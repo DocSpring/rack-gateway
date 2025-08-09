@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/casbin/casbin/v2"
@@ -13,12 +12,13 @@ import (
 )
 
 type Manager struct {
-	enforcer    *casbin.Enforcer
-	users       map[string]*User
-	roles       map[string]*Role
-	policies    map[string]*Policy
-	mu          sync.RWMutex
-	configPaths ConfigPaths
+	enforcer         *casbin.Enforcer
+	users            map[string]*User
+	roles            map[string]*Role
+	policies         map[string]*Policy  // Legacy, kept for compatibility
+	compiledPolicies map[string]*PolicyDef // New compiled-in policies
+	mu               sync.RWMutex
+	configPaths      ConfigPaths
 }
 
 type ConfigPaths struct {
@@ -39,10 +39,12 @@ type Role struct {
 	Permissions []string `yaml:"permissions"`
 }
 
+// Policy is the runtime representation (kept for compatibility)
 type Policy struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
-	Rules       []Rule   `yaml:"rules"`
+	Inherits    string   `yaml:"inherits,omitempty"`
+	Routes      []string `yaml:"routes"`
 }
 
 type Rule struct {
@@ -54,10 +56,11 @@ type Rule struct {
 
 func NewManager(paths ConfigPaths) (*Manager, error) {
 	m := &Manager{
-		users:       make(map[string]*User),
-		roles:       make(map[string]*Role),
-		policies:    make(map[string]*Policy),
-		configPaths: paths,
+		users:            make(map[string]*User),
+		roles:            make(map[string]*Role),
+		policies:         make(map[string]*Policy),
+		compiledPolicies: make(map[string]*PolicyDef),
+		configPaths:      paths,
 	}
 
 	modelText := `
@@ -74,7 +77,7 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && (p.obj == "*" || keyMatch2(r.obj, p.obj)) && (p.act == "*" || regexMatch(r.act, p.act))
+m = g(r.sub, p.sub) && (p.obj == "*" || keyMatch3(r.obj, p.obj) || keyMatch3Multi(r.obj, p.obj)) && (p.act == "*" || r.act == p.act)
 `
 
 	casbinModel, err := model.NewModelFromString(modelText)
@@ -86,6 +89,9 @@ m = g(r.sub, p.sub) && (p.obj == "*" || keyMatch2(r.obj, p.obj)) && (p.act == "*
 	if err != nil {
 		return nil, fmt.Errorf("failed to create enforcer: %w", err)
 	}
+
+	// Register our custom multi-segment matcher
+	enforcer.AddFunction("keyMatch3Multi", keyMatch3Multi)
 
 	m.enforcer = enforcer
 
@@ -159,23 +165,25 @@ func (m *Manager) loadRoles() error {
 }
 
 func (m *Manager) loadPolicies() error {
-	if _, err := os.Stat(m.configPaths.PoliciesPath); os.IsNotExist(err) {
-		m.createDefaultPolicies()
-		return nil
+	// Use compiled-in policies
+	policies := make(map[string]*PolicyDef)
+	for name, def := range DefaultPolicies {
+		// Create a copy to avoid modifying the original
+		policyCopy := &PolicyDef{
+			Description: def.Description,
+			Inherits:    def.Inherits,
+			Routes:      make([]Route, len(def.Routes)),
+		}
+		copy(policyCopy.Routes, def.Routes)
+		policies[name] = policyCopy
 	}
 
-	data, err := os.ReadFile(m.configPaths.PoliciesPath)
-	if err != nil {
-		return err
-	}
+	// Resolve inheritance
+	ResolveInheritance(policies)
 
-	var policies map[string]*Policy
-	if err := yaml.Unmarshal(data, &policies); err != nil {
-		return err
-	}
-
+	// Store the resolved policies
 	m.mu.Lock()
-	m.policies = policies
+	m.compiledPolicies = policies
 	m.mu.Unlock()
 
 	return nil
@@ -194,59 +202,25 @@ func (m *Manager) buildPolicyRules() error {
 		}
 	}
 
-	// Add role permissions
+	// Add compiled policies (roles) with their routes
+	for policyName, policy := range m.compiledPolicies {
+		for _, route := range policy.Routes {
+			method := route.Method
+			path := route.Path
+
+			// Keep paths with {} patterns for keyMatch3
+			// keyMatch3 supports {param} for single segments and {param:.*} for multi-segments
+			// No conversion needed - use paths as-is
+			m.enforcer.AddPolicy(policyName, path, method)
+		}
+	}
+
+	// Legacy: keep roles if they still exist
 	for roleName, role := range m.roles {
 		for _, permission := range role.Permissions {
-			// Handle wildcard permissions
+			// For backwards compatibility with old permission format
 			if permission == "convox:*:*" {
 				m.enforcer.AddPolicy(roleName, "*", "*")
-				continue
-			}
-
-			parts := strings.Split(permission, ":")
-			if len(parts) == 3 {
-				resource := parts[1]
-				action := parts[2]
-				
-				// Map permissions to HTTP resources
-				if resource == "apps" {
-					if action == "list" || action == "*" {
-						m.enforcer.AddPolicy(roleName, "/apps", "GET")
-						m.enforcer.AddPolicy(roleName, "/apps/*", "GET")
-					}
-					if action == "*" {
-						m.enforcer.AddPolicy(roleName, "/apps", "POST")
-						m.enforcer.AddPolicy(roleName, "/apps/*", "POST")
-						m.enforcer.AddPolicy(roleName, "/apps/*", "PUT")
-						m.enforcer.AddPolicy(roleName, "/apps/*", "DELETE")
-					}
-				} else if resource == "ps" {
-					if action == "list" || action == "*" {
-						m.enforcer.AddPolicy(roleName, "/ps", "GET")
-						m.enforcer.AddPolicy(roleName, "/ps/*", "GET")
-					}
-					if action == "*" {
-						m.enforcer.AddPolicy(roleName, "/ps/*", "POST")
-					}
-				} else if resource == "env" {
-					if action == "get" || action == "*" {
-						m.enforcer.AddPolicy(roleName, "/env/*", "GET")
-					}
-					if action == "set" || action == "*" {
-						m.enforcer.AddPolicy(roleName, "/env/*", "POST")
-						m.enforcer.AddPolicy(roleName, "/env/*", "PUT")
-					}
-				} else if resource == "logs" {
-					m.enforcer.AddPolicy(roleName, "/logs/*", "GET")
-				} else if resource == "restart" {
-					m.enforcer.AddPolicy(roleName, "/restart/*", "POST")
-				} else if resource == "run" {
-					m.enforcer.AddPolicy(roleName, "/run/*", "POST")
-				} else if resource == "build" {
-					m.enforcer.AddPolicy(roleName, "/build/*", "POST")
-				} else if resource == "deploy" {
-					m.enforcer.AddPolicy(roleName, "/deploy/*", "POST")
-				}
 			}
 		}
 	}
@@ -254,11 +228,26 @@ func (m *Manager) buildPolicyRules() error {
 	return nil
 }
 
-func (m *Manager) CheckPermission(email, resource, action string) bool {
+func (m *Manager) CheckPermission(email, path, method string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	allowed, err := m.enforcer.Enforce(email, resource, action)
+	// Check if user exists - unknown users are denied
+	if _, exists := m.users[email]; !exists {
+		return false
+	}
+
+	// First check if they have explicit SOCKET permission for WebSocket routes
+	if method == MethodSocket {
+		allowed, err := m.enforcer.Enforce(email, path, MethodSocket)
+		if err == nil && allowed {
+			return true
+		}
+		// If no explicit SOCKET permission, WebSocket connections fall back to GET
+		method = MethodGet
+	}
+
+	allowed, err := m.enforcer.Enforce(email, path, method)
 	if err != nil {
 		return false
 	}
@@ -274,7 +263,8 @@ func (m *Manager) GetUserRoles(email string) []string {
 		return user.Roles
 	}
 
-	return []string{"viewer"}
+	// Unknown users have no roles
+	return []string{}
 }
 
 func (m *Manager) AddUser(email, name string, roles []string) error {
@@ -312,13 +302,9 @@ func (m *Manager) saveUsers() error {
 }
 
 func (m *Manager) createDefaultUsers() {
-	m.users = map[string]*User{
-		"admin@docspring.com": {
-			Email: "admin@docspring.com",
-			Name:  "Admin User",
-			Roles: []string{"admin"},
-		},
-	}
+	// No default users - all users must be explicitly configured
+	// via the mounted users.yaml file
+	m.users = make(map[string]*User)
 }
 
 func (m *Manager) createDefaultRoles() {
@@ -369,24 +355,9 @@ func (m *Manager) createDefaultRoles() {
 }
 
 func (m *Manager) createDefaultPolicies() {
-	m.policies = map[string]*Policy{
-		"default": {
-			Name:        "default",
-			Description: "Default policy rules",
-			Rules: []Rule{
-				{
-					Resource: "/apps/*",
-					Actions:  []string{"GET"},
-					Effect:   "allow",
-				},
-				{
-					Resource: "/ps/*",
-					Actions:  []string{"GET"},
-					Effect:   "allow",
-				},
-			},
-		},
-	}
+	// No longer needed - policies are compiled in
+	// Just initialize empty map for legacy compatibility
+	m.policies = make(map[string]*Policy)
 }
 
 func (m *Manager) GetUsers() map[string]*User {

@@ -3,7 +3,8 @@
 # This script safely runs tests by managing Convox config backup/restore
 set -euo pipefail
 
-BACKUP_PATH="$HOME/Library/Preferences/convox.CONVOX_GATEWAY_TEST_BACKUP"
+# CRITICAL: This is the REAL Convox config - DO NOT DELETE
+BACKUP_PATH="$HOME/Library/Preferences/convox.IMPORTANT_DO_NOT_DELETE_LIVE_BACKUP"
 CONFIG_PATH="$HOME/Library/Preferences/convox"
 
 # Set env var to indicate tests are running through the safe wrapper

@@ -61,20 +61,25 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Route("/v1", func(r chi.Router) {
+	// Gateway's own endpoints under /.gateway/
+	r.Route("/.gateway", func(r chi.Router) {
+		// Health check (no auth required)
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+		})
+
+		// OAuth login endpoints (no auth required)
 		r.Post("/login/start", handleLoginStart(oauthHandler))
 		r.Post("/login/callback", handleLoginCallback(oauthHandler))
 
+		// Authenticated gateway endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(jwtManager.Middleware)
 			
 			r.Get("/me", handleMe())
-			r.Post("/proxy/{rack}/*", proxyHandler.ProxyRequest)
-			r.Get("/proxy/{rack}/*", proxyHandler.ProxyRequest)
-			r.Put("/proxy/{rack}/*", proxyHandler.ProxyRequest)
-			r.Patch("/proxy/{rack}/*", proxyHandler.ProxyRequest)
-			r.Delete("/proxy/{rack}/*", proxyHandler.ProxyRequest)
 
+			// Admin endpoints
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(requireAdmin(cfg.AdminUsers))
 				
@@ -91,6 +96,7 @@ func main() {
 		})
 	})
 
+	// Keep /health at root for backwards compatibility (can be removed later)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
@@ -100,6 +106,13 @@ func main() {
 		r.Use(auth.OptionalAuth(jwtManager))
 		r.Get("/", uiHandler.Index)
 		r.Get("/ui/*", uiHandler.ServeStatic)
+	})
+
+	// Catch-all: proxy everything else to the Convox rack
+	// This MUST come last to avoid catching gateway routes
+	r.Group(func(r chi.Router) {
+		r.Use(jwtManager.Middleware)
+		r.HandleFunc("/*", proxyHandler.ProxyToRack)
 	})
 
 	srv := &http.Server{

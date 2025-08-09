@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,6 +32,51 @@ func NewHandler(cfg *config.Config, rbacManager *rbac.Manager, auditLogger *audi
 	}
 }
 
+// ProxyToRack handles all requests that should be proxied to the Convox rack
+func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	
+	// Get the default rack (there's only one per gateway instance)
+	rackConfig, exists := h.config.Racks["default"]
+	if !exists {
+		// Try local rack in dev mode
+		rackConfig, exists = h.config.Racks["local"]
+		if !exists {
+			h.handleError(w, r, "no rack configured", http.StatusInternalServerError, "default", start)
+			return
+		}
+	}
+
+	if !rackConfig.Enabled {
+		h.handleError(w, r, "rack disabled", http.StatusForbidden, rackConfig.Name, start)
+		return
+	}
+
+	user, ok := auth.GetUser(r.Context())
+	if !ok {
+		h.handleError(w, r, "unauthorized", http.StatusUnauthorized, rackConfig.Name, start)
+		return
+	}
+
+	// Get the full path including query params
+	path := r.URL.Path
+	
+	// Check RBAC permissions
+	if !h.rbacManager.CheckPermission(user.Email, path, r.Method) {
+		h.auditLogger.LogRequest(r, user.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
+		http.Error(w, "permission denied", http.StatusForbidden)
+		return
+	}
+
+	// Forward the request to the rack
+	if err := h.forwardRequest(w, r, rackConfig, path, user.Email); err != nil {
+		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rackConfig.Name, start)
+		return
+	}
+
+	h.auditLogger.LogRequest(r, user.Email, rackConfig.Name, "allow", http.StatusOK, time.Since(start), nil)
+}
+
 func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
@@ -54,9 +100,8 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	permission := h.mapPathToPermission(r.Method, path)
 	if !h.rbacManager.CheckPermission(user.Email, path, r.Method) {
-		h.auditLogger.LogRequest(r, user.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied: %s", permission))
+		h.auditLogger.LogRequest(r, user.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
 		return
 	}
@@ -98,7 +143,9 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 	}
 
-	proxyReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rack.APIKey))
+	// Convox uses Basic Auth with configurable username (default "convox") and the API key as password
+	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s", 
+		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
 	proxyReq.Header.Set("X-User-Email", userEmail)
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
 

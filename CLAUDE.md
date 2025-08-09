@@ -5,6 +5,7 @@
 ## Project Overview
 
 This is a SOC 2 compliant authentication and authorization proxy for self-hosted Convox racks. It sits between users and the Convox API, adding:
+
 - Google Workspace OAuth authentication
 - Role-based access control (RBAC)
 - Complete audit logging with automatic secret redaction
@@ -34,18 +35,21 @@ Flow:
 ### Distributed Architecture
 
 **Gateway Server (Admin-managed):**
+
 - Runs on dedicated infrastructure
 - Has access to real Convox rack credentials
-- Configured via environment variables (RACK_URL_*, RACK_TOKEN_*)
+- Configured via environment variables (RACK*URL*_, RACK*TOKEN*_)
 - Handles OAuth, RBAC, and audit logging
 
 **Developer CLI (User-installed):**
+
 - Installed as binary at `/usr/local/bin/convox-gateway`
 - Wraps the real `convox` CLI
 - Stores config in `~/.config/convox-gateway/config.json`
 - Never has direct access to Convox rack tokens
 
 ### Authentication Flow
+
 1. User runs `convox-gateway login staging https://convox-gateway.company.com`
 2. CLI opens browser for Google OAuth (PKCE flow)
 3. User authenticates with Google Workspace account
@@ -54,6 +58,7 @@ Flow:
 6. CLI stores gateway URL and token in `~/.config/convox-gateway/config.json`
 
 ### Authorization (RBAC)
+
 - Uses Casbin v2 for policy enforcement
 - Roles: viewer, ops, deployer, admin
 - Permissions format: `convox:{resource}:{action}`
@@ -61,12 +66,14 @@ Flow:
 - Policies stored in YAML, hot-reloadable
 
 ### Proxy Behavior
+
 - Never exposes real Convox rack tokens to clients
 - Injects rack token from environment variables
 - Adds tracing headers: X-User-Email, X-Request-ID
 - Forwards all methods: GET, POST, PUT, PATCH, DELETE
 
 ### Security Features
+
 - JWT tokens with HS256 signing (ES256 ready)
 - Automatic secret redaction in logs
 - Domain restriction for OAuth
@@ -85,6 +92,7 @@ Flow:
 ## TODO - Verify with Actual Convox
 
 Check these against `../convox_rack` and `../convox` source:
+
 - [ ] Actual authentication header format
 - [ ] Real API endpoints and paths
 - [ ] Request/response body formats
@@ -106,12 +114,14 @@ make docker       # Build Docker image
 ## Testing Status
 
 ✅ **What's Tested:**
+
 - JWT creation/validation
 - RBAC permission checks
 - Audit log redaction
 - Integration test (server starts, endpoints respond)
 
 ❌ **Not Tested (requires external deps):**
+
 - Real Google OAuth flow
 - Actual Convox rack proxying
 - Multi-rack switching
@@ -120,16 +130,19 @@ make docker       # Build Docker image
 ## Configuration Files
 
 ### Server Configuration
+
 - `config/policies.yaml` - RBAC policies
 - `config/users.yaml` - User→role mappings (auto-created)
 - `config/roles.yaml` - Role→permission mappings (auto-created)
 
 ### Client Configuration
+
 - `~/.config/convox-gateway/config.json` - Gateway URLs and JWT tokens per rack
 
 ## Environment Variables
 
 Critical for production:
+
 - `APP_JWT_KEY` - JWT signing key (auto-generated in dev)
 - `GOOGLE_CLIENT_ID` - OAuth client ID
 - `GOOGLE_CLIENT_SECRET` - OAuth client secret
@@ -140,17 +153,20 @@ Critical for production:
 ## Deployment Notes
 
 ### Convox Deployment
+
 - Use `convox.yml` for app definition
 - Enable sticky sessions for OAuth flow
 - Set all env vars via `convox env set`
 
 ### Terraform Integration
+
 - KMS key for secrets encryption
 - CloudWatch log group (90 day retention)
 - SSM parameters for secure token storage
 - Module in `terraform/main.tf`
 
 ### CloudWatch Integration
+
 - Structured JSON logs to stdout
 - Automatic ingestion via Convox
 - Create metric filters for denied requests
@@ -220,3 +236,14 @@ go tool cover -html=coverage.out
 - [Casbin Documentation](https://casbin.org/)
 - [Google OAuth 2.0](https://developers.google.com/identity/protocols/oauth2)
 - [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
+
+## CRITICAL SAFETY WARNINGS
+
+### NEVER DELETE THESE DIRECTORIES
+
+**These contain LIVE Convox configuration backups that protect the user's actual production settings:**
+
+- `/Users/*/Library/Preferences/convox.IMPORTANT_DO_NOT_DELETE_LIVE_BACKUP`
+- Any backup directory in `/Users/*/Library/Preferences/`
+
+The integration tests create backups of the real Convox CLI configuration to prevent data loss. If tests fail with "backup already exists", it means a previous test didn't clean up properly. The user must manually verify and move/restore the backup - NEVER automatically delete it!

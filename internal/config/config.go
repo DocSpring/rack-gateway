@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
 )
 
 type Config struct {
@@ -27,11 +26,12 @@ type Config struct {
 }
 
 type RackConfig struct {
-	Name    string
-	URL     string
-	APIKey  string
-	Region  string
-	Enabled bool
+	Name     string
+	URL      string
+	Username string // Username for Basic Auth (default: "convox")
+	APIKey   string // Password for Basic Auth
+	Region   string
+	Enabled  bool
 }
 
 func Load() (*Config, error) {
@@ -72,16 +72,23 @@ func Load() (*Config, error) {
 
 func (c *Config) loadRacksFromEnv() {
 	// Load the single rack this gateway is protecting
-	rackURL := os.Getenv("RACK_URL")
+	rackHost := os.Getenv("RACK_HOST")
 	rackToken := os.Getenv("RACK_TOKEN")
+	rackUsername := getEnv("RACK_USERNAME", "convox") // Default to "convox" for standard Convox racks
 	
-	if rackURL != "" && rackToken != "" {
+	if rackHost != "" && rackToken != "" {
+		// Add https:// if no protocol specified
+		if !strings.HasPrefix(rackHost, "http://") && !strings.HasPrefix(rackHost, "https://") {
+			rackHost = "https://" + rackHost
+		}
+		
 		// The gateway protects a single rack
 		c.Racks["default"] = RackConfig{
-			Name:    "default",
-			URL:     rackURL,
-			APIKey:  rackToken,
-			Enabled: true,
+			Name:     "default",
+			URL:      rackHost,
+			Username: rackUsername,
+			APIKey:   rackToken,
+			Enabled:  true,
 		}
 	} else if c.DevMode {
 		// In dev mode, set up a default local rack if none configured
@@ -91,11 +98,12 @@ func (c *Config) loadRacksFromEnv() {
 
 func (c *Config) setupDevRacks() {
 	c.Racks["local"] = RackConfig{
-		Name:    "local",
-		URL:     "http://localhost:5443",
-		APIKey:  "dev-token",
-		Region:  "us-east-1",
-		Enabled: true,
+		Name:     "local",
+		URL:      "http://localhost:5443",
+		Username: "convox",
+		APIKey:   "dev-token",
+		Region:   "us-east-1",
+		Enabled:  true,
 	}
 }
 

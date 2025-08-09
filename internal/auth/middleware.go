@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"strings"
 )
@@ -18,13 +19,39 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		var token string
 		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		if len(parts) != 2 {
 			http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
 			return
 		}
 
-		claims, err := m.ValidateToken(parts[1])
+		if parts[0] == "Bearer" {
+			// Standard Bearer token
+			token = parts[1]
+		} else if parts[0] == "Basic" {
+			// Convox CLI sends Basic auth where username is "convox" and password is JWT
+			decoded, err := base64.StdEncoding.DecodeString(parts[1])
+			if err != nil {
+				http.Error(w, "invalid basic auth encoding", http.StatusUnauthorized)
+				return
+			}
+			
+			credentials := string(decoded)
+			colonIndex := strings.Index(credentials, ":")
+			if colonIndex < 0 {
+				http.Error(w, "invalid basic auth format", http.StatusUnauthorized)
+				return
+			}
+			
+			// Extract JWT from password field (username should be "convox")
+			token = credentials[colonIndex+1:]
+		} else {
+			http.Error(w, "unsupported authorization type", http.StatusUnauthorized)
+			return
+		}
+
+		claims, err := m.ValidateToken(token)
 		if err != nil {
 			http.Error(w, "invalid token: "+err.Error(), http.StatusUnauthorized)
 			return

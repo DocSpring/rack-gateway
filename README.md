@@ -59,12 +59,16 @@ export GOOGLE_CLIENT_SECRET="your-client-secret"
 export GOOGLE_ALLOWED_DOMAIN="your-domain.com"
 ```
 
-4. Configure rack tokens:
+4. Configure rack connection:
 
 ```bash
-export RACK_TOKEN_STAGING="your-staging-token"
-export RACK_TOKEN_US="your-us-token"
-export RACK_TOKEN_EU="your-eu-token"
+# For development with mock server
+export RACK_HOST="http://localhost:9090"
+export RACK_TOKEN="mock-rack-token-12345"
+
+# For real rack in Kubernetes
+export RACK_HOST="api.convox-system.svc.cluster.local:5443"
+export RACK_TOKEN="your-actual-rack-token"
 ```
 
 5. Build the binaries:
@@ -169,9 +173,21 @@ source <(./bin/convox-gateway completion zsh)
 | `GOOGLE_CLIENT_SECRET`  | Google OAuth client secret              | -               |
 | `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain                    | your-domain.com |
 | `ADMIN_USERS`           | Comma-separated admin emails            | -               |
-| `RACK_URL_*`            | Convox rack API URLs                    | -               |
-| `RACK_TOKEN_*`          | Convox rack API tokens                  | -               |
+| `RACK_HOST`             | Convox rack API host (see note below)   | -               |
+| `RACK_TOKEN`            | Convox rack API token                   | -               |
+| `RACK_USERNAME`         | Username for rack Basic Auth            | convox          |
 | `DEV_MODE`              | Enable development mode                 | false           |
+
+#### RACK_HOST Configuration
+
+When running in Kubernetes alongside the Convox rack, `RACK_HOST` will typically be the internal service URL:
+```bash
+# Example for Convox rack in the same cluster
+RACK_HOST=api.convox-system.svc.cluster.local:5443
+
+# Or for external rack
+RACK_HOST=https://rack.example.com
+```
 
 ### Configuration Files
 
@@ -238,7 +254,8 @@ make docker
 docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
   -e GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET \
-  -e RACK_TOKEN_STAGING=$RACK_TOKEN_STAGING \
+  -e RACK_HOST=api.convox-system.svc.cluster.local:5443 \
+  -e RACK_TOKEN=$RACK_TOKEN \
   convox-gateway-api:latest
 ```
 

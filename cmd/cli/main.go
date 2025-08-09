@@ -98,6 +98,8 @@ Rack management:
 		Short:              "Run a convox CLI command through the gateway",
 		Long:               "Execute any convox CLI command with gateway authentication and the selected rack",
 		DisableFlagParsing: true,
+		SilenceUsage:       true,  // Don't show usage on error
+		SilenceErrors:      true,  // We'll handle error printing ourselves
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				// If just "convox-gateway convox" is run, show convox help
@@ -106,7 +108,13 @@ Rack management:
 				convoxCmd.Stderr = os.Stderr
 				return convoxCmd.Run()
 			}
-			return wrapConvoxCommand(args)
+			err := wrapConvoxCommand(args)
+			if err != nil {
+				// Just print the error message, not the usage
+				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				os.Exit(1)
+			}
+			return nil
 		},
 	}
 
@@ -354,6 +362,8 @@ func wrapConvoxCommand(args []string) error {
 	}
 
 	// Build RACK_URL with JWT token as password
+	// The convox CLI expects RACK_URL to point directly to the API server
+	// In our case, the gateway will act as the API server and proxy to the real rack
 	parsedURL := gatewayURL
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
@@ -363,11 +373,11 @@ func wrapConvoxCommand(args []string) error {
 	var rackURL string
 	if strings.HasPrefix(parsedURL, "http://") {
 		// For local testing, preserve http
-		rackURL = fmt.Sprintf("http://convox:%s@%s/v1/proxy",
+		rackURL = fmt.Sprintf("http://convox:%s@%s",
 			token.Token,
 			strings.TrimPrefix(parsedURL, "http://"))
 	} else {
-		rackURL = fmt.Sprintf("https://convox:%s@%s/v1/proxy",
+		rackURL = fmt.Sprintf("https://convox:%s@%s",
 			token.Token,
 			strings.TrimPrefix(parsedURL, "https://"))
 	}

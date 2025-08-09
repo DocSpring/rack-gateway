@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -83,8 +82,12 @@ func TestIntegration(t *testing.T) {
 		testCLIWrapsConvoxHelpAndVersionCommands(t, servers)
 	})
 
-	t.Run("CLIWithAuthentication", func(t *testing.T) {
-		testCLIWithAuthentication(t, servers)
+	t.Run("CLIWithInvalidToken", func(t *testing.T) {
+		testCLIWithInvalidToken(t, servers)
+	})
+
+	t.Run("ProxyE2E", func(t *testing.T) {
+		testProxyE2E(t, servers)
 	})
 
 	t.Run("OAuthLoginFlow", func(t *testing.T) {
@@ -123,9 +126,10 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
 		"GOOGLE_ALLOWED_DOMAIN=example.com",
-		// Configure the single rack this gateway protects
+		// CRITICAL: Only use localhost for testing - NEVER production URLs
+		"RACK_HOST=http://localhost:"+mockConvoxPort,
 		"RACK_TOKEN="+mockRackToken,
-		"RACK_URL=http://localhost:"+mockConvoxPort,
+		"RACK_USERNAME=convox",
 	)
 
 	// Capture output for debugging
@@ -183,7 +187,7 @@ func testHealthCheck(t *testing.T, s *TestServers) {
 }
 
 func testUnauthorizedAccess(t *testing.T, s *TestServers) {
-	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/v1/me")
+	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/me")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -242,7 +246,7 @@ func testProxyWithInvalidToken(t *testing.T, s *TestServers) {
 
 func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 	// Test login start endpoint
-	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/v1/login/start", "application/json", nil)
+	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/.gateway/login/start", "application/json", nil)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -258,9 +262,8 @@ func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 
 func testAdminEndpointProtection(t *testing.T, s *TestServers) {
 	endpoints := []string{
-		"/v1/admin/users",
-		"/v1/admin/roles",
-		"/v1/admin/policies",
+		"/.gateway/admin/users",
+		"/.gateway/admin/roles",
 	}
 
 	for _, endpoint := range endpoints {
@@ -375,13 +378,12 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	})
 }
 
-// Test the full authentication flow with CLI
-func testCLIWithAuthentication(t *testing.T, s *TestServers) {
-	// Create a test token file to simulate a logged-in user
+// Test that invalid tokens are rejected
+func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
+	// Create a test token file with an invalid token
 	configDir := t.TempDir()
 	tokenFile := fmt.Sprintf("%s/config.json", configDir)
 
-	// Create a mock JWT token (in real scenario, this would come from OAuth)
 	config := map[string]interface{}{
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
@@ -390,7 +392,7 @@ func testCLIWithAuthentication(t *testing.T, s *TestServers) {
 		},
 		"tokens": map[string]interface{}{
 			"staging": map[string]interface{}{
-				"token":      "test-jwt-token",
+				"token":      "invalid-jwt-token",
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 			},
@@ -405,28 +407,83 @@ func testCLIWithAuthentication(t *testing.T, s *TestServers) {
 	currentFile := filepath.Join(configDir, "current")
 	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
-	// Now test that the CLI wrapper uses this token to set RACK_URL
+	// Try to run a command with invalid token
 	cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
 	cmd.Env = append(os.Environ(),
-		"CONVOX_GATEWAY_CONFIG="+configDir, // Use test config directory
-		// The wrapper should construct RACK_URL with the JWT token
+		"CONVOX_GATEWAY_CONFIG="+configDir,
 	)
 
 	output, err := cmd.CombinedOutput()
-	t.Logf("CLI with auth output: %s", output)
+	
+	// Should fail with authentication error
+	require.Error(t, err, "Command should fail with invalid token")
+	assert.Contains(t, string(output), "ERROR")
+	assert.Contains(t, string(output), "invalid token")
+}
 
-	// The command will fail because our test JWT isn't valid,
-	// but we're testing that the wrapper attempts to use it
-	if err != nil {
-		// Expected - our test JWT won't actually authenticate
-		// The error could be "invalid authorization header format" or a 401
-		outputStr := string(output)
-		assert.True(t,
-			strings.Contains(outputStr, "401") ||
-				strings.Contains(outputStr, "invalid authorization") ||
-				strings.Contains(outputStr, "ERROR"),
-			"Should get an error when using invalid JWT: %s", outputStr)
+// Test end-to-end proxy functionality with real commands
+func testProxyE2E(t *testing.T, s *TestServers) {
+	// Create a valid JWT token that the gateway will accept
+	configDir := t.TempDir()
+	configFile := fmt.Sprintf("%s/config.json", configDir)
+	
+	validJWT := createTestJWT(t, "test@example.com", 24*time.Hour)
+	
+	config := map[string]interface{}{
+		"gateways": map[string]interface{}{
+			"staging": map[string]interface{}{
+				"url": "http://localhost:" + gatewayPort,
+			},
+		},
+		"tokens": map[string]interface{}{
+			"staging": map[string]interface{}{
+				"token":      validJWT,
+				"email":      "test@example.com",
+				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+			},
+		},
 	}
+
+	configData, err := json.MarshalIndent(config, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	
+	// Set current rack
+	currentFile := filepath.Join(configDir, "current")
+	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
+
+	// Test 1: convox ps (lists processes)
+	t.Run("convox_ps", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
+
+		output, err := cmd.CombinedOutput()
+		t.Logf("convox ps output: %s", output)
+		
+		require.NoError(t, err, "convox ps should succeed")
+		// Should see processes from mock server
+		assert.Contains(t, string(output), "web")
+		assert.Contains(t, string(output), "worker")
+		assert.Contains(t, string(output), "running")
+	})
+
+	// Test 2: convox rack (shows rack info)
+	t.Run("convox_rack", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "rack")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
+
+		output, err := cmd.CombinedOutput()
+		t.Logf("convox rack output: %s", output)
+		
+		require.NoError(t, err, "convox rack should succeed")
+		// Should see rack info from mock server
+		assert.Contains(t, string(output), "mock-rack")
+		assert.Contains(t, string(output), "running")
+	})
 }
 
 // Test the actual convox CLI wrapper functionality

@@ -1,3 +1,42 @@
+// Mock Convox Rack API Server
+//
+// This mock server simulates the actual Convox rack API based on the real implementation
+// found in the Convox source code at: ./reference/convox
+//
+// Key source files that define the API:
+// - ./reference/convox/pkg/api/routes.go - Defines all API routes
+// - ./reference/convox/pkg/api/controllers.go - Controller implementations
+// - ./reference/convox/pkg/structs/process.go - Process struct definition
+// - ./reference/convox/pkg/structs/system.go - System struct definition
+// - ./reference/convox/sdk/sdk.go - SDK client that calls these endpoints
+//
+// Directory structure of Convox source:
+// convox/
+// ├── pkg/
+// │   ├── api/
+// │   │   ├── api.go - Main API server setup
+// │   │   ├── routes.go - Route definitions (GET /apps, /system, /apps/{app}/processes, etc.)
+// │   │   └── controllers.go - Handler implementations
+// │   └── structs/
+// │       ├── process.go - Process{Id, App, Command, Cpu, Memory, Status, etc.}
+// │       └── system.go - System{Name, Provider, Region, Version, etc.}
+// └── sdk/
+//     └── sdk.go - Client that uses RACK_URL env var
+//
+// Important findings:
+// 1. Convox uses Basic Auth with "convox" username and rack token as password
+// 2. RACK_URL format: https://convox:token@api.domain.com (NO /v1/proxy suffix)
+// 3. Main endpoints used by 'convox ps': GET /apps/{app}/processes
+// 4. Main endpoint used by 'convox rack': GET /system
+// 5. Process struct has specific field names (Id not ID, capitalized fields)
+// 6. All responses are JSON arrays or objects
+//
+// Authentication:
+// - Uses HTTP Basic Auth
+// - Username is always "convox"
+// - Password is the rack API token
+// - Also supports JWT tokens with username "jwt"
+
 package main
 
 import (
@@ -27,13 +66,19 @@ type App struct {
 }
 
 type Process struct {
-	ID      string    `json:"id"`
-	App     string    `json:"app"`
-	Service string    `json:"service"`
-	Status  string    `json:"status"`
-	CPU     float64   `json:"cpu"`
-	Memory  float64   `json:"memory"`
-	Started time.Time `json:"started"`
+	Id       string    `json:"id"`
+	App      string    `json:"app"`
+	Command  string    `json:"command"`
+	Cpu      float64   `json:"cpu"`
+	Host     string    `json:"host"`
+	Image    string    `json:"image"`
+	Instance string    `json:"instance"`
+	Memory   float64   `json:"memory"`
+	Name     string    `json:"name"`
+	Ports    []string  `json:"ports"`
+	Release  string    `json:"release"`
+	Started  time.Time `json:"started"`
+	Status   string    `json:"status"`
 }
 
 type Build struct {
@@ -64,12 +109,18 @@ type Instance struct {
 	InstanceType string    `json:"instance_type"`
 }
 
-type SystemInfo struct {
-	Version    string `json:"version"`
-	Provider   string `json:"provider"`
-	Region     string `json:"region"`
-	Name       string `json:"name"`
-	RouterType string `json:"router_type"`
+type System struct {
+	Count      int               `json:"count"`
+	Domain     string            `json:"domain"`
+	Name       string            `json:"name"`
+	Outputs    map[string]string `json:"outputs,omitempty"`
+	Parameters map[string]string `json:"parameters,omitempty"`
+	Provider   string            `json:"provider"`
+	RackDomain string            `json:"rack-domain"`
+	Region     string            `json:"region"`
+	Status     string            `json:"status"`
+	Type       string            `json:"type"`
+	Version    string            `json:"version"`
 }
 
 func main() {
@@ -102,7 +153,6 @@ func main() {
 	r.HandleFunc("/instances/{id}", getInstance).Methods("GET")
 
 	r.HandleFunc("/system", getSystem).Methods("GET")
-	r.HandleFunc("/rack", getRack).Methods("GET")
 
 	// Generic API endpoint for testing
 	r.HandleFunc("/api/{path:.*}", handleAPI).Methods("GET", "POST", "PUT", "DELETE")
@@ -232,31 +282,34 @@ func getProcesses(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	processes := []Process{
 		{
-			ID:      "p-web-1",
-			App:     vars["app"],
-			Service: "web",
-			Status:  "running",
-			CPU:     25.5,
-			Memory:  512.0,
-			Started: time.Now().Add(-3 * time.Hour),
+			Id:       "p-web-1",
+			App:      vars["app"],
+			Command:  "bundle exec rails server",
+			Cpu:      25.5,
+			Host:     "10.0.1.10",
+			Image:    "registry.example.com/app:latest",
+			Instance: "i-1234567890abcdef0",
+			Memory:   512.0,
+			Name:     "web",
+			Ports:    []string{"80:3000"},
+			Release:  "RAPI123456",
+			Started:  time.Now().Add(-3 * time.Hour),
+			Status:   "running",
 		},
 		{
-			ID:      "p-web-2",
-			App:     vars["app"],
-			Service: "web",
-			Status:  "running",
-			CPU:     30.2,
-			Memory:  480.5,
-			Started: time.Now().Add(-3 * time.Hour),
-		},
-		{
-			ID:      "p-worker-1",
-			App:     vars["app"],
-			Service: "worker",
-			Status:  "running",
-			CPU:     15.0,
-			Memory:  256.0,
-			Started: time.Now().Add(-2 * time.Hour),
+			Id:       "p-worker-1",
+			App:      vars["app"],
+			Command:  "bundle exec sidekiq",
+			Cpu:      15.0,
+			Host:     "10.0.1.11",
+			Image:    "registry.example.com/app:latest",
+			Instance: "i-0987654321fedcba0",
+			Memory:   256.0,
+			Name:     "worker",
+			Ports:    []string{},
+			Release:  "RAPI123456",
+			Started:  time.Now().Add(-2 * time.Hour),
+			Status:   "running",
 		},
 	}
 
@@ -267,13 +320,19 @@ func getProcesses(w http.ResponseWriter, r *http.Request) {
 func getProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	process := Process{
-		ID:      vars["id"],
-		App:     vars["app"],
-		Service: "web",
-		Status:  "running",
-		CPU:     25.5,
-		Memory:  512.0,
-		Started: time.Now().Add(-3 * time.Hour),
+		Id:       vars["id"],
+		App:      vars["app"],
+		Command:  "bundle exec rails server",
+		Cpu:      25.5,
+		Host:     "10.0.1.10",
+		Image:    "registry.example.com/app:latest",
+		Instance: "i-1234567890abcdef0",
+		Memory:   512.0,
+		Name:     "web",
+		Ports:    []string{"80:3000"},
+		Release:  "RAPI123456",
+		Started:  time.Now().Add(-3 * time.Hour),
+		Status:   "running",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -442,31 +501,20 @@ func getInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSystem(w http.ResponseWriter, r *http.Request) {
-	system := SystemInfo{
-		Version:    "3.5.0",
-		Provider:   "aws",
-		Region:     "us-east-1",
+	system := System{
+		Count:      2,
+		Domain:     "mock-rack.example.com",
 		Name:       "mock-rack",
-		RouterType: "alb",
+		Provider:   "aws",
+		RackDomain: "rack.mock-rack.example.com",
+		Region:     "us-east-1",
+		Status:     "running",
+		Type:       "production",
+		Version:    "3.5.0",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(system)
-}
-
-func getRack(w http.ResponseWriter, r *http.Request) {
-	rack := map[string]interface{}{
-		"name":     "mock-rack",
-		"provider": "aws",
-		"region":   "us-east-1",
-		"status":   "running",
-		"version":  "3.5.0",
-		"count":    2,
-		"type":     "t3.medium",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rack)
 }
 
 func handleAPI(w http.ResponseWriter, r *http.Request) {
