@@ -24,9 +24,7 @@ go.work
 .env.*.local
 
 # Config files with secrets
-config/users.yaml
-config/roles.yaml
-!config/*.example.yaml
+config/config.yml
 
 # IDE
 .vscode/

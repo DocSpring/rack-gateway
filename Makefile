@@ -1,4 +1,4 @@
-.PHONY: dev gateway cli mock test test-unit test-integration lint docker clean build all deps
+.PHONY: dev dev-build dev-down dev-logs gateway cli mock test test-unit test-integration lint docker clean build all deps
 
 all: gateway cli mock
 
@@ -10,8 +10,20 @@ deps:
 	@go mod tidy
 
 dev:
-	@echo "Starting gateway API in development mode..."
-	@./scripts/dev_env.sh && go run cmd/gateway/main.go
+	@echo "Starting development environment with Docker Compose..."
+	@docker-compose up
+
+dev-build:
+	@echo "Building Docker images for development..."
+	@docker-compose build
+
+dev-down:
+	@echo "Stopping development environment..."
+	@docker-compose down
+
+dev-logs:
+	@echo "Showing development logs..."
+	@docker-compose logs -f
 
 gateway:
 	@echo "Building gateway API server..."

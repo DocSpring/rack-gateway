@@ -107,7 +107,9 @@ make all          # Build everything
 make gateway      # Build gateway server
 make cli          # Build CLI tool
 make test         # Run tests
-make dev          # Run gateway in dev mode
+make dev          # Run development environment with Docker Compose
+make dev-build    # Build Docker images for development
+make dev-down     # Stop development environment
 make docker       # Build Docker image
 ```
 
@@ -131,9 +133,8 @@ make docker       # Build Docker image
 
 ### Server Configuration
 
-- `config/policies.yaml` - RBAC policies
-- `config/users.yaml` - User→role mappings (auto-created)
-- `config/roles.yaml` - Role→permission mappings (auto-created)
+- `config/config.yml` - Users and domain configuration
+- RBAC policies are compiled into the binary (see `internal/api/rbac/policies.go`)
 
 ### Client Configuration
 
@@ -146,9 +147,11 @@ Critical for production:
 - `APP_JWT_KEY` - JWT signing key (auto-generated in dev)
 - `GOOGLE_CLIENT_ID` - OAuth client ID
 - `GOOGLE_CLIENT_SECRET` - OAuth client secret
-- `GOOGLE_ALLOWED_DOMAIN` - Email domain restriction
-- `RACK_URL_*` - Convox rack API URLs (e.g. RACK_URL_STAGING)
-- `RACK_TOKEN_*` - Actual Convox rack API tokens (e.g. RACK_TOKEN_STAGING)
+- `GOOGLE_ALLOWED_DOMAIN` - Email domain restriction (can be overridden by config.yml)
+- `RACK_HOST` - Convox rack API host
+- `RACK_TOKEN` - Actual Convox rack API token
+- `RACK_USERNAME` - Username for rack Basic Auth (default: convox)
+- `CONVOX_GATEWAY_CONFIG_DIR` - Directory containing config.yml
 
 ## Deployment Notes
 

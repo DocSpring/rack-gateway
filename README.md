@@ -26,7 +26,7 @@ Enterprise gateway for self-hosted Convox racks with SSO authentication, RBAC, a
 make all
 
 # Individual targets
-make proxy   # Build gateway API server -> bin/convox-gateway-api
+make gateway # Build gateway API server -> bin/convox-gateway-api
 make cli     # Build gateway CLI -> bin/convox-gateway
 make docker  # Build Docker image
 make test    # Run all tests
@@ -46,6 +46,25 @@ cd convox-gateway
 ```bash
 go mod download
 ```
+
+3. Set up configuration:
+
+```bash
+cp config/config.yml.example config/config.yml
+# Edit config/config.yml with your users and domain
+```
+
+4. Start development environment with Docker Compose:
+
+```bash
+make dev         # Start gateway and mock Convox server
+make dev-logs    # View logs in another terminal
+make dev-down    # Stop when done
+```
+
+The development environment runs:
+- Mock Convox server on http://localhost:5443
+- Gateway API on http://localhost:8080
 
 3. Configure Google OAuth:
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
