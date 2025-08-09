@@ -1,6 +1,6 @@
 # Convox Gateway
 
-Enterprise gateway for self-hosted Convox racks with SSO authentication, RBAC, and audit logging.
+API gateway for self-hosted Convox racks with SSO authentication, RBAC, and audit logging.
 
 ## Features
 
@@ -37,6 +37,7 @@ make test    # Run all tests
 For complete development setup instructions including Google OAuth configuration and testing workflows, see **[DEV.md](DEV.md)**.
 
 **Quick Start:**
+
 ```bash
 git clone https://github.com/DocSpring/convox-gateway.git
 cd convox-gateway
@@ -53,6 +54,7 @@ make dev
 ```
 
 **Development URLs:**
+
 - Gateway API: http://localhost:8447
 - Web UI: http://localhost:5173
 - Mock Convox: http://localhost:5443

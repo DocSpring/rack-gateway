@@ -60,7 +60,7 @@ var (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:           "convox-gateway",
-		Short:         "Enterprise gateway for Convox with authentication and RBAC",
+		Short:         "API gateway for Convox with authentication and RBAC",
 		SilenceErrors: true,
 		Long: `Convox Gateway provides secure authenticated access to Convox racks
 with SSO authentication, role-based access control, and audit logging.
