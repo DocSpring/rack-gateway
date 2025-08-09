@@ -13,20 +13,45 @@ This is a SOC 2 compliant authentication and authorization proxy for self-hosted
 ## Architecture
 
 ```
-User → CLI → Auth Proxy → Convox Rack API
-              ↓
-         Audit Logs → CloudWatch
+Developer Machine -> Gateway Server (Admin-run) -> Convox Racks
+                     |
+                     v
+                  Audit Logs -> CloudWatch
+
+Flow:
+1. Developer runs: convox-gateway apps
+2. CLI loads JWT from ~/.config/convox-gateway/config.json
+3. CLI sets RACK_URL with JWT and calls real convox CLI
+4. Request goes to Gateway API Server with JWT auth
+5. Gateway validates JWT and checks RBAC permissions
+6. Gateway proxies to real Convox rack using actual token
+7. Gateway logs request to CloudWatch
+8. Response flows back through gateway to developer
 ```
 
 ## Key Implementation Details
 
+### Distributed Architecture
+
+**Gateway Server (Admin-managed):**
+- Runs on dedicated infrastructure
+- Has access to real Convox rack credentials
+- Configured via environment variables (RACK_URL_*, RACK_TOKEN_*)
+- Handles OAuth, RBAC, and audit logging
+
+**Developer CLI (User-installed):**
+- Installed as binary at `/usr/local/bin/convox-gateway`
+- Wraps the real `convox` CLI
+- Stores config in `~/.config/convox-gateway/config.json`
+- Never has direct access to Convox rack tokens
+
 ### Authentication Flow
-1. User runs `convox-gateway login staging`
+1. User runs `convox-gateway login staging https://convox-gateway.company.com`
 2. CLI opens browser for Google OAuth (PKCE flow)
 3. User authenticates with Google Workspace account
-4. Proxy validates domain (@docspring.com)
-5. Proxy issues JWT token (30 day TTL)
-6. CLI stores token locally in `~/.config/convox-gateway/tokens.json`
+4. Gateway validates domain (@company.com)
+5. Gateway issues JWT token (30 day TTL)
+6. CLI stores gateway URL and token in `~/.config/convox-gateway/config.json`
 
 ### Authorization (RBAC)
 - Uses Casbin v2 for policy enforcement
@@ -94,10 +119,13 @@ make docker       # Build Docker image
 
 ## Configuration Files
 
-- `config/racks.yaml` - Rack definitions (URL, region, tokens)
+### Server Configuration
 - `config/policies.yaml` - RBAC policies
 - `config/users.yaml` - User→role mappings (auto-created)
 - `config/roles.yaml` - Role→permission mappings (auto-created)
+
+### Client Configuration
+- `~/.config/convox-gateway/config.json` - Gateway URLs and JWT tokens per rack
 
 ## Environment Variables
 
@@ -106,7 +134,8 @@ Critical for production:
 - `GOOGLE_CLIENT_ID` - OAuth client ID
 - `GOOGLE_CLIENT_SECRET` - OAuth client secret
 - `GOOGLE_ALLOWED_DOMAIN` - Email domain restriction
-- `RACK_TOKEN_*` - Actual Convox rack API tokens
+- `RACK_URL_*` - Convox rack API URLs (e.g. RACK_URL_STAGING)
+- `RACK_TOKEN_*` - Actual Convox rack API tokens (e.g. RACK_TOKEN_STAGING)
 
 ## Deployment Notes
 

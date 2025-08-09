@@ -98,11 +98,18 @@ make dev
 # Stores token in ~/.config/convox-gateway/tokens.json
 ```
 
-### Make authenticated calls:
+### Run commands on a rack:
 
 ```bash
-./bin/convox-gateway call staging GET /apps
-./bin/convox-gateway call us POST /apps/myapp/restart --data '{"param":"value"}'
+# The CLI automatically wraps convox commands
+convox-gateway apps --rack staging
+convox-gateway ps web --rack staging
+convox-gateway logs --rack staging
+
+# Or set default rack via environment
+export CONVOX_RACK=staging
+convox-gateway apps
+convox-gateway ps web
 ```
 
 ### Generate shell completions:
@@ -130,15 +137,16 @@ source <(./bin/convox-gateway completion zsh)
 | `GOOGLE_CLIENT_SECRET`  | Google OAuth client secret              | -               |
 | `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain                    | your-domain.com |
 | `ADMIN_USERS`           | Comma-separated admin emails            | -               |
+| `RACK_URL_*`            | Convox rack API URLs                    | -               |
 | `RACK_TOKEN_*`          | Convox rack API tokens                  | -               |
 | `DEV_MODE`              | Enable development mode                 | false           |
 
 ### Configuration Files
 
-- `config/racks.yaml`: Rack definitions and endpoints
 - `config/policies.yaml`: RBAC policy definitions
 - `config/users.yaml`: User role assignments (auto-created)
 - `config/roles.yaml`: Role definitions (auto-created)
+- `~/.config/convox-gateway/config.json`: Local CLI configuration (per developer)
 
 ## RBAC Model
 

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -20,7 +19,6 @@ type Config struct {
 	GoogleAllowedDomain   string
 	RedirectURL           string
 	AdminUsers            []string
-	RacksConfigPath       string
 	UsersConfigPath       string
 	RolesConfigPath       string
 	PoliciesPath          string
@@ -29,12 +27,11 @@ type Config struct {
 }
 
 type RackConfig struct {
-	Name    string `yaml:"name"`
-	URL     string `yaml:"url"`
-	APIKey  string `yaml:"-"`
-	EnvVar  string `yaml:"env_var"`
-	Region  string `yaml:"region"`
-	Enabled bool   `yaml:"enabled"`
+	Name    string
+	URL     string
+	APIKey  string
+	Region  string
+	Enabled bool
 }
 
 func Load() (*Config, error) {
@@ -45,7 +42,6 @@ func Load() (*Config, error) {
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", "docspring.com"),
 		RedirectURL:         getEnv("REDIRECT_URL", "http://localhost:8080/v1/login/callback"),
-		RacksConfigPath:     getEnv("RACKS_CONFIG_PATH", "config/racks.yaml"),
 		UsersConfigPath:     getEnv("USERS_CONFIG_PATH", "config/users.yaml"),
 		RolesConfigPath:     getEnv("ROLES_CONFIG_PATH", "config/roles.yaml"),
 		PoliciesPath:        getEnv("POLICIES_PATH", "config/policies.yaml"),
@@ -69,36 +65,51 @@ func Load() (*Config, error) {
 		cfg.AdminUsers = strings.Split(adminUsers, ",")
 	}
 
-	if err := cfg.loadRacks(); err != nil {
-		return nil, fmt.Errorf("failed to load racks: %w", err)
-	}
+	cfg.loadRacksFromEnv()
 
 	return cfg, nil
 }
 
-func (c *Config) loadRacks() error {
-	racksData, err := os.ReadFile(c.RacksConfigPath)
-	if err != nil {
-		if os.IsNotExist(err) && c.DevMode {
-			c.setupDevRacks()
-			return nil
+func (c *Config) loadRacksFromEnv() {
+	// Load racks from environment variables
+	// Format: RACK_URL_<NAME> and RACK_TOKEN_<NAME>
+	// Example: RACK_URL_STAGING=https://rack.staging.convox.com
+	//          RACK_TOKEN_STAGING=secret-token
+	
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			continue
 		}
-		return err
-	}
-
-	var racks map[string]RackConfig
-	if err := yaml.Unmarshal(racksData, &racks); err != nil {
-		return err
-	}
-
-	for name, rack := range racks {
-		if rack.EnvVar != "" {
-			rack.APIKey = os.Getenv(rack.EnvVar)
+		
+		key := parts[0]
+		value := parts[1]
+		
+		// Check for RACK_URL_* pattern
+		if strings.HasPrefix(key, "RACK_URL_") {
+			rackName := strings.ToLower(strings.TrimPrefix(key, "RACK_URL_"))
+			rack := c.Racks[rackName]
+			rack.Name = rackName
+			rack.URL = value
+			rack.Enabled = true
+			c.Racks[rackName] = rack
 		}
-		c.Racks[name] = rack
+		
+		// Check for RACK_TOKEN_* pattern
+		if strings.HasPrefix(key, "RACK_TOKEN_") {
+			rackName := strings.ToLower(strings.TrimPrefix(key, "RACK_TOKEN_"))
+			rack := c.Racks[rackName]
+			rack.Name = rackName
+			rack.APIKey = value
+			rack.Enabled = true
+			c.Racks[rackName] = rack
+		}
 	}
-
-	return nil
+	
+	// In dev mode, set up a default local rack if none configured
+	if c.DevMode && len(c.Racks) == 0 {
+		c.setupDevRacks()
+	}
 }
 
 func (c *Config) setupDevRacks() {

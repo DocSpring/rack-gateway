@@ -10,6 +10,64 @@ The following Convox repositories are available for reference in `./reference/`:
 - `reference/convox_rack/` - The Convox Rack API server (github.com/convox/rack)
 - `reference/convox_racks_terraform/` - Our Terraform configurations for self-hosted racks
 
+## Convox Gateway Architecture
+
+### Overview
+
+The Convox Gateway acts as an authentication and authorization proxy between developers and self-hosted Convox racks:
+
+```
+Developer → convox-gateway CLI → Gateway API Server → Convox Rack
+```
+
+### Developer Setup
+
+1. **Install CLI**: Binary installed at `/usr/local/bin/convox-gateway`
+2. **Login to Rack**: `convox-gateway login staging https://convox-gateway.company.com`
+3. **Configuration**: Stored in `~/.config/convox-gateway/config.json`
+   ```json
+   {
+     "gateways": {
+       "staging": {
+         "url": "https://convox-gateway.company.com"
+       }
+     },
+     "tokens": {
+       "staging": {
+         "token": "jwt-token-here",
+         "email": "user@company.com",
+         "expires_at": "2024-02-01T00:00:00Z"
+       }
+     }
+   }
+   ```
+
+### Gateway Server Setup
+
+The gateway server (run by admins) needs:
+
+1. **Environment Variables**:
+
+   - `RACK_URL_STAGING=https://api.staging.convox.cloud`
+   - `RACK_TOKEN_STAGING=actual-convox-rack-token`
+   - `GOOGLE_CLIENT_ID=oauth-client-id`
+   - `GOOGLE_CLIENT_SECRET=oauth-client-secret`
+   - `APP_JWT_KEY=jwt-signing-key`
+
+2. **No config/racks.yaml**: Racks are discovered from environment variables
+
+### CLI Wrapper Functionality
+
+The `convox-gateway` CLI wraps the real `convox` CLI:
+
+1. Developer runs: `convox-gateway apps`
+2. CLI loads gateway URL and JWT token from `~/.config/convox-gateway/config.json`
+3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.company.com/v1/proxy/staging`
+4. CLI executes: `convox apps` with the RACK_URL environment variable
+5. Real convox CLI connects to gateway using JWT as password
+6. Gateway validates JWT, checks RBAC permissions
+7. Gateway proxies request to real Convox rack using actual token
+
 ## How Convox v3 Authentication Works
 
 ### Terraform Racks (Self-Hosted)
