@@ -53,8 +53,8 @@ if [ -e "$BACKUP_PATH" ]; then
 fi
 
 # Check if config exists
-if [ ! -e "$CONFIG_PATH" ]; then
-    echo -e "\033[31mCRITICAL: Convox config does not exist at $CONFIG_PATH - THIS SHOULD NEVER HAPPEN\033[0m"
+if [ ! -e "$CONFIG_PATH" ] && [ -z "${CI:-}" ]; then
+    echo -e "\033[31mCRITICAL: Convox config does not exist at $CONFIG_PATH\033[0m"
     exit 1
 fi
 
