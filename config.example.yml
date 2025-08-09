@@ -1,0 +1,11 @@
+domain: company.com # Only @company.com emails can sign in
+users:
+  admin@company.com:
+    name: Admin User
+    roles: [admin]
+  john@company.com:
+    name: John Doe
+    roles: [deployer]
+  jane@company.com:
+    name: Jane Smith
+    roles: [ops, viewer]

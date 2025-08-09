@@ -191,9 +191,29 @@ RACK_HOST=https://rack.example.com
 
 ### Configuration Files
 
-- `config/policies.yaml`: RBAC policy definitions
-- `config/users.yaml`: User role assignments (auto-created)
-- `config/roles.yaml`: Role definitions (auto-created)
+The gateway uses a single `config.yml` file for user and domain configuration:
+
+```yaml
+# /app/data/config.yml (or set via CONVOX_GATEWAY_CONFIG_DIR env var)
+domain: company.com  # Only @company.com emails can sign in
+users:
+  admin@company.com:
+    name: Admin User
+    roles: [admin]
+  john@company.com:
+    name: John Doe
+    roles: [deployer]
+  jane@company.com:
+    name: Jane Smith
+    roles: [ops, viewer]
+```
+
+Set the config directory via environment variable:
+```bash
+CONVOX_GATEWAY_CONFIG_DIR=/app/data  # Will look for /app/data/config.yml
+```
+
+The CLI stores its configuration separately:
 - `~/.config/convox-gateway/config.json`: Local CLI configuration (per developer)
 
 ## RBAC Model

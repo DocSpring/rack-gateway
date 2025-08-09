@@ -59,7 +59,7 @@ const (
 type App struct {
 	Name       string    `json:"name"`
 	Status     string    `json:"status"`
-	Generation int       `json:"generation"`
+	Generation string    `json:"generation"`
 	Release    string    `json:"release"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -214,7 +214,7 @@ func getApps(w http.ResponseWriter, r *http.Request) {
 		{
 			Name:       "api",
 			Status:     "running",
-			Generation: 3,
+			Generation: "3",
 			Release:    "RAPI123456",
 			CreatedAt:  time.Now().Add(-720 * time.Hour),
 			UpdatedAt:  time.Now().Add(-24 * time.Hour),
@@ -222,7 +222,7 @@ func getApps(w http.ResponseWriter, r *http.Request) {
 		{
 			Name:       "web",
 			Status:     "running",
-			Generation: 3,
+			Generation: "3",
 			Release:    "RWEB789012",
 			CreatedAt:  time.Now().Add(-480 * time.Hour),
 			UpdatedAt:  time.Now().Add(-2 * time.Hour),
@@ -230,7 +230,7 @@ func getApps(w http.ResponseWriter, r *http.Request) {
 		{
 			Name:       "worker",
 			Status:     "updating",
-			Generation: 3,
+			Generation: "3",
 			Release:    "RWRK345678",
 			CreatedAt:  time.Now().Add(-240 * time.Hour),
 			UpdatedAt:  time.Now().Add(-5 * time.Minute),
@@ -246,7 +246,7 @@ func getApp(w http.ResponseWriter, r *http.Request) {
 	app := App{
 		Name:       vars["app"],
 		Status:     "running",
-		Generation: 3,
+		Generation: "3",
 		Release:    "R" + strings.ToUpper(vars["app"][:3]) + "123456",
 		CreatedAt:  time.Now().Add(-720 * time.Hour),
 		UpdatedAt:  time.Now().Add(-24 * time.Hour),
@@ -263,7 +263,7 @@ func createApp(w http.ResponseWriter, r *http.Request) {
 	app := App{
 		Name:       req["name"],
 		Status:     "creating",
-		Generation: 3,
+		Generation: "3",
 		Release:    "",
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),

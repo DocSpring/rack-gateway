@@ -18,13 +18,8 @@ type Manager struct {
 	policies         map[string]*Policy  // Legacy, kept for compatibility
 	compiledPolicies map[string]*PolicyDef // New compiled-in policies
 	mu               sync.RWMutex
-	configPaths      ConfigPaths
-}
-
-type ConfigPaths struct {
-	UsersPath    string
-	RolesPath    string
-	PoliciesPath string
+	configPath       string  // Path to config.yml
+	config           *GatewayConfig  // Loaded configuration
 }
 
 type User struct {
@@ -54,13 +49,13 @@ type Rule struct {
 	Racks    []string `yaml:"racks,omitempty"`
 }
 
-func NewManager(paths ConfigPaths) (*Manager, error) {
+func NewManager(configPath string) (*Manager, error) {
 	m := &Manager{
 		users:            make(map[string]*User),
 		roles:            make(map[string]*Role),
 		policies:         make(map[string]*Policy),
 		compiledPolicies: make(map[string]*PolicyDef),
-		configPaths:      paths,
+		configPath:       configPath,
 	}
 
 	modelText := `
@@ -119,21 +114,24 @@ func (m *Manager) LoadConfigs() error {
 }
 
 func (m *Manager) loadUsers() error {
-	if _, err := os.Stat(m.configPaths.UsersPath); os.IsNotExist(err) {
-		m.createDefaultUsers()
-		return nil
-	}
-
-	data, err := os.ReadFile(m.configPaths.UsersPath)
+	// Load config.yml
+	config, err := LoadConfig(m.configPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load config: %w", err)
 	}
-
-	var users map[string]*User
-	if err := yaml.Unmarshal(data, &users); err != nil {
-		return err
+	
+	m.config = config
+	
+	// Convert UserConfig to User structs
+	users := make(map[string]*User)
+	for email, userConfig := range config.Users {
+		users[email] = &User{
+			Email: email,
+			Name:  userConfig.Name,
+			Roles: userConfig.Roles,
+		}
 	}
-
+	
 	m.mu.Lock()
 	m.users = users
 	m.mu.Unlock()
@@ -142,25 +140,8 @@ func (m *Manager) loadUsers() error {
 }
 
 func (m *Manager) loadRoles() error {
-	if _, err := os.Stat(m.configPaths.RolesPath); os.IsNotExist(err) {
-		m.createDefaultRoles()
-		return nil
-	}
-
-	data, err := os.ReadFile(m.configPaths.RolesPath)
-	if err != nil {
-		return err
-	}
-
-	var roles map[string]*Role
-	if err := yaml.Unmarshal(data, &roles); err != nil {
-		return err
-	}
-
-	m.mu.Lock()
-	m.roles = roles
-	m.mu.Unlock()
-
+	// Roles are now compiled-in, no need to load from file
+	m.createDefaultRoles()
 	return nil
 }
 
@@ -268,15 +249,31 @@ func (m *Manager) GetUserRoles(email string) []string {
 }
 
 func (m *Manager) AddUser(email, name string, roles []string) error {
+	// Update in-memory users
 	m.mu.Lock()
 	m.users[email] = &User{
 		Email: email,
 		Name:  name,
 		Roles: roles,
 	}
+	
+	// Update config
+	if m.config == nil {
+		m.config = &GatewayConfig{
+			Users: make(map[string]*UserConfig),
+		}
+	}
+	if m.config.Users == nil {
+		m.config.Users = make(map[string]*UserConfig)
+	}
+	m.config.Users[email] = &UserConfig{
+		Name:  name,
+		Roles: roles,
+	}
 	m.mu.Unlock()
 
-	if err := m.saveUsers(); err != nil {
+	// Save to config.yml
+	if err := m.saveConfig(); err != nil {
 		return err
 	}
 
@@ -284,21 +281,25 @@ func (m *Manager) AddUser(email, name string, roles []string) error {
 	return m.buildPolicyRules()
 }
 
-func (m *Manager) saveUsers() error {
+func (m *Manager) saveConfig() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	data, err := yaml.Marshal(m.users)
+	if m.config == nil {
+		return nil // Nothing to save
+	}
+
+	data, err := yaml.Marshal(m.config)
 	if err != nil {
 		return err
 	}
 
-	dir := filepath.Dir(m.configPaths.UsersPath)
+	dir := filepath.Dir(m.configPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(m.configPaths.UsersPath, data, 0644)
+	return os.WriteFile(m.configPath, data, 0644)
 }
 
 func (m *Manager) createDefaultUsers() {
@@ -380,4 +381,14 @@ func (m *Manager) GetRoles() map[string]*Role {
 		roles[k] = v
 	}
 	return roles
+}
+
+func (m *Manager) GetDomain() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if m.config != nil {
+		return m.config.Domain
+	}
+	return ""
 }

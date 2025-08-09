@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docspring/convox-gateway/internal/audit"
-	"github.com/docspring/convox-gateway/internal/auth"
-	"github.com/docspring/convox-gateway/internal/config"
-	"github.com/docspring/convox-gateway/internal/rbac"
+	"github.com/docspring/convox-gateway/internal/api/audit"
+	"github.com/docspring/convox-gateway/internal/api/auth"
+	"github.com/docspring/convox-gateway/internal/api/config"
+	"github.com/docspring/convox-gateway/internal/api/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )

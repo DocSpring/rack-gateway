@@ -18,9 +18,7 @@ type Config struct {
 	GoogleAllowedDomain   string
 	RedirectURL           string
 	AdminUsers            []string
-	UsersConfigPath       string
-	RolesConfigPath       string
-	PoliciesPath          string
+	ConfigPath            string  // Path to config.yml
 	DevMode               bool
 	Racks                 map[string]RackConfig
 }
@@ -35,16 +33,17 @@ type RackConfig struct {
 }
 
 func Load() (*Config, error) {
+	// Check for config directory override
+	configDir := getEnv("CONVOX_GATEWAY_CONFIG_DIR", "config")
+	
 	cfg := &Config{
 		Port:                getEnv("PORT", "8080"),
 		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
-		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", "docspring.com"),
+		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", ""), // Will be overridden by config.yml if present
 		RedirectURL:         getEnv("REDIRECT_URL", "http://localhost:8080/v1/login/callback"),
-		UsersConfigPath:     getEnv("USERS_CONFIG_PATH", "config/users.yaml"),
-		RolesConfigPath:     getEnv("ROLES_CONFIG_PATH", "config/roles.yaml"),
-		PoliciesPath:        getEnv("POLICIES_PATH", "config/policies.yaml"),
+		ConfigPath:          configDir + "/config.yml",
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),
 	}

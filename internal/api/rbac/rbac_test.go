@@ -402,22 +402,17 @@ func TestMultiSegmentWildcards(t *testing.T) {
 
 func TestUserPersistence(t *testing.T) {
 	tempDir := t.TempDir()
-	
-	paths := ConfigPaths{
-		UsersPath:    filepath.Join(tempDir, "users.yaml"),
-		RolesPath:    filepath.Join(tempDir, "roles.yaml"),
-		PoliciesPath: filepath.Join(tempDir, "policies.yaml"),
-	}
+	configPath := filepath.Join(tempDir, "config.yml")
 
 	// Create first manager and add user
-	manager1, err := NewManager(paths)
+	manager1, err := NewManager(configPath)
 	require.NoError(t, err)
 
 	err = manager1.AddUser("persist@test.com", "Persist User", []string{"deployer"})
 	require.NoError(t, err)
 
 	// Create second manager and check user exists
-	manager2, err := NewManager(paths)
+	manager2, err := NewManager(configPath)
 	require.NoError(t, err)
 
 	users := manager2.GetUsers()
@@ -481,14 +476,9 @@ func TestUnknownUser(t *testing.T) {
 // Helper function to set up a test manager
 func setupTestManager(t *testing.T) *Manager {
 	tempDir := t.TempDir()
-	
-	paths := ConfigPaths{
-		UsersPath:    filepath.Join(tempDir, "users.yaml"),
-		RolesPath:    filepath.Join(tempDir, "roles.yaml"),
-		PoliciesPath: filepath.Join(tempDir, "policies.yaml"),
-	}
+	configPath := filepath.Join(tempDir, "config.yml")
 
-	manager, err := NewManager(paths)
+	manager, err := NewManager(configPath)
 	require.NoError(t, err, "Failed to create RBAC manager")
 	
 	return manager

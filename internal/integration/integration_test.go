@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -70,8 +71,8 @@ func TestIntegration(t *testing.T) {
 		testHealthCheck(t, servers)
 	})
 
-	t.Run("UnauthorizedAccess", func(t *testing.T) {
-		testUnauthorizedAccess(t, servers)
+	t.Run("UnauthenticatedAccess", func(t *testing.T) {
+		testUnauthenticatedAccess(t, servers)
 	})
 
 	t.Run("MockConvoxAuth", func(t *testing.T) {
@@ -86,8 +87,12 @@ func TestIntegration(t *testing.T) {
 		testCLIWithInvalidToken(t, servers)
 	})
 
-	t.Run("ProxyE2E", func(t *testing.T) {
-		testProxyE2E(t, servers)
+	t.Run("ProxyE2EAuthorized", func(t *testing.T) {
+		testProxyE2EAuthorized(t, servers)
+	})
+
+	t.Run("ProxyE2EUnauthorized", func(t *testing.T) {
+		testProxyE2EUnauthorized(t, servers)
 	})
 
 	t.Run("OAuthLoginFlow", func(t *testing.T) {
@@ -110,14 +115,40 @@ func (s *TestServers) startMockConvox(t *testing.T) {
 	s.mockConvoxCmd = exec.Command("../../bin/mock-convox")
 	s.mockConvoxCmd.Env = append(os.Environ(), "MOCK_CONVOX_PORT="+mockConvoxPort)
 
-	// Capture output for debugging
-	s.mockConvoxCmd.Stdout = os.Stdout
-	s.mockConvoxCmd.Stderr = os.Stderr
+	// Capture output to avoid noise during tests
+	var mockOut bytes.Buffer
+	s.mockConvoxCmd.Stdout = &mockOut
+	s.mockConvoxCmd.Stderr = &mockOut
 
-	require.NoError(t, s.mockConvoxCmd.Start())
+	if err := s.mockConvoxCmd.Start(); err != nil {
+		t.Logf("Mock Convox output:\n%s", mockOut.String())
+		require.NoError(t, err)
+	}
 }
 
 func (s *TestServers) startGateway(t *testing.T) {
+	// Create RBAC config directory with test users
+	rbacConfigDir := t.TempDir()
+	configFile := filepath.Join(rbacConfigDir, "config.yml")
+	
+	// Create config.yml with test users for different roles
+	config := `domain: example.com
+users:
+  test@example.com:
+    name: Test User
+    roles: [admin]
+  viewer@example.com:
+    name: Viewer User
+    roles: [viewer]
+  ops@example.com:
+    name: Ops User
+    roles: [ops]
+  deployer@example.com:
+    name: Deployer User
+    roles: [deployer]
+`
+	require.NoError(t, os.WriteFile(configFile, []byte(config), 0644))
+	
 	s.gatewayCmd = exec.Command("../../bin/convox-gateway-api")
 	s.gatewayCmd.Env = append(os.Environ(),
 		"PORT="+gatewayPort,
@@ -130,13 +161,18 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"RACK_HOST=http://localhost:"+mockConvoxPort,
 		"RACK_TOKEN="+mockRackToken,
 		"RACK_USERNAME=convox",
+		// RBAC configuration directory
+		"CONVOX_GATEWAY_CONFIG_DIR="+rbacConfigDir,
 	)
 
-	// Capture output for debugging
-	s.gatewayCmd.Stdout = os.Stdout
-	s.gatewayCmd.Stderr = os.Stderr
+	// Capture output to avoid noise during tests (only show on failure)
+	var gatewayOut bytes.Buffer
+	s.gatewayCmd.Stdout = &gatewayOut
+	s.gatewayCmd.Stderr = &gatewayOut
 
-	require.NoError(t, s.gatewayCmd.Start())
+	if err := s.gatewayCmd.Start(); err != nil {
+		require.NoError(t, err)
+	}
 }
 
 func (s *TestServers) cleanup() {
@@ -186,7 +222,7 @@ func testHealthCheck(t *testing.T, s *TestServers) {
 	assert.Equal(t, "healthy", result["status"])
 }
 
-func testUnauthorizedAccess(t *testing.T, s *TestServers) {
+func testUnauthenticatedAccess(t *testing.T, s *TestServers) {
 	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/me")
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -288,11 +324,11 @@ func createTestJWT(t *testing.T, email string, expiresIn time.Duration) string {
 		"iat":   time.Now().Unix(),
 		"nbf":   time.Now().Unix(),
 	}
-	
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(testJWTSecret))
 	require.NoError(t, err)
-	
+
 	return tokenString
 }
 
@@ -321,7 +357,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
-	
+
 	// Set current rack
 	currentFile := filepath.Join(configDir, "current")
 	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
@@ -350,7 +386,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "convox apps")
 		assert.Contains(t, string(output), "convox ps")
 	})
-	
+
 	// Test rack command shows current rack
 	t.Run("rack", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "rack")
@@ -361,9 +397,9 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 		output, _ := cmd.CombinedOutput()
 		// Should show current rack info
 		assert.Contains(t, string(output), "Current rack: staging")
-		assert.Contains(t, string(output), "Gateway URL: http://localhost:" + gatewayPort)
+		assert.Contains(t, string(output), "Gateway URL: http://localhost:"+gatewayPort)
 	})
-	
+
 	// Test racks command lists configured racks
 	t.Run("racks", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "racks")
@@ -374,7 +410,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 		output, _ := cmd.CombinedOutput()
 		// Should list configured racks
 		assert.Contains(t, string(output), "staging")
-		assert.Contains(t, string(output), "http://localhost:" + gatewayPort)
+		assert.Contains(t, string(output), "http://localhost:"+gatewayPort)
 	})
 }
 
@@ -402,7 +438,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(tokenFile, configData, 0600))
-	
+
 	// Set current rack
 	currentFile := filepath.Join(configDir, "current")
 	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
@@ -414,7 +450,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	)
 
 	output, err := cmd.CombinedOutput()
-	
+
 	// Should fail with authentication error
 	require.Error(t, err, "Command should fail with invalid token")
 	assert.Contains(t, string(output), "ERROR")
@@ -422,13 +458,13 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 }
 
 // Test end-to-end proxy functionality with real commands
-func testProxyE2E(t *testing.T, s *TestServers) {
+func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	// Create a valid JWT token that the gateway will accept
 	configDir := t.TempDir()
 	configFile := fmt.Sprintf("%s/config.json", configDir)
-	
+
 	validJWT := createTestJWT(t, "test@example.com", 24*time.Hour)
-	
+
 	config := map[string]interface{}{
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
@@ -447,7 +483,7 @@ func testProxyE2E(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
-	
+
 	// Set current rack
 	currentFile := filepath.Join(configDir, "current")
 	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
@@ -460,8 +496,9 @@ func testProxyE2E(t *testing.T, s *TestServers) {
 		)
 
 		output, err := cmd.CombinedOutput()
-		t.Logf("convox ps output: %s", output)
-		
+		if err != nil {
+			t.Logf("convox ps failed with output: %s", output)
+		}
 		require.NoError(t, err, "convox ps should succeed")
 		// Should see processes from mock server
 		assert.Contains(t, string(output), "web")
@@ -477,95 +514,226 @@ func testProxyE2E(t *testing.T, s *TestServers) {
 		)
 
 		output, err := cmd.CombinedOutput()
-		t.Logf("convox rack output: %s", output)
-		
+		if err != nil {
+			t.Logf("convox rack failed with output: %s", output)
+		}
 		require.NoError(t, err, "convox rack should succeed")
 		// Should see rack info from mock server
 		assert.Contains(t, string(output), "mock-rack")
 		assert.Contains(t, string(output), "running")
 	})
+
+	// Test 3: convox apps (lists applications)
+	t.Run("convox_apps", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("convox apps failed with output: %s", output)
+		}
+		require.NoError(t, err, "convox apps should succeed")
+		// Should see apps from mock server
+		assert.Contains(t, string(output), "api")
+		assert.Contains(t, string(output), "web")
+	})
 }
 
-// Test the actual convox CLI wrapper functionality
-func testConvoxCLIWrapper(t *testing.T, s *TestServers) {
-	// Test that convox-gateway passes through commands to convox
-	// when given a valid rack configuration
-
-	// First, simulate a successful login by creating a token file
-	configDir := t.TempDir()
-	configFile := fmt.Sprintf("%s/config.json", configDir)
-
-	// Create a valid JWT token that the gateway will accept
-	validJWT := createTestJWT(t, "test@example.com", 24*time.Hour)
+// Test that unauthorized users and users with insufficient permissions are blocked
+func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
+	// Helper function to create config for a user with specific role
+	createUserConfig := func(t *testing.T, email string, role string) string {
+		configDir := t.TempDir()
+		configFile := filepath.Join(configDir, "config.json")
+		
+		// Create JWT with role claim
+		claims := jwt.MapClaims{
+			"email": email,
+			"name":  "Test User",
+			"role":  role, // Add role to JWT claims
+			"exp":   time.Now().Add(24 * time.Hour).Unix(),
+			"iat":   time.Now().Unix(),
+			"nbf":   time.Now().Unix(),
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString([]byte(testJWTSecret))
+		require.NoError(t, err)
+		
+		config := map[string]interface{}{
+			"gateways": map[string]interface{}{
+				"staging": map[string]interface{}{
+					"url": "http://localhost:" + gatewayPort,
+				},
+			},
+			"tokens": map[string]interface{}{
+				"staging": map[string]interface{}{
+					"token":      tokenString,
+					"email":      email,
+					"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				},
+			},
+		}
+		
+		configData, err := json.MarshalIndent(config, "", "  ")
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(configFile, configData, 0600))
+		
+		// Set current rack
+		currentFile := filepath.Join(configDir, "current")
+		require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
+		
+		return configDir
+	}
 	
-	config := map[string]interface{}{
-		"gateways": map[string]interface{}{
-			"staging": map[string]interface{}{
-				"url": "http://localhost:" + gatewayPort,
-			},
-		},
-		"tokens": map[string]interface{}{
-			"staging": map[string]interface{}{
-				"token":      validJWT, // Use a valid JWT that the gateway will accept
-				"email":      "test@example.com",
-				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
-			},
-		},
-	}
-
-	configData, err := json.MarshalIndent(config, "", "  ")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	// Test 1: Viewer role - should be blocked from write operations
+	t.Run("viewer_blocked_from_writes", func(t *testing.T) {
+		configDir := createUserConfig(t, "viewer@example.com", "viewer")
+		
+		// Try to create an app (should be blocked)
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err := cmd.CombinedOutput()
+		
+		require.Error(t, err, "viewer should be blocked from creating apps")
+		assert.Contains(t, string(output), "permission denied") // Forbidden
+		
+		// Try to delete a process (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "stop", "web-123", "-a", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "viewer should be blocked from stopping processes")
+		assert.Contains(t, string(output), "permission denied")
+	})
 	
-	// Set current rack
-	currentFile := filepath.Join(configDir, "current")
-	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
-
-	// Test various convox commands through our wrapper
-	testCases := []struct {
-		name     string
-		args     []string
-		checkOut func(t *testing.T, output []byte)
-	}{
-		{
-			name: "apps_list",
-			args: []string{"apps"},
-			checkOut: func(t *testing.T, output []byte) {
-				// Should see apps from our mock server
-				assert.Contains(t, string(output), "api")
-				assert.Contains(t, string(output), "web")
-			},
-		},
-		{
-			name: "rack_info",
-			args: []string{"rack"},
-			checkOut: func(t *testing.T, output []byte) {
-				// Should see rack info from mock server
-				assert.Contains(t, string(output), "mock-rack")
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Prepend "convox" to the args since all convox commands go through that subcommand now
-			args := append([]string{"convox"}, tc.args...)
-			cmd := exec.Command("../../bin/convox-gateway", args...)
-			cmd.Env = append(os.Environ(),
-				"CONVOX_GATEWAY_CONFIG="+configDir,
-				// Let convox-gateway build the RACK_URL pointing to the gateway
-			)
-
-			output, err := cmd.CombinedOutput()
-			t.Logf("Command %v output: %s", tc.args, output)
-
-			if err != nil {
-				t.Logf("Command failed: %v", err)
-			}
-
-			if tc.checkOut != nil {
-				tc.checkOut(t, output)
-			}
-		})
-	}
+	// Test 2: Ops role - should be blocked from deployment operations
+	t.Run("ops_blocked_from_deployment", func(t *testing.T) {
+		configDir := createUserConfig(t, "ops@example.com", "ops")
+		
+		// Try to deploy (should be blocked)
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "deploy", "-a", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err := cmd.CombinedOutput()
+		
+		require.Error(t, err, "ops should be blocked from deploying")
+		assert.Contains(t, string(output), "permission denied")
+		
+		// Try to create an app (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "ops should be blocked from creating apps")
+		assert.Contains(t, string(output), "permission denied")
+		
+		// Try to update environment variables (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "env", "set", "KEY=value", "-a", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "ops should be blocked from setting env vars")
+		assert.Contains(t, string(output), "permission denied")
+	})
+	
+	// Test 3: Deployer role - should be blocked from destructive operations
+	t.Run("deployer_blocked_from_destruction", func(t *testing.T) {
+		configDir := createUserConfig(t, "deployer@example.com", "deployer")
+		
+		// Try to delete an app (should be blocked)
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps", "delete", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err := cmd.CombinedOutput()
+		
+		require.Error(t, err, "deployer should be blocked from deleting apps")
+		assert.Contains(t, string(output), "permission denied")
+		
+		// Try to delete a certificate (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "certs", "delete", "cert-123")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "deployer should be blocked from deleting certificates")
+		assert.Contains(t, string(output), "permission denied")
+		
+		// Try to terminate an instance (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "instances", "terminate", "i-123456")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "deployer should be blocked from terminating instances")
+		assert.Contains(t, string(output), "permission denied")
+	})
+	
+	// Test 4: Unknown/unregistered user - should be blocked from everything
+	t.Run("unknown_user_blocked", func(t *testing.T) {
+		configDir := createUserConfig(t, "unknown@example.com", "")
+		
+		// Try to list apps (should be blocked)
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err := cmd.CombinedOutput()
+		
+		require.Error(t, err, "unknown user should be blocked from listing apps")
+		assert.Contains(t, string(output), "permission denied")
+		
+		// Try to view processes (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "unknown user should be blocked from viewing processes")
+		assert.Contains(t, string(output), "permission denied")
+		
+		// Try to get rack info (should be blocked)
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "rack")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+configDir)
+		
+		output, err = cmd.CombinedOutput()
+		
+		require.Error(t, err, "unknown user should be blocked from viewing rack info")
+		assert.Contains(t, string(output), "permission denied")
+	})
+	
+	// Test 5: Verify proper access levels are enforced
+	t.Run("verify_access_levels", func(t *testing.T) {
+		// Viewer can read but not write
+		viewerConfig := createUserConfig(t, "viewer@example.com", "viewer")
+		
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+viewerConfig)
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "viewer should be able to list apps")
+		assert.Contains(t, string(output), "api") // Should see apps
+		
+		// Ops can manage processes but not deploy
+		opsConfig := createUserConfig(t, "ops@example.com", "ops")
+		
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+opsConfig)
+		output, err = cmd.CombinedOutput()
+		require.NoError(t, err, "ops should be able to view processes")
+		assert.Contains(t, string(output), "web") // Should see processes
+		
+		// Deployer can deploy but not delete
+		deployerConfig := createUserConfig(t, "deployer@example.com", "deployer")
+		
+		cmd = exec.Command("../../bin/convox-gateway", "convox", "builds", "-a", "myapp")
+		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CONFIG="+deployerConfig)
+		output, err = cmd.CombinedOutput()
+		require.NoError(t, err, "deployer should be able to list builds")
+		assert.Contains(t, string(output), "BAPI") // Should see build IDs
+	})
 }
