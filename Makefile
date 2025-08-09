@@ -1,8 +1,13 @@
-.PHONY: dev proxy cli test lint docker clean build all
+.PHONY: dev proxy cli mock test test-unit test-integration lint docker clean build all deps
 
-all: proxy cli
+all: proxy cli mock
 
-build: proxy cli
+build: proxy cli mock
+
+deps:
+	@echo "Installing Go dependencies..."
+	@go mod download
+	@go mod tidy
 
 dev:
 	@echo "Starting gateway API in development mode..."
@@ -16,9 +21,19 @@ cli:
 	@echo "Building gateway CLI..."
 	@go build -o bin/convox-gateway cmd/cli/main.go
 
-test:
-	@echo "Running tests..."
-	@go test -v -race ./...
+mock:
+	@echo "Building mock Convox server..."
+	@go build -o bin/mock-convox cmd/mock-convox/main.go
+
+test: test-unit test-integration
+
+test-unit:
+	@echo "Running unit tests..."
+	@./scripts/safe-test.sh -v -race -short ./...
+
+test-integration:
+	@echo "Running integration tests..."
+	@./scripts/safe-test.sh -v -race -tags=integration ./internal/integration/...
 
 lint:
 	@echo "Running linters..."

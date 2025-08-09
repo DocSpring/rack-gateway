@@ -21,12 +21,12 @@ User → CLI → Auth Proxy → Convox Rack API
 ## Key Implementation Details
 
 ### Authentication Flow
-1. User runs `docspring-convox login staging`
+1. User runs `convox-gateway login staging`
 2. CLI opens browser for Google OAuth (PKCE flow)
 3. User authenticates with Google Workspace account
 4. Proxy validates domain (@docspring.com)
 5. Proxy issues JWT token (30 day TTL)
-6. CLI stores token locally in `~/.config/docspring-convox/tokens.json`
+6. CLI stores token locally in `~/.config/convox-gateway/tokens.json`
 
 ### Authorization (RBAC)
 - Uses Casbin v2 for policy enforcement

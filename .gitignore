@@ -47,7 +47,7 @@ terraform/*.tfplan
 terraform/.terraform.lock.hcl
 
 # CLI config
-~/.config/docspring-convox-login/
+~/.config/convox-gateway/
 
 # Build artifacts
 dist/

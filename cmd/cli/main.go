@@ -56,6 +56,10 @@ func main() {
 		Short: "Enterprise gateway for Convox with authentication and RBAC",
 		Long: `Convox Gateway provides secure authenticated access to Convox racks
 with SSO authentication, role-based access control, and audit logging.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			// If no subcommand is specified, show help
+			cmd.Help()
+		},
 	}
 
 	loginCmd := &cobra.Command{
@@ -64,14 +68,6 @@ with SSO authentication, role-based access control, and audit logging.`,
 		Long:  "Authenticate with SSO provider and store token for the specified rack",
 		Args:  cobra.ExactArgs(1),
 		RunE:  loginCommand,
-	}
-
-	callCmd := &cobra.Command{
-		Use:   "call [rack] [method] [path]",
-		Short: "Make an authenticated API call",
-		Long:  "Make an authenticated call to the Convox rack through the auth proxy",
-		Args:  cobra.MinimumNArgs(3),
-		RunE:  callCommand,
 	}
 
 	completionCmd := &cobra.Command{
@@ -122,11 +118,19 @@ PowerShell:
 		},
 	}
 
-	callCmd.Flags().StringP("data", "d", "", "Request body data (JSON)")
-
-	rootCmd.AddCommand(loginCmd, callCmd, completionCmd)
+	rootCmd.AddCommand(loginCmd, completionCmd)
 	rootCmd.PersistentFlags().StringVar(&proxyURL, "proxy", getEnv("CONVOX_GATEWAY_PROXY", "http://localhost:8080"), "Proxy server URL")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", filepath.Join(homeDir(), ".config", "convox-gateway"), "Config directory")
+
+	// Check if we should wrap a convox command
+	if len(os.Args) > 1 && os.Args[1] != "login" && os.Args[1] != "completion" && os.Args[1] != "--help" && os.Args[1] != "-h" {
+		// This is a convox command to be wrapped
+		if err := wrapConvoxCommand(os.Args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -168,57 +172,56 @@ func loginCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func callCommand(cmd *cobra.Command, args []string) error {
-	rack := args[0]
-	method := strings.ToUpper(args[1])
-	path := args[2]
-
-	data, _ := cmd.Flags().GetString("data")
-
+func wrapConvoxCommand(args []string) error {
+	// Determine which rack to use (could be from flag, env var, or default)
+	rack := "staging" // Default rack
+	
+	// Check for --rack flag
+	for i, arg := range args {
+		if arg == "--rack" && i+1 < len(args) {
+			rack = args[i+1]
+		}
+	}
+	
+	// Check for rack from environment
+	if envRack := os.Getenv("CONVOX_RACK"); envRack != "" {
+		rack = envRack
+	}
+	
+	// Load token for the rack
 	token, err := loadToken(rack)
 	if err != nil {
-		return fmt.Errorf("no valid token found for rack %s: %w", rack, err)
+		return fmt.Errorf("not logged in to rack %s. Run: convox-gateway login %s", rack, rack)
 	}
-
-	url := fmt.Sprintf("%s/v1/proxy/%s/%s", proxyURL, rack, strings.TrimPrefix(path, "/"))
-
-	var body io.Reader
-	if data != "" {
-		body = strings.NewReader(data)
+	
+	// Check if token is expired
+	if time.Now().After(token.ExpiresAt) {
+		return fmt.Errorf("token expired for rack %s. Run: convox-gateway login %s", rack, rack)
 	}
-
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+	
+	// Build RACK_URL with JWT token as password
+	rackURL := fmt.Sprintf("https://convox:%s@%s/v1/proxy/%s", token.Token, proxyURL, rack)
+	if strings.HasPrefix(proxyURL, "http://") {
+		// For local testing, preserve http
+		rackURL = fmt.Sprintf("http://convox:%s@%s/v1/proxy/%s", 
+			token.Token, 
+			strings.TrimPrefix(proxyURL, "http://"), 
+			rack)
+	} else if strings.HasPrefix(proxyURL, "https://") {
+		rackURL = fmt.Sprintf("https://convox:%s@%s/v1/proxy/%s", 
+			token.Token,
+			strings.TrimPrefix(proxyURL, "https://"),
+			rack)
 	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.Token))
-	if data != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
-
-	fmt.Printf("Status: %d\n", resp.StatusCode)
-
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, respBody, "", "  "); err == nil {
-		fmt.Println(prettyJSON.String())
-	} else {
-		fmt.Println(string(respBody))
-	}
-
-	return nil
+	
+	// Execute the real convox CLI with RACK_URL set
+	cmd := exec.Command("convox", args...)
+	cmd.Env = append(os.Environ(), "RACK_URL="+rackURL)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	
+	return cmd.Run()
 }
 
 func startLogin() (*LoginStartResponse, error) {

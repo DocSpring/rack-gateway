@@ -133,19 +133,19 @@ The CLI checks in this order (from `pkg/rack/rack.go`):
 
 ## CLI Wrapper Strategy
 
-Instead of reimplementing all Convox commands, `docspring-convox` acts as a wrapper:
+Instead of reimplementing all Convox commands, `convox-gateway` acts as a wrapper:
 
 1. **Handles authentication**:
 
    ```bash
-   docspring-convox login staging
+   convox-gateway login staging
    # Performs OAuth, stores JWT
    ```
 
 2. **Wraps standard Convox CLI**:
 
    ```bash
-   docspring-convox apps
+   convox-gateway apps
    # Sets RACK_URL with JWT
    # Executes: convox apps
    ```
@@ -203,7 +203,7 @@ These should only be done by infrastructure team with direct terraform access.
 2. **Create test user** in RBAC system
 3. **Login via OAuth**:
    ```bash
-   docspring-convox login staging
+   convox-gateway login staging
    ```
 4. **Test standard commands**:
    ```bash
