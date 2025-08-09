@@ -28,6 +28,13 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Install Convox CLI
+        run: |
+          curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+          sudo mv /tmp/convox /usr/local/bin/convox
+          sudo chmod +x /usr/local/bin/convox
+          convox --version
+
       - name: Run go fmt
         run: |
           if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
