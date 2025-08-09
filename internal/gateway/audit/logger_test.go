@@ -121,6 +121,56 @@ func TestShouldRedact(t *testing.T) {
 	}
 }
 
+func TestRedactQueryParams(t *testing.T) {
+	logger := NewLogger()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "single parameter",
+			input:    "token=secret123",
+			expected: "token=[REDACTED]",
+		},
+		{
+			name:     "multiple parameters",
+			input:    "user=john&password=secret&api_key=12345",
+			expected: "user=[REDACTED]&password=[REDACTED]&api_key=[REDACTED]",
+		},
+		{
+			name:     "parameters with special characters",
+			input:    "DATABASE_URL=postgres://user:pass@localhost/db&NODE_ENV=production",
+			expected: "DATABASE_URL=[REDACTED]&NODE_ENV=[REDACTED]",
+		},
+		{
+			name:     "empty query string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "parameter without value",
+			input:    "debug&verbose=true",
+			expected: "debug&verbose=[REDACTED]",
+		},
+		{
+			name:     "url encoded values",
+			input:    "message=hello%20world&secret=my%2Bsecret%3Dvalue",
+			expected: "message=[REDACTED]&secret=[REDACTED]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := logger.redactQueryParams(tt.input)
+			if result != tt.expected {
+				t.Errorf("redactQueryParams(%s) = %s, expected %s", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestRedactEnvVars(t *testing.T) {
 	logger := NewLogger()
 

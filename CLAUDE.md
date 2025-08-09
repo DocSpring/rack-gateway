@@ -161,13 +161,6 @@ Critical for production:
 - Enable sticky sessions for OAuth flow
 - Set all env vars via `convox env set`
 
-### Terraform Integration
-
-- KMS key for secrets encryption
-- CloudWatch log group (90 day retention)
-- SSM parameters for secure token storage
-- Module in `terraform/main.tf`
-
 ### CloudWatch Integration
 
 - Structured JSON logs to stdout

@@ -392,3 +392,10 @@ func (m *Manager) GetDomain() string {
 	}
 	return ""
 }
+
+func (m *Manager) GetConfig() *GatewayConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	return m.config
+}

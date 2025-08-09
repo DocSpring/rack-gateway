@@ -18,13 +18,10 @@ bin/
 # Go workspace
 go.work
 
-# Environment files
-.env
-.env.local
-.env.*.local
-
 # Config files with secrets
-config/config.yml
+config/gateway/config.yml
+config/cli/
+docker-compose.override.yml
 
 # IDE
 .vscode/
@@ -34,15 +31,10 @@ config/config.yml
 *~
 .DS_Store
 
+mise.local.toml
+
 # Logs
 *.log
-
-# Terraform
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.*
-terraform/*.tfplan
-terraform/.terraform.lock.hcl
 
 # CLI config
 ~/.config/convox-gateway/
@@ -50,3 +42,6 @@ terraform/.terraform.lock.hcl
 # Build artifacts
 dist/
 tmp/
+
+# Test artifacts
+web/test-results/.last-run.json

@@ -1,0 +1,23 @@
+[env]
+# Gateway configuration
+PORT = "8447"
+LOG_LEVEL = "debug"
+
+# OAuth configuration (override in mise.local.toml)
+GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_SECRET = ""
+GOOGLE_ALLOWED_DOMAIN = "example.com"
+
+# JWT configuration
+APP_JWT_KEY = "development-jwt-secret-key"
+
+# Mock Convox rack (for development)
+RACK_HOST = "https://mock-convox:5443"
+RACK_TOKEN = "mock-rack-token-12345"
+RACK_USERNAME = "convox"
+
+# Config directory for gateway server (contains config.yml with users/RBAC)
+CONVOX_GATEWAY_CONFIG_DIR = "./config/gateway"
+
+# Config directory for CLI (stores config.json with tokens and rack settings)
+CONVOX_GATEWAY_CLI_CONFIG_DIR = "./config/cli"

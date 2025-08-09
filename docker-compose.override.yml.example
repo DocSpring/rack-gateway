@@ -1,0 +1,26 @@
+# Docker Compose override for local development
+# Copy this to docker-compose.override.yml and customize
+
+version: '3.8'
+
+services:
+  gateway-api:
+    # Override environment variables for local development
+    environment:
+      # Uncomment and set your Google OAuth credentials
+      # GOOGLE_CLIENT_ID: your-client-id
+      # GOOGLE_CLIENT_SECRET: your-client-secret
+      # GOOGLE_ALLOWED_DOMAIN: your-domain.com
+      
+      # Enable debug logging
+      LOG_LEVEL: debug
+      
+    # Mount source code for hot reload with air
+    volumes:
+      - .:/app:ro
+      - ./config:/app/data:ro
+      
+    # Uncomment to use a different port
+    # ports:
+    #   - "3000:8080"
+

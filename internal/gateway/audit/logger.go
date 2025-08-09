@@ -22,6 +22,7 @@ type LogEntry struct {
 	Rack           string                 `json:"rack"`
 	Method         string                 `json:"method"`
 	Path           string                 `json:"path"`
+	QueryParams    string                 `json:"query_params,omitempty"`
 	Status         int                    `json:"status"`
 	LatencyMs      int64                  `json:"latency_ms"`
 	RBACDecision   string                 `json:"rbac_decision"`
@@ -69,6 +70,7 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 		Rack:         rack,
 		Method:       r.Method,
 		Path:         l.redactPath(r.URL.Path),
+		QueryParams:  l.redactQueryParams(r.URL.RawQuery),
 		Status:       status,
 		LatencyMs:    latency.Milliseconds(),
 		RBACDecision: rbacDecision,
@@ -154,6 +156,22 @@ func (l *Logger) shouldRedact(value string) bool {
 		}
 	}
 	return false
+}
+
+func (l *Logger) redactQueryParams(rawQuery string) string {
+	if rawQuery == "" {
+		return ""
+	}
+
+	params := strings.Split(rawQuery, "&")
+	for i, param := range params {
+		parts := strings.SplitN(param, "=", 2)
+		if len(parts) == 2 {
+			// Always redact query parameter values, keep the keys
+			params[i] = parts[0] + "=[REDACTED]"
+		}
+	}
+	return strings.Join(params, "&")
 }
 
 func (l *Logger) RedactEnvVars(envVars map[string]string) map[string]string {

@@ -52,6 +52,10 @@ go mod download
 ```bash
 cp config/config.yml.example config/config.yml
 # Edit config/config.yml with your users and domain
+
+# Set up environment variables using mise
+cp mise.local.toml.example mise.local.toml
+# Edit mise.local.toml with your OAuth credentials
 ```
 
 4. Start development environment with Docker Compose:
@@ -63,10 +67,18 @@ make dev-down    # Stop when done
 ```
 
 The development environment runs:
+
 - Mock Convox server on http://localhost:5443
 - Gateway API on http://localhost:8080
 
-3. Configure Google OAuth:
+For local customization, create a `docker-compose.override.yml`:
+
+```bash
+cp docker-compose.override.yml.example docker-compose.override.yml
+# Edit to customize ports, volumes, or environment variables
+```
+
+5. Configure Google OAuth:
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
    - Create OAuth 2.0 credentials
    - Add `http://localhost:8080/v1/login/callback` to authorized redirect URIs
@@ -97,11 +109,11 @@ export RACK_TOKEN="your-actual-rack-token"
 make all
 
 # Or build individually
-make proxy  # Builds bin/convox-gateway-api
-make cli    # Builds bin/convox-gateway
+make gateway  # Builds bin/convox-gateway-api
+make cli      # Builds bin/convox-gateway
 ```
 
-6. Run the proxy:
+6. Run the gateway:
 
 ```bash
 # Run directly for development
@@ -109,6 +121,12 @@ make dev
 
 # Or run the built binary
 ./bin/convox-gateway-api
+```
+
+7. Verify health:
+
+```bash
+./scripts/health_check.sh
 ```
 
 ## CLI Usage
@@ -308,30 +326,6 @@ convox apps create convox-gateway
 convox env set GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID -a convox-gateway
 convox env set GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET -a convox-gateway
 convox deploy -a convox-gateway
-```
-
-### Terraform Integration
-
-The `terraform/` directory contains modules for:
-
-- KMS key for secret encryption
-- CloudWatch log group with 90-day retention
-- SSM parameters for secure secret storage
-
-To integrate with existing Terraform:
-
-```hcl
-module "convox_gateway" {
-  source = "./convox-gateway/terraform"
-
-  environment          = "production"
-  convox_rack         = var.convox_rack
-  google_client_id    = var.google_client_id
-  google_client_secret = var.google_client_secret
-  rack_tokens         = var.rack_tokens
-  admin_users         = "admin@your-domain.com"
-  domain              = "gateway.your-domain.com"
-}
 ```
 
 ## CloudWatch Configuration

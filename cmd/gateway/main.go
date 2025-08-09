@@ -18,13 +18,9 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/ui"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(".env"); err != nil {
-		log.Printf("No .env file found: %v", err)
-	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -54,7 +50,7 @@ func main() {
 
 	auditLogger := audit.NewLogger()
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
-	uiHandler := ui.NewHandler(rbacManager, cfg.AdminUsers)
+	uiHandler := ui.NewHandler(rbacManager, cfg.ConfigPath)
 
 	r := chi.NewRouter()
 
@@ -67,10 +63,7 @@ func main() {
 	// Gateway's own endpoints under /.gateway/
 	r.Route("/.gateway", func(r chi.Router) {
 		// Health check (no auth required)
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
-		})
+		r.Get("/health", uiHandler.Health)
 
 		// OAuth login endpoints (no auth required)
 		r.Post("/login/start", handleLoginStart(oauthHandler))
@@ -80,34 +73,17 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(jwtManager.Middleware)
 
-			r.Get("/me", handleMe())
+			r.Get("/me", uiHandler.GetMe)
 
 			// Admin endpoints
 			r.Route("/admin", func(r chi.Router) {
-				r.Use(requireAdmin(cfg.AdminUsers))
-
-				r.Get("/users", uiHandler.ListUsers)
-				r.Post("/users", uiHandler.CreateUser)
-				r.Put("/users/{email}", uiHandler.UpdateUser)
-				r.Delete("/users/{email}", uiHandler.DeleteUser)
-
+				r.Get("/config", uiHandler.GetConfig)
+				r.Put("/config", uiHandler.UpdateConfig)
 				r.Get("/roles", uiHandler.ListRoles)
-				r.Post("/roles", uiHandler.CreateRole)
-				r.Put("/roles/{name}", uiHandler.UpdateRole)
-				r.Delete("/roles/{name}", uiHandler.DeleteRole)
 			})
 		})
-	})
 
-	// Keep /health at root for backwards compatibility (can be removed later)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
-	})
-
-	r.Group(func(r chi.Router) {
-		r.Use(auth.OptionalAuth(jwtManager))
-		r.Get("/", uiHandler.Index)
+		// Serve UI static files
 		r.Get("/ui/*", uiHandler.ServeStatic)
 	})
 
@@ -183,45 +159,4 @@ func handleLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 	}
 }
 
-func handleMe() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := auth.GetUser(r.Context())
-		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"email": user.Email,
-			"name":  user.Name,
-		})
-	}
-}
-
-func requireAdmin(adminUsers []string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, ok := auth.GetUser(r.Context())
-			if !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			isAdmin := false
-			for _, admin := range adminUsers {
-				if user.Email == admin {
-					isAdmin = true
-					break
-				}
-			}
-
-			if !isAdmin {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}

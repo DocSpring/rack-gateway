@@ -24,7 +24,7 @@ services:
     environment:
       - PORT=8080
       - DEV_MODE=false
-    health: /health
+    health: /.gateway/health
     internal: false
     port: 8080
     scale:
