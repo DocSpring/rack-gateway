@@ -1,0 +1,39 @@
+environment:
+  - GOOGLE_CLIENT_ID
+  - GOOGLE_CLIENT_SECRET
+  - GOOGLE_ALLOWED_DOMAIN=docspring.com
+  - RACK_TOKEN_STAGING
+  - RACK_TOKEN_US
+  - RACK_TOKEN_EU
+  - ADMIN_USERS
+  - APP_JWT_KEY
+  - REDIRECT_URL
+
+resources:
+  database:
+    type: rds
+    options:
+      storage: 20
+      type: db.t3.micro
+
+services:
+  api:
+    build: .
+    command: ./proxy
+    domain: ${DOMAIN}
+    environment:
+      - PORT=8080
+      - DEV_MODE=false
+    health: /health
+    internal: false
+    port: 8080
+    scale:
+      count: 2
+      cpu: 256
+      memory: 512
+    sticky: true
+
+timers:
+  cleanup:
+    command: echo "Cleanup old sessions"
+    schedule: "0 2 * * *"

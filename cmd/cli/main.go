@@ -1,0 +1,367 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+)
+
+type TokenStore struct {
+	Tokens map[string]Token `json:"tokens"`
+}
+
+type Token struct {
+	Token     string    `json:"token"`
+	Email     string    `json:"email"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type LoginStartResponse struct {
+	AuthURL      string `json:"auth_url"`
+	State        string `json:"state"`
+	CodeVerifier string `json:"code_verifier"`
+}
+
+type LoginCallbackRequest struct {
+	Code         string `json:"code"`
+	State        string `json:"state"`
+	CodeVerifier string `json:"code_verifier"`
+}
+
+type LoginResponse struct {
+	Token     string    `json:"token"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+var (
+	proxyURL   string
+	configPath string
+)
+
+func main() {
+	rootCmd := &cobra.Command{
+		Use:   "convox-gateway",
+		Short: "Enterprise gateway for Convox with authentication and RBAC",
+		Long: `Convox Gateway provides secure authenticated access to Convox racks
+with SSO authentication, role-based access control, and audit logging.`,
+	}
+
+	loginCmd := &cobra.Command{
+		Use:   "login [rack]",
+		Short: "Login to a Convox rack via OAuth",
+		Long:  "Authenticate with SSO provider and store token for the specified rack",
+		Args:  cobra.ExactArgs(1),
+		RunE:  loginCommand,
+	}
+
+	callCmd := &cobra.Command{
+		Use:   "call [rack] [method] [path]",
+		Short: "Make an authenticated API call",
+		Long:  "Make an authenticated call to the Convox rack through the auth proxy",
+		Args:  cobra.MinimumNArgs(3),
+		RunE:  callCommand,
+	}
+
+	completionCmd := &cobra.Command{
+		Use:   "completion [bash|zsh|fish|powershell]",
+		Short: "Generate shell completion script",
+		Long: `Generate shell completion script for convox-gateway.
+
+To load completions:
+
+Bash:
+  $ source <(convox-gateway completion bash)
+  # To load completions for each session, execute once:
+  # Linux:
+  $ convox-gateway completion bash > /etc/bash_completion.d/convox-gateway
+  # macOS:
+  $ convox-gateway completion bash > $(brew --prefix)/etc/bash_completion.d/convox-gateway
+
+Zsh:
+  $ source <(convox-gateway completion zsh)
+  # To load completions for each session, execute once:
+  $ convox-gateway completion zsh > "${fpath[1]}/_convox-gateway"
+
+Fish:
+  $ convox-gateway completion fish | source
+  # To load completions for each session, execute once:
+  $ convox-gateway completion fish > ~/.config/fish/completions/convox-gateway.fish
+
+PowerShell:
+  PS> convox-gateway completion powershell | Out-String | Invoke-Expression
+  # To load completions for every new session, run:
+  PS> convox-gateway completion powershell > convox-gateway.ps1
+  # and source this file from your PowerShell profile.
+`,
+		DisableFlagsInUseLine: true,
+		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+		Args:                  cobra.ExactValidArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			switch args[0] {
+			case "bash":
+				cmd.Root().GenBashCompletion(os.Stdout)
+			case "zsh":
+				cmd.Root().GenZshCompletion(os.Stdout)
+			case "fish":
+				cmd.Root().GenFishCompletion(os.Stdout, true)
+			case "powershell":
+				cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
+			}
+		},
+	}
+
+	callCmd.Flags().StringP("data", "d", "", "Request body data (JSON)")
+
+	rootCmd.AddCommand(loginCmd, callCmd, completionCmd)
+	rootCmd.PersistentFlags().StringVar(&proxyURL, "proxy", getEnv("CONVOX_GATEWAY_PROXY", "http://localhost:8080"), "Proxy server URL")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", filepath.Join(homeDir(), ".config", "convox-gateway"), "Config directory")
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func loginCommand(cmd *cobra.Command, args []string) error {
+	rack := args[0]
+
+	fmt.Printf("Starting login for rack: %s\n", rack)
+
+	startResp, err := startLogin()
+	if err != nil {
+		return fmt.Errorf("failed to start login: %w", err)
+	}
+
+	fmt.Printf("Opening browser for authentication...\n")
+	if err := openBrowser(startResp.AuthURL); err != nil {
+		fmt.Printf("Please open this URL in your browser:\n%s\n", startResp.AuthURL)
+	}
+
+	fmt.Print("Enter the authorization code from the callback URL: ")
+	var code string
+	fmt.Scanln(&code)
+
+	loginResp, err := completeLogin(code, startResp.State, startResp.CodeVerifier)
+	if err != nil {
+		return fmt.Errorf("failed to complete login: %w", err)
+	}
+
+	if err := saveToken(rack, loginResp); err != nil {
+		return fmt.Errorf("failed to save token: %w", err)
+	}
+
+	fmt.Printf("Successfully logged in as %s\n", loginResp.Email)
+	fmt.Printf("Token expires at: %s\n", loginResp.ExpiresAt.Format(time.RFC3339))
+
+	return nil
+}
+
+func callCommand(cmd *cobra.Command, args []string) error {
+	rack := args[0]
+	method := strings.ToUpper(args[1])
+	path := args[2]
+
+	data, _ := cmd.Flags().GetString("data")
+
+	token, err := loadToken(rack)
+	if err != nil {
+		return fmt.Errorf("no valid token found for rack %s: %w", rack, err)
+	}
+
+	url := fmt.Sprintf("%s/v1/proxy/%s/%s", proxyURL, rack, strings.TrimPrefix(path, "/"))
+
+	var body io.Reader
+	if data != "" {
+		body = strings.NewReader(data)
+	}
+
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.Token))
+	if data != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	fmt.Printf("Status: %d\n", resp.StatusCode)
+
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, respBody, "", "  "); err == nil {
+		fmt.Println(prettyJSON.String())
+	} else {
+		fmt.Println(string(respBody))
+	}
+
+	return nil
+}
+
+func startLogin() (*LoginStartResponse, error) {
+	url := fmt.Sprintf("%s/v1/login/start", proxyURL)
+
+	resp, err := http.Post(url, "application/json", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("login start failed: %s", string(body))
+	}
+
+	var result LoginStartResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func completeLogin(code, state, codeVerifier string) (*LoginResponse, error) {
+	url := fmt.Sprintf("%s/v1/login/callback", proxyURL)
+
+	payload := LoginCallbackRequest{
+		Code:         code,
+		State:        state,
+		CodeVerifier: codeVerifier,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("login callback failed: %s", string(body))
+	}
+
+	var result LoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func saveToken(rack string, loginResp *LoginResponse) error {
+	if err := os.MkdirAll(configPath, 0700); err != nil {
+		return err
+	}
+
+	tokenFile := filepath.Join(configPath, "tokens.json")
+
+	store := &TokenStore{Tokens: make(map[string]Token)}
+
+	if data, err := os.ReadFile(tokenFile); err == nil {
+		json.Unmarshal(data, store)
+	}
+
+	store.Tokens[rack] = Token{
+		Token:     loginResp.Token,
+		Email:     loginResp.Email,
+		ExpiresAt: loginResp.ExpiresAt,
+	}
+
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(tokenFile, data, 0600)
+}
+
+func loadToken(rack string) (*Token, error) {
+	tokenFile := filepath.Join(configPath, "tokens.json")
+
+	data, err := os.ReadFile(tokenFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var store TokenStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return nil, err
+	}
+
+	token, exists := store.Tokens[rack]
+	if !exists {
+		return nil, fmt.Errorf("no token found for rack: %s", rack)
+	}
+
+	if time.Now().After(token.ExpiresAt) {
+		return nil, fmt.Errorf("token expired")
+	}
+
+	return &token, nil
+}
+
+func openBrowser(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	case "linux":
+		cmd = "xdg-open"
+		args = []string{url}
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start", url}
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	return exec.Command(cmd, args...).Start()
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if home := os.Getenv("USERPROFILE"); home != "" {
+		return home
+	}
+	return ""
+}
+
+func getEnv(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
+}

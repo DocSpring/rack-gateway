@@ -1,0 +1,67 @@
+viewer:
+  name: viewer
+  description: Read-only access policy
+  rules:
+    - resource: /apps
+      actions: [GET]
+      effect: allow
+    - resource: /apps/*
+      actions: [GET]
+      effect: allow
+    - resource: /ps
+      actions: [GET]
+      effect: allow
+    - resource: /ps/*
+      actions: [GET]
+      effect: allow
+    - resource: /logs/*
+      actions: [GET]
+      effect: allow
+
+ops:
+  name: ops
+  description: Operations team policy
+  rules:
+    - resource: /apps/*
+      actions: [GET, POST]
+      effect: allow
+    - resource: /ps/*
+      actions: [GET, POST]
+      effect: allow
+    - resource: /restart/*
+      actions: [POST]
+      effect: allow
+    - resource: /logs/*
+      actions: [GET]
+      effect: allow
+    - resource: /env/*/get
+      actions: [GET]
+      effect: allow
+
+deployer:
+  name: deployer
+  description: Deployment policy
+  rules:
+    - resource: /*
+      actions: [GET, POST, PUT, PATCH]
+      effect: allow
+    - resource: /env/*
+      actions: [GET, POST, PUT]
+      effect: allow
+    - resource: /build/*
+      actions: [POST]
+      effect: allow
+    - resource: /deploy/*
+      actions: [POST]
+      effect: allow
+    - resource: /run/*
+      actions: [POST]
+      effect: allow
+
+admin:
+  name: admin
+  description: Full admin access
+  rules:
+    - resource: /*
+      actions: [GET, POST, PUT, PATCH, DELETE]
+      effect: allow

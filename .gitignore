@@ -1,0 +1,54 @@
+# Source code for reference
+reference/
+
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace
+go.work
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Config files with secrets
+config/users.yaml
+config/roles.yaml
+!config/*.example.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan
+terraform/.terraform.lock.hcl
+
+# CLI config
+~/.config/docspring-convox-login/
+
+# Build artifacts
+dist/
+tmp/

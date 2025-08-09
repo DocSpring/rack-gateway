@@ -1,0 +1,20 @@
+staging:
+  name: staging
+  url: https://convox-staging.example.com
+  env_var: RACK_TOKEN_STAGING
+  region: us-east-1
+  enabled: true
+
+us:
+  name: us
+  url: https://convox-us.example.com
+  env_var: RACK_TOKEN_US
+  region: us-west-2
+  enabled: true
+
+eu:
+  name: eu
+  url: https://convox-eu.example.com
+  env_var: RACK_TOKEN_EU
+  region: eu-west-1
+  enabled: true
