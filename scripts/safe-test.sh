@@ -45,37 +45,37 @@ restore_config() {
     }
 }
 
-# Check if backup already exists
-if [ -e "$BACKUP_PATH" ]; then
-    echo -e "\033[31mCRITICAL: Backup already exists at $BACKUP_PATH - refusing to run to prevent data loss\033[0m"
-    echo "Please manually resolve this before running tests"
-    exit 1
+if [ -n "${CI:-}" ]; then
+    echo "Running in CI, skipping config backup/restore"
+else
+    # Check if backup already exists
+    if [ -e "$BACKUP_PATH" ]; then
+        echo -e "\033[31mCRITICAL: Backup already exists at $BACKUP_PATH - refusing to run to prevent data loss\033[0m"
+        echo "Please manually resolve this before running tests"
+        exit 1
+    fi
+
+    # Check if config exists
+    if [ ! -e "$CONFIG_PATH" ]; then
+        echo -e "\033[31mCRITICAL: Convox config does not exist at $CONFIG_PATH\033[0m"
+        exit 1
+    fi
+
+    # Backup config
+    echo -e "\033[33mSAFETY: Backing up Convox config from $CONFIG_PATH to $BACKUP_PATH\033[0m"
+    mv "$CONFIG_PATH" "$BACKUP_PATH" || {
+        echo -e "\033[31mCRITICAL: Failed to backup Convox config\033[0m"
+        exit 1
+    }
+
+    # Create placeholder so tests don't fail due to missing dir
+    mkdir -p "$CONFIG_PATH"
+    echo "TEST_PLACEHOLDER" > "$CONFIG_PATH/GUARD_ACTIVE"
+
+    # Trap to ensure restore happens on exit
+    trap restore_config EXIT INT TERM
 fi
-
-# Check if config exists
-if [ ! -e "$CONFIG_PATH" ] && [ -z "${CI:-}" ]; then
-    echo -e "\033[31mCRITICAL: Convox config does not exist at $CONFIG_PATH\033[0m"
-    exit 1
-fi
-
-# Backup config
-echo -e "\033[33mSAFETY: Backing up Convox config from $CONFIG_PATH to $BACKUP_PATH\033[0m"
-mv "$CONFIG_PATH" "$BACKUP_PATH" || {
-    echo -e "\033[31mCRITICAL: Failed to backup Convox config\033[0m"
-    exit 1
-}
-
-# Create placeholder so tests don't fail due to missing dir
-mkdir -p "$CONFIG_PATH"
-echo "TEST_PLACEHOLDER" > "$CONFIG_PATH/GUARD_ACTIVE"
-
-# Trap to ensure restore happens on exit
-trap restore_config EXIT INT TERM
 
 # Run the actual tests
 echo "Running tests with Convox config protection..."
 go test "$@"
-TEST_EXIT_CODE=$?
-
-# Exit with test result
-exit $TEST_EXIT_CODE
