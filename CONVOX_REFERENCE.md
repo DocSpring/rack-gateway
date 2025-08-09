@@ -273,6 +273,65 @@ These should only be done by infrastructure team with direct terraform access.
 5. **Verify audit logs** show user attribution
 6. **Test RBAC** blocks unauthorized operations
 
+## Production Usage Patterns
+
+### Service Types in convox.yml
+
+Convox applications define multiple service types in their `convox.yml`:
+
+- **`web`**: The main web application service that handles HTTP requests
+- **`worker`**: Background job processors (e.g., Sidekiq, Resque)
+- **`command`**: A special service type that doesn't run containers by default, used exclusively for one-off commands like migrations, rake tasks, and console access
+
+### CI/CD Deployment Workflow
+
+During continuous deployment, the pipeline executes specific commands in sequence:
+
+1. **`convox rack`** - Verify rack connectivity and status
+2. **`convox ps`** - Check current running processes
+3. **`convox build`** - Build new Docker images from source
+4. **`convox run`** - Execute pre-release tasks:
+   - Database migrations: `convox run command "bin/pre_release"`
+   - DNS verification and smoke test: `convox run command "run_as_deploy rake checks:verify_dns checks:generate_test_submission"`
+   - Stripe configuration: `convox run command "rake stripe:prepare"`
+5. **`convox releases promote`** - Promote the new release to production
+
+### convox run Restrictions
+
+The `convox run` command allows executing commands in containers, but should be restricted based on service type:
+
+- **Blocked**: `convox run web` and `convox run worker` - These should never be allowed as they could interfere with running services
+- **Allowed (with restrictions)**: `convox run command` - Only for specific approved commands
+- **Special Access**: `convox run command "rails console"` - Should be restricted to admin-level users only
+  - Note: Rails console itself has additional protection with email/password login and 2FA required at the CLI level
+
+### Typical CI/CD Commands
+
+The CI/CD pipeline uses a limited set of commands with specific parameters:
+
+```bash
+# Pre-release tasks
+convox run command "bin/pre_release"
+convox run command "run_as_deploy rake checks:verify_dns checks:generate_test_submission"
+convox run command "rake stripe:prepare"
+
+# Deployment
+convox releases promote
+```
+
+### Administrative Commands
+
+Certain commands require elevated privileges:
+
+```bash
+# Console access (admin only)
+convox run command "rails console"
+
+# Database operations
+convox run command "rake db:migrate"
+convox run command "rake db:seed"
+```
+
 ## Convox CLI Commands
 
 ```
