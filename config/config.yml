@@ -1,0 +1,21 @@
+# Example configuration for development
+# Copy this to config/config.yml and adjust as needed
+
+domain: example.com  # Only @example.com emails can sign in
+
+users:
+  admin@example.com:
+    name: Admin User
+    roles: [admin]
+    
+  developer@example.com:
+    name: Developer
+    roles: [deployer]
+    
+  ops@example.com:
+    name: Operations
+    roles: [ops]
+    
+  viewer@example.com:
+    name: Read Only User
+    roles: [viewer]

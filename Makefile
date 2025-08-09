@@ -1,8 +1,8 @@
-.PHONY: dev proxy cli mock test test-unit test-integration lint docker clean build all deps
+.PHONY: dev gateway cli mock test test-unit test-integration lint docker clean build all deps
 
-all: proxy cli mock
+all: gateway cli mock
 
-build: proxy cli mock
+build: gateway cli mock
 
 deps:
 	@echo "Installing Go dependencies..."
@@ -11,11 +11,11 @@ deps:
 
 dev:
 	@echo "Starting gateway API in development mode..."
-	@./scripts/dev_env.sh && go run cmd/api/main.go
+	@./scripts/dev_env.sh && go run cmd/gateway/main.go
 
-proxy:
+gateway:
 	@echo "Building gateway API server..."
-	@go build -o bin/convox-gateway-api cmd/api/main.go
+	@go build -o bin/convox-gateway-api cmd/gateway/main.go
 
 cli:
 	@echo "Building gateway CLI..."

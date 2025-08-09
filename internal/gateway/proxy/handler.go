@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docspring/convox-gateway/internal/api/audit"
-	"github.com/docspring/convox-gateway/internal/api/auth"
-	"github.com/docspring/convox-gateway/internal/api/config"
-	"github.com/docspring/convox-gateway/internal/api/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -35,7 +35,7 @@ func NewHandler(cfg *config.Config, rbacManager *rbac.Manager, auditLogger *audi
 // ProxyToRack handles all requests that should be proxied to the Convox rack
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	
+
 	// Get the default rack (there's only one per gateway instance)
 	rackConfig, exists := h.config.Racks["default"]
 	if !exists {
@@ -60,7 +60,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Get the full path including query params
 	path := r.URL.Path
-	
+
 	// Check RBAC permissions
 	if !h.rbacManager.CheckPermission(user.Email, path, r.Method) {
 		h.auditLogger.LogRequest(r, user.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
@@ -144,7 +144,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	// Convox uses Basic Auth with configurable username (default "convox") and the API key as password
-	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s", 
+	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s",
 		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
 	proxyReq.Header.Set("X-User-Email", userEmail)
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())

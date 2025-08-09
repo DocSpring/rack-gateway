@@ -104,10 +104,10 @@ Check these against `../convox_rack` and `../convox` source:
 
 ```bash
 make all          # Build everything
-make proxy        # Build proxy server
+make gateway      # Build gateway server
 make cli          # Build CLI tool
 make test         # Run tests
-make dev          # Run proxy in dev mode
+make dev          # Run gateway in dev mode
 make docker       # Build Docker image
 ```
 
@@ -176,12 +176,13 @@ Critical for production:
 
 ```
 internal/
-  auth/     - OAuth + JWT handling
-  rbac/     - Casbin-based authorization
-  proxy/    - Request forwarding logic
-  audit/    - Structured logging + redaction
-  config/   - Configuration management
-  ui/       - Admin web interface
+  gateway/
+    auth/     - OAuth + JWT handling
+    rbac/     - Casbin-based authorization
+    proxy/    - Request forwarding logic
+    audit/    - Structured logging + redaction
+    config/   - Configuration management
+    ui/       - Admin web interface
 ```
 
 ## Known Limitations

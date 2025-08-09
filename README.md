@@ -37,7 +37,7 @@ make test    # Run all tests
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/docspring/convox-gateway.git
+git clone https://github.com/DocSpring/convox-gateway.git
 cd convox-gateway
 ```
 
@@ -181,6 +181,7 @@ source <(./bin/convox-gateway completion zsh)
 #### RACK_HOST Configuration
 
 When running in Kubernetes alongside the Convox rack, `RACK_HOST` will typically be the internal service URL:
+
 ```bash
 # Example for Convox rack in the same cluster
 RACK_HOST=api.convox-system.svc.cluster.local:5443
@@ -195,7 +196,7 @@ The gateway uses a single `config.yml` file for user and domain configuration:
 
 ```yaml
 # /app/data/config.yml (or set via CONVOX_GATEWAY_CONFIG_DIR env var)
-domain: company.com  # Only @company.com emails can sign in
+domain: company.com # Only @company.com emails can sign in
 users:
   admin@company.com:
     name: Admin User
@@ -209,11 +210,13 @@ users:
 ```
 
 Set the config directory via environment variable:
+
 ```bash
 CONVOX_GATEWAY_CONFIG_DIR=/app/data  # Will look for /app/data/config.yml
 ```
 
 The CLI stores its configuration separately:
+
 - `~/.config/convox-gateway/config.json`: Local CLI configuration (per developer)
 
 ## RBAC Model

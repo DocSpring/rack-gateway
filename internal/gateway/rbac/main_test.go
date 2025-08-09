@@ -3,7 +3,8 @@ package rbac
 import (
 	"os"
 	"testing"
-	"github.com/docspring/convox-gateway/internal/testutil/convoxguard"
+
+	"github.com/DocSpring/convox-gateway/internal/testutil/convoxguard"
 )
 
 func TestMain(m *testing.M) {

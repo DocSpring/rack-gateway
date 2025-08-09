@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/docspring/convox-gateway/internal/api/auth"
-	"github.com/docspring/convox-gateway/internal/api/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -43,7 +43,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	users := h.rbacManager.GetUsers()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
@@ -98,7 +98,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles := h.rbacManager.GetRoles()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(roles)
 }

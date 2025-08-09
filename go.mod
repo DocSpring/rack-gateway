@@ -1,4 +1,4 @@
-module github.com/docspring/convox-gateway
+module github.com/DocSpring/convox-gateway
 
 go 1.22
 

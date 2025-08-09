@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docspring/convox-gateway/internal/api/audit"
-	"github.com/docspring/convox-gateway/internal/api/auth"
-	"github.com/docspring/convox-gateway/internal/api/config"
-	"github.com/docspring/convox-gateway/internal/api/proxy"
-	"github.com/docspring/convox-gateway/internal/api/rbac"
-	"github.com/docspring/convox-gateway/internal/api/ui"
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/ui"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
@@ -32,18 +32,18 @@ func main() {
 	}
 
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
-	
+
 	rbacManager, err := rbac.NewManager(cfg.ConfigPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize RBAC: %v", err)
 	}
-	
+
 	// Use domain from config.yml if available, otherwise fall back to env var
 	allowedDomain := rbacManager.GetDomain()
 	if allowedDomain == "" {
 		allowedDomain = cfg.GoogleAllowedDomain
 	}
-	
+
 	oauthHandler := auth.NewOAuthHandler(
 		cfg.GoogleClientID,
 		cfg.GoogleClientSecret,
@@ -79,13 +79,13 @@ func main() {
 		// Authenticated gateway endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(jwtManager.Middleware)
-			
+
 			r.Get("/me", handleMe())
 
 			// Admin endpoints
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(requireAdmin(cfg.AdminUsers))
-				
+
 				r.Get("/users", uiHandler.ListUsers)
 				r.Post("/users", uiHandler.CreateUser)
 				r.Put("/users/{email}", uiHandler.UpdateUser)

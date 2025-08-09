@@ -19,7 +19,7 @@ resources:
 services:
   api:
     build: .
-    command: ./proxy
+    command: ./convox-gateway-api
     domain: ${DOMAIN}
     environment:
       - PORT=8080
@@ -32,8 +32,3 @@ services:
       cpu: 256
       memory: 512
     sticky: true
-
-timers:
-  cleanup:
-    command: echo "Cleanup old sessions"
-    schedule: "0 2 * * *"

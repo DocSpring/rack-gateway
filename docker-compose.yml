@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  mock-convox:
+    build:
+      context: .
+      dockerfile: Dockerfile.mock
+    environment:
+      MOCK_CONVOX_PORT: 5443
+    ports:
+      - "5443:5443"
+    networks:
+      - gateway-net
+
+  gateway-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PORT: 8080
+      APP_ENV: development
+      APP_JWT_KEY: dev-jwt-secret-key-change-in-production
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-test-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-test-client-secret}
+      GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-example.com}
+      RACK_HOST: http://mock-convox:5443
+      RACK_TOKEN: mock-rack-token-12345
+      RACK_USERNAME: convox
+      CONVOX_GATEWAY_CONFIG_DIR: /app/data
+      DEV_MODE: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/data:ro
+    depends_on:
+      - mock-convox
+    networks:
+      - gateway-net
+
+networks:
+  gateway-net:
+    driver: bridge
