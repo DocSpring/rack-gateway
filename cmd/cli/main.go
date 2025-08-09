@@ -52,23 +52,33 @@ type LoginResponse struct {
 
 var (
 	configPath string
+	rackFlag   string
+	Version    = "dev"
+	BuildTime  = "unknown"
 )
 
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "convox-gateway",
 		Short: "Enterprise gateway for Convox with authentication and RBAC",
+		SilenceErrors: true,
 		Long: `Convox Gateway provides secure authenticated access to Convox racks
 with SSO authentication, role-based access control, and audit logging.
 
-This tool wraps the convox CLI. Any command not listed below will be
-passed through to convox with proper authentication. For example:
-  convox-gateway apps
-  convox-gateway ps
-  convox-gateway deploy
+To run convox commands through the gateway:
+  convox-gateway convox apps
+  convox-gateway convox ps
+  convox-gateway convox deploy
 
-To see help for the underlying convox CLI, use:
-  convox-gateway convox-help`,
+Recommended aliases for your shell:
+  alias cx="convox-gateway convox"   # cx apps, cx ps, cx deploy
+  alias cg="convox-gateway"          # cg login, cg switch, cg rack
+
+Rack management:
+  convox-gateway rack                # Show current rack
+  convox-gateway racks               # List all racks
+  convox-gateway switch <rack>       # Switch to a different rack
+  convox-gateway login <rack> <url>  # Login to a new rack`,
 		Run: func(cmd *cobra.Command, args []string) {
 			// If no subcommand is specified, show help
 			cmd.Help()
@@ -83,16 +93,118 @@ To see help for the underlying convox CLI, use:
 		RunE:  loginCommand,
 	}
 
-	convoxHelpCmd := &cobra.Command{
-		Use:   "convox-help",
-		Short: "Show help for the convox CLI",
-		Long:  "Display the help output from the actual convox CLI that this gateway wraps",
+	convoxCmd := &cobra.Command{
+		Use:                "convox [command]",
+		Short:              "Run a convox CLI command through the gateway",
+		Long:               "Execute any convox CLI command with gateway authentication and the selected rack",
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				// If just "convox-gateway convox" is run, show convox help
+				convoxCmd := exec.Command("convox", "help")
+				convoxCmd.Stdout = os.Stdout
+				convoxCmd.Stderr = os.Stderr
+				return convoxCmd.Run()
+			}
+			return wrapConvoxCommand(args)
+		},
+	}
+
+	rackCmd := &cobra.Command{
+		Use:   "rack",
+		Short: "Show current rack and gateway information",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rack, err := getCurrentRack()
+			if err != nil {
+				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+			}
+
+			gatewayURL, err := loadGatewayURL(rack)
+			if err != nil {
+				return fmt.Errorf("rack %s not configured", rack)
+			}
+
+			fmt.Printf("Current rack: %s\n", rack)
+			fmt.Printf("Gateway URL: %s\n", gatewayURL)
+
+			// Check if token exists and is valid
+			token, err := loadToken(rack)
+			if err != nil {
+				fmt.Printf("Status: Not logged in\n")
+			} else if time.Now().After(token.ExpiresAt) {
+				fmt.Printf("Status: Token expired\n")
+			} else {
+				fmt.Printf("Status: Logged in as %s\n", token.Email)
+				fmt.Printf("Token expires: %s\n", token.ExpiresAt.Format(time.RFC3339))
+			}
+
+			return nil
+		},
+	}
+
+	racksCmd := &cobra.Command{
+		Use:   "racks",
+		Short: "List all configured racks",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configFile := filepath.Join(configPath, "config.json")
+			data, err := os.ReadFile(configFile)
+			if err != nil {
+				return fmt.Errorf("no configuration found. Run: convox-gateway login <rack> <gateway-url>")
+			}
+
+			var config Config
+			if err := json.Unmarshal(data, &config); err != nil {
+				return err
+			}
+
+			currentRack, _ := getCurrentRack()
+
+			if len(config.Gateways) == 0 {
+				fmt.Println("No racks configured")
+				return nil
+			}
+
+			fmt.Println("Configured racks:")
+			for name, gateway := range config.Gateways {
+				marker := "  "
+				if name == currentRack {
+					marker = "* "
+				}
+				fmt.Printf("%s%s - %s\n", marker, name, gateway.URL)
+			}
+
+			return nil
+		},
+	}
+
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Show convox-gateway version",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Pass through to convox CLI help
-			convoxCmd := exec.Command("convox", "help")
-			convoxCmd.Stdout = os.Stdout
-			convoxCmd.Stderr = os.Stderr
-			convoxCmd.Run()
+			fmt.Printf("convox-gateway version %s (built %s)\n", Version, BuildTime)
+		},
+	}
+
+	switchCmd := &cobra.Command{
+		Use:   "switch [rack]",
+		Short: "Switch to a different rack",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rack := args[0]
+
+			// Verify the rack exists in our config
+			if _, err := loadGatewayURL(rack); err != nil {
+				return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+			}
+
+			if err := setCurrentRack(rack); err != nil {
+				return fmt.Errorf("failed to switch rack: %w", err)
+			}
+
+			fmt.Printf("Switched to rack: %s\n", rack)
+			return nil
 		},
 	}
 
@@ -144,21 +256,14 @@ PowerShell:
 		},
 	}
 
-	rootCmd.AddCommand(loginCmd, convoxHelpCmd, completionCmd)
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, completionCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("CONVOX_GATEWAY_CONFIG", filepath.Join(homeDir(), ".config", "convox-gateway"))
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", defaultConfigPath, "Config directory")
 
-	// Check if we should wrap a convox command
-	if len(os.Args) > 1 && os.Args[1] != "login" && os.Args[1] != "completion" && os.Args[1] != "convox-help" && os.Args[1] != "help" && os.Args[1] != "--help" && os.Args[1] != "-h" {
-		// This is a convox command to be wrapped
-		if err := wrapConvoxCommand(os.Args[1:]); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
+	// Add --rack flag as a global flag for rack selection
+	rootCmd.PersistentFlags().StringVar(&rackFlag, "rack", "", "Rack to use (overrides current rack)")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -200,26 +305,36 @@ func loginCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save token: %w", err)
 	}
 
+	// Set this rack as the current rack
+	if err := setCurrentRack(rack); err != nil {
+		return fmt.Errorf("failed to set current rack: %w", err)
+	}
+
 	fmt.Printf("Successfully logged in as %s\n", loginResp.Email)
 	fmt.Printf("Token expires at: %s\n", loginResp.ExpiresAt.Format(time.RFC3339))
+	fmt.Printf("Current rack set to: %s\n", rack)
 
 	return nil
 }
 
 func wrapConvoxCommand(args []string) error {
-	// Determine which rack to use (could be from flag, env var, or default)
-	rack := "staging" // Default rack
+	var rack string
 
-	// Check for --rack flag
-	for i, arg := range args {
-		if arg == "--rack" && i+1 < len(args) {
-			rack = args[i+1]
-		}
-	}
+	// Priority order for rack selection:
+	// 1. --rack flag (global flag, already parsed by cobra)
+	// 2. CONVOX_GATEWAY_RACK environment variable
+	// 3. Current rack from file
 
-	// Check for rack from environment
-	if envRack := os.Getenv("CONVOX_RACK"); envRack != "" {
+	if rackFlag != "" {
+		rack = rackFlag
+	} else if envRack := os.Getenv("CONVOX_GATEWAY_RACK"); envRack != "" {
 		rack = envRack
+	} else {
+		var err error
+		rack, err = getCurrentRack()
+		if err != nil {
+			return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url> or use --rack flag")
+		}
 	}
 
 	// Load gateway config and token for the rack
@@ -248,15 +363,13 @@ func wrapConvoxCommand(args []string) error {
 	var rackURL string
 	if strings.HasPrefix(parsedURL, "http://") {
 		// For local testing, preserve http
-		rackURL = fmt.Sprintf("http://convox:%s@%s/v1/proxy/%s",
+		rackURL = fmt.Sprintf("http://convox:%s@%s/v1/proxy",
 			token.Token,
-			strings.TrimPrefix(parsedURL, "http://"),
-			rack)
+			strings.TrimPrefix(parsedURL, "http://"))
 	} else {
-		rackURL = fmt.Sprintf("https://convox:%s@%s/v1/proxy/%s",
+		rackURL = fmt.Sprintf("https://convox:%s@%s/v1/proxy",
 			token.Token,
-			strings.TrimPrefix(parsedURL, "https://"),
-			rack)
+			strings.TrimPrefix(parsedURL, "https://"))
 	}
 
 	// Execute the convox CLI with RACK_URL set
@@ -486,4 +599,24 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+func getCurrentRack() (string, error) {
+	currentFile := filepath.Join(configPath, "current")
+
+	data, err := os.ReadFile(currentFile)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(data)), nil
+}
+
+func setCurrentRack(rack string) error {
+	if err := os.MkdirAll(configPath, 0700); err != nil {
+		return err
+	}
+
+	currentFile := filepath.Join(configPath, "current")
+	return os.WriteFile(currentFile, []byte(rack), 0600)
 }

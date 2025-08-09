@@ -90,27 +90,59 @@ make dev
 
 ## CLI Usage
 
-### Login to a rack:
+### Setup
 
 ```bash
-./bin/convox-gateway login staging
+# Login to a rack (sets it as current)
+convox-gateway login staging https://convox-gateway-staging.company.com
 # Opens browser for Google OAuth
-# Stores token in ~/.config/convox-gateway/tokens.json
+# Stores configuration in ~/.config/convox-gateway/config.json
+
+# Set up convenient shell aliases
+alias cx="convox-gateway convox"   # For convox commands
+alias cg="convox-gateway"          # For gateway commands
 ```
 
-### Run commands on a rack:
+### Running Convox Commands
 
 ```bash
-# The CLI automatically wraps convox commands
-convox-gateway apps --rack staging
-convox-gateway ps web --rack staging
-convox-gateway logs --rack staging
+# All convox commands go through "convox-gateway convox"
+convox-gateway convox apps
+convox-gateway convox ps
+convox-gateway convox deploy
 
-# Or set default rack via environment
-export CONVOX_RACK=staging
-convox-gateway apps
-convox-gateway ps web
+# With the cx alias:
+cx apps
+cx ps
+cx deploy
+cx logs -f
 ```
+
+### Managing Racks
+
+```bash
+# Show current rack and status
+convox-gateway rack
+
+# List all configured racks
+convox-gateway racks
+
+# Switch to a different rack
+convox-gateway switch production
+
+# With the cg alias:
+cg rack
+cg racks
+cg switch eu-west
+```
+
+### Rack Selection
+
+The CLI determines which rack to use in this order:
+
+1. `--rack` flag: `convox-gateway --rack production convox apps`
+2. Environment variable: `CONVOX_GATEWAY_RACK=production cx apps`
+3. Current rack from `~/.config/convox-gateway/current`
 
 ### Generate shell completions:
 

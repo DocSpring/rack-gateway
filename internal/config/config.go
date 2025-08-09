@@ -71,43 +71,20 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) loadRacksFromEnv() {
-	// Load racks from environment variables
-	// Format: RACK_URL_<NAME> and RACK_TOKEN_<NAME>
-	// Example: RACK_URL_STAGING=https://rack.staging.convox.com
-	//          RACK_TOKEN_STAGING=secret-token
+	// Load the single rack this gateway is protecting
+	rackURL := os.Getenv("RACK_URL")
+	rackToken := os.Getenv("RACK_TOKEN")
 	
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		if len(parts) != 2 {
-			continue
+	if rackURL != "" && rackToken != "" {
+		// The gateway protects a single rack
+		c.Racks["default"] = RackConfig{
+			Name:    "default",
+			URL:     rackURL,
+			APIKey:  rackToken,
+			Enabled: true,
 		}
-		
-		key := parts[0]
-		value := parts[1]
-		
-		// Check for RACK_URL_* pattern
-		if strings.HasPrefix(key, "RACK_URL_") {
-			rackName := strings.ToLower(strings.TrimPrefix(key, "RACK_URL_"))
-			rack := c.Racks[rackName]
-			rack.Name = rackName
-			rack.URL = value
-			rack.Enabled = true
-			c.Racks[rackName] = rack
-		}
-		
-		// Check for RACK_TOKEN_* pattern
-		if strings.HasPrefix(key, "RACK_TOKEN_") {
-			rackName := strings.ToLower(strings.TrimPrefix(key, "RACK_TOKEN_"))
-			rack := c.Racks[rackName]
-			rack.Name = rackName
-			rack.APIKey = value
-			rack.Enabled = true
-			c.Racks[rackName] = rack
-		}
-	}
-	
-	// In dev mode, set up a default local rack if none configured
-	if c.DevMode && len(c.Racks) == 0 {
+	} else if c.DevMode {
+		// In dev mode, set up a default local rack if none configured
 		c.setupDevRacks()
 	}
 }

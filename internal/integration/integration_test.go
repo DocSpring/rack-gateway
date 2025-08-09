@@ -11,10 +11,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,6 +25,7 @@ const (
 	mockConvoxPort = "9090"
 	gatewayPort    = "8080"
 	mockRackToken  = "mock-rack-token-12345"
+	testJWTSecret  = "test-secret-key-for-integration-testing"
 )
 
 type TestServers struct {
@@ -76,8 +79,8 @@ func TestIntegration(t *testing.T) {
 		testMockConvoxAuth(t, servers)
 	})
 
-	t.Run("CLIWrapsConvoxCommands", func(t *testing.T) {
-		testCLIWrapsConvoxCommands(t, servers)
+	t.Run("testCLIWrapsConvoxHelpAndVersionCommands", func(t *testing.T) {
+		testCLIWrapsConvoxHelpAndVersionCommands(t, servers)
 	})
 
 	t.Run("CLIWithAuthentication", func(t *testing.T) {
@@ -120,9 +123,9 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
 		"GOOGLE_ALLOWED_DOMAIN=example.com",
-		// Configure rack with mock Convox server
-		"RACK_TOKEN_STAGING="+mockRackToken,
-		"RACK_URL_STAGING=http://localhost:"+mockConvoxPort,
+		// Configure the single rack this gateway protects
+		"RACK_TOKEN="+mockRackToken,
+		"RACK_URL=http://localhost:"+mockConvoxPort,
 	)
 
 	// Capture output for debugging
@@ -274,13 +277,24 @@ func testAdminEndpointProtection(t *testing.T, s *TestServers) {
 
 // Helper function to create a test JWT token
 func createTestJWT(t *testing.T, email string, expiresIn time.Duration) string {
-	// This would normally use the JWT library to create a proper token
-	// For testing, we'd need to match the signing key used by the gateway
-	return "test-jwt-token"
+	// Create a JWT token that matches what the gateway expects
+	claims := jwt.MapClaims{
+		"email": email,
+		"name":  "Test User",
+		"exp":   time.Now().Add(expiresIn).Unix(),
+		"iat":   time.Now().Unix(),
+		"nbf":   time.Now().Unix(),
+	}
+	
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(testJWTSecret))
+	require.NoError(t, err)
+	
+	return tokenString
 }
 
-// Test that our CLI wrapper actually calls the Convox CLI
-func testCLIWrapsConvoxCommands(t *testing.T, s *TestServers) {
+// Test that our CLI has proper commands
+func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	// Create a test config directory with valid config
 	configDir := t.TempDir()
 	configFile := fmt.Sprintf("%s/config.json", configDir)
@@ -304,43 +318,61 @@ func testCLIWrapsConvoxCommands(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	
+	// Set current rack
+	currentFile := filepath.Join(configDir, "current")
+	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
-	// Set up environment to point to our mock Convox server
-	// The wrapper should set RACK_URL and call the convox CLI
-	cmd := exec.Command("../../bin/convox-gateway", "version")
-	cmd.Env = append(os.Environ(),
-		"CONVOX_GATEWAY_CONFIG="+configDir,
-		// This would normally be set after login, but for testing we bypass auth
-		"RACK_URL=https://convox:"+mockRackToken+"@localhost:"+mockConvoxPort,
-	)
+	// Test version command shows gateway version
+	t.Run("version", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "version")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
 
-	output, err := cmd.CombinedOutput()
+		output, _ := cmd.CombinedOutput()
+		// Should show convox-gateway version
+		assert.Contains(t, string(output), "convox-gateway version")
+	})
 
-	// The wrapper should pass through to the convox CLI
-	// which should return version info
-	if err != nil {
-		// If convox CLI is installed, this should work
-		// The error might be because we're not authenticated properly
-		t.Logf("CLI wrapper output: %s", output)
-	}
+	// Test convox command passes through to real convox CLI
+	t.Run("convox", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "convox", "help")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
 
-	// Test that our wrapper handles convox commands
-	testCommands := []string{"help", "version"}
+		output, _ := cmd.CombinedOutput()
+		// Should contain convox commands from real CLI
+		assert.Contains(t, string(output), "convox apps")
+		assert.Contains(t, string(output), "convox ps")
+	})
+	
+	// Test rack command shows current rack
+	t.Run("rack", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "rack")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
 
-	for _, command := range testCommands {
-		t.Run(command, func(t *testing.T) {
-			cmd := exec.Command("../../bin/convox-gateway", command)
-			cmd.Env = append(os.Environ(),
-				"CONVOX_GATEWAY_CONFIG="+configDir,
-			)
+		output, _ := cmd.CombinedOutput()
+		// Should show current rack info
+		assert.Contains(t, string(output), "Current rack: staging")
+		assert.Contains(t, string(output), "Gateway URL: http://localhost:" + gatewayPort)
+	})
+	
+	// Test racks command lists configured racks
+	t.Run("racks", func(t *testing.T) {
+		cmd := exec.Command("../../bin/convox-gateway", "racks")
+		cmd.Env = append(os.Environ(),
+			"CONVOX_GATEWAY_CONFIG="+configDir,
+		)
 
-			output, _ := cmd.CombinedOutput()
-			t.Logf("Command '%s' output: %s", command, output)
-
-			// We expect some output (help text, version, etc)
-			assert.NotEmpty(t, output)
-		})
-	}
+		output, _ := cmd.CombinedOutput()
+		// Should list configured racks
+		assert.Contains(t, string(output), "staging")
+		assert.Contains(t, string(output), "http://localhost:" + gatewayPort)
+	})
 }
 
 // Test the full authentication flow with CLI
@@ -368,9 +400,13 @@ func testCLIWithAuthentication(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(tokenFile, configData, 0600))
+	
+	// Set current rack
+	currentFile := filepath.Join(configDir, "current")
+	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
 	// Now test that the CLI wrapper uses this token to set RACK_URL
-	cmd := exec.Command("../../bin/convox-gateway", "apps")
+	cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
 	cmd.Env = append(os.Environ(),
 		"CONVOX_GATEWAY_CONFIG="+configDir, // Use test config directory
 		// The wrapper should construct RACK_URL with the JWT token
@@ -402,8 +438,9 @@ func testConvoxCLIWrapper(t *testing.T, s *TestServers) {
 	configDir := t.TempDir()
 	configFile := fmt.Sprintf("%s/config.json", configDir)
 
-	// In a real scenario, this JWT would be validated by the gateway
-	// For testing, we'll use the mock server directly
+	// Create a valid JWT token that the gateway will accept
+	validJWT := createTestJWT(t, "test@example.com", 24*time.Hour)
+	
 	config := map[string]interface{}{
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
@@ -412,7 +449,7 @@ func testConvoxCLIWrapper(t *testing.T, s *TestServers) {
 		},
 		"tokens": map[string]interface{}{
 			"staging": map[string]interface{}{
-				"token":      mockRackToken, // Use the mock server's token directly for testing
+				"token":      validJWT, // Use a valid JWT that the gateway will accept
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 			},
@@ -422,6 +459,10 @@ func testConvoxCLIWrapper(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	
+	// Set current rack
+	currentFile := filepath.Join(configDir, "current")
+	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
 	// Test various convox commands through our wrapper
 	testCases := []struct {
@@ -450,11 +491,12 @@ func testConvoxCLIWrapper(t *testing.T, s *TestServers) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := exec.Command("../../bin/convox-gateway", tc.args...)
+			// Prepend "convox" to the args since all convox commands go through that subcommand now
+			args := append([]string{"convox"}, tc.args...)
+			cmd := exec.Command("../../bin/convox-gateway", args...)
 			cmd.Env = append(os.Environ(),
 				"CONVOX_GATEWAY_CONFIG="+configDir,
-				// Override to use mock server directly for testing
-				"RACK_URL=http://convox:"+mockRackToken+"@localhost:"+mockConvoxPort,
+				// Let convox-gateway build the RACK_URL pointing to the gateway
 			)
 
 			output, err := cmd.CombinedOutput()
