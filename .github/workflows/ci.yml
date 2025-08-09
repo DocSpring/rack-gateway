@@ -46,8 +46,8 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run tests
-        run: make test
+      - name: Run Go tests
+        run: make test-go
 
       - name: Build Go binaries
         run: make go
