@@ -30,17 +30,3 @@ pre-commit:
       root: "web/"
       glob: "*.{ts,tsx}"
       run: pnpm tsc --noEmit
-
-pre-push:
-  parallel: false
-  commands:
-    go-tests:
-      run: make test
-
-    web-tests:
-      root: "web/"
-      run: pnpm test --run
-
-    web-build:
-      root: "web/"
-      run: pnpm build

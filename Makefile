@@ -1,8 +1,10 @@
-.PHONY: dev dev-build dev-down dev-logs gateway cli mock test test-unit test-integration lint docker clean build all deps web-deps web-build web-test web-lint
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-unit test-integration lint docker clean build all deps web-deps web-build web-test web-lint
 
 all: web-build gateway cli mock
 
 build: web-build gateway cli mock
+
+go: gateway cli mock
 
 deps:
 	@echo "Installing Go dependencies..."
