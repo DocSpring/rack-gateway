@@ -1,24 +1,27 @@
 import { Outlet } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/auth-context'
+import { ThemeToggle } from './theme-toggle'
 
 export function Layout() {
   const { user, logout } = useAuth()
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+      <header className="border-border border-b bg-card shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
             <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-semibold">Convox Gateway</h1>
-              <span className="text-sm text-gray-500">User Management</span>
+              <h1 className="font-semibold text-foreground text-xl">Convox Gateway</h1>
+              <span className="text-muted-foreground text-sm">User Management</span>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">{user?.email}</span>
+              <ThemeToggle />
+              <span className="text-muted-foreground text-sm">{user?.email}</span>
               <button
+                className="font-medium text-destructive text-sm hover:text-destructive/80"
                 onClick={logout}
-                className="text-sm text-red-600 hover:text-red-800 font-medium"
+                type="button"
               >
                 Logout
               </button>
@@ -28,7 +31,7 @@ export function Layout() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
         <Outlet />
       </main>
     </div>

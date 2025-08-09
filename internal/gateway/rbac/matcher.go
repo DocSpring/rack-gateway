@@ -11,15 +11,16 @@ import (
 // - * matches anything within a segment
 //
 // Examples:
-//   /apps/{app}/processes/{pid} matches /apps/myapp/processes/p1
-//   but NOT /apps/myapp/processes/p1/exec
 //
-//   /apps/{app}/objects/{key:.*} matches /apps/myapp/objects/path/to/file.txt
+//	/apps/{app}/processes/{pid} matches /apps/myapp/processes/p1
+//	but NOT /apps/myapp/processes/p1/exec
+//
+//	/apps/{app}/objects/{key:.*} matches /apps/myapp/objects/path/to/file.txt
 func keyMatch3Multi(args ...interface{}) (interface{}, error) {
 	if len(args) < 2 {
 		return false, nil
 	}
-	
+
 	path, ok1 := args[0].(string)
 	pattern, ok2 := args[1].(string)
 	if !ok1 || !ok2 {

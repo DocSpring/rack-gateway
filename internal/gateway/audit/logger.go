@@ -17,19 +17,19 @@ type Logger struct {
 }
 
 type LogEntry struct {
-	Timestamp      string                 `json:"ts"`
-	UserEmail      string                 `json:"user_email"`
-	Rack           string                 `json:"rack"`
-	Method         string                 `json:"method"`
-	Path           string                 `json:"path"`
-	QueryParams    string                 `json:"query_params,omitempty"`
-	Status         int                    `json:"status"`
-	LatencyMs      int64                  `json:"latency_ms"`
-	RBACDecision   string                 `json:"rbac_decision"`
-	RequestID      string                 `json:"request_id"`
-	ClientIP       string                 `json:"client_ip"`
-	RequestBody    map[string]interface{} `json:"request_body,omitempty"`
-	ResponseError  string                 `json:"response_error,omitempty"`
+	Timestamp     string                 `json:"ts"`
+	UserEmail     string                 `json:"user_email"`
+	Rack          string                 `json:"rack"`
+	Method        string                 `json:"method"`
+	Path          string                 `json:"path"`
+	QueryParams   string                 `json:"query_params,omitempty"`
+	Status        int                    `json:"status"`
+	LatencyMs     int64                  `json:"latency_ms"`
+	RBACDecision  string                 `json:"rbac_decision"`
+	RequestID     string                 `json:"request_id"`
+	ClientIP      string                 `json:"client_ip"`
+	RequestBody   map[string]interface{} `json:"request_body,omitempty"`
+	ResponseError string                 `json:"response_error,omitempty"`
 }
 
 func NewLogger() *Logger {
@@ -102,7 +102,7 @@ func (l *Logger) redactPath(path string) string {
 
 func (l *Logger) redactMap(data map[string]interface{}) map[string]interface{} {
 	redacted := make(map[string]interface{})
-	
+
 	for key, value := range data {
 		if l.shouldRedact(key) {
 			redacted[key] = "[REDACTED]"
@@ -130,7 +130,7 @@ func (l *Logger) redactMap(data map[string]interface{}) map[string]interface{} {
 
 func (l *Logger) redactSlice(data []interface{}) []interface{} {
 	redacted := make([]interface{}, len(data))
-	
+
 	for i, item := range data {
 		switch v := item.(type) {
 		case map[string]interface{}:

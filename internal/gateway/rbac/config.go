@@ -3,14 +3,14 @@ package rbac
 import (
 	"fmt"
 	"os"
-	
+
 	"gopkg.in/yaml.v3"
 )
 
 // GatewayConfig represents the full config.yml structure
 type GatewayConfig struct {
-	Domain string                  `yaml:"domain"`
-	Users  map[string]*UserConfig  `yaml:"users"`
+	Domain string                 `yaml:"domain"`
+	Users  map[string]*UserConfig `yaml:"users"`
 }
 
 // UserConfig represents a user in config.yml
@@ -29,21 +29,21 @@ func LoadConfig(configPath string) (*GatewayConfig, error) {
 			Users:  make(map[string]*UserConfig),
 		}, nil
 	}
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	var config GatewayConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
-	
+
 	// Initialize users map if nil
 	if config.Users == nil {
 		config.Users = make(map[string]*UserConfig)
 	}
-	
+
 	return &config, nil
 }

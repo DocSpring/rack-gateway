@@ -1,9 +1,10 @@
-import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { GoogleIcon } from '@/components/google-icon'
+import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { GoogleIcon } from '@/components/GoogleIcon'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/auth-context'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -13,32 +14,34 @@ export function LoginPage() {
     setIsLoading(true)
     try {
       await login()
-    } catch (error) {
-      console.error('Login failed:', error)
+    } catch (_error) {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="w-full max-w-md px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">Convox Gateway</h1>
-          <p className="text-slate-600">Secure access management for your Convox rack</p>
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="absolute top-4 right-4">
+        <ModeToggle />
+      </div>
+      <div className="w-full max-w-md">
+        <div className="mb-8 text-center">
+          <h1 className="mb-2 font-bold text-4xl text-foreground tracking-tight">Convox Gateway</h1>
+          <p className="text-muted-foreground">Secure access management for your Convox rack</p>
         </div>
 
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Sign in</CardTitle>
+            <CardTitle className="text-center text-2xl">Sign in</CardTitle>
             <CardDescription className="text-center">
               Use your company Google account to continue
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button
-              onClick={handleLogin}
+              className="w-full text-white"
               disabled={isLoading}
-              className="w-full h-11"
+              onClick={handleLogin}
               size="lg"
             >
               {isLoading ? (
@@ -48,14 +51,13 @@ export function LoginPage() {
                 </>
               ) : (
                 <>
-                  <GoogleIcon className="w-5 h-5 mr-2" />
+                  <GoogleIcon className="mr-2 h-5 w-5" />
                   Continue with Google
                 </>
               )}
             </Button>
           </CardContent>
         </Card>
-
       </div>
     </div>
   )

@@ -64,7 +64,7 @@ class ApiService {
           authService.logout()
         }
         return Promise.reject(error)
-      },
+      }
     )
   }
 

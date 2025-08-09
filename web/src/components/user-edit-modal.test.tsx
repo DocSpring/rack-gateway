@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { UserEditModal } from './UserEditModal'
+import { UserEditModal } from './user-edit-modal'
+
+// Move regex to top level as per ultracite rules
+const VIEWER_REGEX = /viewer/i
+const ADMIN_REGEX = /admin/i
 
 describe('UserEditModal', () => {
   const mockOnSave = vi.fn()
@@ -25,18 +29,18 @@ describe('UserEditModal', () => {
     expect(screen.getByText('Edit User')).toBeInTheDocument()
     expect(screen.getByDisplayValue('test@example.com')).toBeDisabled()
     expect(screen.getByDisplayValue('Test User')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: /viewer/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: VIEWER_REGEX })).toBeChecked()
   })
 
   it('renders add mode correctly', () => {
-    render(<UserEditModal {...defaultProps} isNew={true} email="" />)
+    render(<UserEditModal {...defaultProps} email="" isNew={true} />)
 
     expect(screen.getByRole('heading', { name: 'Add User' })).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).not.toBeDisabled()
   })
 
   it('validates required fields', async () => {
-    render(<UserEditModal {...defaultProps} isNew={true} email="" user={{ name: '', roles: [] }} />)
+    render(<UserEditModal {...defaultProps} email="" isNew={true} user={{ name: '', roles: [] }} />)
 
     const saveButton = screen.getByRole('button', { name: 'Add User' })
     fireEvent.click(saveButton)
@@ -54,10 +58,10 @@ describe('UserEditModal', () => {
     render(
       <UserEditModal
         {...defaultProps}
-        isNew={true}
         email=""
+        isNew={true}
         user={{ name: 'Test', roles: ['viewer'] }}
-      />,
+      />
     )
 
     // Type invalid email
@@ -78,11 +82,11 @@ describe('UserEditModal', () => {
   })
 
   it('calls onSave with correct data', async () => {
-    render(<UserEditModal {...defaultProps} isNew={true} email="" user={{ name: '', roles: [] }} />)
+    render(<UserEditModal {...defaultProps} email="" isNew={true} user={{ name: '', roles: [] }} />)
 
     const emailInput = screen.getByLabelText('Email')
     const nameInput = screen.getByLabelText('Name')
-    const adminCheckbox = screen.getByRole('checkbox', { name: /admin/i })
+    const adminCheckbox = screen.getByRole('checkbox', { name: ADMIN_REGEX })
 
     await userEvent.type(emailInput, 'new@example.com')
     await userEvent.type(nameInput, 'New User')
@@ -111,8 +115,8 @@ describe('UserEditModal', () => {
   it('toggles roles correctly', async () => {
     render(<UserEditModal {...defaultProps} />)
 
-    const adminCheckbox = screen.getByRole('checkbox', { name: /admin/i })
-    const viewerCheckbox = screen.getByRole('checkbox', { name: /viewer/i })
+    const adminCheckbox = screen.getByRole('checkbox', { name: ADMIN_REGEX })
+    const viewerCheckbox = screen.getByRole('checkbox', { name: VIEWER_REGEX })
 
     expect(viewerCheckbox).toBeChecked()
     expect(adminCheckbox).not.toBeChecked()

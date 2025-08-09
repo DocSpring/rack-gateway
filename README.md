@@ -34,100 +34,28 @@ make test    # Run all tests
 
 ### Development Setup
 
-1. Clone the repository:
+For complete development setup instructions including Google OAuth configuration and testing workflows, see **[DEV.md](DEV.md)**.
 
+**Quick Start:**
 ```bash
 git clone https://github.com/DocSpring/convox-gateway.git
 cd convox-gateway
-```
 
-2. Install dependencies:
-
-```bash
-go mod download
-```
-
-3. Set up configuration:
-
-```bash
-cp config/config.yml.example config/config.yml
-# Edit config/config.yml with your users and domain
-
-# Set up environment variables using mise
+# Set up configuration
+cp config/gateway/config.yml.example config/gateway/config.yml
 cp mise.local.toml.example mise.local.toml
-# Edit mise.local.toml with your OAuth credentials
-```
+# Edit these files with your settings (see DEV.md for details)
 
-4. Start development environment with Docker Compose:
-
-```bash
-make dev         # Start gateway and mock Convox server
-make dev-logs    # View logs in another terminal
-make dev-down    # Stop when done
-```
-
-The development environment runs:
-
-- Mock Convox server on http://localhost:5443
-- Gateway API on http://localhost:8080
-
-For local customization, create a `docker-compose.override.yml`:
-
-```bash
-cp docker-compose.override.yml.example docker-compose.override.yml
-# Edit to customize ports, volumes, or environment variables
-```
-
-5. Configure Google OAuth:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create OAuth 2.0 credentials
-   - Add `http://localhost:8080/v1/login/callback` to authorized redirect URIs
-   - Set environment variables:
-
-```bash
-export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
-export GOOGLE_CLIENT_SECRET="your-client-secret"
-export GOOGLE_ALLOWED_DOMAIN="your-domain.com"
-```
-
-4. Configure rack connection:
-
-```bash
-# For development with mock server
-export RACK_HOST="http://localhost:9090"
-export RACK_TOKEN="mock-rack-token-12345"
-
-# For real rack in Kubernetes
-export RACK_HOST="api.convox-system.svc.cluster.local:5443"
-export RACK_TOKEN="your-actual-rack-token"
-```
-
-5. Build the binaries:
-
-```bash
-# Build both proxy and CLI
-make all
-
-# Or build individually
-make gateway  # Builds bin/convox-gateway-api
-make cli      # Builds bin/convox-gateway
-```
-
-6. Run the gateway:
-
-```bash
-# Run directly for development
+# Install dependencies and start development environment
+go mod download
+cd web && pnpm install && cd ..
 make dev
-
-# Or run the built binary
-./bin/convox-gateway-api
 ```
 
-7. Verify health:
-
-```bash
-./scripts/health_check.sh
-```
+**Development URLs:**
+- Gateway API: http://localhost:8447
+- Web UI: http://localhost:5173
+- Mock Convox: http://localhost:5443
 
 ## CLI Usage
 

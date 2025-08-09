@@ -21,8 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check if user is already logged in
     authService
       .getCurrentUser()
-      .then((user) => {
-        setUser(user)
+      .then((currentUser) => {
+        setUser(currentUser)
       })
       .catch(() => {
         // Not logged in or token expired

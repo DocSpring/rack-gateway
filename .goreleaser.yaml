@@ -1,0 +1,92 @@
+version: 2
+
+project_name: convox-gateway
+
+before:
+  hooks:
+    - go mod tidy
+    - cd web && pnpm install --frozen-lockfile && pnpm build
+
+builds:
+  - id: gateway
+    main: ./cmd/gateway
+    binary: gateway
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+  - id: cli
+    main: ./cmd/cli
+    binary: convox-gateway
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: gateway
+    builds:
+      - gateway
+    name_template: "{{ .ProjectName }}-gateway-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+  - id: cli
+    builds:
+      - cli
+    name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^build:'
+      - '^style:'
+      - '^refactor:'
+      - 'merge conflict'
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+
+release:
+  github:
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+    name: "{{ .ProjectName }}"
+  draft: false
+  prerelease: auto
+  name_template: "Release {{ .Version }}"

@@ -59,8 +59,8 @@ var (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "convox-gateway",
-		Short: "Enterprise gateway for Convox with authentication and RBAC",
+		Use:           "convox-gateway",
+		Short:         "Enterprise gateway for Convox with authentication and RBAC",
 		SilenceErrors: true,
 		Long: `Convox Gateway provides secure authenticated access to Convox racks
 with SSO authentication, role-based access control, and audit logging.
@@ -98,8 +98,8 @@ Rack management:
 		Short:              "Run a convox CLI command through the gateway",
 		Long:               "Execute any convox CLI command with gateway authentication and the selected rack",
 		DisableFlagParsing: true,
-		SilenceUsage:       true,  // Don't show usage on error
-		SilenceErrors:      true,  // We'll handle error printing ourselves
+		SilenceUsage:       true, // Don't show usage on error
+		SilenceErrors:      true, // We'll handle error printing ourselves
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				// If just "convox-gateway convox" is run, show convox help
@@ -119,8 +119,8 @@ Rack management:
 	}
 
 	rackCmd := &cobra.Command{
-		Use:   "rack",
-		Short: "Show current rack and gateway information",
+		Use:          "rack",
+		Short:        "Show current rack and gateway information",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rack, err := getCurrentRack()
@@ -152,8 +152,8 @@ Rack management:
 	}
 
 	racksCmd := &cobra.Command{
-		Use:   "racks",
-		Short: "List all configured racks",
+		Use:          "racks",
+		Short:        "List all configured racks",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configFile := filepath.Join(configPath, "config.json")

@@ -40,7 +40,7 @@ func Setup() (func() error, error) {
 	if os.Getenv("CI") != "" {
 		return func() error { return nil }, nil
 	}
-	
+
 	// ENFORCE: Tests MUST be run through safe-test.sh wrapper
 	if os.Getenv("CONVOX_GATEWAY_SAFE_TEST") != "1" {
 		panic(`
@@ -57,18 +57,18 @@ ALWAYS use one of these commands:
 DO NOT run 'go test' directly!
 `)
 	}
-	
+
 	// Verify the wrapper has set up the test environment correctly
 	cfg, err := configDir()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	guardFile := filepath.Join(cfg, "GUARD_ACTIVE")
 	if _, err := os.Stat(guardFile); err != nil {
 		return nil, fmt.Errorf("CRITICAL: Guard file not found at %s - safe wrapper may have failed", guardFile)
 	}
-	
+
 	// No cleanup needed - wrapper handles everything
 	return func() error { return nil }, nil
 }

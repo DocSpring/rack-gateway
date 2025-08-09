@@ -22,7 +22,7 @@ func TestRBACManager(t *testing.T) {
 	t.Run("policy inheritance resolved", func(t *testing.T) {
 		// ops should have viewer routes plus its own
 		opsPolicy := manager.compiledPolicies["ops"]
-		
+
 		// Check for a viewer route
 		hasViewerRoute := false
 		for _, route := range opsPolicy.Routes {
@@ -47,16 +47,16 @@ func TestRBACManager(t *testing.T) {
 
 func TestViewerPermissions(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add a viewer user
 	err := manager.AddUser("viewer@test.com", "Viewer User", []string{"viewer"})
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		method   string
-		path     string
-		allowed  bool
+		name    string
+		method  string
+		path    string
+		allowed bool
 	}{
 		// Should be allowed (read-only operations)
 		{"can list apps", MethodGet, "/apps", true},
@@ -89,16 +89,16 @@ func TestViewerPermissions(t *testing.T) {
 
 func TestOpsPermissions(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add an ops user
 	err := manager.AddUser("ops@test.com", "Ops User", []string{"ops"})
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		method   string
-		path     string
-		allowed  bool
+		name    string
+		method  string
+		path    string
+		allowed bool
 	}{
 		// Should inherit viewer permissions
 		{"can list apps", MethodGet, "/apps", true},
@@ -130,16 +130,16 @@ func TestOpsPermissions(t *testing.T) {
 
 func TestDeployerPermissions(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add a deployer user
 	err := manager.AddUser("deployer@test.com", "Deployer User", []string{"deployer"})
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		method   string
-		path     string
-		allowed  bool
+		name    string
+		method  string
+		path    string
+		allowed bool
 	}{
 		// Should inherit viewer + ops permissions
 		{"can list apps", MethodGet, "/apps", true},
@@ -176,15 +176,15 @@ func TestDeployerPermissions(t *testing.T) {
 
 func TestAdminPermissions(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add an admin user
 	err := manager.AddUser("admin@test.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		method   string
-		path     string
+		name   string
+		method string
+		path   string
 	}{
 		// Admin should have access to everything
 		{"can do anything with apps", MethodDelete, "/apps/myapp"},
@@ -198,7 +198,7 @@ func TestAdminPermissions(t *testing.T) {
 		{"can create JWT tokens", MethodPost, "/system/jwt/token"},
 		{"can proxy any service", MethodAny, "/custom/http/proxy/anything"},
 		{"can access any registry path", MethodAny, "/v2/anything/else"},
-		
+
 		// Wildcard should match everything
 		{"can GET anything", MethodGet, "/some/random/path"},
 		{"can POST anything", MethodPost, "/another/random/path"},
@@ -216,16 +216,16 @@ func TestAdminPermissions(t *testing.T) {
 
 func TestWebSocketPermissions(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add users with different roles
 	require.NoError(t, manager.AddUser("viewer@test.com", "Viewer", []string{"viewer"}))
 	require.NoError(t, manager.AddUser("ops@test.com", "Ops", []string{"ops"}))
 
 	tests := []struct {
-		name     string
-		user     string
-		path     string
-		allowed  bool
+		name    string
+		user    string
+		path    string
+		allowed bool
 	}{
 		// Viewer can access log websockets
 		{"viewer can access app logs", "viewer@test.com", "/apps/myapp/logs", true},
@@ -256,7 +256,7 @@ func TestWebSocketPermissions(t *testing.T) {
 
 func TestPathPatternMatching(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add a viewer user and ops user
 	err := manager.AddUser("viewer@test.com", "Viewer User", []string{"viewer"})
 	require.NoError(t, err)
@@ -264,23 +264,23 @@ func TestPathPatternMatching(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		user     string
-		path     string
-		method   string
-		allowed  bool
+		name    string
+		user    string
+		path    string
+		method  string
+		allowed bool
 	}{
 		// Test path parameter matching (viewer)
 		{"matches app name parameter", "viewer@test.com", "/apps/production", MethodGet, true},
 		{"matches app with special chars", "viewer@test.com", "/apps/my-app-123", MethodGet, true},
 		{"matches nested parameters", "viewer@test.com", "/apps/myapp/processes/process-123", MethodGet, true},
 		{"matches release ID", "viewer@test.com", "/apps/myapp/releases/RAPI123456", MethodGet, true},
-		
+
 		// Test multi-segment wildcards (ops has object access, not viewer)
 		{"ops matches object key wildcard", "ops@test.com", "/apps/myapp/objects/path/to/file.txt", MethodGet, true},
 		{"ops matches deep object path", "ops@test.com", "/apps/myapp/objects/very/deep/path/to/file.txt", MethodGet, true},
 		{"viewer cannot access objects", "viewer@test.com", "/apps/myapp/objects/path/to/file.txt", MethodGet, false},
-		
+
 		// Should not match different paths
 		{"doesn't match wrong prefix", "viewer@test.com", "/wrongprefix/apps", MethodGet, false},
 		{"doesn't match partial path", "viewer@test.com", "/apps", MethodPost, false}, // viewer can GET but not POST
@@ -296,53 +296,53 @@ func TestPathPatternMatching(t *testing.T) {
 
 func TestExactPathMatching(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add users with different roles
 	require.NoError(t, manager.AddUser("viewer@test.com", "Viewer", []string{"viewer"}))
 	require.NoError(t, manager.AddUser("ops@test.com", "Ops", []string{"ops"}))
 
 	tests := []struct {
-		name     string
-		user     string
-		path     string
-		method   string
-		allowed  bool
+		name    string
+		user    string
+		path    string
+		method  string
+		allowed bool
 	}{
 		// CRITICAL: /apps/{app}/processes/{pid} should NOT match /apps/{app}/processes/{pid}/exec
 		{"viewer can view process", "viewer@test.com", "/apps/myapp/processes/p1", MethodGet, true},
 		{"viewer CANNOT exec into process", "viewer@test.com", "/apps/myapp/processes/p1/exec", MethodGet, false},
 		{"viewer CANNOT exec with SOCKET", "viewer@test.com", "/apps/myapp/processes/p1/exec", MethodSocket, false},
-		
+
 		// But ops can exec
 		{"ops can view process", "ops@test.com", "/apps/myapp/processes/p1", MethodGet, true},
 		{"ops can exec into process", "ops@test.com", "/apps/myapp/processes/p1/exec", MethodSocket, true},
-		
+
 		// Test exact vs prefix matching for other paths
 		{"viewer can list apps", "viewer@test.com", "/apps", MethodGet, true},
 		{"viewer can view specific app", "viewer@test.com", "/apps/myapp", MethodGet, true},
 		{"path /apps doesn't match /apps/extra/path", "viewer@test.com", "/apps/myapp/extra", MethodGet, false},
-		
+
 		// Test builds vs builds/import
 		{"viewer can view builds", "viewer@test.com", "/apps/myapp/builds", MethodGet, true},
 		{"viewer can view specific build", "viewer@test.com", "/apps/myapp/builds/b123", MethodGet, true},
 		{"viewer CANNOT import builds", "viewer@test.com", "/apps/myapp/builds/import", MethodPost, false},
-		
+
 		// Test logs endpoints (should match exactly)
 		{"viewer can view app logs", "viewer@test.com", "/apps/myapp/logs", MethodSocket, true},
 		{"viewer can view build logs", "viewer@test.com", "/apps/myapp/builds/b123/logs", MethodSocket, true},
 		{"viewer can view process logs", "viewer@test.com", "/apps/myapp/processes/p1/logs", MethodSocket, true},
-		
+
 		// Test resources vs resources/console
 		{"viewer can view resources", "viewer@test.com", "/apps/myapp/resources", MethodGet, true},
 		{"viewer can view specific resource", "viewer@test.com", "/apps/myapp/resources/db", MethodGet, true},
 		{"viewer CANNOT access resource console", "viewer@test.com", "/apps/myapp/resources/db/console", MethodSocket, false},
 		{"ops can access resource console", "ops@test.com", "/apps/myapp/resources/db/console", MethodSocket, true},
-		
+
 		// Test instances vs instances/shell
 		{"viewer can list instances", "viewer@test.com", "/instances", MethodGet, true},
 		{"viewer CANNOT access instance shell", "viewer@test.com", "/instances/i-123/shell", MethodSocket, false},
 		{"ops can access instance shell", "ops@test.com", "/instances/i-123/shell", MethodSocket, true},
-		
+
 		// Test files endpoints
 		{"viewer CANNOT access files", "viewer@test.com", "/apps/myapp/processes/p1/files", MethodGet, false},
 		{"ops can access files", "ops@test.com", "/apps/myapp/processes/p1/files", MethodGet, true},
@@ -360,18 +360,18 @@ func TestExactPathMatching(t *testing.T) {
 
 func TestMultiSegmentWildcards(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add users
 	require.NoError(t, manager.AddUser("viewer@test.com", "Viewer", []string{"viewer"}))
 	require.NoError(t, manager.AddUser("ops@test.com", "Ops", []string{"ops"}))
 	require.NoError(t, manager.AddUser("admin@test.com", "Admin", []string{"admin"}))
 
 	tests := []struct {
-		name     string
-		user     string
-		path     string
-		method   string
-		allowed  bool
+		name    string
+		user    string
+		path    string
+		method  string
+		allowed bool
 	}{
 		// Test object storage paths with multi-segment wildcards
 		// Note: ops has read access to objects, not viewer
@@ -380,12 +380,12 @@ func TestMultiSegmentWildcards(t *testing.T) {
 		{"ops can read nested object", "ops@test.com", "/apps/myapp/objects/path/to/file.txt", MethodGet, true},
 		{"ops can read deeply nested object", "ops@test.com", "/apps/myapp/objects/very/deep/path/to/file.txt", MethodGet, true},
 		{"ops CANNOT write objects", "ops@test.com", "/apps/myapp/objects/file.txt", MethodPost, false},
-		
+
 		// Test registry paths
 		{"admin can access registry v2 API", "admin@test.com", "/v2/anything", MethodAny, true},
 		{"admin can access nested registry paths", "admin@test.com", "/v2/library/nginx/manifests/latest", MethodAny, true},
 		{"viewer CANNOT access registry API", "viewer@test.com", "/v2/anything", MethodGet, false},
-		
+
 		// Test custom proxy paths
 		{"admin can use custom proxy", "admin@test.com", "/custom/http/proxy/anything", MethodAny, true},
 		{"admin can use nested proxy paths", "admin@test.com", "/custom/http/proxy/path/to/service", MethodAny, true},
@@ -428,24 +428,24 @@ func TestUserPersistence(t *testing.T) {
 
 func TestMultipleRoles(t *testing.T) {
 	manager := setupTestManager(t)
-	
+
 	// Add user with multiple roles
 	err := manager.AddUser("multi@test.com", "Multi Role User", []string{"viewer", "ops"})
 	require.NoError(t, err)
 
 	// Should have combined permissions of both roles
 	tests := []struct {
-		name     string
-		method   string
-		path     string
-		allowed  bool
+		name    string
+		method  string
+		path    string
+		allowed bool
 	}{
 		// Viewer permissions
 		{"has viewer read permissions", MethodGet, "/apps", true},
-		
+
 		// Ops permissions
 		{"has ops process management", MethodDelete, "/apps/myapp/processes/p1", true},
-		
+
 		// Should not have deployer permissions
 		{"no deployer permissions", MethodPost, "/apps", false},
 	}
@@ -480,6 +480,6 @@ func setupTestManager(t *testing.T) *Manager {
 
 	manager, err := NewManager(configPath)
 	require.NoError(t, err, "Failed to create RBAC manager")
-	
+
 	return manager
 }

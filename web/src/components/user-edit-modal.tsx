@@ -10,6 +10,9 @@ interface UserEditModalProps {
   onClose: () => void
 }
 
+// Move regex to top level as per ultracite rules
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export function UserEditModal({
   email: initialEmail,
   user,
@@ -33,7 +36,7 @@ export function UserEditModal({
 
     if (!email.trim()) {
       newErrors.email = 'Email is required'
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (!EMAIL_REGEX.test(email)) {
       newErrors.email = 'Invalid email format'
     }
 
@@ -57,82 +60,82 @@ export function UserEditModal({
   }
 
   const toggleRole = (role: string) => {
-    setSelectedRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    setSelectedRoles((previous) =>
+      previous.includes(role) ? previous.filter((r) => r !== role) : [...previous, role]
     )
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75 p-4">
+      <div className="w-full max-w-md rounded-lg bg-white p-6">
+        <h3 className="mb-4 font-medium text-gray-900 text-lg">
           {isNew ? 'Add User' : 'Edit User'}
         </h3>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label className="block font-medium text-gray-700 text-sm" htmlFor="email">
               Email
             </label>
             <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 sm:text-sm"
               disabled={!isNew}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100"
+              id="email"
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="user@example.com"
+              type="email"
+              value={email}
             />
-            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+            {errors.email ? <p className="mt-1 text-red-600 text-sm">{errors.email}</p> : null}
           </div>
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            <label className="block font-medium text-gray-700 text-sm" htmlFor="name">
               Name
             </label>
             <input
-              type="text"
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              id="name"
+              onChange={(e) => setName(e.target.value)}
               placeholder="John Doe"
+              type="text"
+              value={name}
             />
-            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+            {errors.name ? <p className="mt-1 text-red-600 text-sm">{errors.name}</p> : null}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Roles</label>
+          <fieldset>
+            <legend className="mb-2 block font-medium text-gray-700 text-sm">Roles</legend>
             <div className="space-y-2">
               {Object.entries(AVAILABLE_ROLES).map(([key, role]) => (
-                <label key={key} className="flex items-start">
+                <label className="flex items-start" key={key}>
                   <input
-                    type="checkbox"
                     checked={selectedRoles.includes(key)}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     onChange={() => toggleRole(key)}
-                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    type="checkbox"
                   />
                   <div className="ml-3">
-                    <span className="text-sm font-medium text-gray-700">{role.name}</span>
-                    <p className="text-xs text-gray-500">{role.description}</p>
+                    <span className="font-medium text-gray-700 text-sm">{role.name}</span>
+                    <p className="text-gray-500 text-xs">{role.description}</p>
                   </div>
                 </label>
               ))}
             </div>
-            {errors.roles && <p className="mt-1 text-sm text-red-600">{errors.roles}</p>}
-          </div>
+            {errors.roles ? <p className="mt-1 text-red-600 text-sm">{errors.roles}</p> : null}
+          </fieldset>
 
           <div className="flex justify-end space-x-3 pt-4">
             <button
-              type="button"
+              className="rounded-md border border-gray-300 px-4 py-2 font-medium text-gray-700 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              type="button"
             >
               Cancel
             </button>
             <button
+              className="rounded-md border border-transparent bg-blue-600 px-4 py-2 font-medium text-sm text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               {isNew ? 'Add User' : 'Save Changes'}
             </button>

@@ -36,14 +36,14 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 				http.Error(w, "invalid basic auth encoding", http.StatusUnauthorized)
 				return
 			}
-			
+
 			credentials := string(decoded)
 			colonIndex := strings.Index(credentials, ":")
 			if colonIndex < 0 {
 				http.Error(w, "invalid basic auth format", http.StatusUnauthorized)
 				return
 			}
-			
+
 			// Extract JWT from password field (username should be "convox")
 			token = credentials[colonIndex+1:]
 		} else {

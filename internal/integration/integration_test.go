@@ -23,7 +23,7 @@ import (
 
 const (
 	mockConvoxPort = "9090"
-	gatewayPort    = "8448"  // Use 8448 for tests to avoid conflicts with dev (8447)
+	gatewayPort    = "8448" // Use 8448 for tests to avoid conflicts with dev (8447)
 	mockRackToken  = "mock-rack-token-12345"
 	testJWTSecret  = "test-secret-key-for-integration-testing"
 )

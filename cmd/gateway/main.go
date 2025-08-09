@@ -158,5 +158,3 @@ func handleLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 		json.NewEncoder(w).Encode(resp)
 	}
 }
-
-

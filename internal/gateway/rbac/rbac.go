@@ -15,11 +15,11 @@ type Manager struct {
 	enforcer         *casbin.Enforcer
 	users            map[string]*User
 	roles            map[string]*Role
-	policies         map[string]*Policy  // Legacy, kept for compatibility
+	policies         map[string]*Policy    // Legacy, kept for compatibility
 	compiledPolicies map[string]*PolicyDef // New compiled-in policies
 	mu               sync.RWMutex
-	configPath       string  // Path to config.yml
-	config           *GatewayConfig  // Loaded configuration
+	configPath       string         // Path to config.yml
+	config           *GatewayConfig // Loaded configuration
 }
 
 type User struct {
@@ -119,9 +119,9 @@ func (m *Manager) loadUsers() error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	
+
 	m.config = config
-	
+
 	// Convert UserConfig to User structs
 	users := make(map[string]*User)
 	for email, userConfig := range config.Users {
@@ -131,7 +131,7 @@ func (m *Manager) loadUsers() error {
 			Roles: userConfig.Roles,
 		}
 	}
-	
+
 	m.mu.Lock()
 	m.users = users
 	m.mu.Unlock()
@@ -256,7 +256,7 @@ func (m *Manager) AddUser(email, name string, roles []string) error {
 		Name:  name,
 		Roles: roles,
 	}
-	
+
 	// Update config
 	if m.config == nil {
 		m.config = &GatewayConfig{
@@ -386,7 +386,7 @@ func (m *Manager) GetRoles() map[string]*Role {
 func (m *Manager) GetDomain() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	if m.config != nil {
 		return m.config.Domain
 	}
@@ -396,6 +396,6 @@ func (m *Manager) GetDomain() string {
 func (m *Manager) GetConfig() *GatewayConfig {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	return m.config
 }

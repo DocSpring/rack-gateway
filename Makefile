@@ -1,13 +1,29 @@
-.PHONY: dev dev-build dev-down dev-logs gateway cli mock test test-unit test-integration lint docker clean build all deps
+.PHONY: dev dev-build dev-down dev-logs gateway cli mock test test-unit test-integration lint docker clean build all deps web-deps web-build web-test web-lint
 
-all: gateway cli mock
+all: web-build gateway cli mock
 
-build: gateway cli mock
+build: web-build gateway cli mock
 
 deps:
 	@echo "Installing Go dependencies..."
 	@go mod download
 	@go mod tidy
+
+web-deps:
+	@echo "Installing web dependencies..."
+	@cd web && pnpm install --frozen-lockfile
+
+web-build: web-deps
+	@echo "Building web assets..."
+	@cd web && pnpm build
+
+web-test: web-deps
+	@echo "Running web tests..."
+	@cd web && pnpm test --run
+
+web-lint: web-deps
+	@echo "Running web linting..."
+	@cd web && pnpm lint
 
 dev:
 	@echo "Starting development environment with Docker Compose..."
@@ -37,7 +53,7 @@ mock:
 	@echo "Building mock Convox server..."
 	@go build -o bin/mock-convox cmd/mock-convox/main.go
 
-test: test-unit test-integration
+test: test-unit test-integration web-test
 
 test-unit:
 	@echo "Running unit tests..."
@@ -47,8 +63,8 @@ test-integration:
 	@echo "Running integration tests..."
 	@./scripts/safe-test.sh -v -race -tags=integration ./internal/integration/...
 
-lint:
-	@echo "Running linters..."
+lint: web-lint
+	@echo "Running Go linters..."
 	@go vet ./...
 	@go fmt ./...
 	@if command -v staticcheck > /dev/null; then staticcheck ./...; else echo "staticcheck not installed"; fi
@@ -60,4 +76,6 @@ docker:
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf bin/
+	@rm -rf web/dist/
+	@rm -rf web/node_modules/
 	@go clean -cache

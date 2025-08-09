@@ -46,7 +46,7 @@ func TestJWTManager(t *testing.T) {
 
 	t.Run("expired token", func(t *testing.T) {
 		shortManager := NewJWTManager(secret, 1*time.Nanosecond)
-		
+
 		token, err := shortManager.CreateToken("test@example.com", "Test User")
 		if err != nil {
 			t.Fatalf("Failed to create token: %v", err)

@@ -42,6 +42,10 @@ mise.local.toml
 # Build artifacts
 dist/
 tmp/
+web/dist/
+web/node_modules/
+web/.vite/
 
 # Test artifacts
-web/test-results/.last-run.json
+web/test-results/
+web/coverage/

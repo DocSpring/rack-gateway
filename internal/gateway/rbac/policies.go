@@ -194,18 +194,18 @@ var DefaultPolicies = map[string]*PolicyDef{
 // ResolveInheritance processes the Inherits field to include parent routes
 func ResolveInheritance(policies map[string]*PolicyDef) {
 	resolved := make(map[string]bool)
-	
+
 	var resolve func(name string) []Route
 	resolve = func(name string) []Route {
 		if resolved[name] {
 			return policies[name].Routes
 		}
-		
+
 		policy := policies[name]
 		if policy == nil {
 			return nil
 		}
-		
+
 		if policy.Inherits != "" {
 			parentRoutes := resolve(policy.Inherits)
 			// Combine parent routes with current routes (parent first)
@@ -215,11 +215,11 @@ func ResolveInheritance(policies map[string]*PolicyDef) {
 			policy.Routes = allRoutes
 			policy.Inherits = "" // Clear to avoid re-processing
 		}
-		
+
 		resolved[name] = true
 		return policy.Routes
 	}
-	
+
 	// Resolve all policies
 	for name := range policies {
 		resolve(name)

@@ -41,83 +41,73 @@ class AuthService {
   }
 
   // Start OAuth flow with PKCE
-  async startLogin(rack: string = 'default'): Promise<void> {
-    try {
-      // Generate PKCE parameters
-      this.codeVerifier = this.generateRandomString(128)
-      this.state = this.generateRandomString(32)
-      const codeChallenge = await this.generatePKCEChallenge(this.codeVerifier)
+  async startLogin(rack = 'default'): Promise<void> {
+    // Generate PKCE parameters
+    this.codeVerifier = this.generateRandomString(128)
+    this.state = this.generateRandomString(32)
+    const codeChallenge = await this.generatePKCEChallenge(this.codeVerifier)
 
-      // Store in session storage for callback
-      sessionStorage.setItem('code_verifier', this.codeVerifier)
-      sessionStorage.setItem('oauth_state', this.state)
-      sessionStorage.setItem('oauth_rack', rack)
+    // Store in session storage for callback
+    sessionStorage.setItem('code_verifier', this.codeVerifier)
+    sessionStorage.setItem('oauth_state', this.state)
+    sessionStorage.setItem('oauth_rack', rack)
 
-      // Get OAuth URL from backend
-      const response = await axios.get(`${API_BASE}/.gateway/login/start`, {
-        params: {
-          code_challenge: codeChallenge,
-          state: this.state,
-          rack,
-          redirect_uri: `${window.location.origin}/auth/callback`,
-        },
-      })
+    // Get OAuth URL from backend
+    const response = await axios.get(`${API_BASE}/.gateway/login/start`, {
+      params: {
+        code_challenge: codeChallenge,
+        state: this.state,
+        rack,
+        redirect_uri: `${window.location.origin}/auth/callback`,
+      },
+    })
 
-      // Redirect to Google OAuth
-      window.location.href = response.data.authUrl
-    } catch (error) {
-      console.error('Failed to start login:', error)
-      throw error
-    }
+    // Redirect to Google OAuth
+    window.location.href = response.data.authUrl
   }
 
   // Handle OAuth callback
   async handleCallback(code: string, state: string): Promise<AuthState> {
-    try {
-      // Verify state matches
-      const storedState = sessionStorage.getItem('oauth_state')
-      if (state !== storedState) {
-        throw new Error('Invalid state parameter')
-      }
+    // Verify state matches
+    const storedState = sessionStorage.getItem('oauth_state')
+    if (state !== storedState) {
+      throw new Error('Invalid state parameter')
+    }
 
-      // Get stored PKCE verifier
-      const codeVerifier = sessionStorage.getItem('code_verifier')
-      const rack = sessionStorage.getItem('oauth_rack') || 'default'
+    // Get stored PKCE verifier
+    const codeVerifier = sessionStorage.getItem('code_verifier')
+    const rack = sessionStorage.getItem('oauth_rack') || 'default'
 
-      if (!codeVerifier) {
-        throw new Error('Missing PKCE verifier')
-      }
+    if (!codeVerifier) {
+      throw new Error('Missing PKCE verifier')
+    }
 
-      // Exchange code for token
-      const response = await axios.post(`${API_BASE}/.gateway/login/callback`, {
-        code,
-        code_verifier: codeVerifier,
-        rack,
-        redirect_uri: `${window.location.origin}/auth/callback`,
-      })
+    // Exchange code for token
+    const response = await axios.post(`${API_BASE}/.gateway/login/callback`, {
+      code,
+      code_verifier: codeVerifier,
+      rack,
+      redirect_uri: `${window.location.origin}/auth/callback`,
+    })
 
-      const { token, user } = response.data
+    const { token, user } = response.data
 
-      // Store token in cookie
-      Cookies.set('gateway_token', token, {
-        expires: 30, // 30 days
-        secure: window.location.protocol === 'https:',
-        sameSite: 'strict',
-      })
+    // Store token in cookie
+    Cookies.set('gateway_token', token, {
+      expires: 30, // 30 days
+      secure: window.location.protocol === 'https:',
+      sameSite: 'strict',
+    })
 
-      // Clean up session storage
-      sessionStorage.removeItem('code_verifier')
-      sessionStorage.removeItem('oauth_state')
-      sessionStorage.removeItem('oauth_rack')
+    // Clean up session storage
+    sessionStorage.removeItem('code_verifier')
+    sessionStorage.removeItem('oauth_state')
+    sessionStorage.removeItem('oauth_rack')
 
-      return {
-        user,
-        token,
-        isAuthenticated: true,
-      }
-    } catch (error) {
-      console.error('Failed to handle callback:', error)
-      throw error
+    return {
+      user,
+      token,
+      isAuthenticated: true,
     }
   }
 
@@ -135,7 +125,7 @@ class AuthService {
         },
       })
       return response.data
-    } catch (error) {
+    } catch (_error) {
       // Token might be expired
       this.logout()
       return null

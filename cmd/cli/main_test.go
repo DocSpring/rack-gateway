@@ -118,7 +118,7 @@ func TestRackSelectionPriority(t *testing.T) {
 	// Test 2: Environment variable override
 	os.Setenv("CONVOX_GATEWAY_RACK", "production")
 	defer os.Unsetenv("CONVOX_GATEWAY_RACK")
-	
+
 	// In the actual wrapConvoxCommand, env var overrides current
 	// We're just testing the helper functions here
 	envRack := os.Getenv("CONVOX_GATEWAY_RACK")
@@ -135,7 +135,7 @@ func TestLoginSetsCurrentRack(t *testing.T) {
 
 	// Simulate what happens during login
 	rack := "us-west"
-	
+
 	// Save gateway config (normally done by saveGatewayConfig)
 	config := map[string]interface{}{
 		"gateways": map[string]interface{}{

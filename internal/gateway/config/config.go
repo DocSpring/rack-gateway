@@ -10,17 +10,17 @@ import (
 )
 
 type Config struct {
-	Port                  string
-	JWTSecret             string
-	JWTExpiry             time.Duration
-	GoogleClientID        string
-	GoogleClientSecret    string
-	GoogleAllowedDomain   string
-	RedirectURL           string
-	AdminUsers            []string
-	ConfigPath            string  // Path to config.yml
-	DevMode               bool
-	Racks                 map[string]RackConfig
+	Port                string
+	JWTSecret           string
+	JWTExpiry           time.Duration
+	GoogleClientID      string
+	GoogleClientSecret  string
+	GoogleAllowedDomain string
+	RedirectURL         string
+	AdminUsers          []string
+	ConfigPath          string // Path to config.yml
+	DevMode             bool
+	Racks               map[string]RackConfig
 }
 
 type RackConfig struct {
@@ -35,7 +35,7 @@ type RackConfig struct {
 func Load() (*Config, error) {
 	// Check for config directory override
 	configDir := getEnv("CONVOX_GATEWAY_CONFIG_DIR", "config")
-	
+
 	cfg := &Config{
 		Port:                getEnv("PORT", "8080"),
 		JWTExpiry:           30 * 24 * time.Hour,
@@ -74,13 +74,13 @@ func (c *Config) loadRacksFromEnv() {
 	rackHost := os.Getenv("RACK_HOST")
 	rackToken := os.Getenv("RACK_TOKEN")
 	rackUsername := getEnv("RACK_USERNAME", "convox") // Default to "convox" for standard Convox racks
-	
+
 	if rackHost != "" && rackToken != "" {
 		// Add https:// if no protocol specified
 		if !strings.HasPrefix(rackHost, "http://") && !strings.HasPrefix(rackHost, "https://") {
 			rackHost = "https://" + rackHost
 		}
-		
+
 		// The gateway protects a single rack
 		c.Racks["default"] = RackConfig{
 			Name:     "default",

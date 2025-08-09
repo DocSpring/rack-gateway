@@ -1,8 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.1.4/schema.json",
   "files": {
-    "ignoreUnknown": false,
-    "experimentalScannerIgnores": ["node_modules", "dist", "coverage", "*.config.js", "*.config.ts"]
+    "includes": ["src/**/*.{js,ts,jsx,tsx}", "*.{js,jsx}"]
   },
   "formatter": {
     "enabled": true,
@@ -28,5 +27,6 @@
       "quoteStyle": "single",
       "semicolons": "asNeeded"
     }
-  }
+  },
+  "extends": ["ultracite"]
 }

@@ -11,14 +11,14 @@ export function CallbackPage() {
     const handleCallback = async () => {
       const code = searchParams.get('code')
       const state = searchParams.get('state')
-      const error = searchParams.get('error')
+      const urlError = searchParams.get('error')
 
-      if (error) {
-        setError(`Authentication failed: ${error}`)
+      if (urlError) {
+        setError(`Authentication failed: ${urlError}`)
         return
       }
 
-      if (!code || !state) {
+      if (!(code && state)) {
         setError('Invalid callback parameters')
         return
       }
@@ -28,7 +28,6 @@ export function CallbackPage() {
         // Redirect to main app
         navigate('/', { replace: true })
       } catch (err) {
-        console.error('Callback error:', err)
         setError(err instanceof Error ? err.message : 'Authentication failed')
       }
     }
@@ -38,14 +37,15 @@ export function CallbackPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full">
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <h3 className="text-sm font-medium text-red-800">Authentication Error</h3>
-            <p className="mt-1 text-sm text-red-700">{error}</p>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="w-full max-w-md">
+          <div className="rounded-md border border-red-200 bg-red-50 p-4">
+            <h3 className="font-medium text-red-800 text-sm">Authentication Error</h3>
+            <p className="mt-1 text-red-700 text-sm">{error}</p>
             <button
+              className="mt-3 font-medium text-red-600 text-sm hover:text-red-500"
               onClick={() => navigate('/login')}
-              className="mt-3 text-sm text-red-600 hover:text-red-500 font-medium"
+              type="button"
             >
               Back to login
             </button>
@@ -56,10 +56,10 @@ export function CallbackPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-sm text-gray-600">Completing authentication...</p>
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-blue-600 border-b-2" />
+        <p className="mt-4 text-gray-600 text-sm">Completing authentication...</p>
       </div>
     </div>
   )

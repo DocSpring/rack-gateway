@@ -4,16 +4,16 @@ import { expect, test } from '@playwright/test'
 async function mockAuth(page, role: 'admin' | 'ops' | 'viewer') {
   // This would normally be done via the OAuth flow
   // For testing, we'll set a mock token directly
-  await page.evaluate((role) => {
+  await page.evaluate((userRole) => {
     const mockToken = 'mock-jwt-token'
     const mockUser = {
-      email: `test-${role}@example.com`,
-      name: `Test ${role}`,
-      roles: [role],
+      email: `test-${userRole}@example.com`,
+      name: `Test ${userRole}`,
+      roles: [userRole],
     }
 
-    // Set the cookie
-    document.cookie = `gateway_token=${mockToken}; path=/; max-age=86400`
+    // Set the cookie using localStorage instead for testing
+    window.localStorage.setItem('gateway_token', mockToken)
 
     // Mock the API response for getCurrentUser
     window.localStorage.setItem('mock_user', JSON.stringify(mockUser))
