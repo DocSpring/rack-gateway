@@ -1,4 +1,4 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-unit test-integration lint docker clean build all deps web-deps web-build web-test web-lint
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps web-deps web-build web-test web-lint
 
 all: web-build gateway cli mock
 
@@ -56,6 +56,8 @@ mock:
 	@go build -o bin/mock-convox cmd/mock-convox/main.go
 
 test: test-unit test-integration web-test
+
+test-go: test-unit test-integration
 
 test-unit:
 	@echo "Running unit tests..."
