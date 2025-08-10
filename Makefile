@@ -52,15 +52,15 @@ dev-logs:
 
 gateway:
 	@echo "Building gateway API server..."
-	@go build -o bin/convox-gateway-api cmd/gateway/main.go
+	@go build -o bin/convox-gateway-api ./cmd/gateway/
 
 cli:
 	@echo "Building gateway CLI..."
-	@go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/convox-gateway cmd/cli/main.go
+	@go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/convox-gateway ./cmd/cli/
 
 mock:
 	@echo "Building mock Convox server..."
-	@go build -o bin/mock-convox cmd/mock-convox/main.go
+	@go build -o bin/mock-convox ./cmd/mock-convox/
 
 test: test-unit test-integration web-test
 

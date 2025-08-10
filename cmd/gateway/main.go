@@ -108,6 +108,12 @@ func main() {
 				r.Put("/config", uiHandler.UpdateConfig)
 				r.Get("/roles", uiHandler.ListRoles)
 
+				// User management endpoints
+				r.Get("/users", uiHandler.ListUsers)
+				r.Post("/users", uiHandler.CreateUser)
+				r.Delete("/users/{email}", uiHandler.DeleteUser)
+				r.Put("/users/{email}/roles", uiHandler.UpdateUserRoles)
+
 				// API token endpoints
 				r.Post("/tokens", uiHandler.CreateAPIToken)
 				r.Get("/tokens", uiHandler.ListAPITokens)

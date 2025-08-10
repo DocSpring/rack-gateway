@@ -279,6 +279,132 @@ func (h *Handler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListUsers returns all users (admin only)
+func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	if !h.isAdmin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	users, err := h.rbacManager.GetUsers()
+	if err != nil {
+		http.Error(w, "failed to get users", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert map to slice for easier consumption
+	userList := make([]map[string]interface{}, 0)
+	for email, user := range users {
+		userList = append(userList, map[string]interface{}{
+			"email": email,
+			"name":  user.Name,
+			"roles": user.Roles,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(userList)
+}
+
+// CreateUser creates a new user (admin only)
+func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	if !h.isAdmin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Email string   `json:"email"`
+		Name  string   `json:"name"`
+		Roles []string `json:"roles"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists
+	existing, _ := h.rbacManager.GetUser(req.Email)
+	if existing != nil {
+		http.Error(w, "user already exists", http.StatusConflict)
+		return
+	}
+
+	// Create user
+	if err := h.rbacManager.SaveUser(req.Email, &rbac.UserConfig{
+		Name:  req.Name,
+		Roles: req.Roles,
+	}); err != nil {
+		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"status": "created"})
+}
+
+// DeleteUser removes a user (admin only)
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	if !h.isAdmin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	email := chi.URLParam(r, "email")
+	if email == "" {
+		http.Error(w, "email required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.rbacManager.DeleteUser(email); err != nil {
+		http.Error(w, "failed to delete user", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// UpdateUserRoles updates a user's roles (admin only)
+func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
+	if !h.isAdmin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	email := chi.URLParam(r, "email")
+	if email == "" {
+		http.Error(w, "email required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Roles []string `json:"roles"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get existing user
+	existing, err := h.rbacManager.GetUser(email)
+	if err != nil || existing == nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	// Update roles
+	existing.Roles = req.Roles
+	if err := h.rbacManager.SaveUser(email, existing); err != nil {
+		http.Error(w, "failed to update user", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
 // ServeStatic serves the React app's static files
 func (h *Handler) ServeStatic(w http.ResponseWriter, r *http.Request) {
 	// In production, serve from embedded files or dist directory
@@ -326,4 +452,21 @@ func (h *Handler) hasWriteAccess(user *auth.Claims) bool {
 	return false
 }
 
-// saveConfigToFile removed - unused
+func (h *Handler) isAdmin(r *http.Request) bool {
+	authUser, ok := auth.GetAuthUser(r.Context())
+	if !ok {
+		return false
+	}
+
+	roles, err := h.rbacManager.GetUserRoles(authUser.Email)
+	if err != nil {
+		return false
+	}
+
+	for _, role := range roles {
+		if role == "admin" {
+			return true
+		}
+	}
+	return false
+}
