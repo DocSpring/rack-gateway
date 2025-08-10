@@ -16,6 +16,7 @@ type Config struct {
 	GoogleClientID      string
 	GoogleClientSecret  string
 	GoogleAllowedDomain string
+	GoogleOAuthBaseURL  string
 	RedirectURL         string
 	AdminUsers          []string
 	DevMode             bool
@@ -38,6 +39,7 @@ func Load() (*Config, error) {
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", ""),
+		GoogleOAuthBaseURL:  getEnv("GOOGLE_OAUTH_BASE_URL", ""),
 		RedirectURL:         getEnv("REDIRECT_URL", "http://localhost:8080/v1/login/callback"),
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),

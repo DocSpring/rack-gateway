@@ -48,9 +48,9 @@ func TestIntegration(t *testing.T) {
 
 	// Build binaries - fix paths to be relative to project root
 	t.Log("Building binaries...")
-	require.NoError(t, buildBinary("../../cmd/mock-convox/main.go", "../../bin/mock-convox"))
-	require.NoError(t, buildBinary("../../cmd/gateway/main.go", "../../bin/convox-gateway-api"))
-	require.NoError(t, buildBinary("../../cmd/cli/main.go", "../../bin/convox-gateway"))
+	require.NoError(t, buildBinary("../../cmd/mock-convox", "../../bin/mock-convox"))
+	require.NoError(t, buildBinary("../../cmd/gateway", "../../bin/convox-gateway-api"))
+	require.NoError(t, buildBinary("../../cmd/cli", "../../bin/convox-gateway"))
 
 	// Start servers
 	servers := &TestServers{

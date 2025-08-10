@@ -1,4 +1,21 @@
 services:
+  mock-oauth:
+    build:
+      context: ./dev/mock-oauth
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      OAUTH_ISSUER: http://localhost:3001
+    ports:
+      - "3001:3001"
+    networks:
+      - gateway-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   mock-convox:
     build:
       context: .
@@ -18,9 +35,10 @@ services:
       PORT: 8447
       APP_ENV: development
       APP_JWT_KEY: dev-jwt-secret-key-change-in-production
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-test-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-test-client-secret}
-      GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-example.com}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-mock-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-mock-client-secret}  
+      GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
+      GOOGLE_OAUTH_BASE_URL: http://mock-oauth:3001
       RACK_HOST: http://mock-convox:5443
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox
@@ -32,6 +50,7 @@ services:
       - ./data:/app/data
     depends_on:
       - mock-convox
+      - mock-oauth
     networks:
       - gateway-net
 

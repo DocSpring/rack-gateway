@@ -54,34 +54,44 @@ echo -e "${GREEN}Step 4: Configure Environment${NC}"
 echo "Copy your OAuth credentials:"
 echo ""
 
-# Check if .env exists
-if [ ! -f .env ]; then
-    if [ -f .env.example ]; then
-        cp .env.example .env
-        echo -e "${YELLOW}Created .env from .env.example${NC}"
-    else
-        echo -e "${RED}No .env.example found!${NC}"
-        exit 1
-    fi
-fi
-
 # Read OAuth credentials
 echo -e "${BLUE}Enter your OAuth credentials:${NC}"
 read -p "Client ID: " client_id
 read -p "Client Secret: " client_secret
 read -p "Allowed domain (e.g., company.com): " domain
 
-# Update .env file
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    sed -i '' "s|GOOGLE_CLIENT_ID=.*|GOOGLE_CLIENT_ID=$client_id|" .env
-    sed -i '' "s|GOOGLE_CLIENT_SECRET=.*|GOOGLE_CLIENT_SECRET=$client_secret|" .env
-    sed -i '' "s|GOOGLE_ALLOWED_DOMAIN=.*|GOOGLE_ALLOWED_DOMAIN=$domain|" .env
+# Create mise.local.toml if it doesn't exist
+if [ ! -f mise.local.toml ]; then
+    if [ -f mise.local.toml.example ]; then
+        cp mise.local.toml.example mise.local.toml
+        echo -e "${GREEN}Created mise.local.toml from example${NC}"
+    else
+        cat > mise.local.toml << EOF
+[env]
+# Google OAuth credentials
+GOOGLE_CLIENT_ID = "$client_id"
+GOOGLE_CLIENT_SECRET = "$client_secret"
+GOOGLE_ALLOWED_DOMAIN = "$domain"
+
+# Remove GOOGLE_OAUTH_BASE_URL to use real Google OAuth instead of mock
+# GOOGLE_OAUTH_BASE_URL = ""
+EOF
+        echo -e "${GREEN}Created mise.local.toml${NC}"
+    fi
 else
-    # Linux
-    sed -i "s|GOOGLE_CLIENT_ID=.*|GOOGLE_CLIENT_ID=$client_id|" .env
-    sed -i "s|GOOGLE_CLIENT_SECRET=.*|GOOGLE_CLIENT_SECRET=$client_secret|" .env
-    sed -i "s|GOOGLE_ALLOWED_DOMAIN=.*|GOOGLE_ALLOWED_DOMAIN=$domain|" .env
+    # Update existing mise.local.toml file
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        sed -i '' "s|GOOGLE_CLIENT_ID = \".*\"|GOOGLE_CLIENT_ID = \"$client_id\"|" mise.local.toml
+        sed -i '' "s|GOOGLE_CLIENT_SECRET = \".*\"|GOOGLE_CLIENT_SECRET = \"$client_secret\"|" mise.local.toml
+        sed -i '' "s|GOOGLE_ALLOWED_DOMAIN = \".*\"|GOOGLE_ALLOWED_DOMAIN = \"$domain\"|" mise.local.toml
+    else
+        # Linux
+        sed -i "s|GOOGLE_CLIENT_ID = \".*\"|GOOGLE_CLIENT_ID = \"$client_id\"|" mise.local.toml
+        sed -i "s|GOOGLE_CLIENT_SECRET = \".*\"|GOOGLE_CLIENT_SECRET = \"$client_secret\"|" mise.local.toml
+        sed -i "s|GOOGLE_ALLOWED_DOMAIN = \".*\"|GOOGLE_ALLOWED_DOMAIN = \"$domain\"|" mise.local.toml
+    fi
+    echo -e "${GREEN}Updated existing mise.local.toml${NC}"
 fi
 
 # Update config.yml domain if it exists
@@ -97,7 +107,7 @@ fi
 echo ""
 echo -e "${GREEN}✓ OAuth setup complete!${NC}"
 echo ""
-echo "Your credentials have been saved to .env"
+echo "Your credentials have been saved to mise.local.toml"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Edit config/config.yml to add users with @$domain emails"

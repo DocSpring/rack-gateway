@@ -42,7 +42,7 @@ export function TokensPage() {
   const [createdToken, setCreatedToken] = useState<string | null>(null)
 
   // Fetch tokens
-  const { data: tokens = [], isLoading, error, refetch } = useQuery({
+  const { data: tokens = [], isLoading, error } = useQuery({
     queryKey: ['tokens'],
     queryFn: async () => {
       const response = await api.get<APIToken[]>('/.gateway/admin/tokens')
@@ -166,7 +166,7 @@ export function TokensPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tokens.map((token) => {
+                {tokens.map((token: APIToken) => {
                   const isExpired = new Date(token.expires_at) < new Date()
                   return (
                     <TableRow key={token.id}>

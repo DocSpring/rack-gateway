@@ -2,6 +2,36 @@
 
 **IMPORTANT: Read CONVOX_REFERENCE.md and README.md first for context on how Convox actually works and current project status.**
 
+## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
+
+**NEVER mark a task as "completed" unless ALL of these pass:**
+
+### 🔧 Build Requirements
+- `go build ./cmd/gateway/` - Backend builds without errors
+- `go build ./cmd/cli/` - CLI builds without errors  
+- `cd web && pnpm build` - Frontend builds without errors
+- `make test` - All Go tests pass
+- `cd web && pnpm test` - All frontend tests pass
+
+### 📏 Code Quality
+- `go vet ./...` - No vet issues
+- `golangci-lint run` or equivalent linting passes
+- `cd web && pnpm lint` - Frontend linting passes
+- No TypeScript compilation errors
+- No unused imports or variables
+
+### 🧪 Integration Tests
+- `make dev` - Development environment starts successfully
+- `docker compose ps` - All services show healthy status
+- `curl http://localhost:8447/.gateway/health` - Gateway health check passes
+- `curl http://localhost:3001/health` - Mock OAuth health check passes
+- `curl http://localhost:5443/health` - Mock Convox health check passes
+
+### 🚀 Production Readiness
+- `make docker` - Docker build command passes
+
+**If ANY of these fail, the task is NOT complete. Fix all issues before marking done.**
+
 ## Project Overview
 
 This is a SOC 2 compliant authentication and authorization proxy for self-hosted Convox racks. It sits between users and the Convox API, adding:
@@ -152,6 +182,25 @@ Critical for production:
 - `RACK_TOKEN` - Actual Convox rack API token
 - `RACK_USERNAME` - Username for rack Basic Auth (default: convox)
 - `CONVOX_GATEWAY_DB_PATH` - Path to SQLite database file (default: /app/data/db.sqlite)
+
+### Local Development Configuration
+
+**IMPORTANT: This project uses mise for environment variable management, NOT .env files.**
+
+- `mise.toml` - Project-level configuration (checked into git)
+- `mise.local.toml` - Local overrides (gitignored, create your own)
+- `mise.local.toml.example` - Template for local configuration
+
+Environment variables are automatically loaded when you `cd` into the project directory via mise. No need to source .env files or manually export variables.
+
+Example `mise.local.toml`:
+```toml
+[env]
+APP_JWT_KEY = "your-local-jwt-key"
+GOOGLE_CLIENT_ID = "your-oauth-client-id"
+GOOGLE_CLIENT_SECRET = "your-oauth-secret"
+GOOGLE_ALLOWED_DOMAIN = "yourcompany.com"
+```
 
 ## Deployment Notes
 

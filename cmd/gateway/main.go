@@ -72,6 +72,7 @@ func main() {
 		cfg.GoogleClientSecret,
 		cfg.RedirectURL,
 		allowedDomain,
+		cfg.GoogleOAuthBaseURL,
 		jwtManager,
 	)
 

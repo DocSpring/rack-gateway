@@ -1,8 +1,11 @@
 [env]
-# Google OAuth credentials
+# Google OAuth credentials (for production OAuth)
 GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET = "your-client-secret"
 GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
+
+# Remove GOOGLE_OAUTH_BASE_URL to use real Google OAuth instead of mock
+# GOOGLE_OAUTH_BASE_URL = ""
 
 # Override JWT key for local development if needed
 # APP_JWT_KEY = "your-local-jwt-secret"

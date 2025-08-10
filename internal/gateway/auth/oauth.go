@@ -19,6 +19,7 @@ type OAuthHandler struct {
 	allowedDomain string
 	jwtManager    *JWTManager
 	stateStore    map[string]*OAuthState
+	baseURL       string
 }
 
 type OAuthState struct {
@@ -35,18 +36,28 @@ type GoogleUserInfo struct {
 	HD            string `json:"hd"`
 }
 
-func NewOAuthHandler(clientID, clientSecret, redirectURL, allowedDomain string, jwtManager *JWTManager) *OAuthHandler {
+func NewOAuthHandler(clientID, clientSecret, redirectURL, allowedDomain, baseURL string, jwtManager *JWTManager) *OAuthHandler {
+	// Use Google OAuth endpoints by default, or custom ones for development
+	endpoint := google.Endpoint
+	if baseURL != "" {
+		endpoint = oauth2.Endpoint{
+			AuthURL:  baseURL + "/oauth2/v2/auth",
+			TokenURL: baseURL + "/oauth2/v4/token",
+		}
+	}
+
 	return &OAuthHandler{
 		config: &oauth2.Config{
 			ClientID:     clientID,
 			ClientSecret: clientSecret,
 			RedirectURL:  redirectURL,
 			Scopes:       []string{"openid", "email", "profile"},
-			Endpoint:     google.Endpoint,
+			Endpoint:     endpoint,
 		},
 		allowedDomain: allowedDomain,
 		jwtManager:    jwtManager,
 		stateStore:    make(map[string]*OAuthState),
+		baseURL:       baseURL,
 	}
 }
 
@@ -121,7 +132,14 @@ func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginRe
 
 func (h *OAuthHandler) getUserInfo(ctx context.Context, token *oauth2.Token) (*GoogleUserInfo, error) {
 	client := h.config.Client(ctx, token)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+
+	// Use custom userinfo URL for mock OAuth server, otherwise use Google's
+	userInfoURL := "https://www.googleapis.com/oauth2/v2/userinfo"
+	if h.baseURL != "" {
+		userInfoURL = h.baseURL + "/oauth2/v2/userinfo"
+	}
+
+	resp, err := client.Get(userInfoURL)
 	if err != nil {
 		return nil, err
 	}

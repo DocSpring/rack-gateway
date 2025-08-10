@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Development environment setup script
-# This script sets up environment variables for local development
+# This script sets up the development environment using mise for environment variables
 
 set -e
 
@@ -13,22 +13,25 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}Setting up development environment...${NC}"
 
-# Check if .env file exists
-if [ ! -f .env ]; then
-    if [ -f .env.example ]; then
-        echo -e "${YELLOW}No .env file found. Creating from .env.example...${NC}"
-        cp .env.example .env
-        echo -e "${YELLOW}Please edit .env with your configuration values${NC}"
+# Check if mise is installed
+if ! command -v mise &> /dev/null; then
+    echo -e "${RED}mise is not installed! Please install mise: https://mise.jdx.dev/getting-started.html${NC}"
+    exit 1
+fi
+
+# Check if mise.local.toml exists
+if [ ! -f mise.local.toml ]; then
+    if [ -f mise.local.toml.example ]; then
+        echo -e "${YELLOW}No mise.local.toml found. Creating from example...${NC}"
+        cp mise.local.toml.example mise.local.toml
+        echo -e "${YELLOW}Please edit mise.local.toml with your configuration values${NC}"
     else
-        echo -e "${RED}No .env or .env.example file found!${NC}"
-        exit 1
+        echo -e "${YELLOW}No mise.local.toml found. You can create one from mise.local.toml.example${NC}"
     fi
 fi
 
-# Load environment variables from .env
-set -a
-source .env
-set +a
+# Load environment variables using mise
+eval "$(mise env --shell bash)"
 
 # Check if config.yml exists
 if [ ! -f config/config.yml ]; then

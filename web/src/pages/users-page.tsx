@@ -15,13 +15,6 @@ import {
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select'
-import {
   Table,
   TableBody,
   TableCell,
@@ -81,7 +74,7 @@ export function UsersPage() {
   const isAdmin = currentUser?.roles?.includes('admin')
 
   // Fetch users
-  const { data: users = [], isLoading, error, refetch } = useQuery({
+  const { data: users = [], isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
       const response = await api.get<User[]>('/.gateway/admin/users')

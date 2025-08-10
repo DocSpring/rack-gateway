@@ -93,6 +93,27 @@ class ApiService {
     await this.updateConfig(config)
   }
 
+  // Generic HTTP methods for direct API access
+  async get<T = any>(url: string): Promise<T> {
+    const response = await this.client.get(url)
+    return response.data
+  }
+
+  async post<T = any>(url: string, data?: any): Promise<T> {
+    const response = await this.client.post(url, data)
+    return response.data
+  }
+
+  async put<T = any>(url: string, data?: any): Promise<T> {
+    const response = await this.client.put(url, data)
+    return response.data
+  }
+
+  async delete<T = any>(url: string): Promise<T> {
+    const response = await this.client.delete(url)
+    return response.data
+  }
+
   // Health check
   async healthCheck(): Promise<{ status: string; version: string }> {
     const response = await this.client.get('/.gateway/health')
@@ -101,3 +122,4 @@ class ApiService {
 }
 
 export const apiService = new ApiService()
+export const api = apiService

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { RefreshCw, Search, Filter, Download } from 'lucide-react'
+import { RefreshCw, Search, Download } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
@@ -22,7 +22,6 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { Badge } from '../components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { api } from '../lib/api'
 
 interface AuditLog {
@@ -146,11 +145,11 @@ export function AuditPage() {
   // Calculate statistics
   const stats = {
     total: logs.length,
-    success: logs.filter(l => l.status === 'success').length,
-    failed: logs.filter(l => l.status === 'failed').length,
-    blocked: logs.filter(l => l.status === 'blocked').length,
+    success: logs.filter((l: AuditLog) => l.status === 'success').length,
+    failed: logs.filter((l: AuditLog) => l.status === 'failed').length,
+    blocked: logs.filter((l: AuditLog) => l.status === 'blocked').length,
     avgResponseTime: logs.length > 0 
-      ? Math.round(logs.reduce((acc, l) => acc + l.response_time_ms, 0) / logs.length)
+      ? Math.round(logs.reduce((acc: number, l: AuditLog) => acc + l.response_time_ms, 0) / logs.length)
       : 0,
   }
 
@@ -322,7 +321,7 @@ export function AuditPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.map((log) => (
+                {logs.map((log: AuditLog) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-mono text-sm">
                       {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}

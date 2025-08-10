@@ -55,8 +55,17 @@ make dev
 **Development URLs:**
 
 - Gateway API: http://localhost:8447
-- Web UI: http://localhost:5173
+- Web UI: http://localhost:5173  
 - Mock Convox: http://localhost:5443
+- Mock OAuth: http://localhost:3001
+
+The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
+
+- **admin@company.com** - Admin User (full access)
+- **developer@company.com** - Developer User  
+- **viewer@company.com** - Viewer User
+
+When logging in via http://localhost:8447 during development, you'll be redirected to the mock OAuth server to select which test user to authenticate as.
 
 ## How It Works
 
