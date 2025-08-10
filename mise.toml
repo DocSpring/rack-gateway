@@ -16,8 +16,8 @@ RACK_HOST = "https://mock-convox:5443"
 RACK_TOKEN = "mock-rack-token-12345"
 RACK_USERNAME = "convox"
 
-# Config directory for gateway server (contains config.yml with users/RBAC)
-CONVOX_GATEWAY_CONFIG_DIR = "./config/gateway"
+# Database path for gateway server
+CONVOX_GATEWAY_DB_PATH = "./data/db.sqlite"
 
 # Config directory for CLI (stores config.json with tokens and rack settings)
 CONVOX_GATEWAY_CLI_CONFIG_DIR = "./config/cli"

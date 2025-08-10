@@ -1,4 +1,4 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps web-deps web-build web-test web-lint
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint
 
 all: web-build gateway cli mock
 
@@ -11,9 +11,12 @@ deps:
 	@go mod download
 	@go mod tidy
 
-install-staticcheck:
-	@echo "Installing staticcheck..."
+tools:
+	@echo "Installing development tools..."
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
+	@go install gotest.tools/gotestsum@latest
+	@staticcheck -version
+	@gotestsum --version
 
 web-deps:
 	@echo "Installing web dependencies..."
@@ -65,13 +68,13 @@ test-go: test-unit test-integration
 
 test-unit:
 	@echo "Running unit tests..."
-	@./scripts/safe-test.sh -v -race -short ./...
+	@./scripts/safe-test.sh -v -race -short -timeout 30s ./...
 
 test-integration:
 	@echo "Running integration tests..."
-	@./scripts/safe-test.sh -v -race -tags=integration ./internal/integration/...
+	@./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
-lint: web-lint install-staticcheck
+lint: web-lint
 	@echo "Running Go linters..."
 	@go vet ./...
 	@go fmt ./...

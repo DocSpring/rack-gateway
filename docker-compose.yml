@@ -24,12 +24,12 @@ services:
       RACK_HOST: http://mock-convox:5443
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox
-      CONVOX_GATEWAY_CONFIG_DIR: /app/data
+      CONVOX_GATEWAY_DB_PATH: /app/data/db.sqlite
       DEV_MODE: "true"
     ports:
       - "8447:8447"
     volumes:
-      - ./config:/app/data:ro
+      - ./data:/app/data
     depends_on:
       - mock-convox
     networks:

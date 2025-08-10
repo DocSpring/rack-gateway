@@ -133,8 +133,8 @@ make docker       # Build Docker image
 
 ### Server Configuration
 
-- `config/config.yml` - Users and domain configuration
-- RBAC policies are compiled into the binary (see `internal/api/rbac/policies.go`)
+- SQLite database at `/app/data/db.sqlite` - Stores users, API tokens, and audit logs
+- RBAC policies are compiled into the binary (see `internal/gateway/rbac/policies.go`)
 
 ### Client Configuration
 
@@ -151,7 +151,7 @@ Critical for production:
 - `RACK_HOST` - Convox rack API host
 - `RACK_TOKEN` - Actual Convox rack API token
 - `RACK_USERNAME` - Username for rack Basic Auth (default: convox)
-- `CONVOX_GATEWAY_CONFIG_DIR` - Directory containing config.yml
+- `CONVOX_GATEWAY_DB_PATH` - Path to SQLite database file (default: /app/data/db.sqlite)
 
 ## Deployment Notes
 
@@ -184,10 +184,9 @@ internal/
 ## Known Limitations
 
 1. **No Websocket Support** - Logs/exec might not work
-2. **Simple User Store** - Currently YAML, needs database for production
-3. **No User Self-Service** - Admin must add users manually
-4. **Basic UI** - Minimal functionality, needs enhancement
-5. **No Metrics** - Should add Prometheus/OpenTelemetry
+2. **No User Self-Service** - Admin must add users manually
+3. **Basic UI** - Minimal functionality, needs enhancement
+4. **No Metrics** - Should add Prometheus/OpenTelemetry
 
 ## Security Considerations
 
@@ -199,13 +198,12 @@ internal/
 ## Next Steps for Production
 
 1. Verify actual Convox API behavior
-2. Add database for user/role storage
-3. Implement JWT key rotation
-4. Add Prometheus metrics
-5. Enhance web UI
-6. Add integration tests with mock Convox
-7. Set up CI/CD pipeline
-8. Add OpenTelemetry tracing
+2. Implement JWT key rotation
+3. Add Prometheus metrics
+4. Enhance web UI
+5. Add integration tests with mock Convox
+6. Set up CI/CD pipeline
+7. Add OpenTelemetry tracing
 
 ## Useful Commands for Development
 
@@ -244,3 +242,7 @@ go tool cover -html=coverage.out
 - Any backup directory in `/Users/*/Library/Preferences/`
 
 The integration tests create backups of the real Convox CLI configuration to prevent data loss. If tests fail with "backup already exists", it means a previous test didn't clean up properly. The user must manually verify and move/restore the backup - NEVER automatically delete it!
+
+## Important Instructions
+
+Don't leave old code lying around. When you see it, tidy it.

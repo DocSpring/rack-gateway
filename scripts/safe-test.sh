@@ -14,8 +14,9 @@ BACKUP_PATH="$HOME/Library/Preferences/convox.IMPORTANT_DO_NOT_DELETE_LIVE_BACKU
 # Set env var to indicate tests are running through the safe wrapper
 export CONVOX_GATEWAY_SAFE_TEST=1
 
-# Track if restore has already been called
+# Track if restore has already been called and if we created the backup
 RESTORE_DONE=0
+BACKUP_CREATED_BY_US=0
 
 # Function to restore config using the restore script
 # shellcheck disable=SC2329
@@ -26,14 +27,15 @@ restore_config() {
     fi
     RESTORE_DONE=1
     
-    if [ ! -d "$BACKUP_PATH" ]; then
-        # Only warn if we're not in CI and the backup should exist
-        if [ -z "${CI:-}" ]; then
-            echo -e "\033[31mCRITICAL: No backup found at $BACKUP_PATH!\033[0m"
-            echo -e "\033[31mYour Convox config may need manual restoration\033[0m"
-            exit 1
-        fi
+    # Only restore if we created the backup
+    if [ "$BACKUP_CREATED_BY_US" -eq 0 ]; then
         return 0
+    fi
+    
+    if [ ! -d "$BACKUP_PATH" ]; then
+        echo -e "\033[31mCRITICAL: No backup found at $BACKUP_PATH!\033[0m"
+        echo -e "\033[31mYour Convox config may need manual restoration\033[0m"
+        exit 1
     fi
     
     echo -e "\033[33mSAFETY: Running restore script...\033[0m"
@@ -46,6 +48,8 @@ restore_config() {
 
 if [ -n "${CI:-}" ]; then
     echo "Running in CI, skipping config backup/restore"
+elif [ -d "$BACKUP_PATH" ]; then
+    BACKUP_CREATED_BY_US=0
 else
     # Run backup using the backup script
     echo -e "\033[33mSAFETY: Running backup script...\033[0m"
@@ -53,6 +57,7 @@ else
         echo -e "\033[31mCRITICAL: Failed to backup Convox config\033[0m"
         exit 1
     }
+    BACKUP_CREATED_BY_US=1
 
     # Trap to ensure restore happens on exit
     trap restore_config EXIT INT TERM

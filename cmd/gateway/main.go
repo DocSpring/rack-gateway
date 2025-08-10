@@ -30,9 +30,9 @@ func main() {
 	}
 
 	// Initialize database
-	dbPath := getEnv("DATABASE_PATH", "/app/data/db.sqlite")
-	if cfg.DevMode {
-		// In dev mode, use local path
+	dbPath := getEnv("CONVOX_GATEWAY_DB_PATH", "/app/data/db.sqlite")
+	if cfg.DevMode && dbPath == "/app/data/db.sqlite" {
+		// In dev mode, use local path if not explicitly set
 		dbPath = filepath.Join(".", "data", "db.sqlite")
 	}
 
@@ -50,13 +50,7 @@ func main() {
 		}
 	}
 
-	// Migrate from config.yml if it exists
-	if _, err := os.Stat(cfg.ConfigPath); err == nil {
-		log.Printf("Migrating users from %s to database...", cfg.ConfigPath)
-		if err := rbac.MigrateFromConfigFile(database, cfg.ConfigPath); err != nil {
-			log.Printf("Warning: Migration failed: %v", err)
-		}
-	}
+	// Migration from config.yml removed - database is the only source now
 
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
@@ -83,7 +77,7 @@ func main() {
 
 	auditLogger := audit.NewLogger(database)
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
-	uiHandler := ui.NewHandler(rbacManager, cfg.ConfigPath, tokenService)
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService)
 
 	r := chi.NewRouter()
 

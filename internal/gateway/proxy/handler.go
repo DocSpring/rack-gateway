@@ -233,33 +233,51 @@ func (h *Handler) mapPathToPermission(method, path string) string {
 		action = "delete"
 	}
 
-	if strings.Contains(path, "/env") {
-		if method == "GET" {
-			return "convox:env:get"
-		}
-		return "convox:env:set"
-	}
+	// Normalize path for checking - remove leading slash for consistency
+	normalizedPath := strings.TrimPrefix(path, "/")
 
-	if strings.Contains(path, "/ps") {
-		if method == "GET" {
-			return "convox:ps:list"
-		}
-		return "convox:ps:manage"
-	}
-
-	if strings.Contains(path, "/apps") {
+	// Check for specific resource patterns
+	if strings.HasPrefix(normalizedPath, "apps") {
 		if method == "GET" {
 			return "convox:apps:list"
 		}
 		return "convox:apps:manage"
 	}
 
-	if strings.Contains(path, "/run") {
+	// Check for processes endpoint (but not if it's part of "apps")
+	pathParts := strings.Split(normalizedPath, "/")
+	if len(pathParts) > 0 && pathParts[0] == "ps" {
+		if method == "GET" {
+			return "convox:ps:list"
+		}
+		return "convox:ps:manage"
+	}
+	// Also check for /apps/{app}/processes pattern
+	if len(pathParts) >= 3 && pathParts[0] == "apps" && pathParts[2] == "processes" {
+		if method == "GET" {
+			return "convox:ps:list"
+		}
+		return "convox:ps:manage"
+	}
+
+	if strings.Contains(normalizedPath, "env") {
+		if method == "GET" {
+			return "convox:env:get"
+		}
+		return "convox:env:set"
+	}
+
+	if strings.Contains(normalizedPath, "run") {
 		return "convox:run:command"
 	}
 
-	if strings.Contains(path, "/restart") {
+	if strings.Contains(normalizedPath, "restart") {
 		return "convox:restart:app"
+	}
+
+	// Special case for rack endpoint
+	if normalizedPath == "rack" || normalizedPath == "system" {
+		return "convox:rack:read"
 	}
 
 	return fmt.Sprintf("convox:%s:%s", resource, action)

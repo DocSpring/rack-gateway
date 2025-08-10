@@ -43,9 +43,8 @@ git clone https://github.com/DocSpring/convox-gateway.git
 cd convox-gateway
 
 # Set up configuration
-cp config/gateway/config.yml.example config/gateway/config.yml
 cp mise.local.toml.example mise.local.toml
-# Edit these files with your settings (see DEV.md for details)
+# Edit this file with your settings (see DEV.md for details)
 
 # Install dependencies and start development environment
 go mod download
@@ -178,6 +177,7 @@ source <(./bin/convox-gateway completion zsh)
 | `RACK_HOST`             | Convox rack API host (see note below)   | -               |
 | `RACK_TOKEN`            | Convox rack API token                   | -               |
 | `RACK_USERNAME`         | Username for rack Basic Auth            | convox          |
+| `CONVOX_GATEWAY_DB_PATH`| Path to SQLite database                 | /app/data/db.sqlite |
 | `DEV_MODE`              | Enable development mode                 | false           |
 
 #### RACK_HOST Configuration
@@ -192,30 +192,19 @@ RACK_HOST=api.convox-system.svc.cluster.local:5443
 RACK_HOST=https://rack.example.com
 ```
 
-### Configuration Files
+### Database
 
-The gateway uses a single `config.yml` file for user and domain configuration:
-
-```yaml
-# /app/data/config.yml (or set via CONVOX_GATEWAY_CONFIG_DIR env var)
-domain: company.com # Only @company.com emails can sign in
-users:
-  admin@company.com:
-    name: Admin User
-    roles: [admin]
-  john@company.com:
-    name: John Doe
-    roles: [deployer]
-  jane@company.com:
-    name: Jane Smith
-    roles: [ops, viewer]
-```
-
-Set the config directory via environment variable:
+The gateway uses a SQLite database to store users, API tokens, and audit logs:
 
 ```bash
-CONVOX_GATEWAY_CONFIG_DIR=/app/data  # Will look for /app/data/config.yml
+# Default location
+/app/data/db.sqlite
+
+# Override with environment variable
+CONVOX_GATEWAY_DB_PATH=/custom/path/db.sqlite
 ```
+
+The database is automatically initialized on first run with an admin user from the first Google OAuth login.
 
 The CLI stores its configuration separately:
 

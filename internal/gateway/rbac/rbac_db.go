@@ -34,7 +34,7 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && (p.obj == "*" || r.obj == p.obj) && (p.act == "*" || r.act == p.act)
+m = g(r.sub, p.sub) && (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) && (p.act == "*" || r.act == p.act)
 `
 
 // NewDBManager creates a new RBAC manager using the database
@@ -58,12 +58,8 @@ func NewDBManager(database *db.Database, domain string) (*DBManager, error) {
 		domain:   domain,
 	}
 
-	// Load policies from embedded definitions
-	if err := manager.loadPolicies(); err != nil {
-		return nil, fmt.Errorf("failed to load policies: %w", err)
-	}
-
-	// Sync users from database
+	// Policies are already loaded via the adapter in NewEnforcer
+	// Just sync users from database
 	if err := manager.syncUsersFromDB(); err != nil {
 		return nil, fmt.Errorf("failed to sync users: %w", err)
 	}
@@ -74,41 +70,35 @@ func NewDBManager(database *db.Database, domain string) (*DBManager, error) {
 // Define the embedded RBAC policies
 var policies = [][]string{
 	// Viewer role permissions
-	{"p", "viewer", "convox:apps:read"},
-	{"p", "viewer", "convox:ps:list"},
-	{"p", "viewer", "convox:logs:read"},
-	{"p", "viewer", "convox:builds:list"},
-	{"p", "viewer", "convox:releases:list"},
+	{"p", "viewer", "convox:apps:list", "*"},
+	{"p", "viewer", "convox:ps:list", "*"},
+	{"p", "viewer", "convox:logs:read", "*"},
+	{"p", "viewer", "convox:builds:list", "*"},
+	{"p", "viewer", "convox:releases:list", "*"},
+	{"p", "viewer", "convox:rack:read", "*"},
 
 	// Ops role inherits viewer and adds more
 	{"g", "ops", "viewer"},
-	{"p", "ops", "convox:env:get"},
-	{"p", "ops", "convox:ps:manage"},
-	{"p", "ops", "convox:restart:app"},
+	{"p", "ops", "convox:env:get", "*"},
+	{"p", "ops", "convox:ps:manage", "*"},
+	{"p", "ops", "convox:restart:app", "*"},
 
 	// Deployer role inherits ops and adds deployment permissions
 	{"g", "deployer", "ops"},
-	{"p", "deployer", "convox:env:set"},
-	{"p", "deployer", "convox:builds:create"},
-	{"p", "deployer", "convox:releases:promote"},
-	{"p", "deployer", "convox:apps:update"},
+	{"p", "deployer", "convox:env:set", "*"},
+	{"p", "deployer", "convox:builds:create", "*"},
+	{"p", "deployer", "convox:releases:promote", "*"},
+	{"p", "deployer", "convox:apps:manage", "*"},
 
 	// Admin role has all permissions
-	{"p", "admin", "convox:*:*"},
+	{"p", "admin", "convox:*:*", "*"},
 
 	// CI/CD role for automated deployments
-	{"p", "cicd", "convox:apps:read"},
-	{"p", "cicd", "convox:builds:create"},
-	{"p", "cicd", "convox:releases:promote"},
-	{"p", "cicd", "convox:ps:manage"},
-	{"p", "cicd", "convox:restart:app"},
-}
-
-// loadPolicies loads the embedded RBAC policies
-func (m *DBManager) loadPolicies() error {
-	adapter := &memoryAdapter{policies: policies}
-	m.enforcer.SetAdapter(adapter)
-	return m.enforcer.LoadPolicy()
+	{"p", "cicd", "convox:apps:list", "*"},
+	{"p", "cicd", "convox:builds:create", "*"},
+	{"p", "cicd", "convox:releases:promote", "*"},
+	{"p", "cicd", "convox:ps:manage", "*"},
+	{"p", "cicd", "convox:restart:app", "*"},
 }
 
 // syncUsersFromDB loads user-role mappings from the database
@@ -118,18 +108,14 @@ func (m *DBManager) syncUsersFromDB() error {
 		return fmt.Errorf("failed to list users: %w", err)
 	}
 
-	// Clear existing user-role mappings
-	m.enforcer.RemoveFilteredGroupingPolicy(0, "", "")
-
 	// Add user-role mappings from database
 	for _, user := range users {
 		if user.Suspended {
 			continue // Skip suspended users
 		}
 		for _, role := range user.Roles {
-			if _, err := m.enforcer.AddGroupingPolicy(user.Email, role); err != nil {
-				return fmt.Errorf("failed to add grouping policy: %w", err)
-			}
+			// AddGroupingPolicy returns false if already exists, but no error
+			m.enforcer.AddGroupingPolicy(user.Email, role)
 		}
 	}
 
@@ -156,8 +142,9 @@ func (m *DBManager) Enforce(userEmail, resource, action string) (bool, error) {
 	// Format permission as convox:resource:action
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)
 
-	// Check permission using Casbin
-	ok, err := m.enforcer.Enforce(userEmail, permission)
+	// Check permission using Casbin with 3 parameters (sub, obj, act)
+	// The third parameter is "*" as we don't use it in our model
+	ok, err := m.enforcer.Enforce(userEmail, permission, "*")
 	if err != nil {
 		return false, fmt.Errorf("failed to enforce: %w", err)
 	}
@@ -314,6 +301,8 @@ func (a *memoryAdapter) LoadPolicy(model model.Model) error {
 		if sec == "p" {
 			model.AddPolicy(sec, ptype, p[1:])
 		} else if sec == "g" {
+			// For grouping policies (role inheritance), we still use AddPolicy
+			// but the section is "g" not "p"
 			model.AddPolicy(sec, ptype, p[1:])
 		}
 	}

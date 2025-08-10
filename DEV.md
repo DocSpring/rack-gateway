@@ -22,7 +22,6 @@ go mod download
 cd web && pnpm install && cd ..
 
 # Set up configuration (see Configuration section below)
-cp config/gateway/config.yml.example config/gateway/config.yml
 cp mise.local.toml.example mise.local.toml
 
 # Start development environment
@@ -54,11 +53,11 @@ The Convox Gateway is split into multiple components:
 
 ### Component Separation
 
-**Gateway Server** (`config/gateway/`):
-- Contains `config.yml` with users and RBAC policies
+**Gateway Server**:
+- Uses SQLite database at `./data/db.sqlite` (or `/app/data/db.sqlite` in production)
 - Has access to real Convox rack tokens via environment variables
 - Runs OAuth authentication and audit logging
-- Environment variable: `CONVOX_GATEWAY_CONFIG_DIR=./config/gateway`
+- Environment variable: `CONVOX_GATEWAY_DB_PATH=./data/db.sqlite`
 
 **CLI Client** (`config/cli/` in dev, `~/.config/convox-gateway/` in production):
 - Stores `config.json` with JWT tokens per rack
@@ -97,33 +96,16 @@ GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 # RACK_TOKEN = "your-rack-token"
 ```
 
-### 2. Gateway Configuration
+### 2. Database Configuration
 
-```bash
-cp config/gateway/config.yml.example config/gateway/config.yml
-```
+The gateway uses a SQLite database that is automatically initialized on first run. The first user to log in via Google OAuth will automatically be granted admin privileges.
 
-Edit `config/gateway/config.yml`:
+The database stores:
+- Users and their roles
+- API tokens for CI/CD
+- Audit logs
 
-```yaml
-domain: "yourdomain.com"  # Your Google Workspace domain
-
-users:
-  admin@yourdomain.com:
-    name: "Admin User"
-    roles: ["admin"]
-  
-  developer@yourdomain.com:
-    name: "Developer"
-    roles: ["deployer"]
-  
-  viewer@yourdomain.com:
-    name: "Read Only User"
-    roles: ["viewer"]
-
-# Roles are defined in internal/gateway/rbac/policies.go
-# Available roles: viewer, ops, deployer, admin
-```
+The database location is controlled by the `CONVOX_GATEWAY_DB_PATH` environment variable (default: `./data/db.sqlite` in development, `/app/data/db.sqlite` in production).
 
 ## Google OAuth Setup
 
