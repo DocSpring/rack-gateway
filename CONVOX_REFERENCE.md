@@ -62,11 +62,33 @@ The `convox-gateway` CLI wraps the real `convox` CLI:
 
 1. Developer runs: `convox-gateway apps`
 2. CLI loads gateway URL and JWT token from `~/.config/convox-gateway/config.json`
-3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.company.com/v1/proxy/staging`
+3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.company.com`
 4. CLI executes: `convox apps` with the RACK_URL environment variable
 5. Real convox CLI connects to gateway using JWT as password
 6. Gateway validates JWT, checks RBAC permissions
 7. Gateway proxies request to real Convox rack using actual token
+
+### Direct Native Convox CLI Usage
+
+The gateway is fully compatible with the native Convox CLI - no wrapper needed:
+
+```bash
+# For CI/CD with API token
+export RACK_URL="https://convox:<api-token>@gateway.company.com"
+convox apps  # Uses native convox CLI directly
+
+# For developers with JWT token
+export RACK_URL="https://convox:<jwt-token>@gateway.company.com"
+convox apps  # Uses native convox CLI directly
+```
+
+The convox-gateway CLI wrapper simply provides convenience features:
+- Manages multiple rack configurations
+- Handles JWT token storage
+- Provides login/logout commands
+- Automatic token refresh reminders
+
+But it's completely optional - the gateway speaks the same API as a real Convox rack.
 
 ## How Convox v3 Authentication Works
 

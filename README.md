@@ -1,6 +1,6 @@
 # Convox Gateway
 
-API gateway for self-hosted Convox racks with SSO authentication, RBAC, and audit logging.
+API proxy for Convox racks with SSO, RBAC, and audit logging
 
 ## Features
 
@@ -59,19 +59,54 @@ make dev
 - Web UI: http://localhost:5173
 - Mock Convox: http://localhost:5443
 
+## How It Works
+
+The gateway acts as a transparent proxy that speaks the Convox API protocol. It accepts JWT tokens (for developers) or API tokens (for CI/CD) as authentication.
+
+### Two Ways to Use the Gateway
+
+#### Option 1: Native Convox CLI (Direct)
+
+```bash
+# For CI/CD with API token
+export RACK_URL="https://convox:<api-token>@gateway.company.com"
+convox apps  # Uses standard convox CLI directly
+
+# For developers with JWT token
+export RACK_URL="https://convox:<jwt-token>@gateway.company.com"
+convox apps  # Uses standard convox CLI directly
+```
+
+#### Option 2: convox-gateway CLI Wrapper (Convenience)
+
+```bash
+# Use our wrapper for easier multi-rack management
+convox-gateway login staging https://gateway.company.com
+convox-gateway convox apps  # Automatically sets RACK_URL with stored token
+
+# Set up convenient shell alias
+alias cx="convox-gateway convox"
+cx apps
+cx ps
+cx deploy
+```
+
+The `convox-gateway` CLI wrapper is optional - it just provides:
+
+- Automatic token management
+- Multi-rack configuration
+- Browser-based login flow
+- Token expiry reminders
+
 ## CLI Usage
 
 ### Setup
 
 ```bash
 # Login to a rack (sets it as current)
-convox-gateway login staging https://convox-gateway-staging.company.com
+convox-gateway login staging https://gateway.company.com
 # Opens browser for Google OAuth
 # Stores configuration in ~/.config/convox-gateway/config.json
-
-# Set up convenient shell aliases
-alias cx="convox-gateway convox"   # For convox commands
-alias cg="convox-gateway"          # For gateway commands
 ```
 
 ### Running Convox Commands
