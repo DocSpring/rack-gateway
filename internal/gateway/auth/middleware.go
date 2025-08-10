@@ -62,10 +62,7 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func GetUser(ctx context.Context) (*Claims, bool) {
-	claims, ok := ctx.Value(UserContextKey).(*Claims)
-	return claims, ok
-}
+// GetUser moved to service.go
 
 func OptionalAuth(jwtManager *JWTManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

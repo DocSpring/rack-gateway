@@ -168,6 +168,30 @@ func (d *Database) InitializeAdmin(email, name string) error {
 	return nil
 }
 
+// GetUserByID retrieves a user by ID
+func (d *Database) GetUserByID(id int64) (*User, error) {
+	var user User
+	var rolesJSON string
+
+	err := d.db.QueryRow(
+		"SELECT id, email, name, roles, created_at, updated_at, suspended FROM users WHERE id = ?",
+		id,
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
+	}
+
+	return &user, nil
+}
+
 // GetUser retrieves a user by email
 func (d *Database) GetUser(email string) (*User, error) {
 	var user User
@@ -343,6 +367,121 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	}
 
 	return logs, nil
+}
+
+// CreateAPIToken creates a new API token
+func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt time.Time) (*APIToken, error) {
+	permissionsJSON, err := json.Marshal(permissions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal permissions: %w", err)
+	}
+
+	result, err := d.db.Exec(
+		"INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?)",
+		tokenHash, name, userID, string(permissionsJSON), expiresAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API token: %w", err)
+	}
+
+	id, _ := result.LastInsertId()
+	return &APIToken{
+		ID:          id,
+		TokenHash:   tokenHash,
+		Name:        name,
+		UserID:      userID,
+		Permissions: permissions,
+		CreatedAt:   time.Now(),
+		ExpiresAt:   expiresAt,
+	}, nil
+}
+
+// GetAPITokenByHash retrieves an API token by its hash
+func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
+	var token APIToken
+	var permissionsJSON string
+	var lastUsedAtNull sql.NullTime
+
+	err := d.db.QueryRow(
+		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at FROM api_tokens WHERE token_hash = ?",
+		tokenHash,
+	).Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON,
+		&token.CreatedAt, &token.ExpiresAt, &lastUsedAtNull)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API token: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(permissionsJSON), &token.Permissions); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal permissions: %w", err)
+	}
+
+	if lastUsedAtNull.Valid {
+		token.LastUsedAt = &lastUsedAtNull.Time
+	}
+
+	return &token, nil
+}
+
+// ListAPITokensByUser returns all API tokens for a user
+func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
+	rows, err := d.db.Query(
+		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API tokens: %w", err)
+	}
+	defer rows.Close()
+
+	var tokens []*APIToken
+	for rows.Next() {
+		var token APIToken
+		var permissionsJSON string
+		var lastUsedAtNull sql.NullTime
+
+		err := rows.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID,
+			&permissionsJSON, &token.CreatedAt, &token.ExpiresAt, &lastUsedAtNull)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan API token: %w", err)
+		}
+
+		if err := json.Unmarshal([]byte(permissionsJSON), &token.Permissions); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal permissions: %w", err)
+		}
+
+		if lastUsedAtNull.Valid {
+			token.LastUsedAt = &lastUsedAtNull.Time
+		}
+
+		tokens = append(tokens, &token)
+	}
+
+	return tokens, nil
+}
+
+// UpdateAPITokenLastUsed updates the last used timestamp
+func (d *Database) UpdateAPITokenLastUsed(tokenHash string) error {
+	_, err := d.db.Exec(
+		"UPDATE api_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE token_hash = ?",
+		tokenHash,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update API token last used: %w", err)
+	}
+	return nil
+}
+
+// DeleteAPIToken removes an API token
+func (d *Database) DeleteAPIToken(id int64) error {
+	_, err := d.db.Exec("DELETE FROM api_tokens WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete API token: %w", err)
+	}
+	return nil
 }
 
 // Close closes the database connection

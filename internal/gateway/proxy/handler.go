@@ -20,11 +20,11 @@ import (
 
 type Handler struct {
 	config      *config.Config
-	rbacManager *rbac.Manager
+	rbacManager rbac.RBACManager
 	auditLogger *audit.Logger
 }
 
-func NewHandler(cfg *config.Config, rbacManager *rbac.Manager, auditLogger *audit.Logger) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger) *Handler {
 	return &Handler{
 		config:      cfg,
 		rbacManager: rbacManager,
@@ -52,7 +52,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, ok := auth.GetUser(r.Context())
+	authUser, ok := auth.GetAuthUser(r.Context())
 	if !ok {
 		h.handleError(w, r, "unauthorized", http.StatusUnauthorized, rackConfig.Name, start)
 		return
@@ -61,20 +61,35 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Get the full path including query params
 	path := r.URL.Path
 
-	// Check RBAC permissions
-	if !h.rbacManager.CheckPermission(user.Email, path, r.Method) {
-		h.auditLogger.LogRequest(r, user.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
+	// Check permissions (different logic for JWT vs API tokens)
+	var allowed bool
+	var err error
+	resource, action := h.pathToResourceAction(path, r.Method)
+
+	if authUser.IsAPIToken {
+		// For API tokens, check permissions directly
+		allowed = h.hasAPITokenPermission(authUser, resource, action)
+	} else {
+		// For JWT users, use RBAC
+		allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action)
+		if err != nil {
+			allowed = false
+		}
+	}
+
+	if !allowed {
+		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
 		return
 	}
 
 	// Forward the request to the rack
-	if err := h.forwardRequest(w, r, rackConfig, path, user.Email); err != nil {
+	if err := h.forwardRequest(w, r, rackConfig, path, authUser.Email); err != nil {
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rackConfig.Name, start)
 		return
 	}
 
-	h.auditLogger.LogRequest(r, user.Email, rackConfig.Name, "allow", http.StatusOK, time.Since(start), nil)
+	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", http.StatusOK, time.Since(start), nil)
 }
 
 func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
@@ -94,24 +109,39 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, ok := auth.GetUser(r.Context())
+	authUser, ok := auth.GetAuthUser(r.Context())
 	if !ok {
 		h.handleError(w, r, "unauthorized", http.StatusUnauthorized, rack, start)
 		return
 	}
 
-	if !h.rbacManager.CheckPermission(user.Email, path, r.Method) {
-		h.auditLogger.LogRequest(r, user.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
+	var allowed bool
+	var err error
+	resource, action := h.pathToResourceAction(path, r.Method)
+
+	if authUser.IsAPIToken {
+		// For API tokens, check permissions directly
+		allowed = h.hasAPITokenPermission(authUser, resource, action)
+	} else {
+		// For JWT users, use RBAC
+		allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action)
+		if err != nil {
+			allowed = false
+		}
+	}
+
+	if !allowed {
+		h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
 		return
 	}
 
-	if err := h.forwardRequest(w, r, rackConfig, path, user.Email); err != nil {
+	if err := h.forwardRequest(w, r, rackConfig, path, authUser.Email); err != nil {
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rack, start)
 		return
 	}
 
-	h.auditLogger.LogRequest(r, user.Email, rack, "allow", http.StatusOK, time.Since(start), nil)
+	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", http.StatusOK, time.Since(start), nil)
 }
 
 func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path, userEmail string) error {
@@ -174,6 +204,17 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	return nil
 }
 
+// pathToResourceAction converts a path and HTTP method to resource and action for RBAC
+func (h *Handler) pathToResourceAction(path, method string) (string, string) {
+	permission := h.mapPathToPermission(method, path)
+	// permission format is "convox:resource:action"
+	parts := strings.Split(permission, ":")
+	if len(parts) == 3 {
+		return parts[1], parts[2]
+	}
+	return "*", "*"
+}
+
 func (h *Handler) mapPathToPermission(method, path string) string {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) == 0 {
@@ -224,10 +265,28 @@ func (h *Handler) mapPathToPermission(method, path string) string {
 	return fmt.Sprintf("convox:%s:%s", resource, action)
 }
 
+// hasAPITokenPermission checks if an API token has the required permission
+func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource, action string) bool {
+	permission := fmt.Sprintf("convox:%s:%s", resource, action)
+
+	for _, perm := range authUser.Permissions {
+		// Check for exact match
+		if perm == permission {
+			return true
+		}
+		// Check for wildcard matches
+		if perm == "convox:*:*" || perm == fmt.Sprintf("convox:%s:*", resource) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message string, status int, rack string, start time.Time) {
 	userEmail := "anonymous"
-	if user, ok := auth.GetUser(r.Context()); ok {
-		userEmail = user.Email
+	if authUser, ok := auth.GetAuthUser(r.Context()); ok {
+		userEmail = authUser.Email
 	}
 
 	h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf(message))

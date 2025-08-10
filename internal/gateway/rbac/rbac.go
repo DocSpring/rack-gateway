@@ -399,3 +399,56 @@ func (m *Manager) GetConfig() *GatewayConfig {
 
 	return m.config
 }
+
+// GetUserWithID is not implemented for file-based manager
+func (m *Manager) GetUserWithID(email string) (*UserWithID, error) {
+	return nil, fmt.Errorf("GetUserWithID not supported in file-based manager")
+}
+
+// Enforce converts CheckPermission for interface compatibility
+func (m *Manager) Enforce(userEmail, resource, action string) (bool, error) {
+	// Convert resource:action to path:method format for CheckPermission
+	path := "/" + resource
+	method := "GET"
+	if action == "create" || action == "set" {
+		method = "POST"
+	} else if action == "update" {
+		method = "PUT"
+	} else if action == "delete" {
+		method = "DELETE"
+	}
+
+	allowed := m.CheckPermission(userEmail, path, method)
+	return allowed, nil
+}
+
+// SaveUser saves user to config file
+func (m *Manager) SaveUser(email string, user *UserConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Update in-memory config
+	if m.config == nil {
+		m.config = &GatewayConfig{
+			Users: make(map[string]*UserConfig),
+		}
+	}
+	m.config.Users[email] = user
+
+	// Save to file
+	return m.saveConfig()
+}
+
+// DeleteUser removes user from config
+func (m *Manager) DeleteUser(email string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.config != nil && m.config.Users != nil {
+		delete(m.config.Users, email)
+	}
+
+	return m.saveConfig()
+}
+
+// Interface implementation methods removed - already exist above

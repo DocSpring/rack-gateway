@@ -7,38 +7,71 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ui"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
-
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	// Initialize database
+	dbPath := getEnv("DATABASE_PATH", "/app/data/db.sqlite")
+	if cfg.DevMode {
+		// In dev mode, use local path
+		dbPath = filepath.Join(".", "data", "db.sqlite")
+	}
+
+	database, err := db.New(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer database.Close()
+
+	// Initialize admin user if needed
+	if len(cfg.AdminUsers) > 0 {
+		adminEmail := cfg.AdminUsers[0]
+		if err := database.InitializeAdmin(adminEmail, "Admin User"); err != nil {
+			log.Printf("Warning: Failed to initialize admin: %v", err)
+		}
+	}
+
+	// Migrate from config.yml if it exists
+	if _, err := os.Stat(cfg.ConfigPath); err == nil {
+		log.Printf("Migrating users from %s to database...", cfg.ConfigPath)
+		if err := rbac.MigrateFromConfigFile(database, cfg.ConfigPath); err != nil {
+			log.Printf("Warning: Migration failed: %v", err)
+		}
+	}
+
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 
-	rbacManager, err := rbac.NewManager(cfg.ConfigPath)
+	// Use database-backed RBAC manager
+	allowedDomain := cfg.GoogleAllowedDomain
+	rbacManager, err := rbac.NewDBManager(database, allowedDomain)
 	if err != nil {
 		log.Fatalf("Failed to initialize RBAC: %v", err)
 	}
 
-	// Use domain from config.yml if available, otherwise fall back to env var
-	allowedDomain := rbacManager.GetDomain()
-	if allowedDomain == "" {
-		allowedDomain = cfg.GoogleAllowedDomain
-	}
+	// Create token service
+	tokenService := token.NewService(database)
+
+	// Create combined auth service
+	authService := auth.NewAuthService(jwtManager, tokenService, database)
 
 	oauthHandler := auth.NewOAuthHandler(
 		cfg.GoogleClientID,
@@ -50,7 +83,7 @@ func main() {
 
 	auditLogger := audit.NewLogger()
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
-	uiHandler := ui.NewHandler(rbacManager, cfg.ConfigPath)
+	uiHandler := ui.NewHandler(rbacManager, cfg.ConfigPath, tokenService)
 
 	r := chi.NewRouter()
 
@@ -71,7 +104,7 @@ func main() {
 
 		// Authenticated gateway endpoints
 		r.Group(func(r chi.Router) {
-			r.Use(jwtManager.Middleware)
+			r.Use(authService.Middleware)
 
 			r.Get("/me", uiHandler.GetMe)
 
@@ -80,6 +113,11 @@ func main() {
 				r.Get("/config", uiHandler.GetConfig)
 				r.Put("/config", uiHandler.UpdateConfig)
 				r.Get("/roles", uiHandler.ListRoles)
+
+				// API token endpoints
+				r.Post("/tokens", uiHandler.CreateAPIToken)
+				r.Get("/tokens", uiHandler.ListAPITokens)
+				r.Delete("/tokens/{tokenID}", uiHandler.DeleteAPIToken)
 			})
 		})
 
@@ -90,7 +128,7 @@ func main() {
 	// Catch-all: proxy everything else to the Convox rack
 	// This MUST come last to avoid catching gateway routes
 	r.Group(func(r chi.Router) {
-		r.Use(jwtManager.Middleware)
+		r.Use(authService.Middleware)
 		r.HandleFunc("/*", proxyHandler.ProxyToRack)
 	})
 
@@ -120,6 +158,13 @@ func main() {
 	}
 
 	log.Println("Server exited")
+}
+
+func getEnv(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
 }
 
 func handleLoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
