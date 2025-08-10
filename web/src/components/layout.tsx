@@ -1,39 +1,81 @@
-import { Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/auth-context'
 import { ThemeToggle } from './theme-toggle'
+import { cn } from '../lib/utils'
+import { Users, Key, FileText, LogOut } from 'lucide-react'
+import { Button } from './ui/button'
+import { Separator } from './ui/separator'
+
+const navigation = [
+  { name: 'Users', href: '/users', icon: Users },
+  { name: 'API Tokens', href: '/tokens', icon: Key },
+  { name: 'Audit Logs', href: '/audit', icon: FileText },
+]
 
 export function Layout() {
   const { user, logout } = useAuth()
+  const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-border border-b bg-card shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-8">
-              <h1 className="font-semibold text-foreground text-xl">Convox Gateway</h1>
-              <span className="text-muted-foreground text-sm">User Management</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <span className="text-muted-foreground text-sm">{user?.email}</span>
-              <button
-                className="font-medium text-destructive text-sm hover:text-destructive/80"
-                onClick={logout}
-                type="button"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <div className="flex w-64 flex-col border-r bg-card">
+        {/* Logo */}
+        <div className="flex h-16 items-center px-6">
+          <h1 className="text-xl font-semibold">Convox Gateway</h1>
         </div>
-      </header>
+        
+        <Separator />
+        
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-3 py-4">
+          {navigation.map((item) => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={cn(
+                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                  location.pathname === item.href
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <Icon className="mr-3 h-4 w-4" />
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
+        
+        <Separator />
+        
+        {/* User section */}
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <ThemeToggle />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={logout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      </div>
 
       {/* Main content */}
-      <main className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+      <div className="flex-1 overflow-auto">
         <Outlet />
-      </main>
+      </div>
     </div>
   )
 }

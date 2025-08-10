@@ -1,215 +1,450 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { UserEditModal } from '../components/user-edit-modal'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { format } from 'date-fns'
+import { Plus, Edit2, Trash2, RefreshCw, UserCheck, UserX } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table'
+import { Badge } from '../components/ui/badge'
+import { toast } from 'sonner'
+import { api } from '../lib/api'
 import { useAuth } from '../contexts/auth-context'
-import type { UserConfig } from '../lib/api'
-import { AVAILABLE_ROLES, apiService } from '../lib/api'
+
+interface User {
+  email: string
+  name: string
+  roles: string[]
+  created_at: string
+  updated_at: string
+  suspended: boolean
+}
+
+const AVAILABLE_ROLES = {
+  viewer: {
+    label: 'Viewer',
+    description: 'Read-only access to apps and logs',
+    color: 'default',
+  },
+  ops: {
+    label: 'Operations',
+    description: 'Can manage processes and access systems',
+    color: 'secondary',
+  },
+  deployer: {
+    label: 'Deployer',
+    description: 'Can deploy apps and manage configurations',
+    color: 'outline',
+  },
+  admin: {
+    label: 'Administrator',
+    description: 'Full access to all resources',
+    color: 'destructive',
+  },
+}
 
 export function UsersPage() {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
-  const [editingUser, setEditingUser] = useState<{ email: string; user: UserConfig } | null>(null)
-  const [isAddingUser, setIsAddingUser] = useState(false)
-
-  // Check if current user is admin
-  const isAdmin = user?.roles?.includes('admin')
-  const canViewUsers = isAdmin || user?.roles?.includes('ops') || user?.roles?.includes('deployer')
-
-  // Fetch config
-  const {
-    data: config,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ['config'],
-    queryFn: () => apiService.getConfig(),
-    enabled: canViewUsers, // Only fetch if user has permission
+  const { user: currentUser } = useAuth()
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [formData, setFormData] = useState({
+    email: '',
+    name: '',
+    roles: [] as string[],
   })
 
-  // Save user mutation
-  const saveUserMutation = useMutation({
-    mutationFn: ({ email, user: userConfig }: { email: string; user: UserConfig }) =>
-      apiService.saveUser(email, userConfig),
+  // Check if current user is admin
+  const isAdmin = currentUser?.roles?.includes('admin')
+
+  // Fetch users
+  const { data: users = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await api.get<User[]>('/.gateway/admin/users')
+      return response
+    },
+  })
+
+  // Create user mutation
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { email: string; name: string; roles: string[] }) => {
+      await api.post('/.gateway/admin/users', data)
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['config'] })
-      setEditingUser(null)
-      setIsAddingUser(false)
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('User created successfully')
+      handleCloseDialog()
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to create user')
+    },
+  })
+
+  // Update user roles mutation
+  const updateRolesMutation = useMutation({
+    mutationFn: async ({ email, roles }: { email: string; roles: string[] }) => {
+      await api.put(`/.gateway/admin/users/${email}/roles`, { roles })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('User roles updated successfully')
+      handleCloseDialog()
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update roles')
+    },
+  })
+
+  // Suspend/unsuspend user mutation
+  const suspendUserMutation = useMutation({
+    mutationFn: async ({ email, suspended }: { email: string; suspended: boolean }) => {
+      await api.put(`/.gateway/admin/users/${email}/suspend`, { suspended })
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success(`User ${variables.suspended ? 'suspended' : 'unsuspended'} successfully`)
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update user status')
     },
   })
 
   // Delete user mutation
   const deleteUserMutation = useMutation({
-    mutationFn: (email: string) => apiService.deleteUser(email),
+    mutationFn: async (email: string) => {
+      await api.delete(`/.gateway/admin/users/${email}`)
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['config'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('User deleted successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to delete user')
     },
   })
 
   const handleAddUser = () => {
-    if (!isAdmin) {
-      return
-    }
-    setIsAddingUser(true)
-    setEditingUser({ email: '', user: { name: '', roles: [] } })
+    setEditingUser(null)
+    setFormData({ email: '', name: '', roles: ['viewer'] })
+    setIsDialogOpen(true)
   }
 
-  const handleEditUser = (email: string, userConfig: UserConfig) => {
-    if (!isAdmin) {
-      return
-    }
-    setIsAddingUser(false)
-    setEditingUser({ email, user: userConfig })
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    setFormData({
+      email: user.email,
+      name: user.name,
+      roles: user.roles,
+    })
+    setIsDialogOpen(true)
   }
 
-  const handleSaveUser = (email: string, userConfig: UserConfig) => {
-    if (!isAdmin) {
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false)
+    setEditingUser(null)
+    setFormData({ email: '', name: '', roles: [] })
+  }
+
+  const handleSaveUser = () => {
+    if (!formData.email || !formData.name || formData.roles.length === 0) {
+      toast.error('Please fill in all fields')
       return
     }
-    saveUserMutation.mutate({ email, user: userConfig })
+
+    if (editingUser) {
+      updateRolesMutation.mutate({ email: formData.email, roles: formData.roles })
+    } else {
+      createUserMutation.mutate(formData)
+    }
   }
 
   const handleDeleteUser = (email: string) => {
-    if (!isAdmin) {
+    if (email === currentUser?.email) {
+      toast.error("You can't delete your own account")
       return
     }
+    
     if (confirm(`Are you sure you want to delete ${email}?`)) {
       deleteUserMutation.mutate(email)
     }
   }
 
-  // Check permissions
-  if (!canViewUsers) {
+  const toggleRoleSelection = (role: string) => {
+    setFormData(prev => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter(r => r !== role)
+        : [...prev.roles, role],
+    }))
+  }
+
+  if (!isAdmin) {
     return (
-      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
-        <h3 className="font-medium text-sm text-yellow-800">Access Denied</h3>
-        <p className="mt-1 text-sm text-yellow-700">
-          You don't have permission to view the user management interface.
-        </p>
+      <div className="p-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-destructive">Access Denied</CardTitle>
+            <CardDescription>
+              You don't have permission to view the user management interface.
+              Admin role is required.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       </div>
     )
   }
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-8">
-        <div className="h-8 w-8 animate-spin rounded-full border-blue-600 border-b-2" />
+      <div className="p-8">
+        <div className="flex items-center justify-center h-64">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 p-4">
-        <p className="text-red-800 text-sm">Failed to load users: {String(error)}</p>
+      <div className="p-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-destructive">Error</CardTitle>
+            <CardDescription>Failed to load users</CardDescription>
+          </CardHeader>
+        </Card>
       </div>
     )
   }
 
-  const users = config?.users || {}
-
   return (
-    <div>
-      <div className="mb-6 sm:flex sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-bold text-2xl text-gray-900">Users</h2>
-          {config?.domain && (
-            <p className="mt-1 text-gray-600 text-sm">
-              Domain: <span className="font-medium">{config.domain}</span>
-            </p>
-          )}
-          {!isAdmin && (
-            <p className="mt-1 text-amber-600 text-sm">
-              Read-only access (admin role required for modifications)
-            </p>
-          )}
-        </div>
-        {isAdmin && (
-          <button
-            className="mt-3 inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 font-medium text-sm text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:mt-0"
-            onClick={handleAddUser}
-            type="button"
-          >
-            Add User
-          </button>
-        )}
+    <div className="p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Users</h1>
+        <p className="text-muted-foreground mt-2">
+          Manage user access and permissions for the gateway
+        </p>
       </div>
 
-      <div className="overflow-hidden bg-white shadow sm:rounded-md">
-        {Object.keys(users).length === 0 ? (
-          <div className="px-4 py-12 text-center text-gray-500">
-            {isAdmin
-              ? 'No users configured. Click "Add User" to get started.'
-              : 'No users configured.'}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Users</CardTitle>
+              <CardDescription>
+                {users.length} {users.length === 1 ? 'user' : 'users'} configured
+              </CardDescription>
+            </div>
+            <Button onClick={handleAddUser}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add User
+            </Button>
           </div>
-        ) : (
-          <ul className="divide-y divide-gray-200">
-            {Object.entries(users).map(([email, userConfig]) => (
-              <li key={email}>
-                <div className="px-4 py-4 hover:bg-gray-50 sm:px-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center">
-                        <p className="font-medium text-gray-900 text-sm">{email}</p>
-                        {email === user?.email && (
-                          <span className="ml-2 inline-flex items-center rounded bg-green-100 px-2 py-0.5 font-medium text-green-800 text-xs">
-                            You
-                          </span>
-                        )}
+        </CardHeader>
+        <CardContent>
+          {users.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No users configured yet
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Roles</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.email}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">
+                          {user.name}
+                          {user.email === currentUser?.email && (
+                            <Badge variant="outline" className="ml-2">You</Badge>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground">{user.email}</div>
                       </div>
-                      <p className="mt-1 text-gray-600 text-sm">{userConfig.name}</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {userConfig.roles.map((role) => (
-                          <span
-                            className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 text-xs"
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles.map((role) => (
+                          <Badge
                             key={role}
-                            title={
-                              AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.description
-                            }
+                            variant={AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.color as any}
                           >
-                            {role}
-                          </span>
+                            {AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.label || role}
+                          </Badge>
                         ))}
                       </div>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex items-center space-x-2">
-                        <button
-                          className="font-medium text-blue-600 text-sm hover:text-blue-900"
-                          onClick={() => handleEditUser(email, userConfig)}
-                          type="button"
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.suspended ? 'destructive' : 'default'}>
+                        {user.suspended ? 'Suspended' : 'Active'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {format(new Date(user.created_at), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {format(new Date(user.updated_at), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditUser(user)}
                         >
-                          Edit
-                        </button>
-                        <button
-                          className="font-medium text-red-600 text-sm hover:text-red-900"
-                          disabled={email === user?.email}
-                          onClick={() => handleDeleteUser(email)}
-                          type="button"
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => suspendUserMutation.mutate({
+                            email: user.email,
+                            suspended: !user.suspended,
+                          })}
+                          disabled={user.email === currentUser?.email}
                         >
-                          Delete
-                        </button>
+                          {user.suspended ? (
+                            <UserCheck className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <UserX className="h-4 w-4 text-orange-600" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteUser(user.email)}
+                          disabled={user.email === currentUser?.email}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-      {editingUser && isAdmin && (
-        <UserEditModal
-          email={editingUser.email}
-          isNew={isAddingUser}
-          onClose={() => {
-            setEditingUser(null)
-            setIsAddingUser(false)
-          }}
-          onSave={handleSaveUser}
-          user={editingUser.user}
-        />
-      )}
+      {/* User Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingUser ? 'Edit User' : 'Add User'}</DialogTitle>
+            <DialogDescription>
+              {editingUser
+                ? 'Update user roles and permissions'
+                : 'Add a new user to the gateway'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                disabled={!!editingUser}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="John Doe"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                disabled={!!editingUser}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Roles</Label>
+              <div className="space-y-2">
+                {Object.entries(AVAILABLE_ROLES).map(([role, config]) => (
+                  <div
+                    key={role}
+                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                      formData.roles.includes(role)
+                        ? 'bg-primary/10 border-primary'
+                        : 'hover:bg-accent'
+                    }`}
+                    onClick={() => toggleRoleSelection(role)}
+                  >
+                    <div>
+                      <div className="font-medium">{config.label}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {config.description}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={formData.roles.includes(role)}
+                      onChange={() => {}}
+                      className="h-4 w-4"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveUser}
+              disabled={createUserMutation.isPending || updateRolesMutation.isPending}
+            >
+              {createUserMutation.isPending || updateRolesMutation.isPending
+                ? 'Saving...'
+                : editingUser
+                ? 'Update User'
+                : 'Add User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -6,6 +6,9 @@ import { AuthProvider } from './contexts/auth-context'
 import { CallbackPage } from './pages/callback-page'
 import { LoginPage } from './pages/login-page'
 import { UsersPage } from './pages/users-page'
+import { TokensPage } from './pages/tokens-page'
+import { AuditPage } from './pages/audit-page'
+import { Toaster } from './components/ui/sonner'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,10 +32,13 @@ function App() {
               <Route element={<Layout />}>
                 <Route element={<Navigate replace to="/users" />} path="/" />
                 <Route element={<UsersPage />} path="/users" />
+                <Route element={<TokensPage />} path="/tokens" />
+                <Route element={<AuditPage />} path="/audit" />
               </Route>
             </Route>
           </Routes>
         </Router>
+        <Toaster position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
   )
