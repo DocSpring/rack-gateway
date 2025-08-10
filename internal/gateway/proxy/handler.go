@@ -289,7 +289,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message st
 		userEmail = authUser.Email
 	}
 
-	h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf(message))
+	h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf("%s", message))
 
 	errorResponse := map[string]string{"error": message}
 	w.Header().Set("Content-Type", "application/json")

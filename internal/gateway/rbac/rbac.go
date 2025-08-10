@@ -302,11 +302,7 @@ func (m *Manager) saveConfig() error {
 	return os.WriteFile(m.configPath, data, 0644)
 }
 
-func (m *Manager) createDefaultUsers() {
-	// No default users - all users must be explicitly configured
-	// via the mounted users.yaml file
-	m.users = make(map[string]*User)
-}
+// createDefaultUsers removed - unused
 
 func (m *Manager) createDefaultRoles() {
 	m.roles = map[string]*Role{
@@ -355,11 +351,7 @@ func (m *Manager) createDefaultRoles() {
 	}
 }
 
-func (m *Manager) createDefaultPolicies() {
-	// No longer needed - policies are compiled in
-	// Just initialize empty map for legacy compatibility
-	m.policies = make(map[string]*Policy)
-}
+// createDefaultPolicies removed - unused
 
 func (m *Manager) GetUsers() map[string]*User {
 	m.mu.RLock()

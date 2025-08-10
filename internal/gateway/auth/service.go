@@ -79,9 +79,15 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Add user to request context
+		// Add user to request context and headers for audit logging
 		ctx := context.WithValue(r.Context(), UserContextKey, user)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		r = r.WithContext(ctx)
+
+		// Set headers for audit logging
+		r.Header.Set("X-User-Name", user.Name)
+		r.Header.Set("X-User-Email", user.Email)
+
+		next.ServeHTTP(w, r)
 	})
 }
 

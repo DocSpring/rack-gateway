@@ -2,10 +2,8 @@ package ui
 
 import (
 	"encoding/json"
-	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -13,13 +11,11 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
-	"gopkg.in/yaml.v3"
 )
 
 type Handler struct {
 	rbacManager  rbac.RBACManager
 	configPath   string
-	staticFS     fs.FS
 	tokenService *token.Service
 }
 
@@ -330,19 +326,4 @@ func (h *Handler) hasWriteAccess(user *auth.Claims) bool {
 	return false
 }
 
-func (h *Handler) saveConfigToFile(config *rbac.GatewayConfig) error {
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(h.configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-
-	// Marshal to YAML
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return err
-	}
-
-	// Write to file
-	return os.WriteFile(h.configPath, data, 0644)
-}
+// saveConfigToFile removed - unused

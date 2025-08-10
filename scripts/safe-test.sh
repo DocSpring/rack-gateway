@@ -3,9 +3,13 @@
 # This script safely runs tests by managing Convox config backup/restore
 set -euo pipefail
 
+# Get script directory to find backup/restore scripts
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_SCRIPT="$SCRIPT_DIR/backup-convox-config.sh"
+RESTORE_SCRIPT="$SCRIPT_DIR/restore-convox-config.sh"
+
 # CRITICAL: This is the REAL Convox config - DO NOT DELETE
 BACKUP_PATH="$HOME/Library/Preferences/convox.IMPORTANT_DO_NOT_DELETE_LIVE_BACKUP"
-CONFIG_PATH="$HOME/Library/Preferences/convox"
 
 # Set env var to indicate tests are running through the safe wrapper
 export CONVOX_GATEWAY_SAFE_TEST=1
@@ -13,7 +17,7 @@ export CONVOX_GATEWAY_SAFE_TEST=1
 # Track if restore has already been called
 RESTORE_DONE=0
 
-# Function to restore config
+# Function to restore config using the restore script
 # shellcheck disable=SC2329
 restore_config() {
     # Prevent double restoration
@@ -32,15 +36,10 @@ restore_config() {
         return 0
     fi
     
-    # Remove placeholder if it exists
-    if [ -e "$CONFIG_PATH" ]; then
-        rm -rf "$CONFIG_PATH"
-    fi
-    
-    echo -e "\033[33mSAFETY: Restoring Convox config from $BACKUP_PATH to $CONFIG_PATH\033[0m"
-    mv "$BACKUP_PATH" "$CONFIG_PATH" || {
+    echo -e "\033[33mSAFETY: Running restore script...\033[0m"
+    "$RESTORE_SCRIPT" || {
         echo -e "\033[31mCRITICAL: Failed to restore Convox config - YOU MUST MANUALLY RESTORE YOUR CONVOX CONFIG\033[0m"
-        echo "Run: mv $BACKUP_PATH $CONFIG_PATH"
+        echo "Run: $RESTORE_SCRIPT"
         exit 1
     }
 }
@@ -48,29 +47,12 @@ restore_config() {
 if [ -n "${CI:-}" ]; then
     echo "Running in CI, skipping config backup/restore"
 else
-    # Check if backup already exists
-    if [ -e "$BACKUP_PATH" ]; then
-        echo -e "\033[31mCRITICAL: Backup already exists at $BACKUP_PATH - refusing to run to prevent data loss\033[0m"
-        echo "Please manually resolve this before running tests"
-        exit 1
-    fi
-
-    # Check if config exists
-    if [ ! -e "$CONFIG_PATH" ]; then
-        echo -e "\033[31mCRITICAL: Convox config does not exist at $CONFIG_PATH\033[0m"
-        exit 1
-    fi
-
-    # Backup config
-    echo -e "\033[33mSAFETY: Backing up Convox config from $CONFIG_PATH to $BACKUP_PATH\033[0m"
-    mv "$CONFIG_PATH" "$BACKUP_PATH" || {
+    # Run backup using the backup script
+    echo -e "\033[33mSAFETY: Running backup script...\033[0m"
+    "$BACKUP_SCRIPT" || {
         echo -e "\033[31mCRITICAL: Failed to backup Convox config\033[0m"
         exit 1
     }
-
-    # Create placeholder so tests don't fail due to missing dir
-    mkdir -p "$CONFIG_PATH"
-    echo "TEST_PLACEHOLDER" > "$CONFIG_PATH/GUARD_ACTIVE"
 
     # Trap to ensure restore happens on exit
     trap restore_config EXIT INT TERM

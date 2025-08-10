@@ -3,17 +3,20 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/google/uuid"
 )
 
 type Logger struct {
 	redactPatterns []*regexp.Regexp
+	database       *db.Database
 }
 
 type LogEntry struct {
@@ -32,7 +35,7 @@ type LogEntry struct {
 	ResponseError string                 `json:"response_error,omitempty"`
 }
 
-func NewLogger() *Logger {
+func NewLogger(database *db.Database) *Logger {
 	patterns := []string{
 		`(?i)(secret|token|password|key|authorization|cookie|set-cookie|session)`,
 		`(?i)(api[-_]?key|api[-_]?secret|client[-_]?secret)`,
@@ -46,6 +49,7 @@ func NewLogger() *Logger {
 
 	return &Logger{
 		redactPatterns: compiled,
+		database:       database,
 	}
 }
 
@@ -60,10 +64,43 @@ func (l *Logger) Log(entry *LogEntry) {
 		return
 	}
 
+	// Output structured JSON to stdout for CloudWatch ingestion
 	fmt.Println(string(data))
 }
 
+// storeInDatabase stores the audit log in SQLite for admin UI and compliance
+func (l *Logger) storeInDatabase(r *http.Request, userEmail, rbacDecision string, status int, latency time.Duration, err error) {
+	if l.database == nil {
+		return // Skip database logging if not configured
+	}
+
+	// Determine action and resource from path
+	action, resource := l.parseConvoxAction(r.URL.Path, r.Method)
+
+	// Get user name if available from context or header
+	userName := r.Header.Get("X-User-Name") // Set by auth middleware
+
+	// Create database audit log
+	auditLog := &db.AuditLog{
+		UserEmail:      userEmail,
+		UserName:       userName,
+		ActionType:     "convox_api",
+		Action:         action,
+		Resource:       resource,
+		Details:        l.buildDetailsJSON(r),
+		IPAddress:      getClientIP(r),
+		UserAgent:      r.UserAgent(),
+		Status:         l.mapStatusToString(status, rbacDecision),
+		ResponseTimeMs: int(latency.Milliseconds()),
+	}
+
+	if dbErr := l.database.CreateAuditLog(auditLog); dbErr != nil {
+		log.Printf("Failed to store audit log in database: %v", dbErr)
+	}
+}
+
 func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
+	// Create audit log entry for stdout/CloudWatch
 	entry := &LogEntry{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		UserEmail:    userEmail,
@@ -82,7 +119,11 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 		entry.ResponseError = err.Error()
 	}
 
+	// Log to stdout for CloudWatch
 	l.Log(entry)
+
+	// Also store in database for queryability
+	l.storeInDatabase(r, userEmail, rbacDecision, status, latency, err)
 }
 
 func (l *Logger) redactPath(path string) string {
@@ -199,4 +240,154 @@ func getClientIP(r *http.Request) string {
 		return ip
 	}
 	return strings.Split(r.RemoteAddr, ":")[0]
+}
+
+// parseConvoxAction extracts meaningful action and resource from the request
+func (l *Logger) parseConvoxAction(path, method string) (action, resource string) {
+	path = strings.TrimPrefix(path, "/")
+	parts := strings.Split(path, "/")
+
+	if len(parts) == 0 {
+		return "unknown", "unknown"
+	}
+
+	// Handle common Convox API patterns - check more specific paths first
+	switch {
+	// Check for specific sub-resources first (more specific matches)
+	case strings.Contains(path, "/env"):
+		if method == "GET" {
+			action = "env.get"
+		} else {
+			action = "env.set"
+		}
+		// Find app name - it's usually before /env
+		for i, part := range parts {
+			if part == "env" && i > 0 {
+				resource = parts[i-1]
+				break
+			}
+		}
+
+	case strings.Contains(path, "/builds"):
+		if method == "GET" {
+			action = "builds.list"
+		} else if method == "POST" {
+			action = "builds.create"
+		}
+		// Find app name - it's usually before /builds
+		for i, part := range parts {
+			if part == "builds" && i > 0 {
+				resource = parts[i-1]
+				break
+			}
+		}
+
+	case strings.Contains(path, "/releases"):
+		if method == "GET" {
+			action = "releases.list"
+		} else if method == "POST" {
+			action = "releases.promote"
+		}
+		// Find app name - it's usually before /releases
+		for i, part := range parts {
+			if part == "releases" && i > 0 {
+				resource = parts[i-1]
+				break
+			}
+		}
+
+	case strings.Contains(path, "/run"):
+		action = "run.command"
+		// Find app name - it's usually before /run
+		for i, part := range parts {
+			if part == "run" && i > 0 {
+				resource = parts[i-1]
+				break
+			}
+		}
+
+	case strings.Contains(path, "/ps"):
+		if method == "GET" {
+			action = "ps.list"
+		} else {
+			action = "ps.manage"
+		}
+		// Find app name - it's usually before /ps
+		for i, part := range parts {
+			if part == "ps" && i > 0 {
+				resource = parts[i-1]
+				break
+			}
+		}
+
+	// Check for apps at the root level (less specific match)
+	case strings.HasPrefix(path, "apps"):
+		if method == "GET" {
+			if len(parts) == 1 {
+				action = "apps.list"
+			} else {
+				action = "apps.get"
+			}
+		} else if method == "POST" {
+			action = "apps.create"
+		} else if method == "DELETE" {
+			action = "apps.delete"
+		}
+		if len(parts) > 1 {
+			resource = parts[1]
+		}
+
+	default:
+		action = fmt.Sprintf("%s.%s", parts[0], strings.ToLower(method))
+		if len(parts) > 1 {
+			resource = parts[1]
+		}
+	}
+
+	if resource == "" {
+		resource = "unknown"
+	}
+
+	return action, resource
+}
+
+// buildDetailsJSON creates a JSON string with request details
+func (l *Logger) buildDetailsJSON(r *http.Request) string {
+	details := map[string]interface{}{
+		"method": r.Method,
+		"path":   r.URL.Path,
+	}
+
+	// Add query parameters (redacted)
+	if r.URL.RawQuery != "" {
+		details["query"] = l.redactQueryParams(r.URL.RawQuery)
+	}
+
+	// Add request ID if available
+	if requestID := getRequestID(r); requestID != "" {
+		details["request_id"] = requestID
+	}
+
+	data, err := json.Marshal(details)
+	if err != nil {
+		return "{}"
+	}
+
+	return string(data)
+}
+
+// mapStatusToString converts HTTP status and RBAC decision to audit status
+func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
+	switch {
+	case rbacDecision == "deny":
+		return "denied"
+	case httpStatus >= 200 && httpStatus < 300:
+		return "success"
+	case httpStatus >= 400 && httpStatus < 500:
+		return "blocked"
+	case httpStatus >= 500:
+		return "error"
+	default:
+		return "unknown"
+	}
 }

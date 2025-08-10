@@ -81,7 +81,7 @@ func main() {
 		jwtManager,
 	)
 
-	auditLogger := audit.NewLogger()
+	auditLogger := audit.NewLogger(database)
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
 	uiHandler := ui.NewHandler(rbacManager, cfg.ConfigPath, tokenService)
 

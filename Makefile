@@ -11,6 +11,10 @@ deps:
 	@go mod download
 	@go mod tidy
 
+install-staticcheck:
+	@echo "Installing staticcheck..."
+	@go install honnef.co/go/tools/cmd/staticcheck@latest
+
 web-deps:
 	@echo "Installing web dependencies..."
 	@cd web && pnpm install --frozen-lockfile
@@ -67,11 +71,11 @@ test-integration:
 	@echo "Running integration tests..."
 	@./scripts/safe-test.sh -v -race -tags=integration ./internal/integration/...
 
-lint: web-lint
+lint: web-lint install-staticcheck
 	@echo "Running Go linters..."
 	@go vet ./...
 	@go fmt ./...
-	@if command -v staticcheck > /dev/null; then staticcheck ./...; else echo "staticcheck not installed"; fi
+	@staticcheck ./...
 
 docker:
 	@echo "Building Docker image..."

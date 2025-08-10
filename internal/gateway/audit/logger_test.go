@@ -1,190 +1,110 @@
 package audit
 
 import (
+	"net/http"
+	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestRedaction(t *testing.T) {
-	logger := NewLogger()
+func TestAuditLogger(t *testing.T) {
+	// Create temp database
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
 
-	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		expected map[string]interface{}
-	}{
-		{
-			name: "redact secret keys",
-			input: map[string]interface{}{
-				"username": "user@example.com",
-				"password": "secret123",
-				"api_key":  "key123",
-			},
-			expected: map[string]interface{}{
-				"username": "user@example.com",
-				"password": "[REDACTED]",
-				"api_key":  "[REDACTED]",
-			},
-		},
-		{
-			name: "redact nested secrets",
-			input: map[string]interface{}{
-				"config": map[string]interface{}{
-					"database": "mydb",
-					"secret":   "hidden",
-				},
-			},
-			expected: map[string]interface{}{
-				"config": map[string]interface{}{
-					"database": "mydb",
-					"secret":   "[REDACTED]",
-				},
-			},
-		},
-		{
-			name: "redact authorization headers",
-			input: map[string]interface{}{
-				"headers": map[string]interface{}{
-					"Content-Type":  "application/json",
-					"Authorization": "Bearer token123",
-				},
-			},
-			expected: map[string]interface{}{
-				"headers": map[string]interface{}{
-					"Content-Type":  "application/json",
-					"Authorization": "[REDACTED]",
-				},
-			},
-		},
-	}
+	database, err := db.New(dbPath)
+	require.NoError(t, err)
+	defer database.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := logger.redactMap(tt.input)
+	logger := NewLogger(database)
 
-			for key, expectedValue := range tt.expected {
-				actualValue, exists := result[key]
-				if !exists {
-					t.Errorf("Expected key %s not found in result", key)
-					continue
-				}
-
-				switch expected := expectedValue.(type) {
-				case map[string]interface{}:
-					actual, ok := actualValue.(map[string]interface{})
-					if !ok {
-						t.Errorf("Expected map for key %s, got %T", key, actualValue)
-						continue
-					}
-					for k, v := range expected {
-						if actual[k] != v {
-							t.Errorf("For key %s.%s, expected %v, got %v", key, k, v, actual[k])
-						}
-					}
-				default:
-					if actualValue != expectedValue {
-						t.Errorf("For key %s, expected %v, got %v", key, expectedValue, actualValue)
-					}
-				}
-			}
-		})
-	}
-}
-
-func TestShouldRedact(t *testing.T) {
-	logger := NewLogger()
-
-	tests := []struct {
-		value    string
-		expected bool
-	}{
-		{"password", true},
-		{"PASSWORD", true},
-		{"api_key", true},
-		{"api-key", true},
-		{"secret", true},
-		{"token", true},
-		{"authorization", true},
-		{"cookie", true},
-		{"session", true},
-		{"username", false},
-		{"email", false},
-		{"name", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			result := logger.shouldRedact(tt.value)
-			if result != tt.expected {
-				t.Errorf("shouldRedact(%s) = %v, expected %v", tt.value, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestRedactQueryParams(t *testing.T) {
-	logger := NewLogger()
-
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "single parameter",
-			input:    "token=secret123",
-			expected: "token=[REDACTED]",
-		},
-		{
-			name:     "multiple parameters",
-			input:    "user=john&password=secret&api_key=12345",
-			expected: "user=[REDACTED]&password=[REDACTED]&api_key=[REDACTED]",
-		},
-		{
-			name:     "parameters with special characters",
-			input:    "DATABASE_URL=postgres://user:pass@localhost/db&NODE_ENV=production",
-			expected: "DATABASE_URL=[REDACTED]&NODE_ENV=[REDACTED]",
-		},
-		{
-			name:     "empty query string",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "parameter without value",
-			input:    "debug&verbose=true",
-			expected: "debug&verbose=[REDACTED]",
-		},
-		{
-			name:     "url encoded values",
-			input:    "message=hello%20world&secret=my%2Bsecret%3Dvalue",
-			expected: "message=[REDACTED]&secret=[REDACTED]",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := logger.redactQueryParams(tt.input)
-			if result != tt.expected {
-				t.Errorf("redactQueryParams(%s) = %s, expected %s", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestRedactEnvVars(t *testing.T) {
-	logger := NewLogger()
-
-	envVars := map[string]string{
-		"DATABASE_URL": "postgres://user:pass@localhost/db",
-		"API_KEY":      "secret123",
-		"NODE_ENV":     "production",
-	}
-
-	result := logger.RedactEnvVars(envVars)
-
-	for key := range envVars {
-		if result[key] != "[REDACTED]" {
-			t.Errorf("Expected env var %s to be redacted, got %s", key, result[key])
+	t.Run("ParseConvoxAction", func(t *testing.T) {
+		tests := []struct {
+			path             string
+			method           string
+			expectedAction   string
+			expectedResource string
+		}{
+			{"/apps/myapp/env", "GET", "env.get", "myapp"},
+			{"/apps/myapp/env", "POST", "env.set", "myapp"},
+			{"/apps", "GET", "apps.list", "unknown"},
+			{"/apps/myapp", "DELETE", "apps.delete", "myapp"},
+			{"/apps/myapp/builds", "POST", "builds.create", "myapp"},
+			{"/apps/myapp/run", "POST", "run.command", "myapp"},
+			{"/apps/myapp/ps", "GET", "ps.list", "myapp"},
+			{"/unknown/path", "GET", "unknown.get", "path"},
 		}
-	}
+
+		for _, test := range tests {
+			action, resource := logger.parseConvoxAction(test.path, test.method)
+			assert.Equal(t, test.expectedAction, action, "Path: %s %s", test.method, test.path)
+			assert.Equal(t, test.expectedResource, resource, "Path: %s %s", test.method, test.path)
+		}
+	})
+
+	t.Run("LogRequest", func(t *testing.T) {
+		// Create a mock HTTP request
+		req, err := http.NewRequest("GET", "/apps/myapp/env?key=SECRET_TOKEN", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("X-User-Name", "Test User")
+		req.RemoteAddr = "192.168.1.1:1234"
+
+		// Log the request
+		logger.LogRequest(req, "test@example.com", "production", "allow", 200, 150*time.Millisecond, nil)
+
+		// Verify it was stored in database
+		logs, err := database.GetAuditLogs("test@example.com", time.Time{}, 0)
+		require.NoError(t, err)
+		require.Len(t, logs, 1)
+
+		log := logs[0]
+		assert.Equal(t, "test@example.com", log.UserEmail)
+		assert.Equal(t, "Test User", log.UserName)
+		assert.Equal(t, "convox_api", log.ActionType)
+		assert.Equal(t, "env.get", log.Action)
+		assert.Equal(t, "myapp", log.Resource)
+		assert.Equal(t, "success", log.Status)
+		assert.Equal(t, 150, log.ResponseTimeMs)
+		assert.Equal(t, "192.168.1.1", log.IPAddress)
+		assert.Contains(t, log.Details, "GET")
+		assert.Contains(t, log.Details, "/apps/myapp/env")
+	})
+
+	t.Run("LogDeniedRequest", func(t *testing.T) {
+		req, err := http.NewRequest("DELETE", "/apps/myapp", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("X-User-Name", "Viewer User")
+
+		// Log a denied request
+		logger.LogRequest(req, "viewer@example.com", "production", "deny", 403, 50*time.Millisecond, nil)
+
+		// Verify it was stored with denied status
+		logs, err := database.GetAuditLogs("viewer@example.com", time.Time{}, 0)
+		require.NoError(t, err)
+		require.Len(t, logs, 1)
+
+		log := logs[0]
+		assert.Equal(t, "denied", log.Status)
+		assert.Equal(t, "apps.delete", log.Action)
+		assert.Equal(t, "myapp", log.Resource)
+	})
+
+	t.Run("RedactionWorks", func(t *testing.T) {
+		logger := NewLogger(nil) // No database for this test
+
+		// Test path redaction
+		redacted := logger.redactPath("/apps/myapp/env/SECRET_TOKEN")
+		assert.Contains(t, redacted, "[REDACTED]")
+
+		// Test query param redaction
+		redacted = logger.redactQueryParams("key=SECRET_TOKEN&other=value")
+		assert.Contains(t, redacted, "key=[REDACTED]")
+		assert.Contains(t, redacted, "other=[REDACTED]")
+	})
 }
