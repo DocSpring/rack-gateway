@@ -19,7 +19,9 @@ export function LoginPage() {
         toast.error(msg)
         sessionStorage.removeItem('auth_error')
       }
-    } catch (_e) { /* ignore */ }
+    } catch (_e) {
+      /* ignore */
+    }
   }, [])
 
   const handleLogin = async () => {

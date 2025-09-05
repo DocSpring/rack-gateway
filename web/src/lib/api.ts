@@ -65,9 +65,15 @@ class ApiService {
           // Persist an auth error message to show after redirect
           try {
             sessionStorage.setItem('auth_error', 'Your session has expired. Please sign in again.')
-          } catch (_e) { /* ignore */ }
+          } catch (_e) {
+            /* ignore */
+          }
           // Best-effort immediate toast (may disappear on navigation)
-          try { toast.error('Your session has expired. Please sign in again.') } catch (_e) { /* ignore */ }
+          try {
+            toast.error('Your session has expired. Please sign in again.')
+          } catch (_e) {
+            /* ignore */
+          }
           authService.logout()
         }
         return Promise.reject(error)

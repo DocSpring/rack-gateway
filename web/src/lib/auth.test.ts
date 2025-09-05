@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { authService } from './auth'
 
 describe('authService', () => {
@@ -7,7 +7,9 @@ describe('authService', () => {
   })
 
   it('logout calls server logout endpoint', async () => {
-    const fetchSpy = vi.spyOn(global, 'fetch' as any).mockResolvedValue({} as any)
+    const fetchSpy = vi
+      .spyOn(globalThis as { fetch: typeof fetch }, 'fetch')
+      .mockResolvedValue(new Response() as unknown as Response)
     authService.logout()
     // Allow promise in finally to run
     await Promise.resolve()

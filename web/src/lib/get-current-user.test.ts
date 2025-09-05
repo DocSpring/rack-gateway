@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
 import axios from 'axios'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { authService } from './auth'
 
 vi.mock('axios')
@@ -11,7 +11,7 @@ describe('getCurrentUser', () => {
 
   it('uses withCredentials and returns user', async () => {
     const mockResp = { data: { email: 'admin@example.com', name: 'Admin' } }
-    vi.mocked(axios.get as any).mockResolvedValueOnce(mockResp)
+    vi.mocked(axios.get).mockResolvedValueOnce(mockResp as unknown as never)
 
     const user = await authService.getCurrentUser()
     expect(axios.get).toHaveBeenCalledWith('/api/.gateway/me', { withCredentials: true })
@@ -19,9 +19,8 @@ describe('getCurrentUser', () => {
   })
 
   it('returns null on error', async () => {
-    vi.mocked(axios.get as any).mockRejectedValueOnce(new Error('nope'))
+    vi.mocked(axios.get).mockRejectedValueOnce(new Error('nope'))
     const user = await authService.getCurrentUser()
     expect(user).toBeNull()
   })
 })
-

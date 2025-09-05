@@ -65,7 +65,9 @@ class AuthService {
         if (status === 401) {
           sessionStorage.setItem('auth_error', 'Unauthorized. Please sign in to continue.')
         }
-      } catch (_e) { /* ignore */ }
+      } catch (_e) {
+        /* ignore */
+      }
       return null
     }
   }
@@ -74,7 +76,9 @@ class AuthService {
   logout(): void {
     // Request server-side logout to clear HttpOnly cookie, then go to login
     fetch('/api/.gateway/web/logout', { credentials: 'include' })
-      .catch(() => {})
+      .catch((_e) => {
+        /* ignore network errors during logout */
+      })
       .finally(() => {
         window.location.href = '/login'
       })

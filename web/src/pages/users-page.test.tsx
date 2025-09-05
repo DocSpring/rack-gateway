@@ -300,9 +300,11 @@ describe('UsersPage', () => {
           email: 'nodates@example.com',
           name: 'No Dates',
           roles: ['admin'],
-          // created_at and updated_at missing
+          // created_at and updated_at intentionally empty to simulate missing
+          created_at: '',
+          updated_at: '',
           suspended: false,
-        } as any,
+        },
       ]
       vi.mocked(api.get).mockResolvedValueOnce(users)
 

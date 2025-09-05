@@ -1,11 +1,22 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '../contexts/auth-context'
 import { useEffect, useRef } from 'react'
+import { Navigate, Outlet } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useAuth } from '../contexts/auth-context'
 
 export function ProtectedRoute() {
   const { isAuthenticated, isLoading, user } = useAuth()
   const warnedRef = useRef(false)
+
+  // Check if user has UI access (viewers don't get UI access)
+  const hasUIAccess = user?.roles?.some((role) => ['admin', 'ops', 'deployer'].includes(role))
+
+  // Fire a one-time toast if the signed-in user lacks UI access
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user && !hasUIAccess && !warnedRef.current) {
+      warnedRef.current = true
+      toast.error('Your role does not allow access to this UI. Use the CLI or contact an admin.')
+    }
+  }, [isLoading, isAuthenticated, user, hasUIAccess])
 
   if (isLoading) {
     return (
@@ -18,16 +29,6 @@ export function ProtectedRoute() {
   if (!isAuthenticated) {
     return <Navigate replace to="/login" />
   }
-
-  // Check if user has UI access (viewers don't get UI access)
-  const hasUIAccess = user?.roles?.some((role) => ['admin', 'ops', 'deployer'].includes(role))
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && user && !hasUIAccess && !warnedRef.current) {
-      warnedRef.current = true
-      toast.error('Your role does not allow access to this UI. Use the CLI or contact an admin.')
-    }
-  }, [isLoading, isAuthenticated, user, hasUIAccess])
 
   if (!hasUIAccess) {
     return (
