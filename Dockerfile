@@ -4,12 +4,16 @@ RUN apk add --no-cache git ca-certificates make gcc musl-dev sqlite-dev
 
 WORKDIR /app
 
+# Cache go mod download
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
+# Copy only the source needed to build the gateway
+COPY internal ./internal
+COPY cmd/gateway ./cmd/gateway
 
-RUN CGO_ENABLED=1 make gateway
+# Build the gateway binary directly (avoid Makefile dependency)
+RUN CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway
 
 FROM alpine:latest
 
@@ -17,9 +21,8 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/bin/convox-gateway-api .
-COPY --from=builder /app/config ./config
-COPY --from=builder /app/web ./web
+COPY --from=builder /out/convox-gateway-api .
+COPY config ./config
 
 EXPOSE 8080
 

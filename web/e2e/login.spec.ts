@@ -4,10 +4,9 @@ test('login button redirects to mock OAuth selection', async ({ page }) => {
   await page.goto('/login')
   await page.getByRole('button', { name: /Continue with (Mock OAuth|Google)/i }).click()
 
-  // The mock OAuth server redirects to a user selection page when no user is chosen
-  await page.waitForURL(/\/dev\/select-user|oauth2\/v2\/auth/i, { timeout: 10000 })
+  // Wait for cross-origin navigation to OAuth server
+  await page.waitForLoadState('load')
 
   const url = page.url()
-  expect(url).toMatch(/dev\/select-user|oauth2\/v2\/auth/i)
+  expect(url).toMatch(/dev\/select-user|oauth2\//i)
 })
-

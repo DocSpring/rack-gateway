@@ -98,6 +98,18 @@ e2e-devrack:
 web-e2e:
 	@echo "Starting backend services (web-dev + gateway + mocks)..."
 	@docker compose up -d --build mock-oauth mock-convox gateway-api web-dev
+	@echo "Waiting for services to become ready..."
+	@bash -c '
+		set -e; \
+		WEB_PORT=$${WEB_PORT:-5173}; \
+		API_PORT=$${GATEWAY_PORT:-8447}; \
+		OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345}; \
+		retry() { i=0; until curl -fsS "$$1" >/dev/null 2>&1; do i=$$((i+1)); [ $$i -gt 60 ] && { echo "Timed out waiting for $$1"; exit 1; }; sleep 1; done; }; \
+		retry "http://localhost:$$WEB_PORT/"; \
+		retry "http://localhost:$$API_PORT/.gateway/health"; \
+		retry "http://localhost:$$OAUTH_PORT/health"; \
+		echo "All services are up"; \
+	'
 	@echo "Installing Playwright browsers (if needed) and running tests..."
 	@cd web && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps || pnpm exec playwright install
 	@cd web && pnpm e2e

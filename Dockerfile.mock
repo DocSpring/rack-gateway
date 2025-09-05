@@ -5,15 +5,15 @@ RUN apk add --no-cache git make
 
 WORKDIR /app
 
-# Copy go mod files
+# Cache go dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy only the source needed for mock-convox
+COPY cmd/mock-convox ./cmd/mock-convox
 
-# Build mock server using Makefile
-RUN make mock
+# Build mock binary directly
+RUN go build -o /out/mock-convox ./cmd/mock-convox
 
 # Final stage
 FROM alpine:latest
@@ -23,7 +23,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy the binary from builder
-COPY --from=builder /app/bin/mock-convox .
+COPY --from=builder /out/mock-convox .
 
 EXPOSE 5443
 
