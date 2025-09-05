@@ -39,9 +39,14 @@ const mockUsers = {
 const authCodes = new Map();
 const accessTokens = new Map();
 
+// Resolve base URL from env for consistent external redirects (browser)
+function getBaseUrl(req) {
+  return process.env.OAUTH_ISSUER || `${req.protocol}://${req.get('host')}`;
+}
+
 // OAuth discovery endpoint
 app.get('/.well-known/openid-configuration', (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const baseUrl = getBaseUrl(req);
   res.json({
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/oauth2/v2/auth`,
