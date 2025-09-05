@@ -293,6 +293,29 @@ describe('UsersPage', () => {
 
       expect(deleteButton).toBeDisabled()
     })
+
+    it('renders users without dates safely', async () => {
+      const users = [
+        {
+          email: 'nodates@example.com',
+          name: 'No Dates',
+          roles: ['admin'],
+          // created_at and updated_at missing
+          suspended: false,
+        } as any,
+      ]
+      vi.mocked(api.get).mockResolvedValueOnce(users)
+
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('No Dates')).toBeInTheDocument()
+      })
+
+      // Should not crash; placeholders should render
+      expect(screen.getAllByText('-').length).toBeGreaterThan(0)
+    })
   })
 
   describe('Non-Admin User', () => {

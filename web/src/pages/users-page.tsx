@@ -321,10 +321,16 @@ export function UsersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm">
-                      {format(new Date(user.created_at), 'MMM d, yyyy')}
+                      {(() => {
+                        const d = user.created_at ? new Date(user.created_at) : null
+                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                      })()}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {format(new Date(user.updated_at), 'MMM d, yyyy')}
+                      {(() => {
+                        const d = user.updated_at ? new Date(user.updated_at) : null
+                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                      })()}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">

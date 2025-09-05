@@ -50,31 +50,26 @@ class AuthService {
     }
   }
 
-  // Get current user
+  // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)
   async getCurrentUser(): Promise<User | null> {
-    const token = Cookies.get('gateway_token')
-    if (!token) {
-      return null
-    }
-
     try {
       const response = await axios.get(`${API_BASE}/.gateway/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        withCredentials: true,
       })
       return response.data
     } catch (_error) {
-      // Token might be expired
-      this.logout()
       return null
     }
   }
 
   // Logout
   logout(): void {
-    Cookies.remove('gateway_token')
-    window.location.href = '/'
+    // Request server-side logout to clear HttpOnly cookie, then go to login
+    fetch('/api/.gateway/web/logout', { credentials: 'include' })
+      .catch(() => {})
+      .finally(() => {
+        window.location.href = '/login'
+      })
   }
 
   // Get stored token

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,7 +93,7 @@ func main() {
 
 	auditLogger := audit.NewLogger(database)
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
-	uiHandler := ui.NewHandler(rbacManager, "", tokenService)
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database)
 
 	r := chi.NewRouter()
 
@@ -117,6 +118,7 @@ func main() {
 		// Web OAuth flow
 		r.Get("/web/login", handleWebLoginStart(oauthHandler))
 		r.Get("/web/callback", handleWebLoginCallback(oauthHandler))
+		r.Get("/web/logout", handleWebLogout())
 
 		// Authenticated gateway endpoints
 		r.Group(func(r chi.Router) {
@@ -129,6 +131,10 @@ func main() {
 				r.Get("/config", uiHandler.GetConfig)
 				r.Put("/config", uiHandler.UpdateConfig)
 				r.Get("/roles", uiHandler.ListRoles)
+
+				// Audit log endpoints (admin)
+				r.Get("/audit", uiHandler.ListAuditLogs)
+				r.Get("/audit/export", uiHandler.ExportAuditLogs)
 
 				// User management endpoints
 				r.Get("/users", uiHandler.ListUsers)
@@ -255,9 +261,51 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 			return
 		}
 
-		// TODO: Redirect to frontend with token in a secure way
-		// For now, return JSON
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		// Set auth cookie for the frontend (SameSite=Lax allows top-level redirects)
+		cookie := &http.Cookie{
+			Name:     "gateway_token",
+			Value:    resp.Token,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false,
+			// MaxAge based on expiry (seconds)
+			Expires:  resp.ExpiresAt,
+			SameSite: http.SameSiteLaxMode,
+		}
+		http.SetCookie(w, cookie)
+
+		// Redirect back to frontend base (dev server), or root if not set
+		frontend := os.Getenv("FRONTEND_BASE_URL")
+		if frontend == "" {
+			frontend = "/"
+		}
+		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
+	}
+}
+
+func handleWebLogout() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Expire the auth cookie
+		expired := &http.Cookie{
+			Name:     "gateway_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false,
+			Expires:  time.Unix(0, 0),
+			MaxAge:   -1,
+			SameSite: http.SameSiteLaxMode,
+		}
+		http.SetCookie(w, expired)
+
+		// Redirect back to login or frontend base
+		frontend := os.Getenv("FRONTEND_BASE_URL")
+		if frontend == "" {
+			frontend = "/login"
+		} else if !strings.HasSuffix(frontend, "/login") {
+			// Best-effort send to login
+			frontend = frontend + "/login"
+		}
+		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
 	}
 }

@@ -327,5 +327,5 @@ Time: 2024-01-15 10:30:45 UTC
 
 ### Optional Variables
 - `AUDIT_LOG_RETENTION_DAYS` - Days to keep audit logs (default: 90)
-- `TOKEN_DEFAULT_EXPIRY_DAYS` - Default API token expiry (default: 365)
+ - `TOKEN_DEFAULT_EXPIRY_DAYS` - Remove; tokens do not expire by default
 - `SLACK_CHANNEL` - Override default Slack channel (default: #infrastructure)

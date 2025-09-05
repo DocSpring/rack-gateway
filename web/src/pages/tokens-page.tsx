@@ -32,7 +32,7 @@ interface APIToken {
   token?: string
   last_used: string | null
   created_at: string
-  expires_at: string
+  expires_at: string | null
 }
 
 export function TokensPage() {
@@ -53,6 +53,8 @@ export function TokensPage() {
       return response
     },
   })
+
+  const tokenList: APIToken[] = Array.isArray(tokens) ? tokens : []
 
   // Create token mutation
   const createTokenMutation = useMutation({
@@ -155,7 +157,7 @@ export function TokensPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {tokens.length === 0 ? (
+          {tokenList.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">No API tokens created yet</div>
           ) : (
             <Table>
@@ -170,8 +172,9 @@ export function TokensPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tokens.map((token: APIToken) => {
-                  const isExpired = new Date(token.expires_at) < new Date()
+                {tokenList.map((token: APIToken) => {
+                  const exp = token.expires_at ? new Date(token.expires_at) : null
+                  const isExpired = exp ? exp < new Date() : false
                   return (
                     <TableRow key={token.id}>
                       <TableCell className="font-medium">{token.name}</TableCell>
@@ -185,8 +188,18 @@ export function TokensPage() {
                           ? format(new Date(token.last_used), 'MMM d, yyyy')
                           : 'Never'}
                       </TableCell>
-                      <TableCell>{format(new Date(token.created_at), 'MMM d, yyyy')}</TableCell>
-                      <TableCell>{format(new Date(token.expires_at), 'MMM d, yyyy')}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const d = token.created_at ? new Date(token.created_at) : null
+                          return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const d = token.expires_at ? new Date(token.expires_at) : null
+                          return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                        })()}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           disabled={deleteTokenMutation.isPending}

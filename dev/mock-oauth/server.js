@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const jose = require('jose');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,6 +48,28 @@ function getInternalBase(req) {
 function getBrowserBase(req) {
   return process.env.OAUTH_BROWSER_BASE || `${req.protocol}://${req.get('host')}`;
 }
+
+// In-memory signing key (RS256)
+let jwkPublic;
+let kid;
+let privateKey;
+
+async function initKeys() {
+  const { publicKey, privateKey: priv } = await jose.generateKeyPair('RS256');
+  privateKey = priv;
+  const jwk = await jose.exportJWK(publicKey);
+  jwk.kty = 'RSA';
+  kid = uuidv4();
+  jwk.kid = kid;
+  jwk.use = 'sig';
+  jwk.alg = 'RS256';
+  jwkPublic = jwk;
+}
+
+// JWKS endpoint for public keys
+app.get('/.well-known/jwks', (_req, res) => {
+  res.json({ keys: [jwkPublic] });
+});
 
 // OAuth discovery endpoint
 app.get('/.well-known/openid-configuration', (req, res) => {
@@ -131,7 +154,7 @@ app.get('/oauth2/v2/auth', (req, res) => {
 });
 
 // OAuth token endpoint
-app.post('/oauth2/v4/token', (req, res) => {
+app.post('/oauth2/v4/token', async (req, res) => {
   const {
     grant_type,
     code,
@@ -172,7 +195,7 @@ app.post('/oauth2/v4/token', (req, res) => {
 
   // Generate access token
   const accessToken = uuidv4();
-  const idToken = generateMockIdToken(authData.user);
+  const idToken = await generateMockIdToken(authData.user);
   
   // Store access token
   accessTokens.set(accessToken, {
@@ -271,21 +294,27 @@ app.get('/dev/select-user', (req, res) => {
 
 // Generate mock ID token (simplified JWT-like structure)
 function generateMockIdToken(user) {
-  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
-    iss: `${process.env.OAUTH_ISSUER || 'http://localhost:3001'}`,
+  const iss = `${process.env.OAUTH_ISSUER || 'http://localhost:3001'}`;
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss,
     sub: user.id,
     aud: 'mock-client-id',
-    exp: Math.floor(Date.now() / 1000) + 3600,
-    iat: Math.floor(Date.now() / 1000),
+    exp: now + 3600,
+    iat: now,
     email: user.email,
     email_verified: user.verified_email,
     name: user.name,
     picture: user.picture,
-  })).toString('base64url');
-  const signature = 'mock-signature'; // In real implementation, this would be cryptographically signed
-  
-  return `${header}.${payload}.${signature}`;
+  };
+  const header = { alg: 'RS256', kid, typ: 'JWT' };
+  const jwt = new jose.SignJWT(payload)
+    .setProtectedHeader(header)
+    .setIssuer(iss)
+    .setAudience('mock-client-id')
+    .setIssuedAt()
+    .setExpirationTime('1h');
+  return jwt.sign(privateKey);
 }
 
 // Health check endpoint
@@ -311,10 +340,12 @@ app.get('/', (req, res) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Mock OAuth server running on port ${PORT}`);
-  console.log(`Visit http://localhost:${PORT} for endpoint info`);
-  console.log('Mock users available:', Object.keys(mockUsers).join(', '));
+initKeys().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Mock OAuth server running on port ${PORT}`);
+    console.log(`Visit http://localhost:${PORT} for endpoint info`);
+    console.log('Mock users available:', Object.keys(mockUsers).join(', '));
+  });
 });
 
 module.exports = app;

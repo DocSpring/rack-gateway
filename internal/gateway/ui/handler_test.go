@@ -9,10 +9,13 @@ import (
 
 	"context"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"path/filepath"
+	"time"
 )
 
 // Mock RBAC Manager for testing
@@ -145,7 +148,7 @@ func createAuthenticatedRequest(method, path string, body interface{}, email str
 
 func TestListUsers(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil)
+	handler := NewHandler(rbacManager, "", nil, nil)
 
 	tests := []struct {
 		name       string
@@ -256,7 +259,7 @@ func TestCreateUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil)
+			handler := NewHandler(rbacManager, "", nil, nil)
 
 			req := createAuthenticatedRequest("POST", "/.gateway/admin/users", tt.reqBody, tt.userEmail)
 			rr := httptest.NewRecorder()
@@ -304,7 +307,7 @@ func TestDeleteUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil)
+			handler := NewHandler(rbacManager, "", nil, nil)
 
 			req := createAuthenticatedRequest("DELETE", "/.gateway/admin/users/"+tt.deleteEmail, nil, tt.userEmail)
 
@@ -384,7 +387,7 @@ func TestUpdateUserRoles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil)
+			handler := NewHandler(rbacManager, "", nil, nil)
 
 			req := createAuthenticatedRequest("PUT", "/.gateway/admin/users/"+tt.targetEmail+"/roles", tt.reqBody, tt.userEmail)
 
@@ -412,7 +415,7 @@ func TestUpdateUserRoles(t *testing.T) {
 
 func TestIsAdminHelper(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil)
+	handler := NewHandler(rbacManager, "", nil, nil)
 
 	tests := []struct {
 		name      string
@@ -452,7 +455,7 @@ func TestIsAdminHelper(t *testing.T) {
 
 func TestNoAuthContext(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil)
+	handler := NewHandler(rbacManager, "", nil, nil)
 
 	// Test requests without auth context
 	tests := []struct {
@@ -492,7 +495,7 @@ func TestNoAuthContext(t *testing.T) {
 func TestRBACManagerError(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	rbacManager.shouldError = true
-	handler := NewHandler(rbacManager, "", nil)
+	handler := NewHandler(rbacManager, "", nil, nil)
 
 	t.Run("ListUsers with RBAC error", func(t *testing.T) {
 		req := createAuthenticatedRequest("GET", "/.gateway/admin/users", nil, "admin@example.com")
@@ -523,7 +526,7 @@ func TestRBACManagerError(t *testing.T) {
 // Test concurrent access to ensure thread safety
 func TestConcurrentUserOperations(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil)
+	handler := NewHandler(rbacManager, "", nil, nil)
 
 	// Run multiple operations concurrently
 	done := make(chan bool)
@@ -542,4 +545,67 @@ func TestConcurrentUserOperations(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		<-done
 	}
+}
+
+func createTempDB(t *testing.T) *db.Database {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	database, err := db.New(path)
+	require.NoError(t, err)
+	return database
+}
+
+func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	handler := NewHandler(rbacManager, "", nil, database)
+
+	// No logs yet
+	req := createAuthenticatedRequest("GET", "/.gateway/admin/audit?range=7d", nil, "admin@example.com")
+	rr := httptest.NewRecorder()
+	handler.ListAuditLogs(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var logs []map[string]interface{}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &logs))
+	assert.Len(t, logs, 0)
+
+	// Seed some logs
+	now := time.Now().UTC()
+	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "admin@example.com", ActionType: "user_management", Action: "user.create", Status: "success", ResponseTimeMs: 10}))
+	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "viewer@example.com", ActionType: "convox_api", Action: "apps.list", Status: "success", ResponseTimeMs: 5}))
+
+	// Query all
+	rr = httptest.NewRecorder()
+	handler.ListAuditLogs(rr, createAuthenticatedRequest("GET", "/.gateway/admin/audit?range=all", nil, "admin@example.com"))
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &logs))
+	assert.GreaterOrEqual(t, len(logs), 2)
+
+	// Filter by status
+	rr = httptest.NewRecorder()
+	handler.ListAuditLogs(rr, createAuthenticatedRequest("GET", "/.gateway/admin/audit?status=success", nil, "admin@example.com"))
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	// Filter by recent range (1h)
+	_ = now // explicitly unused here; rely on timestamps defaulting to now
+	rr = httptest.NewRecorder()
+	handler.ListAuditLogs(rr, createAuthenticatedRequest("GET", "/.gateway/admin/audit?range=1h", nil, "admin@example.com"))
+	require.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestExportAuditLogs_CSV(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	handler := NewHandler(rbacManager, "", nil, database)
+
+	// Seed
+	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "admin@example.com", ActionType: "auth", Action: "login", Status: "success", ResponseTimeMs: 1}))
+
+	rr := httptest.NewRecorder()
+	handler.ExportAuditLogs(rr, createAuthenticatedRequest("GET", "/.gateway/admin/audit/export?range=all", nil, "admin@example.com"))
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	assert.Contains(t, body, "timestamp,user_email,user_name,action_type,action,resource,status,response_time_ms,ip_address,user_agent")
+	assert.Contains(t, body, "admin@example.com")
 }

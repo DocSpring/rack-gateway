@@ -138,7 +138,7 @@ func TestTokenService(t *testing.T) {
 			Name:        "Expired Token",
 			UserID:      user.ID,
 			Permissions: DefaultCICDPermissions(),
-			ExpiresAt:   time.Now().Add(-1 * time.Hour), // 1 hour ago
+			ExpiresAt:   func() *time.Time { t := time.Now().Add(-1 * time.Hour); return &t }(), // 1 hour ago
 		}
 
 		resp, err := service.GenerateAPIToken(req)

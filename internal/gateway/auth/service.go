@@ -42,7 +42,12 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "missing authorization header", http.StatusUnauthorized)
+			if c, err := r.Cookie("gateway_token"); err == nil && c.Value != "" {
+				authHeader = "Bearer " + c.Value
+			}
+		}
+		if authHeader == "" {
+			http.Error(w, "missing authorization", http.StatusUnauthorized)
 			return
 		}
 

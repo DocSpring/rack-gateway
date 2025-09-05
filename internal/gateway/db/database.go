@@ -35,7 +35,7 @@ type APIToken struct {
 	UserID      int64      `json:"user_id"`
 	Permissions []string   `json:"permissions"`
 	CreatedAt   time.Time  `json:"created_at"`
-	ExpiresAt   time.Time  `json:"expires_at"`
+	ExpiresAt   *time.Time `json:"expires_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
 }
 
@@ -97,17 +97,17 @@ func (d *Database) initSchema() error {
 		suspended BOOLEAN DEFAULT FALSE
 	);
 
-	CREATE TABLE IF NOT EXISTS api_tokens (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		token_hash TEXT NOT NULL UNIQUE,
-		name TEXT NOT NULL,
-		user_id INTEGER NOT NULL,
-		permissions TEXT NOT NULL, -- JSON array of permissions
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL,
-		last_used_at DATETIME,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
+    CREATE TABLE IF NOT EXISTS api_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_hash TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        permissions TEXT NOT NULL, -- JSON array of permissions
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        last_used_at DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
 
 	CREATE TABLE IF NOT EXISTS audit_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -370,15 +370,22 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 }
 
 // CreateAPIToken creates a new API token
-func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt time.Time) (*APIToken, error) {
+func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt *time.Time) (*APIToken, error) {
 	permissionsJSON, err := json.Marshal(permissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal permissions: %w", err)
 	}
 
+	var expVal interface{}
+	if expiresAt != nil {
+		expVal = *expiresAt
+	} else {
+		expVal = nil
+	}
+
 	result, err := d.db.Exec(
 		"INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?)",
-		tokenHash, name, userID, string(permissionsJSON), expiresAt,
+		tokenHash, name, userID, string(permissionsJSON), expVal,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API token: %w", err)
@@ -400,13 +407,14 @@ func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissi
 func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 	var token APIToken
 	var permissionsJSON string
+	var expiresAtNull sql.NullTime
 	var lastUsedAtNull sql.NullTime
 
 	err := d.db.QueryRow(
 		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at FROM api_tokens WHERE token_hash = ?",
 		tokenHash,
 	).Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON,
-		&token.CreatedAt, &token.ExpiresAt, &lastUsedAtNull)
+		&token.CreatedAt, &expiresAtNull, &lastUsedAtNull)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -419,6 +427,10 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 		return nil, fmt.Errorf("failed to unmarshal permissions: %w", err)
 	}
 
+	if expiresAtNull.Valid {
+		t := expiresAtNull.Time
+		token.ExpiresAt = &t
+	}
 	if lastUsedAtNull.Valid {
 		token.LastUsedAt = &lastUsedAtNull.Time
 	}
@@ -441,10 +453,11 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 	for rows.Next() {
 		var token APIToken
 		var permissionsJSON string
+		var expiresAtNull sql.NullTime
 		var lastUsedAtNull sql.NullTime
 
 		err := rows.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID,
-			&permissionsJSON, &token.CreatedAt, &token.ExpiresAt, &lastUsedAtNull)
+			&permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan API token: %w", err)
 		}
@@ -453,6 +466,10 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 			return nil, fmt.Errorf("failed to unmarshal permissions: %w", err)
 		}
 
+		if expiresAtNull.Valid {
+			t := expiresAtNull.Time
+			token.ExpiresAt = &t
+		}
 		if lastUsedAtNull.Valid {
 			token.LastUsedAt = &lastUsedAtNull.Time
 		}

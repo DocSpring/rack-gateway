@@ -109,6 +109,18 @@ describe('TokensPage', () => {
         expect(screen.getByText('Never')).toBeInTheDocument() // Never used
       })
     })
+
+    it('renders gracefully when API returns null or non-array', async () => {
+      // @ts-expect-error simulate bad API response
+      vi.mocked(api.get).mockResolvedValueOnce(null)
+
+      const Wrapper = createWrapper()
+      render(<TokensPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('No API tokens created yet')).toBeInTheDocument()
+      })
+    })
   })
 
   describe('Token Creation', () => {
@@ -241,6 +253,33 @@ describe('TokensPage', () => {
 
       // Should not call API
       expect(api.post).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Date Rendering', () => {
+    it('handles missing or invalid dates without crashing', async () => {
+      const badTokens = [
+        {
+          id: 't1',
+          name: 'Bad Token',
+          token: undefined,
+          last_used: null,
+          // created_at / expires_at missing
+        } as unknown as APIToken,
+      ]
+      // @ts-expect-error partial fields
+      vi.mocked(api.get).mockResolvedValueOnce(badTokens)
+
+      const Wrapper = createWrapper()
+      render(<TokensPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('Bad Token')).toBeInTheDocument()
+      })
+
+      // Should show placeholders
+      expect(screen.getAllByText('-').length).toBeGreaterThan(0)
+      expect(screen.getByText('Never')).toBeInTheDocument()
     })
   })
 

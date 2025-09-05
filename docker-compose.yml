@@ -42,9 +42,11 @@ services:
       GOOGLE_CLIENT_ID: mock-client-id
       GOOGLE_CLIENT_SECRET: mock-client-secret  
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
+      ADMIN_USERS: admin@company.com
       # Internal service URL for OIDC discovery/token endpoints
       GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
       REDIRECT_URL: http://localhost:${GATEWAY_PORT:-8447}
+      FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-5173}
       RACK_HOST: http://mock-convox:${MOCK_CONVOX_PORT:-5443}
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox

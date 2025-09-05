@@ -19,10 +19,10 @@ type Service struct {
 
 // APITokenRequest represents a request to create an API token
 type APITokenRequest struct {
-	Name        string    `json:"name"`
-	UserID      int64     `json:"user_id"`
-	Permissions []string  `json:"permissions"`
-	ExpiresAt   time.Time `json:"expires_at"`
+	Name        string     `json:"name"`
+	UserID      int64      `json:"user_id"`
+	Permissions []string   `json:"permissions"`
+	ExpiresAt   *time.Time `json:"expires_at"`
 }
 
 // APITokenResponse represents the response when creating an API token
@@ -86,7 +86,7 @@ func (s *Service) ValidateAPIToken(token string) (*db.APIToken, error) {
 	}
 
 	// Check if token has expired
-	if time.Now().After(apiToken.ExpiresAt) {
+	if apiToken.ExpiresAt != nil && time.Now().After(*apiToken.ExpiresAt) {
 		return nil, fmt.Errorf("token has expired")
 	}
 
@@ -141,7 +141,5 @@ func DefaultCICDPermissions() []string {
 	}
 }
 
-// DefaultTokenExpiry returns the default expiry time for tokens (1 year)
-func DefaultTokenExpiry() time.Time {
-	return time.Now().AddDate(1, 0, 0)
-}
+// DefaultTokenExpiry: tokens do not expire by default (nil)
+func DefaultTokenExpiry() *time.Time { return nil }
