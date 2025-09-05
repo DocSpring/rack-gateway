@@ -1,0 +1,4 @@
+# Send the smallest possible context for dev image build
+**
+!package.json
+!pnpm-lock.yaml

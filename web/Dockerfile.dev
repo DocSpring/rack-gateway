@@ -8,9 +8,6 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies
 RUN npm install -g pnpm && pnpm install --frozen-lockfile
 
-# Copy source code
-COPY . .
-
 # Expose Vite dev server port
 EXPOSE 5173
 

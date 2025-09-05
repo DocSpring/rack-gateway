@@ -1,0 +1,31 @@
+# Exclude heavy/unnecessary files from Docker build context
+.git
+.github
+.gitignore
+node_modules
+bin
+data
+*.log
+.DS_Store
+
+# Web app artifacts
+web/node_modules
+web/dist
+web/.vite
+web/test-results
+web/coverage
+web/playwright-report
+
+# Dev mock oauth
+dev/mock-oauth/node_modules
+dev/mock-oauth/package-lock.json
+dev/mock-oauth/pnpm-lock.yaml
+
+# Local config/examples not needed in image
+docker-compose.override.yml
+mise.local.toml
+mise.local.toml.example
+
+# Tests and reports
+**/*.test.*
+**/coverage
