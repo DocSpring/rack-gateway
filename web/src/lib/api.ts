@@ -1,5 +1,6 @@
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
+import { toast } from 'sonner'
 import { authService } from './auth'
 
 const API_BASE = '/api'
@@ -61,6 +62,12 @@ class ApiService {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
+          // Persist an auth error message to show after redirect
+          try {
+            sessionStorage.setItem('auth_error', 'Your session has expired. Please sign in again.')
+          } catch (_e) { /* ignore */ }
+          // Best-effort immediate toast (may disappear on navigation)
+          try { toast.error('Your session has expired. Please sign in again.') } catch (_e) { /* ignore */ }
           authService.logout()
         }
         return Promise.reject(error)

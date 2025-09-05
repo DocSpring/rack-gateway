@@ -1,3 +1,4 @@
+import type { AxiosError } from 'axios'
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
@@ -57,7 +58,14 @@ class AuthService {
         withCredentials: true,
       })
       return response.data
-    } catch (_error) {
+    } catch (err: unknown) {
+      // Mark for UI to show an error after redirect to login
+      const status = (err as AxiosError)?.response?.status
+      try {
+        if (status === 401) {
+          sessionStorage.setItem('auth_error', 'Unauthorized. Please sign in to continue.')
+        }
+      } catch (_e) { /* ignore */ }
       return null
     }
   }

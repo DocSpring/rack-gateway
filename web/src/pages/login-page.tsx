@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { GoogleIcon } from '@/components/google-icon'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,17 @@ import { useAuth } from '@/contexts/auth-context'
 export function LoginPage() {
   const { login } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+
+  // Show any persisted auth error (from 401 redirects)
+  useEffect(() => {
+    try {
+      const msg = sessionStorage.getItem('auth_error')
+      if (msg) {
+        toast.error(msg)
+        sessionStorage.removeItem('auth_error')
+      }
+    } catch (_e) { /* ignore */ }
+  }, [])
 
   const handleLogin = async () => {
     setIsLoading(true)

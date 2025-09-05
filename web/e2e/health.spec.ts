@@ -1,11 +1,22 @@
 import { expect, test } from '@playwright/test'
 
-test('gateway health via web proxy is OK', async ({ request }) => {
-  const res = await request.get('/api/.gateway/health')
-  expect(res.ok()).toBeTruthy()
-  const json = await res.json()
-  expect(json).toBeTruthy()
-  // status may be 'ok' depending on backend; assert presence
-  expect(json.status).toBeDefined()
-})
+const WEB_PORT = process.env.WEB_PORT || '5173'
+const BASE = `http://127.0.0.1:${WEB_PORT}`
 
+test('gateway health via web proxy is OK', async ({ page }) => {
+  // Hit the site to ensure Vite dev server is accepting connections
+  await page.goto(`${BASE}/`)
+
+  // Fetch health via the browser context to avoid host resolution quirks
+  const result = await page.evaluate(async () => {
+    const r = await fetch('/api/.gateway/health')
+    let data: any = null
+    try { data = await r.json() } catch {}
+    return { ok: r.ok, status: r.status, data }
+  })
+
+  expect(result.ok).toBeTruthy()
+  expect(result.status).toBe(200)
+  expect(result.data).toBeTruthy()
+  expect(result.data.status).toBeDefined()
+})

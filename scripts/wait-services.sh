@@ -18,14 +18,19 @@ retry() {
   done
 }
 
-echo "Waiting for Web UI on http://localhost:${WEB_PORT}/"
-retry "http://localhost:${WEB_PORT}/"
+echo "Waiting for Web UI on http://127.0.0.1:${WEB_PORT}/"
+retry "http://127.0.0.1:${WEB_PORT}/"
 
-echo "Waiting for Gateway on http://localhost:${API_PORT}/.gateway/health"
-retry "http://localhost:${API_PORT}/.gateway/health"
+echo "Waiting for Gateway on http://127.0.0.1:${API_PORT}/.gateway/health"
+retry "http://127.0.0.1:${API_PORT}/.gateway/health"
 
-echo "Waiting for Mock OAuth on http://localhost:${OAUTH_PORT}/health"
-retry "http://localhost:${OAUTH_PORT}/health"
+echo "Waiting for Mock OAuth on http://127.0.0.1:${OAUTH_PORT}/health"
+retry "http://127.0.0.1:${OAUTH_PORT}/health"
+
+echo "Waiting for Gateway via Vite proxy at http://127.0.0.1:${WEB_PORT}/api/.gateway/health"
+retry "http://127.0.0.1:${WEB_PORT}/api/.gateway/health"
+
+echo "Waiting for direct /.gateway proxy at http://127.0.0.1:${WEB_PORT}/.gateway/health"
+retry "http://127.0.0.1:${WEB_PORT}/.gateway/health"
 
 echo "All services are up"
-

@@ -9,6 +9,10 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      WEB_PORT: 5173
+      GATEWAY_PORT: 8447
+      MOCK_OAUTH_PORT: 3345
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +34,22 @@ jobs:
       - name: Wait for services
         run: |
           chmod +x scripts/wait-services.sh
-          WEB_PORT=${WEB_PORT:-5173} GATEWAY_PORT=${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=${MOCK_OAUTH_PORT:-3345} \
-            bash scripts/wait-services.sh
+          bash scripts/wait-services.sh
+
+      - name: Diagnose endpoints before E2E
+        run: |
+          set -x
+          curl -sv http://127.0.0.1:${WEB_PORT}/ | head -n 5
+          curl -sv http://127.0.0.1:${WEB_PORT}/api/.gateway/health || true
+          curl -sv http://127.0.0.1:${WEB_PORT}/.gateway/health || true
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/health || true
+
+      - name: Show test and config snippets
+        run: |
+          echo '--- playwright.config.ts ---'
+          sed -n '1,120p' web/playwright.config.ts
+          echo '--- health.spec.ts ---'
+          sed -n '1,80p' web/e2e/health.spec.ts
 
       - name: Install Playwright and deps
         working-directory: web
@@ -50,4 +68,3 @@ jobs:
       - name: Teardown
         if: always()
         run: docker compose down -v
-

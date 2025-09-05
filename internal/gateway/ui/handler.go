@@ -32,6 +32,40 @@ func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *t
 	}
 }
 
+// auditUserAction records an audit log for a user-management action
+func (h *Handler) auditUserAction(r *http.Request, action, resource, status string, details map[string]interface{}, start time.Time) {
+	if h.database == nil {
+		return
+	}
+	au, _ := auth.GetAuthUser(r.Context())
+	var detailsJSON []byte
+	if details != nil {
+		detailsJSON, _ = json.Marshal(details)
+	}
+	_ = h.database.CreateAuditLog(&db.AuditLog{
+		UserEmail: func() string {
+			if au != nil {
+				return au.Email
+			}
+			return ""
+		}(),
+		UserName: func() string {
+			if au != nil {
+				return au.Name
+			}
+			return ""
+		}(),
+		ActionType:     "user_management",
+		Action:         action,
+		Resource:       resource,
+		Details:        string(detailsJSON),
+		IPAddress:      r.RemoteAddr,
+		UserAgent:      r.Header.Get("User-Agent"),
+		Status:         status,
+		ResponseTimeMs: int(time.Since(start).Milliseconds()),
+	})
+}
+
 // GetConfig returns the current gateway configuration
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	user, _ := auth.GetUser(r.Context())
@@ -437,8 +471,10 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 // CreateUser creates a new user (admin only)
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if !h.isAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "user.create", "", "denied", map[string]interface{}{"reason": "forbidden"}, start)
 		return
 	}
 
@@ -450,6 +486,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		h.auditUserAction(r, "user.create", "", "error", map[string]interface{}{"error": "invalid request body"}, start)
 		return
 	}
 
@@ -457,6 +494,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	existing, _ := h.rbacManager.GetUser(req.Email)
 	if existing != nil {
 		http.Error(w, "user already exists", http.StatusConflict)
+		h.auditUserAction(r, "user.create", req.Email, "error", map[string]interface{}{"error": "user exists"}, start)
 		return
 	}
 
@@ -466,44 +504,54 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Roles: req.Roles,
 	}); err != nil {
 		http.Error(w, "failed to create user", http.StatusInternalServerError)
+		h.auditUserAction(r, "user.create", req.Email, "error", map[string]interface{}{"error": "save failed"}, start)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "created"})
+	h.auditUserAction(r, "user.create", req.Email, "success", map[string]interface{}{"name": req.Name, "roles": req.Roles}, start)
 }
 
 // DeleteUser removes a user (admin only)
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if !h.isAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "user.delete", "", "denied", map[string]interface{}{"reason": "forbidden"}, start)
 		return
 	}
 
 	email := chi.URLParam(r, "email")
 	if email == "" {
 		http.Error(w, "email required", http.StatusBadRequest)
+		h.auditUserAction(r, "user.delete", "", "error", map[string]interface{}{"error": "missing email"}, start)
 		return
 	}
 
 	if err := h.rbacManager.DeleteUser(email); err != nil {
 		http.Error(w, "failed to delete user", http.StatusInternalServerError)
+		h.auditUserAction(r, "user.delete", email, "error", map[string]interface{}{"error": "delete failed"}, start)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+	h.auditUserAction(r, "user.delete", email, "success", nil, start)
 }
 
 // UpdateUserRoles updates a user's roles (admin only)
 func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if !h.isAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "user.update_roles", "", "denied", map[string]interface{}{"reason": "forbidden"}, start)
 		return
 	}
 
 	email := chi.URLParam(r, "email")
 	if email == "" {
 		http.Error(w, "email required", http.StatusBadRequest)
+		h.auditUserAction(r, "user.update_roles", "", "error", map[string]interface{}{"error": "missing email"}, start)
 		return
 	}
 
@@ -513,6 +561,7 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		h.auditUserAction(r, "user.update_roles", email, "error", map[string]interface{}{"error": "invalid body"}, start)
 		return
 	}
 
@@ -520,6 +569,7 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.rbacManager.GetUser(email)
 	if err != nil || existing == nil {
 		http.Error(w, "user not found", http.StatusNotFound)
+		h.auditUserAction(r, "user.update_roles", email, "error", map[string]interface{}{"error": "not found"}, start)
 		return
 	}
 
@@ -527,11 +577,13 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	existing.Roles = req.Roles
 	if err := h.rbacManager.SaveUser(email, existing); err != nil {
 		http.Error(w, "failed to update user", http.StatusInternalServerError)
+		h.auditUserAction(r, "user.update_roles", email, "error", map[string]interface{}{"error": "save failed"}, start)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	h.auditUserAction(r, "user.update_roles", email, "success", map[string]interface{}{"roles": req.Roles}, start)
 }
 
 // ServeStatic serves the React app's static files

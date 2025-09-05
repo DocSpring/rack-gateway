@@ -8,7 +8,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: `http://localhost:${process.env.WEB_PORT || '5173'}`,
+    // Use IPv4 to avoid ::1 resolution issues in CI
+    baseURL: `http://127.0.0.1:${process.env.WEB_PORT || '5173'}`,
     trace: 'on-first-retry',
   },
 
