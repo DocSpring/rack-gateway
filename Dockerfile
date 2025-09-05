@@ -17,7 +17,7 @@ RUN CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates curl
 
 WORKDIR /root/
 

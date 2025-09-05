@@ -39,20 +39,25 @@ const mockUsers = {
 const authCodes = new Map();
 const accessTokens = new Map();
 
-// Resolve base URL from env for consistent external redirects (browser)
-function getBaseUrl(req) {
+// Resolve internal and browser-facing bases
+function getInternalBase(req) {
   return process.env.OAUTH_ISSUER || `${req.protocol}://${req.get('host')}`;
+}
+
+function getBrowserBase(req) {
+  return process.env.OAUTH_BROWSER_BASE || `${req.protocol}://${req.get('host')}`;
 }
 
 // OAuth discovery endpoint
 app.get('/.well-known/openid-configuration', (req, res) => {
-  const baseUrl = getBaseUrl(req);
+  const internalBase = getInternalBase(req);
+  const browserBase = getBrowserBase(req);
   res.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/oauth2/v2/auth`,
-    token_endpoint: `${baseUrl}/oauth2/v4/token`,
-    userinfo_endpoint: `${baseUrl}/oauth2/v2/userinfo`,
-    jwks_uri: `${baseUrl}/.well-known/jwks`,
+    issuer: internalBase,
+    authorization_endpoint: `${browserBase}/oauth2/v2/auth`,
+    token_endpoint: `${internalBase}/oauth2/v4/token`,
+    userinfo_endpoint: `${internalBase}/oauth2/v2/userinfo`,
+    jwks_uri: `${internalBase}/.well-known/jwks`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
     subject_types_supported: ['public'],

@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --only=production
 
+# Add curl for healthchecks
+RUN apk add --no-cache curl
+
 # Copy application code
 COPY server.js ./
 
