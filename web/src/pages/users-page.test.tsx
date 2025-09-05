@@ -148,6 +148,9 @@ describe('UsersPage', () => {
       // Submit - find all buttons with "Add User" text and click the last one (in dialog)
       const addUserButtons = screen.getAllByRole('button', { name: ADD_USER_RE })
       const submitButton = addUserButtons.at(-1)
+      if (!submitButton) {
+        throw new Error('Submit button not found')
+      }
       fireEvent.click(submitButton)
 
       await waitFor(() => {
@@ -261,6 +264,9 @@ describe('UsersPage', () => {
       // Find the delete button within that row (has Trash2 icon)
       const buttons = within(viewerRow).getAllByRole('button')
       const deleteButton = buttons.at(-1) // Last button is delete
+      if (!deleteButton) {
+        throw new Error('Delete button not found')
+      }
       fireEvent.click(deleteButton)
 
       expect(confirmSpy).toHaveBeenCalledWith('Are you sure you want to delete viewer@example.com?')

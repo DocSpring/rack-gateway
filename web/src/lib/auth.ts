@@ -31,7 +31,7 @@ class AuthService {
   async handleCallback(_code: string, _state: string): Promise<AuthState> {
     // For web flow, the callback is handled server-side
     // This method is called after server redirect with token
-    const _rack = sessionStorage.getItem('oauth_rack') || 'default'
+    // rack selection is only used server-side; just clear any prior selection
 
     // The server should have set a cookie or returned a token
     // We just need to fetch the current user
