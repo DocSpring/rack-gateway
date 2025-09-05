@@ -1,4 +1,4 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e
 
 all: web-build gateway cli mock
 
@@ -35,8 +35,8 @@ web-lint: web-deps
 	@cd web && pnpm lint
 
 dev:
-	@echo "Starting development environment with Docker Compose..."
-	@docker compose up
+    @echo "Starting development environment with Docker Compose (rebuild + recreate)..."
+    @docker compose up --build --force-recreate
 
 dev-build:
 	@echo "Building Docker images for development..."
@@ -92,5 +92,12 @@ clean:
 	@go clean -cache
 
 e2e-devrack:
-	@echo "Running Convox Development Rack E2E (opt-in via E2E_DEV_RACK=1)..."
-	@bash scripts/e2e-devrack.sh
+    @echo "Running Convox Development Rack E2E (opt-in via E2E_DEV_RACK=1)..."
+    @bash scripts/e2e-devrack.sh
+
+web-e2e:
+    @echo "Starting backend services..."
+    @docker compose up -d mock-oauth mock-convox gateway-api
+    @echo "Running Playwright E2E tests against web dev server..."
+    @cd web && pnpm e2e
+    @echo "(Backend left running. Use 'make dev-down' to stop.)"

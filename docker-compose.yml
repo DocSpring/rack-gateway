@@ -5,7 +5,7 @@ services:
     environment:
       PORT: ${MOCK_OAUTH_PORT:-3345}
       NODE_ENV: development
-      OAUTH_ISSUER: http://localhost:${MOCK_OAUTH_PORT:-3345}
+      OAUTH_ISSUER: http://host.docker.internal:${MOCK_OAUTH_PORT:-3345}
     ports:
       - "${MOCK_OAUTH_PORT:-3345}:${MOCK_OAUTH_PORT:-3345}"
     networks:
@@ -39,7 +39,7 @@ services:
       GOOGLE_CLIENT_ID: mock-client-id
       GOOGLE_CLIENT_SECRET: mock-client-secret  
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
-      GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
+      GOOGLE_OAUTH_BASE_URL: http://host.docker.internal:${MOCK_OAUTH_PORT:-3345}
       REDIRECT_URL: http://localhost:${GATEWAY_PORT:-8447}
       RACK_HOST: http://mock-convox:${MOCK_CONVOX_PORT:-5443}
       RACK_TOKEN: mock-rack-token-12345

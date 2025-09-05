@@ -40,7 +40,7 @@ const authCodes = new Map();
 const accessTokens = new Map();
 
 // OAuth discovery endpoint
-app.get('/.well-known/openid_configuration', (req, res) => {
+app.get('/.well-known/openid-configuration', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
     issuer: baseUrl,
