@@ -13,6 +13,12 @@
     - Skip test unless `MOCK_OAUTH_BASE_URL` is resolvable.
 - [x] Safe test wrapper: add guard file creation in `scripts/safe-test.sh` to satisfy `convoxguard` checks.
 
+### Dev Environment Ports
+- [x] Parameterize docker-compose ports via env with safe defaults:
+  - `MOCK_OAUTH_PORT` (default 3345), `MOCK_CONVOX_PORT` (default 5443), `GATEWAY_PORT` (default 8447), `WEB_PORT` (default 5173)
+- [x] Update compose env references (issuer/redirect, RACK_HOST) to use variables.
+- [ ] Document `.env` use (optional) to persist local port choices.
+
 ## Phase 1: SQLite Database Implementation ✅ IN PROGRESS
 
 ### Database Setup

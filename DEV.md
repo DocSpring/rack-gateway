@@ -33,6 +33,48 @@ The development environment will start:
 - **Web UI**: http://localhost:5173  
 - **Mock Convox API**: http://localhost:5443
 
+## Local Dev Walkthrough (Step-by-step)
+
+Use this concise flow to spin up, explore endpoints, and test the CLI.
+
+1) Optional: pick non-conflicting ports (override any subset)
+
+```bash
+MOCK_OAUTH_PORT=3201 MOCK_CONVOX_PORT=5543 GATEWAY_PORT=8547 WEB_PORT=5175 make dev
+```
+
+2) Verify services
+- Web UI: `http://localhost:$WEB_PORT` (default 5173)
+- Gateway health: `curl http://localhost:$GATEWAY_PORT/.gateway/health`
+- Mock Convox: `curl http://localhost:$MOCK_CONVOX_PORT/health`
+
+3) Build CLI and log in
+
+```bash
+make cli
+./bin/convox-gateway login local http://localhost:$GATEWAY_PORT
+# Browser opens (mock OAuth). Complete login, then CLI stores token locally.
+```
+
+4) Try proxied Convox commands via gateway
+
+```bash
+./bin/convox-gateway convox rack
+./bin/convox-gateway convox apps
+./bin/convox-gateway convox ps -a myapp
+```
+
+5) Admin UI
+- Open `http://localhost:$WEB_PORT`
+- Manage users, tokens, and view audit logs
+
+6) Stop/cleanup
+
+```bash
+make dev-down   # stop
+make dev-logs   # view logs
+```
+
 ## Architecture Overview
 
 The Convox Gateway is split into multiple components:
