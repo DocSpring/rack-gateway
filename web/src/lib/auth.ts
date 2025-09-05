@@ -16,7 +16,6 @@ export interface AuthState {
 }
 
 class AuthService {
-
   // (PKCE helpers removed; web flow uses server-side OAuth)
 
   // Start OAuth flow for web (no PKCE needed)

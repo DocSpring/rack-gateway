@@ -1,4 +1,4 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack
 
 all: web-build gateway cli mock
 
@@ -90,3 +90,7 @@ clean:
 	@rm -rf web/dist/
 	@rm -rf web/node_modules/
 	@go clean -cache
+
+e2e-devrack:
+	@echo "Running Convox Development Rack E2E (opt-in via E2E_DEV_RACK=1)..."
+	@bash scripts/e2e-devrack.sh

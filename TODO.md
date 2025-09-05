@@ -1,9 +1,10 @@
 # Convox Gateway TODO
 
 ## Build Health (2025-09-05)
-- [ ] Web linting: reduced from 221 → ~37 errors. `web/package.json` now has `lint:fix` (uses `--write`) and `lint:unsafe`. Remaining work mainly:
-  - Replace Radix namespace imports in `web/src/components/ui/*` with named imports (or relax rule in `biome.json`).
-  - Clean up a few test style issues (top-level regex constants, wrap single-line ifs).
+- [x] Web linting: now clean (Biome passes). Changes:
+  - Replaced Radix namespace imports with named imports in UI components.
+  - Fixed TypeScript anys, unused params/privates, a11y and style nits; extracted regex constants in tests.
+  - `web/package.json` scripts: `lint:fix` and `lint:unsafe` added.
 - [ ] Go linting: `staticcheck` reports unused func `sha256Hash` at `internal/gateway/auth/jwt.go:80`. Remove or use it.
 - [ ] Tests: All Go packages pass except `internal/gateway/auth`.
   - [ ] Failing test `TestOAuthHandler_UsesCustomBaseURL`: tries to reach `http://mock-oauth:3001` (DNS not available outside Docker). Options:
@@ -211,12 +212,11 @@ Time: 2024-01-15 10:30:45 UTC
 - [ ] CLI confirms: "Successfully logged in as user@company.com"
 
 ## Phase 8: Local Dev Rack E2E (Convox Development Rack)
-- [ ] Add optional heavy E2E that provisions a local Development Rack (Ubuntu-compatible):
-  - Prereqs on runner: Convox CLI, Docker, Minikube (>=1.29.0), Terraform.
-  - Steps: init Minikube, `convox rack install local`, deploy gateway app via Convox, expose service.
-  - Verify: CLI via gateway can `convox system`, `convox ps`, basic app ops.
-- [ ] Provide a `make e2e-devrack` script to orchestrate setup/teardown and time-box (<5 min target).
-- [ ] Gate CI execution behind a flag (e.g., `E2E_DEV_RACK=1`) and/or a dedicated workflow.
+- [x] Scaffold optional heavy E2E runner:
+  - `scripts/e2e-devrack.sh` with checks for Convox, Docker, Minikube (>=1.29), Terraform.
+  - `make e2e-devrack` target; gated by `E2E_DEV_RACK=1` env.
+  - Installs/ensures rack `local`, deploys `convox-gateway`, runs `convox rack/system/ps` smoke checks.
+- [ ] Decide on CI job: add a workflow that runs this behind a repository/branch flag (target runtime 3–5 minutes).
 
 
 ## Phase 8: Admin UI Enhancements

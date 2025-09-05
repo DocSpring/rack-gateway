@@ -6,6 +6,10 @@ import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { UsersPage } from './users-page'
 
+const ADD_USER_RE = /Add User/i
+const DONT_HAVE_PERMISSION_RE = /don't have permission/i
+const UPDATE_USER_RE = /Update User/i
+
 // Mock the API
 vi.mock('../lib/api', () => ({
   api: {
@@ -106,11 +110,11 @@ describe('UsersPage', () => {
       })
 
       // Click the Add User button
-      const addUserButton = screen.getByRole('button', { name: /Add User/i })
+      const addUserButton = screen.getByRole('button', { name: ADD_USER_RE })
       fireEvent.click(addUserButton)
 
       // Check for the dialog title
-      const dialogTitle = await screen.findByRole('heading', { name: /Add User/i })
+      const dialogTitle = await screen.findByRole('heading', { name: ADD_USER_RE })
       expect(dialogTitle).toBeInTheDocument()
       expect(screen.getByLabelText('Email')).toBeInTheDocument()
       expect(screen.getByLabelText('Name')).toBeInTheDocument()
@@ -128,7 +132,7 @@ describe('UsersPage', () => {
       })
 
       // Open dialog
-      const addUserButton = screen.getByRole('button', { name: /Add User/i })
+      const addUserButton = screen.getByRole('button', { name: ADD_USER_RE })
       fireEvent.click(addUserButton)
 
       // Fill form
@@ -142,8 +146,8 @@ describe('UsersPage', () => {
       // So we don't need to select it
 
       // Submit - find all buttons with "Add User" text and click the last one (in dialog)
-      const addUserButtons = screen.getAllByRole('button', { name: /Add User/i })
-      const submitButton = addUserButtons[addUserButtons.length - 1]
+      const addUserButtons = screen.getAllByRole('button', { name: ADD_USER_RE })
+      const submitButton = addUserButtons.at(-1)
       fireEvent.click(submitButton)
 
       await waitFor(() => {
@@ -169,7 +173,9 @@ describe('UsersPage', () => {
       // Click edit on viewer user
       const rows = screen.getAllByRole('row')
       const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
-      if (!viewerRow) throw new Error('Viewer row not found')
+      if (!viewerRow) {
+        throw new Error('Viewer row not found')
+      }
 
       // Find the edit button within that row (first button with Edit2 icon)
       const buttons = within(viewerRow).getAllByRole('button')
@@ -185,10 +191,12 @@ describe('UsersPage', () => {
       const adminCheckbox = checkboxes.find((cb) =>
         cb.closest('div')?.textContent?.includes('Administrator')
       )
-      if (adminCheckbox) fireEvent.click(adminCheckbox)
+      if (adminCheckbox) {
+        fireEvent.click(adminCheckbox)
+      }
 
       // Submit
-      fireEvent.click(screen.getByRole('button', { name: /Update User/i }))
+      fireEvent.click(screen.getByRole('button', { name: UPDATE_USER_RE }))
 
       await waitFor(() => {
         expect(api.put).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com/roles', {
@@ -211,7 +219,9 @@ describe('UsersPage', () => {
       // Find suspend button for viewer user
       const rows = screen.getAllByRole('row')
       const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
-      if (!viewerRow) throw new Error('Viewer row not found')
+      if (!viewerRow) {
+        throw new Error('Viewer row not found')
+      }
 
       // Find the suspend button within that row (middle button with UserX icon)
       const buttons = within(viewerRow).getAllByRole('button')
@@ -244,11 +254,13 @@ describe('UsersPage', () => {
       // Find delete button for viewer user
       const rows = screen.getAllByRole('row')
       const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
-      if (!viewerRow) throw new Error('Viewer row not found')
+      if (!viewerRow) {
+        throw new Error('Viewer row not found')
+      }
 
       // Find the delete button within that row (has Trash2 icon)
       const buttons = within(viewerRow).getAllByRole('button')
-      const deleteButton = buttons[buttons.length - 1] // Last button is delete
+      const deleteButton = buttons.at(-1) // Last button is delete
       fireEvent.click(deleteButton)
 
       expect(confirmSpy).toHaveBeenCalledWith('Are you sure you want to delete viewer@example.com?')
@@ -278,7 +290,7 @@ describe('UsersPage', () => {
   })
 
   describe('Non-Admin User', () => {
-    it('shows access denied for viewer user', async () => {
+    it('shows access denied for viewer user', () => {
       // Mock the API to return empty array to avoid undefined error
       vi.mocked(api.get).mockResolvedValueOnce([])
 
@@ -286,10 +298,10 @@ describe('UsersPage', () => {
       render(<UsersPage />, { wrapper: Wrapper })
 
       expect(screen.getByText('Access Denied')).toBeInTheDocument()
-      expect(screen.getByText(/don't have permission/)).toBeInTheDocument()
+      expect(screen.getByText(DONT_HAVE_PERMISSION_RE)).toBeInTheDocument()
     })
 
-    it('shows access denied for ops user', async () => {
+    it('shows access denied for ops user', () => {
       // Mock the API to return empty array to avoid undefined error
       vi.mocked(api.get).mockResolvedValueOnce([])
 
@@ -313,7 +325,12 @@ describe('UsersPage', () => {
     })
 
     it('shows loading state', () => {
-      vi.mocked(api.get).mockImplementation(() => new Promise(() => {})) // Never resolves
+      vi.mocked(api.get).mockImplementation(
+        () =>
+          new Promise(() => {
+            /* never resolves in this test */
+          })
+      )
 
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
@@ -322,5 +339,6 @@ describe('UsersPage', () => {
       const spinner = document.querySelector('.animate-spin')
       expect(spinner).toBeInTheDocument()
     })
+    // moved to top-level
   })
 })

@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../lib/api'
 import { TokensPage } from './tokens-page'
 
+const CREATE_TOKEN_RE = /Create Token/i
+const COPY_TOKEN_NOW_RE = /Copy this token now/i
+
 // Mock the API
 vi.mock('../lib/api', () => ({
   api: {
@@ -161,7 +164,7 @@ describe('TokensPage', () => {
       fireEvent.change(nameInput, { target: { value: 'New Token' } })
 
       // Submit
-      fireEvent.click(screen.getByRole('button', { name: /Create Token/i }))
+      fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(api.post).toHaveBeenCalledWith('/.gateway/admin/tokens', {
@@ -172,7 +175,7 @@ describe('TokensPage', () => {
       // Should show the token
       await waitFor(() => {
         expect(screen.getByText('gat_abc123xyz456')).toBeInTheDocument()
-        expect(screen.getByText(/Copy this token now/)).toBeInTheDocument()
+        expect(screen.getByText(COPY_TOKEN_NOW_RE)).toBeInTheDocument()
       })
     })
 
@@ -208,7 +211,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByText('Create Token'))
       const nameInput = screen.getByLabelText('Token Name')
       fireEvent.change(nameInput, { target: { value: 'New Token' } })
-      fireEvent.click(screen.getByRole('button', { name: /Create Token/i }))
+      fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(screen.getByText('gat_abc123xyz456')).toBeInTheDocument()
@@ -234,7 +237,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByText('Create Token'))
 
       // Submit without entering name
-      fireEvent.click(screen.getByRole('button', { name: /Create Token/i }))
+      fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       // Should not call API
       expect(api.post).not.toHaveBeenCalled()
@@ -261,7 +264,9 @@ describe('TokensPage', () => {
       const pipelineRow = rows.find((row) => row.textContent?.includes('CI/CD Pipeline'))
       const deleteButton = pipelineRow?.querySelector('button')
 
-      if (!deleteButton) throw new Error('Delete button not found')
+      if (!deleteButton) {
+        throw new Error('Delete button not found')
+      }
       fireEvent.click(deleteButton)
 
       await waitFor(() => {
@@ -283,7 +288,12 @@ describe('TokensPage', () => {
     })
 
     it('shows loading state', () => {
-      vi.mocked(api.get).mockImplementation(() => new Promise(() => {})) // Never resolves
+      vi.mocked(api.get).mockImplementation(
+        () =>
+          new Promise(() => {
+            /* never resolves in this test */
+          })
+      )
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -308,7 +318,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByText('Create Token'))
       const nameInput = screen.getByLabelText('Token Name')
       fireEvent.change(nameInput, { target: { value: 'New Token' } })
-      fireEvent.click(screen.getByRole('button', { name: /Create Token/i }))
+      fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(api.post).toHaveBeenCalled()
@@ -334,7 +344,9 @@ describe('TokensPage', () => {
       const pipelineRow = rows.find((row) => row.textContent?.includes('CI/CD Pipeline'))
       const deleteButton = pipelineRow?.querySelector('button')
 
-      if (!deleteButton) throw new Error('Delete button not found')
+      if (!deleteButton) {
+        throw new Error('Delete button not found')
+      }
       fireEvent.click(deleteButton)
 
       await waitFor(() => {
@@ -344,5 +356,6 @@ describe('TokensPage', () => {
       // Token should still be visible after failed deletion
       expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
     })
+    // moved to top-level
   })
 })

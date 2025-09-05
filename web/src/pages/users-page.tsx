@@ -303,9 +303,11 @@ export function UsersPage() {
                           <Badge
                             key={role}
                             variant={
-                              AVAILABLE_ROLES[
-                                role as keyof typeof AVAILABLE_ROLES
-                              ]?.color as 'default' | 'secondary' | 'outline' | 'destructive'
+                              AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.color as
+                                | 'default'
+                                | 'secondary'
+                                | 'outline'
+                                | 'destructive'
                             }
                           >
                             {AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.label || role}
@@ -402,7 +404,7 @@ export function UsersPage() {
               <Label>Roles</Label>
               <div className="space-y-2">
                 {Object.entries(AVAILABLE_ROLES).map(([role, config]) => (
-                  <div
+                  <button
                     className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${
                       formData.roles.includes(role)
                         ? 'border-primary bg-primary/10'
@@ -410,14 +412,7 @@ export function UsersPage() {
                     }`}
                     key={role}
                     onClick={() => toggleRoleSelection(role)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        toggleRoleSelection(role)
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
+                    type="button"
                   >
                     <div>
                       <div className="font-medium">{config.label}</div>
@@ -429,7 +424,7 @@ export function UsersPage() {
                       onChange={() => toggleRoleSelection(role)}
                       type="checkbox"
                     />
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -444,7 +439,9 @@ export function UsersPage() {
               onClick={handleSaveUser}
             >
               {(() => {
-                if (createUserMutation.isPending || updateRolesMutation.isPending) return 'Saving...'
+                if (createUserMutation.isPending || updateRolesMutation.isPending) {
+                  return 'Saving...'
+                }
                 return editingUser ? 'Update User' : 'Add User'
               })()}
             </Button>

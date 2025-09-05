@@ -141,11 +141,14 @@ func (s *TestServers) startGateway(t *testing.T) {
 	s.gatewayCmd = exec.Command("../../bin/convox-gateway-api")
 	s.gatewayCmd.Env = append(os.Environ(),
 		"PORT="+gatewayPort,
+		"GATEWAY_PORT="+gatewayPort,
 		"APP_ENV=test",
 		"APP_JWT_KEY=test-secret-key-for-integration-testing",
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
 		"GOOGLE_ALLOWED_DOMAIN=example.com",
+		// Ensure tests do not inherit a local mock OAuth base URL inadvertently
+		"GOOGLE_OAUTH_BASE_URL=",
 		// CRITICAL: Only use localhost for testing - NEVER production URLs
 		"RACK_HOST=http://localhost:"+mockConvoxPort,
 		"RACK_TOKEN="+mockRackToken,

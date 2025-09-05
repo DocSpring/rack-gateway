@@ -109,6 +109,8 @@ func main() {
 
 		// OAuth login endpoints (no auth required)
 		// CLI OAuth flow
+		// Backwards-compat endpoint used by integration tests
+		r.Post("/login/start", handleCLILoginStart(oauthHandler))
 		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler))
 		r.Post("/cli/login/callback", handleCLILoginCallback(oauthHandler))
 

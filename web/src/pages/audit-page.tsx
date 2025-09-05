@@ -70,10 +70,18 @@ export function AuditPage() {
     queryKey: ['audit-logs', actionTypeFilter, statusFilter, dateRange, searchTerm],
     queryFn: async () => {
       const params = new URLSearchParams()
-      if (actionTypeFilter !== 'all') { params.append('action_type', actionTypeFilter) }
-      if (statusFilter !== 'all') { params.append('status', statusFilter) }
-      if (dateRange) { params.append('range', dateRange) }
-      if (searchTerm) { params.append('search', searchTerm) }
+      if (actionTypeFilter !== 'all') {
+        params.append('action_type', actionTypeFilter)
+      }
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter)
+      }
+      if (dateRange) {
+        params.append('range', dateRange)
+      }
+      if (searchTerm) {
+        params.append('search', searchTerm)
+      }
 
       const response = await api.get<AuditLog[]>(`/.gateway/admin/audit?${params}`)
       return response
@@ -82,10 +90,18 @@ export function AuditPage() {
 
   const handleExport = () => {
     const params = new URLSearchParams()
-    if (actionTypeFilter !== 'all') { params.append('action_type', actionTypeFilter) }
-    if (statusFilter !== 'all') { params.append('status', statusFilter) }
-    if (dateRange) { params.append('range', dateRange) }
-    if (searchTerm) { params.append('search', searchTerm) }
+    if (actionTypeFilter !== 'all') {
+      params.append('action_type', actionTypeFilter)
+    }
+    if (statusFilter !== 'all') {
+      params.append('status', statusFilter)
+    }
+    if (dateRange) {
+      params.append('range', dateRange)
+    }
+    if (searchTerm) {
+      params.append('search', searchTerm)
+    }
     params.append('format', 'csv')
 
     // Create download link

@@ -177,7 +177,9 @@ describe('AuditPage', () => {
 
       // Find and click action type filter by its id
       const actionTypeSelect = document.getElementById('action-type')
-      if (!actionTypeSelect) throw new Error('Action type select not found')
+      if (!actionTypeSelect) {
+        throw new Error('Action type select not found')
+      }
       fireEvent.click(actionTypeSelect)
 
       // Select "Authentication"
@@ -204,7 +206,9 @@ describe('AuditPage', () => {
 
       // Find and click status filter by its id
       const statusSelect = document.getElementById('status')
-      if (!statusSelect) throw new Error('Status select not found')
+      if (!statusSelect) {
+        throw new Error('Status select not found')
+      }
       fireEvent.click(statusSelect)
 
       // Select "Failed"
@@ -229,7 +233,9 @@ describe('AuditPage', () => {
 
       // Find and click date range filter by its id
       const dateRangeSelect = document.getElementById('date-range')
-      if (!dateRangeSelect) throw new Error('Date range select not found')
+      if (!dateRangeSelect) {
+        throw new Error('Date range select not found')
+      }
       fireEvent.click(dateRangeSelect)
 
       // Select "Last 24 Hours"
@@ -328,7 +334,12 @@ describe('AuditPage', () => {
     })
 
     it('shows loading state', () => {
-      vi.mocked(api.get).mockImplementation(() => new Promise(() => {})) // Never resolves
+      vi.mocked(api.get).mockImplementation(
+        () =>
+          new Promise(() => {
+            /* never resolves in this test */
+          })
+      )
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
