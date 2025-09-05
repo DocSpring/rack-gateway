@@ -1,8 +1,8 @@
+import { FileText, Key, LogOut, Users } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/auth-context'
-import { ThemeToggle } from './theme-toggle'
 import { cn } from '../lib/utils'
-import { Users, Key, FileText, LogOut } from 'lucide-react'
+import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
 import { Separator } from './ui/separator'
 
@@ -22,25 +22,25 @@ export function Layout() {
       <div className="flex w-64 flex-col border-r bg-card">
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
-          <h1 className="text-xl font-semibold">Convox Gateway</h1>
+          <h1 className="font-semibold text-xl">Convox Gateway</h1>
         </div>
-        
+
         <Separator />
-        
+
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
             const Icon = item.icon
             return (
               <Link
-                key={item.name}
-                to={item.href}
                 className={cn(
-                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                  'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
                   location.pathname === item.href
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 )}
+                key={item.name}
+                to={item.href}
               >
                 <Icon className="mr-3 h-4 w-4" />
                 {item.name}
@@ -48,24 +48,19 @@ export function Layout() {
             )
           })}
         </nav>
-        
+
         <Separator />
-        
+
         {/* User section */}
         <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user?.name || 'User'}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-sm">{user?.name || 'User'}</p>
+              <p className="truncate text-muted-foreground text-xs">{user?.email}</p>
             </div>
             <ThemeToggle />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={logout}
-          >
+          <Button className="w-full" onClick={logout} size="sm" variant="outline">
             <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>

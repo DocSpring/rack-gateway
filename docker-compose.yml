@@ -35,10 +35,11 @@ services:
       PORT: 8447
       APP_ENV: development
       APP_JWT_KEY: dev-jwt-secret-key-change-in-production
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-mock-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-mock-client-secret}  
+      GOOGLE_CLIENT_ID: mock-client-id
+      GOOGLE_CLIENT_SECRET: mock-client-secret  
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
-      GOOGLE_OAUTH_BASE_URL: http://mock-oauth:3001
+      GOOGLE_OAUTH_BASE_URL: http://localhost:3001
+      REDIRECT_URL: http://localhost:8447/.gateway/login/callback
       RACK_HOST: http://mock-convox:5443
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox

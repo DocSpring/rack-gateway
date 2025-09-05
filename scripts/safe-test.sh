@@ -11,6 +11,36 @@ RESTORE_SCRIPT="$SCRIPT_DIR/restore-convox-config.sh"
 # CRITICAL: This is the REAL Convox config - DO NOT DELETE
 BACKUP_PATH="$HOME/Library/Preferences/convox.IMPORTANT_DO_NOT_DELETE_LIVE_BACKUP"
 
+# Determine Convox config dir (match internal/testutil/convoxguard logic)
+detect_config_dir() {
+    case "$(uname -s)" in
+        Darwin)
+            echo "$HOME/Library/Preferences/convox"
+            ;;
+        Linux)
+            local xdg="${XDG_CONFIG_HOME:-}"
+            if [ -z "$xdg" ]; then
+                xdg="$HOME/.config"
+            fi
+            echo "$xdg/convox"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            # Best-effort for Windows shells
+            if [ -n "${LOCALAPPDATA:-}" ]; then
+                echo "$LOCALAPPDATA/convox"
+            else
+                echo "$HOME/.config/convox"
+            fi
+            ;;
+        *)
+            echo "$HOME/.config/convox"
+            ;;
+    esac
+}
+
+CONVOX_CFG_DIR="$(detect_config_dir)"
+GUARD_FILE="$CONVOX_CFG_DIR/GUARD_ACTIVE"
+
 # Set env var to indicate tests are running through the safe wrapper
 export CONVOX_GATEWAY_SAFE_TEST=1
 
@@ -65,4 +95,9 @@ fi
 
 # Run the actual tests
 echo "Running tests with Convox config protection..."
+
+# Create guard file to signal wrapper is active (cleaned up by restore)
+mkdir -p "$CONVOX_CFG_DIR"
+touch "$GUARD_FILE"
+
 go test "$@"

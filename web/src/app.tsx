@@ -2,13 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import { Layout } from './components/layout'
 import { ProtectedRoute } from './components/protected-route'
+import { Toaster } from './components/ui/sonner'
 import { AuthProvider } from './contexts/auth-context'
+import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
 import { LoginPage } from './pages/login-page'
-import { UsersPage } from './pages/users-page'
 import { TokensPage } from './pages/tokens-page'
-import { AuditPage } from './pages/audit-page'
-import { Toaster } from './components/ui/sonner'
+import { UsersPage } from './pages/users-page'
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,6 +1,11 @@
 [env]
+# PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
+GATEWAY_PORT = "8447"
+WEB_PORT = "5173"
+MOCK_OAUTH_PORT = "3345"
+MOCK_CONVOX_PORT = "5443"
+
 # Application configuration
-PORT = "8447"
 APP_ENV = "development"
 DEV_MODE = "true"
 LOG_LEVEL = "debug"
@@ -9,14 +14,14 @@ LOG_LEVEL = "debug"
 GOOGLE_CLIENT_ID = "mock-client-id"
 GOOGLE_CLIENT_SECRET = "mock-client-secret"
 GOOGLE_ALLOWED_DOMAIN = "company.com"
-GOOGLE_OAUTH_BASE_URL = "http://localhost:3001"
-REDIRECT_URL = "http://localhost:8447/v1/login/callback"
+GOOGLE_OAUTH_BASE_URL = "http://localhost:3345"  # References MOCK_OAUTH_PORT
+REDIRECT_URL = "http://localhost:8447"  # Base URL for OAuth redirects (callbacks are appended)
 
 # JWT configuration
 APP_JWT_KEY = "development-jwt-secret-key"
 
 # Mock Convox rack (for development)
-RACK_HOST = "http://localhost:5443"
+RACK_HOST = "http://localhost:5443"  # References MOCK_CONVOX_PORT
 RACK_TOKEN = "mock-rack-token-12345"
 RACK_USERNAME = "convox"
 

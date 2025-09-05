@@ -15,15 +15,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: parseInt(process.env.WEB_PORT || '5173'),
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: `http://localhost:${process.env.GATEWAY_PORT || '8447'}`,
         changeOrigin: true,
         rewrite: (pathStr) => pathStr.replace(API_REGEX, ''),
       },
       '/.gateway': {
-        target: 'http://localhost:8080',
+        target: `http://localhost:${process.env.GATEWAY_PORT || '8447'}`,
         changeOrigin: true,
       },
     },

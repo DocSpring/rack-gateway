@@ -3,81 +3,101 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 )
 
+// OAuthHandler handles OAuth flows using vetted libraries
+// Supports separate web and CLI flows with proper OIDC/OAuth2 primitives
 type OAuthHandler struct {
-	config        *oauth2.Config
-	allowedDomain string
-	jwtManager    *JWTManager
-	stateStore    map[string]*OAuthState
-	baseURL       string
+	provider        *oidc.Provider
+	oauth2ConfigCLI *oauth2.Config
+	oauth2ConfigWeb *oauth2.Config
+	idTokenVerifier *oidc.IDTokenVerifier
+	jwtManager      *JWTManager
+	allowedDomain   string
+	issuingURL      string
 }
 
-type OAuthState struct {
-	State     string
-	Challenge string
-	CreatedAt time.Time
+// LoginStartResponse for CLI OAuth flow
+type LoginStartResponse struct {
+	AuthURL      string `json:"auth_url"`
+	State        string `json:"state"`
+	CodeVerifier string `json:"code_verifier"`
 }
 
-type GoogleUserInfo struct {
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-	Name          string `json:"name"`
-	Picture       string `json:"picture"`
-	HD            string `json:"hd"`
+// LoginResponse for successful OAuth completion
+type LoginResponse struct {
+	Token     string    `json:"token"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func NewOAuthHandler(clientID, clientSecret, redirectURL, allowedDomain, baseURL string, jwtManager *JWTManager) *OAuthHandler {
-	// Use Google OAuth endpoints by default, or custom ones for development
-	endpoint := google.Endpoint
-	if baseURL != "" {
-		endpoint = oauth2.Endpoint{
-			AuthURL:  baseURL + "/oauth2/v2/auth",
-			TokenURL: baseURL + "/oauth2/v4/token",
-		}
+// NewOAuthHandler creates a new OAuth handler using vetted OIDC libraries
+func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, issuerURL string, jwtManager *JWTManager) (*OAuthHandler, error) {
+	ctx := context.Background()
+
+	// Use vetted OIDC provider discovery
+	provider, err := oidc.NewProvider(ctx, issuerURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
+
+	// Configure OAuth2 for CLI flow (with PKCE)
+	oauth2ConfigCLI := &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  baseRedirectURL + "/.gateway/cli/login/callback",
+		Endpoint:     provider.Endpoint(),
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+	}
+
+	// Configure OAuth2 for web flow (without PKCE)
+	oauth2ConfigWeb := &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  baseRedirectURL + "/.gateway/web/callback",
+		Endpoint:     provider.Endpoint(),
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+	}
+
+	// Create ID token verifier with proper configuration
+	verifierConfig := &oidc.Config{
+		ClientID:             clientID,
+		SupportedSigningAlgs: []string{"RS256", "HS256"}, // Support both for flexibility
+	}
+	idTokenVerifier := provider.Verifier(verifierConfig)
 
 	return &OAuthHandler{
-		config: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			RedirectURL:  redirectURL,
-			Scopes:       []string{"openid", "email", "profile"},
-			Endpoint:     endpoint,
-		},
-		allowedDomain: allowedDomain,
-		jwtManager:    jwtManager,
-		stateStore:    make(map[string]*OAuthState),
-		baseURL:       baseURL,
-	}
+		provider:        provider,
+		oauth2ConfigCLI: oauth2ConfigCLI,
+		oauth2ConfigWeb: oauth2ConfigWeb,
+		idTokenVerifier: idTokenVerifier,
+		jwtManager:      jwtManager,
+		allowedDomain:   allowedDomain,
+		issuingURL:      issuerURL,
+	}, nil
 }
 
+// StartLogin initiates OAuth flow - returns auth URL and PKCE params for CLI
 func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
-	state := generateRandomString(32)
-	codeVerifier := generateRandomString(64)
-	codeChallenge := base64URLEncode(sha256Hash(codeVerifier))
+	// Generate PKCE parameters using secure methods
+	codeVerifier := generateSecureRandomString(128)
+	codeChallenge := generatePKCEChallenge(codeVerifier)
+	state := generateSecureRandomString(32)
 
-	h.stateStore[state] = &OAuthState{
-		State:     state,
-		Challenge: codeVerifier,
-		CreatedAt: time.Now(),
-	}
-
-	h.cleanupOldStates()
-
-	authURL := h.config.AuthCodeURL(state,
+	// Generate auth URL with PKCE
+	authURL := h.oauth2ConfigCLI.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
-		oauth2.SetAuthURLParam("access_type", "offline"),
 		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
 
@@ -88,116 +108,106 @@ func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
 	}, nil
 }
 
-func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginResponse, error) {
-	storedState, exists := h.stateStore[state]
-	if !exists {
-		return nil, fmt.Errorf("invalid state")
-	}
+// StartWebLogin initiates OAuth flow for web browser - no PKCE needed
+func (h *OAuthHandler) StartWebLogin() string {
+	state := generateSecureRandomString(32)
 
-	if storedState.Challenge != codeVerifier {
-		return nil, fmt.Errorf("invalid code verifier")
-	}
-
-	delete(h.stateStore, state)
-
-	ctx := context.Background()
-	token, err := h.config.Exchange(ctx, code,
-		oauth2.SetAuthURLParam("code_verifier", codeVerifier),
+	// Generate auth URL without PKCE for web flow
+	authURL := h.oauth2ConfigWeb.AuthCodeURL(state,
+		oauth2.AccessTypeOnline,
+		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to exchange code: %w", err)
+
+	return authURL
+}
+
+// CompleteLogin handles OAuth callback - validates code and returns JWT
+func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginResponse, error) {
+	ctx := context.Background()
+
+	// Select the right config based on whether this is CLI or web flow
+	config := h.oauth2ConfigWeb
+	if codeVerifier != "" {
+		config = h.oauth2ConfigCLI
 	}
 
-	userInfo, err := h.getUserInfo(ctx, token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user info: %w", err)
+	// Exchange code for token
+	// Only include code_verifier if provided (CLI flow)
+	var opts []oauth2.AuthCodeOption
+	if codeVerifier != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 	}
 
-	if !h.isAllowedDomain(userInfo.Email) {
-		return nil, fmt.Errorf("email domain not allowed: %s", userInfo.Email)
+	token, err := config.Exchange(ctx, code, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
 	}
 
-	jwtToken, err := h.jwtManager.CreateToken(userInfo.Email, userInfo.Name)
+	// Extract and verify ID token using vetted OIDC library
+	rawIDToken, ok := token.Extra("id_token").(string)
+	if !ok {
+		return nil, fmt.Errorf("missing id_token in OAuth response")
+	}
+
+	idToken, err := h.idTokenVerifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create JWT: %w", err)
+		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+	}
+
+	// Extract user claims
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		HD            string `json:"hd,omitempty"` // Google Workspace domain
+	}
+
+	if err := idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("failed to extract claims: %w", err)
+	}
+
+	// Verify email domain if required
+	if h.allowedDomain != "" && !h.isAllowedDomain(claims.Email) {
+		return nil, fmt.Errorf("email domain not allowed: %s", claims.Email)
+	}
+
+	// Create JWT token using existing JWT manager
+	jwtToken, expiresAt, err := h.jwtManager.GenerateToken(claims.Email, claims.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate JWT: %w", err)
 	}
 
 	return &LoginResponse{
 		Token:     jwtToken,
-		Email:     userInfo.Email,
-		Name:      userInfo.Name,
-		ExpiresAt: time.Now().Add(h.jwtManager.expiry),
+		Email:     claims.Email,
+		Name:      claims.Name,
+		ExpiresAt: expiresAt,
 	}, nil
 }
 
-func (h *OAuthHandler) getUserInfo(ctx context.Context, token *oauth2.Token) (*GoogleUserInfo, error) {
-	client := h.config.Client(ctx, token)
-
-	// Use custom userinfo URL for mock OAuth server, otherwise use Google's
-	userInfoURL := "https://www.googleapis.com/oauth2/v2/userinfo"
-	if h.baseURL != "" {
-		userInfoURL = h.baseURL + "/oauth2/v2/userinfo"
-	}
-
-	resp, err := client.Get(userInfoURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get user info: %s", resp.Status)
-	}
-
-	var userInfo GoogleUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, err
-	}
-
-	return &userInfo, nil
-}
-
+// isAllowedDomain checks if email domain is allowed
 func (h *OAuthHandler) isAllowedDomain(email string) bool {
 	if h.allowedDomain == "" {
 		return true
 	}
-
 	parts := strings.Split(email, "@")
 	if len(parts) != 2 {
 		return false
 	}
-
 	return parts[1] == h.allowedDomain
 }
 
-func (h *OAuthHandler) cleanupOldStates() {
-	cutoff := time.Now().Add(-10 * time.Minute)
-	for state, info := range h.stateStore {
-		if info.CreatedAt.Before(cutoff) {
-			delete(h.stateStore, state)
-		}
+// generateSecureRandomString generates a cryptographically secure random string
+func generateSecureRandomString(length int) string {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(fmt.Sprintf("failed to generate secure random string: %v", err))
 	}
+	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes)
 }
 
-func generateRandomString(length int) string {
-	b := make([]byte, length)
-	rand.Read(b)
-	return base64URLEncode(b)
-}
-
-func base64URLEncode(b []byte) string {
-	return strings.TrimRight(base64.URLEncoding.EncodeToString(b), "=")
-}
-
-type LoginStartResponse struct {
-	AuthURL      string `json:"auth_url"`
-	State        string `json:"state"`
-	CodeVerifier string `json:"code_verifier"`
-}
-
-type LoginResponse struct {
-	Token     string    `json:"token"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	ExpiresAt time.Time `json:"expires_at"`
+// generatePKCEChallenge generates PKCE code challenge from verifier
+func generatePKCEChallenge(verifier string) string {
+	sha := sha256.Sum256([]byte(verifier))
+	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sha[:])
 }

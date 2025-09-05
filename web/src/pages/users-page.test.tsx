@@ -1,10 +1,10 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { UsersPage } from './users-page'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
+import { UsersPage } from './users-page'
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -83,7 +83,7 @@ describe('UsersPage', () => {
   describe('Admin User', () => {
     it('renders users list for admin', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -97,7 +97,7 @@ describe('UsersPage', () => {
 
     it('opens add user dialog when clicking Add User', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -119,7 +119,7 @@ describe('UsersPage', () => {
     it('creates a new user', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
       vi.mocked(api.post).mockResolvedValueOnce({})
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -134,7 +134,7 @@ describe('UsersPage', () => {
       // Fill form
       const emailInput = screen.getByLabelText('Email')
       const nameInput = screen.getByLabelText('Name')
-      
+
       fireEvent.change(emailInput, { target: { value: 'newuser@example.com' } })
       fireEvent.change(nameInput, { target: { value: 'New User' } })
 
@@ -158,7 +158,7 @@ describe('UsersPage', () => {
     it('updates user roles', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
       vi.mocked(api.put).mockResolvedValueOnce({})
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -168,9 +168,9 @@ describe('UsersPage', () => {
 
       // Click edit on viewer user
       const rows = screen.getAllByRole('row')
-      const viewerRow = rows.find(row => row.textContent?.includes('viewer@example.com'))
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
       if (!viewerRow) throw new Error('Viewer row not found')
-      
+
       // Find the edit button within that row (first button with Edit2 icon)
       const buttons = within(viewerRow).getAllByRole('button')
       const editButton = buttons[0] // First button is edit
@@ -182,24 +182,25 @@ describe('UsersPage', () => {
 
       // Toggle admin role - find the checkbox for admin role
       const checkboxes = screen.getAllByRole('checkbox')
-      const adminCheckbox = checkboxes.find(cb => cb.closest('div')?.textContent?.includes('Administrator'))
+      const adminCheckbox = checkboxes.find((cb) =>
+        cb.closest('div')?.textContent?.includes('Administrator')
+      )
       if (adminCheckbox) fireEvent.click(adminCheckbox)
 
       // Submit
       fireEvent.click(screen.getByRole('button', { name: /Update User/i }))
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith(
-          '/.gateway/admin/users/viewer@example.com/roles',
-          { roles: expect.arrayContaining(['viewer']) }
-        )
+        expect(api.put).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com/roles', {
+          roles: expect.arrayContaining(['viewer']),
+        })
       })
     })
 
     it('suspends a user', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
       vi.mocked(api.put).mockResolvedValueOnce({})
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -209,31 +210,30 @@ describe('UsersPage', () => {
 
       // Find suspend button for viewer user
       const rows = screen.getAllByRole('row')
-      const viewerRow = rows.find(row => row.textContent?.includes('viewer@example.com'))
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
       if (!viewerRow) throw new Error('Viewer row not found')
-      
+
       // Find the suspend button within that row (middle button with UserX icon)
       const buttons = within(viewerRow).getAllByRole('button')
       const suspendButton = buttons[1] // Middle button is suspend
       fireEvent.click(suspendButton)
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith(
-          '/.gateway/admin/users/viewer@example.com/suspend',
-          { suspended: true }
-        )
+        expect(api.put).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com/suspend', {
+          suspended: true,
+        })
       })
     })
 
     it('deletes a user with confirmation', async () => {
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockUsers)
-        .mockResolvedValueOnce(mockUsers.filter(u => u.email !== 'viewer@example.com')) // After deletion
+        .mockResolvedValueOnce(mockUsers.filter((u) => u.email !== 'viewer@example.com')) // After deletion
       vi.mocked(api.delete).mockResolvedValueOnce({})
-      
+
       // Mock window.confirm
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -243,9 +243,9 @@ describe('UsersPage', () => {
 
       // Find delete button for viewer user
       const rows = screen.getAllByRole('row')
-      const viewerRow = rows.find(row => row.textContent?.includes('viewer@example.com'))
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
       if (!viewerRow) throw new Error('Viewer row not found')
-      
+
       // Find the delete button within that row (has Trash2 icon)
       const buttons = within(viewerRow).getAllByRole('button')
       const deleteButton = buttons[buttons.length - 1] // Last button is delete
@@ -260,7 +260,7 @@ describe('UsersPage', () => {
 
     it('prevents deleting own account', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -270,7 +270,7 @@ describe('UsersPage', () => {
 
       // Find delete button for admin user (current user)
       const rows = screen.getAllByRole('row')
-      const adminRow = rows.find(row => row.textContent?.includes('admin@example.com'))
+      const adminRow = rows.find((row) => row.textContent?.includes('admin@example.com'))
       const deleteButton = adminRow?.querySelector('button[disabled]')
 
       expect(deleteButton).toBeDisabled()
@@ -281,7 +281,7 @@ describe('UsersPage', () => {
     it('shows access denied for viewer user', async () => {
       // Mock the API to return empty array to avoid undefined error
       vi.mocked(api.get).mockResolvedValueOnce([])
-      
+
       const Wrapper = createWrapper({ email: 'viewer@example.com', roles: ['viewer'] })
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -292,7 +292,7 @@ describe('UsersPage', () => {
     it('shows access denied for ops user', async () => {
       // Mock the API to return empty array to avoid undefined error
       vi.mocked(api.get).mockResolvedValueOnce([])
-      
+
       const Wrapper = createWrapper({ email: 'ops@example.com', roles: ['ops'] })
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -303,7 +303,7 @@ describe('UsersPage', () => {
   describe('Error Handling', () => {
     it('displays error when API fails', async () => {
       vi.mocked(api.get).mockRejectedValueOnce(new Error('API Error'))
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -314,7 +314,7 @@ describe('UsersPage', () => {
 
     it('shows loading state', () => {
       vi.mocked(api.get).mockImplementation(() => new Promise(() => {})) // Never resolves
-      
+
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 

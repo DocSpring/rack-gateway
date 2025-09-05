@@ -34,13 +34,13 @@ type RackConfig struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:                getEnv("PORT", "8080"),
+		Port:                getEnv("GATEWAY_PORT", "8080"),
 		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", ""),
 		GoogleOAuthBaseURL:  getEnv("GOOGLE_OAUTH_BASE_URL", ""),
-		RedirectURL:         getEnv("REDIRECT_URL", "http://localhost:8080/v1/login/callback"),
+		RedirectURL:         getEnv("REDIRECT_URL", ""),
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),
 	}

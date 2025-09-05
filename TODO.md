@@ -1,5 +1,17 @@
 # Convox Gateway TODO
 
+## Build Health (2025-09-05)
+- [ ] Web linting: reduced from 221 → ~37 errors. `web/package.json` now has `lint:fix` (uses `--write`) and `lint:unsafe`. Remaining work mainly:
+  - Replace Radix namespace imports in `web/src/components/ui/*` with named imports (or relax rule in `biome.json`).
+  - Clean up a few test style issues (top-level regex constants, wrap single-line ifs).
+- [ ] Go linting: `staticcheck` reports unused func `sha256Hash` at `internal/gateway/auth/jwt.go:80`. Remove or use it.
+- [ ] Tests: All Go packages pass except `internal/gateway/auth`.
+  - [ ] Failing test `TestOAuthHandler_UsesCustomBaseURL`: tries to reach `http://mock-oauth:3001` (DNS not available outside Docker). Options:
+    - Use `localhost` and run `dev/mock-oauth/server.js` during tests, or
+    - Stub OIDC discovery/HTTP client in `NewOAuthHandler`, or
+    - Skip test unless `MOCK_OAUTH_BASE_URL` is resolvable.
+- [x] Safe test wrapper: add guard file creation in `scripts/safe-test.sh` to satisfy `convoxguard` checks.
+
 ## Phase 1: SQLite Database Implementation ✅ IN PROGRESS
 
 ### Database Setup
@@ -197,6 +209,14 @@ Time: 2024-01-15 10:30:45 UTC
 - [ ] CLI stores configuration in `CONVOX_GATEWAY_CLI_CONFIG_DIR/config.json`
 - [ ] Browser shows success page: "Authorization complete. You can now close this window"
 - [ ] CLI confirms: "Successfully logged in as user@company.com"
+
+## Phase 8: Local Dev Rack E2E (Convox Development Rack)
+- [ ] Add optional heavy E2E that provisions a local Development Rack (Ubuntu-compatible):
+  - Prereqs on runner: Convox CLI, Docker, Minikube (>=1.29.0), Terraform.
+  - Steps: init Minikube, `convox rack install local`, deploy gateway app via Convox, expose service.
+  - Verify: CLI via gateway can `convox system`, `convox ps`, basic app ops.
+- [ ] Provide a `make e2e-devrack` script to orchestrate setup/teardown and time-box (<5 min target).
+- [ ] Gate CI execution behind a flag (e.g., `E2E_DEV_RACK=1`) and/or a dedicated workflow.
 
 
 ## Phase 8: Admin UI Enhancements

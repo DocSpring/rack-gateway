@@ -94,22 +94,22 @@ class ApiService {
   }
 
   // Generic HTTP methods for direct API access
-  async get<T = any>(url: string): Promise<T> {
+  async get<T = unknown>(url: string): Promise<T> {
     const response = await this.client.get(url)
     return response.data
   }
 
-  async post<T = any>(url: string, data?: any): Promise<T> {
+  async post<T = unknown>(url: string, data?: unknown): Promise<T> {
     const response = await this.client.post(url, data)
     return response.data
   }
 
-  async put<T = any>(url: string, data?: any): Promise<T> {
+  async put<T = unknown>(url: string, data?: unknown): Promise<T> {
     const response = await this.client.put(url, data)
     return response.data
   }
 
-  async delete<T = any>(url: string): Promise<T> {
+  async delete<T = unknown>(url: string): Promise<T> {
     const response = await this.client.delete(url)
     return response.data
   }

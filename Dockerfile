@@ -1,6 +1,6 @@
 FROM golang:1.22-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates make
+RUN apk add --no-cache git ca-certificates make gcc musl-dev sqlite-dev
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN make gateway
+RUN CGO_ENABLED=1 make gateway
 
 FROM alpine:latest
 

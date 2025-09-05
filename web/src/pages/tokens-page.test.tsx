@@ -1,9 +1,9 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { TokensPage } from './tokens-page'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../lib/api'
+import { TokensPage } from './tokens-page'
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -69,7 +69,7 @@ describe('TokensPage', () => {
   describe('Token List', () => {
     it('renders tokens list', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -86,7 +86,7 @@ describe('TokensPage', () => {
 
     it('shows empty state when no tokens', async () => {
       vi.mocked(api.get).mockResolvedValueOnce([])
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -97,7 +97,7 @@ describe('TokensPage', () => {
 
     it('displays last used date', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -111,7 +111,7 @@ describe('TokensPage', () => {
   describe('Token Creation', () => {
     it('opens create token dialog', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -128,13 +128,16 @@ describe('TokensPage', () => {
     it('creates a new token and displays it', async () => {
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockTokens)
-        .mockResolvedValueOnce([...mockTokens, {
-          id: 'new-token',
-          name: 'New Token',
-          last_used: null,
-          created_at: '2024-01-20T00:00:00Z',
-          expires_at: '2026-01-20T00:00:00Z',
-        }])
+        .mockResolvedValueOnce([
+          ...mockTokens,
+          {
+            id: 'new-token',
+            name: 'New Token',
+            last_used: null,
+            created_at: '2024-01-20T00:00:00Z',
+            expires_at: '2026-01-20T00:00:00Z',
+          },
+        ])
       vi.mocked(api.post).mockResolvedValueOnce({
         id: 'new-token',
         name: 'New Token',
@@ -142,7 +145,7 @@ describe('TokensPage', () => {
         created_at: '2024-01-20T00:00:00Z',
         expires_at: '2025-01-20T00:00:00Z',
       })
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -176,13 +179,16 @@ describe('TokensPage', () => {
     it('copies token to clipboard', async () => {
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockTokens)
-        .mockResolvedValueOnce([...mockTokens, {
-          id: 'new-token',
-          name: 'New Token',
-          last_used: null,
-          created_at: '2024-01-20T00:00:00Z',
-          expires_at: '2026-01-20T00:00:00Z',
-        }])
+        .mockResolvedValueOnce([
+          ...mockTokens,
+          {
+            id: 'new-token',
+            name: 'New Token',
+            last_used: null,
+            created_at: '2024-01-20T00:00:00Z',
+            expires_at: '2026-01-20T00:00:00Z',
+          },
+        ])
       vi.mocked(api.post).mockResolvedValueOnce({
         id: 'new-token',
         name: 'New Token',
@@ -190,7 +196,7 @@ describe('TokensPage', () => {
         created_at: '2024-01-20T00:00:00Z',
         expires_at: '2025-01-20T00:00:00Z',
       })
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -216,7 +222,7 @@ describe('TokensPage', () => {
 
     it('validates token name is not empty', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -239,9 +245,9 @@ describe('TokensPage', () => {
     it('deletes a token', async () => {
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockTokens)
-        .mockResolvedValueOnce(mockTokens.filter(t => t.id !== 'token-1')) // After deletion
+        .mockResolvedValueOnce(mockTokens.filter((t) => t.id !== 'token-1')) // After deletion
       vi.mocked(api.delete).mockResolvedValueOnce({})
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -252,9 +258,9 @@ describe('TokensPage', () => {
       // Find delete button for first token by looking for the trash icon button
       const rows = screen.getAllByRole('row')
       // Find the row with CI/CD Pipeline
-      const pipelineRow = rows.find(row => row.textContent?.includes('CI/CD Pipeline'))
+      const pipelineRow = rows.find((row) => row.textContent?.includes('CI/CD Pipeline'))
       const deleteButton = pipelineRow?.querySelector('button')
-      
+
       if (!deleteButton) throw new Error('Delete button not found')
       fireEvent.click(deleteButton)
 
@@ -267,7 +273,7 @@ describe('TokensPage', () => {
   describe('Error Handling', () => {
     it('displays error when loading fails', async () => {
       vi.mocked(api.get).mockRejectedValueOnce(new Error('API Error'))
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -278,7 +284,7 @@ describe('TokensPage', () => {
 
     it('shows loading state', () => {
       vi.mocked(api.get).mockImplementation(() => new Promise(() => {})) // Never resolves
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -290,7 +296,7 @@ describe('TokensPage', () => {
     it('handles token creation error', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
       vi.mocked(api.post).mockRejectedValueOnce(new Error('Creation failed'))
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -315,7 +321,7 @@ describe('TokensPage', () => {
     it('handles token deletion error', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
       vi.mocked(api.delete).mockRejectedValueOnce(new Error('Deletion failed'))
-      
+
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
 
@@ -325,9 +331,9 @@ describe('TokensPage', () => {
 
       // Try to delete token
       const rows = screen.getAllByRole('row')
-      const pipelineRow = rows.find(row => row.textContent?.includes('CI/CD Pipeline'))
+      const pipelineRow = rows.find((row) => row.textContent?.includes('CI/CD Pipeline'))
       const deleteButton = pipelineRow?.querySelector('button')
-      
+
       if (!deleteButton) throw new Error('Delete button not found')
       fireEvent.click(deleteButton)
 

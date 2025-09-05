@@ -2,6 +2,14 @@
 
 API proxy for Convox racks with SSO, RBAC, and audit logging
 
+## 📖 Start Here
+
+**First time setup?** Follow these steps:
+
+1. **Quick Start** (below) - Gets you running in 5 minutes with mock services
+2. **[DEV.md](DEV.md)** - Complete development guide with Google OAuth setup
+3. **[CLAUDE.md](CLAUDE.md)** - Technical implementation details
+
 ## Features
 
 - **Google Workspace OAuth**: Secure authentication with domain restrictions
@@ -13,11 +21,46 @@ API proxy for Convox racks with SSO, RBAC, and audit logging
 
 ## Quick Start
 
+### ⚡ 5-Minute Setup (Mock Services)
+
+Get everything running locally with mock services - no Google OAuth setup required:
+
+```bash
+# 1. Clone and install
+git clone https://github.com/DocSpring/convox-gateway.git
+cd convox-gateway
+go mod download
+cd web && pnpm install && cd ..
+
+# 2. Set up configuration (uses defaults with mock services)
+cp mise.local.toml.example mise.local.toml
+
+# 3. Start everything
+make dev
+```
+
+**🎉 You're done!** Open these URLs:
+- **Web UI**: http://localhost:5173 (test users: admin@company.com, developer@company.com, viewer@company.com)
+- **Gateway API**: http://localhost:8447
+- **Mock Convox**: http://localhost:5443
+
+### 🧪 Test the CLI
+
+```bash
+# Login (opens mock OAuth in browser)  
+./bin/convox-gateway login staging http://localhost:8447
+
+# Run convox commands through the gateway
+./bin/convox-gateway convox apps
+./bin/convox-gateway convox ps
+```
+
 ### Prerequisites
 
 - Go 1.22+
-- Google OAuth application credentials
-- Convox rack API tokens
+- Docker & Docker Compose
+- Node.js 20+ and pnpm
+- mise (for environment variables) - [Install mise](https://mise.jdx.dev/getting-started.html)
 
 ### Building
 
@@ -32,25 +75,9 @@ make docker  # Build Docker image
 make test    # Run all tests
 ```
 
-### Development Setup
+### Real Google OAuth Setup
 
-For complete development setup instructions including Google OAuth configuration and testing workflows, see **[DEV.md](DEV.md)**.
-
-**Quick Start:**
-
-```bash
-git clone https://github.com/DocSpring/convox-gateway.git
-cd convox-gateway
-
-# Set up configuration
-cp mise.local.toml.example mise.local.toml
-# Edit this file with your settings (see DEV.md for details)
-
-# Install dependencies and start development environment
-go mod download
-cd web && pnpm install && cd ..
-make dev
-```
+For complete development setup with real Google OAuth (instead of mock), see **[DEV.md](DEV.md)**.
 
 **Development URLs:**
 

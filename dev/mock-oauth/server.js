@@ -56,7 +56,7 @@ app.get('/.well-known/openid_configuration', (req, res) => {
   });
 });
 
-// OAuth authorization endpoint
+// OAuth authorization endpoint with user selection
 app.get('/oauth2/v2/auth', (req, res) => {
   const {
     client_id,
@@ -65,7 +65,8 @@ app.get('/oauth2/v2/auth', (req, res) => {
     scope,
     state,
     code_challenge,
-    code_challenge_method
+    code_challenge_method,
+    selected_user
   } = req.query;
 
   console.log('OAuth authorization request:', {
@@ -73,14 +74,28 @@ app.get('/oauth2/v2/auth', (req, res) => {
     redirect_uri,
     response_type,
     scope,
-    state
+    state,
+    selected_user
   });
+
+  // If no user selected, show user selection page
+  if (!selected_user) {
+    return res.redirect(`/dev/select-user?${req.url.split('?')[1]}`);
+  }
 
   // Validate required parameters
   if (!client_id || !redirect_uri || response_type !== 'code') {
     return res.status(400).json({
       error: 'invalid_request',
       error_description: 'Missing or invalid required parameters'
+    });
+  }
+
+  const user = mockUsers[selected_user];
+  if (!user) {
+    return res.status(400).json({
+      error: 'invalid_user',
+      error_description: 'Selected user not found'
     });
   }
 
@@ -93,11 +108,11 @@ app.get('/oauth2/v2/auth', (req, res) => {
     redirect_uri,
     code_challenge,
     code_challenge_method,
-    user: mockUsers['admin@company.com'], // Default to admin user for dev
+    user,
     expires: Date.now() + 600000, // 10 minutes
   });
 
-  // Simulate user consent and redirect back with code
+  // Redirect back with code
   const redirectUrl = new URL(redirect_uri);
   redirectUrl.searchParams.set('code', authCode);
   if (state) redirectUrl.searchParams.set('state', state);
@@ -243,69 +258,6 @@ app.get('/dev/select-user', (req, res) => {
   `);
 });
 
-// Updated auth endpoint to use selected user
-app.get('/oauth2/v2/auth', (req, res) => {
-  const {
-    client_id,
-    redirect_uri,
-    response_type,
-    scope,
-    state,
-    code_challenge,
-    code_challenge_method,
-    selected_user
-  } = req.query;
-
-  console.log('OAuth authorization request:', {
-    client_id,
-    redirect_uri,
-    response_type,
-    scope,
-    state,
-    selected_user
-  });
-
-  // If no user selected, show user selection page
-  if (!selected_user) {
-    return res.redirect(`/dev/select-user?${req.url.split('?')[1]}`);
-  }
-
-  // Validate required parameters
-  if (!client_id || !redirect_uri || response_type !== 'code') {
-    return res.status(400).json({
-      error: 'invalid_request',
-      error_description: 'Missing or invalid required parameters'
-    });
-  }
-
-  const user = mockUsers[selected_user];
-  if (!user) {
-    return res.status(400).json({
-      error: 'invalid_user',
-      error_description: 'Selected user not found'
-    });
-  }
-
-  // Generate authorization code
-  const authCode = uuidv4();
-  
-  // Store auth code with associated data
-  authCodes.set(authCode, {
-    client_id,
-    redirect_uri,
-    code_challenge,
-    code_challenge_method,
-    user,
-    expires: Date.now() + 600000, // 10 minutes
-  });
-
-  // Redirect back with code
-  const redirectUrl = new URL(redirect_uri);
-  redirectUrl.searchParams.set('code', authCode);
-  if (state) redirectUrl.searchParams.set('state', state);
-
-  res.redirect(redirectUrl.toString());
-});
 
 // Generate mock ID token (simplified JWT-like structure)
 function generateMockIdToken(user) {

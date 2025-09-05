@@ -1,7 +1,9 @@
-import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Copy, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import {
@@ -22,8 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
-import { Badge } from '../components/ui/badge'
-import { toast } from 'sonner'
 import { api } from '../lib/api'
 
 interface APIToken {
@@ -42,7 +42,11 @@ export function TokensPage() {
   const [createdToken, setCreatedToken] = useState<string | null>(null)
 
   // Fetch tokens
-  const { data: tokens = [], isLoading, error } = useQuery({
+  const {
+    data: tokens = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['tokens'],
     queryFn: async () => {
       const response = await api.get<APIToken[]>('/.gateway/admin/tokens')
@@ -61,8 +65,9 @@ export function TokensPage() {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('API token created successfully')
     },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to create token')
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to create token')
     },
   })
 
@@ -75,8 +80,9 @@ export function TokensPage() {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('Token deleted successfully')
     },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to delete token')
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to delete token')
     },
   })
 
@@ -104,7 +110,7 @@ export function TokensPage() {
   if (isLoading) {
     return (
       <div className="p-8">
-        <div className="flex items-center justify-center h-64">
+        <div className="flex h-64 items-center justify-center">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
@@ -127,8 +133,8 @@ export function TokensPage() {
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">API Tokens</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="font-bold text-3xl">API Tokens</h1>
+        <p className="mt-2 text-muted-foreground">
           Manage API tokens for programmatic access to the gateway
         </p>
       </div>
@@ -150,9 +156,7 @@ export function TokensPage() {
         </CardHeader>
         <CardContent>
           {tokens.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No API tokens created yet
-            </div>
+            <div className="py-8 text-center text-muted-foreground">No API tokens created yet</div>
           ) : (
             <Table>
               <TableHeader>
@@ -181,18 +185,14 @@ export function TokensPage() {
                           ? format(new Date(token.last_used), 'MMM d, yyyy')
                           : 'Never'}
                       </TableCell>
-                      <TableCell>
-                        {format(new Date(token.created_at), 'MMM d, yyyy')}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(token.expires_at), 'MMM d, yyyy')}
-                      </TableCell>
+                      <TableCell>{format(new Date(token.created_at), 'MMM d, yyyy')}</TableCell>
+                      <TableCell>{format(new Date(token.expires_at), 'MMM d, yyyy')}</TableCell>
                       <TableCell className="text-right">
                         <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteTokenMutation.mutate(token.id)}
                           disabled={deleteTokenMutation.isPending}
+                          onClick={() => deleteTokenMutation.mutate(token.id)}
+                          size="sm"
+                          variant="ghost"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -207,23 +207,23 @@ export function TokensPage() {
       </Card>
 
       {/* Create Token Dialog */}
-      <Dialog open={isCreateOpen} onOpenChange={handleCloseDialog}>
+      <Dialog onOpenChange={handleCloseDialog} open={isCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create API Token</DialogTitle>
             <DialogDescription>
               {createdToken
-                ? 'Copy this token now. You won\'t be able to see it again.'
+                ? "Copy this token now. You won't be able to see it again."
                 : 'Enter a name for the new API token'}
             </DialogDescription>
           </DialogHeader>
 
           {createdToken ? (
             <div className="space-y-4">
-              <div className="p-3 bg-muted rounded-md font-mono text-sm break-all">
+              <div className="break-all rounded-md bg-muted p-3 font-mono text-sm">
                 {createdToken}
               </div>
-              <Button onClick={handleCopyToken} className="w-full">
+              <Button className="w-full" onClick={handleCopyToken}>
                 <Copy className="mr-2 h-4 w-4" />
                 Copy Token
               </Button>
@@ -234,10 +234,10 @@ export function TokensPage() {
                 <Label htmlFor="name">Token Name</Label>
                 <Input
                   id="name"
-                  placeholder="e.g., CI/CD Pipeline"
-                  value={newTokenName}
                   onChange={(e) => setNewTokenName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateToken()}
+                  placeholder="e.g., CI/CD Pipeline"
+                  value={newTokenName}
                 />
               </div>
             </div>
@@ -248,13 +248,10 @@ export function TokensPage() {
               <Button onClick={handleCloseDialog}>Done</Button>
             ) : (
               <>
-                <Button variant="outline" onClick={handleCloseDialog}>
+                <Button onClick={handleCloseDialog} variant="outline">
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleCreateToken}
-                  disabled={createTokenMutation.isPending}
-                >
+                <Button disabled={createTokenMutation.isPending} onClick={handleCreateToken}>
                   {createTokenMutation.isPending ? 'Creating...' : 'Create Token'}
                 </Button>
               </>

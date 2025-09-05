@@ -2,14 +2,37 @@
 
 **IMPORTANT: Read CONVOX_REFERENCE.md and README.md first for context on how Convox actually works and current project status.**
 
+## 🔌 PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
+
+**All development ports are defined in `mise.toml`. NEVER hardcode ports elsewhere.**
+
+| Service | Port | Environment Variable | Description |
+|---------|------|---------------------|-------------|
+| **Gateway API** | 8447 | `GATEWAY_PORT` | Main API server |
+| **Web Frontend** | 5173 | `WEB_PORT` | Vite dev server |
+| **Mock OAuth** | 3345 | `MOCK_OAUTH_PORT` | Mock Google OAuth server |
+| **Mock Convox** | 5443 | `MOCK_CONVOX_PORT` | Mock Convox API server |
+
+**URLs in Development:**
+- Gateway API: `http://localhost:8447`
+- Web UI: `http://localhost:5173`
+- Mock OAuth: `http://localhost:3345`
+- Mock Convox API: `http://localhost:5443`
+
+**Configuration References:**
+- `mise.toml` - Defines all port environment variables
+- `web/vite.config.ts` - Uses `process.env.GATEWAY_PORT` for proxy
+- `Procfile.dev` - Uses `$MOCK_OAUTH_PORT` and `$MOCK_CONVOX_PORT`
+
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
 **NEVER mark a task as "completed" unless ALL of these pass:**
 
 ### 🔧 Build Requirements
-- `go build ./cmd/gateway/` - Backend builds without errors
-- `go build ./cmd/cli/` - CLI builds without errors  
-- `cd web && pnpm build` - Frontend builds without errors
+**⛔ FORBIDDEN: Never use `go build` directly - creates unwanted binaries in root**
+- `make gateway` - Backend builds without errors (or use `go run ./cmd/gateway/`)
+- `make cli` - CLI builds without errors (or use `go run ./cmd/cli/`)
+- `make web` - Frontend builds without errors (or `cd web && pnpm build`)
 - `make test` - All Go tests pass
 - `cd web && pnpm test` - All frontend tests pass
 
@@ -21,10 +44,9 @@
 - No unused imports or variables
 
 ### 🧪 Integration Tests
-- `make dev` - Development environment starts successfully
-- `docker compose ps` - All services show healthy status
+- `./dev.sh` - Development environment starts successfully
 - `curl http://localhost:8447/.gateway/health` - Gateway health check passes
-- `curl http://localhost:3001/health` - Mock OAuth health check passes
+- `curl http://localhost:3345/health` - Mock OAuth health check passes
 - `curl http://localhost:5443/health` - Mock Convox health check passes
 
 ### 🚀 Production Readiness

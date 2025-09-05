@@ -1,7 +1,8 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { RefreshCw, Search, Download } from 'lucide-react'
+import { Download, RefreshCw, Search } from 'lucide-react'
+import { useState } from 'react'
+import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
@@ -21,7 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
-import { Badge } from '../components/ui/badge'
 import { api } from '../lib/api'
 
 interface AuditLog {
@@ -61,26 +61,31 @@ export function AuditPage() {
   const [dateRange, setDateRange] = useState('7d')
 
   // Fetch audit logs
-  const { data: logs = [], isLoading, error, refetch } = useQuery({
+  const {
+    data: logs = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['audit-logs', actionTypeFilter, statusFilter, dateRange, searchTerm],
     queryFn: async () => {
       const params = new URLSearchParams()
-      if (actionTypeFilter !== 'all') params.append('action_type', actionTypeFilter)
-      if (statusFilter !== 'all') params.append('status', statusFilter)
-      if (dateRange) params.append('range', dateRange)
-      if (searchTerm) params.append('search', searchTerm)
-      
+      if (actionTypeFilter !== 'all') { params.append('action_type', actionTypeFilter) }
+      if (statusFilter !== 'all') { params.append('status', statusFilter) }
+      if (dateRange) { params.append('range', dateRange) }
+      if (searchTerm) { params.append('search', searchTerm) }
+
       const response = await api.get<AuditLog[]>(`/.gateway/admin/audit?${params}`)
       return response
     },
   })
 
-  const handleExport = async () => {
+  const handleExport = () => {
     const params = new URLSearchParams()
-    if (actionTypeFilter !== 'all') params.append('action_type', actionTypeFilter)
-    if (statusFilter !== 'all') params.append('status', statusFilter)
-    if (dateRange) params.append('range', dateRange)
-    if (searchTerm) params.append('search', searchTerm)
+    if (actionTypeFilter !== 'all') { params.append('action_type', actionTypeFilter) }
+    if (statusFilter !== 'all') { params.append('status', statusFilter) }
+    if (dateRange) { params.append('range', dateRange) }
+    if (searchTerm) { params.append('search', searchTerm) }
     params.append('format', 'csv')
 
     // Create download link
@@ -122,7 +127,7 @@ export function AuditPage() {
   if (isLoading) {
     return (
       <div className="p-8">
-        <div className="flex items-center justify-center h-64">
+        <div className="flex h-64 items-center justify-center">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
@@ -148,64 +153,65 @@ export function AuditPage() {
     success: logs.filter((l: AuditLog) => l.status === 'success').length,
     failed: logs.filter((l: AuditLog) => l.status === 'failed').length,
     blocked: logs.filter((l: AuditLog) => l.status === 'blocked').length,
-    avgResponseTime: logs.length > 0 
-      ? Math.round(logs.reduce((acc: number, l: AuditLog) => acc + l.response_time_ms, 0) / logs.length)
-      : 0,
+    avgResponseTime:
+      logs.length > 0
+        ? Math.round(
+            logs.reduce((acc: number, l: AuditLog) => acc + l.response_time_ms, 0) / logs.length
+          )
+        : 0,
   }
 
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Audit Logs</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="font-bold text-3xl">Audit Logs</h1>
+        <p className="mt-2 text-muted-foreground">
           Monitor all gateway activity and access patterns
         </p>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-4 mb-6">
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
               Total Events
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="font-bold text-2xl">{stats.total}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
               Success Rate
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="font-bold text-2xl text-green-600">
               {stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}%
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
               Failed/Blocked
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.failed + stats.blocked}
-            </div>
+            <div className="font-bold text-2xl text-red-600">{stats.failed + stats.blocked}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="font-medium text-muted-foreground text-sm">
               Avg Response Time
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.avgResponseTime}ms</div>
+            <div className="font-bold text-2xl">{stats.avgResponseTime}ms</div>
           </CardContent>
         </Card>
       </div>
@@ -220,20 +226,20 @@ export function AuditPage() {
             <div className="space-y-2">
               <Label htmlFor="search">Search</Label>
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  className="pl-8"
                   id="search"
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="User, resource, action..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="action-type">Action Type</Label>
-              <Select value={actionTypeFilter} onValueChange={setActionTypeFilter}>
+              <Select onValueChange={setActionTypeFilter} value={actionTypeFilter}>
                 <SelectTrigger id="action-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -246,10 +252,10 @@ export function AuditPage() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select onValueChange={setStatusFilter} value={statusFilter}>
                 <SelectTrigger id="status">
                   <SelectValue />
                 </SelectTrigger>
@@ -262,10 +268,10 @@ export function AuditPage() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="date-range">Date Range</Label>
-              <Select value={dateRange} onValueChange={setDateRange}>
+              <Select onValueChange={setDateRange} value={dateRange}>
                 <SelectTrigger id="date-range">
                   <SelectValue />
                 </SelectTrigger>
@@ -279,8 +285,8 @@ export function AuditPage() {
               </Select>
             </div>
           </div>
-          
-          <div className="flex gap-2 mt-4">
+
+          <div className="mt-4 flex gap-2">
             <Button onClick={() => refetch()} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
@@ -297,15 +303,11 @@ export function AuditPage() {
       <Card>
         <CardHeader>
           <CardTitle>Activity Log</CardTitle>
-          <CardDescription>
-            Showing {logs.length} events
-          </CardDescription>
+          <CardDescription>Showing {logs.length} events</CardDescription>
         </CardHeader>
         <CardContent>
           {logs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No audit logs found
-            </div>
+            <div className="py-8 text-center text-muted-foreground">No audit logs found</div>
           ) : (
             <Table>
               <TableHeader>
@@ -330,7 +332,7 @@ export function AuditPage() {
                       <div>
                         <div className="font-medium">{log.user_email}</div>
                         {log.user_name && (
-                          <div className="text-xs text-muted-foreground">{log.user_name}</div>
+                          <div className="text-muted-foreground text-xs">{log.user_name}</div>
                         )}
                       </div>
                     </TableCell>
@@ -346,16 +348,10 @@ export function AuditPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(log.status)}>
-                        {log.status}
-                      </Badge>
+                      <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      {log.response_time_ms}ms
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {log.ip_address || '-'}
-                    </TableCell>
+                    <TableCell className="text-right">{log.response_time_ms}ms</TableCell>
+                    <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

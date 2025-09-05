@@ -1,9 +1,9 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { AuditPage } from './audit-page'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../lib/api'
+import { AuditPage } from './audit-page'
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -94,7 +94,7 @@ describe('AuditPage', () => {
   describe('Audit Log Display', () => {
     it('renders audit logs table', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -112,7 +112,7 @@ describe('AuditPage', () => {
 
     it('displays status badges correctly', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -127,7 +127,7 @@ describe('AuditPage', () => {
 
     it('shows empty state when no logs', async () => {
       vi.mocked(api.get).mockResolvedValueOnce([])
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -140,20 +140,20 @@ describe('AuditPage', () => {
   describe('Statistics', () => {
     it('calculates and displays statistics correctly', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
         // Total events
         expect(screen.getByText('4')).toBeInTheDocument()
-        
+
         // Success rate: 2 success out of 4 = 50%
         expect(screen.getByText('50%')).toBeInTheDocument()
-        
+
         // Failed/Blocked: 1 failed + 1 blocked = 2
         expect(screen.getByText('2')).toBeInTheDocument()
-        
+
         // Average response time: (150 + 75 + 200 + 5) / 4 = 107.5 ≈ 108ms
         // There are multiple ms values in the table, just check one exists
         expect(screen.getByText('108ms')).toBeInTheDocument()
@@ -166,8 +166,8 @@ describe('AuditPage', () => {
       // Mock initial load and filtered load
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter(l => l.action_type === 'auth'))
-      
+        .mockResolvedValueOnce(mockLogs.filter((l) => l.action_type === 'auth'))
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -185,9 +185,7 @@ describe('AuditPage', () => {
       fireEvent.click(authOption)
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('action_type=auth')
-        )
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('action_type=auth'))
       })
     })
 
@@ -195,8 +193,8 @@ describe('AuditPage', () => {
       // Mock initial load and filtered load
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter(l => l.status === 'failed'))
-      
+        .mockResolvedValueOnce(mockLogs.filter((l) => l.status === 'failed'))
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -214,18 +212,14 @@ describe('AuditPage', () => {
       fireEvent.click(failedOption)
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('status=failed')
-        )
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('status=failed'))
       })
     })
 
     it('filters by date range', async () => {
       // Mock initial load and filtered load
-      vi.mocked(api.get)
-        .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs)
-      
+      vi.mocked(api.get).mockResolvedValueOnce(mockLogs).mockResolvedValueOnce(mockLogs)
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -243,9 +237,7 @@ describe('AuditPage', () => {
       fireEvent.click(last24Option)
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('range=24h')
-        )
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('range=24h'))
       })
     })
 
@@ -253,8 +245,8 @@ describe('AuditPage', () => {
       // Mock initial load and search results
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter(l => l.user_email.includes('admin')))
-      
+        .mockResolvedValueOnce(mockLogs.filter((l) => l.user_email.includes('admin')))
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -267,18 +259,19 @@ describe('AuditPage', () => {
       fireEvent.change(searchInput, { target: { value: 'admin' } })
 
       // Wait for debounce
-      await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('search=admin')
-        )
-      }, { timeout: 1000 })
+      await waitFor(
+        () => {
+          expect(api.get).toHaveBeenCalledWith(expect.stringContaining('search=admin'))
+        },
+        { timeout: 1000 }
+      )
     })
   })
 
   describe('Actions', () => {
     it('refreshes data when clicking refresh button', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -300,12 +293,12 @@ describe('AuditPage', () => {
 
     it('exports CSV when clicking export button', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       // Mock document methods for download
       const createElementSpy = vi.spyOn(document, 'createElement')
       const appendChildSpy = vi.spyOn(document.body, 'appendChild')
       const removeChildSpy = vi.spyOn(document.body, 'removeChild')
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -325,7 +318,7 @@ describe('AuditPage', () => {
   describe('Error Handling', () => {
     it('displays error when loading fails', async () => {
       vi.mocked(api.get).mockRejectedValueOnce(new Error('API Error'))
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -336,7 +329,7 @@ describe('AuditPage', () => {
 
     it('shows loading state', () => {
       vi.mocked(api.get).mockImplementation(() => new Promise(() => {})) // Never resolves
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -349,7 +342,7 @@ describe('AuditPage', () => {
   describe('Response Times', () => {
     it('displays response times correctly', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
@@ -365,7 +358,7 @@ describe('AuditPage', () => {
   describe('IP Addresses', () => {
     it('displays IP addresses', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-      
+
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 

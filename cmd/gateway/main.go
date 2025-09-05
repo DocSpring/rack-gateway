@@ -67,14 +67,28 @@ func main() {
 	// Create combined auth service
 	authService := auth.NewAuthService(jwtManager, tokenService, database)
 
-	oauthHandler := auth.NewOAuthHandler(
+	// Debug: Log OAuth configuration and PORT values
+	log.Printf("DEBUG: Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), cfg.Port)
+	log.Printf("DEBUG: OAuth config - ClientID: %s, BaseURL: %s, RedirectURL: %s",
+		cfg.GoogleClientID, cfg.GoogleOAuthBaseURL, cfg.RedirectURL)
+
+	// For OIDC, we need the issuer URL which is the base OAuth URL
+	issuerURL := cfg.GoogleOAuthBaseURL
+	if issuerURL == "" {
+		issuerURL = "https://accounts.google.com"
+	}
+
+	oauthHandler, err := auth.NewOAuthHandler(
 		cfg.GoogleClientID,
 		cfg.GoogleClientSecret,
 		cfg.RedirectURL,
 		allowedDomain,
-		cfg.GoogleOAuthBaseURL,
+		issuerURL,
 		jwtManager,
 	)
+	if err != nil {
+		log.Fatalf("Failed to initialize OAuth handler: %v", err)
+	}
 
 	auditLogger := audit.NewLogger(database)
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
@@ -94,8 +108,13 @@ func main() {
 		r.Get("/health", uiHandler.Health)
 
 		// OAuth login endpoints (no auth required)
-		r.Post("/login/start", handleLoginStart(oauthHandler))
-		r.Post("/login/callback", handleLoginCallback(oauthHandler))
+		// CLI OAuth flow
+		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler))
+		r.Post("/cli/login/callback", handleCLILoginCallback(oauthHandler))
+
+		// Web OAuth flow
+		r.Get("/web/login", handleWebLoginStart(oauthHandler))
+		r.Get("/web/callback", handleWebLoginCallback(oauthHandler))
 
 		// Authenticated gateway endpoints
 		r.Group(func(r chi.Router) {
@@ -168,7 +187,7 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func handleLoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
+func handleCLILoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp, err := oauth.StartLogin()
 		if err != nil {
@@ -181,7 +200,14 @@ func handleLoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
 	}
 }
 
-func handleLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
+func handleWebLoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authURL := oauth.StartWebLogin()
+		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+	}
+}
+
+func handleCLILoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Code         string `json:"code"`
@@ -190,7 +216,12 @@ func handleLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid request", http.StatusBadRequest)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Code == "" || req.State == "" || req.CodeVerifier == "" {
+			http.Error(w, "missing required parameters", http.StatusBadRequest)
 			return
 		}
 
@@ -200,6 +231,30 @@ func handleLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func handleWebLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		state := r.URL.Query().Get("state")
+
+		if code == "" || state == "" {
+			http.Error(w, "missing code or state parameter", http.StatusBadRequest)
+			return
+		}
+
+		// Web flow doesn't use PKCE
+		resp, err := oauth.CompleteLogin(code, state, "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// TODO: Redirect to frontend with token in a secure way
+		// For now, return JSON
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}
