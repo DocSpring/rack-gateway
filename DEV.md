@@ -35,12 +35,12 @@ The development environment will start:
 
 ## Local Dev Walkthrough (Step-by-step)
 
-Use this concise flow to spin up, explore endpoints, and test the CLI.
+Use this concise flow to spin up, explore endpoints, and test the CLI. Port selection is handled by mise configuration (no need to pass env vars on the command line).
 
-1) Optional: pick non-conflicting ports (override any subset)
+1) Start services
 
 ```bash
-MOCK_OAUTH_PORT=3201 MOCK_CONVOX_PORT=5543 GATEWAY_PORT=8547 WEB_PORT=5175 make dev
+make dev
 ```
 
 2) Verify services
