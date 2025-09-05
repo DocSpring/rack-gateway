@@ -52,7 +52,9 @@ export function LoginPage() {
               ) : (
                 <>
                   <GoogleIcon className="mr-2 h-5 w-5" />
-                  Continue with Google
+                  {import.meta.env.MODE === 'development'
+                    ? 'Continue with Mock OAuth'
+                    : 'Continue with Google'}
                 </>
               )}
             </Button>

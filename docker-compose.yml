@@ -61,7 +61,7 @@ services:
       dockerfile: Dockerfile.dev
       target: dev
     environment:
-      VITE_API_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}
+      VITE_API_BASE_URL: http://gateway-api:${GATEWAY_PORT:-8447}
     ports:
       - "${WEB_PORT:-5173}:5173"
     volumes:
