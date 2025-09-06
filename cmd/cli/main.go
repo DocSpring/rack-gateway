@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,13 +86,19 @@ Rack management:
 		},
 	}
 
+	var nonInteractive bool
+	var selectedUser string
 	loginCmd := &cobra.Command{
 		Use:   "login [rack] [gateway-url]",
 		Short: "Login to a Convox rack via OAuth",
 		Long:  "Authenticate with SSO provider and store token for the specified rack.\n\nExample: convox-gateway login staging https://convox-gateway.company.com",
 		Args:  cobra.ExactArgs(2),
-		RunE:  loginCommand,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return loginCommandWithFlags(args, nonInteractive, selectedUser)
+		},
 	}
+	loginCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Complete login without browser (dev/mock only)")
+	loginCmd.Flags().StringVar(&selectedUser, "email", "", "When --non-interactive, mock OAuth user email to authenticate as")
 
 	convoxCmd := &cobra.Command{
 		Use:                "convox [command]",
@@ -281,7 +288,7 @@ PowerShell:
 	}
 }
 
-func loginCommand(cmd *cobra.Command, args []string) error {
+func loginCommandWithFlags(args []string, nonInteractive bool, selectedUser string) error {
 	rack := args[0]
 	gatewayURL := args[1]
 
@@ -297,14 +304,24 @@ func loginCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to start login: %w", err)
 	}
 
-	fmt.Printf("Opening browser for authentication...\n")
-	if err := openBrowser(startResp.AuthURL); err != nil {
-		fmt.Printf("Please open this URL in your browser:\n%s\n", startResp.AuthURL)
-	}
-
-	fmt.Print("Enter the authorization code from the callback URL: ")
 	var code string
-	fmt.Scanln(&code)
+	if nonInteractive {
+		if selectedUser == "" {
+			return fmt.Errorf("--email is required with --non-interactive")
+		}
+		c, err := autoAuthorize(startResp.AuthURL, selectedUser)
+		if err != nil {
+			return fmt.Errorf("non-interactive auth failed: %w", err)
+		}
+		code = c
+	} else {
+		fmt.Printf("Opening browser for authentication...\n")
+		if err := openBrowser(startResp.AuthURL); err != nil {
+			fmt.Printf("Please open this URL in your browser:\n%s\n", startResp.AuthURL)
+		}
+		fmt.Print("Enter the authorization code from the callback URL: ")
+		fmt.Scanln(&code)
+	}
 
 	loginResp, err := completeLogin(gatewayURL, code, startResp.State, startResp.CodeVerifier)
 	if err != nil {
@@ -325,6 +342,50 @@ func loginCommand(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Current rack set to: %s\n", rack)
 
 	return nil
+}
+
+// autoAuthorize completes the OAuth authorization step against the mock OAuth server
+// by selecting a user via the "selected_user" query parameter and capturing the auth code
+// from the redirect Location header.
+func autoAuthorize(authURL, userEmail string) (string, error) {
+	// Append selected_user to the authorization URL
+	u, err := url.Parse(authURL)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("selected_user", userEmail)
+	u.RawQuery = q.Encode()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		// Do not follow redirects; we only need the Location for the code
+		return http.ErrUseLastResponse
+	}}
+
+	resp, err := client.Get(u.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("authorization did not redirect (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		return "", fmt.Errorf("missing redirect Location header")
+	}
+	ru, err := url.Parse(loc)
+	if err != nil {
+		return "", err
+	}
+	code := ru.Query().Get("code")
+	if code == "" {
+		return "", fmt.Errorf("missing authorization code in redirect")
+	}
+	return code, nil
 }
 
 func wrapConvoxCommand(args []string) error {
@@ -399,7 +460,7 @@ func startLogin(gatewayURL string) (*LoginStartResponse, error) {
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/v1/login/start", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/.gateway/cli/login/start", strings.TrimSuffix(parsedURL, "/"))
 
 	resp, err := http.Post(url, "application/json", nil)
 	if err != nil {
@@ -425,7 +486,7 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/v1/login/callback", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/.gateway/cli/login/callback", strings.TrimSuffix(parsedURL, "/"))
 
 	payload := LoginCallbackRequest{
 		Code:         code,

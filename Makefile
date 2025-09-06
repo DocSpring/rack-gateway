@@ -1,4 +1,4 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e cli-e2e
 
 all: web-build gateway cli mock
 
@@ -103,4 +103,13 @@ web-e2e:
 	@echo "Installing Playwright browsers (if needed) and running tests..."
 	@cd web && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps || pnpm exec playwright install
 	@cd web && pnpm e2e
+	@echo "(Backend left running. Use 'make dev-down' to stop.)"
+
+cli-e2e:
+	@echo "Starting backend services (web-dev + gateway + mocks)..."
+	@docker compose up -d --build mock-oauth mock-convox gateway-api web-dev
+	@echo "Waiting for services to become ready..."
+	@WEB_PORT=$${WEB_PORT:-5173} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} bash scripts/wait-services.sh
+	@echo "Running CLI E2E..."
+	@bash scripts/cli-e2e.sh
 	@echo "(Backend left running. Use 'make dev-down' to stop.)"
