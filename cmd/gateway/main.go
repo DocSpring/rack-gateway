@@ -116,9 +116,9 @@ func main() {
 		r.Post("/cli/login/callback", handleCLILoginCallback(oauthHandler))
 
 		// Web OAuth flow
-		r.Get("/web/login", handleWebLoginStart(oauthHandler))
-		r.Get("/web/callback", handleWebLoginCallback(oauthHandler))
-		r.Get("/web/logout", handleWebLogout())
+		r.Get("/web/login", handleWebLoginStart(oauthHandler, database))
+		r.Get("/web/callback", handleWebLoginCallback(oauthHandler, database))
+		r.Get("/web/logout", handleWebLogout(database))
 
 		// Authenticated gateway endpoints
 		r.Group(func(r chi.Router) {
@@ -208,8 +208,22 @@ func handleCLILoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
 	}
 }
 
-func handleWebLoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
+func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if database != nil {
+			_ = database.CreateAuditLog(&db.AuditLog{
+				UserEmail:      "",
+				UserName:       "",
+				ActionType:     "auth",
+				Action:         "login.start",
+				Resource:       "web",
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "success",
+				ResponseTimeMs: 0,
+			})
+		}
 		authURL := oauth.StartWebLogin()
 		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 	}
@@ -244,7 +258,7 @@ func handleCLILoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 	}
 }
 
-func handleWebLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
+func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
@@ -257,6 +271,20 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 		// Web flow doesn't use PKCE
 		resp, err := oauth.CompleteLogin(code, state, "")
 		if err != nil {
+			if database != nil {
+				_ = database.CreateAuditLog(&db.AuditLog{
+					UserEmail:      "",
+					UserName:       "",
+					ActionType:     "auth",
+					Action:         "login",
+					Resource:       "web",
+					Details:        "{\"error\":\"oauth_failed\"}",
+					IPAddress:      r.RemoteAddr,
+					UserAgent:      r.UserAgent(),
+					Status:         "error",
+					ResponseTimeMs: 0,
+				})
+			}
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -274,6 +302,21 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 		}
 		http.SetCookie(w, cookie)
 
+		if database != nil {
+			_ = database.CreateAuditLog(&db.AuditLog{
+				UserEmail:      resp.Email,
+				UserName:       resp.Name,
+				ActionType:     "auth",
+				Action:         "login",
+				Resource:       "web",
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "success",
+				ResponseTimeMs: 0,
+			})
+		}
+
 		// Redirect back to frontend base (dev server), or root if not set
 		frontend := os.Getenv("FRONTEND_BASE_URL")
 		if frontend == "" {
@@ -283,7 +326,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 	}
 }
 
-func handleWebLogout() http.HandlerFunc {
+func handleWebLogout(database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Expire the auth cookie
 		expired := &http.Cookie{
@@ -297,6 +340,21 @@ func handleWebLogout() http.HandlerFunc {
 			SameSite: http.SameSiteLaxMode,
 		}
 		http.SetCookie(w, expired)
+
+		if database != nil {
+			_ = database.CreateAuditLog(&db.AuditLog{
+				UserEmail:      r.Header.Get("X-User-Email"),
+				UserName:       r.Header.Get("X-User-Name"),
+				ActionType:     "auth",
+				Action:         "logout",
+				Resource:       "web",
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "success",
+				ResponseTimeMs: 0,
+			})
+		}
 
 		// Redirect back to login or frontend base
 		frontend := os.Getenv("FRONTEND_BASE_URL")
