@@ -427,4 +427,8 @@ convox-gateway audit-cleanup --days 90
 ```
 
 If `--days` is omitted, the command reads `AUDIT_LOG_RETENTION_DAYS`.
+
+## Deployment
+
+See DEPLOY.md for a production-ready deployment guide, environment configuration, persistence, timers for audit cleanup, and a minimal `convox.yml` example.
 - Review CloudWatch logs for errors

@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 import { toast } from 'sonner'
 import { authService } from './auth'
+import { getCsrfToken } from './csrf'
 
 const API_BASE = '/api'
 
@@ -43,6 +44,7 @@ class ApiService {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE,
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -54,6 +56,17 @@ class ApiService {
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }
+      // Attach CSRF token for unsafe admin requests
+      try {
+        const method = (config.method || 'get').toUpperCase()
+        const url = config.url || ''
+        if (method !== 'GET' && url.startsWith('/.gateway/admin')) {
+          const csrf = getCsrfToken()
+          if (csrf) {
+            config.headers['X-CSRF-Token'] = csrf
+          }
+        }
+      } catch (_e) {}
       return config
     })
 
@@ -75,6 +88,17 @@ class ApiService {
             /* ignore */
           }
           authService.logout()
+        }
+        // If CSRF missing/invalid, try to refresh once
+        if (error.response?.status === 403 && error.response?.data) {
+          try {
+            const url: string = error.config?.url || ''
+            const method: string = (error.config?.method || 'get').toUpperCase()
+            if (method !== 'GET' && url.startsWith('/.gateway/admin')) {
+              // refresh token
+              fetch('/api/.gateway/csrf', { credentials: 'include' }).catch(() => {})
+            }
+          } catch (_e) {}
         }
         return Promise.reject(error)
       }

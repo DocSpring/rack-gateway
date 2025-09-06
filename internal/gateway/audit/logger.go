@@ -136,7 +136,8 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 		}
 	}
 
-	if dbErr := l.database.CreateAuditLog(auditLog); dbErr != nil {
+	// Persist and mirror to stdout as DB-style JSON
+	if dbErr := LogDB(l.database, auditLog); dbErr != nil {
 		log.Printf("Failed to store audit log in database: %v", dbErr)
 	}
 }
@@ -367,6 +368,23 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 			}
 		}
 
+	// Start/list processes via service: /apps/{app}/services/{service}/processes
+	case len(parts) >= 5 && parts[0] == "apps" && parts[2] == "services" && parts[4] == "processes":
+		if method == "POST" {
+			action = "process.start"
+		} else if method == "GET" {
+			action = "process.list"
+		} else {
+			action = strings.ToLower(method)
+		}
+		appName := parts[1]
+		svcName := parts[3]
+		if appName != "" && svcName != "" {
+			resource = appName + "/" + svcName
+		} else {
+			resource = svcName
+		}
+
 	case strings.Contains(path, "/processes/") && strings.HasSuffix(path, "/exec"):
 		// /apps/{app}/processes/{pid}/exec
 		action = "process.exec"
@@ -413,7 +431,12 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 		}
 
 	default:
-		action = fmt.Sprintf("%s.%s", parts[0], strings.ToLower(method))
+		// Special-case racks collection
+		if parts[0] == "racks" && len(parts) == 1 && strings.ToUpper(method) == "GET" {
+			action = "racks.list"
+		} else {
+			action = fmt.Sprintf("%s.%s", parts[0], strings.ToLower(method))
+		}
 		if len(parts) > 1 {
 			resource = parts[1]
 		}

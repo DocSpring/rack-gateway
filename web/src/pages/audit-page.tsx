@@ -1,19 +1,25 @@
-import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
-import { Download, RefreshCw, Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { Badge } from '../components/ui/badge'
-import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { Download, RefreshCw, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../components/ui/select'
+} from "../components/ui/select";
 import {
   Table,
   TableBody,
@@ -21,79 +27,79 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table'
-import { api } from '../lib/api'
+} from "../components/ui/table";
+import { api } from "../lib/api";
 
 interface AuditLog {
-  id: number
-  timestamp: string
-  user_email: string
-  user_name: string
-  action_type: string
-  action: string
-  command?: string
-  resource: string
-  details: string
-  ip_address: string
-  user_agent: string
-  status: string
-  response_time_ms: number
+  id: number;
+  timestamp: string;
+  user_email: string;
+  user_name: string;
+  action_type: string;
+  action: string;
+  command?: string;
+  resource: string;
+  details: string;
+  ip_address: string;
+  user_agent: string;
+  status: string;
+  response_time_ms: number;
 }
 
 const ACTION_TYPES = {
-  all: 'All Actions',
-  convox_api: 'Convox API',
-  auth: 'Authentication',
-  user_management: 'User Management',
-  token_management: 'Token Management',
-}
+  all: "All Actions",
+  convox_api: "Convox API",
+  auth: "Authentication",
+  user_management: "User Management",
+  token_management: "Token Management",
+};
 
 const STATUS_TYPES = {
-  all: 'All Statuses',
-  success: 'Success',
-  failed: 'Failed',
-  blocked: 'Blocked',
-}
+  all: "All Statuses",
+  success: "Success",
+  failed: "Failed",
+  blocked: "Blocked",
+};
 
 export function AuditPage() {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [actionTypeFilter, setActionTypeFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [actionTypeFilter, setActionTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [dateRange, setDateRange] = useState(() => {
     try {
-      return localStorage.getItem('audit_date_range') || '7d'
+      return localStorage.getItem("audit_date_range") || "7d";
     } catch {
-      return '7d'
+      return "7d";
     }
-  })
-  const [page, setPage] = useState(1)
+  });
+  const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState<number>(() => {
     try {
-      const v = localStorage.getItem('audit_per_page')
-      return v ? Math.max(1, parseInt(v, 10)) : 50
+      const v = localStorage.getItem("audit_per_page");
+      return v ? Math.max(1, parseInt(v, 10)) : 50;
     } catch {
-      return 50
+      return 50;
     }
-  })
+  });
 
   // Persist selected date range and per-page to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('audit_date_range', dateRange)
+      localStorage.setItem("audit_date_range", dateRange);
     } catch {}
-  }, [dateRange])
+  }, [dateRange]);
   useEffect(() => {
     try {
-      localStorage.setItem('audit_per_page', String(perPage))
+      localStorage.setItem("audit_per_page", String(perPage));
     } catch {}
-  }, [perPage])
+  }, [perPage]);
 
   // Debounce search to prevent refetch on every keystroke
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300)
-    return () => clearTimeout(t)
-  }, [searchTerm])
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   // Fetch audit logs
   const {
@@ -103,110 +109,133 @@ export function AuditPage() {
     isFetching,
     refetch,
   } = useQuery({
-    queryKey: ['audit-logs', actionTypeFilter, statusFilter, dateRange, debouncedSearch],
+    queryKey: [
+      "audit-logs",
+      actionTypeFilter,
+      statusFilter,
+      dateRange,
+      debouncedSearch,
+    ],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (actionTypeFilter !== 'all') {
-        params.append('action_type', actionTypeFilter)
+      const params = new URLSearchParams();
+      if (actionTypeFilter !== "all") {
+        params.append("action_type", actionTypeFilter);
       }
-      if (statusFilter !== 'all') {
-        params.append('status', statusFilter)
+      if (statusFilter !== "all") {
+        params.append("status", statusFilter);
       }
       if (dateRange) {
-        params.append('range', dateRange)
+        params.append("range", dateRange);
       }
       if (debouncedSearch) {
-        params.append('search', debouncedSearch)
+        params.append("search", debouncedSearch);
       }
 
-      const response = await api.get<AuditLog[]>(`/.gateway/admin/audit?${params}`)
-      return response
+      const response = await api.get<AuditLog[]>(
+        `/.gateway/admin/audit?${params}`
+      );
+      return response;
     },
     keepPreviousData: true,
-  })
+  });
 
   const handleExport = () => {
-    const params = new URLSearchParams()
-    if (actionTypeFilter !== 'all') {
-      params.append('action_type', actionTypeFilter)
+    const params = new URLSearchParams();
+    if (actionTypeFilter !== "all") {
+      params.append("action_type", actionTypeFilter);
     }
-    if (statusFilter !== 'all') {
-      params.append('status', statusFilter)
+    if (statusFilter !== "all") {
+      params.append("status", statusFilter);
     }
     if (dateRange) {
-      params.append('range', dateRange)
+      params.append("range", dateRange);
     }
     if (searchTerm) {
-      params.append('search', searchTerm)
+      params.append("search", searchTerm);
     }
-    params.append('format', 'csv')
+    params.append("format", "csv");
 
     // Create download link
-    const url = `/.gateway/admin/audit/export?${params}`
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `audit-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+    const url = `/.gateway/admin/audit/export?${params}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `audit-logs-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const getStatusBadgeAppearance = (
     status: string
-  ): { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string } => {
+  ): {
+    variant: "default" | "secondary" | "destructive" | "outline";
+    className?: string;
+  } => {
     switch (status) {
-      case 'success':
+      case "success":
         // Force green for success regardless of theme primary color
-        return { variant: 'default', className: 'bg-green-600 text-white hover:bg-green-700' }
-      case 'failed':
-      case 'error':
+        return {
+          variant: "default",
+          className: "bg-green-600 text-white hover:bg-green-700",
+        };
+      case "failed":
+      case "error":
         // Red for failure/error
-        return { variant: 'destructive' }
-      case 'blocked':
-        return { variant: 'secondary' }
+        return { variant: "destructive" };
+      case "blocked":
+        return { variant: "secondary" };
       default:
-        return { variant: 'outline' }
+        return { variant: "outline" };
     }
-  }
+  };
 
   const getActionTypeBadgeAppearance = (
     type: string
-  ): { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string } => {
+  ): {
+    variant: "default" | "secondary" | "destructive" | "outline";
+    className?: string;
+  } => {
     switch (type) {
-      case 'auth':
-        return { variant: 'default' }
-      case 'user_management':
+      case "auth":
+        return { variant: "default" };
+      case "user_management":
         // Purple badge for user management actions
-        return { variant: 'default', className: 'bg-purple-600 text-white hover:bg-purple-700' }
-      case 'token_management':
-        return { variant: 'outline' }
+        return {
+          variant: "default",
+          className: "bg-purple-600 text-white hover:bg-purple-700",
+        };
+      case "token_management":
+        return { variant: "outline" };
       default:
-        return { variant: 'default' }
+        return { variant: "default" };
     }
-  }
+  };
 
   // Do not unmount the page on loading/error; render inline status instead to preserve input focus
 
   // Calculate statistics
   const stats = {
     total: logs.length,
-    success: logs.filter((l: AuditLog) => l.status === 'success').length,
-    failed: logs.filter((l: AuditLog) => l.status === 'failed').length,
-    blocked: logs.filter((l: AuditLog) => l.status === 'blocked').length,
+    success: logs.filter((l: AuditLog) => l.status === "success").length,
+    failed: logs.filter((l: AuditLog) => l.status === "failed").length,
+    blocked: logs.filter((l: AuditLog) => l.status === "blocked").length,
     avgResponseTime:
       logs.length > 0
         ? Math.round(
-            logs.reduce((acc: number, l: AuditLog) => acc + l.response_time_ms, 0) / logs.length
+            logs.reduce(
+              (acc: number, l: AuditLog) => acc + l.response_time_ms,
+              0
+            ) / logs.length
           )
         : 0,
-  }
+  };
 
   // Client-side pagination
-  const totalPages = Math.max(1, Math.ceil(stats.total / perPage))
-  const currentPage = Math.min(page, totalPages)
-  const startIdx = (currentPage - 1) * perPage
-  const endIdx = Math.min(startIdx + perPage, stats.total)
-  const pageItems = logs.slice(startIdx, endIdx)
+  const totalPages = Math.max(1, Math.ceil(stats.total / perPage));
+  const currentPage = Math.min(page, totalPages);
+  const startIdx = (currentPage - 1) * perPage;
+  const endIdx = Math.min(startIdx + perPage, stats.total);
+  const pageItems = logs.slice(startIdx, endIdx);
 
   return (
     <div className="p-8">
@@ -237,7 +266,10 @@ export function AuditPage() {
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl text-green-600">
-              {stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}%
+              {stats.total > 0
+                ? Math.round((stats.success / stats.total) * 100)
+                : 0}
+              %
             </div>
           </CardContent>
         </Card>
@@ -248,7 +280,9 @@ export function AuditPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl text-red-600">{stats.failed + stats.blocked}</div>
+            <div className="font-bold text-2xl text-red-600">
+              {stats.failed + stats.blocked}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -286,7 +320,10 @@ export function AuditPage() {
 
             <div className="space-y-2">
               <Label htmlFor="action-type">Action Type</Label>
-              <Select onValueChange={setActionTypeFilter} value={actionTypeFilter}>
+              <Select
+                onValueChange={setActionTypeFilter}
+                value={actionTypeFilter}
+              >
                 <SelectTrigger id="action-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -337,8 +374,8 @@ export function AuditPage() {
               <Label htmlFor="per-page">Per Page</Label>
               <Select
                 onValueChange={(v) => {
-                  setPerPage(Number(v))
-                  setPage(1)
+                  setPerPage(Number(v));
+                  setPage(1);
                 }}
                 value={String(perPage)}
               >
@@ -378,13 +415,16 @@ export function AuditPage() {
         <CardContent>
           {isError && (
             <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-              Failed to load audit logs: {String((error as Error)?.message || 'Unknown error')}
+              Failed to load audit logs:{" "}
+              {String((error as Error)?.message || "Unknown error")}
             </div>
           )}
           {stats.total === 0 && !isError ? (
-            <div className="py-8 text-center text-muted-foreground">No audit logs found</div>
+            <div className="py-8 text-center text-muted-foreground">
+              No audit logs found
+            </div>
           ) : (
-            <Table>
+            <Table className="text-sm">
               <TableHeader>
                 <TableRow>
                   <TableHead>Timestamp</TableHead>
@@ -400,76 +440,81 @@ export function AuditPage() {
                 {pageItems.map((log: AuditLog) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-mono text-sm">
-                      {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
+                      {format(new Date(log.timestamp), "MMM d, HH:mm:ss")}
                     </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">{log.user_email}</div>
                         {log.user_name && (
-                          <div className="text-muted-foreground text-xs">{log.user_name}</div>
+                          <div className="text-muted-foreground text-xs">
+                            {log.user_name}
+                          </div>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
                       {(() => {
-                        const ap = getActionTypeBadgeAppearance(log.action_type)
+                        const ap = getActionTypeBadgeAppearance(
+                          log.action_type
+                        );
                         return (
                           <Badge className={ap.className} variant={ap.variant}>
-                            {log.action_type.replace('_', ' ')}
+                            {log.action_type.replace("_", " ")}
                           </Badge>
-                        )
+                        );
                       })()}
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{log.action}</TableCell>
-                    <TableCell>
-                      <div className="max-w-[260px] truncate" title={log.resource}>
-                        {(() => {
-                          if (log.action_type === 'convox_api' && log.action === 'process.exec') {
-                            const cmdFromColumn = log.command || ''
+                    <TableCell className="text-sm">
+                      {(() => {
+                        if (log.action_type === 'convox_api' && log.action === 'process.exec') {
+                          const raw = (() => {
                             try {
                               const d = JSON.parse(log.details || '{}') as { command?: string }
-                              const cmd = cmdFromColumn || d.command || ''
-                              return (
-                                <span>
-                                  {log.resource}
-                                  {cmd ? (
-                                    <>
-                                      {': '}
-                                      <code className="whitespace-nowrap">{cmd}</code>
-                                    </>
-                                  ) : null}
-                                </span>
-                              )
+                              return (log.command || d.command || '').trim()
                             } catch {
-                              // Fallback
-                              return (
-                                <span>
-                                  {log.resource}
-                                  {cmdFromColumn ? (
-                                    <>
-                                      {': '}
-                                      <code className="whitespace-nowrap">{cmdFromColumn}</code>
-                                    </>
-                                  ) : null}
-                                </span>
-                              )
+                              return (log.command || '').trim()
                             }
+                          })()
+                          let cmd = raw
+                          if ((cmd.startsWith("'") && cmd.endsWith("'")) || (cmd.startsWith('"') && cmd.endsWith('"'))) {
+                            cmd = cmd.slice(1, -1)
                           }
-                          return <span>{log.resource || '-'}</span>
-                        })()}
+                          const truncated = cmd.length > 64 ? cmd.slice(0, 64) + '…' : cmd
+                          return (
+                            <div className="flex flex-col">
+                              <span className="font-mono">{log.action}:</span>
+                              {cmd && (
+                                <code
+                                  className="mt-1 w-fit whitespace-nowrap font-mono rounded px-1 py-0.5 bg-secondary text-blue-600 dark:text-blue-300 border border-border shadow-sm"
+                                  title={cmd}
+                                >
+                                  {truncated}
+                                </code>
+                              )}
+                            </div>
+                          )
+                        }
+                        return <span className="font-mono">{log.action}</span>
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="max-w-[260px] truncate" title={log.resource}>
+                        <span>{log.resource || '-'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       {(() => {
-                        const ap = getStatusBadgeAppearance(log.status)
+                        const ap = getStatusBadgeAppearance(log.status);
                         return (
                           <Badge className={ap.className} variant={ap.variant}>
                             {log.status}
                           </Badge>
-                        )
+                        );
                       })()}
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {log.ip_address || "-"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -502,5 +547,5 @@ export function AuditPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

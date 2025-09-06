@@ -193,11 +193,12 @@ func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		log.Printf("REQ %s %s rawQuery=%q", r.Method, r.URL.Path, r.URL.RawQuery)
-		for k, vs := range r.Header {
-			for _, v := range vs {
-				log.Printf("HDR %s: %s", k, v)
-			}
-		}
+		// Uncomment for extra request debugging
+		// for k, vs := range r.Header {
+		// 	for _, v := range vs {
+		// 		log.Printf("HDR %s: %s", k, v)
+		// 	}
+		// }
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sr, r)
 		log.Printf("RES %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))

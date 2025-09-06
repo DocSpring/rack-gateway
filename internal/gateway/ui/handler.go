@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -195,6 +197,39 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 		"status":  "ok",
 		"version": "1.0.0",
 	})
+}
+
+// GetCSRFToken issues a CSRF token (double-submit cookie) and returns it in JSON for the SPA.
+func (h *Handler) GetCSRFToken(w http.ResponseWriter, r *http.Request) {
+	tokenCookie, err := r.Cookie("csrf_token")
+	token := ""
+	if err != nil || tokenCookie == nil || tokenCookie.Value == "" {
+		// Generate a random 32-byte token
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err == nil {
+			token = hex.EncodeToString(b)
+		}
+		if token == "" {
+			token = fmt.Sprintf("%d", time.Now().UnixNano())
+		}
+	} else {
+		token = tokenCookie.Value
+	}
+
+	// Set cookie (not HttpOnly so SPA can read if needed; Lax to support redirects)
+	secure := os.Getenv("COOKIE_SECURE") != "false" && os.Getenv("DEV_MODE") != "true"
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(24 * time.Hour),
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"token": token})
 }
 
 // ListAuditLogs returns audit logs (admin only). Minimal implementation returns an empty list

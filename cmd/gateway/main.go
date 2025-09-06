@@ -162,6 +162,9 @@ func main() {
 		// Health check (no auth required)
 		r.Get("/health", uiHandler.Health)
 
+		// CSRF token endpoint (no auth required)
+		r.Get("/csrf", uiHandler.GetCSRFToken)
+
 		// OAuth login endpoints (no auth required)
 		// CLI OAuth flow (real OIDC redirect via GET callback + separate completion)
 		// Start returns auth URL, state, and code_verifier
@@ -183,8 +186,9 @@ func main() {
 
 			r.Get("/me", uiHandler.GetMe)
 
-			// Admin endpoints
+			// Admin endpoints (CSRF protected for unsafe methods)
 			r.Route("/admin", func(r chi.Router) {
+				r.Use(csrfMiddleware())
 				r.Get("/config", uiHandler.GetConfig)
 				r.Put("/config", uiHandler.UpdateConfig)
 				r.Get("/roles", uiHandler.ListRoles)
@@ -250,6 +254,27 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+// csrfMiddleware validates that unsafe admin requests include a CSRF token header matching the CSRF cookie.
+func csrfMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet, http.MethodHead, http.MethodOptions:
+				next.ServeHTTP(w, r)
+				return
+			default:
+				hdr := r.Header.Get("X-CSRF-Token")
+				c, err := r.Cookie("csrf_token")
+				if err != nil || hdr == "" || c == nil || c.Value == "" || hdr != c.Value {
+					http.Error(w, "invalid CSRF token", http.StatusForbidden)
+					return
+				}
+				next.ServeHTTP(w, r)
+			}
+		})
+	}
 }
 
 func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
@@ -440,12 +465,18 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 		}
 
 		// Set auth cookie for the frontend (SameSite=Lax allows top-level redirects)
+		// Set auth cookie for the frontend
+		// Use secure cookies by default; allow insecure only in explicit dev mode
+		secureCookies := getEnv("COOKIE_SECURE", "true") != "false"
+		if getEnv("DEV_MODE", "false") == "true" {
+			secureCookies = false
+		}
 		cookie := &http.Cookie{
 			Name:     "gateway_token",
 			Value:    resp.Token,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   false,
+			Secure:   secureCookies,
 			// MaxAge based on expiry (seconds)
 			Expires:  resp.ExpiresAt,
 			SameSite: http.SameSiteLaxMode,
