@@ -7,16 +7,20 @@ export function setCsrfToken(token: string) {
 export function getCsrfToken(): string | null {
   return csrfCache
 }
-
 // Initialize on module load by fetching token once
 ;(function init() {
   try {
     fetch('/api/.gateway/csrf', { credentials: 'include' })
       .then((r) => r.json())
       .then((j) => {
-        if (j && j.token) setCsrfToken(j.token)
+        if (j?.token) {
+          setCsrfToken(j.token)
+        }
       })
-      .catch(() => {})
-  } catch (_e) {}
+      .catch(() => {
+        /* ignore */
+      })
+  } catch (_e) {
+    /* ignore */
+  }
 })()
-

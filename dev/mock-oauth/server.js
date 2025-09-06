@@ -159,9 +159,21 @@ app.post('/oauth2/v4/token', async (req, res) => {
     grant_type,
     code,
     redirect_uri,
-    client_id,
     code_verifier
   } = req.body;
+
+  // Allow client_id via Basic auth or request body
+  let bodyClientId = req.body.client_id;
+  let authClientId = null;
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Basic ')) {
+    try {
+      const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+      const [user, _pass] = decoded.split(':', 2);
+      authClientId = user;
+    } catch (_) {}
+  }
+  const client_id = bodyClientId || authClientId;
 
   console.log('OAuth token request:', {
     grant_type,

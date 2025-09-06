@@ -66,43 +66,52 @@ class ApiService {
             config.headers['X-CSRF-Token'] = csrf
           }
         }
-      } catch (_e) {}
+      } catch (_e) {
+        /* ignore */
+      }
       return config
     })
 
     // Add response interceptor for auth errors
-    this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          // Persist an auth error message to show after redirect
-          try {
-            sessionStorage.setItem('auth_error', 'Your session has expired. Please sign in again.')
-          } catch (_e) {
-            /* ignore */
-          }
-          // Best-effort immediate toast (may disappear on navigation)
-          try {
-            toast.error('Your session has expired. Please sign in again.')
-          } catch (_e) {
-            /* ignore */
-          }
-          authService.logout()
-        }
-        // If CSRF missing/invalid, try to refresh once
-        if (error.response?.status === 403 && error.response?.data) {
-          try {
-            const url: string = error.config?.url || ''
-            const method: string = (error.config?.method || 'get').toUpperCase()
-            if (method !== 'GET' && url.startsWith('/.gateway/admin')) {
-              // refresh token
-              fetch('/api/.gateway/csrf', { credentials: 'include' }).catch(() => {})
-            }
-          } catch (_e) {}
-        }
-        return Promise.reject(error)
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: acceptable branching for interceptor
+    const onResponseError = (error: unknown) => {
+      const err = error as {
+        response?: { status?: number; data?: unknown }
+        config?: { url?: string; method?: string }
       }
-    )
+      if (err.response?.status === 401) {
+        // Persist an auth error message to show after redirect
+        try {
+          sessionStorage.setItem('auth_error', 'Your session has expired. Please sign in again.')
+        } catch (_e) {
+          /* ignore */
+        }
+        // Best-effort immediate toast (may disappear on navigation)
+        try {
+          toast.error('Your session has expired. Please sign in again.')
+        } catch (_e) {
+          /* ignore */
+        }
+        authService.logout()
+      }
+      // If CSRF missing/invalid, try to refresh once
+      if (err.response?.status === 403 && err.response?.data) {
+        try {
+          const url: string = err.config?.url || ''
+          const method: string = (err.config?.method || 'get').toUpperCase()
+          if (method !== 'GET' && url.startsWith('/.gateway/admin')) {
+            // refresh token
+            fetch('/api/.gateway/csrf', { credentials: 'include' }).catch(() => {
+              /* ignore */
+            })
+          }
+        } catch (_e) {
+          /* ignore */
+        }
+      }
+      return Promise.reject(err)
+    }
+    this.client.interceptors.response.use((response) => response, onResponseError)
   }
 
   // Get gateway configuration (domain + users)

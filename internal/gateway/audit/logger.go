@@ -85,9 +85,7 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 		"ip_address":  al.IPAddress,
 		"user_agent":  al.UserAgent,
 	}
-	if al.Details != "" {
-		payload["details"] = al.Details
-	}
+	// Omit verbose request details; method/path are already logged separately
 	if data, err := json.Marshal(payload); err == nil {
 		fmt.Println(string(data))
 	} else {
