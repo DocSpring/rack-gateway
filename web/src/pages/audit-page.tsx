@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Download, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -105,7 +105,7 @@ export function AuditPage() {
     error,
     isError,
     refetch,
-  } = useQuery({
+  } = useQuery<AuditLog[], Error>({
     queryKey: ['audit-logs', actionTypeFilter, statusFilter, dateRange, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -125,7 +125,7 @@ export function AuditPage() {
       const response = await api.get<AuditLog[]>(`/.gateway/admin/audit?${params}`)
       return response
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
 
   const handleExport = () => {

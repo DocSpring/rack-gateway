@@ -201,6 +201,41 @@ Rack management:
 		},
 	}
 
+	logoutCmd := &cobra.Command{
+		Use:   "logout [rack]",
+		Short: "Remove a rack (deletes config and token)",
+		Args:  cobra.RangeArgs(0, 1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var rack string
+			if len(args) == 1 {
+				rack = args[0]
+			} else {
+				var err error
+				rack, err = getCurrentRack()
+				if err != nil || rack == "" {
+					return fmt.Errorf("no rack selected. Specify a rack: convox-gateway logout <rack>")
+				}
+			}
+
+			removed, err := removeRack(rack)
+			if err != nil {
+				return fmt.Errorf("failed to remove rack: %w", err)
+			}
+
+			// If the removed rack was the current rack, unset it
+			if cur, _ := getCurrentRack(); cur == rack {
+				_ = unsetCurrentRack()
+			}
+
+			if removed {
+				fmt.Printf("Removed rack: %s\n", rack)
+			} else {
+				fmt.Printf("Rack not found: %s (nothing to remove)\n", rack)
+			}
+			return nil
+		},
+	}
+
 	switchCmd := &cobra.Command{
 		Use:   "switch [rack]",
 		Short: "Switch to a different rack",
@@ -324,7 +359,7 @@ PowerShell:
 
 	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, completionCmd, usersCmd)
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, completionCmd, usersCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("CONVOX_GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
@@ -648,6 +683,58 @@ func loadGatewayURL(rack string) (string, error) {
 	return gateway.URL, nil
 }
 
+// removeRack deletes both the gateway config and token for a rack.
+// Returns true if the rack existed in either map, false if nothing changed.
+func removeRack(rack string) (bool, error) {
+	if err := os.MkdirAll(configPath, 0700); err != nil {
+		return false, err
+	}
+
+	configFile := filepath.Join(configPath, "config.json")
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	cfg := &Config{}
+	if err := json.Unmarshal(data, cfg); err != nil {
+		return false, err
+	}
+
+	changed := false
+	if cfg.Gateways == nil {
+		cfg.Gateways = make(map[string]GatewayConfig)
+	}
+	if cfg.Tokens == nil {
+		cfg.Tokens = make(map[string]Token)
+	}
+
+	if _, ok := cfg.Gateways[rack]; ok {
+		delete(cfg.Gateways, rack)
+		changed = true
+	}
+	if _, ok := cfg.Tokens[rack]; ok {
+		delete(cfg.Tokens, rack)
+		changed = true
+	}
+
+	if !changed {
+		return false, nil
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(configFile, out, 0600); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func openBrowser(url string) error {
 	var cmd string
 	var args []string
@@ -704,4 +791,16 @@ func setCurrentRack(rack string) error {
 
 	currentFile := filepath.Join(configPath, "current")
 	return os.WriteFile(currentFile, []byte(rack), 0600)
+}
+
+// unsetCurrentRack removes the current rack selection by deleting the file.
+func unsetCurrentRack() error {
+	currentFile := filepath.Join(configPath, "current")
+	if err := os.Remove(currentFile); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

@@ -62,7 +62,7 @@ mock:
 	@echo "Building mock Convox server..."
 	@go build -o bin/mock-convox ./cmd/mock-convox/
 
-test: test-unit test-integration web-test
+test: test-unit test-integration web-test web-e2e cli-e2e
 
 test-go: test-unit test-integration
 
