@@ -30,6 +30,19 @@ jobs:
           chmod +x scripts/wait-services.sh
           bash scripts/wait-services.sh
 
+      - name: Install Convox CLI
+        run: |
+          set -euo pipefail
+          ARCH=$(uname -m)
+          URL="https://github.com/convox/convox/releases/latest/download/convox-linux"
+          if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            URL="https://github.com/convox/convox/releases/latest/download/convox-linux-arm64"
+          fi
+          curl -fsSL "$URL" -o /tmp/convox
+          sudo mv /tmp/convox /usr/local/bin/convox
+          sudo chmod 755 /usr/local/bin/convox
+          convox version || true
+
       - name: Run CLI E2E
         run: bash scripts/cli-e2e.sh
 
@@ -40,4 +53,3 @@ jobs:
       - name: Teardown
         if: always()
         run: docker compose down -v
-
