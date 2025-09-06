@@ -6,6 +6,8 @@ import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { UsersPage } from './users-page'
 
+const ADMIN_LABEL_RE = /Administrator/i
+
 const ADD_USER_RE = /Add User/i
 const DONT_HAVE_PERMISSION_RE = /don't have permission/i
 const UPDATE_USER_RE = /Update User/i
@@ -189,54 +191,21 @@ describe('UsersPage', () => {
         expect(screen.getByText('Edit User')).toBeInTheDocument()
       })
 
-      // Toggle admin role - find the checkbox for admin role
-      const checkboxes = screen.getAllByRole('checkbox')
-      const adminCheckbox = checkboxes.find((cb) =>
-        cb.closest('div')?.textContent?.includes('Administrator')
-      )
-      if (adminCheckbox) {
-        fireEvent.click(adminCheckbox)
-      }
+      // Select admin role via radio
+      const adminRadio = screen.getByRole('radio', { name: ADMIN_LABEL_RE })
+      fireEvent.click(adminRadio)
 
       // Submit
       fireEvent.click(screen.getByRole('button', { name: UPDATE_USER_RE }))
 
       await waitFor(() => {
         expect(api.put).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com/roles', {
-          roles: expect.arrayContaining(['viewer']),
+          roles: ['admin'],
         })
       })
     })
 
-    it('suspends a user', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
-      vi.mocked(api.put).mockResolvedValueOnce({})
-
-      const Wrapper = createWrapper()
-      render(<UsersPage />, { wrapper: Wrapper })
-
-      await waitFor(() => {
-        expect(screen.getByText('Viewer User')).toBeInTheDocument()
-      })
-
-      // Find suspend button for viewer user
-      const rows = screen.getAllByRole('row')
-      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
-      if (!viewerRow) {
-        throw new Error('Viewer row not found')
-      }
-
-      // Find the suspend button within that row (middle button with UserX icon)
-      const buttons = within(viewerRow).getAllByRole('button')
-      const suspendButton = buttons[1] // Middle button is suspend
-      fireEvent.click(suspendButton)
-
-      await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com/suspend', {
-          suspended: true,
-        })
-      })
-    })
+    // suspend/unsuspend removed from UI; no test required
 
     it('deletes a user with confirmation', async () => {
       vi.mocked(api.get)

@@ -98,6 +98,13 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 		ResponseTimeMs: int(latency.Milliseconds()),
 	}
 
+	// Enrich with command when executing
+	if action == "process.exec" {
+		if cmd := r.Header.Get("command"); cmd != "" {
+			auditLog.Command = cmd
+		}
+	}
+
 	if dbErr := l.database.CreateAuditLog(auditLog); dbErr != nil {
 		log.Printf("Failed to store audit log in database: %v", dbErr)
 	}
@@ -227,6 +234,11 @@ func (l *Logger) RedactEnvVars(envVars map[string]string) map[string]string {
 	return redacted
 }
 
+// no ephemeral exec hints; authoritative source is the 'command' header from the WS request
+
+// SaveProcessCommand stores a pid->command mapping (used to enrich exec audit entries)
+// No-op migration helper removed; exec commands are stored directly on audit logs.
+
 func getRequestID(r *http.Request) string {
 	requestID := r.Header.Get("X-Request-ID")
 	if requestID == "" {
@@ -324,7 +336,35 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 			}
 		}
 
-	// Check for apps at the root level (less specific match)
+	case strings.Contains(path, "/processes/") && strings.HasSuffix(path, "/exec"):
+		// /apps/{app}/processes/{pid}/exec
+		action = "process.exec"
+		// Extract process id as resource
+		for i, part := range parts {
+			if part == "processes" && i+1 < len(parts) {
+				resource = parts[i+1]
+				break
+			}
+		}
+
+	case strings.Contains(path, "/processes/"):
+		// /apps/{app}/processes/{pid}
+		switch method {
+		case "DELETE":
+			action = "process.terminate"
+		case "GET":
+			action = "process.get"
+		default:
+			action = "process.manage"
+		}
+		for i, part := range parts {
+			if part == "processes" && i+1 < len(parts) {
+				resource = parts[i+1]
+				break
+			}
+		}
+
+		// Check for apps at the root level (less specific match)
 	case strings.HasPrefix(path, "apps"):
 		if method == "GET" {
 			if len(parts) == 1 {
@@ -365,6 +405,21 @@ func (l *Logger) buildDetailsJSON(r *http.Request) string {
 	// Add query parameters (redacted)
 	if r.URL.RawQuery != "" {
 		details["query"] = l.redactQueryParams(r.URL.RawQuery)
+	}
+
+	// For exec, include command and process id if available
+	if strings.HasSuffix(r.URL.Path, "/exec") {
+		if cmd := r.Header.Get("command"); cmd != "" {
+			details["command"] = cmd
+		}
+		// No fallback to WS frames; authoritative source is the 'command' header
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		for i, p := range parts {
+			if p == "processes" && i+1 < len(parts) {
+				details["process_id"] = parts[i+1]
+				break
+			}
+		}
 	}
 
 	// Add request ID if available

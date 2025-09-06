@@ -44,6 +44,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -191,9 +192,15 @@ func main() {
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		log.Printf("REQ %s %s rawQuery=%q", r.Method, r.URL.Path, r.URL.RawQuery)
+		for k, vs := range r.Header {
+			for _, v := range vs {
+				log.Printf("HDR %s: %s", k, v)
+			}
+		}
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sr, r)
-		log.Printf("%d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
+		log.Printf("RES %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
 	})
 }
 
@@ -310,6 +317,16 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	service := vars["service"]
+	// Log query and body for debugging
+	rawBody := ""
+	if r.Body != nil {
+		if b, err := io.ReadAll(r.Body); err == nil {
+			rawBody = string(b)
+		}
+	}
+	_ = r.Body.Close()
+	log.Printf("SERVICE processes start app=%s service=%s query=%q body=%q", app, service, r.URL.RawQuery, rawBody)
+
 	// Stub: return 202 Accepted with a fake process id; echo method
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -327,9 +344,12 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	id := vars["id"]
+	log.Printf("EXEC request for app=%s pid=%s query=%q", app, id, r.URL.RawQuery)
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
+		// Accept client requested subprotocols to mimic k8s exec behavior
+		Subprotocols: parseSubprotocols(r.Header.Get("Sec-WebSocket-Protocol")),
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -341,12 +361,28 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 
 	// Send a tiny session transcript
 	_ = conn.WriteMessage(websocket.TextMessage, []byte("Connected to mock exec for app="+app+" pid="+id+"\n"))
-	// If a command was provided, echo it
+	// If a command was provided on query, echo it (some clients may do this)
 	if cmd := r.URL.Query().Get("command"); cmd != "" {
 		_ = conn.WriteMessage(websocket.TextMessage, []byte("$ "+cmd+"\n"))
 		_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
 	}
+
 	_ = conn.WriteMessage(websocket.TextMessage, []byte("Session closing.\n"))
+}
+
+func parseSubprotocols(h string) []string {
+	if h == "" {
+		return nil
+	}
+	parts := strings.Split(h, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func createApp(w http.ResponseWriter, r *http.Request) {

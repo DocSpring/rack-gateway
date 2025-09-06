@@ -47,6 +47,7 @@ type AuditLog struct {
 	UserName       string    `json:"user_name,omitempty"`
 	ActionType     string    `json:"action_type"` // "convox_api", "user_management", "auth"
 	Action         string    `json:"action"`      // e.g., "env.get", "user.create", "auth.failed"
+	Command        string    `json:"command,omitempty"`
 	Resource       string    `json:"resource,omitempty"`
 	Details        string    `json:"details,omitempty"` // JSON string
 	IPAddress      string    `json:"ip_address,omitempty"`
@@ -109,20 +110,21 @@ func (d *Database) initSchema() error {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
-	CREATE TABLE IF NOT EXISTS audit_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		user_email TEXT NOT NULL,
-		user_name TEXT,
-		action_type TEXT NOT NULL,
-		action TEXT NOT NULL,
-		resource TEXT,
-		details TEXT, -- JSON with command details
-		ip_address TEXT,
-		user_agent TEXT,
-		status TEXT NOT NULL,
-		response_time_ms INTEGER
-	);
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        user_email TEXT NOT NULL,
+        user_name TEXT,
+        action_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        command TEXT,
+        resource TEXT,
+        details TEXT, -- JSON with command details
+        ip_address TEXT,
+        user_agent TEXT,
+        status TEXT NOT NULL,
+        response_time_ms INTEGER
+    );
 
 	-- Indexes for performance
 	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -131,18 +133,19 @@ func (d *Database) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_user_email ON audit_logs(user_email);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_action_type ON audit_logs(action_type);
 
-	-- CLI login interim codes (state -> code)
-	CREATE TABLE IF NOT EXISTS cli_login_states (
-		state TEXT PRIMARY KEY,
-		code TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
+    -- CLI login interim codes (state -> code)
+    CREATE TABLE IF NOT EXISTS cli_login_states (
+        state TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     `
 
 	if _, err := d.db.Exec(schema); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
-
+	// No runtime migrations; schema is defined above for greenfield usage
 	return nil
 }
 
@@ -342,10 +345,10 @@ func (d *Database) ListUsers() ([]*User, error) {
 func (d *Database) CreateAuditLog(log *AuditLog) error {
 	_, err := d.db.Exec(
 		`INSERT INTO audit_logs (
-			user_email, user_name, action_type, action, resource, 
-			details, ip_address, user_agent, status, response_time_ms
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Resource,
+            user_email, user_name, action_type, action, command, resource, 
+            details, ip_address, user_agent, status, response_time_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Command, log.Resource,
 		log.Details, log.IPAddress, log.UserAgent, log.Status, log.ResponseTimeMs,
 	)
 	if err != nil {
@@ -357,12 +360,12 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 // GetAuditLogs retrieves audit logs with optional filters
 func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([]*AuditLog, error) {
 	query := `
-		SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action, 
-		       COALESCE(resource, ''), COALESCE(details, ''), COALESCE(ip_address, ''), 
-		       COALESCE(user_agent, ''), status, response_time_ms
-		FROM audit_logs
-		WHERE 1=1
-	`
+        SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action, 
+               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(details, ''), COALESCE(ip_address, ''), 
+               COALESCE(user_agent, ''), status, response_time_ms
+        FROM audit_logs
+        WHERE 1=1
+    `
 	args := []interface{}{}
 
 	if userEmail != "" {
@@ -371,8 +374,9 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	}
 
 	if !since.IsZero() {
+		// Normalize to UTC to match SQLite CURRENT_TIMESTAMP storage
 		query += " AND timestamp >= ?"
-		args = append(args, since)
+		args = append(args, since.UTC())
 	}
 
 	query += " ORDER BY timestamp DESC"
@@ -394,7 +398,7 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 
 		err := rows.Scan(
 			&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName,
-			&log.ActionType, &log.Action, &log.Resource, &log.Details,
+			&log.ActionType, &log.Action, &log.Command, &log.Resource, &log.Details,
 			&log.IPAddress, &log.UserAgent, &log.Status, &log.ResponseTimeMs,
 		)
 		if err != nil {
@@ -542,4 +546,10 @@ func (d *Database) DeleteAPIToken(id int64) error {
 // Close closes the database connection
 func (d *Database) Close() error {
 	return d.db.Close()
+}
+
+// DB exposes the underlying *sql.DB for tests and advanced usage.
+// Avoid using this in application code where higher-level helpers exist.
+func (d *Database) DB() *sql.DB {
+	return d.db
 }

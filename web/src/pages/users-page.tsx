@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Edit2, Plus, RefreshCw, Trash2, UserCheck, UserX } from 'lucide-react'
+import { Edit2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '../components/ui/badge'
@@ -67,8 +67,18 @@ export function UsersPage() {
   const [formData, setFormData] = useState({
     email: '',
     name: '',
-    roles: [] as string[],
   })
+  const [selectedRole, setSelectedRole] = useState<string>('viewer')
+
+  const rolePrecedence = ['admin', 'deployer', 'ops', 'viewer'] as const
+  const pickHighestRole = (roles: string[] = []) => {
+    for (const r of rolePrecedence) {
+      if (roles.includes(r)) {
+        return r
+      }
+    }
+    return 'viewer'
+  }
 
   // Check if current user is admin
   const isAdmin = currentUser?.roles?.includes('admin')
@@ -118,21 +128,6 @@ export function UsersPage() {
     },
   })
 
-  // Suspend/unsuspend user mutation
-  const suspendUserMutation = useMutation({
-    mutationFn: async ({ email, suspended }: { email: string; suspended: boolean }) => {
-      await api.put(`/.gateway/admin/users/${email}/suspend`, { suspended })
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast.success(`User ${variables.suspended ? 'suspended' : 'unsuspended'} successfully`)
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to update user status')
-    },
-  })
-
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -150,7 +145,8 @@ export function UsersPage() {
 
   const handleAddUser = () => {
     setEditingUser(null)
-    setFormData({ email: '', name: '', roles: ['viewer'] })
+    setFormData({ email: '', name: '' })
+    setSelectedRole('viewer')
     setIsDialogOpen(true)
   }
 
@@ -159,27 +155,32 @@ export function UsersPage() {
     setFormData({
       email: user.email,
       name: user.name,
-      roles: user.roles,
     })
+    setSelectedRole(pickHighestRole(user.roles))
     setIsDialogOpen(true)
   }
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false)
     setEditingUser(null)
-    setFormData({ email: '', name: '', roles: [] })
+    setFormData({ email: '', name: '' })
+    setSelectedRole('viewer')
   }
 
   const handleSaveUser = () => {
-    if (!(formData.email && formData.name) || formData.roles.length === 0) {
+    if (!(formData.email && formData.name && selectedRole)) {
       toast.error('Please fill in all fields')
       return
     }
 
     if (editingUser) {
-      updateRolesMutation.mutate({ email: formData.email, roles: formData.roles })
+      updateRolesMutation.mutate({ email: formData.email, roles: [selectedRole] })
     } else {
-      createUserMutation.mutate(formData)
+      createUserMutation.mutate({
+        email: formData.email,
+        name: formData.name,
+        roles: [selectedRole],
+      })
     }
   }
 
@@ -194,14 +195,7 @@ export function UsersPage() {
     }
   }
 
-  const toggleRoleSelection = (role: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      roles: prev.roles.includes(role)
-        ? prev.roles.filter((r) => r !== role)
-        : [...prev.roles, role],
-    }))
-  }
+  // Single role only; radios control selectedRole
 
   if (!isAdmin) {
     return (
@@ -316,9 +310,7 @@ export function UsersPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.suspended ? 'destructive' : 'default'}>
-                        {user.suspended ? 'Suspended' : 'Active'}
-                      </Badge>
+                      <Badge variant={'default'}>Active</Badge>
                     </TableCell>
                     <TableCell className="text-sm">
                       {(() => {
@@ -336,23 +328,6 @@ export function UsersPage() {
                       <div className="flex justify-end gap-2">
                         <Button onClick={() => handleEditUser(user)} size="sm" variant="ghost">
                           <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          disabled={user.email === currentUser?.email}
-                          onClick={() =>
-                            suspendUserMutation.mutate({
-                              email: user.email,
-                              suspended: !user.suspended,
-                            })
-                          }
-                          size="sm"
-                          variant="ghost"
-                        >
-                          {user.suspended ? (
-                            <UserCheck className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <UserX className="h-4 w-4 text-orange-600" />
-                          )}
                         </Button>
                         <Button
                           disabled={user.email === currentUser?.email}
@@ -398,6 +373,7 @@ export function UsersPage() {
                 name="user_email"
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="user@example.com"
+                required
                 spellCheck={false}
                 type="email"
                 value={formData.email}
@@ -419,36 +395,37 @@ export function UsersPage() {
                 name="user_name"
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="John Doe"
+                required
                 spellCheck={false}
                 value={formData.name}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Roles</Label>
+              <Label>Role</Label>
               <div className="space-y-2">
                 {Object.entries(AVAILABLE_ROLES).map(([role, config]) => (
-                  <button
+                  <label
                     className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${
-                      formData.roles.includes(role)
-                        ? 'border-primary bg-primary/10'
-                        : 'hover:bg-accent'
+                      selectedRole === role ? 'border-primary bg-primary/10' : 'hover:bg-accent'
                     }`}
                     key={role}
-                    onClick={() => toggleRoleSelection(role)}
-                    type="button"
                   >
-                    <div>
-                      <div className="font-medium">{config.label}</div>
-                      <div className="text-muted-foreground text-sm">{config.description}</div>
+                    <div className="flex items-start gap-3">
+                      <input
+                        checked={selectedRole === role}
+                        className="mt-1 h-4 w-4"
+                        name="user_role"
+                        onChange={() => setSelectedRole(role)}
+                        type="radio"
+                        value={role}
+                      />
+                      <div>
+                        <div className="font-medium">{config.label}</div>
+                        <div className="text-muted-foreground text-sm">{config.description}</div>
+                      </div>
                     </div>
-                    <input
-                      checked={formData.roles.includes(role)}
-                      className="h-4 w-4"
-                      onChange={() => toggleRoleSelection(role)}
-                      type="checkbox"
-                    />
-                  </button>
+                  </label>
                 ))}
               </div>
             </div>

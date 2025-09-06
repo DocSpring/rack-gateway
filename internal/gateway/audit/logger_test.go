@@ -37,6 +37,8 @@ func TestAuditLogger(t *testing.T) {
 			{"/apps/myapp/run", "POST", "run.command", "myapp"},
 			{"/apps/myapp/ps", "GET", "ps.list", "myapp"},
 			{"/unknown/path", "GET", "unknown.get", "path"},
+			{"/apps/myapp/processes/p1", "GET", "process.get", "p1"},
+			{"/apps/myapp/processes/p1", "DELETE", "process.terminate", "p1"},
 		}
 
 		for _, test := range tests {

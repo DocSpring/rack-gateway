@@ -18,12 +18,12 @@ export default defineConfig({
     port: parseInt(process.env.WEB_PORT || '5173'),
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL || `http://localhost:${process.env.GATEWAY_PORT || '8447'}`,
+        target: process.env.VITE_API_BASE_URL || `http://127.0.0.1:${process.env.GATEWAY_PORT || '8080'}`,
         changeOrigin: true,
         rewrite: (pathStr) => pathStr.replace(API_REGEX, ''),
       },
       '/.gateway': {
-        target: process.env.VITE_API_BASE_URL || `http://localhost:${process.env.GATEWAY_PORT || '8447'}`,
+        target: process.env.VITE_API_BASE_URL || `http://127.0.0.1:${process.env.GATEWAY_PORT || '8080'}`,
         changeOrigin: true,
       },
     },

@@ -231,6 +231,33 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	header.Set("X-Request-ID", uuid.New().String())
 	// Some servers validate Origin during WS handshake
 	header.Set("Origin", fmt.Sprintf("%s://%s", map[bool]string{true: "https", false: "http"}[strings.HasPrefix(rack.URL, "https")], u.Host))
+	// Forward relevant client headers to upstream (Convox uses headers for exec options, including 'command')
+	for k, vals := range r.Header {
+		lk := strings.ToLower(k)
+		switch lk {
+		case "authorization":
+			// override with rack auth
+			continue
+		case "host", "connection", "upgrade", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions":
+			continue
+		case "origin":
+			// we already set Origin appropriate to upstream host
+			continue
+		case "sec-websocket-protocol":
+			// handled below
+			continue
+		case "x-user-email", "x-request-id":
+			// already set explicitly above; avoid duplicates
+			continue
+		}
+		for _, v := range vals {
+			header.Add(k, v)
+		}
+	}
+	// Preserve subprotocols requested by client (needed for k8s exec multiplexing)
+	if sp := r.Header.Get("Sec-WebSocket-Protocol"); sp != "" {
+		header.Set("Sec-WebSocket-Protocol", sp)
+	}
 	d := *websocket.DefaultDialer
 	d.HandshakeTimeout = 10 * time.Second
 
@@ -267,9 +294,22 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	}
 	defer upstreamConn.Close()
 
+	// Determine upstream-selected subprotocol (if any)
+	selectedSP := ""
+	if upstreamConn != nil {
+		selectedSP = upstreamConn.Subprotocol()
+	}
+
 	// Upgrade client connection
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
+		// Advertise only the upstream-selected subprotocol (pass-through) if present
+		Subprotocols: func() []string {
+			if selectedSP != "" {
+				return []string{selectedSP}
+			}
+			return nil
+		}(),
 	}
 	clientConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -308,7 +348,23 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 
 	// Wait for either direction to error/close
 	<-errc
+
 	return nil
+}
+
+func parseSubprotocols(h string) []string {
+	if h == "" {
+		return nil
+	}
+	parts := strings.Split(h, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		s := strings.TrimSpace(p)
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC

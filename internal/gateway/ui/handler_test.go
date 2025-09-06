@@ -209,6 +209,16 @@ func TestCreateUser(t *testing.T) {
 		wantStatus int
 	}{
 		{
+			name:      "admin invalid email format",
+			userEmail: "admin@example.com",
+			reqBody: map[string]interface{}{
+				"email": "not-an-email",
+				"name":  "Bad",
+				"roles": []string{"viewer"},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name:      "admin can create user",
 			userEmail: "admin@example.com",
 			reqBody: map[string]interface{}{
@@ -594,6 +604,47 @@ func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 }
 
+func TestListAuditLogs_Range15mFilters(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	handler := NewHandler(rbacManager, "", nil, database)
+
+	// Seed: one old (1h ago), one recent (5m ago)
+	now := time.Now().UTC()
+	oneHourAgo := now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
+	fiveMinAgo := now.Add(-5 * time.Minute).Format("2006-01-02 15:04:05")
+
+	// Insert explicitly with custom timestamps
+	_, err := database.DB().Exec(
+		`INSERT INTO audit_logs (timestamp, user_email, user_name, action_type, action, resource, details, ip_address, user_agent, status, response_time_ms)
+         VALUES (?, ?, '', 'auth', 'login', '', '', '', '', 'success', 10)`,
+		oneHourAgo, "old@example.com",
+	)
+	require.NoError(t, err)
+	_, err = database.DB().Exec(
+		`INSERT INTO audit_logs (timestamp, user_email, user_name, action_type, action, resource, details, ip_address, user_agent, status, response_time_ms)
+         VALUES (?, ?, '', 'auth', 'login', '', '', '', '', 'success', 10)`,
+		fiveMinAgo, "recent@example.com",
+	)
+	require.NoError(t, err)
+
+	// Query last 15 minutes
+	rr := httptest.NewRecorder()
+	req := createAuthenticatedRequest("GET", "/.gateway/admin/audit?range=15m", nil, "admin@example.com")
+	handler.ListAuditLogs(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	var logs []db.AuditLog
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &logs))
+
+	// Expect only the recent entry
+	require.GreaterOrEqual(t, len(logs), 1)
+	for _, l := range logs {
+		if l.UserEmail == "old@example.com" {
+			t.Fatalf("unexpected old log included for 15m range: %+v", l)
+		}
+	}
+}
+
 func TestExportAuditLogs_CSV(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
@@ -606,6 +657,6 @@ func TestExportAuditLogs_CSV(t *testing.T) {
 	handler.ExportAuditLogs(rr, createAuthenticatedRequest("GET", "/.gateway/admin/audit/export?range=all", nil, "admin@example.com"))
 	assert.Equal(t, http.StatusOK, rr.Code)
 	body := rr.Body.String()
-	assert.Contains(t, body, "timestamp,user_email,user_name,action_type,action,resource,status,response_time_ms,ip_address,user_agent")
+	assert.Contains(t, body, "timestamp,user_email,user_name,action_type,action,command,resource,status,response_time_ms,ip_address,user_agent")
 	assert.Contains(t, body, "admin@example.com")
 }

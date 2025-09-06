@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Download, RefreshCw, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -31,6 +31,7 @@ interface AuditLog {
   user_name: string
   action_type: string
   action: string
+  command?: string
   resource: string
   details: string
   ip_address: string
@@ -56,18 +57,53 @@ const STATUS_TYPES = {
 
 export function AuditPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [actionTypeFilter, setActionTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [dateRange, setDateRange] = useState('7d')
+  const [dateRange, setDateRange] = useState(() => {
+    try {
+      return localStorage.getItem('audit_date_range') || '7d'
+    } catch {
+      return '7d'
+    }
+  })
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem('audit_per_page')
+      return v ? Math.max(1, parseInt(v, 10)) : 50
+    } catch {
+      return 50
+    }
+  })
+
+  // Persist selected date range and per-page to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('audit_date_range', dateRange)
+    } catch {}
+  }, [dateRange])
+  useEffect(() => {
+    try {
+      localStorage.setItem('audit_per_page', String(perPage))
+    } catch {}
+  }, [perPage])
+
+  // Debounce search to prevent refetch on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300)
+    return () => clearTimeout(t)
+  }, [searchTerm])
 
   // Fetch audit logs
   const {
     data: logs = [],
-    isLoading,
     error,
+    isError,
+    isFetching,
     refetch,
   } = useQuery({
-    queryKey: ['audit-logs', actionTypeFilter, statusFilter, dateRange, searchTerm],
+    queryKey: ['audit-logs', actionTypeFilter, statusFilter, dateRange, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (actionTypeFilter !== 'all') {
@@ -79,13 +115,14 @@ export function AuditPage() {
       if (dateRange) {
         params.append('range', dateRange)
       }
-      if (searchTerm) {
-        params.append('search', searchTerm)
+      if (debouncedSearch) {
+        params.append('search', debouncedSearch)
       }
 
       const response = await api.get<AuditLog[]>(`/.gateway/admin/audit?${params}`)
       return response
     },
+    keepPreviousData: true,
   })
 
   const handleExport = () => {
@@ -114,54 +151,41 @@ export function AuditPage() {
     document.body.removeChild(link)
   }
 
-  const getStatusBadgeVariant = (status: string) => {
+  const getStatusBadgeAppearance = (
+    status: string
+  ): { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string } => {
     switch (status) {
       case 'success':
-        return 'default'
+        // Force green for success regardless of theme primary color
+        return { variant: 'default', className: 'bg-green-600 text-white hover:bg-green-700' }
       case 'failed':
-        return 'destructive'
+      case 'error':
+        // Red for failure/error
+        return { variant: 'destructive' }
       case 'blocked':
-        return 'secondary'
+        return { variant: 'secondary' }
       default:
-        return 'outline'
+        return { variant: 'outline' }
     }
   }
 
-  const getActionTypeBadgeVariant = (type: string) => {
+  const getActionTypeBadgeAppearance = (
+    type: string
+  ): { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string } => {
     switch (type) {
       case 'auth':
-        return 'default'
+        return { variant: 'default' }
       case 'user_management':
-        return 'secondary'
+        // Purple badge for user management actions
+        return { variant: 'default', className: 'bg-purple-600 text-white hover:bg-purple-700' }
       case 'token_management':
-        return 'outline'
+        return { variant: 'outline' }
       default:
-        return 'default'
+        return { variant: 'default' }
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-8">
-        <div className="flex h-64 items-center justify-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-destructive">Error</CardTitle>
-            <CardDescription>Failed to load audit logs</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
+  // Do not unmount the page on loading/error; render inline status instead to preserve input focus
 
   // Calculate statistics
   const stats = {
@@ -176,6 +200,13 @@ export function AuditPage() {
           )
         : 0,
   }
+
+  // Client-side pagination
+  const totalPages = Math.max(1, Math.ceil(stats.total / perPage))
+  const currentPage = Math.min(page, totalPages)
+  const startIdx = (currentPage - 1) * perPage
+  const endIdx = Math.min(startIdx + perPage, stats.total)
+  const pageItems = logs.slice(startIdx, endIdx)
 
   return (
     <div className="p-8">
@@ -238,7 +269,7 @@ export function AuditPage() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <div className="space-y-2">
               <Label htmlFor="search">Search</Label>
               <div className="relative">
@@ -292,11 +323,32 @@ export function AuditPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="15m">Last 15 Minutes</SelectItem>
                   <SelectItem value="1h">Last Hour</SelectItem>
                   <SelectItem value="24h">Last 24 Hours</SelectItem>
                   <SelectItem value="7d">Last 7 Days</SelectItem>
                   <SelectItem value="30d">Last 30 Days</SelectItem>
                   <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="per-page">Per Page</Label>
+              <Select
+                onValueChange={(v) => {
+                  setPerPage(Number(v))
+                  setPage(1)
+                }}
+                value={String(perPage)}
+              >
+                <SelectTrigger id="per-page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -319,10 +371,17 @@ export function AuditPage() {
       <Card>
         <CardHeader>
           <CardTitle>Activity Log</CardTitle>
-          <CardDescription>Showing {logs.length} events</CardDescription>
+          <CardDescription>
+            Showing {stats.total} events · Page {currentPage} of {totalPages}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {logs.length === 0 ? (
+          {isError && (
+            <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              Failed to load audit logs: {String((error as Error)?.message || 'Unknown error')}
+            </div>
+          )}
+          {stats.total === 0 && !isError ? (
             <div className="py-8 text-center text-muted-foreground">No audit logs found</div>
           ) : (
             <Table>
@@ -334,12 +393,11 @@ export function AuditPage() {
                   <TableHead>Action</TableHead>
                   <TableHead>Resource</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Response Time</TableHead>
                   <TableHead>IP Address</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.map((log: AuditLog) => (
+                {pageItems.map((log: AuditLog) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-mono text-sm">
                       {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
@@ -353,25 +411,93 @@ export function AuditPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getActionTypeBadgeVariant(log.action_type)}>
-                        {log.action_type.replace('_', ' ')}
-                      </Badge>
+                      {(() => {
+                        const ap = getActionTypeBadgeAppearance(log.action_type)
+                        return (
+                          <Badge className={ap.className} variant={ap.variant}>
+                            {log.action_type.replace('_', ' ')}
+                          </Badge>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{log.action}</TableCell>
                     <TableCell>
-                      <div className="max-w-[200px] truncate" title={log.resource}>
-                        {log.resource || '-'}
+                      <div className="max-w-[260px] truncate" title={log.resource}>
+                        {(() => {
+                          if (log.action_type === 'convox_api' && log.action === 'process.exec') {
+                            const cmdFromColumn = log.command || ''
+                            try {
+                              const d = JSON.parse(log.details || '{}') as { command?: string }
+                              const cmd = cmdFromColumn || d.command || ''
+                              return (
+                                <span>
+                                  {log.resource}
+                                  {cmd ? (
+                                    <>
+                                      {': '}
+                                      <code className="whitespace-nowrap">{cmd}</code>
+                                    </>
+                                  ) : null}
+                                </span>
+                              )
+                            } catch {
+                              // Fallback
+                              return (
+                                <span>
+                                  {log.resource}
+                                  {cmdFromColumn ? (
+                                    <>
+                                      {': '}
+                                      <code className="whitespace-nowrap">{cmdFromColumn}</code>
+                                    </>
+                                  ) : null}
+                                </span>
+                              )
+                            }
+                          }
+                          return <span>{log.resource || '-'}</span>
+                        })()}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>
+                      {(() => {
+                        const ap = getStatusBadgeAppearance(log.status)
+                        return (
+                          <Badge className={ap.className} variant={ap.variant}>
+                            {log.status}
+                          </Badge>
+                        )
+                      })()}
                     </TableCell>
-                    <TableCell className="text-right">{log.response_time_ms}ms</TableCell>
                     <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+          )}
+
+          {stats.total > 0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-muted-foreground text-sm">
+                Showing {startIdx + 1}–{endIdx} of {stats.total}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  variant="outline"
+                >
+                  Previous
+                </Button>
+                <Button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  variant="outline"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

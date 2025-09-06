@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
+	"regexp"
 )
 
 type Handler struct {
@@ -30,6 +31,15 @@ func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *t
 		tokenService: tokenService,
 		database:     database,
 	}
+}
+
+var emailRegex = regexp.MustCompile(`^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$`)
+
+func isValidEmail(email string) bool {
+	if len(email) < 3 || len(email) > 254 {
+		return false
+	}
+	return emailRegex.MatchString(email)
 }
 
 // auditUserAction records an audit log for a user-management action
@@ -264,16 +274,24 @@ func (h *Handler) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", "attachment; filename=audits.csv")
-	buf := "timestamp,user_email,user_name,action_type,action,resource,status,response_time_ms,ip_address,user_agent\n"
+	buf := "timestamp,user_email,user_name,action_type,action,command,resource,status,response_time_ms,ip_address,user_agent\n"
 	for _, l := range logs {
-		buf += fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%d,%s,%s\n",
-			l.Timestamp.Format(time.RFC3339), escapeCSV(l.UserEmail), escapeCSV(l.UserName), l.ActionType, escapeCSV(l.Action), escapeCSV(l.Resource), l.Status, l.ResponseTimeMs, escapeCSV(l.IPAddress), escapeCSV(l.UserAgent))
+		buf += fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%d,%s,%s\n",
+			l.Timestamp.Format(time.RFC3339), escapeCSV(l.UserEmail), escapeCSV(l.UserName), l.ActionType, escapeCSV(l.Action), escapeCSV(l.Command), escapeCSV(l.Resource), l.Status, l.ResponseTimeMs, escapeCSV(l.IPAddress), escapeCSV(l.UserAgent))
 	}
 	_, _ = w.Write([]byte(buf))
 }
 
 func parseRange(s string) (time.Duration, error) {
 	// Supports Nd or Nh (days or hours)
+	if strings.HasSuffix(s, "m") {
+		minsStr := strings.TrimSuffix(s, "m")
+		m, err := strconv.Atoi(minsStr)
+		if err != nil {
+			return 0, err
+		}
+		return time.Duration(m) * time.Minute, nil
+	}
 	if strings.HasSuffix(s, "d") {
 		daysStr := strings.TrimSuffix(s, "d")
 		d, err := strconv.Atoi(daysStr)
@@ -494,6 +512,12 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		h.auditUserAction(r, "user.create", "", "error", map[string]interface{}{"error": "invalid request body"}, start)
+		return
+	}
+
+	// Basic email validation
+	if !isValidEmail(req.Email) {
+		http.Error(w, "invalid email format", http.StatusBadRequest)
 		return
 	}
 
