@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../lib/api'
 import { AuditPage } from './audit-page'
 
+// Hoisted regex for Biome performance rule
+const FAILED_LOAD_REGEX = /Failed to load audit logs/i
+
 // Mock the API
 vi.mock('../lib/api', () => ({
   api: {
@@ -329,7 +332,7 @@ describe('AuditPage', () => {
       render(<AuditPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText(/Failed to load audit logs/i)).toBeInTheDocument()
+        expect(screen.getByText(FAILED_LOAD_REGEX)).toBeInTheDocument()
       })
     })
   })

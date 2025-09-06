@@ -2,31 +2,29 @@ pre-commit:
   parallel: true
   commands:
     go-fmt:
-      glob: "*.go"
+      glob: "**/*.go"
       run: gofmt -w {staged_files}
       stage_fixed: true
 
     go-vet:
-      glob: "*.go"
+      glob: "**/*.go"
       run: go vet ./...
 
     go-test:
-      glob: "*.go"
+      glob: "**/*.go"
       run: ./scripts/safe-test.sh -short ./...
 
     biome-format:
       root: "web/"
-      glob: "src/**/*.{js,ts,jsx,tsx}"
-      run: pnpm biome format --write {staged_files}
-      stage_fixed: true
+      # Run across the web project every commit to avoid misses
+      run: pnpm biome format --write .
 
     biome-lint:
       root: "web/"
-      glob: "src/**/*.{js,ts,jsx,tsx}"
-      run: pnpm biome check --write {staged_files}
-      stage_fixed: true
+      # Run across the web project every commit to avoid misses
+      run: pnpm biome check --write .
 
     web-typecheck:
       root: "web/"
-      glob: "*.{ts,tsx}"
+      glob: "**/*.{ts,tsx}"
       run: pnpm tsc --noEmit
