@@ -125,6 +125,21 @@ func (a *AuthService) validateJWT(tokenString string) (*AuthUser, error) {
 func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 	apiToken, err := a.tokenService.ValidateAPIToken(tokenString)
 	if err != nil {
+		// Audit failed token validation (do not log raw token)
+		if a.database != nil {
+			_ = a.database.CreateAuditLog(&db.AuditLog{
+				UserEmail:      "",
+				UserName:       "",
+				ActionType:     "auth",
+				Action:         "token.validate",
+				Resource:       "api_token",
+				Details:        "{\"result\":\"error\"}",
+				IPAddress:      "",
+				UserAgent:      "",
+				Status:         "error",
+				ResponseTimeMs: 0,
+			})
+		}
 		return nil, fmt.Errorf("invalid API token: %w", err)
 	}
 
@@ -140,13 +155,31 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 		return nil, fmt.Errorf("token owner is suspended")
 	}
 
-	return &AuthUser{
+	userResp := &AuthUser{
 		Email:       user.Email,
 		Name:        user.Name + " (API)",
 		Permissions: apiToken.Permissions,
 		IsAPIToken:  true,
 		TokenID:     &apiToken.ID,
-	}, nil
+	}
+
+	// Audit successful token validation / usage (no sensitive values; include token id)
+	if a.database != nil {
+		_ = a.database.CreateAuditLog(&db.AuditLog{
+			UserEmail:      user.Email,
+			UserName:       user.Name,
+			ActionType:     "auth",
+			Action:         "token.validate",
+			Resource:       fmt.Sprintf("token_id:%d", apiToken.ID),
+			Details:        "{\"result\":\"success\"}",
+			IPAddress:      "",
+			UserAgent:      "",
+			Status:         "success",
+			ResponseTimeMs: 0,
+		})
+	}
+
+	return userResp, nil
 }
 
 func (a *AuthService) validateBasicAuth(credentials string) (*AuthUser, error) {

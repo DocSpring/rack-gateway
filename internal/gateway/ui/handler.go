@@ -191,6 +191,7 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if !h.isAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "audit.list", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
 		return
 	}
 
@@ -241,6 +242,7 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 	if !h.isAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "audit.export", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
 		return
 	}
 
@@ -384,11 +386,13 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, "failed to create token", http.StatusInternalServerError)
+		h.auditUserAction(r, "token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name}, time.Now())
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokenResp)
+	h.auditUserAction(r, "token.create", targetUserEmail, "success", map[string]interface{}{"name": req.Name}, time.Now())
 }
 
 // ListAPITokens returns API tokens for the current user
@@ -436,16 +440,19 @@ func (h *Handler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 	_ = authUser // Suppress unused variable warning
 	if err := h.tokenService.DeleteToken(tokenID); err != nil {
 		http.Error(w, "failed to delete token", http.StatusInternalServerError)
+		h.auditUserAction(r, "token.delete", tokenIDStr, "error", nil, time.Now())
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+	h.auditUserAction(r, "token.delete", tokenIDStr, "success", nil, time.Now())
 }
 
 // ListUsers returns all users (admin only)
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if !h.isAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "user.list", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
 		return
 	}
 

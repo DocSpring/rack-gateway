@@ -130,12 +130,50 @@ func (d *Database) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_user_email ON audit_logs(user_email);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_action_type ON audit_logs(action_type);
-	`
+
+	-- CLI login interim codes (state -> code)
+	CREATE TABLE IF NOT EXISTS cli_login_states (
+		state TEXT PRIMARY KEY,
+		code TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+    `
 
 	if _, err := d.db.Exec(schema); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
+	return nil
+}
+
+// SaveCLILoginCode stores an authorization code for a given state
+func (d *Database) SaveCLILoginCode(state, code string) error {
+	_, err := d.db.Exec(`INSERT OR REPLACE INTO cli_login_states (state, code) VALUES (?, ?)`, state, code)
+	if err != nil {
+		return fmt.Errorf("failed to save CLI login code: %w", err)
+	}
+	return nil
+}
+
+// GetCLILoginCode retrieves and returns the code for a given state, and a boolean indicating existence
+func (d *Database) GetCLILoginCode(state string) (string, bool, error) {
+	var code string
+	err := d.db.QueryRow(`SELECT code FROM cli_login_states WHERE state = ?`, state).Scan(&code)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get CLI login code: %w", err)
+	}
+	return code, true, nil
+}
+
+// DeleteCLILoginCode removes a stored code for a given state
+func (d *Database) DeleteCLILoginCode(state string) error {
+	_, err := d.db.Exec(`DELETE FROM cli_login_states WHERE state = ?`, state)
+	if err != nil {
+		return fmt.Errorf("failed to delete CLI login code: %w", err)
+	}
 	return nil
 }
 

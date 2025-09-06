@@ -69,13 +69,17 @@ func (l *Logger) Log(entry *LogEntry) {
 }
 
 // storeInDatabase stores the audit log in SQLite for admin UI and compliance
-func (l *Logger) storeInDatabase(r *http.Request, userEmail, rbacDecision string, status int, latency time.Duration, err error) {
+func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
 	if l.database == nil {
 		return // Skip database logging if not configured
 	}
 
 	// Determine action and resource from path
 	action, resource := l.parseConvoxAction(r.URL.Path, r.Method)
+	// If resource is unknown for rack-wide endpoints like /system, set to rack name
+	if resource == "unknown" && strings.HasPrefix(action, "system.") && rack != "" {
+		resource = rack
+	}
 
 	// Get user name if available from context or header
 	userName := r.Header.Get("X-User-Name") // Set by auth middleware
@@ -123,7 +127,7 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 	l.Log(entry)
 
 	// Also store in database for queryability
-	l.storeInDatabase(r, userEmail, rbacDecision, status, latency, err)
+	l.storeInDatabase(r, userEmail, rack, rbacDecision, status, latency, err)
 }
 
 func (l *Logger) redactPath(path string) string {

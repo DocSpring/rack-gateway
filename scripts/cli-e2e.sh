@@ -25,8 +25,34 @@ GW_PORT="${GATEWAY_PORT:-}"
 echo "Building CLI..."
 make -s cli
 
-echo "Logging in non-interactively via mock OAuth..."
-./bin/convox-gateway login e2e "http://127.0.0.1:${GW_PORT}" --non-interactive --email admin@company.com
+echo "Starting CLI login (two-step)..."
+AUTH_FILE="$(mktemp)"
+echo "Running CLI login (no-open) and writing auth params to $AUTH_FILE ..."
+set -m
+./bin/convox-gateway login e2e "http://127.0.0.1:${GW_PORT}" --no-open --auth-file "$AUTH_FILE" &
+CLI_PID=$!
+
+# Wait for auth-file to be written
+for i in $(seq 1 30); do
+  [[ -s "$AUTH_FILE" ]] && break
+  sleep 0.2
+done
+
+AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
+STATE=$(sed -n 's/^STATE=//p' "$AUTH_FILE")
+CODE_VERIFIER=$(sed -n 's/^CODE_VERIFIER=//p' "$AUTH_FILE")
+
+if [[ -z "$AUTH_URL" || -z "$STATE" || -z "$CODE_VERIFIER" ]]; then
+  echo "Auth URL not produced" >&2
+  kill $CLI_PID || true
+  exit 1
+fi
+
+echo "Driving OAuth authorization (headless)..."
+curl -s -L "$AUTH_URL&selected_user=admin@company.com" -o /dev/null || true
+
+echo "Waiting for CLI to complete..."
+wait $CLI_PID
 
 echo "Verifying CLI commands..."
 ./bin/convox-gateway rack
@@ -34,4 +60,3 @@ echo "Verifying CLI commands..."
 ./bin/convox-gateway convox apps || true
 
 echo "CLI E2E completed successfully."
-

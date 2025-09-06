@@ -86,19 +86,19 @@ Rack management:
 		},
 	}
 
-	var nonInteractive bool
-	var selectedUser string
+	var noOpen bool
+	var authFile string
 	loginCmd := &cobra.Command{
 		Use:   "login [rack] [gateway-url]",
 		Short: "Login to a Convox rack via OAuth",
 		Long:  "Authenticate with SSO provider and store token for the specified rack.\n\nExample: convox-gateway login staging https://convox-gateway.company.com",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return loginCommandWithFlags(args, nonInteractive, selectedUser)
+			return loginCommandWithFlags(args, noOpen, authFile)
 		},
 	}
-	loginCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Complete login without browser (dev/mock only)")
-	loginCmd.Flags().StringVar(&selectedUser, "email", "", "When --non-interactive, mock OAuth user email to authenticate as")
+	loginCmd.Flags().BoolVar(&noOpen, "no-open", false, "Do not open a browser; print auth URL and wait for completion")
+	loginCmd.Flags().StringVar(&authFile, "auth-file", "", "Write AUTH_URL, STATE, CODE_VERIFIER to this file for automation")
 
 	convoxCmd := &cobra.Command{
 		Use:                "convox [command]",
@@ -273,7 +273,59 @@ PowerShell:
 
 	usersCmd := createUsersCmd()
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, completionCmd, usersCmd)
+	// Two-step login helpers for E2E / automation
+	var completeState string
+	var completeCodeVerifier string
+	loginStartCmd := &cobra.Command{
+		Use:   "login-start [rack] [gateway-url]",
+		Short: "Start CLI login and print parameters",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rack := args[0]
+			gatewayURL := args[1]
+			if err := saveGatewayConfig(rack, gatewayURL); err != nil {
+				return fmt.Errorf("failed to save gateway config: %w", err)
+			}
+			startResp, err := startLogin(gatewayURL)
+			if err != nil {
+				return fmt.Errorf("failed to start login: %w", err)
+			}
+			// Output as shell-friendly lines and JSON for flexibility
+			fmt.Printf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
+			b, _ := json.Marshal(startResp)
+			fmt.Printf("JSON=%s\n", string(b))
+			return nil
+		},
+	}
+
+	loginCompleteCmd := &cobra.Command{
+		Use:   "login-complete [rack] [gateway-url]",
+		Short: "Complete CLI login after browser authorization",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rack := args[0]
+			gatewayURL := args[1]
+			if completeState == "" || completeCodeVerifier == "" {
+				return fmt.Errorf("--state and --code-verifier are required")
+			}
+			loginResp, err := completeLogin(gatewayURL, "", completeState, completeCodeVerifier)
+			if err != nil {
+				return fmt.Errorf("failed to complete login: %w", err)
+			}
+			if err := saveToken(rack, loginResp); err != nil {
+				return fmt.Errorf("failed to save token: %w", err)
+			}
+			if err := setCurrentRack(rack); err != nil {
+				return fmt.Errorf("failed to set current rack: %w", err)
+			}
+			fmt.Printf("Successfully logged in as %s\n", loginResp.Email)
+			return nil
+		},
+	}
+	loginCompleteCmd.Flags().StringVar(&completeState, "state", "", "OAuth state returned by login-start")
+	loginCompleteCmd.Flags().StringVar(&completeCodeVerifier, "code-verifier", "", "PKCE code_verifier from login-start")
+
+	rootCmd.AddCommand(convoxCmd, loginCmd, loginStartCmd, loginCompleteCmd, switchCmd, rackCmd, racksCmd, versionCmd, completionCmd, usersCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("CONVOX_GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
@@ -288,7 +340,7 @@ PowerShell:
 	}
 }
 
-func loginCommandWithFlags(args []string, nonInteractive bool, selectedUser string) error {
+func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 	rack := args[0]
 	gatewayURL := args[1]
 
@@ -304,28 +356,34 @@ func loginCommandWithFlags(args []string, nonInteractive bool, selectedUser stri
 		return fmt.Errorf("failed to start login: %w", err)
 	}
 
-	var code string
-	if nonInteractive {
-		if selectedUser == "" {
-			return fmt.Errorf("--email is required with --non-interactive")
-		}
-		c, err := autoAuthorize(startResp.AuthURL, selectedUser)
-		if err != nil {
-			return fmt.Errorf("non-interactive auth failed: %w", err)
-		}
-		code = c
-	} else {
+	// Always print the auth URL for users and automation
+	fmt.Printf("Auth URL: %s\n", startResp.AuthURL)
+	if authFile != "" {
+		// Write shell-friendly lines; avoid unquoted & parsing issues
+		content := fmt.Sprintf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
+		_ = os.WriteFile(authFile, []byte(content), 0600)
+	}
+	// Optionally open browser
+	if !noOpen {
 		fmt.Printf("Opening browser for authentication...\n")
 		if err := openBrowser(startResp.AuthURL); err != nil {
 			fmt.Printf("Please open this URL in your browser:\n%s\n", startResp.AuthURL)
 		}
-		fmt.Print("Enter the authorization code from the callback URL: ")
-		fmt.Scanln(&code)
 	}
 
-	loginResp, err := completeLogin(gatewayURL, code, startResp.State, startResp.CodeVerifier)
-	if err != nil {
-		return fmt.Errorf("failed to complete login: %w", err)
+	// Poll the server for completion; it returns 202 while pending
+	var loginResp *LoginResponse
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		resp, err := completeLogin(gatewayURL, "", startResp.State, startResp.CodeVerifier)
+		if err == nil {
+			loginResp = resp
+			break
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("login did not complete before timeout: %w", err)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	if err := saveToken(rack, loginResp); err != nil {
@@ -486,13 +544,9 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/.gateway/cli/login/callback", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/.gateway/cli/login/complete", strings.TrimSuffix(parsedURL, "/"))
 
-	payload := LoginCallbackRequest{
-		Code:         code,
-		State:        state,
-		CodeVerifier: codeVerifier,
-	}
+	payload := map[string]string{"state": state, "code_verifier": codeVerifier}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -505,6 +559,9 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusAccepted {
+		return nil, fmt.Errorf("pending")
+	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("login callback failed: %s", string(body))

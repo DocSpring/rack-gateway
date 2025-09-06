@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -32,10 +31,6 @@ func main() {
 
 	// Initialize database
 	dbPath := getEnv("CONVOX_GATEWAY_DB_PATH", "/app/data/db.sqlite")
-	if cfg.DevMode && dbPath == "/app/data/db.sqlite" {
-		// In dev mode, use local path if not explicitly set
-		dbPath = filepath.Join(".", "data", "db.sqlite")
-	}
 
 	database, err := db.New(dbPath)
 	if err != nil {
@@ -109,11 +104,14 @@ func main() {
 		r.Get("/health", uiHandler.Health)
 
 		// OAuth login endpoints (no auth required)
-		// CLI OAuth flow
-		// Backwards-compat endpoint used by integration tests
-		r.Post("/login/start", handleCLILoginStart(oauthHandler))
-		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler))
-		r.Post("/cli/login/callback", handleCLILoginCallback(oauthHandler))
+		// CLI OAuth flow (real OIDC redirect via GET callback + separate completion)
+		// Start returns auth URL, state, and code_verifier
+		r.Post("/login/start", handleCLILoginStart(oauthHandler, database))
+		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler, database))
+		// Provider redirects GET with code + state to this callback; we store code by state
+		r.Get("/cli/login/callback", handleCLILoginRedirectCallback(database))
+		// CLI completes by POSTing state + code_verifier; server exchanges code for tokens
+		r.Post("/cli/login/complete", handleCLILoginComplete(oauthHandler, database))
 
 		// Web OAuth flow
 		r.Get("/web/login", handleWebLoginStart(oauthHandler, database))
@@ -195,12 +193,41 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func handleCLILoginStart(oauth *auth.OAuthHandler) http.HandlerFunc {
+func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp, err := oauth.StartLogin()
 		if err != nil {
+			if database != nil {
+				_ = database.CreateAuditLog(&db.AuditLog{
+					UserEmail:      "",
+					UserName:       "",
+					ActionType:     "auth",
+					Action:         "login.start",
+					Resource:       "cli",
+					Details:        "{}",
+					IPAddress:      r.RemoteAddr,
+					UserAgent:      r.UserAgent(),
+					Status:         "error",
+					ResponseTimeMs: 0,
+				})
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		if database != nil {
+			_ = database.CreateAuditLog(&db.AuditLog{
+				UserEmail:      "",
+				UserName:       "",
+				ActionType:     "auth",
+				Action:         "login.start",
+				Resource:       "cli",
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "success",
+				ResponseTimeMs: 0,
+			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -229,10 +256,30 @@ func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 	}
 }
 
-func handleCLILoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
+// handleCLILoginRedirectCallback receives GET redirects from the OIDC provider
+// and stores the authorization code by state for later completion by the CLI.
+func handleCLILoginRedirectCallback(database *db.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		state := r.URL.Query().Get("state")
+		if code == "" || state == "" {
+			http.Error(w, "missing code or state parameter", http.StatusBadRequest)
+			return
+		}
+		if database != nil {
+			_ = database.SaveCLILoginCode(state, code)
+		}
+
+		// Minimal success page for CLI-driven flows
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><body><h3>Authorization complete.</h3><p>You can return to the CLI.</p></body></html>"))
+	}
+}
+
+// handleCLILoginComplete exchanges the stored code for a token using the provided state + code_verifier.
+func handleCLILoginComplete(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Code         string `json:"code"`
 			State        string `json:"state"`
 			CodeVerifier string `json:"code_verifier"`
 		}
@@ -242,15 +289,59 @@ func handleCLILoginCallback(oauth *auth.OAuthHandler) http.HandlerFunc {
 			return
 		}
 
-		if req.Code == "" || req.State == "" || req.CodeVerifier == "" {
+		if req.State == "" || req.CodeVerifier == "" {
 			http.Error(w, "missing required parameters", http.StatusBadRequest)
 			return
 		}
 
-		resp, err := oauth.CompleteLogin(req.Code, req.State, req.CodeVerifier)
+		code, ok, err := database.GetCLILoginCode(req.State)
 		if err != nil {
+			http.Error(w, "failed to retrieve login state", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			// Not ready yet
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"pending"}`))
+			return
+		}
+
+		resp, err := oauth.CompleteLogin(code, req.State, req.CodeVerifier)
+		if err != nil {
+			if database != nil {
+				_ = database.CreateAuditLog(&db.AuditLog{
+					UserEmail:      "",
+					UserName:       "",
+					ActionType:     "auth",
+					Action:         "login",
+					Resource:       "cli",
+					Details:        "{\"error\":\"oauth_failed\"}",
+					IPAddress:      r.RemoteAddr,
+					UserAgent:      r.UserAgent(),
+					Status:         "error",
+					ResponseTimeMs: 0,
+				})
+			}
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
+		}
+
+		// Clear stored code
+		_ = database.DeleteCLILoginCode(req.State)
+
+		if database != nil {
+			_ = database.CreateAuditLog(&db.AuditLog{
+				UserEmail:      resp.Email,
+				UserName:       resp.Name,
+				ActionType:     "auth",
+				Action:         "login",
+				Resource:       "cli",
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "success",
+				ResponseTimeMs: 0,
+			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
