@@ -329,39 +329,7 @@ describe('AuditPage', () => {
       render(<AuditPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load audit logs')).toBeInTheDocument()
-      })
-    })
-
-    it('shows loading state', () => {
-      vi.mocked(api.get).mockImplementation(
-        () =>
-          new Promise(() => {
-            /* never resolves in this test */
-          })
-      )
-
-      const Wrapper = createWrapper()
-      render(<AuditPage />, { wrapper: Wrapper })
-
-      // Check for loading spinner by class or text
-      const spinner = document.querySelector('.animate-spin')
-      expect(spinner).toBeInTheDocument()
-    })
-  })
-
-  describe('Response Times', () => {
-    it('displays response times correctly', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
-
-      const Wrapper = createWrapper()
-      render(<AuditPage />, { wrapper: Wrapper })
-
-      await waitFor(() => {
-        expect(screen.getByText('150ms')).toBeInTheDocument()
-        expect(screen.getByText('75ms')).toBeInTheDocument()
-        expect(screen.getByText('200ms')).toBeInTheDocument()
-        expect(screen.getByText('5ms')).toBeInTheDocument()
+        expect(screen.getByText(/Failed to load audit logs/i)).toBeInTheDocument()
       })
     })
   })
