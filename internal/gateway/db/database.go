@@ -411,6 +411,50 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	return logs, nil
 }
 
+// GetAuditLogsPaged retrieves audit logs with limit and offset for pagination
+func (d *Database) GetAuditLogsPaged(userEmail string, since time.Time, limit, offset int) ([]*AuditLog, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := `
+        SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
+               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(details, ''), COALESCE(ip_address, ''),
+               COALESCE(user_agent, ''), status, response_time_ms
+        FROM audit_logs
+        WHERE 1=1
+    `
+	args := []interface{}{}
+	if userEmail != "" {
+		query += " AND user_email = ?"
+		args = append(args, userEmail)
+	}
+	if !since.IsZero() {
+		query += " AND timestamp >= ?"
+		args = append(args, since.UTC())
+	}
+	query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*AuditLog
+	for rows.Next() {
+		var log AuditLog
+		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.ResponseTimeMs); err != nil {
+			return nil, fmt.Errorf("failed to scan audit log: %w", err)
+		}
+		logs = append(logs, &log)
+	}
+	return logs, nil
+}
+
 // CreateAPIToken creates a new API token
 func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt *time.Time) (*APIToken, error) {
 	permissionsJSON, err := json.Marshal(permissions)
@@ -552,4 +596,14 @@ func (d *Database) Close() error {
 // Avoid using this in application code where higher-level helpers exist.
 func (d *Database) DB() *sql.DB {
 	return d.db
+}
+
+// CleanupOldAuditLogs deletes audit logs older than retentionDays
+func (d *Database) CleanupOldAuditLogs(retentionDays int) error {
+	if retentionDays <= 0 {
+		return nil
+	}
+	// SQLite datetime: now minus N days
+	_, err := d.db.Exec("DELETE FROM audit_logs WHERE timestamp < datetime('now', ?)", fmt.Sprintf("-%d days", retentionDays))
+	return err
 }

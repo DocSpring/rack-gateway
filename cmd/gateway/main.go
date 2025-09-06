@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -24,6 +26,54 @@ import (
 )
 
 func main() {
+	// Support maintenance subcommands
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "audit-cleanup":
+			// Usage: convox-gateway audit-cleanup --days 90
+			// Falls back to AUDIT_LOG_RETENTION_DAYS if --days not provided
+			days := 0
+			// Parse a very small flag set: --days N
+			for i := 2; i < len(os.Args); i++ {
+				if strings.HasPrefix(os.Args[i], "--days=") {
+					if v, err := strconv.Atoi(strings.TrimPrefix(os.Args[i], "--days=")); err == nil {
+						days = v
+					}
+				} else if os.Args[i] == "--days" && i+1 < len(os.Args) {
+					if v, err := strconv.Atoi(os.Args[i+1]); err == nil {
+						days = v
+					}
+					i++
+				}
+			}
+			if days == 0 {
+				if ds := os.Getenv("AUDIT_LOG_RETENTION_DAYS"); ds != "" {
+					if v, err := strconv.Atoi(ds); err == nil {
+						days = v
+					}
+				}
+			}
+			if days <= 0 {
+				log.Fatalf("audit-cleanup requires --days N or AUDIT_LOG_RETENTION_DAYS")
+			}
+
+			dbPath := getEnv("CONVOX_GATEWAY_DB_PATH", "/app/data/db.sqlite")
+			database, err := db.New(dbPath)
+			if err != nil {
+				log.Fatalf("Failed to open database: %v", err)
+			}
+			defer database.Close()
+			if err := database.CleanupOldAuditLogs(days); err != nil {
+				log.Fatalf("Audit cleanup failed: %v", err)
+			}
+			log.Printf("Audit cleanup successful: removed entries older than %d days", days)
+			return
+		case "help", "--help", "-h":
+			fmt.Println("convox-gateway commands:\n  (no args)            Start the API server\n  audit-cleanup        Delete audit logs older than N days\n                        --days N (or set AUDIT_LOG_RETENTION_DAYS)")
+			return
+		}
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -37,6 +87,15 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer database.Close()
+
+	// Audit retention cleanup
+	if daysStr := os.Getenv("AUDIT_LOG_RETENTION_DAYS"); daysStr != "" {
+		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
+			if err := database.CleanupOldAuditLogs(d); err != nil {
+				log.Printf("Warning: audit retention cleanup failed: %v", err)
+			}
+		}
+	}
 
 	// Initialize admin user if needed
 	if len(cfg.AdminUsers) > 0 {
@@ -198,7 +257,7 @@ func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 		resp, err := oauth.StartLogin()
 		if err != nil {
 			if database != nil {
-				_ = database.CreateAuditLog(&db.AuditLog{
+				_ = audit.LogDB(database, &db.AuditLog{
 					UserEmail:      "",
 					UserName:       "",
 					ActionType:     "auth",
@@ -216,7 +275,7 @@ func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 		}
 
 		if database != nil {
-			_ = database.CreateAuditLog(&db.AuditLog{
+			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      "",
 				UserName:       "",
 				ActionType:     "auth",
@@ -238,7 +297,7 @@ func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if database != nil {
-			_ = database.CreateAuditLog(&db.AuditLog{
+			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      "",
 				UserName:       "",
 				ActionType:     "auth",
@@ -363,7 +422,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 		resp, err := oauth.CompleteLogin(code, state, "")
 		if err != nil {
 			if database != nil {
-				_ = database.CreateAuditLog(&db.AuditLog{
+				_ = audit.LogDB(database, &db.AuditLog{
 					UserEmail:      "",
 					UserName:       "",
 					ActionType:     "auth",
@@ -394,7 +453,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 		http.SetCookie(w, cookie)
 
 		if database != nil {
-			_ = database.CreateAuditLog(&db.AuditLog{
+			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      resp.Email,
 				UserName:       resp.Name,
 				ActionType:     "auth",
@@ -433,7 +492,7 @@ func handleWebLogout(database *db.Database) http.HandlerFunc {
 		http.SetCookie(w, expired)
 
 		if database != nil {
-			_ = database.CreateAuditLog(&db.AuditLog{
+			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      r.Header.Get("X-User-Email"),
 				UserName:       r.Header.Get("X-User-Name"),
 				ActionType:     "auth",

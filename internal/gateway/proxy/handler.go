@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -66,7 +67,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Check permissions (different logic for JWT vs API tokens)
 	var allowed bool
 	var err error
-	resource, action := h.pathToResourceAction(path, r.Method)
+	methodForRBAC := r.Method
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+		methodForRBAC = "SOCKET"
+	}
+	resource, action := h.pathToResourceAction(path, methodForRBAC)
 
 	if authUser.IsAPIToken {
 		// For API tokens, check permissions directly
@@ -119,7 +124,11 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 
 	var allowed bool
 	var err error
-	resource, action := h.pathToResourceAction(path, r.Method)
+	methodForRBAC := r.Method
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+		methodForRBAC = "SOCKET"
+	}
+	resource, action := h.pathToResourceAction(path, methodForRBAC)
 
 	if authUser.IsAPIToken {
 		// For API tokens, check permissions directly
@@ -369,81 +378,83 @@ func parseSubprotocols(h string) []string {
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC
 func (h *Handler) pathToResourceAction(path, method string) (string, string) {
-	permission := h.mapPathToPermission(method, path)
-	// permission format is "convox:resource:action"
-	parts := strings.Split(permission, ":")
-	if len(parts) == 3 {
-		return parts[1], parts[2]
+	// Explicit mapping aligned to Convox routes
+	type rule struct{ m, p, res, act string }
+	rules := []rule{
+		{"SOCKET", "/apps/{app}/processes/{pid}/exec", "ps", "manage"},
+		{"DELETE", "/apps/{app}/processes/{pid}", "ps", "manage"},
+		{"GET", "/apps/{app}/processes/{pid}", "ps", "list"},
+		{"GET", "/apps/{app}/processes", "ps", "list"},
+		{"POST", "/apps/{app}/services/{service}/processes", "ps", "manage"},
+
+		{"SOCKET", "/apps/{app}/processes/{pid}/logs", "logs", "read"},
+		{"SOCKET", "/apps/{app}/builds/{id}/logs", "logs", "read"},
+		{"SOCKET", "/apps/{app}/logs", "logs", "read"},
+		{"SOCKET", "/system/logs", "logs", "read"},
+
+		{"GET", "/apps/{app}/builds", "builds", "list"},
+		{"GET", "/apps/{app}/builds/{id}", "builds", "list"},
+		{"GET", "/apps/{app}/builds/{id}.tgz", "builds", "list"},
+		{"POST", "/apps/{app}/builds", "builds", "create"},
+		{"POST", "/apps/{app}/builds/import", "builds", "create"},
+		{"PUT", "/apps/{app}/builds/{id}", "builds", "create"},
+
+		{"GET", "/apps/{app}/releases", "releases", "list"},
+		{"GET", "/apps/{app}/releases/{id}", "releases", "list"},
+		{"POST", "/apps/{app}/releases/{id}/promote", "releases", "promote"},
+
+		{"GET", "/apps", "apps", "list"},
+		{"GET", "/apps/{name}", "apps", "list"},
+		{"POST", "/apps", "apps", "manage"},
+		{"PUT", "/apps/{name}", "apps", "manage"},
+		{"DELETE", "/apps/{name}", "apps", "manage"},
+
+		{"GET", "/system", "rack", "read"},
+		{"GET", "/system/capacity", "rack", "read"},
+		{"GET", "/system/metrics", "rack", "read"},
+		{"GET", "/system/processes", "rack", "read"},
+		{"GET", "/system/releases", "rack", "read"},
 	}
-	return "*", "*"
+
+	for _, rl := range rules {
+		if (rl.m == method || rl.m == "*") && keyMatch3(path, rl.p) {
+			return rl.res, rl.act
+		}
+	}
+	// Default conservative
+	if method == "GET" {
+		return "apps", "list"
+	}
+	return "apps", "manage"
 }
 
-func (h *Handler) mapPathToPermission(method, path string) string {
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) == 0 {
-		return "convox:unknown:unknown"
-	}
-
-	resource := parts[0]
-	action := "read"
-
-	switch method {
-	case "POST":
-		action = "create"
-	case "PUT", "PATCH":
-		action = "update"
-	case "DELETE":
-		action = "delete"
-	}
-
-	// Normalize path for checking - remove leading slash for consistency
-	normalizedPath := strings.TrimPrefix(path, "/")
-
-	// Check for specific resource patterns
-	if strings.HasPrefix(normalizedPath, "apps") {
-		if method == "GET" {
-			return "convox:apps:list"
+// keyMatch3 simplified: supports {var} placeholders and wildcards
+func keyMatch3(path, pattern string) bool {
+	// Convert pattern to regex
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
+		if c == '{' {
+			for i < len(pattern) && pattern[i] != '}' {
+				i++
+			}
+			b.WriteString("[^/]+")
+			continue
 		}
-		return "convox:apps:manage"
-	}
-
-	// Check for processes endpoint (but not if it's part of "apps")
-	pathParts := strings.Split(normalizedPath, "/")
-	if len(pathParts) > 0 && pathParts[0] == "ps" {
-		if method == "GET" {
-			return "convox:ps:list"
+		if c == '*' {
+			b.WriteString(".*")
+			continue
 		}
-		return "convox:ps:manage"
-	}
-	// Also check for /apps/{app}/processes pattern
-	if len(pathParts) >= 3 && pathParts[0] == "apps" && pathParts[2] == "processes" {
-		if method == "GET" {
-			return "convox:ps:list"
+		if strings.ContainsRune(".+?^$()[]{}|\\", rune(c)) {
+			b.WriteByte('\\')
 		}
-		return "convox:ps:manage"
+		b.WriteByte(c)
 	}
-
-	if strings.Contains(normalizedPath, "env") {
-		if method == "GET" {
-			return "convox:env:get"
-		}
-		return "convox:env:set"
-	}
-
-	if strings.Contains(normalizedPath, "run") {
-		return "convox:run:command"
-	}
-
-	if strings.Contains(normalizedPath, "restart") {
-		return "convox:restart:app"
-	}
-
-	// Special case for rack endpoint
-	if normalizedPath == "rack" || normalizedPath == "system" {
-		return "convox:rack:read"
-	}
-
-	return fmt.Sprintf("convox:%s:%s", resource, action)
+	b.WriteString("$")
+	re := b.String()
+	ok, _ := regexp.MatchString(re, path)
+	return ok
 }
 
 // hasAPITokenPermission checks if an API token has the required permission

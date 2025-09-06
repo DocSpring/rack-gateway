@@ -68,6 +68,37 @@ func (l *Logger) Log(entry *LogEntry) {
 	fmt.Println(string(data))
 }
 
+// LogDB writes a DB-style audit entry to stdout as structured JSON and persists it.
+// Use this helper anywhere an audit log would otherwise be written directly to the DB.
+func LogDB(database *db.Database, al *db.AuditLog) error {
+	// Mirror fields into a structured line suitable for CloudWatch ingestion
+	payload := map[string]interface{}{
+		"ts":          time.Now().UTC().Format(time.RFC3339),
+		"user_email":  al.UserEmail,
+		"user_name":   al.UserName,
+		"action_type": al.ActionType,
+		"action":      al.Action,
+		"resource":    al.Resource,
+		"command":     al.Command,
+		"status":      al.Status,
+		"latency_ms":  al.ResponseTimeMs,
+		"ip_address":  al.IPAddress,
+		"user_agent":  al.UserAgent,
+	}
+	if al.Details != "" {
+		payload["details"] = al.Details
+	}
+	if data, err := json.Marshal(payload); err == nil {
+		fmt.Println(string(data))
+	} else {
+		fmt.Fprintf(os.Stderr, "Failed to marshal audit db log: %v\n", err)
+	}
+	if database == nil {
+		return nil
+	}
+	return database.CreateAuditLog(al)
+}
+
 // storeInDatabase stores the audit log in SQLite for admin UI and compliance
 func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
 	if l.database == nil {

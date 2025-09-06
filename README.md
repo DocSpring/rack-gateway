@@ -412,4 +412,19 @@ For issues or questions:
 
 - Create an issue on GitHub
 - Check audit logs for debugging
+
+### Retention and scheduled cleanup
+
+Audit events are stored in SQLite for the UI and also emitted to stdout in structured JSON for CloudWatch. To keep the local DB small:
+
+- Environment-based cleanup at boot: set `AUDIT_LOG_RETENTION_DAYS` to purge old rows during startup.
+- Scheduled cleanup command (for Convox timers):
+
+Run this inside the gateway container on a schedule (e.g., every 24 hours):
+
+```
+convox-gateway audit-cleanup --days 90
+```
+
+If `--days` is omitted, the command reads `AUDIT_LOG_RETENTION_DAYS`.
 - Review CloudWatch logs for errors

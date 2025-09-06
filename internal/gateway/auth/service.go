@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 )
@@ -40,10 +41,12 @@ func NewAuthService(jwtManager *JWTManager, tokenService *token.Service, databas
 // Middleware handles both JWT and API token authentication
 func (a *AuthService) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
+		originalAuth := r.Header.Get("Authorization")
+		authHeader := originalAuth
 		if authHeader == "" {
 			if c, err := r.Cookie("gateway_token"); err == nil && c.Value != "" {
 				authHeader = "Bearer " + c.Value
+				r.Header.Set("X-Auth-Source", "cookie")
 			}
 		}
 		if authHeader == "" {
@@ -92,6 +95,14 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 		r.Header.Set("X-User-Name", user.Name)
 		r.Header.Set("X-User-Email", user.Email)
 
+		// CSRF guard: disallow cookie-only auth for admin API routes
+		if strings.HasPrefix(r.URL.Path, "/.gateway/admin/") {
+			if originalAuth == "" && r.Header.Get("X-Auth-Source") == "cookie" {
+				http.Error(w, "cookie auth not allowed for admin API", http.StatusUnauthorized)
+				return
+			}
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -127,7 +138,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 	if err != nil {
 		// Audit failed token validation (do not log raw token)
 		if a.database != nil {
-			_ = a.database.CreateAuditLog(&db.AuditLog{
+			_ = audit.LogDB(a.database, &db.AuditLog{
 				UserEmail:      "",
 				UserName:       "",
 				ActionType:     "auth",
@@ -165,7 +176,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 
 	// Audit successful token validation / usage (no sensitive values; include token id)
 	if a.database != nil {
-		_ = a.database.CreateAuditLog(&db.AuditLog{
+		_ = audit.LogDB(a.database, &db.AuditLog{
 			UserEmail:      user.Email,
 			UserName:       user.Name,
 			ActionType:     "auth",

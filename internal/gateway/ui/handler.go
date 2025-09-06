@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
@@ -52,7 +53,7 @@ func (h *Handler) auditUserAction(r *http.Request, action, resource, status stri
 	if details != nil {
 		detailsJSON, _ = json.Marshal(details)
 	}
-	_ = h.database.CreateAuditLog(&db.AuditLog{
+	_ = audit.LogDB(h.database, &db.AuditLog{
 		UserEmail: func() string {
 			if au != nil {
 				return au.Email
@@ -221,8 +222,27 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Pull logs from DB (filter by since); filter others in-memory for now
-	logs, err := h.database.GetAuditLogs("", since, 0)
+	// Pagination params
+	limit := 1000
+	offset := 0
+	if l := q.Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil {
+			if v > 0 {
+				if v > 1000 {
+					v = 1000
+				}
+				limit = v
+			}
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	// Pull logs from DB (filter by since) with pagination; filter others in-memory for now
+	logs, err := h.database.GetAuditLogsPaged("", since, limit, offset)
 	if err != nil {
 		http.Error(w, "failed to get audit logs", http.StatusInternalServerError)
 		return
