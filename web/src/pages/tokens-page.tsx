@@ -246,10 +246,19 @@ export function TokensPage() {
               <div className="space-y-2">
                 <Label htmlFor="name">Token Name</Label>
                 <Input
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  data-1p-ignore
+                  data-bwignore="true"
+                  data-lpignore="true"
                   id="name"
+                  inputMode="text"
+                  name="token_name"
                   onChange={(e) => setNewTokenName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateToken()}
                   placeholder="e.g., CI/CD Pipeline"
+                  spellCheck={false}
                   value={newTokenName}
                 />
               </div>

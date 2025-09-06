@@ -386,10 +386,19 @@ export function UsersPage() {
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
+                autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect="off"
+                data-1p-ignore
+                data-bwignore="true"
+                data-lpignore="true"
                 disabled={!!editingUser}
                 id="email"
+                inputMode="email"
+                name="user_email"
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="user@example.com"
+                spellCheck={false}
                 type="email"
                 value={formData.email}
               />
@@ -398,10 +407,19 @@ export function UsersPage() {
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input
+                autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect="off"
+                data-1p-ignore
+                data-bwignore="true"
+                data-lpignore="true"
                 disabled={!!editingUser}
                 id="name"
+                inputMode="text"
+                name="user_name"
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="John Doe"
+                spellCheck={false}
                 value={formData.name}
               />
             </div>

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -273,12 +272,12 @@ PowerShell:
 
 	usersCmd := createUsersCmd()
 
-	// Two-step login helpers for E2E / automation
+	// Two-step helpers as subcommands of login (visible only under `login --help`)
 	var completeState string
 	var completeCodeVerifier string
 	loginStartCmd := &cobra.Command{
-		Use:   "login-start [rack] [gateway-url]",
-		Short: "Start CLI login and print parameters",
+		Use:   "start [rack] [gateway-url]",
+		Short: "Start login and print parameters (advanced)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rack := args[0]
@@ -290,17 +289,15 @@ PowerShell:
 			if err != nil {
 				return fmt.Errorf("failed to start login: %w", err)
 			}
-			// Output as shell-friendly lines and JSON for flexibility
 			fmt.Printf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
 			b, _ := json.Marshal(startResp)
 			fmt.Printf("JSON=%s\n", string(b))
 			return nil
 		},
 	}
-
 	loginCompleteCmd := &cobra.Command{
-		Use:   "login-complete [rack] [gateway-url]",
-		Short: "Complete CLI login after browser authorization",
+		Use:   "complete [rack] [gateway-url]",
+		Short: "Complete login after browser authorization (advanced)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rack := args[0]
@@ -322,10 +319,12 @@ PowerShell:
 			return nil
 		},
 	}
-	loginCompleteCmd.Flags().StringVar(&completeState, "state", "", "OAuth state returned by login-start")
-	loginCompleteCmd.Flags().StringVar(&completeCodeVerifier, "code-verifier", "", "PKCE code_verifier from login-start")
+	loginCompleteCmd.Flags().StringVar(&completeState, "state", "", "OAuth state returned by login start")
+	loginCompleteCmd.Flags().StringVar(&completeCodeVerifier, "code-verifier", "", "PKCE code verifier from login start")
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, loginStartCmd, loginCompleteCmd, switchCmd, rackCmd, racksCmd, versionCmd, completionCmd, usersCmd)
+	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
+
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, completionCmd, usersCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("CONVOX_GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
@@ -400,50 +399,6 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 	fmt.Printf("Current rack set to: %s\n", rack)
 
 	return nil
-}
-
-// autoAuthorize completes the OAuth authorization step against the mock OAuth server
-// by selecting a user via the "selected_user" query parameter and capturing the auth code
-// from the redirect Location header.
-func autoAuthorize(authURL, userEmail string) (string, error) {
-	// Append selected_user to the authorization URL
-	u, err := url.Parse(authURL)
-	if err != nil {
-		return "", err
-	}
-	q := u.Query()
-	q.Set("selected_user", userEmail)
-	u.RawQuery = q.Encode()
-
-	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		// Do not follow redirects; we only need the Location for the code
-		return http.ErrUseLastResponse
-	}}
-
-	resp, err := client.Get(u.String())
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("authorization did not redirect (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	loc := resp.Header.Get("Location")
-	if loc == "" {
-		return "", fmt.Errorf("missing redirect Location header")
-	}
-	ru, err := url.Parse(loc)
-	if err != nil {
-		return "", err
-	}
-	code := ru.Query().Get("code")
-	if code == "" {
-		return "", fmt.Errorf("missing authorization code in redirect")
-	}
-	return code, nil
 }
 
 func wrapConvoxCommand(args []string) error {

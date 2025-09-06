@@ -16,6 +16,8 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"net/url"
 )
 
 type Handler struct {
@@ -150,6 +152,11 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		targetURL += "?" + r.URL.RawQuery
 	}
 
+	// Handle WebSocket upgrade requests
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+		return h.proxyWebSocket(w, r, rack, targetURL, userEmail)
+	}
+
 	var bodyBytes []byte
 	if r.Body != nil {
 		var err error
@@ -201,6 +208,106 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		return fmt.Errorf("failed to copy response body: %w", err)
 	}
 
+	return nil
+}
+
+// proxyWebSocket upgrades the client connection and bridges it to the rack via a WebSocket connection
+func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string) error {
+	// Prepare upstream URL (ws or wss)
+	u, err := url.Parse(target)
+	if err != nil {
+		return fmt.Errorf("invalid target URL: %w", err)
+	}
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	} else {
+		u.Scheme = "ws"
+	}
+
+	// Dial upstream websocket with Authorization header
+	header := http.Header{}
+	header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
+	header.Set("X-User-Email", userEmail)
+	header.Set("X-Request-ID", uuid.New().String())
+	// Some servers validate Origin during WS handshake
+	header.Set("Origin", fmt.Sprintf("%s://%s", map[bool]string{true: "https", false: "http"}[strings.HasPrefix(rack.URL, "https")], u.Host))
+	d := *websocket.DefaultDialer
+	d.HandshakeTimeout = 10 * time.Second
+
+	// Follow up to 3 redirects for WS dial (some servers redirect mounting paths)
+	var upstreamConn *websocket.Conn
+	var resp *http.Response
+	for i := 0; i < 3; i++ {
+		upstreamConn, resp, err = d.Dial(u.String(), header)
+		if err == nil {
+			break
+		}
+		if resp != nil && (resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect || resp.StatusCode == http.StatusSeeOther) {
+			loc := resp.Header.Get("Location")
+			if loc == "" {
+				break
+			}
+			nu, perr := url.Parse(loc)
+			if perr != nil {
+				break
+			}
+			if !nu.IsAbs() {
+				nu = u.ResolveReference(nu)
+			}
+			u = nu
+			continue
+		}
+		break
+	}
+	if err != nil {
+		if resp != nil {
+			return fmt.Errorf("failed to dial upstream websocket (%s): %w", resp.Status, err)
+		}
+		return fmt.Errorf("failed to dial upstream websocket: %w", err)
+	}
+	defer upstreamConn.Close()
+
+	// Upgrade client connection
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	clientConn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return fmt.Errorf("failed to upgrade client connection: %w", err)
+	}
+	defer clientConn.Close()
+
+	// Bridge messages in both directions
+	errc := make(chan error, 2)
+	go func() {
+		for {
+			mt, message, err := clientConn.ReadMessage()
+			if err != nil {
+				errc <- err
+				return
+			}
+			if err := upstreamConn.WriteMessage(mt, message); err != nil {
+				errc <- err
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			mt, message, err := upstreamConn.ReadMessage()
+			if err != nil {
+				errc <- err
+				return
+			}
+			if err := clientConn.WriteMessage(mt, message); err != nil {
+				errc <- err
+				return
+			}
+		}
+	}()
+
+	// Wait for either direction to error/close
+	<-errc
 	return nil
 }
 

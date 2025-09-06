@@ -40,15 +40,19 @@
 package main
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -125,6 +129,7 @@ type System struct {
 
 func main() {
 	r := mux.NewRouter()
+	r.Use(requestLogger)
 
 	// Add authentication middleware
 	r.Use(authMiddleware)
@@ -137,6 +142,7 @@ func main() {
 
 	r.HandleFunc("/apps/{app}/processes", getProcesses).Methods("GET")
 	r.HandleFunc("/apps/{app}/processes/{id}", getProcess).Methods("GET")
+	r.HandleFunc("/apps/{app}/processes/{id}/exec", execProcess).Methods("GET")
 	r.HandleFunc("/apps/{app}/processes/{id}/stop", stopProcess).Methods("POST")
 
 	r.HandleFunc("/apps/{app}/builds", getBuilds).Methods("GET")
@@ -154,6 +160,9 @@ func main() {
 
 	r.HandleFunc("/system", getSystem).Methods("GET")
 
+	// Services command processes (stub for convox run)
+	r.HandleFunc("/apps/{app}/services/{service}/processes", serviceProcesses).Methods("POST", "GET")
+
 	// Generic API endpoint for testing
 	r.HandleFunc("/api/{path:.*}", handleAPI).Methods("GET", "POST", "PUT", "DELETE")
 
@@ -161,6 +170,12 @@ func main() {
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "server": "mock-convox"})
 	}).Methods("GET")
+
+	// Log 404s explicitly so unexpected routes are visible in logs
+	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("404 %s %s", r.Method, r.URL.String())
+		http.NotFound(w, r)
+	})
 
 	port := os.Getenv("MOCK_CONVOX_PORT")
 	if port == "" {
@@ -170,6 +185,41 @@ func main() {
 	log.Printf("Mock Convox API server starting on port %s", port)
 	log.Printf("Expected auth: Basic %s", base64.StdEncoding.EncodeToString([]byte(mockUsername+":"+mockPassword)))
 	log.Fatal(http.ListenAndServe(":"+port, r))
+}
+
+// requestLogger logs method, path, status and duration for every request
+func requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sr := &statusRecorder{ResponseWriter: w, status: 200}
+		next.ServeHTTP(sr, r)
+		log.Printf("%d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sr *statusRecorder) WriteHeader(code int) {
+	sr.status = code
+	sr.ResponseWriter.WriteHeader(code)
+}
+
+// Ensure WebSocket upgrades can hijack the connection
+func (sr *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := sr.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("hijacker not supported")
+}
+
+// Pass-through flushing if supported
+func (sr *statusRecorder) Flush() {
+	if f, ok := sr.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func authMiddleware(next http.Handler) http.Handler {
@@ -254,6 +304,49 @@ func getApp(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(app)
+}
+
+func serviceProcesses(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	service := vars["service"]
+	// Stub: return 202 Accepted with a fake process id; echo method
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "started",
+		"method":  r.Method,
+		"app":     app,
+		"service": service,
+		"id":      "proc-123456",
+	})
+}
+
+// execProcess upgrades to a WebSocket and streams a short mock session, then closes
+func execProcess(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	id := vars["id"]
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("exec upgrade error: %v", err)
+		http.Error(w, "upgrade failed", http.StatusBadRequest)
+		return
+	}
+	defer conn.Close()
+
+	// Send a tiny session transcript
+	_ = conn.WriteMessage(websocket.TextMessage, []byte("Connected to mock exec for app="+app+" pid="+id+"\n"))
+	// If a command was provided, echo it
+	if cmd := r.URL.Query().Get("command"); cmd != "" {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("$ "+cmd+"\n"))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
+	}
+	_ = conn.WriteMessage(websocket.TextMessage, []byte("Session closing.\n"))
 }
 
 func createApp(w http.ResponseWriter, r *http.Request) {
@@ -527,7 +620,7 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log the request for debugging
-	log.Printf("Mock API: %s %s", r.Method, r.URL.Path)
+	log.Printf("%s %s", r.Method, r.URL.Path)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
