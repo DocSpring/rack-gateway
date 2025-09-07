@@ -7,32 +7,49 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"net/url"
+
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"net/url"
 )
 
 type Handler struct {
 	config      *config.Config
 	rbacManager rbac.RBACManager
 	auditLogger *audit.Logger
+	secretNames map[string]struct{}
 }
 
+const maskedSecret = "********************"
+
 func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger) *Handler {
-	return &Handler{
+	h := &Handler{
 		config:      cfg,
 		rbacManager: rbacManager,
 		auditLogger: auditLogger,
+		secretNames: make(map[string]struct{}),
 	}
+	// Load additional secret env var names from env (comma-separated)
+	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
+		for _, k := range strings.Split(list, ",") {
+			k = strings.TrimSpace(k)
+			if k != "" {
+				h.secretNames[k] = struct{}{}
+			}
+		}
+	}
+	return h
 }
 
 // ProxyToRack handles all requests that should be proxied to the Convox rack
@@ -84,6 +101,23 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Additional RBAC for release environment set operations and body rewrite
+	var envDiffs []EnvDiff
+	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
+		ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, authUser.Email)
+		if err != nil {
+			h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+			return
+		}
+		envDiffs = diffs
+		if !ok {
+			// Deny without emitting an additional high-level releases.create deny;
+			// per-key env/secrets denies were already logged in prepareReleaseCreate.
+			http.Error(w, "permission denied", http.StatusForbidden)
+			return
+		}
+	}
+
 	if !allowed {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
@@ -101,6 +135,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", status, time.Since(start), nil)
+
+	// On success, write detailed audit entries for each env change
+	if status >= 200 && status < 300 {
+		h.logEnvDiffs(r, authUser.Email, rackConfig.Name, envDiffs)
+	}
 }
 
 func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +184,23 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
+		if au, ok := auth.GetAuthUser(r.Context()); ok {
+			ok2, diffs, err := h.prepareReleaseCreate(r, rackConfig, au.Email)
+			if err != nil {
+				h.handleError(w, r, err.Error(), http.StatusBadRequest, rack, start)
+				return
+			}
+			if !ok2 {
+				// Deny without duplicating high-level releases.create deny; per-key denies logged already
+				http.Error(w, "permission denied", http.StatusForbidden)
+				return
+			}
+			// success path will log diffs via outer caller (this code path is for ProxyRequest route)
+			_ = diffs
+		}
+	}
+
 	if !allowed {
 		h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
@@ -160,6 +216,336 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
+}
+
+// checkEnvSetPermissions inspects request headers for env vars being set and enforces environment/secrets set permissions.
+func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
+	// Extract keys from known headers
+	keys := h.extractEnvKeysFromHeaders(r.Header)
+	if len(keys) == 0 {
+		// No explicit env changes detected; allow
+		return true
+	}
+	// Require env:set for any env changes
+	canEnvSet, _ := h.rbacManager.Enforce(email, "env", "set")
+	if !canEnvSet {
+		return false
+	}
+	// For secret keys, require secrets:set
+	canSecretsSet, _ := h.rbacManager.Enforce(email, "secrets", "set")
+	if !canSecretsSet {
+		for _, k := range keys {
+			if h.isSecretKey(k) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (h *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
+	keys := make([]string, 0)
+	for name, vals := range hdr {
+		ln := strings.ToLower(name)
+		if ln == "env" || ln == "environment" || ln == "release-env" {
+			for _, v := range vals {
+				for _, line := range strings.Split(v, "\n") {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					parts := strings.SplitN(line, "=", 2)
+					k := strings.TrimSpace(parts[0])
+					if k != "" {
+						keys = append(keys, k)
+					}
+				}
+			}
+		}
+	}
+	return keys
+}
+
+// EnvDiff represents a single env var change
+type EnvDiff struct {
+	Key    string
+	OldVal string
+	NewVal string
+	Secret bool
+}
+
+// prepareReleaseCreate parses POST body env data, merges masked values from latest release,
+// enforces RBAC (environment:set and secrets:set), rewrites the request body with the merged env,
+// and returns a list of diffs for auditing.
+func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, email string) (bool, []EnvDiff, error) {
+	// Read and buffer original body
+	var bodyBuf []byte
+	if r.Body != nil {
+		var err error
+		bodyBuf, err = io.ReadAll(r.Body)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		r.Body.Close()
+	}
+	// Parse form
+	vals, err := url.ParseQuery(string(bodyBuf))
+	if err != nil {
+		return false, nil, fmt.Errorf("invalid form body: %w", err)
+	}
+	envStr := vals.Get("env")
+	if envStr == "" {
+		// no env set attempt => allow
+		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		return true, nil, nil
+	}
+
+	// Get app name from path /apps/{app}/releases
+	app := extractAppFromPath(r.URL.Path)
+	if app == "" {
+		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		return false, nil, fmt.Errorf("could not infer app name from path")
+	}
+
+	// Parse posted env into ordered keys
+	postedLines := strings.Split(envStr, "\n")
+	posted := make(map[string]string)
+	order := make([]string, 0, len(postedLines))
+	for _, ln := range postedLines {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		parts := strings.SplitN(ln, "=", 2)
+		key := strings.TrimSpace(parts[0])
+		val := ""
+		if len(parts) == 2 {
+			val = parts[1]
+		}
+		if key == "" {
+			continue
+		}
+		if _, seen := posted[key]; !seen {
+			order = append(order, key)
+		}
+		posted[key] = val
+	}
+
+	// If attempting to set secret values without permission, deny early (no need to fetch base)
+	canSecretsSet, _ := h.rbacManager.Enforce(email, "secrets", "set")
+	if !canSecretsSet {
+		offending := make([]string, 0)
+		for _, k := range order {
+			if h.isSecretKey(k) && posted[k] != maskedSecret {
+				offending = append(offending, k)
+			}
+		}
+		if len(offending) > 0 {
+			// Log denied secrets.set per offending key for audit clarity
+			userName := r.Header.Get("X-User-Name")
+			for _, key := range offending {
+				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+					UserEmail:      email,
+					UserName:       userName,
+					ActionType:     "convox",
+					Action:         "secrets.set",
+					ResourceType:   "secret",
+					Resource:       fmt.Sprintf("%s/%s", app, key),
+					Details:        "{}",
+					IPAddress:      r.RemoteAddr,
+					UserAgent:      r.UserAgent(),
+					Status:         "denied",
+					RBACDecision:   "deny",
+					HTTPStatus:     http.StatusForbidden,
+					ResponseTimeMs: 0,
+				})
+			}
+			return false, nil, nil
+		}
+	}
+
+	// Fetch latest env map from rack (needed to fill back masked values and compute diffs)
+	baseEnv, err := h.fetchLatestEnvMap(rack, app)
+	if err != nil {
+		// If fetch fails, fall back to submitted body without rewrite
+		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		return false, nil, fmt.Errorf("failed to fetch latest env: %w", err)
+	}
+
+	// Permissions
+	canEnvSet, _ := h.rbacManager.Enforce(email, "env", "set")
+	canSecretsSet, _ = h.rbacManager.Enforce(email, "secrets", "set")
+	if !canEnvSet {
+		// Log denied env.set entries for submitted keys
+		userName := r.Header.Get("X-User-Name")
+		for _, key := range order {
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "env.set",
+				ResourceType:   "env",
+				Resource:       fmt.Sprintf("%s/%s", app, key),
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
+		}
+		return false, nil, nil
+	}
+
+	// Merge masked values and compute diffs
+	merged := make(map[string]string)
+	diffs := make([]EnvDiff, 0)
+	for _, key := range order {
+		val := posted[key]
+		base := baseEnv[key]
+		isSecret := h.isSecretKey(key)
+		// If masked, keep base value
+		if val == maskedSecret {
+			merged[key] = base
+			continue
+		}
+		// If changing a secret without permission, deny
+		if isSecret && !canSecretsSet && val != base {
+			return false, nil, nil
+		}
+		merged[key] = val
+		if val != base {
+			diffs = append(diffs, EnvDiff{Key: key, OldVal: base, NewVal: val, Secret: isSecret})
+		}
+	}
+
+	// Recompose env string preserving order
+	var b strings.Builder
+	for i, k := range order {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(k)
+		b.WriteString("=")
+		b.WriteString(merged[k])
+	}
+	vals.Set("env", b.String())
+	newBody := []byte(vals.Encode())
+	r.Body = io.NopCloser(bytes.NewReader(newBody))
+	// Ensure Content-Length is ignored downstream (we strip it in response), request side proxy will re-create
+	r.ContentLength = int64(len(newBody))
+	return true, diffs, nil
+}
+
+func extractAppFromPath(p string) string {
+	parts := strings.Split(strings.Trim(p, "/"), "/")
+	// expect apps/{app}/releases
+	if len(parts) >= 3 && parts[0] == "apps" && parts[2] == "releases" {
+		return parts[1]
+	}
+	return ""
+}
+
+func (h *Handler) fetchLatestEnvMap(rack config.RackConfig, app string) (map[string]string, error) {
+	base := strings.TrimRight(rack.URL, "/")
+	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	authHeader := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey))))
+	// GET /apps/{app}/releases?limit=1
+	req1, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases?limit=1", base, app), nil)
+	req1.Header.Set("Authorization", authHeader)
+	resp1, err := client.Do(req1)
+	if err != nil {
+		return nil, err
+	}
+	defer resp1.Body.Close()
+	var list []map[string]interface{}
+	if err := json.NewDecoder(resp1.Body).Decode(&list); err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return map[string]string{}, nil
+	}
+	id, _ := list[0]["id"].(string)
+	if id == "" {
+		return map[string]string{}, nil
+	}
+	req2, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases/%s", base, app, id), nil)
+	req2.Header.Set("Authorization", authHeader)
+	resp2, err := client.Do(req2)
+	if err != nil {
+		return nil, err
+	}
+	defer resp2.Body.Close()
+	var rel map[string]interface{}
+	if err := json.NewDecoder(resp2.Body).Decode(&rel); err != nil {
+		return nil, err
+	}
+	envStr, _ := rel["env"].(string)
+	return parseEnvString(envStr), nil
+}
+
+func parseEnvString(s string) map[string]string {
+	out := make(map[string]string)
+	for _, ln := range strings.Split(s, "\n") {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		parts := strings.SplitN(ln, "=", 2)
+		k := parts[0]
+		v := ""
+		if len(parts) == 2 {
+			v = parts[1]
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []EnvDiff) {
+	if len(diffs) == 0 {
+		return
+	}
+	userName := r.Header.Get("X-User-Name")
+	app := extractAppFromPath(r.URL.Path)
+	for _, d := range diffs {
+		// Mask only secret values in audit details
+		oldVal := d.OldVal
+		newVal := d.NewVal
+		if d.Secret {
+			oldVal = "[REDACTED]"
+			newVal = "[REDACTED]"
+		}
+		details := fmt.Sprintf("{\"old\":\"%s\",\"new\":\"%s\"}", escapeJSONString(oldVal), escapeJSONString(newVal))
+		action := "env.set"
+		rtype := "env"
+		if d.Secret {
+			action = "secrets.set"
+			rtype = "secret"
+		}
+		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+			UserEmail:      email,
+			UserName:       userName,
+			ActionType:     "convox",
+			Action:         action,
+			ResourceType:   rtype,
+			Resource:       fmt.Sprintf("%s/%s", app, d.Key),
+			Details:        details,
+			IPAddress:      r.RemoteAddr,
+			UserAgent:      r.UserAgent(),
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     200,
+			ResponseTimeMs: 0,
+		})
+	}
+}
+
+// escapeJSONString minimally escapes quotes, backslashes and newlines for JSON embedding
+func escapeJSONString(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	return s
 }
 
 func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path, userEmail string) (int, error) {
@@ -192,10 +578,12 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	for key, values := range r.Header {
-		if key != "Authorization" {
-			for _, value := range values {
-				proxyReq.Header.Add(key, value)
-			}
+		lk := strings.ToLower(key)
+		if lk == "authorization" || lk == "env" || lk == "environment" || lk == "release-env" {
+			continue
+		}
+		for _, value := range values {
+			proxyReq.Header.Add(key, value)
 		}
 	}
 
@@ -223,7 +611,18 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		return 0, fmt.Errorf("failed to read response body: %w", err)
 	}
 
+	// Filter release env based on RBAC
+	if strings.Contains(path, "/releases") && strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "application/json") {
+		if authUser, ok := auth.GetAuthUser(r.Context()); ok {
+			body = h.filterReleaseEnvForUser(authUser.Email, body)
+		}
+	}
+
+	// Copy headers, but drop Content-Length since we may have modified the body; let Go recalculate
 	for key, values := range resp.Header {
+		if strings.ToLower(key) == "content-length" {
+			continue
+		}
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
@@ -248,7 +647,8 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 				upstreamURL = resp.Request.URL.String()
 			}
 		}
-		fmt.Printf("DEBUG RESPONSE %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q body=%s\n", r.Method, path, resp.StatusCode, ct, len(body), upstreamMethod, upstreamURL, string(logBody))
+		fmt.Printf("DEBUG RESPONSE %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q body=%s\n",
+			r.Method, path, resp.StatusCode, ct, len(body), upstreamMethod, upstreamURL, string(logBody))
 	}
 
 	if _, err := w.Write(body); err != nil {
@@ -256,6 +656,115 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	return resp.StatusCode, nil
+}
+
+// filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.
+func (h *Handler) filterReleaseEnvForUser(email string, body []byte) []byte {
+	// Determine permissions
+	canEnvView, _ := h.rbacManager.Enforce(email, "env", "view")
+	canSecretsView, _ := h.rbacManager.Enforce(email, "secrets", "view")
+
+	// If no environment view, mask all env values (do not strip, to avoid accidental clears)
+	if !canEnvView {
+		var any interface{}
+		if err := json.Unmarshal(body, &any); err != nil {
+			return body
+		}
+		maskAll := func(s string) string {
+			lines := strings.Split(s, "\n")
+			for i, ln := range lines {
+				if ln == "" {
+					continue
+				}
+				parts := strings.SplitN(ln, "=", 2)
+				if len(parts) == 2 {
+					parts[1] = maskedSecret
+					lines[i] = parts[0] + "=" + parts[1]
+				}
+			}
+			return strings.Join(lines, "\n")
+		}
+		switch v := any.(type) {
+		case map[string]interface{}:
+			if envv, ok := v["env"].(string); ok {
+				v["env"] = maskAll(envv)
+			}
+			nb, _ := json.Marshal(v)
+			return nb
+		case []interface{}:
+			for _, it := range v {
+				if m, ok := it.(map[string]interface{}); ok {
+					if envv, ok2 := m["env"].(string); ok2 {
+						m["env"] = maskAll(envv)
+					}
+				}
+			}
+			nb, _ := json.Marshal(v)
+			return nb
+		default:
+			return body
+		}
+	}
+
+	// Env view allowed; redact secrets unless secrets:view
+	if canSecretsView {
+		return body
+	}
+	var any interface{}
+	if err := json.Unmarshal(body, &any); err != nil {
+		return body
+	}
+	mask := func(s string) string {
+		lines := strings.Split(s, "\n")
+		for i, ln := range lines {
+			if ln == "" {
+				continue
+			}
+			parts := strings.SplitN(ln, "=", 2)
+			key := parts[0]
+			if h.isSecretKey(key) && len(parts) > 1 {
+				parts[1] = maskedSecret
+				lines[i] = parts[0] + "=" + parts[1]
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+	switch v := any.(type) {
+	case map[string]interface{}:
+		if envv, ok := v["env"].(string); ok {
+			v["env"] = mask(envv)
+		}
+		nb, _ := json.Marshal(v)
+		return nb
+	case []interface{}:
+		for _, it := range v {
+			if m, ok := it.(map[string]interface{}); ok {
+				if envv, ok2 := m["env"].(string); ok2 {
+					m["env"] = mask(envv)
+				}
+			}
+		}
+		nb, _ := json.Marshal(v)
+		return nb
+	default:
+		return body
+	}
+}
+
+func (h *Handler) isSecretKey(key string) bool {
+	if _, ok := h.secretNames[key]; ok {
+		return true
+	}
+	// Case-insensitive contains for common secret indicators
+	upper := strings.ToUpper(key)
+	if strings.Contains(upper, "SECRET") || strings.Contains(upper, "TOKEN") {
+		return true
+	}
+	// Suffix checks for key identifiers
+	if strings.HasSuffix(upper, "_KEY") || strings.HasSuffix(upper, "_KEY_ID") {
+		return true
+	}
+	return false
 }
 
 // proxyWebSocket upgrades the client connection and bridges it to the rack via a WebSocket connection

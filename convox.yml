@@ -9,6 +9,7 @@ environment:
   - RACK_TOKEN # required API token for target rack
   - POSTMARK_API_TOKEN # optional email notifications
   - POSTMARK_FROM # optional sender address
+  - CONVOX_SECRET_ENV_VARS=DATABASE_URL,REDIS_URL,SECRET_KEY_BASE
   # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
   # - GATEWAY_DB_PATH=/app/data/db.sqlite

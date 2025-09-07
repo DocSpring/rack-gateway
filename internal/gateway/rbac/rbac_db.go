@@ -78,16 +78,18 @@ var policies = [][]string{
 
 	// Ops role inherits viewer and adds more
 	{"g", "ops", "viewer"},
-	// Env is read via releases endpoints
 	{"p", "ops", "convox:ps:manage", "*"},
 	{"p", "ops", "convox:restart:app", "*"},
 	{"p", "ops", "convox:releases:list", "*"},
+	{"p", "ops", "convox:env:view", "*"},
 
 	// Deployer role inherits ops and adds deployment permissions
 	{"g", "deployer", "ops"},
 	{"p", "deployer", "convox:builds:create", "*"},
 	{"p", "deployer", "convox:releases:create", "*"},
 	{"p", "deployer", "convox:releases:promote", "*"},
+	{"p", "deployer", "convox:env:view", "*"},
+	{"p", "deployer", "convox:env:set", "*"},
 	// Allow creating and updating apps/services, but not deleting apps
 	{"p", "deployer", "convox:apps:create", "*"},
 	{"p", "deployer", "convox:apps:update", "*"},
@@ -98,6 +100,7 @@ var policies = [][]string{
 	// CI/CD role for automated deployments
 	{"p", "cicd", "convox:apps:list", "*"},
 	{"p", "cicd", "convox:builds:create", "*"},
+	{"p", "cicd", "convox:releases:create", "*"},
 	{"p", "cicd", "convox:releases:promote", "*"},
 	{"p", "cicd", "convox:ps:manage", "*"},
 	{"p", "cicd", "convox:restart:app", "*"},

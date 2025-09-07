@@ -29,6 +29,10 @@ services:
       dockerfile: Dockerfile.mock-convox
     environment:
       MOCK_CONVOX_PORT: ${MOCK_CONVOX_PORT:-5443}
+      # Mock logging toggles
+      MOCK_CONVOX_LOG_HEADERS: true
+      MOCK_CONVOX_LOG_REQUEST_BODY: true
+      MOCK_CONVOX_LOG_RESPONSE_BODY: true
     ports:
       - "${MOCK_CONVOX_PORT:-5443}:${MOCK_CONVOX_PORT:-5443}"
     networks:
@@ -44,6 +48,7 @@ services:
       GOOGLE_CLIENT_ID: mock-client-id
       GOOGLE_CLIENT_SECRET: mock-client-secret
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
+      CONVOX_SECRET_ENV_VARS: DATABASE_URL,REDIS_URL,SECRET_KEY_BASE
       ADMIN_USERS: admin@company.com
       VIEWER_USERS: viewer@company.com
       DEPLOYER_USERS: deployer@company.com

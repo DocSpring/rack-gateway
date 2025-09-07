@@ -262,27 +262,63 @@ Endpoints:
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("REQ %s %s rawQuery=%q", r.Method, r.URL.Path, r.URL.RawQuery)
-		// Uncomment for extra request debugging
-		// for k, vs := range r.Header {
-		// 	for _, v := range vs {
-		// 		log.Printf("HDR %s: %s", k, v)
-		// 	}
-		// }
+		log.Printf("Request: %s %s rawQuery=%q", r.Method, r.URL.Path, r.URL.RawQuery)
+		if getBoolEnv("MOCK_CONVOX_LOG_HEADERS", true) {
+			for k, vs := range r.Header {
+				for _, v := range vs {
+					log.Printf("[Header] %s: %s", k, v)
+				}
+			}
+		}
+		// Log request body for write methods, but cap size to avoid noise
+		if getBoolEnv("MOCK_CONVOX_LOG_REQUEST_BODY", false) && r.Body != nil && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
+			// Read and restore body
+			buf, _ := io.ReadAll(r.Body)
+			r.Body.Close()
+			r.Body = io.NopCloser(strings.NewReader(string(buf)))
+			max := 4096
+			preview := string(buf)
+			if len(preview) > max {
+				preview = preview[:max] + "…(truncated)"
+			}
+			if preview != "" {
+				log.Printf("[Request Body] %d bytes: %s", len(buf), preview)
+			} else {
+				log.Printf("[Request Body] 0 bytes")
+			}
+		}
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sr, r)
-		log.Printf("RES %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
+		if getBoolEnv("MOCK_CONVOX_LOG_RESPONSE_BODY", false) {
+			// Log response body preview
+			max := 4096
+			preview := string(sr.body)
+			if len(preview) > max {
+				preview = preview[:max] + "…(truncated)"
+			}
+			log.Printf("[Response Body] %d bytes: %s", len(sr.body), preview)
+		}
+		log.Printf("Response: %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
 	})
 }
 
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	body   []byte
 }
 
 func (sr *statusRecorder) WriteHeader(code int) {
 	sr.status = code
 	sr.ResponseWriter.WriteHeader(code)
+}
+
+func (sr *statusRecorder) Write(p []byte) (int, error) {
+	// Copy to buffer for optional logging
+	if len(p) > 0 {
+		sr.body = append(sr.body, p...)
+	}
+	return sr.ResponseWriter.Write(p)
 }
 
 // Ensure WebSocket upgrades can hijack the connection
@@ -335,6 +371,22 @@ func authMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// getBoolEnv returns true if the env var parses to a truthy value, else defaultVal.
+func getBoolEnv(name string, defaultVal bool) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return defaultVal
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return defaultVal
+	}
 }
 
 func getApps(w http.ResponseWriter, r *http.Request) {

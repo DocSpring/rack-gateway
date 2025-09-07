@@ -53,6 +53,11 @@ func NewLogger(database *db.Database) *Logger {
 	}
 }
 
+// LogDBEntry persists a DB-style audit log entry using this logger's database.
+func (l *Logger) LogDBEntry(al *db.AuditLog) error {
+	return LogDB(l.database, al)
+}
+
 func (l *Logger) Log(entry *LogEntry) {
 	if entry.RequestBody != nil {
 		entry.RequestBody = l.redactMap(entry.RequestBody)

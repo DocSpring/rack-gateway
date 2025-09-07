@@ -139,6 +139,7 @@ func DefaultCICDPermissions() []string {
 		"convox:builds:create",
 		"convox:builds:list",
 		"convox:releases:list",
+		"convox:releases:create",
 		"convox:releases:promote",
 		"convox:ps:list",
 		"convox:ps:manage",
