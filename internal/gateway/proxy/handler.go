@@ -82,6 +82,17 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Get the full path including query params
 	path := r.URL.Path
 
+	// Before any RBAC/audit, enforce an allowlist of Convox API paths.
+	methodForAllow := r.Method
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+		methodForAllow = "SOCKET"
+	}
+	if !h.isAllowedConvoxPath(path, methodForAllow) {
+		// Return 404 without writing an audit DB entry for non-Convox noise (e.g., .well-known, favicon, etc.)
+		http.NotFound(w, r)
+		return
+	}
+
 	// Check permissions (different logic for JWT vs API tokens)
 	var allowed bool
 	var err error
@@ -163,6 +174,16 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	authUser, ok := auth.GetAuthUser(r.Context())
 	if !ok {
 		h.handleError(w, r, "unauthorized", http.StatusUnauthorized, rack, start)
+		return
+	}
+
+	// Enforce allowlist for rack-scoped proxy as well
+	methodForAllow := r.Method
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+		methodForAllow = "SOCKET"
+	}
+	if !h.isAllowedConvoxPath("/"+path, methodForAllow) {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -1055,6 +1076,35 @@ func keyMatch3(path, pattern string) bool {
 	re := b.String()
 	ok, _ := regexp.MatchString(re, path)
 	return ok
+}
+
+// isAllowedConvoxPath returns true if the requested path/method is a known Convox API route that the gateway proxies.
+func (h *Handler) isAllowedConvoxPath(path, _ string) bool {
+	// Allow by documented root prefixes from reference/convox_rack/pkg/structs/routes.go
+	if path == "" {
+		return false
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	allowedRoots := []string{
+		"/apps",
+		"/system",
+		"/certificates",
+		"/events",
+		"/instances",
+		"/objects",
+		"/proxy",
+		"/registries",
+		"/resources",
+		"/racks",
+	}
+	for _, root := range allowedRoots {
+		if path == root || strings.HasPrefix(path, root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // hasAPITokenPermission checks if an API token has the required permission
