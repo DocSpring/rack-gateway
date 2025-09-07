@@ -1,34 +1,62 @@
 environment:
-  - GOOGLE_CLIENT_ID
-  - GOOGLE_CLIENT_SECRET
-  - GOOGLE_ALLOWED_DOMAIN=docspring.com
-  - RACK_TOKEN_STAGING
-  - RACK_TOKEN_US
-  - RACK_TOKEN_EU
-  - ADMIN_USERS
-  - APP_JWT_KEY
-  - REDIRECT_URL
+  - APP_JWT_KEY # required
+  - GOOGLE_CLIENT_ID # required
+  - GOOGLE_CLIENT_SECRET # required
+  - GOOGLE_ALLOWED_DOMAIN # required, e.g. company.com
+  - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
+  - REDIRECT_URL # required, e.g. https://gateway.example.com/.gateway/web/callback
+  - ADMIN_USERS # comma-separated bootstrap admins
+  - RACK_HOST # required for gateway to proxy to target Convox API (host or full URL)
+  - RACK_TOKEN # required API token for target rack
+  - POSTMARK_API_TOKEN # optional email notifications
+  - POSTMARK_FROM # optional sender address
+  # - POSTMARK_STREAM=outbound # optional stream
+  # - CONVOX_GATEWAY_DB_PATH=/app/data/db.sqlite
+  # - COOKIE_SECURE=true # in prod
+  # - DEV_MODE=false
+  # - RACK_USERNAME=convox # optional; defaults to convox
 
 resources:
-  database:
-    type: rds
-    options:
-      storage: 20
-      type: db.t3.micro
+  data:
+    type: storage
+    size: 1g
 
 services:
-  api:
-    build: .
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
     command: ./convox-gateway-api
-    domain: ${DOMAIN}
+    domain: ${GATEWAY_DOMAIN}
     environment:
       - PORT=8080
-      - DEV_MODE=false
+      - CONVOX_GATEWAY_DB_PATH=/app/data/db.sqlite
     health: /.gateway/health
     internal: false
     port: 8080
+    resources:
+      - data
     scale:
       count: 2
       cpu: 256
-      memory: 512
+      memory: 256
     sticky: true
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    domain: ${WEB_DOMAIN}
+    port: 80
+    health: /
+    internal: false
+    scale:
+      count: 1
+      cpu: 128
+    memory: 256
+
+timers:
+  audit_cleanup:
+    schedule: "0 3 * * *"
+    service: gateway
+    command: "convox-gateway audit-cleanup --days 90"

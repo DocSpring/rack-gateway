@@ -37,7 +37,7 @@ services:
   gateway-api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gateway
     environment:
       GATEWAY_PORT: ${GATEWAY_PORT:-8447}
       PORT: ${GATEWAY_PORT:-8447}

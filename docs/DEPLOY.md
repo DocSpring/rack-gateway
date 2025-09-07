@@ -1,86 +1,81 @@
-# Deployment Guide
+# Deployment Guide (Convox)
 
-This guide covers production-ready settings and a minimal Convox deployment. It assumes you already run a Convox rack and will restrict access via your Tailscale network.
+Deploy the gateway and UI using the `convox.yml` in this repo — no separate manifest needed.
 
-## Overview
+## Prerequisites
 
-- Gateway HTTP API on `GATEWAY_PORT` (default 8080)
-- OAuth/OIDC for web login, and JWT for API/CLI auth
-- RBAC authorization aligned to Convox routes
-- Audits persisted to SQLite and mirrored to stdout (JSON for CloudWatch)
-- WebSocket proxy supports Convox exec/logs (subprotocol + headers)
+- Convox CLI, authenticated against your rack (e.g., `staging`)
+- A Convox API token for the rack you want the gateway to proxy to
 
-## Configuration
-
-Review the full list of environment variables and options in [CONFIGURATION.md](CONFIGURATION.md). The minimal example below demonstrates typical production variables.
-
-## Persistence
-
-The app uses SQLite at `/app/data/db.sqlite`. Attach a persistent volume to that path.
-
-## Health
-
-- Readiness/Liveness: `/.gateway/health` returns `{status:"ok"}`
-
-## Auditing
-
-- Every audit entry is written to the DB and to stdout as structured JSON (for CloudWatch ingestion).
-- Control DB size by:
-  - Setting `AUDIT_LOG_RETENTION_DAYS` (cleanup at startup), and/or
-  - Scheduling the cleanup command (below).
-
-## Scheduled Cleanup (Convox Timers)
-
-Add a timer that runs daily:
+## 1) Create the app
 
 ```
-timers:
-  audit_cleanup:
-    schedule: "0 3 * * *"   # 3:00 UTC daily
-    service: gateway
-    command: "convox-gateway audit-cleanup --days 90"
+convox apps create convox-gateway
 ```
 
-`--days` may be omitted if you set `AUDIT_LOG_RETENTION_DAYS`.
+## 2) Set environment
 
-## Security Posture (Production)
+All commands assume you are running from this repo root so Convox picks the app name from the directory (no `-a` needed).
 
-- Admin API (`/.gateway/admin/*`) rejects cookie-only auth; use Authorization Bearer from the UI.
-- Keep the app behind Tailscale (or internal-only) and terminate TLS at the edge.
-- Strong `APP_JWT_KEY` required; do not run without it.
-- Tokens are non-expiring by design; scope them minimally and rotate on suspicion.
+Generate a strong APP_JWT_KEY (256‑bit, base64). Examples:
 
-## Minimal convox.yml (example)
+- macOS/Linux (OpenSSL):
 
 ```
-services:
-  gateway:
-    build: .
-    port: 8080
-    environment:
-      - GATEWAY_PORT=8080
-      - CONVOX_GATEWAY_DB_PATH=/app/data/db.sqlite
-      - APP_JWT_KEY
-      - GOOGLE_CLIENT_ID
-      - GOOGLE_CLIENT_SECRET
-      - GOOGLE_ALLOWED_DOMAIN
-      - REDIRECT_URL
-      - RACK_HOST
-      - RACK_TOKEN
-      - AUDIT_LOG_RETENTION_DAYS=90
-    resources:
-      - data
-    health:
-      path: /.gateway/health
-      interval: 10
-      timeout: 5
-      threshold: 3
+openssl rand -base64 32
+```
 
-resources:
-  data:
-    type: storage
-    size: 1g
+```
+convox env set \
+  APP_JWT_KEY=$(openssl rand -base64 32) \
+  GOOGLE_CLIENT_ID=... \
+  GOOGLE_CLIENT_SECRET=... \
+  GOOGLE_ALLOWED_DOMAIN=docspring.com \
+  REDIRECT_URL=https://gateway.example.com/.gateway/web/callback \
+  ADMIN_USERS=admin@yourcompany.com \
+  RACK_HOST=your-rack.convox.cloud \
+  RACK_TOKEN=xxxxx
 
+# Optional email
+convox env set \
+  POSTMARK_API_TOKEN=xxxx \
+  POSTMARK_FROM=no-reply@docspring.com \
+  POSTMARK_STREAM=outbound
+```
+
+See docs/CONFIGURATION.md for all options.
+
+## 3) Domains
+
+Provide domains via environment or CI vars so Convox substitutes them in `convox.yml`:
+
+- `GATEWAY_DOMAIN` → gateway service (e.g., gateway.example.com)
+- `WEB_DOMAIN` → web service (e.g., portal.example.com)
+
+## 4) Deploy
+
+```
+convox deploy -a convox-gateway
+```
+
+This builds:
+
+- `gateway` (Dockerfile.gateway) — API/proxy on port 8080
+- `web` (web/Dockerfile) — Nginx SPA on port 80, proxies `/api/` to `gateway`
+
+## 5) Verify
+
+```
+curl -s https://$GATEWAY_DOMAIN/.gateway/health
+```
+
+Open https://$WEB_DOMAIN and sign in.
+
+## 6) Audit retention (built in)
+
+The `convox.yml` in this repo includes a daily timer that runs the built‑in cleanup command:
+
+```
 timers:
   audit_cleanup:
     schedule: "0 3 * * *"
@@ -88,8 +83,14 @@ timers:
     command: "convox-gateway audit-cleanup --days 90"
 ```
 
-Populate secrets via `convox env set` or your preferred secrets management.
+Adjust the schedule or days as needed. You can also set `AUDIT_LOG_RETENTION_DAYS` to trigger a cleanup on boot.
 
-## Logs
+## 7) CI/CD
 
-Stdout/stderr goes to Convox logs and CloudWatch. Audit lines are JSON-structured for easy indexing.
+```
+convox apps create convox-gateway || true
+convox env set ...
+convox deploy
+```
+
+Use gateway-issued API tokens for your app deploys to run `convox` via the gateway.
