@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,9 +31,16 @@ type Handler struct {
 	database     *db.Database
 	emailer      email.Sender
 	rackName     string
+	devProxy     *httputil.ReverseProxy
 }
 
-func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string) *Handler {
+func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string, devProxyURL string) *Handler {
+	var rp *httputil.ReverseProxy
+	if devProxyURL != "" {
+		if u, err := url.Parse(devProxyURL); err == nil {
+			rp = httputil.NewSingleHostReverseProxy(u)
+		}
+	}
 	return &Handler{
 		rbacManager:  rbacManager,
 		configPath:   configPath,
@@ -38,6 +48,7 @@ func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *t
 		database:     database,
 		emailer:      mailer,
 		rackName:     rackName,
+		devProxy:     rp,
 	}
 }
 
@@ -60,6 +71,24 @@ func (h *Handler) auditUserAction(r *http.Request, action, resource, status stri
 	if details != nil {
 		detailsJSON, _ = json.Marshal(details)
 	}
+	// Infer action type and resource type for admin actions
+	actionType := "user_management"
+	if strings.HasPrefix(action, "api_token.") {
+		actionType = "token_management"
+	} else if strings.HasPrefix(action, "user.") {
+		actionType = "user_management"
+	}
+	// Infer resource type for user/token management actions
+	resourceType := func(a string) string {
+		if strings.HasPrefix(a, "api_token.") {
+			return "api_token"
+		}
+		if strings.HasPrefix(a, "user.") {
+			return "user"
+		}
+		return "admin"
+	}(action)
+
 	_ = audit.LogDB(h.database, &db.AuditLog{
 		UserEmail: func() string {
 			if au != nil {
@@ -73,9 +102,10 @@ func (h *Handler) auditUserAction(r *http.Request, action, resource, status stri
 			}
 			return ""
 		}(),
-		ActionType:     "user_management",
+		ActionType:     actionType,
 		Action:         action,
 		Resource:       resource,
+		ResourceType:   resourceType,
 		Details:        string(detailsJSON),
 		IPAddress:      r.RemoteAddr,
 		UserAgent:      r.Header.Get("User-Agent"),
@@ -156,10 +186,19 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		roles = []string{} // Default to empty if error
 	}
 
+	rackName := os.Getenv("RACK")
+	if rackName == "" {
+		rackName = h.rackName
+	}
+	rackHost := os.Getenv("RACK_HOST")
 	response := map[string]interface{}{
 		"email": user.Email,
 		"name":  user.Name,
 		"roles": roles,
+		"rack": map[string]string{
+			"name": rackName,
+			"host": rackHost,
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -464,13 +503,21 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, "failed to create token", http.StatusInternalServerError)
-		h.auditUserAction(r, "token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name}, time.Now())
+		h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name}, time.Now())
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokenResp)
-	h.auditUserAction(r, "token.create", targetUserEmail, "success", map[string]interface{}{"name": req.Name}, time.Now())
+	// Use the token ID as the resource for audit clarity
+	h.auditUserAction(
+		r,
+		"api_token.create",
+		fmt.Sprintf("%d", tokenResp.APIToken.ID),
+		"success",
+		map[string]interface{}{"name": req.Name},
+		time.Now(),
+	)
 
 	// Notifications
 	if h.emailer != nil {
@@ -543,12 +590,48 @@ func (h *Handler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 	_ = authUser // Suppress unused variable warning
 	if err := h.tokenService.DeleteToken(tokenID); err != nil {
 		http.Error(w, "failed to delete token", http.StatusInternalServerError)
-		h.auditUserAction(r, "token.delete", tokenIDStr, "error", nil, time.Now())
+		h.auditUserAction(r, "api_token.delete", tokenIDStr, "error", nil, time.Now())
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	h.auditUserAction(r, "token.delete", tokenIDStr, "success", nil, time.Now())
+	h.auditUserAction(r, "api_token.delete", tokenIDStr, "success", nil, time.Now())
+}
+
+// UpdateAPITokenName updates the name of an API token
+func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
+	authUser, isAuth := auth.GetAuthUser(r.Context())
+	if !isAuth {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokenIDStr := chi.URLParam(r, "tokenID")
+	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid token ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// In the future, verify ownership or admin; for now allow
+	_ = authUser
+
+	if err := h.tokenService.UpdateTokenName(tokenID, req.Name); err != nil {
+		http.Error(w, "failed to update token", http.StatusInternalServerError)
+		h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"name": req.Name}, time.Now())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	h.auditUserAction(r, "api_token.update", tokenIDStr, "success", map[string]interface{}{"name": req.Name}, time.Now())
 }
 
 // ListUsers returns all users (admin only)
@@ -774,14 +857,32 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 // ServeStatic serves the React app's static files
 func (h *Handler) ServeStatic(w http.ResponseWriter, r *http.Request) {
-	// In production, serve from embedded files or dist directory
-	// For development, Vite dev server handles this
-	staticDir := "web/dist"
-	if _, err := os.Stat(staticDir); err == nil {
-		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
-	} else {
-		http.NotFound(w, r)
+	// In dev, proxy to Vite dev server if configured
+	if h.devProxy != nil {
+		h.devProxy.ServeHTTP(w, r)
+		return
 	}
+	// Serve the built SPA from web/dist under the /.gateway/web/ path
+	staticDir := "web/dist"
+	if _, err := os.Stat(staticDir); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Strip the "/.gateway/web/" prefix since the files live directly in dist
+	reqPath := strings.TrimPrefix(r.URL.Path, "/.gateway/web/")
+	if reqPath == "" || reqPath == "/" {
+		reqPath = "index.html"
+	}
+
+	// Resolve the requested file path
+	fullPath := filepath.Join(staticDir, reqPath)
+	if fi, err := os.Stat(fullPath); err != nil || fi.IsDir() {
+		// SPA fallback to index.html for client-side routes
+		fullPath = filepath.Join(staticDir, "index.html")
+	}
+
+	http.ServeFile(w, r, fullPath)
 }
 
 // Helper functions

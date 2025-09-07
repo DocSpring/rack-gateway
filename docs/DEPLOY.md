@@ -32,7 +32,7 @@ Create an OAuth client in Google Cloud Console for your Workspace domain:
 - Authorized JavaScript origins:
   - https://$WEB_DOMAIN (e.g., https://portal.example.com)
 - Authorized redirect URIs:
-  - https://$GATEWAY_DOMAIN/.gateway/web/callback
+- https://$GATEWAY_DOMAIN/.gateway/api/web/callback
 
 1. Copy the values:
 
@@ -56,7 +56,7 @@ convox env set \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
   GOOGLE_ALLOWED_DOMAIN=yourcompany.com \
-  REDIRECT_URL=https://gateway.example.com/.gateway/web/callback \
+  REDIRECT_URL=https://gateway.example.com/.gateway/api/web/callback \
   ADMIN_USERS=admin@yourcompany.com \
   RACK_HOST=https://api.target-rack.convox.cloud \
   RACK_TOKEN=xxxxx
@@ -90,7 +90,7 @@ This builds:
 ## 5) Verify
 
 ```
-curl -s https://$GATEWAY_DOMAIN/.gateway/health
+curl -s https://$GATEWAY_DOMAIN/.gateway/api/health
 ```
 
 Open https://$WEB_DOMAIN and sign in.

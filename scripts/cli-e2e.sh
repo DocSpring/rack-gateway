@@ -32,49 +32,56 @@ GW_PORT="${GATEWAY_PORT:-}"
 echo "Building CLI..."
 make -s cli
 
-echo "Starting CLI login (two-step)..."
-AUTH_FILE="$(mktemp)"
-echo "Running CLI login (no-open) and writing auth params to $AUTH_FILE ..."
-set -m
-./bin/convox-gateway login e2e "http://127.0.0.1:${GW_PORT}" --no-open --auth-file "$AUTH_FILE" &
-CLI_PID=$!
-
-# Wait for auth-file to be written
-for _i in $(seq 1 30); do
-  [[ -s "$AUTH_FILE" ]] && break
-  sleep 0.2
-done
-
-AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
-STATE=$(sed -n 's/^STATE=//p' "$AUTH_FILE")
-CODE_VERIFIER=$(sed -n 's/^CODE_VERIFIER=//p' "$AUTH_FILE")
-
-if [[ -z "$AUTH_URL" || -z "$STATE" || -z "$CODE_VERIFIER" ]]; then
-  echo "Auth URL not produced" >&2
-  kill $CLI_PID || true
-  exit 1
-fi
-
-echo "Driving OAuth authorization (headless)..."
-curl -s -L "$AUTH_URL&selected_user=admin@company.com" -o /dev/null || true
-
-echo "Waiting for CLI to complete..."
-wait $CLI_PID
-
+login_cli_as() {
+  local user_email="$1"
+  local rack_name="${2:-e2e}"
+  echo -e "${YELLOW}Starting CLI login for ${user_email} on rack ${rack_name}...${NC}"
+  local AUTH_FILE
+  AUTH_FILE="$(mktemp)"
+  echo "  - Running CLI login (no-open) and writing auth params to $AUTH_FILE ..."
+  set -m
+  ./bin/convox-gateway login "${rack_name}" "http://127.0.0.1:${GW_PORT}" --no-open --auth-file "$AUTH_FILE" &
+  local CLI_PID=$!
+  # Wait for auth-file
+  for _i in $(seq 1 50); do
+    [[ -s "$AUTH_FILE" ]] && break
+    sleep 0.1
+  done
+  local AUTH_URL
+  AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
+  if [[ -z "$AUTH_URL" ]]; then
+    echo -e "${RED}Auth URL not produced" >&2
+    kill $CLI_PID || true
+    exit 1
+  fi
+  echo "  - Driving OAuth authorization for ${user_email} (headless)..."
+  curl -s -L "$AUTH_URL&selected_user=${user_email}" -o /dev/null || true
+  echo "  - Waiting for CLI to complete..."
+  wait $CLI_PID
+}
 
 # verify_command <command> <expected1> <expected2> ...
-function verify_command() {
-  local command="$1" 
-  local expected=("${@:2}")
+function verify_command_status_and_output() {
+  local command="$1" expected_status="$2" expected_output=("${@:3}")
   local shell_cmd="./bin/convox-gateway $command"
-  echo -e "${BLUE}Running: $shell_cmd${NC}"
+
+  echo -e "${BLUE}Running: $shell_cmd...${NC}"
+  set +e
   local output
-  output=$($shell_cmd)
-  echo -e "${GREEN}$output${NC}"
-  
-  # Check that ALL expected strings are present in the output
+  output=$($shell_cmd 2>&1)
+  local exit_status=$?
+  set -e
+  if [[ "$exit_status" == "$expected_status" ]]; then
+    echo -e "${GREEN}$output${NC}"
+  else
+    echo -e "${RED}Expected status $expected_status, but got $exit_status" >&2
+    echo -e "${RED}$output${NC}" >&2
+    exit 1
+  fi
+
+  # Check that all expected strings are present in the output
   local missing=()
-  for exp in "${expected[@]}"; do
+  for exp in "${expected_output[@]}"; do
     if ! echo "$output" | grep -q "$exp"; then
       missing+=("$exp")
     fi
@@ -86,11 +93,32 @@ function verify_command() {
   fi
 }
 
-echo "Verifying CLI commands..."
+function verify_command() {
+  verify_command_status_and_output "$1" "0" "${@:2}"
+}
+
+function verify_command_failure() {
+  verify_command_status_and_output "$1" "1" "${@:2}"
+}
+
+function logout_cli() {
+  echo -e "${YELLOW}Logging out...${NC}"
+  verify_command "logout" "Removed rack: e2e"
+}
+
+# Tests
+# --------------------------------------------
+echo "Running CLI tests..."
+
+# Admin login
+login_cli_as "admin@company.com" "e2e"
+
+
 verify_command "rack" "Current rack: e2e" "Logged in as admin@company.com"
 verify_command "convox rack" "mock-rack" "mock-rack.example.com"
-verify_command "convox apps" "convox-gateway" "RAPP123456"
-verify_command "convox apps info -a convox-gateway" "Name" "convox-gateway" "Release" "RAPP123456"
+verify_command "convox apps" "convox-gateway" "RAPI123456"
+verify_command "convox apps info -a convox-gateway" \
+  "Name        convox-gateway" "Status      running"
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
 verify_command "convox run web 'echo hello'" \
@@ -109,4 +137,32 @@ verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "R
 verify_command "convox env set -a convox-gateway FOO=bar --promote" \
   "Setting FOO... OK" "Release:" "Promoting "
 
-echo "CLI E2E completed successfully."
+logout_cli
+
+# Login as deployer
+# ---------------------------------------------
+login_cli_as "deployer@company.com" "e2e"
+
+# cannot do anything
+verify_command_failure "convox ps" \
+  "authentication failed: user not found"
+
+verify_command_failure "convox env set NOTALLOWED=1" \
+  "authentication failed: user not found"
+
+logout_cli
+
+# Login as viewer
+# ---------------------------------------------
+login_cli_as "viewer@company.com" "e2e"
+
+# Viewer can list processes
+verify_command "convox ps" "p-web-1" "p-worker-1"
+
+# Viewer should not be able to set env
+verify_command_failure "convox env set NOTALLOWED=1" \
+  "ERROR: permission denied"
+
+
+echo -e "${GREEN}CLI E2E completed successfully.${NC}"
+

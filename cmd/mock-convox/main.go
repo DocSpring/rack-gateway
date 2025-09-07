@@ -143,6 +143,13 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "help", "--help", "-h":
+			printHelp()
+			return
+		}
+	}
 	r := mux.NewRouter()
 	r.Use(requestLogger)
 
@@ -206,6 +213,49 @@ func main() {
 	log.Printf("Mock Convox API server starting on port %s", port)
 	log.Printf("Expected auth: Basic %s", base64.StdEncoding.EncodeToString([]byte(mockUsername+":"+mockPassword)))
 	log.Fatal(http.ListenAndServe(":"+port, r))
+}
+
+func printHelp() {
+	fmt.Print(`Mock Convox Rack API Server
+
+Starts an HTTP server that mimics a subset of the Convox Rack API used by our tests and E2E flows.
+
+Usage:
+  ./mock-convox                 # start server (port from $MOCK_CONVOX_PORT, default 9090)
+  ./mock-convox help            # show this help
+
+Auth:
+  - HTTP Basic Auth required on all endpoints except /health
+  - Username: "convox"
+  - Password: mock-rack-token-12345
+
+Endpoints:
+  GET  /health                                  # server health
+  GET  /system                                  # rack info
+  
+  GET  /apps                                    # list apps (convox-gateway, api, web)
+  GET  /apps/{app}                              # app info
+  
+  GET  /apps/{app}/processes                    # list processes
+  GET  /apps/{app}/processes/{id}               # process info
+  GET  /apps/{app}/processes/{id}/exec          # mock exec (WebSocket)
+  POST /apps/{app}/processes/{id}/stop          # stop process (mock)
+  
+  GET  /apps/{app}/builds                       # list builds
+  GET  /apps/{app}/builds/{id}                  # build info
+  
+  GET  /apps/{app}/releases                     # list releases (newest first; ?limit=1 supported)
+  POST /apps/{app}/releases                     # create release (returns single Release)
+  GET  /apps/{app}/releases/{id}                # release info (includes Env string)
+  POST /apps/{app}/releases/{id}/promote        # promote release (updates app current release)
+  
+  GET  /apps/{app}/logs                         # app logs (WebSocket; short stream then close)
+  
+  GET  /apps/{app}/environment                  # env (JSON map)
+  POST /apps/{app}/environment                  # set/merge env (returns merged map)
+  
+  GET  /racks                                   # returns [] (some CLI flows call this)
+`)
 }
 
 // requestLogger logs method, path, status and duration for every request

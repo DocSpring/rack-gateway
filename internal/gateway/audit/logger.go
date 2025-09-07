@@ -73,17 +73,20 @@ func (l *Logger) Log(entry *LogEntry) {
 func LogDB(database *db.Database, al *db.AuditLog) error {
 	// Mirror fields into a structured line suitable for CloudWatch ingestion
 	payload := map[string]interface{}{
-		"ts":          time.Now().UTC().Format(time.RFC3339),
-		"user_email":  al.UserEmail,
-		"user_name":   al.UserName,
-		"action_type": al.ActionType,
-		"action":      al.Action,
-		"resource":    al.Resource,
-		"command":     al.Command,
-		"status":      al.Status,
-		"latency_ms":  al.ResponseTimeMs,
-		"ip_address":  al.IPAddress,
-		"user_agent":  al.UserAgent,
+		"ts":            time.Now().UTC().Format(time.RFC3339),
+		"user_email":    al.UserEmail,
+		"user_name":     al.UserName,
+		"action_type":   al.ActionType,
+		"action":        al.Action,
+		"resource":      al.Resource,
+		"resource_type": al.ResourceType,
+		"command":       al.Command,
+		"status":        al.Status,
+		"rbac_decision": al.RBACDecision,
+		"http_status":   al.HTTPStatus,
+		"latency_ms":    al.ResponseTimeMs,
+		"ip_address":    al.IPAddress,
+		"user_agent":    al.UserAgent,
 	}
 	// Omit verbose request details; method/path are already logged separately
 	if data, err := json.Marshal(payload); err == nil {
@@ -105,25 +108,44 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 
 	// Determine action and resource from path
 	action, resource := l.parseConvoxAction(r.URL.Path, r.Method)
-	// If resource is unknown for rack-wide endpoints like /system, set to rack name
-	if resource == "unknown" && strings.HasPrefix(action, "system.") && rack != "" {
-		resource = rack
+	// Normalize list actions to resource="all"
+	if strings.HasSuffix(action, ".list") {
+		resource = "all"
+	} else if resource == "unknown" && rack != "" {
+		// For rack-wide endpoints like /system when no specific resource, use the rack name
+		if strings.HasPrefix(action, "system.") {
+			resource = rack
+		}
 	}
 
 	// Get user name if available from context or header
 	userName := r.Header.Get("X-User-Name") // Set by auth middleware
 
 	// Create database audit log
+	// Determine resource type (app, rack, process, system, etc.)
+	resourceType := l.inferResourceType(r.URL.Path, action)
+
+	// Determine final status: if RBAC denied, mark as denied; otherwise map HTTP code
+	finalStatus := ""
+	if strings.ToLower(rbacDecision) == "deny" {
+		finalStatus = "denied"
+	} else {
+		finalStatus = l.mapHttpStatusToStatus(status)
+	}
+
 	auditLog := &db.AuditLog{
 		UserEmail:      userEmail,
 		UserName:       userName,
 		ActionType:     "convox_api",
 		Action:         action,
 		Resource:       resource,
+		ResourceType:   resourceType,
 		Details:        l.buildDetailsJSON(r),
 		IPAddress:      getClientIP(r),
 		UserAgent:      r.UserAgent(),
-		Status:         l.mapStatusToString(status, rbacDecision),
+		Status:         finalStatus,
+		RBACDecision:   rbacDecision,
+		HTTPStatus:     status,
 		ResponseTimeMs: int(latency.Milliseconds()),
 	}
 
@@ -524,19 +546,53 @@ func (l *Logger) buildDetailsJSON(r *http.Request) string {
 }
 
 // mapStatusToString converts HTTP status and RBAC decision to audit status
-func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
+func (l *Logger) mapHttpStatusToStatus(httpStatus int) string {
 	switch {
-	case rbacDecision == "deny":
-		return "denied"
 	case httpStatus == 101: // WebSocket Switching Protocols treated as success
 		return "success"
 	case httpStatus >= 200 && httpStatus < 300:
 		return "success"
 	case httpStatus >= 400 && httpStatus < 500:
-		return "blocked"
+		return "failed"
 	case httpStatus >= 500:
 		return "error"
 	default:
 		return "unknown"
 	}
+}
+
+// mapStatusToString kept for test compatibility; delegates to RBAC + HTTP mapping
+func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
+	if strings.ToLower(rbacDecision) == "deny" {
+		return "denied"
+	}
+	return l.mapHttpStatusToStatus(httpStatus)
+}
+
+// inferResourceType attempts to derive a normalized resource type label for UI display.
+func (l *Logger) inferResourceType(path, action string) string {
+	p := strings.TrimPrefix(path, "/")
+	parts := strings.Split(p, "/")
+	// Priority by path patterns
+	if strings.Contains(path, "/processes/") {
+		return "process"
+	}
+	if len(parts) > 0 {
+		switch parts[0] {
+		case "apps":
+			return "app"
+		case "racks":
+			return "rack"
+		case "system":
+			return "system"
+		}
+	}
+	// Fallback to action prefix (e.g., env.get -> env)
+	if i := strings.Index(action, "."); i > 0 {
+		return action[:i]
+	}
+	if action != "" {
+		return action
+	}
+	return "unknown"
 }

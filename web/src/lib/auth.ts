@@ -2,12 +2,13 @@ import type { AxiosError } from 'axios'
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
-const API_BASE = '/api'
+const API_BASE = ''
 
 export interface User {
   email: string
   name: string
   roles: string[]
+  rack?: { name: string; host: string }
 }
 
 export interface AuthState {
@@ -25,7 +26,7 @@ class AuthService {
     sessionStorage.setItem('oauth_rack', rack)
 
     // Redirect directly to web login endpoint
-    window.location.href = `${API_BASE}/.gateway/web/login`
+    window.location.href = `${API_BASE}/.gateway/api/web/login`
   }
 
   // Handle OAuth callback
@@ -54,7 +55,7 @@ class AuthService {
   // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)
   async getCurrentUser(): Promise<User | null> {
     try {
-      const response = await axios.get(`${API_BASE}/.gateway/me`, {
+      const response = await axios.get(`${API_BASE}/.gateway/api/me`, {
         withCredentials: true,
       })
       return response.data
@@ -75,12 +76,13 @@ class AuthService {
   // Logout
   logout(): void {
     // Request server-side logout to clear HttpOnly cookie, then go to login
-    fetch('/api/.gateway/web/logout', { credentials: 'include' })
+    fetch(`${API_BASE}/.gateway/api/web/logout`, { credentials: 'include' })
       .catch((_e) => {
         /* ignore network errors during logout */
       })
       .finally(() => {
-        window.location.href = '/login'
+        const base = import.meta.env.BASE_URL || '/'
+        window.location.href = `${base}login`
       })
   }
 

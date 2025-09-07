@@ -40,24 +40,24 @@ const AVAILABLE_ROLES = {
   viewer: {
     label: 'Viewer',
     description: 'Read-only access to apps and logs',
-    color: 'default',
+    className: 'bg-zinc-600 text-white',
   },
   ops: {
     label: 'Operations',
     description: 'Can manage processes and access systems',
-    color: 'secondary',
+    className: 'bg-green-600 text-white',
   },
   deployer: {
     label: 'Deployer',
     description: 'Can deploy apps and manage configurations',
-    color: 'outline',
+    className: 'bg-blue-600 text-white',
   },
   admin: {
     label: 'Administrator',
     description: 'Full access to all resources',
-    color: 'destructive',
+    className: 'bg-purple-600 text-white',
   },
-}
+} as const
 
 export function UsersPage() {
   const queryClient = useQueryClient()
@@ -91,7 +91,7 @@ export function UsersPage() {
   } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const response = await api.get<User[]>('/.gateway/admin/users')
+      const response = await api.get<User[]>('/.gateway/api/admin/users')
       return response
     },
   })
@@ -99,7 +99,7 @@ export function UsersPage() {
   // Create user mutation
   const createUserMutation = useMutation({
     mutationFn: async (data: { email: string; name: string; roles: string[] }) => {
-      await api.post('/.gateway/admin/users', data)
+      await api.post('/.gateway/api/admin/users', data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -115,7 +115,7 @@ export function UsersPage() {
   // Update user roles mutation
   const updateRolesMutation = useMutation({
     mutationFn: async ({ email, roles }: { email: string; roles: string[] }) => {
-      await api.put(`/.gateway/admin/users/${email}/roles`, { roles })
+      await api.put(`/.gateway/api/admin/users/${email}/roles`, { roles })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -131,7 +131,7 @@ export function UsersPage() {
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (email: string) => {
-      await api.delete(`/.gateway/admin/users/${email}`)
+      await api.delete(`/.gateway/api/admin/users/${email}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -174,7 +174,10 @@ export function UsersPage() {
     }
 
     if (editingUser) {
-      updateRolesMutation.mutate({ email: formData.email, roles: [selectedRole] })
+      updateRolesMutation.mutate({
+        email: formData.email,
+        roles: [selectedRole],
+      })
     } else {
       createUserMutation.mutate({
         email: formData.email,
@@ -293,20 +296,14 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {user.roles.map((role) => (
-                          <Badge
-                            key={role}
-                            variant={
-                              AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.color as
-                                | 'default'
-                                | 'secondary'
-                                | 'outline'
-                                | 'destructive'
-                            }
-                          >
-                            {AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]?.label || role}
-                          </Badge>
-                        ))}
+                        {user.roles.map((role) => {
+                          const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
+                          return (
+                            <Badge className={cfg?.className} key={role} variant={'default'}>
+                              {cfg?.label || role}
+                            </Badge>
+                          )
+                        })}
                       </div>
                     </TableCell>
                     <TableCell>

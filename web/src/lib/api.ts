@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { authService } from './auth'
 import { getCsrfToken } from './csrf'
 
-const API_BASE = '/api'
+const API_BASE = ''
 
 export interface UserConfig {
   name: string
@@ -60,7 +60,7 @@ class ApiService {
       try {
         const method = (config.method || 'get').toUpperCase()
         const url = config.url || ''
-        if (method !== 'GET' && url.startsWith('/.gateway/admin')) {
+        if (method !== 'GET' && url.startsWith('/.gateway/api/admin')) {
           const csrf = getCsrfToken()
           if (csrf) {
             config.headers['X-CSRF-Token'] = csrf
@@ -99,9 +99,9 @@ class ApiService {
         try {
           const url: string = err.config?.url || ''
           const method: string = (err.config?.method || 'get').toUpperCase()
-          if (method !== 'GET' && url.startsWith('/.gateway/admin')) {
+          if (method !== 'GET' && url.startsWith('/.gateway/api/admin')) {
             // refresh token
-            fetch('/api/.gateway/csrf', { credentials: 'include' }).catch(() => {
+            fetch('/.gateway/api/csrf', { credentials: 'include' }).catch(() => {
               /* ignore */
             })
           }
@@ -116,13 +116,13 @@ class ApiService {
 
   // Get gateway configuration (domain + users)
   async getConfig(): Promise<GatewayConfig> {
-    const response = await this.client.get('/v1/admin/config')
+    const response = await this.client.get('/.gateway/api/admin/config')
     return response.data
   }
 
   // Update entire gateway configuration
   async updateConfig(config: GatewayConfig): Promise<void> {
-    await this.client.put('/v1/admin/config', config)
+    await this.client.put('/.gateway/api/admin/config', config)
   }
 
   // Add or update a user
@@ -162,7 +162,7 @@ class ApiService {
 
   // Health check
   async healthCheck(): Promise<{ status: string; version: string }> {
-    const response = await this.client.get('/.gateway/health')
+    const response = await this.client.get('/.gateway/api/health')
     return response.data
   }
 }

@@ -8,8 +8,8 @@ import { Separator } from './ui/separator'
 
 const navigation = [
   { name: 'Users', href: '/users', icon: Users },
-  { name: 'API Tokens', href: '/tokens', icon: Key },
-  { name: 'Audit Logs', href: '/audit', icon: FileText },
+  { name: 'API Tokens', href: '/api_tokens', icon: Key },
+  { name: 'Audit Logs', href: '/audit_logs', icon: FileText },
 ]
 
 export function Layout() {
@@ -22,6 +22,8 @@ export function Layout() {
       <div className="flex w-64 flex-col border-r bg-card">
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
+          {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
+          <img alt="" aria-hidden className="mr-2 h-8 w-8" height={32} src="/logo.svg" width={32} />
           <h1 className="font-semibold text-xl">Convox Gateway</h1>
         </div>
 
@@ -60,6 +62,19 @@ export function Layout() {
             </div>
             <ThemeToggle />
           </div>
+          {user?.rack && (
+            <div className="mb-3 text-muted-foreground text-xs">
+              <div className="group relative inline-flex items-center">
+                <span>Rack: {user.rack.name || 'Unknown'}</span>
+                <div
+                  className="pointer-events-none absolute top-full left-0 z-50 mt-1 hidden w-max max-w-[260px] rounded-md border border-border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md group-hover:block"
+                  role="tooltip"
+                >
+                  {user.rack.host || 'Unknown host'}
+                </div>
+              </div>
+            </div>
+          )}
           <Button className="w-full" onClick={logout} size="sm" variant="outline">
             <LogOut className="mr-2 h-4 w-4" />
             Logout

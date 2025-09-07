@@ -48,7 +48,7 @@ make dev
 
 **🎉 You're done!** Open these URLs:
 
-- **Web UI**: http://localhost:5173 (test users: admin@company.com, developer@company.com, viewer@company.com)
+- **Web UI**: http://localhost:5173 (test users: admin@company.com, deployer@company.com, ops@company.com, viewer@company.com)
 - **Gateway API**: http://localhost:8447
 - **Mock Convox**: http://localhost:5443
 
@@ -97,7 +97,8 @@ For complete development setup with real Google OAuth (instead of mock), see **[
 The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
 
 - **admin@company.com** - Admin User (full access)
-- **developer@company.com** - Developer User
+- **deployer@company.com** - Deployer User (full deployment permissions including env vars)
+- **ops@company.com** - Ops User (restart apps, view environments, manage processes)
 - **viewer@company.com** - Viewer User
 
 When logging in via http://localhost:8447 during development, you'll be redirected to the mock OAuth server to select which test user to authenticate as.
@@ -219,7 +220,7 @@ The gateway uses a SQLite database to store users, API tokens, and audit logs:
 /app/data/db.sqlite
 
 # Override with environment variable
-CONVOX_GATEWAY_DB_PATH=/custom/path/db.sqlite
+GATEWAY_DB_PATH=/custom/path/db.sqlite
 ```
 
 The database is automatically initialized on first run with an admin user from the first Google OAuth login.

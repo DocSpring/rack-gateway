@@ -109,6 +109,11 @@ func (s *Service) DeleteToken(tokenID int64) error {
 	return s.db.DeleteAPIToken(tokenID)
 }
 
+// UpdateTokenName updates the display name of an API token
+func (s *Service) UpdateTokenName(tokenID int64, name string) error {
+	return s.db.UpdateAPITokenName(tokenID, name)
+}
+
 // HasPermission checks if an API token has a specific permission
 func (s *Service) HasPermission(apiToken *db.APIToken, resource, action string) bool {
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)

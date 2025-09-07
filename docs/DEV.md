@@ -47,7 +47,7 @@ make dev
 2. Verify services
 
 - Web UI: `http://localhost:$WEB_PORT` (default 5173)
-- Gateway health: `curl http://localhost:$GATEWAY_PORT/.gateway/health`
+- Gateway health: `curl http://localhost:$GATEWAY_PORT/.gateway/api/health`
 - Mock Convox: `curl http://localhost:$MOCK_CONVOX_PORT/health`
 
 3. Build CLI and log in
@@ -103,7 +103,7 @@ The Convox Gateway is split into multiple components:
 - Uses SQLite database at `./data/db.sqlite` (or `/app/data/db.sqlite` in production)
 - Has access to real Convox rack tokens via environment variables
 - Runs OAuth authentication and audit logging
-- Environment variable: `CONVOX_GATEWAY_DB_PATH=./data/db.sqlite`
+- Environment variable: `GATEWAY_DB_PATH=./data/db.sqlite`
 
 **CLI Client** (`config/cli/` in dev, `~/.config/convox-gateway/` in production):
 
@@ -154,7 +154,7 @@ The database stores:
 - API tokens for CI/CD
 - Audit logs
 
-The database location is controlled by the `CONVOX_GATEWAY_DB_PATH` environment variable (default: `./data/db.sqlite` in development, `/app/data/db.sqlite` in production).
+The database location is controlled by the `GATEWAY_DB_PATH` environment variable (default: `./data/db.sqlite` in development, `/app/data/db.sqlite` in production).
 
 ## Google OAuth Setup
 
@@ -184,8 +184,10 @@ The database location is controlled by the `CONVOX_GATEWAY_DB_PATH` environment 
 2. Click "+ CREATE CREDENTIALS" → "OAuth client ID"
 3. Choose "Web application"
 4. Add authorized redirect URIs:
-   - `http://localhost:8447/.gateway/login/callback` (development)
-   - `https://your-production-domain.com/.gateway/login/callback` (production)
+
+- `http://localhost:8447/.gateway/api/cli/login/callback` (development)
+- `https://your-production-domain.com/.gateway/api/cli/login/callback` (production)
+
 5. Save and copy the Client ID and Client Secret
 6. Update your `mise.local.toml` with these values
 

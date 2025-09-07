@@ -1,10 +1,11 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Download, RefreshCw, Search } from 'lucide-react'
+import { Download, Eye, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import {
@@ -33,10 +34,13 @@ interface AuditLog {
   action: string
   command?: string
   resource: string
+  resource_type?: string
   details: string
   ip_address: string
   user_agent: string
   status: string
+  rbac_decision?: string
+  http_status?: number
   response_time_ms: number
 }
 
@@ -55,7 +59,9 @@ const STATUS_TYPES = {
   blocked: 'Blocked',
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: acceptable complexity for this page component
 export function AuditPage() {
+  const [selected, setSelected] = useState<AuditLog | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [actionTypeFilter, setActionTypeFilter] = useState('all')
@@ -122,7 +128,7 @@ export function AuditPage() {
         params.append('search', debouncedSearch)
       }
 
-      const response = await api.get<AuditLog[]>(`/.gateway/admin/audit?${params}`)
+      const response = await api.get<AuditLog[]>(`/.gateway/api/admin/audit?${params}`)
       return response
     },
     placeholderData: keepPreviousData,
@@ -145,7 +151,7 @@ export function AuditPage() {
     params.append('format', 'csv')
 
     // Create download link
-    const url = `/.gateway/admin/audit/export?${params}`
+    const url = `/.gateway/api/admin/audit/export?${params}`
     const link = document.createElement('a')
     link.href = url
     link.download = `audit-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`
@@ -169,10 +175,10 @@ export function AuditPage() {
         }
       case 'failed':
       case 'error':
-        // Red for failure/error
-        return { variant: 'destructive' }
       case 'blocked':
-        return { variant: 'secondary' }
+      case 'denied':
+        // Red for failure/error/blocked
+        return { variant: 'destructive' }
       default:
         return { variant: 'outline' }
     }
@@ -184,19 +190,78 @@ export function AuditPage() {
     variant: 'default' | 'secondary' | 'destructive' | 'outline'
     className?: string
   } => {
+    // Color only the Type badge for quick scanning; keep subtle but distinct
     switch (type) {
       case 'auth':
-        return { variant: 'default' }
+        return {
+          variant: 'outline',
+          className: 'bg-pink-600 text-white border border-border',
+        }
       case 'user_management':
-        // Purple badge for user management actions
         return {
           variant: 'default',
           className: 'bg-purple-600 text-white hover:bg-purple-700',
         }
       case 'token_management':
-        return { variant: 'outline' }
+        return {
+          variant: 'default',
+          className: 'bg-teal-600 text-white hover:bg-teal-700',
+        }
+      case 'convox_api':
+        return {
+          variant: 'default',
+          className: 'bg-blue-600 text-white hover:bg-blue-700',
+        }
       default:
-        return { variant: 'default' }
+        return {
+          variant: 'outline',
+          className: 'bg-muted text-muted-foreground border border-border',
+        }
+    }
+  }
+
+  const getResourceTypeBadgeAppearance = (
+    type?: string
+  ): {
+    variant: 'default' | 'secondary' | 'destructive' | 'outline'
+    className?: string
+  } => {
+    switch (type) {
+      case 'app':
+        return {
+          variant: 'default',
+          className: 'bg-blue-600 text-white hover:bg-blue-700',
+        }
+      case 'rack':
+        return {
+          variant: 'default',
+          className: 'bg-zinc-600 text-white hover:bg-zinc-700',
+        }
+      case 'process':
+        return {
+          variant: 'default',
+          className: 'bg-amber-500 text-black hover:bg-amber-600',
+        }
+      case 'system':
+        return {
+          variant: 'default',
+          className: 'bg-slate-600 text-white hover:bg-slate-700',
+        }
+      case 'api_token':
+        return {
+          variant: 'default',
+          className: 'bg-teal-600 text-white hover:bg-teal-700',
+        }
+      case 'user':
+        return {
+          variant: 'default',
+          className: 'bg-purple-600 text-white hover:bg-purple-700',
+        }
+      default:
+        return {
+          variant: 'outline',
+          className: 'bg-muted text-muted-foreground border border-border',
+        }
     }
   }
 
@@ -207,7 +272,7 @@ export function AuditPage() {
     total: logs.length,
     success: logs.filter((l: AuditLog) => l.status === 'success').length,
     failed: logs.filter((l: AuditLog) => l.status === 'failed').length,
-    blocked: logs.filter((l: AuditLog) => l.status === 'blocked').length,
+    denied: logs.filter((l: AuditLog) => l.status === 'denied').length,
     avgResponseTime:
       logs.length > 0
         ? Math.round(
@@ -236,9 +301,7 @@ export function AuditPage() {
       <div className="mb-6 grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="font-medium text-muted-foreground text-sm">
-              Total Events
-            </CardTitle>
+            <CardTitle className="font-medium text-muted-foreground text-sm">Total Logs</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl">{stats.total}</div>
@@ -259,11 +322,11 @@ export function AuditPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">
-              Failed/Blocked
+              Failed/Denied
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl text-red-600">{stats.failed + stats.blocked}</div>
+            <div className="font-bold text-2xl text-red-600">{stats.failed + stats.denied}</div>
           </CardContent>
         </Card>
         <Card>
@@ -385,9 +448,9 @@ export function AuditPage() {
       {/* Logs Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Activity Log</CardTitle>
+          <CardTitle>Audit Logs</CardTitle>
           <CardDescription>
-            Showing {stats.total} events · Page {currentPage} of {totalPages}
+            Showing {stats.total} logs · Page {currentPage} of {totalPages}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -406,14 +469,20 @@ export function AuditPage() {
                   <TableHead>User</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Action</TableHead>
+                  <TableHead>Resource Type</TableHead>
                   <TableHead>Resource</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>IP Address</TableHead>
+                  <TableHead className="text-right">View</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pageItems.map((log: AuditLog) => (
-                  <TableRow key={log.id}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-accent/50"
+                    key={log.id}
+                    onClick={() => setSelected(log)}
+                  >
                     <TableCell className="font-mono text-sm">
                       {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
                     </TableCell>
@@ -441,7 +510,9 @@ export function AuditPage() {
                         if (log.action_type === 'convox_api' && log.action === 'process.exec') {
                           const raw = (() => {
                             try {
-                              const d = JSON.parse(log.details || '{}') as { command?: string }
+                              const d = JSON.parse(log.details || '{}') as {
+                                command?: string
+                              }
                               return (log.command || d.command || '').trim()
                             } catch {
                               return (log.command || '').trim()
@@ -457,7 +528,12 @@ export function AuditPage() {
                           const truncated = cmd.length > 64 ? `${cmd.slice(0, 64)}…` : cmd
                           return (
                             <div className="flex flex-col">
-                              <span className="font-mono">{log.action}:</span>
+                              <Badge
+                                className="w-fit border border-border bg-muted font-mono text-muted-foreground"
+                                variant="outline"
+                              >
+                                {log.action}
+                              </Badge>
                               {cmd && (
                                 <code
                                   className="mt-1 w-fit whitespace-nowrap rounded border border-border bg-secondary px-1 py-0.5 font-mono text-blue-600 shadow-sm dark:text-blue-300"
@@ -469,25 +545,65 @@ export function AuditPage() {
                             </div>
                           )
                         }
-                        return <span className="font-mono">{log.action}</span>
+                        return (
+                          <Badge
+                            className="border border-border bg-muted font-mono text-muted-foreground"
+                            variant="outline"
+                          >
+                            {log.action}
+                          </Badge>
+                        )
+                      })()}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const rt = log.resource_type || log.action_type?.split('.')[0] || 'unknown'
+                        const ap = getResourceTypeBadgeAppearance(rt)
+                        return (
+                          <Badge className={ap.className} variant={ap.variant}>
+                            {rt}
+                          </Badge>
+                        )
                       })()}
                     </TableCell>
                     <TableCell>
                       <div className="max-w-[260px] truncate" title={log.resource}>
-                        <span>{log.resource || '-'}</span>
+                        <Badge
+                          className="max-w-full truncate border border-border bg-muted font-mono text-muted-foreground"
+                          variant="outline"
+                        >
+                          {log.resource || '-'}
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell>
                       {(() => {
                         const ap = getStatusBadgeAppearance(log.status)
+                        const statusLabel = (() => {
+                          if (log.status === 'denied') {
+                            return 'denied (RBAC)'
+                          }
+                          if (
+                            (log.status === 'failed' || log.status === 'error') &&
+                            log.http_status
+                          ) {
+                            return `${log.status} (${log.http_status})`
+                          }
+                          return log.status
+                        })()
                         return (
                           <Badge className={ap.className} variant={ap.variant}>
-                            {log.status}
+                            {statusLabel}
                           </Badge>
                         )
                       })()}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button onClick={() => setSelected(log)} size="sm" variant="ghost">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -497,7 +613,7 @@ export function AuditPage() {
           {stats.total > 0 && (
             <div className="mt-4 flex items-center justify-between">
               <div className="text-muted-foreground text-sm">
-                Showing {startIdx + 1}–{endIdx} of {stats.total}
+                Showing {startIdx + 1}–{endIdx} of {stats.total} logs
               </div>
               <div className="flex gap-2">
                 <Button
@@ -519,6 +635,100 @@ export function AuditPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Centered detail modal */}
+      <Dialog onOpenChange={(open) => !open && setSelected(null)} open={!!selected}>
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Audit Log</DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <div className="space-y-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Timestamp:</span>{' '}
+                {new Date(selected.timestamp).toISOString()}
+              </div>
+              <div>
+                <span className="text-muted-foreground">User:</span> {selected.user_email}{' '}
+                {selected.user_name ? `(${selected.user_name})` : ''}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Type:</span> {selected.action_type}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Action:</span> {selected.action}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Resource:</span> {selected.resource || '-'}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Resource Type:</span>{' '}
+                {selected.resource_type || selected.action_type?.split('.')[0] || 'unknown'}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Status:</span> {(() => {
+                  if (selected.status === 'denied') {
+                    return 'denied (RBAC)'
+                  }
+                  if (
+                    (selected.status === 'failed' || selected.status === 'error') &&
+                    selected.http_status
+                  ) {
+                    return `${selected.status} (${selected.http_status})`
+                  }
+                  return selected.status
+                })()}
+              </div>
+              {selected.rbac_decision && (
+                <div>
+                  <span className="text-muted-foreground">RBAC:</span> {selected.rbac_decision}
+                </div>
+              )}
+              {typeof selected.http_status === 'number' && selected.http_status > 0 && (
+                <div>
+                  <span className="text-muted-foreground">HTTP Status:</span> {selected.http_status}
+                </div>
+              )}
+              <div>
+                <span className="text-muted-foreground">Response Time:</span>{' '}
+                {selected.response_time_ms} ms
+              </div>
+              <div>
+                <span className="text-muted-foreground">IP:</span> {selected.ip_address || '-'}
+              </div>
+              <div className="break-all">
+                <span className="text-muted-foreground">User Agent:</span>{' '}
+                {selected.user_agent || '-'}
+              </div>
+              {selected.command && (
+                <div className="break-all">
+                  <span className="text-muted-foreground">Command:</span>{' '}
+                  <code className="rounded border bg-secondary px-1 py-0.5">
+                    {selected.command}
+                  </code>
+                </div>
+              )}
+              <div className="break-all">
+                <span className="text-muted-foreground">Details:</span>
+                <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted p-2 text-xs">
+                  {(() => {
+                    try {
+                      return JSON.stringify(JSON.parse(selected.details || '{}'), null, 2)
+                    } catch {
+                      return selected.details || '-'
+                    }
+                  })()}
+                </pre>
+              </div>
+              <div className="mt-2 flex justify-end">
+                <Button onClick={() => setSelected(null)} variant="outline">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

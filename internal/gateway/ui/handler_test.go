@@ -149,7 +149,7 @@ func createAuthenticatedRequest(method, path string, body interface{}, email str
 
 func TestListUsers(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 	tests := []struct {
 		name       string
@@ -270,7 +270,7 @@ func TestCreateUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+			handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 			req := createAuthenticatedRequest("POST", "/.gateway/admin/users", tt.reqBody, tt.userEmail)
 			rr := httptest.NewRecorder()
@@ -318,7 +318,7 @@ func TestDeleteUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+			handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 			req := createAuthenticatedRequest("DELETE", "/.gateway/admin/users/"+tt.deleteEmail, nil, tt.userEmail)
 
@@ -398,7 +398,7 @@ func TestUpdateUserRoles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+			handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 			req := createAuthenticatedRequest("PUT", "/.gateway/admin/users/"+tt.targetEmail+"/roles", tt.reqBody, tt.userEmail)
 
@@ -426,7 +426,7 @@ func TestUpdateUserRoles(t *testing.T) {
 
 func TestIsAdminHelper(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 	tests := []struct {
 		name      string
@@ -466,7 +466,7 @@ func TestIsAdminHelper(t *testing.T) {
 
 func TestNoAuthContext(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 	// Test requests without auth context
 	tests := []struct {
@@ -506,7 +506,7 @@ func TestNoAuthContext(t *testing.T) {
 func TestRBACManagerError(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	rbacManager.shouldError = true
-	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 	t.Run("ListUsers with RBAC error", func(t *testing.T) {
 		req := createAuthenticatedRequest("GET", "/.gateway/admin/users", nil, "admin@example.com")
@@ -537,7 +537,7 @@ func TestRBACManagerError(t *testing.T) {
 // Test concurrent access to ensure thread safety
 func TestConcurrentUserOperations(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", "")
 
 	// Run multiple operations concurrently
 	done := make(chan bool)
@@ -570,7 +570,7 @@ func createTempDB(t *testing.T) *db.Database {
 func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
-	handler := NewHandler(rbacManager, "", nil, database, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, database, nil, "test", "")
 
 	// No logs yet
 	req := createAuthenticatedRequest("GET", "/.gateway/admin/audit?range=7d", nil, "admin@example.com")
@@ -608,7 +608,7 @@ func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
 func TestListAuditLogs_Range15mFilters(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
-	handler := NewHandler(rbacManager, "", nil, database, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, database, nil, "test", "")
 
 	// Seed: one old (1h ago), one recent (5m ago)
 	now := time.Now().UTC()
@@ -649,7 +649,7 @@ func TestListAuditLogs_Range15mFilters(t *testing.T) {
 func TestExportAuditLogs_CSV(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
-	handler := NewHandler(rbacManager, "", nil, database, nil, "test")
+	handler := NewHandler(rbacManager, "", nil, database, nil, "test", "")
 
 	// Seed
 	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "admin@example.com", ActionType: "auth", Action: "login", Status: "success", ResponseTimeMs: 1}))
@@ -689,7 +689,7 @@ func (m *mockEmailSender) SendMany(to []string, subject, textBody string) error 
 func TestCreateUser_SendsEmails(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	mailer := &mockEmailSender{}
-	handler := NewHandler(rbacManager, "", nil, nil, mailer, "testrack")
+	handler := NewHandler(rbacManager, "", nil, nil, mailer, "testrack", "")
 
 	reqBody := map[string]interface{}{
 		"email": "newuser@example.com",
@@ -722,7 +722,7 @@ func TestCreateAPIToken_SendsEmails(t *testing.T) {
 	database := createTempDB(t)
 	tokenService := token.NewService(database)
 	mailer := &mockEmailSender{}
-	handler := NewHandler(rbacManager, "", tokenService, database, mailer, "testrack")
+	handler := NewHandler(rbacManager, "", tokenService, database, mailer, "testrack", "")
 
 	// Seed DB users to satisfy foreign key constraints with known IDs
 	// Admin id=2, Viewer id=1 to align with mockRBAC GetUserWithID returning ID:1

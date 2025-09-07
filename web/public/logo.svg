@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="58" viewBox="0 0 510 464">
+  <title>Convox Gateway</title>
+  <!-- Slightly simplified original trace: removed outer rect, kept core geometry -->
+  <!-- Dark shield/background -->
+  <path
+    d="M254 117L168 172v2l71 46 17 9 73-46 13-10-30-21-18-10-37-25zM103 53 69 70v182l6 39 23 49 28 31 43 34 84 43 50-20 50-31 52-48 17-25 14-36 5-43V70l-55-24-95-17-109 4zM129 271l4-1 122 79 122-79 4 1v24L254 376 134 300l-5-5zm0-59l4-2 121 79 124-79 3 2v23l-124 81h-4l-124-80zm124-122h4l121 77 4 5-2 6-123 79-8-3-121-79v-4l4-4z"
+    fill="#00a63e" />
+  <!-- Light foreground (Convox mark) without the big outer rectangle -->
+  <path
+    d="M130 271v24l124 80 126-80v-24h-3l-122 79-122-79h-3zm0-59l1 25 122 78h4l123-80v-23l-2-1-124 79-121-79zm123-121L132 168l-3 7 120 78 8 3 123-79 1-5-3-4-121-77zm1 25h3l37 25 18 10 26 17 5 5-2 3-85 54-17-9-72-47v-2l87-56z"
+    fill="#ffffff" />
+</svg>

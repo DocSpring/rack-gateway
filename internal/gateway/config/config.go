@@ -20,6 +20,9 @@ type Config struct {
 	GoogleOAuthBaseURL  string
 	RedirectURL         string
 	AdminUsers          []string
+	ViewerUsers         []string
+	DeployerUsers       []string
+	OperationsUsers     []string
 	DevMode             bool
 	Racks               map[string]RackConfig
 	LogResponseBodies   bool
@@ -69,6 +72,18 @@ func Load() (*Config, error) {
 	adminUsers := getEnv("ADMIN_USERS", "")
 	if adminUsers != "" {
 		cfg.AdminUsers = strings.Split(adminUsers, ",")
+	}
+	viewerUsers := getEnv("VIEWER_USERS", "")
+	if viewerUsers != "" {
+		cfg.ViewerUsers = strings.Split(viewerUsers, ",")
+	}
+	deployerUsers := getEnv("DEPLOYER_USERS", "")
+	if deployerUsers != "" {
+		cfg.DeployerUsers = strings.Split(deployerUsers, ",")
+	}
+	operationsUsers := getEnv("OPERATIONS_USERS", "")
+	if operationsUsers != "" {
+		cfg.OperationsUsers = strings.Split(operationsUsers, ",")
 	}
 
 	cfg.loadRacksFromEnv()

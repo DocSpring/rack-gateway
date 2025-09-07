@@ -5,11 +5,11 @@ const BASE = `http://127.0.0.1:${WEB_PORT}`
 
 test('full OAuth login flow succeeds and /me returns user', async ({ page }) => {
   // Hit login
-  await page.goto(`${BASE}/login`)
+await page.goto(`${BASE}/.gateway/web/login`)
 
   // Click login and wait for gateway login redirect
   const [loginResp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/.gateway/web/login')),
+    page.waitForResponse((r) => r.url().includes('/.gateway/api/web/login')),
     page.getByRole('button', { name: /Continue with (Mock OAuth|Google)/i }).click(),
   ])
   expect(loginResp.status()).toBeGreaterThanOrEqual(300)
@@ -23,8 +23,14 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
     await userCard.first().click()
   }
 
-  // After authorize, we should bounce through gateway callback and end up on the protected area
-  await page.waitForURL((url) => url.pathname === '/' || url.pathname === '/users', { timeout: 15000 })
+  // After authorize, wait for the app to fetch the current user successfully
+  await page.waitForResponse(
+    (r) => r.url().includes('/.gateway/api/me') && r.status() === 200,
+    { timeout: 20000 },
+  )
+
+  // Land on the protected area (Users page)
+  await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible({ timeout: 10000 })
 
   // The protected Users page should render for an authenticated admin
   await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible()
@@ -38,9 +44,9 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   const table = page.getByRole('table')
   await expect(empty.or(table)).toBeVisible()
 
-  // Now the cookie should be set; /api/.gateway/me should return the current user
+  // Now the cookie should be set; /.gateway/api/me should return the current user
   const me = await page.evaluate(async () => {
-    const r = await fetch('/api/.gateway/me', { credentials: 'include' })
+    const r = await fetch('/.gateway/api/me', { credentials: 'include' })
     let data = null
     try { data = await r.json() } catch {}
     return { ok: r.ok, status: r.status, data }

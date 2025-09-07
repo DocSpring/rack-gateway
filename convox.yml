@@ -11,7 +11,7 @@ environment:
   - POSTMARK_FROM # optional sender address
   # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
-  # - CONVOX_GATEWAY_DB_PATH=/app/data/db.sqlite
+  # - GATEWAY_DB_PATH=/app/data/db.sqlite
   # - COOKIE_SECURE=true # in prod
   # - DEV_MODE=false
   # - RACK_USERNAME=convox # optional; defaults to convox
@@ -24,14 +24,14 @@ resources:
 services:
   gateway:
     build:
-      context: .
-      dockerfile: Dockerfile.gateway
+      path: .
+      manifest: Dockerfile
     command: ./convox-gateway-api
     domain: ${GATEWAY_DOMAIN}
     environment:
       - PORT=8080
-      - CONVOX_GATEWAY_DB_PATH=/app/data/db.sqlite
-    health: /.gateway/health
+      - GATEWAY_DB_PATH=/app/data/db.sqlite
+    health: /.gateway/api/health
     internal: false
     port: 8080
     resources:
@@ -41,19 +41,6 @@ services:
       cpu: 256
       memory: 256
     sticky: true
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    domain: ${WEB_DOMAIN}
-    port: 80
-    health: /
-    internal: false
-    scale:
-      count: 1
-      cpu: 128
-    memory: 256
 
 timers:
   audit-cleanup:

@@ -6,7 +6,6 @@ MOCK_OAUTH_PORT = "3345"
 MOCK_CONVOX_PORT = "5443"
 
 # Application configuration
-APP_ENV = "development"
 DEV_MODE = "true"
 LOG_LEVEL = "debug"
 
@@ -26,7 +25,7 @@ RACK_TOKEN = "mock-rack-token-12345"
 RACK_USERNAME = "convox"
 
 # Database path for gateway server
-CONVOX_GATEWAY_DB_PATH = "./data/db.sqlite"
+GATEWAY_DB_PATH = "./data/db.sqlite"
 
 # Config directory for CLI (stores config.json with tokens and rack settings)
 CONVOX_GATEWAY_CLI_CONFIG_DIR = "./config/cli"

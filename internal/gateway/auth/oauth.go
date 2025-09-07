@@ -54,7 +54,7 @@ func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, iss
 	oauth2ConfigCLI := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		RedirectURL:  baseRedirectURL + "/.gateway/cli/login/callback",
+		RedirectURL:  baseRedirectURL + "/.gateway/api/cli/login/callback",
 		Endpoint:     provider.Endpoint(),
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
@@ -63,7 +63,7 @@ func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, iss
 	oauth2ConfigWeb := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		RedirectURL:  baseRedirectURL + "/.gateway/web/callback",
+		RedirectURL:  baseRedirectURL + "/.gateway/api/web/callback",
 		Endpoint:     provider.Endpoint(),
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}

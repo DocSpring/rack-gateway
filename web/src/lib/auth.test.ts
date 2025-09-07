@@ -14,6 +14,6 @@ describe('authService', () => {
     // Allow promise in finally to run
     await Promise.resolve()
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/.gateway/web/logout', { credentials: 'include' })
+    expect(fetchSpy).toHaveBeenCalledWith('/.gateway/api/web/logout', { credentials: 'include' })
   })
 })

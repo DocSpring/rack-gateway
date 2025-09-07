@@ -20,10 +20,17 @@ const mockUsers = {
     picture: 'https://via.placeholder.com/128',
     verified_email: true,
   },
-  'developer@company.com': {
+  'deployer@company.com': {
     id: '2', 
-    email: 'developer@company.com',
-    name: 'Developer User',
+    email: 'deployer@company.com',
+    name: 'Deployer User',
+    picture: 'https://via.placeholder.com/128',
+    verified_email: true,
+  },
+  'ops@company.com': {
+    id: '4', 
+    email: 'ops@company.com',
+    name: 'Ops User',
     picture: 'https://via.placeholder.com/128',
     verified_email: true,
   },
@@ -259,27 +266,42 @@ app.get('/dev/select-user', (req, res) => {
       <head>
         <title>Mock OAuth - Select User</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 40px; }
-          .user-card { 
-            border: 1px solid #ddd; 
-            padding: 20px; 
-            margin: 10px 0; 
-            border-radius: 5px;
-            cursor: pointer;
+          :root { color-scheme: dark; }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+            margin: 40px; 
+            background-color: #09090b; 
+            color: #fafafa;
           }
-          .user-card:hover { background-color: #f5f5f5; }
+          .container { max-width: 720px; margin: 0 auto; }
+          .muted { color: #a1a1aa; }
+          .user-card { 
+            border: 1px solid #27272a; 
+            background: #111113;
+            padding: 16px 20px; 
+            margin: 12px 0; 
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color .15s ease, border-color .15s ease;
+          }
+          .user-card:hover { background-color: #18181b; border-color: #3f3f46; }
+          h1 { font-size: 22px; margin: 0 0 6px; }
+          p.sub { margin: 0 0 12px; }
+          h3 { margin: 0 0 4px; font-size: 16px; }
+          p.email { font-size: 13px; color: #a1a1aa; margin: 0; }
         </style>
       </head>
       <body>
-        <h1>Mock Google OAuth - Select User</h1>
-        <p>Choose which user to authenticate as:</p>
-        ${users.map(user => `
-          <div class="user-card" onclick="selectUser('${user.email}')">
-            <h3>${user.name}</h3>
-            <p>${user.email}</p>
-          </div>
-        `).join('')}
-        
+        <div class="container">
+          <h1>Mock Google OAuth – Select User</h1>
+          <p class="sub muted">Choose which user to authenticate as:</p>
+          ${users.map(user => `
+            <div class="user-card" onclick="selectUser('${user.email}')">
+              <h3>${user.name}</h3>
+              <p class="email">${user.email}</p>
+            </div>
+          `).join('')}
+        </div>
         <script>
           function selectUser(email) {
             const urlParams = new URLSearchParams(window.location.search);

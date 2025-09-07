@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Copy, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '../components/ui/badge'
@@ -40,6 +40,9 @@ export function TokensPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newTokenName, setNewTokenName] = useState('')
   const [createdToken, setCreatedToken] = useState<string | null>(null)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editToken, setEditToken] = useState<APIToken | null>(null)
+  const [editName, setEditName] = useState('')
 
   // Fetch tokens
   const {
@@ -49,7 +52,7 @@ export function TokensPage() {
   } = useQuery({
     queryKey: ['tokens'],
     queryFn: async () => {
-      const response = await api.get<APIToken[]>('/.gateway/admin/tokens')
+      const response = await api.get<APIToken[]>('/.gateway/api/admin/tokens')
       return response
     },
   })
@@ -59,7 +62,7 @@ export function TokensPage() {
   // Create token mutation
   const createTokenMutation = useMutation({
     mutationFn: async (name: string) => {
-      const response = await api.post<APIToken>('/.gateway/admin/tokens', { name })
+      const response = await api.post<APIToken>('/.gateway/api/admin/tokens', { name })
       return response
     },
     onSuccess: (data) => {
@@ -76,7 +79,7 @@ export function TokensPage() {
   // Delete token mutation
   const deleteTokenMutation = useMutation({
     mutationFn: async (tokenId: string) => {
-      await api.delete(`/.gateway/admin/tokens/${tokenId}`)
+      await api.delete(`/.gateway/api/admin/tokens/${tokenId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
@@ -85,6 +88,24 @@ export function TokensPage() {
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
       toast.error(message || 'Failed to delete token')
+    },
+  })
+
+  // Update token name mutation
+  const updateTokenMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      await api.put(`/.gateway/api/admin/tokens/${id}`, { name })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tokens'] })
+      toast.success('Token renamed successfully')
+      setIsEditOpen(false)
+      setEditToken(null)
+      setEditName('')
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to rename token')
     },
   })
 
@@ -201,14 +222,27 @@ export function TokensPage() {
                         })()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          disabled={deleteTokenMutation.isPending}
-                          onClick={() => deleteTokenMutation.mutate(token.id)}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            onClick={() => {
+                              setEditToken(token)
+                              setEditName(token.name)
+                              setIsEditOpen(true)
+                            }}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            disabled={deleteTokenMutation.isPending}
+                            onClick={() => deleteTokenMutation.mutate(token.id)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -278,6 +312,44 @@ export function TokensPage() {
                 </Button>
               </>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Token Dialog */}
+      <Dialog onOpenChange={setIsEditOpen} open={isEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename API Token</DialogTitle>
+            <DialogDescription>Update the display name for this token.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Token Name</Label>
+              <Input
+                id="edit-name"
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && editToken) {
+                    updateTokenMutation.mutate({ id: editToken.id, name: editName })
+                  }
+                }}
+                value={editName}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsEditOpen(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button
+              disabled={updateTokenMutation.isPending || !editToken || !editName.trim()}
+              onClick={() =>
+                editToken && updateTokenMutation.mutate({ id: editToken.id, name: editName })
+              }
+            >
+              {updateTokenMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

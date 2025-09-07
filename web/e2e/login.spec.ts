@@ -4,10 +4,10 @@ const WEB_PORT = process.env.WEB_PORT || '5173'
 const BASE = `http://127.0.0.1:${WEB_PORT}`
 
 test('login button triggers gateway OAuth redirect', async ({ page }) => {
-  await page.goto(`${BASE}/login`)
+await page.goto(`${BASE}/.gateway/web/login`)
 
   const [resp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/.gateway/web/login')),
+    page.waitForResponse((r) => r.url().includes('/.gateway/api/web/login')),
     page.getByRole('button', { name: /Continue with (Mock OAuth|Google)/i }).click(),
   ])
 

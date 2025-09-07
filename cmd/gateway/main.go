@@ -58,7 +58,7 @@ func main() {
 				log.Fatalf("audit-cleanup requires --days N or AUDIT_LOG_RETENTION_DAYS")
 			}
 
-			dbPath := getEnv("CONVOX_GATEWAY_DB_PATH", "/app/data/db.sqlite")
+			dbPath := getEnv("GATEWAY_DB_PATH", "/app/data/db.sqlite")
 			database, err := db.New(dbPath)
 			if err != nil {
 				log.Fatalf("Failed to open database: %v", err)
@@ -81,7 +81,7 @@ func main() {
 	}
 
 	// Initialize database
-	dbPath := getEnv("CONVOX_GATEWAY_DB_PATH", "/app/data/db.sqlite")
+	dbPath := getEnv("GATEWAY_DB_PATH", "/app/data/db.sqlite")
 
 	database, err := db.New(dbPath)
 	if err != nil {
@@ -98,11 +98,13 @@ func main() {
 		}
 	}
 
-	// Initialize admin user if needed
+	// Initialize admin user if needed (legacy path)
 	if len(cfg.AdminUsers) > 0 {
-		adminEmail := cfg.AdminUsers[0]
-		if err := database.InitializeAdmin(adminEmail, "Admin User"); err != nil {
-			log.Printf("Warning: Failed to initialize admin: %v", err)
+		adminEmail := strings.TrimSpace(cfg.AdminUsers[0])
+		if adminEmail != "" {
+			if err := database.InitializeAdmin(adminEmail, "Admin User"); err != nil {
+				log.Printf("Warning: Failed to initialize admin: %v", err)
+			}
 		}
 	}
 
@@ -115,6 +117,29 @@ func main() {
 	rbacManager, err := rbac.NewDBManager(database, allowedDomain)
 	if err != nil {
 		log.Fatalf("Failed to initialize RBAC: %v", err)
+	}
+
+	// Seed users from environment for dev/test convenience
+	seedUsers := func(role string, emails []string, defaultName string) {
+		for _, e := range emails {
+			email := strings.TrimSpace(e)
+			if email == "" {
+				continue
+			}
+			uc := &rbac.UserConfig{Name: defaultName, Roles: []string{role}}
+			if err := rbacManager.SaveUser(email, uc); err != nil {
+				log.Printf("Warning: failed to seed %s user %s: %v", role, email, err)
+			}
+		}
+	}
+	if len(cfg.ViewerUsers) > 0 {
+		seedUsers("viewer", cfg.ViewerUsers, "Viewer User")
+	}
+	if len(cfg.DeployerUsers) > 0 {
+		seedUsers("deployer", cfg.DeployerUsers, "Deployer User")
+	}
+	if len(cfg.OperationsUsers) > 0 {
+		seedUsers("ops", cfg.OperationsUsers, "Ops User")
 	}
 
 	// Create token service
@@ -170,7 +195,12 @@ func main() {
 		rackName = rc.Name
 	}
 
-	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName)
+	// Dev proxy for web UI: if DEV_MODE and WEB_DEV_SERVER_URL provided, proxy /.gateway/web/* to Vite
+	devProxyURL := ""
+	if getEnv("DEV_MODE", "false") == "true" {
+		devProxyURL = os.Getenv("WEB_DEV_SERVER_URL")
+	}
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, devProxyURL)
 
 	r := chi.NewRouter()
 
@@ -180,61 +210,50 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// Gateway's own endpoints under /.gateway/
-	r.Route("/.gateway", func(r chi.Router) {
-		// Health check (no auth required)
-		r.Get("/health", uiHandler.Health)
+	// CLI OAuth endpoints under /.gateway/api/cli/*
+	// Serve UI static files under /.gateway/web/
+	r.Get("/.gateway/web", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/.gateway/web/", http.StatusMovedPermanently)
+	})
+	r.Get("/.gateway/web/*", uiHandler.ServeStatic)
 
-		// CSRF token endpoint (no auth required)
+	// Expose API only under /.gateway/api/*
+	r.Route("/.gateway/api", func(r chi.Router) {
+		// CLI OAuth endpoints
+		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler, database))
+		r.Get("/cli/login/callback", handleCLILoginRedirectCallback(database))
+		r.Post("/cli/login/complete", handleCLILoginComplete(oauthHandler, database))
+		// Health + CSRF (no auth required)
+		r.Get("/health", uiHandler.Health)
 		r.Get("/csrf", uiHandler.GetCSRFToken)
 
-		// OAuth login endpoints (no auth required)
-		// CLI OAuth flow (real OIDC redirect via GET callback + separate completion)
-		// Start returns auth URL, state, and code_verifier
-		r.Post("/login/start", handleCLILoginStart(oauthHandler, database))
-		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler, database))
-		// Provider redirects GET with code + state to this callback; we store code by state
-		r.Get("/cli/login/callback", handleCLILoginRedirectCallback(database))
-		// CLI completes by POSTing state + code_verifier; server exchanges code for tokens
-		r.Post("/cli/login/complete", handleCLILoginComplete(oauthHandler, database))
-
-		// Web OAuth flow
+		// OAuth (web) endpoints
 		r.Get("/web/login", handleWebLoginStart(oauthHandler, database))
 		r.Get("/web/callback", handleWebLoginCallback(oauthHandler, database))
 		r.Get("/web/logout", handleWebLogout(database))
 
-		// Authenticated gateway endpoints
+		// Authenticated endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(authService.Middleware)
-
 			r.Get("/me", uiHandler.GetMe)
 
-			// Admin endpoints (CSRF protected for unsafe methods)
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(csrfMiddleware())
 				r.Get("/config", uiHandler.GetConfig)
 				r.Put("/config", uiHandler.UpdateConfig)
 				r.Get("/roles", uiHandler.ListRoles)
-
-				// Audit log endpoints (admin)
 				r.Get("/audit", uiHandler.ListAuditLogs)
 				r.Get("/audit/export", uiHandler.ExportAuditLogs)
-
-				// User management endpoints
 				r.Get("/users", uiHandler.ListUsers)
 				r.Post("/users", uiHandler.CreateUser)
 				r.Delete("/users/{email}", uiHandler.DeleteUser)
 				r.Put("/users/{email}/roles", uiHandler.UpdateUserRoles)
-
-				// API token endpoints
 				r.Post("/tokens", uiHandler.CreateAPIToken)
 				r.Get("/tokens", uiHandler.ListAPITokens)
+				r.Put("/tokens/{tokenID}", uiHandler.UpdateAPITokenName)
 				r.Delete("/tokens/{tokenID}", uiHandler.DeleteAPIToken)
 			})
 		})
-
-		// Serve UI static files
-		r.Get("/ui/*", uiHandler.ServeStatic)
 	})
 
 	// Catch-all: proxy everything else to the Convox rack
@@ -280,7 +299,7 @@ func filteredLogger() func(http.Handler) http.Handler {
 			start := time.Now()
 			next.ServeHTTP(ww, r)
 			// Suppress successful health checks to reduce log noise/cost
-			if r.URL.Path == "/.gateway/health" && ww.Status() == http.StatusOK {
+			if r.URL.Path == "/.gateway/api/health" && ww.Status() == http.StatusOK {
 				return
 			}
 			// Basic concise line; audit and DB logs provide detailed context elsewhere
@@ -394,9 +413,8 @@ func handleCLILoginRedirectCallback(database *db.Database) http.HandlerFunc {
 			_ = database.SaveCLILoginCode(state, code)
 		}
 
-		// Minimal success page for CLI-driven flows
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte("<html><body><h3>Authorization complete.</h3><p>You can return to the CLI.</p></body></html>"))
+		// Redirect to a nicer static success page served by the web bundle
+		http.Redirect(w, r, "/.gateway/web/cli-auth-success.html", http.StatusTemporaryRedirect)
 	}
 }
 
@@ -538,10 +556,10 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 			})
 		}
 
-		// Redirect back to frontend base (dev server), or root if not set
+		// Redirect back to frontend base (dev server) or gateway UI path
 		frontend := os.Getenv("FRONTEND_BASE_URL")
 		if frontend == "" {
-			frontend = "/"
+			frontend = "/.gateway/web/"
 		}
 		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
 	}

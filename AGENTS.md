@@ -46,7 +46,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 
 ### 🧪 Integration Tests
 - `./dev.sh` - Development environment starts successfully
-- `curl http://localhost:8447/.gateway/health` - Gateway health check passes
+- `curl http://localhost:8447/.gateway/api/health` - Gateway health check passes
 - `curl http://localhost:3345/health` - Mock OAuth health check passes
 - `curl http://localhost:5443/health` - Mock Convox health check passes
 

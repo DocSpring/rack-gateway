@@ -14,7 +14,7 @@ describe('getCurrentUser', () => {
     vi.mocked(axios.get).mockResolvedValueOnce(mockResp as unknown as never)
 
     const user = await authService.getCurrentUser()
-    expect(axios.get).toHaveBeenCalledWith('/api/.gateway/me', { withCredentials: true })
+    expect(axios.get).toHaveBeenCalledWith('/.gateway/api/me', { withCredentials: true })
     expect(user?.email).toBe('admin@example.com')
   })
 

@@ -49,10 +49,13 @@ type AuditLog struct {
 	Action         string    `json:"action"`      // e.g., "env.get", "user.create", "auth.failed"
 	Command        string    `json:"command,omitempty"`
 	Resource       string    `json:"resource,omitempty"`
+	ResourceType   string    `json:"resource_type,omitempty"`
 	Details        string    `json:"details,omitempty"` // JSON string
 	IPAddress      string    `json:"ip_address,omitempty"`
 	UserAgent      string    `json:"user_agent,omitempty"`
-	Status         string    `json:"status"` // "success", "denied", "error", "blocked"
+	Status         string    `json:"status"`                  // "success", "denied", "error", "blocked"
+	RBACDecision   string    `json:"rbac_decision,omitempty"` // "allow" or "deny"
+	HTTPStatus     int       `json:"http_status,omitempty"`
 	ResponseTimeMs int       `json:"response_time_ms"`
 }
 
@@ -119,10 +122,13 @@ func (d *Database) initSchema() error {
         action TEXT NOT NULL,
         command TEXT,
         resource TEXT,
+        resource_type TEXT,
         details TEXT, -- JSON with command details
         ip_address TEXT,
         user_agent TEXT,
         status TEXT NOT NULL,
+        rbac_decision TEXT,
+        http_status INTEGER,
         response_time_ms INTEGER
     );
 
@@ -345,11 +351,11 @@ func (d *Database) ListUsers() ([]*User, error) {
 func (d *Database) CreateAuditLog(log *AuditLog) error {
 	_, err := d.db.Exec(
 		`INSERT INTO audit_logs (
-            user_email, user_name, action_type, action, command, resource, 
-            details, ip_address, user_agent, status, response_time_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Command, log.Resource,
-		log.Details, log.IPAddress, log.UserAgent, log.Status, log.ResponseTimeMs,
+            user_email, user_name, action_type, action, command, resource, resource_type,
+            details, ip_address, user_agent, status, rbac_decision, http_status, response_time_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Command, log.Resource, log.ResourceType,
+		log.Details, log.IPAddress, log.UserAgent, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create audit log: %w", err)
@@ -360,9 +366,9 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 // GetAuditLogs retrieves audit logs with optional filters
 func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([]*AuditLog, error) {
 	query := `
-        SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action, 
-               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(details, ''), COALESCE(ip_address, ''), 
-               COALESCE(user_agent, ''), status, response_time_ms
+        SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
+               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(resource_type, ''), COALESCE(details, ''),
+               COALESCE(ip_address, ''), COALESCE(user_agent, ''), status, COALESCE(rbac_decision, ''), COALESCE(http_status, 0), response_time_ms
         FROM audit_logs
         WHERE 1=1
     `
@@ -398,8 +404,8 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 
 		err := rows.Scan(
 			&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName,
-			&log.ActionType, &log.Action, &log.Command, &log.Resource, &log.Details,
-			&log.IPAddress, &log.UserAgent, &log.Status, &log.ResponseTimeMs,
+			&log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details,
+			&log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan audit log: %w", err)
@@ -421,8 +427,8 @@ func (d *Database) GetAuditLogsPaged(userEmail string, since time.Time, limit, o
 	}
 	query := `
         SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
-               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(details, ''), COALESCE(ip_address, ''),
-               COALESCE(user_agent, ''), status, response_time_ms
+               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(resource_type, ''),
+               COALESCE(details, ''), COALESCE(ip_address, ''), COALESCE(user_agent, ''), status, COALESCE(rbac_decision, ''), COALESCE(http_status, 0), response_time_ms
         FROM audit_logs
         WHERE 1=1
     `
@@ -447,7 +453,7 @@ func (d *Database) GetAuditLogsPaged(userEmail string, since time.Time, limit, o
 	var logs []*AuditLog
 	for rows.Next() {
 		var log AuditLog
-		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.ResponseTimeMs); err != nil {
+		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs); err != nil {
 			return nil, fmt.Errorf("failed to scan audit log: %w", err)
 		}
 		logs = append(logs, &log)
@@ -583,6 +589,15 @@ func (d *Database) DeleteAPIToken(id int64) error {
 	_, err := d.db.Exec("DELETE FROM api_tokens WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete API token: %w", err)
+	}
+	return nil
+}
+
+// UpdateAPITokenName renames an existing API token
+func (d *Database) UpdateAPITokenName(id int64, name string) error {
+	_, err := d.db.Exec("UPDATE api_tokens SET name = ? WHERE id = ?", name, id)
+	if err != nil {
+		return fmt.Errorf("failed to update API token name: %w", err)
 	}
 	return nil
 }

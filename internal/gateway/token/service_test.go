@@ -149,4 +149,36 @@ func TestTokenService(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "expired")
 	})
+
+	// New: rename (update) token name
+	t.Run("RenameToken", func(t *testing.T) {
+		// Create a token to rename
+		req := &APITokenRequest{
+			Name:        "Old Name",
+			UserID:      user.ID,
+			Permissions: DefaultCICDPermissions(),
+			ExpiresAt:   DefaultTokenExpiry(),
+		}
+
+		resp, err := service.GenerateAPIToken(req)
+		require.NoError(t, err)
+
+		// Rename the token
+		newName := "New Name"
+		err = service.UpdateTokenName(resp.APIToken.ID, newName)
+		assert.NoError(t, err)
+
+		// Verify via list
+		tokens, err := service.ListTokensForUser(user.ID)
+		require.NoError(t, err)
+		var found *db.APIToken
+		for _, tk := range tokens {
+			if tk.ID == resp.APIToken.ID {
+				found = tk
+				break
+			}
+		}
+		require.NotNil(t, found, "renamed token not found in list")
+		assert.Equal(t, newName, found.Name)
+	})
 }

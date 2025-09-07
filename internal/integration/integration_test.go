@@ -66,7 +66,7 @@ func TestIntegration(t *testing.T) {
 
 	// Wait for servers to be ready
 	waitForServer(t, "http://localhost:"+mockConvoxPort+"/health", 10*time.Second)
-	servers.waitForGateway(t, "http://localhost:"+gatewayPort+"/.gateway/health", 10*time.Second)
+	servers.waitForGateway(t, "http://localhost:"+gatewayPort+"/.gateway/api/health", 10*time.Second)
 
 	// Run tests
 	t.Run("HealthCheck", func(t *testing.T) {
@@ -142,7 +142,6 @@ func (s *TestServers) startGateway(t *testing.T) {
 	s.gatewayCmd.Env = append(os.Environ(),
 		"PORT="+gatewayPort,
 		"GATEWAY_PORT="+gatewayPort,
-		"APP_ENV=test",
 		"APP_JWT_KEY=test-secret-key-for-integration-testing",
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
@@ -154,7 +153,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"RACK_TOKEN="+mockRackToken,
 		"RACK_USERNAME=convox",
 		// Database path for testing
-		"CONVOX_GATEWAY_DB_PATH="+dbPath,
+		"GATEWAY_DB_PATH="+dbPath,
 	)
 
 	// Capture output for debugging
@@ -261,7 +260,7 @@ func waitForServer(t *testing.T, url string, timeout time.Duration) {
 }
 
 func testHealthCheck(t *testing.T, s *TestServers) {
-	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/health")
+	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/api/health")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -273,7 +272,7 @@ func testHealthCheck(t *testing.T, s *TestServers) {
 }
 
 func testUnauthenticatedAccess(t *testing.T, s *TestServers) {
-	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/me")
+	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/api/me")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -332,7 +331,7 @@ func testProxyWithInvalidToken(t *testing.T, s *TestServers) {
 
 func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 	// Test login start endpoint
-	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/.gateway/login/start", "application/json", nil)
+	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/.gateway/api/cli/login/start", "application/json", nil)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

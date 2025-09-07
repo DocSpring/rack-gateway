@@ -5,7 +5,7 @@ A simple Node.js server that mimics Google's OAuth 2.0 endpoints for development
 ## Features
 
 - **OAuth 2.0 Authorization Code Flow** - Implements the standard OAuth flow
-- **PKCE Support** - Code Challenge/Verifier for security  
+- **PKCE Support** - Code Challenge/Verifier for security
 - **Multiple Test Users** - Pre-configured test users with different roles
 - **User Selection UI** - Web interface to choose which user to authenticate as
 - **OpenID Connect** - Basic OIDC compliance with discovery endpoint
@@ -13,17 +13,18 @@ A simple Node.js server that mimics Google's OAuth 2.0 endpoints for development
 
 ## Test Users
 
-The server comes with three pre-configured test users:
+The dev server comes with four pre-configured test users:
 
 - `admin@company.com` - Admin User
-- `developer@company.com` - Developer User  
+- `deployer@company.com` - Deployer User
+- `ops@company.com` - Ops User
 - `viewer@company.com` - Viewer User
 
 ## Endpoints
 
 - `/.well-known/openid_configuration` - OIDC discovery
 - `/oauth2/v2/auth` - Authorization endpoint
-- `/oauth2/v4/token` - Token endpoint  
+- `/oauth2/v4/token` - Token endpoint
 - `/oauth2/v2/userinfo` - User info endpoint
 - `/dev/select-user` - Development user selection page
 - `/health` - Health check
@@ -67,12 +68,12 @@ Configure your OAuth client to use these endpoints:
 
 ```javascript
 const config = {
-  clientId: 'mock-client-id',
-  clientSecret: 'mock-client-secret', 
-  authorizeURL: 'http://localhost:3001/oauth2/v2/auth',
-  tokenURL: 'http://localhost:3001/oauth2/v4/token',
-  userInfoURL: 'http://localhost:3001/oauth2/v2/userinfo'
-}
+  clientId: "mock-client-id",
+  clientSecret: "mock-client-secret",
+  authorizeURL: "http://localhost:3001/oauth2/v2/auth",
+  tokenURL: "http://localhost:3001/oauth2/v4/token",
+  userInfoURL: "http://localhost:3001/oauth2/v2/userinfo",
+};
 ```
 
 ## Security Note

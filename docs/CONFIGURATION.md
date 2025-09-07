@@ -29,7 +29,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 - `GOOGLE_OAUTH_BASE_URL` (default: `https://accounts.google.com`)
   - OIDC issuer base URL. Override in development for the mock OAuth server.
 - `REDIRECT_URL` (required)
-  - OAuth callback URL for the web flow, e.g. `https://gateway.example.com/.gateway/web/callback`.
+  - OAuth callback URL for the web flow, e.g. `https://gateway.example.com/.gateway/api/web/callback`.
 - `ADMIN_USERS` (optional)
   - Comma-separated emails to bootstrap admin access on first run.
 
@@ -53,7 +53,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 ## Database and Auditing
 
-- `CONVOX_GATEWAY_DB_PATH` (default: `/app/data/db.sqlite`)
+- `GATEWAY_DB_PATH` (default: `/app/data/db.sqlite`)
   - SQLite database path for users, tokens, and audit logs.
 - `AUDIT_LOG_RETENTION_DAYS` (optional)
   - If set, the server purges audit rows older than N days at startup.

@@ -23,7 +23,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
+        <Router basename={import.meta.env.BASE_URL}>
           <Routes>
             <Route element={<LoginPage />} path="/login" />
             <Route element={<CallbackPage />} path="/auth/callback" />
@@ -32,8 +32,8 @@ function App() {
               <Route element={<Layout />}>
                 <Route element={<Navigate replace to="/users" />} path="/" />
                 <Route element={<UsersPage />} path="/users" />
-                <Route element={<TokensPage />} path="/tokens" />
-                <Route element={<AuditPage />} path="/audit" />
+                <Route element={<TokensPage />} path="/api_tokens" />
+                <Route element={<AuditPage />} path="/audit_logs" />
               </Route>
             </Route>
           </Routes>
