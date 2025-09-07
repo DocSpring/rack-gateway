@@ -338,40 +338,33 @@ func csrfMiddleware() func(http.Handler) http.Handler {
 
 func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resp, err := oauth.StartLogin()
-		if err != nil {
-			if database != nil {
-				_ = audit.LogDB(database, &db.AuditLog{
-					UserEmail:      "",
-					UserName:       "",
-					ActionType:     "auth",
-					Action:         "login.start",
-					Resource:       "cli",
-					Details:        "{}",
-					IPAddress:      r.RemoteAddr,
-					UserAgent:      r.UserAgent(),
-					Status:         "error",
-					ResponseTimeMs: 0,
-				})
+		writeAudit := func(status string) {
+			if database == nil {
+				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if database != nil {
 			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      "",
 				UserName:       "",
 				ActionType:     "auth",
 				Action:         "login.start",
+				ResourceType:   "auth",
 				Resource:       "cli",
 				Details:        "{}",
 				IPAddress:      r.RemoteAddr,
 				UserAgent:      r.UserAgent(),
-				Status:         "success",
+				Status:         status,
 				ResponseTimeMs: 0,
 			})
 		}
+
+		resp, err := oauth.StartLogin()
+		if err != nil {
+			writeAudit("error")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writeAudit("success")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -386,6 +379,7 @@ func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 				UserName:       "",
 				ActionType:     "auth",
 				Action:         "login.start",
+				ResourceType:   "auth",
 				Resource:       "web",
 				Details:        "{}",
 				IPAddress:      r.RemoteAddr,
@@ -510,6 +504,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 					UserName:       "",
 					ActionType:     "auth",
 					Action:         "login",
+					ResourceType:   "auth",
 					Resource:       "web",
 					Details:        "{\"error\":\"oauth_failed\"}",
 					IPAddress:      r.RemoteAddr,
@@ -547,6 +542,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 				UserName:       resp.Name,
 				ActionType:     "auth",
 				Action:         "login",
+				ResourceType:   "auth",
 				Resource:       "web",
 				Details:        "{}",
 				IPAddress:      r.RemoteAddr,
@@ -586,6 +582,7 @@ func handleWebLogout(database *db.Database) http.HandlerFunc {
 				UserName:       r.Header.Get("X-User-Name"),
 				ActionType:     "auth",
 				Action:         "logout",
+				ResourceType:   "auth",
 				Resource:       "web",
 				Details:        "{}",
 				IPAddress:      r.RemoteAddr,

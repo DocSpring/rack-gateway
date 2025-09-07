@@ -214,22 +214,22 @@ export function AuditPage() {
       case "auth":
         return {
           variant: "outline",
-          className: "bg-pink-600 text-white border border-border",
+          className: "bg-blue-600 text-white border border-border",
         };
       case "users":
         return {
           variant: "default",
-          className: "bg-purple-600 text-white hover:bg-purple-700",
+          className: "bg-blue-600 text-white",
         };
       case "tokens":
         return {
           variant: "default",
-          className: "bg-teal-600 text-white hover:bg-teal-700",
+          className: "bg-pink-600 text-white",
         };
       case "convox":
         return {
           variant: "default",
-          className: "bg-blue-600 text-white hover:bg-blue-700",
+          className: "bg-slate-700 text-white",
         };
       default:
         return {
@@ -249,32 +249,33 @@ export function AuditPage() {
       case "app":
         return {
           variant: "default",
-          className: "bg-blue-600 text-white hover:bg-blue-700",
+          className: "bg-slate-500 text-white",
         };
       case "rack":
         return {
           variant: "default",
-          className: "bg-zinc-600 text-white hover:bg-zinc-700",
+          className: "bg-slate-700 text-white",
         };
       case "process":
         return {
           variant: "default",
-          className: "bg-amber-500 text-black hover:bg-amber-600",
+          className: "bg-amber-500 text-black",
         };
       case "system":
         return {
           variant: "default",
-          className: "bg-slate-600 text-white hover:bg-slate-700",
+          className: "bg-slate-700 text-white",
         };
       case "api_token":
         return {
           variant: "default",
-          className: "bg-teal-600 text-white hover:bg-teal-700",
+          className: "bg-purple-600 text-white",
         };
       case "user":
+      case "auth":
         return {
           variant: "default",
-          className: "bg-purple-600 text-white hover:bg-purple-700",
+          className: "bg-blue-600 text-white",
         };
       default:
         return {

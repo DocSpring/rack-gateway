@@ -74,21 +74,23 @@ var policies = [][]string{
 	{"p", "viewer", "convox:ps:list", "*"},
 	{"p", "viewer", "convox:logs:read", "*"},
 	{"p", "viewer", "convox:builds:list", "*"},
-	{"p", "viewer", "convox:releases:list", "*"},
 	{"p", "viewer", "convox:rack:read", "*"},
 
 	// Ops role inherits viewer and adds more
 	{"g", "ops", "viewer"},
-	{"p", "ops", "convox:env:get", "*"},
+	// Env is read via releases endpoints
 	{"p", "ops", "convox:ps:manage", "*"},
 	{"p", "ops", "convox:restart:app", "*"},
+	{"p", "ops", "convox:releases:list", "*"},
 
 	// Deployer role inherits ops and adds deployment permissions
 	{"g", "deployer", "ops"},
-	{"p", "deployer", "convox:env:set", "*"},
 	{"p", "deployer", "convox:builds:create", "*"},
+	{"p", "deployer", "convox:releases:create", "*"},
 	{"p", "deployer", "convox:releases:promote", "*"},
-	{"p", "deployer", "convox:apps:manage", "*"},
+	// Allow creating and updating apps/services, but not deleting apps
+	{"p", "deployer", "convox:apps:create", "*"},
+	{"p", "deployer", "convox:apps:update", "*"},
 
 	// Admin role has all permissions
 	{"p", "admin", "convox:*:*", "*"},

@@ -137,6 +137,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 				UserName:       "",
 				ActionType:     "auth",
 				Action:         "token.validate",
+				ResourceType:   "auth",
 				Resource:       "api_token",
 				Details:        "{\"result\":\"error\"}",
 				IPAddress:      "",
@@ -175,6 +176,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 			UserName:       user.Name,
 			ActionType:     "auth",
 			Action:         "token.validate",
+			ResourceType:   "api_token",
 			Resource:       fmt.Sprintf("token_id:%d", apiToken.ID),
 			Details:        "{\"result\":\"success\"}",
 			IPAddress:      "",
@@ -204,6 +206,10 @@ func (a *AuthService) validateBasicAuth(credentials string) (*AuthUser, error) {
 
 	// If username is "convox", password should be a JWT (Convox CLI behavior)
 	if username == "convox" {
+		// Support API tokens used as the CLI password as well
+		if strings.HasPrefix(password, "cgw_") {
+			return a.validateAPIToken(password)
+		}
 		return a.validateJWT(password)
 	}
 

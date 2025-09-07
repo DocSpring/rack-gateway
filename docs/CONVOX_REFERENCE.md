@@ -168,7 +168,7 @@ The CLI checks in this order (from `pkg/rack/rack.go`):
 ### API Communication
 
 - **Protocol**: HTTPS with Basic Auth
-- **Base Path**: Varies by operation (e.g., `/apps`, `/ps`, `/env`)
+- **Base Path**: Varies by operation (e.g., `/apps`, `/ps`, `/releases`)
 - **Auth Header**: Constructed from URL as `Authorization: Basic base64(convox:token)`
 - **Response Format**: JSON
 

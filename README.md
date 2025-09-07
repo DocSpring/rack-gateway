@@ -234,8 +234,8 @@ The CLI stores its configuration separately:
 ### Roles
 
 - **viewer**: Read-only access to apps, processes, and logs
-- **ops**: Restart apps, view environments, manage processes
-- **deployer**: Full deployment permissions including env vars
+- **ops**: Restart apps, view env (via releases), manage processes
+- **deployer**: Full deployment permissions (builds/releases), non-destructive
 - **admin**: Complete access to all operations
 
 ### Permissions
@@ -246,7 +246,6 @@ Examples:
 
 - `convox:apps:list` - List applications
 - `convox:ps:manage` - Manage processes
-- `convox:env:set` - Set environment variables
 - `convox:run:command` - Run commands
 - `convox:restart:app` - Restart applications
 

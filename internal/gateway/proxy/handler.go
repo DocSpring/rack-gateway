@@ -448,13 +448,18 @@ func (h *Handler) pathToResourceAction(path, method string) (string, string) {
 
 		{"GET", "/apps/{app}/releases", "releases", "list"},
 		{"GET", "/apps/{app}/releases/{id}", "releases", "list"},
+		{"POST", "/apps/{app}/releases", "releases", "create"},
 		{"POST", "/apps/{app}/releases/{id}/promote", "releases", "promote"},
+
+		// Note: Env reads are via releases endpoints; no separate env route mapping required
 
 		{"GET", "/apps", "apps", "list"},
 		{"GET", "/apps/{name}", "apps", "list"},
-		{"POST", "/apps", "apps", "manage"},
-		{"PUT", "/apps/{name}", "apps", "manage"},
-		{"DELETE", "/apps/{name}", "apps", "manage"},
+		{"POST", "/apps", "apps", "create"},
+		{"PUT", "/apps/{name}", "apps", "update"},
+		{"POST", "/apps/{name}/cancel", "apps", "update"},
+		{"PUT", "/apps/{app}/services/{name}", "apps", "update"},
+		{"DELETE", "/apps/{name}", "apps", "delete"},
 
 		{"GET", "/system", "rack", "read"},
 		{"GET", "/system/capacity", "rack", "read"},
@@ -468,11 +473,11 @@ func (h *Handler) pathToResourceAction(path, method string) (string, string) {
 			return rl.res, rl.act
 		}
 	}
-	// Default conservative
+	// Default conservative: only GET maps to list; all others map to unknown to deny
 	if method == "GET" {
 		return "apps", "list"
 	}
-	return "apps", "manage"
+	return "apps", "unknown"
 }
 
 // keyMatch3 simplified: supports {var} placeholders and wildcards

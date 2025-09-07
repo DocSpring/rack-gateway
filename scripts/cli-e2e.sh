@@ -143,12 +143,14 @@ logout_cli
 # ---------------------------------------------
 login_cli_as "deployer@company.com" "e2e"
 
-# cannot do anything
-verify_command_failure "convox ps" \
-  "authentication failed: user not found"
+# Can list processes
+verify_command "convox ps" "p-web-1" "p-worker-1"
 
-verify_command_failure "convox env set NOTALLOWED=1" \
-  "authentication failed: user not found"
+# Test env set without promote
+verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "Release:"
+
+# Should not be able to delete apps
+verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
 
 logout_cli
 
@@ -159,9 +161,9 @@ login_cli_as "viewer@company.com" "e2e"
 # Viewer can list processes
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
-# Viewer should not be able to set env
-verify_command_failure "convox env set NOTALLOWED=1" \
-  "ERROR: permission denied"
+# Viewer should not be able to set env or delete apps
+verify_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
+verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
 
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"

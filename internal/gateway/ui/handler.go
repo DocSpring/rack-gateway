@@ -217,7 +217,7 @@ func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		"ops": map[string]interface{}{
 			"name":        "ops",
 			"description": "Restart apps, view environments, manage processes",
-			"permissions": []string{"convox:apps:*", "convox:ps:*", "convox:env:get", "convox:logs:*"},
+			"permissions": []string{"convox:apps:*", "convox:ps:*", "convox:releases:list", "convox:logs:*"},
 		},
 		"deployer": map[string]interface{}{
 			"name":        "deployer",
