@@ -26,7 +26,7 @@ COPY cmd/gateway ./cmd/gateway
 
 # Build the gateway binary directly (avoid Makefile dependency)
 RUN CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway \
-  && ./cmd/gateway help
+  && /out/convox-gateway-api help
 
 FROM alpine:latest
 
