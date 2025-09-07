@@ -82,11 +82,11 @@ function verify_command_status_and_output() {
   # Check that all expected strings are present in the output
   local missing=()
   for exp in "${expected_output[@]}"; do
-    if ! echo "$output" | grep -q "$exp"; then
+    if ! echo "$output" | grep -q -F "$exp"; then
       missing+=("$exp")
     fi
   done
-  
+
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo -e "${RED}$command did not show expected strings: ${missing[*]}${NC}" >&2
     exit 1
@@ -128,7 +128,13 @@ verify_command "convox exec p-worker-1 'echo hello'" \
   'Connected to mock exec for app=convox-gateway pid=p-worker-1'
 
 # List environment for a known app
-verify_command "convox env -a convox-gateway" "NODE_ENV=production" "PORT=3000"
+verify_command "convox env -a convox-gateway" \
+  "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
+
+# Fetch secret
+verify_command "env get DATABASE_URL -a convox-gateway --secrets" \
+  "postgres://user:pass@localhost/db"
+
 
 # Test env set without promote
 verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "Release:"
@@ -146,6 +152,14 @@ login_cli_as "deployer@company.com" "e2e"
 # Can list processes
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
+# List environment for a known app
+verify_command "convox env -a convox-gateway" \
+  "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
+
+# Cannot fetch secret
+verify_command_failure "env get DATABASE_URL -a convox-gateway --secrets" \
+  "Error: failed to fetch env: forbidden"
+
 # Test env set without promote
 verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "Release:"
 
@@ -161,10 +175,17 @@ login_cli_as "viewer@company.com" "e2e"
 # Viewer can list processes
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
+# Cannot fetch env
+verify_command_failure "convox env" \
+  "ERROR: permission denied"
+
+# Cannot fetch secret
+verify_command_failure "env get DATABASE_URL -a convox-gateway --secrets" \
+  "Error: failed to fetch env: forbidden"
+
 # Viewer should not be able to set env or delete apps
 verify_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
 verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
 
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"
-
