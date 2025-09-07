@@ -214,12 +214,12 @@ describe('AuditPage', () => {
       }
       fireEvent.click(rtSelect)
 
-      // Select "User"
-      const userOption = screen.getByText('User')
-      fireEvent.click(userOption)
+      // Select a unique option to avoid header text collisions: "API Token"
+      const apiTokenOption = screen.getByText('API Token')
+      fireEvent.click(apiTokenOption)
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('resource_type=user'))
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('resource_type=api_token'))
       })
     })
 
@@ -336,6 +336,12 @@ describe('AuditPage', () => {
       const createElementSpy = vi.spyOn(document, 'createElement')
       const appendChildSpy = vi.spyOn(document.body, 'appendChild')
       const removeChildSpy = vi.spyOn(document.body, 'removeChild')
+      // Prevent jsdom from attempting navigation on anchor.click()
+      const anchorClickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(() => {
+          /* suppress navigation in test */
+        })
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -350,6 +356,7 @@ describe('AuditPage', () => {
       expect(createElementSpy).toHaveBeenCalledWith('a')
       expect(appendChildSpy).toHaveBeenCalled()
       expect(removeChildSpy).toHaveBeenCalled()
+      anchorClickSpy.mockRestore()
     })
   })
 

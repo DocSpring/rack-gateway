@@ -82,7 +82,8 @@ class AuthService {
       })
       .finally(() => {
         const base = import.meta.env.BASE_URL || '/'
-        window.location.href = `${base}login`
+        // Use assign to ease testing under jsdom and avoid Location href setter issues
+        window.location.assign(`${base}login`)
       })
   }
 

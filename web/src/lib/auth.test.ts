@@ -6,14 +6,15 @@ describe('authService', () => {
     vi.restoreAllMocks()
   })
 
-  it('logout calls server logout endpoint', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis as { fetch: typeof fetch }, 'fetch')
-      .mockResolvedValue(new Response() as unknown as Response)
+  it('logout calls server logout endpoint', () => {
+    // Keep fetch pending to avoid triggering navigation in .finally()
+    const fetchSpy = vi.spyOn(globalThis as { fetch: typeof fetch }, 'fetch').mockImplementation(
+      () =>
+        new Promise(() => {
+          /* keep pending to avoid redirect in test */
+        }) as unknown as Promise<Response>
+    )
     authService.logout()
-    // Allow promise in finally to run
-    await Promise.resolve()
-
     expect(fetchSpy).toHaveBeenCalledWith('/.gateway/api/web/logout', { credentials: 'include' })
   })
 })
