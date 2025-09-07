@@ -12,7 +12,7 @@ This guide covers production-ready settings and a minimal Convox deployment. It 
 
 ## Configuration
 
-Review the full list of environment variables and options in [docs/CONFIGURATION.md](docs/CONFIGURATION.md). The minimal example below demonstrates typical production variables.
+Review the full list of environment variables and options in [CONFIGURATION.md](CONFIGURATION.md). The minimal example below demonstrates typical production variables.
 
 ## Persistence
 

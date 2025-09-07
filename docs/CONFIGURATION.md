@@ -2,7 +2,7 @@
 
 This document describes all configuration options for Convox Gateway, grouped by concern.
 
-If you’re deploying to production, read this alongside [docs/DEPLOY.md](docs/DEPLOY.md).
+If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 ## Table of Contents
 
@@ -57,7 +57,7 @@ If you’re deploying to production, read this alongside [docs/DEPLOY.md](docs/D
   - SQLite database path for users, tokens, and audit logs.
 - `AUDIT_LOG_RETENTION_DAYS` (optional)
   - If set, the server purges audit rows older than N days at startup.
-  - Also used by the `convox-gateway audit-cleanup --days N` command (see [docs/DEPLOY.md](docs/DEPLOY.md)).
+  - Also used by the `convox-gateway audit-cleanup --days N` command (see [DEPLOY.md](DEPLOY.md)).
 
 ## Email (Postmark)
 
