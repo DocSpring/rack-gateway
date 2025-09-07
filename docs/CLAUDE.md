@@ -126,69 +126,7 @@ Flow:
 
 ### Security Features
 
-- JWT tokens with HS256 signing (ES256 ready)
-- Automatic secret redaction in logs
-- Domain restriction for OAuth
-- CSRF protection on web UI
-- All secrets in env vars or KMS
-
-## Important Assumptions Made
-
-**⚠️ These are educated guesses - verify against actual Convox source:**
-
-1. **Authentication**: Assumed Convox uses Bearer token auth
-2. **API Paths**: Guessed common paths like `/apps`, `/ps`, `/env`, `/logs`
-3. **Token Format**: Assumed standard Authorization header
-4. **Response Format**: Assumed JSON responses
-
-## TODO - Verify with Actual Convox
-
-Check these against `../convox_rack` and `../convox` source:
-
-- [ ] Actual authentication header format
-- [ ] Real API endpoints and paths
-- [ ] Request/response body formats
-- [ ] Error response structures
-- [ ] Websocket requirements for logs/exec
-- [ ] Rate limiting considerations
-
-## Build Commands
-
-```bash
-make all          # Build everything
-make gateway      # Build gateway server
-make cli          # Build CLI tool
-make test         # Run tests
-make dev          # Run development environment with Docker Compose
-make dev-build    # Build Docker images for development
-make dev-down     # Stop development environment
-make docker       # Build Docker image
-```
-
-## Testing Status
-
-✅ **What's Tested:**
-
-- JWT creation/validation
-- RBAC permission checks
-- Audit log redaction
-- Integration test (server starts, endpoints respond)
-
-❌ **Not Tested (requires external deps):**
-
-- Real Google OAuth flow
-- Actual Convox rack proxying
-- Multi-rack switching
-- Web UI interactions
-
-## Configuration Files
-
-### Server Configuration
-
-- SQLite database at `/app/data/db.sqlite` - Stores users, API tokens, and audit logs
-- RBAC policies are compiled into the binary (see `internal/gateway/rbac/policies.go`)
-
-### Client Configuration
+[... omitted for brevity ...]
 
 - `~/.config/convox-gateway/config.json` - Gateway URLs and JWT tokens per rack
 
@@ -317,3 +255,4 @@ The integration tests create backups of the real Convox CLI configuration to pre
 ## Important Instructions
 
 Don't leave old code lying around. When you see it, tidy it.
+

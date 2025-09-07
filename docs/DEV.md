@@ -341,7 +341,7 @@ web/                   # React/TypeScript web UI
 
 ## Production Deployment
 
-For production deployment instructions, see the main [README.md](README.md).
+For production deployment instructions, see the main [README.md](../README.md).
 
 ## Getting Help
 

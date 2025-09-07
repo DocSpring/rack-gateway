@@ -10,20 +10,9 @@ This guide covers production-ready settings and a minimal Convox deployment. It 
 - Audits persisted to SQLite and mirrored to stdout (JSON for CloudWatch)
 - WebSocket proxy supports Convox exec/logs (subprotocol + headers)
 
-## Required Environment
+## Configuration
 
-- `APP_JWT_KEY` (required, long random secret)
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (OIDC client)
-- `GOOGLE_ALLOWED_DOMAIN` (single domain, e.g. `company.com`)
-- `GOOGLE_OAUTH_BASE_URL` (issuer, default `https://accounts.google.com`)
-- `REDIRECT_URL` (e.g. `https://gateway.example.com/.gateway/web/callback`)
-- `ADMIN_USERS` (comma-separated emails for bootstrap admin)
-- `RACK_HOST` (hostname or full URL of Convox API)
-- `RACK_TOKEN` (Convox rack API token)
-- Optional: `RACK_USERNAME` (default `convox`)
-- Optional: `GATEWAY_PORT` (default `8080`)
-- Optional: `CONVOX_GATEWAY_DB_PATH` (default `/app/data/db.sqlite`)
-- Optional: `AUDIT_LOG_RETENTION_DAYS` (e.g. `90`)
+Review the full list of environment variables and options in [docs/CONFIGURATION.md](docs/CONFIGURATION.md). The minimal example below demonstrates typical production variables.
 
 ## Persistence
 
@@ -104,4 +93,3 @@ Populate secrets via `convox env set` or your preferred secrets management.
 ## Logs
 
 Stdout/stderr goes to Convox logs and CloudWatch. Audit lines are JSON-structured for easy indexing.
-

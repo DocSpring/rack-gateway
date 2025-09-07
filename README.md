@@ -7,8 +7,15 @@ API proxy for Convox racks with SSO, RBAC, and audit logging
 **First time setup?** Follow these steps:
 
 1. **Quick Start** (below) - Gets you running in 5 minutes with mock services
-2. **[DEV.md](DEV.md)** - Complete development guide with Google OAuth setup
-3. **[CLAUDE.md](CLAUDE.md)** - Technical implementation details
+2. **[docs/CLAUDE.md](docs/CLAUDE.md)** - Technical implementation details
+3. **[docs/DEV.md](docs/DEV.md)** - Development guide
+
+## Other Documentation
+
+- **[docs/DEPLOY.md](docs/DEPLOY.md)** - Production deployment guide
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - All environment variables and options
+- **[docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md)** - How Convox works
+- **[docs/TODO.md](docs/TODO.md)** - TODO list / Roadmap
 
 ## Features
 
@@ -40,6 +47,7 @@ make dev
 ```
 
 **🎉 You're done!** Open these URLs:
+
 - **Web UI**: http://localhost:5173 (test users: admin@company.com, developer@company.com, viewer@company.com)
 - **Gateway API**: http://localhost:8447
 - **Mock Convox**: http://localhost:5443
@@ -47,7 +55,7 @@ make dev
 ### 🧪 Test the CLI
 
 ```bash
-# Login (opens mock OAuth in browser)  
+# Login (opens mock OAuth in browser)
 ./bin/convox-gateway login staging http://localhost:8447
 
 # Run convox commands through the gateway
@@ -77,19 +85,19 @@ make test    # Run all tests
 
 ### Real Google OAuth Setup
 
-For complete development setup with real Google OAuth (instead of mock), see **[DEV.md](DEV.md)**.
+For complete development setup with real Google OAuth (instead of mock), see **[docs/DEV.md](docs/DEV.md)**.
 
 **Development URLs:**
 
 - Gateway API: http://localhost:8447
-- Web UI: http://localhost:5173  
+- Web UI: http://localhost:5173
 - Mock Convox: http://localhost:5443
 - Mock OAuth: http://localhost:3001
 
 The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
 
 - **admin@company.com** - Admin User (full access)
-- **developer@company.com** - Developer User  
+- **developer@company.com** - Developer User
 - **viewer@company.com** - Viewer User
 
 When logging in via http://localhost:8447 during development, you'll be redirected to the mock OAuth server to select which test user to authenticate as.
@@ -200,33 +208,7 @@ source <(./bin/convox-gateway completion zsh)
 
 ## Configuration
 
-### Environment Variables
-
-| Variable                | Description                             | Default         |
-| ----------------------- | --------------------------------------- | --------------- |
-| `PORT`                  | Server port                             | 8080            |
-| `APP_JWT_KEY`           | JWT signing key (auto-generated in dev) | -               |
-| `GOOGLE_CLIENT_ID`      | Google OAuth client ID                  | -               |
-| `GOOGLE_CLIENT_SECRET`  | Google OAuth client secret              | -               |
-| `GOOGLE_ALLOWED_DOMAIN` | Allowed email domain                    | your-domain.com |
-| `ADMIN_USERS`           | Comma-separated admin emails            | -               |
-| `RACK_HOST`             | Convox rack API host (see note below)   | -               |
-| `RACK_TOKEN`            | Convox rack API token                   | -               |
-| `RACK_USERNAME`         | Username for rack Basic Auth            | convox          |
-| `CONVOX_GATEWAY_DB_PATH`| Path to SQLite database                 | /app/data/db.sqlite |
-| `DEV_MODE`              | Enable development mode                 | false           |
-
-#### RACK_HOST Configuration
-
-When running in Kubernetes alongside the Convox rack, `RACK_HOST` will typically be the internal service URL:
-
-```bash
-# Example for Convox rack in the same cluster
-RACK_HOST=api.convox-system.svc.cluster.local:5443
-
-# Or for external rack
-RACK_HOST=https://rack.example.com
-```
+See docs/CONFIGURATION.md for the full list of environment variables and configuration options.
 
 ### Database
 
@@ -431,4 +413,5 @@ If `--days` is omitted, the command reads `AUDIT_LOG_RETENTION_DAYS`.
 ## Deployment
 
 See DEPLOY.md for a production-ready deployment guide, environment configuration, persistence, timers for audit cleanup, and a minimal `convox.yml` example.
+
 - Review CloudWatch logs for errors
