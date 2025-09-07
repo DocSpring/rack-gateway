@@ -17,6 +17,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
@@ -147,7 +148,29 @@ func main() {
 
 	auditLogger := audit.NewLogger(database)
 	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
-	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database)
+
+	// Email sender (Postmark)
+	pmToken := os.Getenv("POSTMARK_API_TOKEN")
+	from := os.Getenv("POSTMARK_FROM")
+	if from == "" {
+		domain := cfg.GoogleAllowedDomain
+		if domain == "" {
+			domain = "localhost"
+		}
+		from = "no-reply@" + domain
+	}
+	pmStream := os.Getenv("POSTMARK_STREAM")
+	sender := email.NewSender(pmToken, from, pmStream)
+
+	// Determine rack name for notifications
+	rackName := "default"
+	if rc, ok := cfg.Racks["default"]; ok {
+		rackName = rc.Name
+	} else if rc, ok := cfg.Racks["local"]; ok {
+		rackName = rc.Name
+	}
+
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName)
 
 	r := chi.NewRouter()
 

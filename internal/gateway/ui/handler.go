@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
@@ -25,14 +26,18 @@ type Handler struct {
 	configPath   string
 	tokenService *token.Service
 	database     *db.Database
+	emailer      email.Sender
+	rackName     string
 }
 
-func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database) *Handler {
+func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string) *Handler {
 	return &Handler{
 		rbacManager:  rbacManager,
 		configPath:   configPath,
 		tokenService: tokenService,
 		database:     database,
+		emailer:      mailer,
+		rackName:     rackName,
 	}
 }
 
@@ -466,6 +471,31 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokenResp)
 	h.auditUserAction(r, "token.create", targetUserEmail, "success", map[string]interface{}{"name": req.Name}, time.Now())
+
+	// Notifications
+	if h.emailer != nil {
+		inviter, _ := auth.GetAuthUser(r.Context())
+		owner := targetUserEmail
+		subjectOwner := fmt.Sprintf("[%s] New API token created", h.rackName)
+		bodyOwner := fmt.Sprintf("A new API token '%s' was created for your account on rack '%s'.\n\nCreated by: %s\nIf this wasn't expected, please contact an admin.", req.Name, h.rackName, func() string {
+			if inviter != nil {
+				return inviter.Email
+			}
+			return ""
+		}())
+		_ = h.emailer.Send(owner, subjectOwner, bodyOwner)
+
+		admins := h.getAdminEmails()
+		if len(admins) > 0 {
+			subjectAdmin := fmt.Sprintf("[%s] API token created for %s", h.rackName, owner)
+			creator := "unknown"
+			if inviter != nil {
+				creator = inviter.Email
+			}
+			bodyAdmin := fmt.Sprintf("An API token '%s' was created for %s on rack '%s'.\nCreated by: %s", req.Name, owner, h.rackName, creator)
+			_ = h.emailer.SendMany(admins, subjectAdmin, bodyAdmin)
+		}
+	}
 }
 
 // ListAPITokens returns API tokens for the current user
@@ -597,6 +627,50 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "created"})
 	h.auditUserAction(r, "user.create", req.Email, "success", map[string]interface{}{"name": req.Name, "roles": req.Roles}, start)
+
+	// Notifications
+	if h.emailer != nil {
+		inviter, _ := auth.GetAuthUser(r.Context())
+		// To the new user
+		subjectUser := fmt.Sprintf("[%s] You've been added", h.rackName)
+		bodyUser := fmt.Sprintf("You've been added to the '%s' Convox rack.\n\nName: %s\nRoles: %s\nAdded by: %s", h.rackName, req.Name, strings.Join(req.Roles, ", "), func() string {
+			if inviter != nil {
+				return inviter.Email
+			}
+			return ""
+		}())
+		_ = h.emailer.Send(req.Email, subjectUser, bodyUser)
+
+		// Notify admins (including inviter)
+		admins := h.getAdminEmails()
+		if len(admins) > 0 {
+			subjectAdmin := fmt.Sprintf("[%s] New user added: %s", h.rackName, req.Email)
+			creator := "unknown"
+			if inviter != nil {
+				creator = inviter.Email
+			}
+			bodyAdmin := fmt.Sprintf("%s added new user %s (%s) to rack '%s' with roles: %s", creator, req.Email, req.Name, h.rackName, strings.Join(req.Roles, ", "))
+			_ = h.emailer.SendMany(admins, subjectAdmin, bodyAdmin)
+		}
+	}
+}
+
+// getAdminEmails returns all user emails with admin role.
+func (h *Handler) getAdminEmails() []string {
+	users, err := h.rbacManager.GetUsers()
+	if err != nil {
+		return nil
+	}
+	emails := make([]string, 0)
+	for emailAddr, u := range users {
+		for _, r := range u.Roles {
+			if r == "admin" {
+				emails = append(emails, emailAddr)
+				break
+			}
+		}
+	}
+	return emails
 }
 
 // DeleteUser removes a user (admin only)

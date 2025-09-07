@@ -11,6 +11,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -148,7 +149,7 @@ func createAuthenticatedRequest(method, path string, body interface{}, email str
 
 func TestListUsers(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil)
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 	tests := []struct {
 		name       string
@@ -269,7 +270,7 @@ func TestCreateUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil, nil)
+			handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 			req := createAuthenticatedRequest("POST", "/.gateway/admin/users", tt.reqBody, tt.userEmail)
 			rr := httptest.NewRecorder()
@@ -317,7 +318,7 @@ func TestDeleteUser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil, nil)
+			handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 			req := createAuthenticatedRequest("DELETE", "/.gateway/admin/users/"+tt.deleteEmail, nil, tt.userEmail)
 
@@ -397,7 +398,7 @@ func TestUpdateUserRoles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rbacManager := newMockRBACManager()
-			handler := NewHandler(rbacManager, "", nil, nil)
+			handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 			req := createAuthenticatedRequest("PUT", "/.gateway/admin/users/"+tt.targetEmail+"/roles", tt.reqBody, tt.userEmail)
 
@@ -425,7 +426,7 @@ func TestUpdateUserRoles(t *testing.T) {
 
 func TestIsAdminHelper(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil)
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 	tests := []struct {
 		name      string
@@ -465,7 +466,7 @@ func TestIsAdminHelper(t *testing.T) {
 
 func TestNoAuthContext(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil)
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 	// Test requests without auth context
 	tests := []struct {
@@ -505,7 +506,7 @@ func TestNoAuthContext(t *testing.T) {
 func TestRBACManagerError(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	rbacManager.shouldError = true
-	handler := NewHandler(rbacManager, "", nil, nil)
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 	t.Run("ListUsers with RBAC error", func(t *testing.T) {
 		req := createAuthenticatedRequest("GET", "/.gateway/admin/users", nil, "admin@example.com")
@@ -536,7 +537,7 @@ func TestRBACManagerError(t *testing.T) {
 // Test concurrent access to ensure thread safety
 func TestConcurrentUserOperations(t *testing.T) {
 	rbacManager := newMockRBACManager()
-	handler := NewHandler(rbacManager, "", nil, nil)
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test")
 
 	// Run multiple operations concurrently
 	done := make(chan bool)
@@ -569,7 +570,7 @@ func createTempDB(t *testing.T) *db.Database {
 func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
-	handler := NewHandler(rbacManager, "", nil, database)
+	handler := NewHandler(rbacManager, "", nil, database, nil, "test")
 
 	// No logs yet
 	req := createAuthenticatedRequest("GET", "/.gateway/admin/audit?range=7d", nil, "admin@example.com")
@@ -607,7 +608,7 @@ func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
 func TestListAuditLogs_Range15mFilters(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
-	handler := NewHandler(rbacManager, "", nil, database)
+	handler := NewHandler(rbacManager, "", nil, database, nil, "test")
 
 	// Seed: one old (1h ago), one recent (5m ago)
 	now := time.Now().UTC()
@@ -648,7 +649,7 @@ func TestListAuditLogs_Range15mFilters(t *testing.T) {
 func TestExportAuditLogs_CSV(t *testing.T) {
 	rbacManager := newMockRBACManager()
 	database := createTempDB(t)
-	handler := NewHandler(rbacManager, "", nil, database)
+	handler := NewHandler(rbacManager, "", nil, database, nil, "test")
 
 	// Seed
 	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "admin@example.com", ActionType: "auth", Action: "login", Status: "success", ResponseTimeMs: 1}))
@@ -659,4 +660,110 @@ func TestExportAuditLogs_CSV(t *testing.T) {
 	body := rr.Body.String()
 	assert.Contains(t, body, "timestamp,user_email,user_name,action_type,action,command,resource,status,response_time_ms,ip_address,user_agent")
 	assert.Contains(t, body, "admin@example.com")
+}
+
+// Mock email sender to capture notifications
+type mockEmailSender struct {
+	sent      []struct{ To, Subject, Body string }
+	sentBatch []struct {
+		To            []string
+		Subject, Body string
+	}
+}
+
+func (m *mockEmailSender) Send(to, subject, textBody string) error {
+	m.sent = append(m.sent, struct{ To, Subject, Body string }{to, subject, textBody})
+	return nil
+}
+func (m *mockEmailSender) SendMany(to []string, subject, textBody string) error {
+	// copy slice to avoid later mutation issues
+	cp := make([]string, len(to))
+	copy(cp, to)
+	m.sentBatch = append(m.sentBatch, struct {
+		To            []string
+		Subject, Body string
+	}{cp, subject, textBody})
+	return nil
+}
+
+func TestCreateUser_SendsEmails(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	mailer := &mockEmailSender{}
+	handler := NewHandler(rbacManager, "", nil, nil, mailer, "testrack")
+
+	reqBody := map[string]interface{}{
+		"email": "newuser@example.com",
+		"name":  "New User",
+		"roles": []string{"viewer"},
+	}
+	req := createAuthenticatedRequest("POST", "/.gateway/admin/users", reqBody, "admin@example.com")
+	rr := httptest.NewRecorder()
+	handler.CreateUser(rr, req)
+
+	require.Equal(t, http.StatusCreated, rr.Code)
+	// One direct email to user
+	require.GreaterOrEqual(t, len(mailer.sent), 1)
+	assert.Equal(t, "newuser@example.com", mailer.sent[0].To)
+	assert.Contains(t, mailer.sent[0].Subject, "testrack")
+	// One batch email to admins, includes admin@example.com
+	require.GreaterOrEqual(t, len(mailer.sentBatch), 1)
+	foundAdmin := false
+	for _, addr := range mailer.sentBatch[0].To {
+		if addr == "admin@example.com" {
+			foundAdmin = true
+			break
+		}
+	}
+	assert.True(t, foundAdmin, "admin@example.com should receive admin notification")
+}
+
+func TestCreateAPIToken_SendsEmails(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	tokenService := token.NewService(database)
+	mailer := &mockEmailSender{}
+	handler := NewHandler(rbacManager, "", tokenService, database, mailer, "testrack")
+
+	// Seed DB users to satisfy foreign key constraints with known IDs
+	// Admin id=2, Viewer id=1 to align with mockRBAC GetUserWithID returning ID:1
+	rolesJSON := `{"admin"}`
+	_, _ = database.DB().Exec(`INSERT INTO users (id, email, name, roles) VALUES (2, ?, ?, ?)`, "admin@example.com", "Admin User", rolesJSON)
+	rolesJSON = `{"viewer"}`
+	_, _ = database.DB().Exec(`INSERT INTO users (id, email, name, roles) VALUES (1, ?, ?, ?)`, "viewer@example.com", "Viewer User", rolesJSON)
+
+	// Admin creates a token for viewer
+	reqBody := map[string]interface{}{
+		"name":       "ci-token",
+		"user_email": "viewer@example.com",
+	}
+	req := createAuthenticatedRequest("POST", "/.gateway/admin/tokens", reqBody, "admin@example.com")
+	rr := httptest.NewRecorder()
+	handler.CreateAPIToken(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.GreaterOrEqual(t, len(mailer.sent), 1)
+	assert.Equal(t, "viewer@example.com", mailer.sent[0].To)
+	assert.Contains(t, mailer.sent[0].Subject, "testrack")
+	// Admin notification batch should include admin@example.com
+	require.GreaterOrEqual(t, len(mailer.sentBatch), 1)
+	hasAdmin := false
+	for _, addr := range mailer.sentBatch[0].To {
+		if addr == "admin@example.com" {
+			hasAdmin = true
+		}
+	}
+	assert.True(t, hasAdmin)
+
+	// Clear and test self-created token (viewer creates own)
+	mailer.sent = nil
+	mailer.sentBatch = nil
+	reqBody2 := map[string]interface{}{
+		"name": "dev-token",
+	}
+	req2 := createAuthenticatedRequest("POST", "/.gateway/admin/tokens", reqBody2, "viewer@example.com")
+	rr2 := httptest.NewRecorder()
+	handler.CreateAPIToken(rr2, req2)
+	require.Equal(t, http.StatusOK, rr2.Code)
+	require.GreaterOrEqual(t, len(mailer.sent), 1)
+	assert.Equal(t, "viewer@example.com", mailer.sent[0].To)
+	require.GreaterOrEqual(t, len(mailer.sentBatch), 1)
 }
