@@ -1,6 +1,6 @@
 # Convox Gateway - Technical Details
 
-**IMPORTANT: Read CONVOX_REFERENCE.md and README.md first for context on how Convox actually works and current project status.**
+IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
 
 ## 🔌 PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
 
@@ -23,6 +23,7 @@
 - `mise.toml` - Defines all port environment variables
 - `web/vite.config.ts` - Uses `process.env.GATEWAY_PORT` for proxy
 - `Procfile.dev` - Uses `$MOCK_OAUTH_PORT` and `$MOCK_CONVOX_PORT`
+ - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Full list of environment variables
 
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
@@ -56,7 +57,7 @@
 
 ## Project Overview
 
-This is a SOC 2 compliant authentication and authorization proxy for self-hosted Convox racks. It sits between users and the Convox API, adding:
+This is an authentication and authorization proxy for self-hosted Convox racks. It sits between users and the Convox API, adding:
 
 - Google Workspace OAuth authentication
 - Role-based access control (RBAC)
@@ -111,11 +112,10 @@ Flow:
 
 ### Authorization (RBAC)
 
-- Uses Casbin v2 for policy enforcement
+- Database-backed RBAC manager (SQLite)
 - Roles: viewer, ops, deployer, admin
-- Permissions format: `convox:{resource}:{action}`
-- Wildcard support for admin role
-- Policies stored in YAML, hot-reloadable
+- Permission mapping to Convox routes/actions, e.g., `convox:{resource}:{action}`
+- Admin role has wildcard access
 
 ### Proxy Behavior
 
@@ -123,6 +123,7 @@ Flow:
 - Injects rack token from environment variables
 - Adds tracing headers: X-User-Email, X-Request-ID
 - Forwards all methods: GET, POST, PUT, PATCH, DELETE
+- Full WebSocket proxy support for `convox exec` and logs (subprotocol preserved)
 
 ### Security Features
 
@@ -132,16 +133,7 @@ Flow:
 
 ## Environment Variables
 
-Critical for production:
-
-- `APP_JWT_KEY` - JWT signing key (auto-generated in dev)
-- `GOOGLE_CLIENT_ID` - OAuth client ID
-- `GOOGLE_CLIENT_SECRET` - OAuth client secret
-- `GOOGLE_ALLOWED_DOMAIN` - Email domain restriction (can be overridden by config.yml)
-- `RACK_HOST` - Convox rack API host
-- `RACK_TOKEN` - Actual Convox rack API token
-- `RACK_USERNAME` - Username for rack Basic Auth (default: convox)
-- `CONVOX_GATEWAY_DB_PATH` - Path to SQLite database file (default: /app/data/db.sqlite)
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete and current list of configuration options.
 
 ### Local Development Configuration
 
@@ -183,7 +175,7 @@ GOOGLE_ALLOWED_DOMAIN = "yourcompany.com"
 internal/
   gateway/
     auth/     - OAuth + JWT handling
-    rbac/     - Casbin-based authorization
+    rbac/     - RBAC manager and policies
     proxy/    - Request forwarding logic
     audit/    - Structured logging + redaction
     config/   - Configuration management
@@ -192,10 +184,9 @@ internal/
 
 ## Known Limitations
 
-1. **No Websocket Support** - Logs/exec might not work
-2. **No User Self-Service** - Admin must add users manually
-3. **Basic UI** - Minimal functionality, needs enhancement
-4. **No Metrics** - Should add Prometheus/OpenTelemetry
+1. **No User Self-Service** - Admin must add users manually
+2. **Basic UI** - Minimal functionality, needs enhancement
+3. **No Metrics** - Should add Prometheus/OpenTelemetry
 
 ## Security Considerations
 
@@ -237,7 +228,6 @@ go tool cover -html=coverage.out
 ## Related Documentation
 
 - [Convox Rack API](https://docs.convox.com/reference/rack-api) (if it exists)
-- [Casbin Documentation](https://casbin.org/)
 - [Google OAuth 2.0](https://developers.google.com/identity/protocols/oauth2)
 - [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
 
@@ -255,4 +245,3 @@ The integration tests create backups of the real Convox CLI configuration to pre
 ## Important Instructions
 
 Don't leave old code lying around. When you see it, tidy it.
-
