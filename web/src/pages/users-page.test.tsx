@@ -156,7 +156,7 @@ describe('UsersPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(api.post).toHaveBeenCalledWith('/.gateway/admin/users', {
+        expect(api.post).toHaveBeenCalledWith('/.gateway/api/admin/users', {
           email: 'newuser@example.com',
           name: 'New User',
           roles: ['viewer'],
@@ -199,7 +199,7 @@ describe('UsersPage', () => {
       fireEvent.click(screen.getByRole('button', { name: UPDATE_USER_RE }))
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com/roles', {
+        expect(api.put).toHaveBeenCalledWith('/.gateway/api/admin/users/viewer@example.com/roles', {
           roles: ['admin'],
         })
       })
@@ -241,7 +241,7 @@ describe('UsersPage', () => {
       expect(confirmSpy).toHaveBeenCalledWith('Are you sure you want to delete viewer@example.com?')
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith('/.gateway/admin/users/viewer@example.com')
+        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/users/viewer@example.com')
       })
     })
 

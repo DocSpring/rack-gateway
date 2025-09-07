@@ -131,7 +131,7 @@ func TestAuditLogger(t *testing.T) {
 		log := logs[0]
 		assert.Equal(t, "test@example.com", log.UserEmail)
 		assert.Equal(t, "Test User", log.UserName)
-		assert.Equal(t, "convox_api", log.ActionType)
+		assert.Equal(t, "convox", log.ActionType)
 		assert.Equal(t, "env.get", log.Action)
 		assert.Equal(t, "myapp", log.Resource)
 		assert.Equal(t, "success", log.Status)

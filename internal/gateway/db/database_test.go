@@ -83,7 +83,7 @@ func TestDatabase(t *testing.T) {
 		log1 := &AuditLog{
 			UserEmail:      "user1@example.com",
 			UserName:       "User One",
-			ActionType:     "convox_api",
+			ActionType:     "convox",
 			Action:         "env.get",
 			Resource:       "myapp",
 			Details:        `{"key": "SECRET_TOKEN"}`,
@@ -96,7 +96,7 @@ func TestDatabase(t *testing.T) {
 		log2 := &AuditLog{
 			UserEmail:      "user2@example.com",
 			UserName:       "User Two",
-			ActionType:     "user_management",
+			ActionType:     "users",
 			Action:         "user.create",
 			Resource:       "newuser@example.com",
 			Status:         "success",

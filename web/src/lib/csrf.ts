@@ -7,20 +7,26 @@ export function setCsrfToken(token: string) {
 export function getCsrfToken(): string | null {
   return csrfCache
 }
-// Initialize on module load by fetching token once
-;(function init() {
-  try {
-    fetch('/.gateway/api/csrf', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j?.token) {
-          setCsrfToken(j.token)
-        }
-      })
-      .catch(() => {
-        /* ignore */
-      })
-  } catch (_e) {
-    /* ignore */
+
+export async function ensureCsrfToken(): Promise<string | null> {
+  if (csrfCache) {
+    return csrfCache
   }
+  try {
+    const r = await fetch('/.gateway/api/csrf', { credentials: 'include' })
+    const j = await r.json().catch(() => null)
+    if (j?.token) {
+      setCsrfToken(j.token)
+      return j.token
+    }
+  } catch (_e) {
+    // ignore
+  }
+  return null
+}
+// Best-effort eager fetch on module load
+;(function init() {
+  ensureCsrfToken().catch(() => {
+    /* ignore */
+  })
 })()

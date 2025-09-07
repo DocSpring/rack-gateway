@@ -136,7 +136,7 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 	auditLog := &db.AuditLog{
 		UserEmail:      userEmail,
 		UserName:       userName,
-		ActionType:     "convox_api",
+		ActionType:     "convox",
 		Action:         action,
 		Resource:       resource,
 		ResourceType:   resourceType,

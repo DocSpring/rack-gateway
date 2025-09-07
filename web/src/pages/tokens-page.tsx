@@ -224,6 +224,16 @@ export function TokensPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
+                            aria-label={`Delete Token ${token.name}`}
+                            disabled={deleteTokenMutation.isPending}
+                            onClick={() => deleteTokenMutation.mutate(token.id)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                          <Button
+                            aria-label={`Edit Token ${token.name}`}
                             onClick={() => {
                               setEditToken(token)
                               setEditName(token.name)
@@ -233,14 +243,6 @@ export function TokensPage() {
                             variant="ghost"
                           >
                             <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            disabled={deleteTokenMutation.isPending}
-                            onClick={() => deleteTokenMutation.mutate(token.id)}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>

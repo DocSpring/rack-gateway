@@ -179,7 +179,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       await waitFor(() => {
-        expect(api.post).toHaveBeenCalledWith('/.gateway/admin/tokens', {
+        expect(api.post).toHaveBeenCalledWith('/.gateway/api/admin/tokens', {
           name: 'New Token',
         })
       })
@@ -309,7 +309,7 @@ describe('TokensPage', () => {
       fireEvent.click(deleteButton)
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith('/.gateway/admin/tokens/token-1')
+        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/token-1')
       })
     })
   })

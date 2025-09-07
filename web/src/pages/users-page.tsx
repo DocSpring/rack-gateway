@@ -323,10 +323,16 @@ export function UsersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button onClick={() => handleEditUser(user)} size="sm" variant="ghost">
+                        <Button
+                          aria-label={`Edit User ${user.email}`}
+                          onClick={() => handleEditUser(user)}
+                          size="sm"
+                          variant="ghost"
+                        >
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
+                          aria-label={`Delete User ${user.email}`}
                           disabled={user.email === currentUser?.email}
                           onClick={() => handleDeleteUser(user.email)}
                           size="sm"

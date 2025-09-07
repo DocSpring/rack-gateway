@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://127.0.0.1:${WEB_PORT}`
+const BASE = `http://localhost:${WEB_PORT}`
 
 test('login button triggers gateway OAuth redirect', async ({ page }) => {
 await page.goto(`${BASE}/.gateway/web/login`)

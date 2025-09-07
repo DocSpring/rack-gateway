@@ -2,7 +2,7 @@ import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 import { toast } from 'sonner'
 import { authService } from './auth'
-import { getCsrfToken } from './csrf'
+import { ensureCsrfToken, getCsrfToken } from './csrf'
 
 const API_BASE = ''
 
@@ -51,7 +51,7 @@ class ApiService {
     })
 
     // Add auth interceptor
-    this.client.interceptors.request.use((config) => {
+    this.client.interceptors.request.use(async (config) => {
       const token = authService.getToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
@@ -61,7 +61,10 @@ class ApiService {
         const method = (config.method || 'get').toUpperCase()
         const url = config.url || ''
         if (method !== 'GET' && url.startsWith('/.gateway/api/admin')) {
-          const csrf = getCsrfToken()
+          let csrf = getCsrfToken()
+          if (!csrf) {
+            csrf = await ensureCsrfToken()
+          }
           if (csrf) {
             config.headers['X-CSRF-Token'] = csrf
           }

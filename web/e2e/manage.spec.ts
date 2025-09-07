@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://127.0.0.1:${WEB_PORT}`
+const BASE = `http://localhost:${WEB_PORT}`
 
 async function login(page: any) {
   await page.goto(`${BASE}/.gateway/web/login`)
@@ -45,15 +45,17 @@ test('users: add, edit role, delete', async ({ page }) => {
   await expect(row).toBeVisible()
 
   // Edit role to admin
-  await row.getByRole('button').first().click()
-  await page.getByText('Administrator').click() // choose admin radio by label
+  await row.getByRole('button', { name: /Edit User/i }).click()
+  // Choose Administrator within the open dialog to avoid strict matches
+  const dialog = page.getByRole('dialog')
+  await dialog.getByText('Administrator').click()
   await page.getByRole('button', { name: /Update User/i }).click()
   // Role badge should show Administrator
   await expect(row.getByText('Administrator')).toBeVisible()
 
   // Delete user (confirm dialog)
   page.once('dialog', (d) => d.accept())
-  await row.getByRole('button').nth(1).click()
+  await row.getByRole('button', { name: /Delete User/i }).click()
   await expect(row).toHaveCount(0)
 })
 
@@ -77,8 +79,8 @@ test('tokens: create, rename, delete', async ({ page }) => {
   const row = page.locator('tr', { hasText: name1 })
   await expect(row).toBeVisible()
 
-  // Rename token
-  await row.getByRole('button').first().click() // edit (pencil)
+  // Rename token with explicit aria label
+  await row.getByRole('button', { name: /Edit Token/i }).click()
   const name2 = `${name1} Renamed`
   await page.getByLabel('Token Name').fill(name2)
   await page.getByRole('button', { name: /^Save$/ }).click()
@@ -86,12 +88,22 @@ test('tokens: create, rename, delete', async ({ page }) => {
 
   // Delete token
   const row2 = page.locator('tr', { hasText: name2 })
-  await row2.getByRole('button').nth(1).click()
+  // Delete token using aria label
+  await row2.getByRole('button', { name: /Delete Token/i }).click()
   await expect(row2).toHaveCount(0)
 })
 
 test('audit logs: view and filter', async ({ page }) => {
   await login(page)
+
+  // Create a token to ensure we have a recent audit entry to filter
+  await page.goto(`${BASE}/.gateway/web/api_tokens`)
+  await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
+  const tokenName = `E2E Audit Token ${Date.now()}`
+  await page.getByRole('button', { name: /Create Token/i }).click()
+  await page.getByLabel('Token Name').fill(tokenName)
+  await page.getByRole('button', { name: /Create Token/i }).click()
+  await page.getByRole('button', { name: /Done/i }).click()
 
   // Navigate to Audit Logs
   await page.goto(`${BASE}/.gateway/web/audit_logs`)
@@ -101,16 +113,16 @@ test('audit logs: view and filter', async ({ page }) => {
   const table = page.getByRole('table')
   await expect(table).toBeVisible()
 
-  // Filter by Action Type: User Management
+  // Filter by Action Type: Token Management
   await page.locator('#action-type').click()
-  await page.getByRole('option', { name: /User Management/i }).click()
+  await page.getByRole('option', { name: /Token Management/i }).click()
 
   // Filter by Status: Success
   await page.locator('#status').click()
   await page.getByRole('option', { name: /Success/i }).click()
 
-  // Search for keyword 'token' or 'user'
-  await page.getByLabel('Search').fill('token')
+  // Search for the created token name
+  await page.getByLabel('Search').fill(tokenName)
 
   // Verify at least one data row remains
   await expect(page.locator('table tbody tr').first()).toBeVisible()

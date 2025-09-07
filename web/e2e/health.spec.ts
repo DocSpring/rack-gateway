@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://127.0.0.1:${WEB_PORT}`
+const BASE = `http://localhost:${WEB_PORT}`
 
 test('gateway health via web proxy is OK', async ({ page }) => {
   // Hit the site to ensure Vite dev server is accepting connections

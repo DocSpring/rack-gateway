@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"regexp"
+
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
@@ -21,7 +23,6 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
-	"regexp"
 )
 
 type Handler struct {
@@ -72,11 +73,11 @@ func (h *Handler) auditUserAction(r *http.Request, action, resource, status stri
 		detailsJSON, _ = json.Marshal(details)
 	}
 	// Infer action type and resource type for admin actions
-	actionType := "user_management"
+	actionType := "users"
 	if strings.HasPrefix(action, "api_token.") {
-		actionType = "token_management"
+		actionType = "tokens"
 	} else if strings.HasPrefix(action, "user.") {
-		actionType = "user_management"
+		actionType = "users"
 	}
 	// Infer resource type for user/token management actions
 	resourceType := func(a string) string {

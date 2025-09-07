@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"context"
+	"path/filepath"
+	"time"
+
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
@@ -15,8 +18,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"path/filepath"
-	"time"
 )
 
 // Mock RBAC Manager for testing
@@ -583,8 +584,8 @@ func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
 
 	// Seed some logs
 	now := time.Now().UTC()
-	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "admin@example.com", ActionType: "user_management", Action: "user.create", Status: "success", ResponseTimeMs: 10}))
-	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "viewer@example.com", ActionType: "convox_api", Action: "apps.list", Status: "success", ResponseTimeMs: 5}))
+	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "admin@example.com", ActionType: "users", Action: "user.create", Status: "success", ResponseTimeMs: 10}))
+	require.NoError(t, database.CreateAuditLog(&db.AuditLog{UserEmail: "viewer@example.com", ActionType: "convox", Action: "apps.list", Status: "success", ResponseTimeMs: 5}))
 
 	// Query all
 	rr = httptest.NewRecorder()

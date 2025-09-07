@@ -23,7 +23,14 @@ export function Layout() {
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
           {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
-          <img alt="" aria-hidden className="mr-2 h-8 w-8" height={32} src="/logo.svg" width={32} />
+          <img
+            alt=""
+            aria-hidden
+            className="mr-2 h-8 w-8"
+            height={32}
+            src="/.gateway/web/logo.svg"
+            width={32}
+          />
           <h1 className="font-semibold text-xl">Convox Gateway</h1>
         </div>
 
