@@ -381,6 +381,7 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	rangeParam := q.Get("range") // e.g., 1h, 24h, 7d, 30d, all
 	actionType := q.Get("action_type")
 	status := q.Get("status")
+	resourceType := q.Get("resource_type")
 	search := q.Get("search")
 
 	// Compute since based on range
@@ -426,6 +427,9 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		if status != "" && status != "all" && l.Status != status {
 			continue
 		}
+		if resourceType != "" && resourceType != "all" && l.ResourceType != resourceType {
+			continue
+		}
 		if search != "" {
 			if !containsAny([]string{l.UserEmail, l.UserName, l.Action, l.Resource, l.Details, l.IPAddress, l.UserAgent}, search) {
 				continue
@@ -448,6 +452,10 @@ func (h *Handler) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	rangeParam := q.Get("range")
+	actionType := q.Get("action_type")
+	status := q.Get("status")
+	resourceType := q.Get("resource_type")
+	search := q.Get("search")
 	// Compute since
 	since := time.Time{}
 	if rangeParam != "" && rangeParam != "all" {
@@ -462,10 +470,30 @@ func (h *Handler) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Apply same filters as ListAuditLogs
+	filtered := make([]*db.AuditLog, 0, len(logs))
+	for _, l := range logs {
+		if actionType != "" && actionType != "all" && l.ActionType != actionType {
+			continue
+		}
+		if status != "" && status != "all" && l.Status != status {
+			continue
+		}
+		if resourceType != "" && resourceType != "all" && l.ResourceType != resourceType {
+			continue
+		}
+		if search != "" {
+			if !containsAny([]string{l.UserEmail, l.UserName, l.Action, l.Resource, l.Details, l.IPAddress, l.UserAgent}, search) {
+				continue
+			}
+		}
+		filtered = append(filtered, l)
+	}
+
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", "attachment; filename=audits.csv")
 	buf := "timestamp,user_email,user_name,action_type,action,command,resource,status,response_time_ms,ip_address,user_agent\n"
-	for _, l := range logs {
+	for _, l := range filtered {
 		buf += fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%d,%s,%s\n",
 			l.Timestamp.Format(time.RFC3339), escapeCSV(l.UserEmail), escapeCSV(l.UserName), l.ActionType, escapeCSV(l.Action), escapeCSV(l.Command), escapeCSV(l.Resource), l.Status, l.ResponseTimeMs, escapeCSV(l.IPAddress), escapeCSV(l.UserAgent))
 	}

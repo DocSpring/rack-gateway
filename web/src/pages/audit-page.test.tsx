@@ -194,6 +194,35 @@ describe('AuditPage', () => {
       })
     })
 
+    it('filters by resource type', async () => {
+      // Mock initial load and filtered load
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockLogs)
+        .mockResolvedValueOnce(mockLogs.filter((l) => l.resource_type === 'user'))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('admin@example.com')).toBeInTheDocument()
+      })
+
+      // Find and click resource type filter by its id
+      const rtSelect = document.getElementById('resource-type')
+      if (!rtSelect) {
+        throw new Error('Resource type select not found')
+      }
+      fireEvent.click(rtSelect)
+
+      // Select "User"
+      const userOption = screen.getByText('User')
+      fireEvent.click(userOption)
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('resource_type=user'))
+      })
+    })
+
     it('filters by status', async () => {
       // Mock initial load and filtered load
       vi.mocked(api.get)
