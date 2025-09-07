@@ -18,8 +18,10 @@ import (
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
@@ -233,6 +235,94 @@ func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(roles)
+}
+
+// GetEnvValues returns the latest release env for an app.
+// Query params: app (required), key (optional), secrets=true|false (optional)
+func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	app := r.URL.Query().Get("app")
+	if strings.TrimSpace(app) == "" {
+		http.Error(w, "missing app", http.StatusBadRequest)
+		return
+	}
+	key := r.URL.Query().Get("key")
+	wantSecrets := strings.EqualFold(r.URL.Query().Get("secrets"), "true")
+
+	// Enforce env:view
+	if ok, _ := h.rbacManager.Enforce(au.Email, "env", "view"); !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	// If requesting secrets, enforce secrets:view
+	if wantSecrets {
+		if ok, _ := h.rbacManager.Enforce(au.Email, "secrets", "view"); !ok {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	// Fetch latest env via rack API
+	rackURL := os.Getenv("RACK_HOST")
+	rackUser := os.Getenv("RACK_USERNAME")
+	if rackUser == "" {
+		rackUser = "convox"
+	}
+	rackToken := os.Getenv("RACK_TOKEN")
+	if rackURL == "" || rackToken == "" {
+		http.Error(w, "rack not configured", http.StatusInternalServerError)
+		return
+	}
+	rc := config.RackConfig{Name: h.rackName, URL: rackURL, Username: rackUser, APIKey: rackToken, Enabled: true}
+	envMap, err := envutil.FetchLatestEnvMap(rc, app)
+	if err != nil {
+		http.Error(w, "failed to fetch env", http.StatusBadGateway)
+		return
+	}
+
+	// Mask if secrets not requested and log secrets.view when secrets requested
+	if wantSecrets {
+		// Audit secrets.view read
+		_ = audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    au.Email,
+			UserName:     au.Name,
+			ActionType:   "convox",
+			Action:       "secrets.view",
+			ResourceType: "secret",
+			Resource: func() string {
+				if key != "" {
+					return fmt.Sprintf("%s/%s", app, key)
+				} else {
+					return "all"
+				}
+			}(),
+			Details:        "{}",
+			IPAddress:      r.RemoteAddr,
+			UserAgent:      r.UserAgent(),
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     http.StatusOK,
+			ResponseTimeMs: 0,
+		})
+	} else {
+		extra := strings.Split(os.Getenv("CONVOX_SECRET_ENV_VARS"), ",")
+		for k := range envMap {
+			if envutil.IsSecretKey(k, extra) {
+				envMap[k] = envutil.MaskedSecret
+			}
+		}
+	}
+	// Filter by key if provided
+	if key != "" {
+		v := envMap[key]
+		envMap = map[string]string{key: v}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"env": envMap})
 }
 
 // Health check endpoint

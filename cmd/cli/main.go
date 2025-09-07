@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,6 +124,84 @@ Rack management:
 			return nil
 		},
 	}
+
+	// Env commands (match Convox: env lists; get gets; set delegates)
+	var appFlag string
+	var showSecrets bool
+	envCmd := &cobra.Command{
+		Use:   "env",
+		Short: "List environment variables for an app (masked by default)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if appFlag == "" {
+				return fmt.Errorf("missing app: use -a <app>")
+			}
+			rack, err := getCurrentRack()
+			if err != nil || rack == "" {
+				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+			}
+			gatewayURL, err := loadGatewayURL(rack)
+			if err != nil {
+				return err
+			}
+			tok, err := loadToken(rack)
+			if err != nil {
+				return err
+			}
+			m, err := fetchEnvViaAPI(gatewayURL, tok.Token, appFlag, "", showSecrets)
+			if err != nil {
+				return err
+			}
+			for k, v := range m {
+				fmt.Printf("%s=%s\n", k, v)
+			}
+			return nil
+		},
+	}
+	envCmd.Flags().StringVarP(&appFlag, "app", "a", "", "App name")
+	envCmd.Flags().BoolVar(&showSecrets, "secrets", false, "Show secret values (requires permission)")
+
+	envGetCmd := &cobra.Command{
+		Use:   "get <KEY>",
+		Short: "Get a single environment variable (masked by default)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := args[0]
+			if appFlag == "" {
+				return fmt.Errorf("missing app: use -a <app>")
+			}
+			rack, err := getCurrentRack()
+			if err != nil || rack == "" {
+				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+			}
+			gatewayURL, err := loadGatewayURL(rack)
+			if err != nil {
+				return err
+			}
+			tok, err := loadToken(rack)
+			if err != nil {
+				return err
+			}
+			m, err := fetchEnvViaAPI(gatewayURL, tok.Token, appFlag, key, showSecrets)
+			if err != nil {
+				return err
+			}
+			fmt.Println(m[key])
+			return nil
+		},
+	}
+	envGetCmd.Flags().StringVarP(&appFlag, "app", "a", "", "App name")
+	envGetCmd.Flags().BoolVar(&showSecrets, "secrets", false, "Show secret values (requires permission)")
+
+	envSetAlias := &cobra.Command{
+		Use:                "set",
+		Short:              "Alias for 'convox env set' (delegates to Convox CLI)",
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			full := append([]string{"env", "set"}, args...)
+			return wrapConvoxCommand(full)
+		},
+	}
+	envCmd.AddCommand(envGetCmd, envSetAlias)
 
 	rackCmd := &cobra.Command{
 		Use:          "rack",
@@ -389,7 +468,7 @@ PowerShell:
 
 	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, usersCmd)
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, usersCmd, envCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("CONVOX_GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
@@ -593,6 +672,45 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	}
 
 	return &result, nil
+}
+
+// fetchEnvViaAPI calls the gateway env API to get masked/unmasked values
+func fetchEnvViaAPI(gatewayURL, bearerToken, app, key string, showSecrets bool) (map[string]string, error) {
+	base := gatewayURL
+	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
+		base = "https://" + base
+	}
+	base = strings.TrimSuffix(base, "/")
+	q := url.Values{}
+	q.Set("app", app)
+	if key != "" {
+		q.Set("key", key)
+	}
+	if showSecrets {
+		q.Set("secrets", "true")
+	}
+	req, _ := http.NewRequest("GET", fmt.Sprintf("%s/.gateway/api/env?%s", base, q.Encode()), nil)
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to fetch env: %s", string(b))
+	}
+	var payload struct {
+		Env map[string]string `json:"env"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+	if payload.Env == nil {
+		payload.Env = map[string]string{}
+	}
+	return payload.Env, nil
 }
 
 func saveToken(rack string, loginResp *LoginResponse) error {

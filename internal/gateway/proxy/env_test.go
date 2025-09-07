@@ -42,21 +42,22 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 	// Body with env field
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
-	// Admin sees unfiltered
-	out := h.filterReleaseEnvForUser("admin@test.com", []byte(body))
-	require.Contains(t, string(out), "SECRET_KEY=abc")
-	require.Contains(t, string(out), "DATABASE_URL=postgres://")
+	// Admin should still see masked secrets (native releases always masked)
+	out := h.filterReleaseEnvForUser("admin@test.com", []byte(body), true)
+	s := string(out)
+	require.Contains(t, s, "SECRET_KEY=********************")
+	require.Contains(t, s, "DATABASE_URL=********************")
 
 	// Ops sees masked sensitive values
-	out = h.filterReleaseEnvForUser("ops@test.com", []byte(body))
-	s := string(out)
+	out = h.filterReleaseEnvForUser("ops@test.com", []byte(body), false)
+	s = string(out)
 	require.Contains(t, s, "SECRET_KEY=********************")
 	require.Contains(t, s, "DATABASE_URL=********************")
 	require.Contains(t, s, "REDIS_URL=********************")
 	require.Contains(t, s, "PORT=3000")
 
 	// Deployer same as ops
-	out = h.filterReleaseEnvForUser("deployer@test.com", []byte(body))
+	out = h.filterReleaseEnvForUser("deployer@test.com", []byte(body), false)
 	s = string(out)
 	require.Contains(t, s, "SECRET_KEY=*********")
 }
@@ -67,7 +68,7 @@ func TestFilterReleaseEnv_NoEnvViewMasksAll(t *testing.T) {
 
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
-	out := h.filterReleaseEnvForUser("viewer@test.com", []byte(body))
+	out := h.filterReleaseEnvForUser("viewer@test.com", []byte(body), false)
 	s := string(out)
 	// Should contain env, but all values masked
 	require.Contains(t, s, "DATABASE_URL=********************")

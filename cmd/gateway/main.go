@@ -236,6 +236,8 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(authService.Middleware)
 			r.Get("/me", uiHandler.GetMe)
+			// Env view API (safe masking by default, request secrets via ?secrets=true)
+			r.Get("/env", uiHandler.GetEnvValues)
 
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(csrfMiddleware())

@@ -18,6 +18,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -31,7 +32,7 @@ type Handler struct {
 	secretNames map[string]struct{}
 }
 
-const maskedSecret = "********************"
+const maskedSecret = envutil.MaskedSecret
 
 func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger) *Handler {
 	h := &Handler{
@@ -364,7 +365,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	}
 
 	// Fetch latest env map from rack (needed to fill back masked values and compute diffs)
-	baseEnv, err := h.fetchLatestEnvMap(rack, app)
+	baseEnv, err := envutil.FetchLatestEnvMap(rack, app)
 	if err != nil {
 		// If fetch fails, fall back to submitted body without rewrite
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
@@ -605,16 +606,25 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 	defer resp.Body.Close()
 
-	// Read full response body (so we can optionally log it) then send to client
+	// Read full response body (so we can optionally log it and/or filter) then send to client
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Filter release env based on RBAC
-	if strings.Contains(path, "/releases") && strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "application/json") {
-		if authUser, ok := auth.GetAuthUser(r.Context()); ok {
-			body = h.filterReleaseEnvForUser(authUser.Email, body)
+	// If this is a release/environment read, filter env values before returning
+	// We only process JSON payloads (Content-Type contains "application/json").
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	if strings.Contains(ct, "application/json") {
+		// Normalize path used for RBAC routing match
+		pth := path
+		// Filter release payloads that include "env" string
+		if keyMatch3(pth, "/apps/{app}/releases") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
+			body = h.filterReleaseEnvForUser(userEmail, body, false)
+		}
+		// Filter environment map
+		if keyMatch3(pth, "/apps/{app}/environment") && r.Method == http.MethodGet {
+			body = h.filterEnvironmentMapForUser(userEmail, body)
 		}
 	}
 
@@ -659,10 +669,10 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 }
 
 // filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.
-func (h *Handler) filterReleaseEnvForUser(email string, body []byte) []byte {
+func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
 	// Determine permissions
 	canEnvView, _ := h.rbacManager.Enforce(email, "env", "view")
-	canSecretsView, _ := h.rbacManager.Enforce(email, "secrets", "view")
+	// Note: For native release responses, ALWAYS mask secrets regardless of secrets:view.
 
 	// If no environment view, mask all env values (do not strip, to avoid accidental clears)
 	if !canEnvView {
@@ -706,10 +716,7 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte) []byte {
 		}
 	}
 
-	// Env view allowed; redact secrets unless secrets:view
-	if canSecretsView {
-		return body
-	}
+	// Env view allowed; redact secrets (always, regardless of secrets:view)
 	var any interface{}
 	if err := json.Unmarshal(body, &any); err != nil {
 		return body
@@ -751,20 +758,52 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte) []byte {
 	}
 }
 
+// filterEnvironmentMapForUser applies masking to the /apps/{app}/environment JSON map
+// Always masks secret values regardless of secrets:view; if env:view is not permitted
+// then masks all values.
+func (h *Handler) filterEnvironmentMapForUser(email string, body []byte) []byte {
+	canEnvView, _ := h.rbacManager.Enforce(email, "env", "view")
+
+	var any interface{}
+	if err := json.Unmarshal(body, &any); err != nil {
+		return body
+	}
+	maskAll := func(m map[string]interface{}) {
+		for k := range m {
+			m[k] = maskedSecret
+		}
+	}
+	maskSecrets := func(m map[string]interface{}) {
+		for k, v := range m {
+			if h.isSecretKey(k) {
+				m[k] = maskedSecret
+			} else {
+				m[k] = v
+			}
+		}
+	}
+
+	switch v := any.(type) {
+	case map[string]interface{}:
+		if !canEnvView {
+			maskAll(v)
+		} else {
+			maskSecrets(v)
+		}
+		nb, _ := json.Marshal(v)
+		return nb
+	default:
+		return body
+	}
+}
+
 func (h *Handler) isSecretKey(key string) bool {
-	if _, ok := h.secretNames[key]; ok {
-		return true
+	// Merge configured secret names
+	extra := make([]string, 0, len(h.secretNames))
+	for k := range h.secretNames {
+		extra = append(extra, k)
 	}
-	// Case-insensitive contains for common secret indicators
-	upper := strings.ToUpper(key)
-	if strings.Contains(upper, "SECRET") || strings.Contains(upper, "TOKEN") {
-		return true
-	}
-	// Suffix checks for key identifiers
-	if strings.HasSuffix(upper, "_KEY") || strings.HasSuffix(upper, "_KEY_ID") {
-		return true
-	}
-	return false
+	return envutil.IsSecretKey(key, extra)
 }
 
 // proxyWebSocket upgrades the client connection and bridges it to the rack via a WebSocket connection
