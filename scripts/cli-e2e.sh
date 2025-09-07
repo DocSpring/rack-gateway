@@ -89,7 +89,8 @@ function verify_command() {
 echo "Verifying CLI commands..."
 verify_command "rack" "Current rack: e2e" "Logged in as admin@company.com"
 verify_command "convox rack" "mock-rack" "mock-rack.example.com"
-verify_command "convox apps" "RAPI123456" "RWEB789012"
+verify_command "convox apps" "convox-gateway" "RAPP123456"
+verify_command "convox apps info -a convox-gateway" "Name" "convox-gateway" "Release" "RAPP123456"
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
 verify_command "convox run web 'echo hello'" \
@@ -97,5 +98,15 @@ verify_command "convox run web 'echo hello'" \
 
 verify_command "convox exec p-worker-1 'echo hello'" \
   'Connected to mock exec for app=convox-gateway pid=p-worker-1'
+
+# List environment for a known app
+verify_command "convox env -a convox-gateway" "NODE_ENV=production" "PORT=3000"
+
+# Test env set without promote
+verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "Release:"
+
+# Test env set with promote
+verify_command "convox env set -a convox-gateway FOO=bar --promote" \
+  "Setting FOO... OK" "Release:" "Promoting "
 
 echo "CLI E2E completed successfully."

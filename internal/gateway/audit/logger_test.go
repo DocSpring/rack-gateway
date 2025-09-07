@@ -48,6 +48,70 @@ func TestAuditLogger(t *testing.T) {
 		}
 	})
 
+	// Comprehensive coverage of method/path → action mapping
+	t.Run("ParseConvoxAction_Comprehensive", func(t *testing.T) {
+		cases := []struct {
+			m, p, a, r string
+		}{
+			// env
+			{"GET", "/apps/myapp/env", "env.get", "myapp"},
+			{"POST", "/apps/myapp/env", "env.set", "myapp"},
+			// builds
+			{"GET", "/apps/myapp/builds", "builds.list", "myapp"},
+			{"POST", "/apps/myapp/builds", "builds.create", "myapp"},
+			// releases: list, get, create, promote
+			{"GET", "/apps/myapp/releases", "releases.list", "myapp"},
+			{"GET", "/apps/myapp/releases/RAPI123", "releases.get", "myapp"},
+			{"POST", "/apps/myapp/releases", "releases.create", "myapp"},
+			{"POST", "/apps/myapp/releases/RAPI123/promote", "releases.promote", "myapp"},
+			// run
+			{"POST", "/apps/myapp/run", "run.command", "myapp"},
+			// ps
+			{"GET", "/apps/myapp/ps", "ps.list", "myapp"},
+			{"POST", "/apps/myapp/ps", "ps.manage", "myapp"},
+			// services processes
+			{"GET", "/apps/app1/services/web/processes", "process.list", "app1/web"},
+			{"POST", "/apps/app1/services/web/processes", "process.start", "app1/web"},
+			// processes
+			{"GET", "/apps/myapp/processes/p1", "process.get", "p1"},
+			{"DELETE", "/apps/myapp/processes/p1", "process.terminate", "p1"},
+			{"PUT", "/apps/myapp/processes/p1", "process.manage", "p1"},
+			// exec
+			{"GET", "/apps/myapp/processes/p1/exec", "process.exec", "p1"},
+			// logs
+			{"GET", "/apps/myapp/logs", "logs.view", "myapp"},
+			// apps root
+			{"GET", "/apps", "apps.list", "unknown"},
+			{"GET", "/apps/thing", "apps.get", "thing"},
+			{"POST", "/apps", "apps.create", "unknown"},
+			{"DELETE", "/apps/thing", "apps.delete", "thing"},
+			// racks collection
+			{"GET", "/racks", "racks.list", "unknown"},
+			// default fallthrough
+			{"GET", "/system", "system.get", "unknown"},
+			{"PATCH", "/unknown/path", "unknown.patch", "path"},
+		}
+
+		for _, c := range cases {
+			a, r := logger.parseConvoxAction(c.p, c.m)
+			assert.Equal(t, c.a, a, "action mismatch for %s %s", c.m, c.p)
+			assert.Equal(t, c.r, r, "resource mismatch for %s %s", c.m, c.p)
+		}
+	})
+
+	// 101 Switching Protocols should be success
+	t.Run("Status101IsSuccess", func(t *testing.T) {
+		st := logger.mapStatusToString(101, "allow")
+		assert.Equal(t, "success", st)
+	})
+
+	t.Run("RedactEnvVars_RedactsValues", func(t *testing.T) {
+		vars := map[string]string{"FOO": "bar", "SECRET_TOKEN": "abc"}
+		red := logger.RedactEnvVars(vars)
+		assert.Equal(t, "[REDACTED]", red["FOO"])
+		assert.Equal(t, "[REDACTED]", red["SECRET_TOKEN"])
+	})
+
 	t.Run("LogRequest", func(t *testing.T) {
 		// Create a mock HTTP request
 		req, err := http.NewRequest("GET", "/apps/myapp/env?key=SECRET_TOKEN", nil)

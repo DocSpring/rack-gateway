@@ -201,6 +201,36 @@ Rack management:
 		},
 	}
 
+	webCmd := &cobra.Command{
+		Use:   "web [rack]",
+		Short: "Open the Convox Gateway web UI",
+		Args:  cobra.RangeArgs(0, 1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var rack string
+			if len(args) == 1 {
+				rack = args[0]
+			} else {
+				var err error
+				rack, err = getCurrentRack()
+				if err != nil || rack == "" {
+					return fmt.Errorf("no rack selected. Specify a rack: convox-gateway web <rack>")
+				}
+			}
+
+			gatewayURL, err := loadGatewayURL(rack)
+			if err != nil {
+				return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+			}
+			url := gatewayURL
+			if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+				url = "https://" + url
+			}
+			url = strings.TrimSuffix(url, "/") + "/ui/"
+			fmt.Printf("Opening %s\n", url)
+			return openBrowser(url)
+		},
+	}
+
 	logoutCmd := &cobra.Command{
 		Use:   "logout [rack]",
 		Short: "Remove a rack (deletes config and token)",
@@ -359,7 +389,7 @@ PowerShell:
 
 	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, completionCmd, usersCmd)
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, usersCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("CONVOX_GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))

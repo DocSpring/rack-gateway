@@ -103,6 +103,7 @@ type Release struct {
 	Description string    `json:"description"`
 	Version     int       `json:"version"`
 	Created     time.Time `json:"created"`
+	Env         string    `json:"env,omitempty"`
 }
 
 type Instance struct {
@@ -128,6 +129,19 @@ type System struct {
 	Version    string            `json:"version"`
 }
 
+// In-memory state for releases and current app release
+var (
+	currentReleaseByApp = map[string]string{
+		"convox-gateway": "RAPP123456",
+	}
+	releasesByApp = map[string][]Release{
+		"convox-gateway": {
+			{ID: "RAPI123456", App: "convox-gateway", Build: "BAPI123456", Description: "Deployed by mock", Version: 10, Created: time.Now().Add(-24 * time.Hour), Env: envString()},
+			{ID: "RAPI123455", App: "convox-gateway", Build: "BAPI123455", Description: "Deployed by mock", Version: 9, Created: time.Now().Add(-48 * time.Hour), Env: envString()},
+		},
+	}
+)
+
 func main() {
 	r := mux.NewRouter()
 	r.Use(requestLogger)
@@ -149,12 +163,18 @@ func main() {
 	r.HandleFunc("/apps/{app}/builds", getBuilds).Methods("GET")
 	r.HandleFunc("/apps/{app}/builds/{id}", getBuild).Methods("GET")
 
-	r.HandleFunc("/apps/{app}/releases", getReleases).Methods("GET")
+	r.HandleFunc("/apps/{app}/releases", handleReleases).Methods("GET", "POST")
 	r.HandleFunc("/apps/{app}/releases/{id}", getRelease).Methods("GET")
 	r.HandleFunc("/apps/{app}/releases/{id}/promote", promoteRelease).Methods("POST")
 
 	r.HandleFunc("/apps/{app}/environment", getEnvironment).Methods("GET")
 	r.HandleFunc("/apps/{app}/environment", setEnvironment).Methods("POST", "PUT")
+
+	// Logs streaming (WebSocket)
+	r.HandleFunc("/apps/{app}/logs", appLogs).Methods("GET")
+
+	// Optional racks listing used by CLI in some flows
+	r.HandleFunc("/racks", listRacks).Methods("GET")
 
 	r.HandleFunc("/instances", getInstances).Methods("GET")
 	r.HandleFunc("/instances/{id}", getInstance).Methods("GET")
@@ -270,6 +290,14 @@ func authMiddleware(next http.Handler) http.Handler {
 func getApps(w http.ResponseWriter, r *http.Request) {
 	apps := []App{
 		{
+			Name:       "convox-gateway",
+			Status:     "running",
+			Generation: "3",
+			Release:    currentReleaseByApp["convox-gateway"],
+			CreatedAt:  time.Now().Add(-720 * time.Hour),
+			UpdatedAt:  time.Now().Add(-24 * time.Hour),
+		},
+		{
 			Name:       "api",
 			Status:     "running",
 			Generation: "3",
@@ -285,14 +313,6 @@ func getApps(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:  time.Now().Add(-480 * time.Hour),
 			UpdatedAt:  time.Now().Add(-2 * time.Hour),
 		},
-		{
-			Name:       "worker",
-			Status:     "updating",
-			Generation: "3",
-			Release:    "RWRK345678",
-			CreatedAt:  time.Now().Add(-240 * time.Hour),
-			UpdatedAt:  time.Now().Add(-5 * time.Minute),
-		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -301,11 +321,15 @@ func getApps(w http.ResponseWriter, r *http.Request) {
 
 func getApp(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	rel := currentReleaseByApp[vars["app"]]
+	if rel == "" {
+		rel = "RAPP123456"
+	}
 	app := App{
 		Name:       vars["app"],
 		Status:     "running",
 		Generation: "3",
-		Release:    "R" + strings.ToUpper(vars["app"][:3]) + "123456",
+		Release:    rel,
 		CreatedAt:  time.Now().Add(-720 * time.Hour),
 		UpdatedAt:  time.Now().Add(-24 * time.Hour),
 	}
@@ -521,63 +545,114 @@ func getBuild(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(build)
 }
 
-func getReleases(w http.ResponseWriter, r *http.Request) {
+func handleReleases(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	releases := []Release{
-		{
-			ID:          "RAPI123456",
-			App:         vars["app"],
-			Build:       "BAPI123456",
-			Description: "Deployed by mock",
-			Version:     10,
-			Created:     time.Now().Add(-24 * time.Hour),
-		},
-		{
-			ID:          "RAPI123455",
-			App:         vars["app"],
-			Build:       "BAPI123455",
-			Description: "Deployed by mock",
-			Version:     9,
-			Created:     time.Now().Add(-48 * time.Hour),
-		},
+	app := vars["app"]
+	if r.Method == http.MethodPost {
+		// Create a new release and append to store
+		id := fmt.Sprintf("RAPI%06d", time.Now().UnixNano()%1000000)
+		rel := Release{
+			ID:          id,
+			App:         app,
+			Build:       "BNEW123456",
+			Description: "Created by mock env set",
+			Version:     42,
+			Created:     time.Now(),
+			Env:         envString(),
+		}
+		// Prepend so newest release is first
+		releasesByApp[app] = append([]Release{rel}, releasesByApp[app]...)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rel)
+		return
 	}
-
+	// GET: list releases (support limit=1)
+	list := releasesByApp[app]
+	if list == nil {
+		list = []Release{}
+	}
+	if lim := r.URL.Query().Get("limit"); lim == "1" && len(list) > 0 {
+		// Return most recent (index 0)
+		list = []Release{list[0]}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(releases)
+	json.NewEncoder(w).Encode(list)
 }
 
 func getRelease(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	release := Release{
-		ID:          vars["id"],
-		App:         vars["app"],
-		Build:       "B" + vars["id"][1:],
-		Description: "Deployed by mock",
-		Version:     10,
-		Created:     time.Now().Add(-24 * time.Hour),
+	app := vars["app"]
+	id := vars["id"]
+	var rel Release
+	found := false
+	for _, rr := range releasesByApp[app] {
+		if rr.ID == id {
+			rel = rr
+			found = true
+			break
+		}
 	}
-
+	if !found {
+		rel = Release{ID: id, App: app, Build: "B" + id[1:], Description: "Deployed by mock", Version: 10, Created: time.Now().Add(-24 * time.Hour)}
+	}
+	if rel.Env == "" {
+		rel.Env = envString()
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(release)
+	json.NewEncoder(w).Encode(rel)
+}
+
+func createRelease(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	// In real Convox, creating a release returns a structs.Release object
+	rel := Release{
+		ID:          fmt.Sprintf("RAPI%06d", time.Now().Unix()%1000000),
+		App:         vars["app"],
+		Build:       "BNEW123456",
+		Description: "Created by mock env set",
+		Version:     42,
+		Created:     time.Now(),
+		Env:         envString(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rel)
 }
 
 func promoteRelease(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	app := vars["app"]
+	id := vars["id"]
+	currentReleaseByApp[app] = id
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"id":     vars["id"],
-		"status": "promoting",
-	})
+	json.NewEncoder(w).Encode(map[string]string{"id": id, "status": "promoting"})
+}
+
+// listRacks returns an empty list to satisfy CLI calls
+func listRacks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("[]"))
+}
+
+// appLogs upgrades to WebSocket and streams a few log lines, then closes
+func appLogs(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "upgrade failed", http.StatusBadRequest)
+		return
+	}
+	defer c.Close()
+	// Stream a couple of lines quickly then close
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Promoting release..."))
+	time.Sleep(100 * time.Millisecond)
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Release promoted successfully."))
+	// Close the WS cleanly
+	_ = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 }
 
 func getEnvironment(w http.ResponseWriter, r *http.Request) {
-	env := map[string]string{
-		"DATABASE_URL": "postgres://user:pass@localhost/db",
-		"REDIS_URL":    "redis://localhost:6379",
-		"SECRET_KEY":   "super-secret-key-12345",
-		"NODE_ENV":     "production",
-		"PORT":         "3000",
-	}
+	env := defaultEnvMap()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(env)
@@ -586,9 +661,38 @@ func getEnvironment(w http.ResponseWriter, r *http.Request) {
 func setEnvironment(w http.ResponseWriter, r *http.Request) {
 	var env map[string]string
 	json.NewDecoder(r.Body).Decode(&env)
-
+	if env == nil {
+		env = map[string]string{}
+	}
+	// Merge with defaults for predictability
+	merged := defaultEnvMap()
+	for k, v := range env {
+		merged[k] = v
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(env)
+	json.NewEncoder(w).Encode(merged)
+}
+
+// Helpers
+func defaultEnvMap() map[string]string {
+	return map[string]string{
+		"DATABASE_URL": "postgres://user:pass@localhost/db",
+		"REDIS_URL":    "redis://localhost:6379",
+		"SECRET_KEY":   "super-secret-key-12345",
+		"NODE_ENV":     "production",
+		"PORT":         "3000",
+	}
+}
+
+func envString() string {
+	// Return a deterministic order for tests
+	env := defaultEnvMap()
+	order := []string{"DATABASE_URL", "REDIS_URL", "SECRET_KEY", "NODE_ENV", "PORT"}
+	var b strings.Builder
+	for _, k := range order {
+		fmt.Fprintf(&b, "%s=%s\n", k, env[k])
+	}
+	return b.String()
 }
 
 func getInstances(w http.ResponseWriter, r *http.Request) {

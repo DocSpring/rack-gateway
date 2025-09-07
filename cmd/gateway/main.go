@@ -176,7 +176,7 @@ func main() {
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(filteredLogger())
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -270,6 +270,23 @@ func main() {
 	}
 
 	log.Println("Server exited")
+}
+
+// filteredLogger suppresses noisy healthcheck logs (200 OK) while logging others.
+func filteredLogger() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			start := time.Now()
+			next.ServeHTTP(ww, r)
+			// Suppress successful health checks to reduce log noise/cost
+			if r.URL.Path == "/.gateway/health" && ww.Status() == http.StatusOK {
+				return
+			}
+			// Basic concise line; audit and DB logs provide detailed context elsewhere
+			log.Printf("%s %s %d in %s", r.Method, r.URL.String(), ww.Status(), time.Since(start))
+		})
+	}
 }
 
 func getEnv(key, defaultVal string) string {

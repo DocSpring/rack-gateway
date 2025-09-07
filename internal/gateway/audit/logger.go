@@ -329,17 +329,42 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 		}
 
 	case strings.Contains(path, "/releases"):
-		if method == "GET" {
-			action = "releases.list"
-		} else if method == "POST" {
-			action = "releases.promote"
-		}
-		// Find app name - it's usually before /releases
+		// Determine whether this is list, get, create, or promote
+		idx := -1
 		for i, part := range parts {
-			if part == "releases" && i > 0 {
-				resource = parts[i-1]
+			if part == "releases" {
+				idx = i
 				break
 			}
+		}
+		if idx > 0 {
+			resource = parts[idx-1]
+		}
+		switch method {
+		case "GET":
+			// /apps/{app}/releases (list) vs /apps/{app}/releases/{id} (get)
+			if idx+1 < len(parts) && parts[idx+1] != "" {
+				// if there is an id segment after 'releases' and no further subresource
+				if idx+2 == len(parts) {
+					action = "releases.get"
+				} else {
+					action = fmt.Sprintf("%s.get", parts[idx])
+				}
+			} else {
+				action = "releases.list"
+			}
+		case "POST":
+			// /apps/{app}/releases (create) OR /apps/{app}/releases/{id}/promote (promote)
+			if idx+2 < len(parts) && parts[idx+2] == "promote" {
+				action = "releases.promote"
+				// resource remains app name
+			} else if idx+1 == len(parts) { // ends with /releases
+				action = "releases.create"
+			} else {
+				action = "releases.create"
+			}
+		default:
+			action = fmt.Sprintf("releases.%s", strings.ToLower(method))
 		}
 
 	case strings.Contains(path, "/run"):
@@ -364,6 +389,17 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 				resource = parts[i-1]
 				break
 			}
+		}
+
+	// Logs
+	case strings.Contains(path, "/logs"):
+		action = "logs.view"
+		// /apps/{app}/logs or /system/logs
+		parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+		if len(parts) >= 3 && parts[0] == "apps" && parts[2] == "logs" {
+			resource = parts[1]
+		} else if len(parts) >= 2 && parts[0] == "system" && parts[1] == "logs" {
+			resource = "system"
 		}
 
 	// Start/list processes via service: /apps/{app}/services/{service}/processes
@@ -492,6 +528,8 @@ func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
 	switch {
 	case rbacDecision == "deny":
 		return "denied"
+	case httpStatus == 101: // WebSocket Switching Protocols treated as success
+		return "success"
 	case httpStatus >= 200 && httpStatus < 300:
 		return "success"
 	case httpStatus >= 400 && httpStatus < 500:

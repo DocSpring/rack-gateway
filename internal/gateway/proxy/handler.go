@@ -91,12 +91,16 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Forward the request to the rack
-	if err := h.forwardRequest(w, r, rackConfig, path, authUser.Email); err != nil {
+	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
+	if err != nil {
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rackConfig.Name, start)
 		return
 	}
 
-	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", http.StatusOK, time.Since(start), nil)
+	if status == 0 {
+		status = http.StatusOK
+	}
+	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", status, time.Since(start), nil)
 }
 
 func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
@@ -147,16 +151,22 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.forwardRequest(w, r, rackConfig, path, authUser.Email); err != nil {
+	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
+	if err != nil {
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rack, start)
 		return
 	}
-
-	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", http.StatusOK, time.Since(start), nil)
+	if status == 0 {
+		status = http.StatusOK
+	}
+	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
 }
 
-func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path, userEmail string) error {
-	targetURL := fmt.Sprintf("%s/%s", strings.TrimSuffix(rack.URL, "/"), path)
+func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path, userEmail string) (int, error) {
+	// Build clean target URL without double slashes
+	base := strings.TrimRight(rack.URL, "/")
+	p := "/" + strings.TrimLeft(path, "/")
+	targetURL := base + p
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
 	}
@@ -171,14 +181,14 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		var err error
 		bodyBytes, err = io.ReadAll(r.Body)
 		if err != nil {
-			return fmt.Errorf("failed to read request body: %w", err)
+			return 0, fmt.Errorf("failed to read request body: %w", err)
 		}
 		r.Body.Close()
 	}
 
 	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("failed to create proxy request: %w", err)
+		return 0, fmt.Errorf("failed to create proxy request: %w", err)
 	}
 
 	for key, values := range r.Header {
@@ -197,13 +207,21 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	client := &http.Client{
 		Timeout: 30 * time.Second,
+		// Never follow redirects so we can observe upstream responses and preserve methods
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
 	}
 
 	resp, err := client.Do(proxyReq)
 	if err != nil {
-		return fmt.Errorf("failed to forward request: %w", err)
+		return 0, fmt.Errorf("failed to forward request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Read full response body (so we can optionally log it) then send to client
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response body: %w", err)
+	}
 
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -213,19 +231,39 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	w.WriteHeader(resp.StatusCode)
 
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		return fmt.Errorf("failed to copy response body: %w", err)
+	// Optional response logging
+	if h.config.LogResponseBodies {
+		max := h.config.LogResponseMaxBytes
+		logBody := body
+		if max > 0 && len(logBody) > max {
+			logBody = append([]byte{}, logBody[:max]...)
+			logBody = append(logBody, []byte("…(truncated)")...)
+		}
+		ct := resp.Header.Get("Content-Type")
+		upstreamMethod := ""
+		upstreamURL := ""
+		if resp.Request != nil {
+			upstreamMethod = resp.Request.Method
+			if resp.Request.URL != nil {
+				upstreamURL = resp.Request.URL.String()
+			}
+		}
+		fmt.Printf("DEBUG RESPONSE %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q body=%s\n", r.Method, path, resp.StatusCode, ct, len(body), upstreamMethod, upstreamURL, string(logBody))
 	}
 
-	return nil
+	if _, err := w.Write(body); err != nil {
+		return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
+	}
+
+	return resp.StatusCode, nil
 }
 
 // proxyWebSocket upgrades the client connection and bridges it to the rack via a WebSocket connection
-func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string) error {
+func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string) (int, error) {
 	// Prepare upstream URL (ws or wss)
 	u, err := url.Parse(target)
 	if err != nil {
-		return fmt.Errorf("invalid target URL: %w", err)
+		return 0, fmt.Errorf("invalid target URL: %w", err)
 	}
 	if u.Scheme == "https" {
 		u.Scheme = "wss"
@@ -297,9 +335,18 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	}
 	if err != nil {
 		if resp != nil {
-			return fmt.Errorf("failed to dial upstream websocket (%s): %w", resp.Status, err)
+			// If upstream returned a non-101 status (e.g., 404), pass it through to the client
+			body, _ := io.ReadAll(resp.Body)
+			for k, vs := range resp.Header {
+				for _, v := range vs {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(resp.StatusCode)
+			_, _ = w.Write(body)
+			return resp.StatusCode, nil
 		}
-		return fmt.Errorf("failed to dial upstream websocket: %w", err)
+		return 0, fmt.Errorf("failed to dial upstream websocket: %w", err)
 	}
 	defer upstreamConn.Close()
 
@@ -322,7 +369,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	}
 	clientConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return fmt.Errorf("failed to upgrade client connection: %w", err)
+		return 0, fmt.Errorf("failed to upgrade client connection: %w", err)
 	}
 	defer clientConn.Close()
 
@@ -358,7 +405,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	// Wait for either direction to error/close
 	<-errc
 
-	return nil
+	return http.StatusSwitchingProtocols, nil
 }
 
 func parseSubprotocols(h string) []string {

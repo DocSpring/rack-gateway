@@ -14,10 +14,14 @@ services:
     networks:
       - gateway-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${MOCK_OAUTH_PORT:-3345}/health || exit 1"]
-      interval: 10s
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:${MOCK_OAUTH_PORT:-3345}/health || exit 1",
+        ]
+      interval: 2s
       timeout: 5s
-      retries: 3
+      retries: 30
 
   mock-convox:
     build:
@@ -40,7 +44,7 @@ services:
       APP_ENV: development
       APP_JWT_KEY: dev-jwt-secret-key-change-in-production
       GOOGLE_CLIENT_ID: mock-client-id
-      GOOGLE_CLIENT_SECRET: mock-client-secret  
+      GOOGLE_CLIENT_SECRET: mock-client-secret
       GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
       ADMIN_USERS: admin@company.com
       # Internal service URL for OIDC discovery/token endpoints
@@ -52,6 +56,7 @@ services:
       RACK_USERNAME: convox
       CONVOX_GATEWAY_DB_PATH: /app/data/db.sqlite
       DEV_MODE: "true"
+      GATEWAY_LOG_RESPONSE_BODIES: "true"
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
     volumes:
@@ -63,10 +68,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/health || exit 1"]
-      interval: 10s
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/health || exit 1",
+        ]
+      interval: 2s
       timeout: 5s
-      retries: 12
+      retries: 3
     networks:
       - gateway-net
 
@@ -83,9 +92,6 @@ services:
       - ./web:/app
       - /app/node_modules
     command: pnpm dev --host 0.0.0.0
-    depends_on:
-      gateway-api:
-        condition: service_healthy
     networks:
       - gateway-net
 

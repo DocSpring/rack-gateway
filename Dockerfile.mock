@@ -1,19 +1,25 @@
 # Build stage
+# syntax=docker/dockerfile:1.5
+
 FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache git make
 
 WORKDIR /app
 
-# Cache go dependencies
+# Cache go dependencies with BuildKit caches
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    go mod download
 
 # Copy only the source needed for mock-convox
 COPY cmd/mock-convox ./cmd/mock-convox
 
-# Build mock binary directly
-RUN go build -o /out/mock-convox ./cmd/mock-convox
+# Build mock binary with caches
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    go build -o /out/mock-convox ./cmd/mock-convox
 
 # Final stage
 FROM alpine:latest
