@@ -83,11 +83,46 @@ func (p *PostmarkSender) Send(to, subject, textBody string) error {
 }
 
 func (p *PostmarkSender) SendMany(to []string, subject, textBody string) error {
-	// Send individually for simplicity; Postmark also supports /email/batch
-	for _, addr := range to {
-		if err := p.Send(addr, subject, textBody); err != nil {
-			return err
+	if len(to) == 0 {
+		return nil
+	}
+	// Use Bcc for additional recipients to avoid exposing multiple To addresses
+	primary := to[0]
+	bcc := ""
+	if len(to) > 1 {
+		// Comma-separated per Postmark API
+		for i, addr := range to[1:] {
+			if i == 0 {
+				bcc = addr
+			} else {
+				bcc += "," + addr
+			}
 		}
+	}
+	payload := map[string]string{
+		"From":          p.From,
+		"To":            primary,
+		"Subject":       subject,
+		"TextBody":      textBody,
+		"MessageStream": p.Stream,
+	}
+	if bcc != "" {
+		payload["Bcc"] = bcc
+	}
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", p.APIBase+"/email", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Postmark-Server-Token", p.Token)
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}
 	return nil
 }
@@ -101,8 +136,16 @@ func (l *LoggerSender) Send(to, subject, textBody string) error {
 }
 
 func (l *LoggerSender) SendMany(to []string, subject, textBody string) error {
-	b, _ := json.Marshal(to)
-	log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n%s", string(b), l.From, subject, textBody)
+	primary := ""
+	if len(to) > 0 {
+		primary = to[0]
+	}
+	bcc := []string{}
+	if len(to) > 1 {
+		bcc = append(bcc, to[1:]...)
+	}
+	b, _ := json.Marshal(bcc)
+	log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n%s", primary, string(b), l.From, subject, textBody)
 	return nil
 }
 

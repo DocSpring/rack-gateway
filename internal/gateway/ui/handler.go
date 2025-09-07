@@ -476,7 +476,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	if h.emailer != nil {
 		inviter, _ := auth.GetAuthUser(r.Context())
 		owner := targetUserEmail
-		subjectOwner := fmt.Sprintf("[%s] New API token created", h.rackName)
+		subjectOwner := fmt.Sprintf("Convox Gateway: New API token created on %s", h.rackName)
 		bodyOwner := fmt.Sprintf("A new API token '%s' was created for your account on rack '%s'.\n\nCreated by: %s\nIf this wasn't expected, please contact an admin.", req.Name, h.rackName, func() string {
 			if inviter != nil {
 				return inviter.Email
@@ -487,13 +487,13 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 
 		admins := h.getAdminEmails()
 		if len(admins) > 0 {
-			subjectAdmin := fmt.Sprintf("[%s] API token created for %s", h.rackName, owner)
+			subjectAdmin := fmt.Sprintf("Convox Gateway: API token created for %s on %s", owner, h.rackName)
 			creator := "unknown"
 			if inviter != nil {
 				creator = inviter.Email
 			}
 			bodyAdmin := fmt.Sprintf("An API token '%s' was created for %s on rack '%s'.\nCreated by: %s", req.Name, owner, h.rackName, creator)
-			_ = h.emailer.SendMany(admins, subjectAdmin, bodyAdmin)
+			_ = h.emailer.SendMany(orderByInviterFirst(admins, inviter), subjectAdmin, bodyAdmin)
 		}
 	}
 }
@@ -632,7 +632,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if h.emailer != nil {
 		inviter, _ := auth.GetAuthUser(r.Context())
 		// To the new user
-		subjectUser := fmt.Sprintf("[%s] You've been added", h.rackName)
+		subjectUser := fmt.Sprintf("You've been granted access to Convox Gateway for the %s rack", h.rackName)
 		bodyUser := fmt.Sprintf("You've been added to the '%s' Convox rack.\n\nName: %s\nRoles: %s\nAdded by: %s", h.rackName, req.Name, strings.Join(req.Roles, ", "), func() string {
 			if inviter != nil {
 				return inviter.Email
@@ -644,13 +644,13 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		// Notify admins (including inviter)
 		admins := h.getAdminEmails()
 		if len(admins) > 0 {
-			subjectAdmin := fmt.Sprintf("[%s] New user added: %s", h.rackName, req.Email)
+			subjectAdmin := fmt.Sprintf("Convox Gateway: New user added to %s", h.rackName)
 			creator := "unknown"
 			if inviter != nil {
 				creator = inviter.Email
 			}
 			bodyAdmin := fmt.Sprintf("%s added new user %s (%s) to rack '%s' with roles: %s", creator, req.Email, req.Name, h.rackName, strings.Join(req.Roles, ", "))
-			_ = h.emailer.SendMany(admins, subjectAdmin, bodyAdmin)
+			_ = h.emailer.SendMany(orderByInviterFirst(admins, inviter), subjectAdmin, bodyAdmin)
 		}
 	}
 }
@@ -671,6 +671,32 @@ func (h *Handler) getAdminEmails() []string {
 		}
 	}
 	return emails
+}
+
+// orderByInviterFirst ensures inviter is primary recipient (first), useful when BCC-ing others.
+func orderByInviterFirst(admins []string, inviter *auth.AuthUser) []string {
+	if inviter == nil || len(admins) == 0 {
+		return admins
+	}
+	idx := -1
+	for i, a := range admins {
+		if a == inviter.Email {
+			idx = i
+			break
+		}
+	}
+	if idx <= 0 {
+		return admins
+	}
+	out := make([]string, 0, len(admins))
+	out = append(out, inviter.Email)
+	for i, a := range admins {
+		if i == idx {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 // DeleteUser removes a user (admin only)
