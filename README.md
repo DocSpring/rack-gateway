@@ -7,7 +7,7 @@ API proxy for Convox racks with SSO, RBAC, and audit logging
 **First time setup?** Follow these steps:
 
 1. **Quick Start** (below) - Gets you running in 5 minutes with mock services
-2. **[docs/CLAUDE.md](docs/CLAUDE.md)** - Technical implementation details
+2. **[AGENTS.md](AGENTS.md)** - Technical implementation details for AI agents
 3. **[docs/DEV.md](docs/DEV.md)** - Development guide
 
 ## Other Documentation
