@@ -3,13 +3,13 @@ environment:
   - GOOGLE_CLIENT_ID # required
   - GOOGLE_CLIENT_SECRET # required
   - GOOGLE_ALLOWED_DOMAIN # required, e.g. company.com
-  - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   - REDIRECT_URL # required, e.g. https://gateway.example.com/.gateway/web/callback
   - ADMIN_USERS # comma-separated bootstrap admins
   - RACK_HOST # required for gateway to proxy to target Convox API (host or full URL)
   - RACK_TOKEN # required API token for target rack
   - POSTMARK_API_TOKEN # optional email notifications
   - POSTMARK_FROM # optional sender address
+  # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
   # - CONVOX_GATEWAY_DB_PATH=/app/data/db.sqlite
   # - COOKIE_SECURE=true # in prod
@@ -56,7 +56,7 @@ services:
     memory: 256
 
 timers:
-  audit_cleanup:
+  audit-cleanup:
     schedule: "0 3 * * *"
     service: gateway
     command: "convox-gateway audit-cleanup --days 90"

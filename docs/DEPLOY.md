@@ -17,6 +17,31 @@ convox apps create convox-gateway
 
 All commands assume you are running from this repo root so Convox picks the app name from the directory (no `-a` needed).
 
+### 2.1 Configure Google OAuth (one‑time)
+
+Create an OAuth client in Google Cloud Console for your Workspace domain:
+
+1. OAuth consent screen:
+
+- User Type: Internal (recommended for Google Workspace)
+- Scopes: openid, email, profile
+
+2. OAuth client ID (APIs & Services → Credentials → Create → OAuth client ID):
+
+- Application type: Web application
+- Authorized JavaScript origins:
+  - https://$WEB_DOMAIN (e.g., https://portal.example.com)
+- Authorized redirect URIs:
+  - https://$GATEWAY_DOMAIN/.gateway/web/callback
+
+1. Copy the values:
+
+- GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+- Set GOOGLE_ALLOWED_DOMAIN to your Workspace domain (e.g., company.com)
+- Leave GOOGLE_OAUTH_BASE_URL empty for Google (defaults to accounts.google.com)
+
+### 2.2 Generate APP_JWT_KEY
+
 Generate a strong APP_JWT_KEY (256‑bit, base64). Examples:
 
 - macOS/Linux (OpenSSL):
@@ -30,17 +55,16 @@ convox env set \
   APP_JWT_KEY=$(openssl rand -base64 32) \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
-  GOOGLE_ALLOWED_DOMAIN=docspring.com \
+  GOOGLE_ALLOWED_DOMAIN=yourcompany.com \
   REDIRECT_URL=https://gateway.example.com/.gateway/web/callback \
   ADMIN_USERS=admin@yourcompany.com \
-  RACK_HOST=your-rack.convox.cloud \
+  RACK_HOST=https://api.target-rack.convox.cloud \
   RACK_TOKEN=xxxxx
 
 # Optional email
 convox env set \
   POSTMARK_API_TOKEN=xxxx \
-  POSTMARK_FROM=no-reply@docspring.com \
-  POSTMARK_STREAM=outbound
+  POSTMARK_FROM=no-reply@docspring.com
 ```
 
 See docs/CONFIGURATION.md for all options.
