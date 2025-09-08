@@ -58,8 +58,7 @@ func main() {
 				log.Fatalf("audit-cleanup requires --days N or AUDIT_LOG_RETENTION_DAYS")
 			}
 
-			dbPath := getEnv("GATEWAY_DB_PATH", "/app/data/db.sqlite")
-			database, err := db.New(dbPath)
+			database, err := db.NewFromEnv()
 			if err != nil {
 				log.Fatalf("Failed to open database: %v", err)
 			}
@@ -81,9 +80,7 @@ func main() {
 	}
 
 	// Initialize database
-	dbPath := getEnv("GATEWAY_DB_PATH", "/app/data/db.sqlite")
-
-	database, err := db.New(dbPath)
+	database, err := db.NewFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
