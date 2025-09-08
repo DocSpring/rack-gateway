@@ -30,6 +30,15 @@ func main() {
 	// Support maintenance subcommands
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "migrate":
+			// One-off migration runner
+			database, err := db.NewFromEnv()
+			if err != nil {
+				log.Fatalf("Failed to open database: %v", err)
+			}
+			defer database.Close()
+			fmt.Println("Database migrations applied")
+			return
 		case "audit-cleanup":
 			// Usage: convox-gateway audit-cleanup --days 90
 			// Falls back to AUDIT_LOG_RETENTION_DAYS if --days not provided

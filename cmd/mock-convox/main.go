@@ -232,28 +232,28 @@ Auth:
 Endpoints:
   GET  /health                                  # server health
   GET  /system                                  # rack info
-  
+
   GET  /apps                                    # list apps (convox-gateway, api, web)
   GET  /apps/{app}                              # app info
-  
+
   GET  /apps/{app}/processes                    # list processes
   GET  /apps/{app}/processes/{id}               # process info
   GET  /apps/{app}/processes/{id}/exec          # mock exec (WebSocket)
   POST /apps/{app}/processes/{id}/stop          # stop process (mock)
-  
+
   GET  /apps/{app}/builds                       # list builds
   GET  /apps/{app}/builds/{id}                  # build info
-  
+
   GET  /apps/{app}/releases                     # list releases (newest first; ?limit=1 supported)
   POST /apps/{app}/releases                     # create release (returns single Release)
   GET  /apps/{app}/releases/{id}                # release info (includes Env string)
   POST /apps/{app}/releases/{id}/promote        # promote release (updates app current release)
-  
+
   GET  /apps/{app}/logs                         # app logs (WebSocket; short stream then close)
-  
+
   GET  /apps/{app}/environment                  # env (JSON map)
   POST /apps/{app}/environment                  # set/merge env (returns merged map)
-  
+
   GET  /racks                                   # returns [] (some CLI flows call this)
 `)
 }
@@ -699,22 +699,6 @@ func getRelease(w http.ResponseWriter, r *http.Request) {
 	}
 	if rel.Env == "" {
 		rel.Env = envString()
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rel)
-}
-
-func createRelease(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	// In real Convox, creating a release returns a structs.Release object
-	rel := Release{
-		ID:          fmt.Sprintf("RAPI%06d", time.Now().Unix()%1000000),
-		App:         vars["app"],
-		Build:       "BNEW123456",
-		Description: "Created by mock env set",
-		Version:     42,
-		Created:     time.Now(),
-		Env:         envString(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(rel)

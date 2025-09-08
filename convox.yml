@@ -18,8 +18,18 @@ environment:
   # - RACK_USERNAME=convox # optional; defaults to convox
 
 resources:
-  data:
-    type: volume
+  database:
+    type: rds-postgres
+    options:
+      class: db.t3.micro
+      storage: 20
+      version: 15
+      deletionProtection: true
+      durable: true
+      encrypted: true
+      backupRetentionPeriod: 35
+      preferredBackupWindow: 02:00-03:00
+      preferredMaintenanceWindow: sun:05:00-sun:06:00
 
 services:
   gateway:
@@ -30,19 +40,18 @@ services:
     domain: ${GATEWAY_DOMAIN}
     environment:
       - PORT=8080
-      - GATEWAY_DB_PATH=/app/data/db.sqlite
+      - AUDIT_LOG_RETENTION_DAYS=90
     health: /.gateway/api/health
     internal: false
     port: 8080
     resources:
-      - data
+      - database
     scale:
-      count: 2
+      count: 1
       cpu: 256
       memory: 256
     sticky: true
-    volumes:
-      - data:/app/data
+    volumes: []
 
 timers:
   audit-cleanup:

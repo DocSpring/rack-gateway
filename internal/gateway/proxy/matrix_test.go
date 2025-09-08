@@ -5,14 +5,16 @@ import (
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
 
 // Test a matrix of sensitive routes mapped to RBAC permissions for deployer vs admin.
 func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
-	database, err := db.New(t.TempDir() + "/test.sqlite")
+	database, err := db.NewFromEnv()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
+	dbtest.Reset(t, database)
 
 	// Users
 	_, err = database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})

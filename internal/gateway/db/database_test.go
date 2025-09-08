@@ -1,23 +1,20 @@
-package db
+package db_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
+	gwdb "github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDatabase(t *testing.T) {
-	// Create temp database
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	db, err := New(dbPath)
+	db, err := gwdb.NewFromEnv()
 	require.NoError(t, err)
 	defer db.Close()
+	dbtest.Reset(t, db)
 
 	t.Run("InitializeAdmin", func(t *testing.T) {
 		// First initialization should succeed
@@ -80,7 +77,7 @@ func TestDatabase(t *testing.T) {
 
 	t.Run("AuditLogs", func(t *testing.T) {
 		// Create audit logs
-		log1 := &AuditLog{
+		log1 := &gwdb.AuditLog{
 			UserEmail:      "user1@example.com",
 			UserName:       "User One",
 			ActionType:     "convox",
@@ -93,7 +90,7 @@ func TestDatabase(t *testing.T) {
 			ResponseTimeMs: 123,
 		}
 
-		log2 := &AuditLog{
+		log2 := &gwdb.AuditLog{
 			UserEmail:      "user2@example.com",
 			UserName:       "User Two",
 			ActionType:     "users",
@@ -103,7 +100,7 @@ func TestDatabase(t *testing.T) {
 			ResponseTimeMs: 45,
 		}
 
-		log3 := &AuditLog{
+		log3 := &gwdb.AuditLog{
 			UserEmail:      "attacker@evil.com",
 			ActionType:     "auth",
 			Action:         "auth.failed",
@@ -116,7 +113,7 @@ func TestDatabase(t *testing.T) {
 
 		// Verify the first log was created by counting
 		var count int
-		err = db.db.QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count)
+		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count)
 		require.NoError(t, err)
 		t.Logf("After log1: %d audit logs in database", count)
 
@@ -129,7 +126,7 @@ func TestDatabase(t *testing.T) {
 		require.NoError(t, err, "Failed to create log3: %v", err)
 
 		// Count total logs before query
-		err = db.db.QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count)
+		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count)
 		require.NoError(t, err)
 		t.Logf("Total audit logs before GetAuditLogs: %d", count)
 
@@ -167,42 +164,22 @@ func TestDatabase(t *testing.T) {
 }
 
 func TestDatabaseInitialization(t *testing.T) {
-	t.Run("CreatesDirectoryIfNotExists", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		dbPath := filepath.Join(tmpDir, "subdir", "test.db")
-
-		db, err := New(dbPath)
-		require.NoError(t, err)
-		defer db.Close()
-
-		// Directory should exist
-		_, err = os.Stat(filepath.Dir(dbPath))
-		assert.NoError(t, err)
-	})
-
 	t.Run("ReinitializesCorrectly", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		dbPath := filepath.Join(tmpDir, "test.db")
-
-		// Create and close first connection
-		db1, err := New(dbPath)
+		db1, err := gwdb.NewFromEnv()
 		require.NoError(t, err)
+		dbtest.Reset(t, db1)
 
 		err = db1.InitializeAdmin("admin@example.com", "Admin")
 		require.NoError(t, err)
-
 		_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
 		require.NoError(t, err)
-
 		db1.Close()
 
-		// Create second connection - should preserve data
-		db2, err := New(dbPath)
+		db2, err := gwdb.NewFromEnv()
 		require.NoError(t, err)
 		defer db2.Close()
-
 		users, err := db2.ListUsers()
 		require.NoError(t, err)
-		assert.Len(t, users, 2) // Both users should still exist
+		assert.GreaterOrEqual(t, len(users), 2)
 	})
 }

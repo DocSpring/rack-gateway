@@ -1,24 +1,18 @@
 package rbac
 
 import (
-	"path/filepath"
 	"testing"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
 
 // TestEnforceDeployerPermissions verifies deployer can create/update apps but cannot delete apps.
 func TestEnforceDeployerPermissions(t *testing.T) {
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "test.sqlite")
-
-	database, err := db.New(dbPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := dbtest.NewDatabase(t)
 
 	// Create users
-	_, err = database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
+	_, err := database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
 	require.NoError(t, err)
 	_, err = database.CreateUser("admin@test.com", "Admin", []string{"admin"})
 	require.NoError(t, err)

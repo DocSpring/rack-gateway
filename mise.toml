@@ -24,8 +24,8 @@ RACK_HOST = "http://localhost:5443"  # References MOCK_CONVOX_PORT
 RACK_TOKEN = "mock-rack-token-12345"
 RACK_USERNAME = "convox"
 
-# Database path for gateway server
-GATEWAY_DB_PATH = "./data/db.sqlite"
+# Postgres for dev/test (Postgres.app default)
+DATABASE_URL = "postgres://localhost:5432/postgres?sslmode=disable"
 
 # Config directory for CLI (stores config.json with tokens and rack settings)
 CONVOX_GATEWAY_CLI_CONFIG_DIR = "./config/cli"

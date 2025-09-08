@@ -14,13 +14,12 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
 
 func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
-	database, err := db.New(t.TempDir() + "/test.sqlite")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := dbtest.NewDatabase(t)
 	mgr, err := rbac.NewDBManager(database, "company.com")
 	require.NoError(t, err)
 	h := NewHandler(&config.Config{Racks: map[string]config.RackConfig{

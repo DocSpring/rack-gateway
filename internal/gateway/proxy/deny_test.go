@@ -9,18 +9,16 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
 
 // Test that a deployer cannot delete an app via the proxy (403 expected).
 func TestDeployerCannotDeleteApp(t *testing.T) {
 	// Setup DB with a deployer user
-	database, err := db.New(t.TempDir() + "/test.sqlite")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
-	_, err = database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
+	database := dbtest.NewDatabase(t)
+	_, err := database.CreateUser("deployer@test.com", "Deployer", []string{"deployer"})
 	require.NoError(t, err)
 
 	// RBAC manager (DB)

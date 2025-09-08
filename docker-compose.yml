@@ -61,15 +61,16 @@ services:
       RACK_HOST: http://mock-convox:${MOCK_CONVOX_PORT:-5443}
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox
-      GATEWAY_DB_PATH: /app/data/db.sqlite
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway?sslmode=disable
       DEV_MODE: "true"
       GATEWAY_LOG_RESPONSE_BODIES: "true"
       WEB_DEV_SERVER_URL: http://web-dev:5173
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
-    volumes:
-      - ./data:/app/data
+    volumes: []
     depends_on:
+      postgres:
+        condition: service_healthy
       mock-convox:
         condition: service_started
       mock-oauth:
@@ -84,6 +85,23 @@ services:
       interval: 2s
       timeout: 5s
       retries: 3
+    networks:
+      - gateway-net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gateway
+    # Expose on a non-default host port to avoid conflicts with local Postgres
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 50
     networks:
       - gateway-net
 

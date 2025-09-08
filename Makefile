@@ -18,6 +18,11 @@ tools:
 	@staticcheck -version
 	@gotestsum --version
 
+db-test-create:
+	@echo "Ensuring test database exists (convox_gateway_test)..."
+	@psql -Atqc "SELECT 1 FROM pg_database WHERE datname='convox_gateway_test'" >/dev/null 2>&1 \
+		|| createdb convox_gateway_test
+
 web-deps:
 	@echo "Installing web dependencies..."
 	@cd web && pnpm install --frozen-lockfile

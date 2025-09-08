@@ -8,13 +8,13 @@ import (
 	"testing"
 
 	"context"
-	"path/filepath"
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -561,11 +561,7 @@ func TestConcurrentUserOperations(t *testing.T) {
 
 func createTempDB(t *testing.T) *db.Database {
 	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "test.db")
-	database, err := db.New(path)
-	require.NoError(t, err)
-	return database
+	return dbtest.NewDatabase(t)
 }
 
 func TestListAuditLogs_EmptyAndFiltered(t *testing.T) {
@@ -612,22 +608,16 @@ func TestListAuditLogs_Range15mFilters(t *testing.T) {
 	handler := NewHandler(rbacManager, "", nil, database, nil, "test", "")
 
 	// Seed: one old (1h ago), one recent (5m ago)
-	now := time.Now().UTC()
-	oneHourAgo := now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")
-	fiveMinAgo := now.Add(-5 * time.Minute).Format("2006-01-02 15:04:05")
+	_ = time.Now().UTC()
 
 	// Insert explicitly with custom timestamps
 	_, err := database.DB().Exec(
 		`INSERT INTO audit_logs (timestamp, user_email, user_name, action_type, action, resource, details, ip_address, user_agent, status, response_time_ms)
-         VALUES (?, ?, '', 'auth', 'login', '', '', '', '', 'success', 10)`,
-		oneHourAgo, "old@example.com",
-	)
+         VALUES (NOW() - interval '1 hour', 'old@example.com', '', 'auth', 'login', '', '', '', '', 'success', 10)`)
 	require.NoError(t, err)
 	_, err = database.DB().Exec(
 		`INSERT INTO audit_logs (timestamp, user_email, user_name, action_type, action, resource, details, ip_address, user_agent, status, response_time_ms)
-         VALUES (?, ?, '', 'auth', 'login', '', '', '', '', 'success', 10)`,
-		fiveMinAgo, "recent@example.com",
-	)
+         VALUES (NOW() - interval '5 minutes', 'recent@example.com', '', 'auth', 'login', '', '', '', '', 'success', 10)`)
 	require.NoError(t, err)
 
 	// Query last 15 minutes
@@ -725,12 +715,9 @@ func TestCreateAPIToken_SendsEmails(t *testing.T) {
 	mailer := &mockEmailSender{}
 	handler := NewHandler(rbacManager, "", tokenService, database, mailer, "testrack", "")
 
-	// Seed DB users to satisfy foreign key constraints with known IDs
-	// Admin id=2, Viewer id=1 to align with mockRBAC GetUserWithID returning ID:1
-	rolesJSON := `{"admin"}`
-	_, _ = database.DB().Exec(`INSERT INTO users (id, email, name, roles) VALUES (2, ?, ?, ?)`, "admin@example.com", "Admin User", rolesJSON)
-	rolesJSON = `{"viewer"}`
-	_, _ = database.DB().Exec(`INSERT INTO users (id, email, name, roles) VALUES (1, ?, ?, ?)`, "viewer@example.com", "Viewer User", rolesJSON)
+	// Seed DB user for foreign key (viewer will receive the token)
+	_, err := database.CreateUser("viewer@example.com", "Viewer User", []string{"viewer"})
+	require.NoError(t, err)
 
 	// Admin creates a token for viewer
 	reqBody := map[string]interface{}{

@@ -2,21 +2,21 @@ package db
 
 import (
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // Database wraps the SQL database connection
 type Database struct {
 	db     *sql.DB
-	driver string // "sqlite3" or "pgx"
+	driver string // always "pgx"
 }
 
 // User represents a user in the system
@@ -63,67 +63,65 @@ type AuditLog struct {
 }
 
 // New creates a new database connection
-func New(dbPath string) (*Database, error) {
-	// Ensure the directory exists
-	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
+func New(dsn string) (*Database, error) {
+	// Use provided DSN if it looks like Postgres, else use env var
+	source := strings.TrimSpace(dsn)
+	if source == "" || !(strings.HasPrefix(strings.ToLower(source), "postgres://") || strings.HasPrefix(strings.ToLower(source), "postgresql://")) {
+		source = os.Getenv("DATABASE_URL")
 	}
-
-	// Open database connection
-	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
+	if source == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+	db, err := sql.Open("pgx", source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to open postgres: %w", err)
 	}
-
-	// Test the connection
 	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
-
-	d := &Database{db: db, driver: "sqlite3"}
-
-	// Initialize schema
-	if err := d.initSchema(); err != nil {
+	d := &Database{db: db, driver: "pgx"}
+	if err := d.migrateAll(); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
-
 	return d, nil
 }
 
 // NewFromEnv chooses Postgres if DATABASE_URL is set, otherwise SQLite (GATEWAY_DB_PATH)
 func NewFromEnv() (*Database, error) {
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		if strings.HasPrefix(strings.ToLower(dsn), "postgres://") || strings.HasPrefix(strings.ToLower(dsn), "postgresql://") {
-			pdb, err := sql.Open("pgx", dsn)
-			if err != nil {
-				return nil, fmt.Errorf("failed to open postgres: %w", err)
-			}
-			if err := pdb.Ping(); err != nil {
-				return nil, fmt.Errorf("failed to ping postgres: %w", err)
-			}
-			d := &Database{db: pdb, driver: "pgx"}
-			if err := d.initSchema(); err != nil {
-				return nil, err
-			}
-			return d, nil
-		}
+		return New(dsn)
 	}
-	return New(getEnv("GATEWAY_DB_PATH", "/app/data/db.sqlite"))
-}
-
-func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+	// Build from libpq-like env if present
+	host := os.Getenv("PGHOST")
+	if host == "" {
+		host = "localhost"
 	}
-	return def
+	port := os.Getenv("PGPORT")
+	if port == "" {
+		port = "5432"
+	}
+	user := os.Getenv("PGUSER")
+	if user == "" {
+		user = os.Getenv("USER")
+	}
+	if user == "" {
+		user = "postgres"
+	}
+	dbname := os.Getenv("PGDATABASE")
+	if dbname == "" {
+		dbname = user
+	}
+	ssl := os.Getenv("PGSSLMODE")
+	if ssl == "" {
+		ssl = "disable"
+	}
+	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
+	return New(dsn)
 }
 
 // initSchema creates the database tables if they don't exist
 func (d *Database) initSchema() error {
-	var schema string
-	if d.driver == "pgx" {
-		schema = `
+	schema := `
 CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -176,64 +174,80 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_email ON audit_logs(user_email);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action_type ON audit_logs(action_type);
         `
-	} else {
-		schema = `
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  roles TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  suspended BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE IF NOT EXISTS api_tokens (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  token_hash TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  user_id INTEGER NOT NULL,
-  permissions TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  expires_at DATETIME,
-  last_used_at DATETIME,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-  user_email TEXT NOT NULL,
-  user_name TEXT,
-  action_type TEXT NOT NULL,
-  action TEXT NOT NULL,
-  command TEXT,
-  resource TEXT,
-  resource_type TEXT,
-  details TEXT,
-  ip_address TEXT,
-  user_agent TEXT,
-  status TEXT NOT NULL,
-  rbac_decision TEXT,
-  http_status INTEGER,
-  response_time_ms INTEGER
-);
-
-CREATE TABLE IF NOT EXISTS cli_login_states (
-  state TEXT PRIMARY KEY,
-  code TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user_email ON audit_logs(user_email);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_action_type ON audit_logs(action_type);
-        `
-	}
 	if _, err := d.db.Exec(schema); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
+	}
+	return nil
+}
+
+// Embedded migrations for future use
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+// migrateAll applies embedded migrations in lexical order using a simple schema_migrations table.
+func (d *Database) migrateAll() error {
+	if _, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
+		return err
+	}
+	// Always ensure base schema exists for fresh DBs (0001)
+	if err := d.initSchema(); err != nil {
+		return err
+	}
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return err
+	}
+	// read applied
+	applied := map[string]bool{}
+	rows, err := d.db.Query(`SELECT version FROM schema_migrations`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			rows.Close()
+			return err
+		}
+		applied[v] = true
+	}
+	rows.Close()
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasSuffix(name, ".sql") {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		version := strings.TrimSuffix(name, ".sql")
+		if applied[version] {
+			continue
+		}
+		sqlBytes, err := migrationsFS.ReadFile("migrations/" + name)
+		if err != nil {
+			return err
+		}
+		tx, err := d.db.Begin()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(string(sqlBytes)); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("migration %s failed: %w", name, err)
+		}
+		if _, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES ($1)`, version); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -271,14 +285,7 @@ func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
 // SaveCLILoginCode stores an authorization code for a given state
 func (d *Database) SaveCLILoginCode(state, code string) error {
 	// Upsert by state
-	if d.driver == "pgx" {
-		_, err := d.exec(`INSERT INTO cli_login_states (state, code) VALUES (?, ?) ON CONFLICT (state) DO UPDATE SET code = EXCLUDED.code`, state, code)
-		if err != nil {
-			return fmt.Errorf("failed to save CLI login code: %w", err)
-		}
-		return nil
-	}
-	_, err := d.exec(`INSERT OR REPLACE INTO cli_login_states (state, code) VALUES (?, ?)`, state, code)
+	_, err := d.exec(`INSERT INTO cli_login_states (state, code) VALUES (?, ?) ON CONFLICT (state) DO UPDATE SET code = EXCLUDED.code`, state, code)
 	if err != nil {
 		return fmt.Errorf("failed to save CLI login code: %w", err)
 	}
@@ -325,14 +332,8 @@ func (d *Database) InitializeAdmin(email, name string) error {
 	roles := []string{"admin"}
 	rolesJSON, _ := json.Marshal(roles)
 
-	if d.driver == "pgx" {
-		var id int64
-		if err := d.queryRow("INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id", email, name, string(rolesJSON)).Scan(&id); err != nil {
-			return fmt.Errorf("failed to create admin user: %w", err)
-		}
-		return nil
-	}
-	if _, err := d.exec("INSERT INTO users (email, name, roles) VALUES (?, ?, ?)", email, name, string(rolesJSON)); err != nil {
+	var id int64
+	if err := d.queryRow("INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id", email, name, string(rolesJSON)).Scan(&id); err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)
 	}
 	return nil
@@ -394,16 +395,8 @@ func (d *Database) CreateUser(email, name string, roles []string) (*User, error)
 	}
 
 	var id int64
-	if d.driver == "pgx" {
-		if err := d.queryRow("INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id", email, name, string(rolesJSON)).Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to create user: %w", err)
-		}
-	} else {
-		result, err := d.exec("INSERT INTO users (email, name, roles) VALUES (?, ?, ?)", email, name, string(rolesJSON))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create user: %w", err)
-		}
-		id, _ = result.LastInsertId()
+	if err := d.queryRow("INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id", email, name, string(rolesJSON)).Scan(&id); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 	return &User{
 		ID:        id,
@@ -602,16 +595,8 @@ func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissi
 	}
 
 	var id int64
-	if d.driver == "pgx" {
-		if err := d.queryRow("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id", tokenHash, name, userID, string(permissionsJSON), expVal).Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to create API token: %w", err)
-		}
-	} else {
-		result, err := d.exec("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?)", tokenHash, name, userID, string(permissionsJSON), expVal)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create API token: %w", err)
-		}
-		id, _ = result.LastInsertId()
+	if err := d.queryRow("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id", tokenHash, name, userID, string(permissionsJSON), expVal).Scan(&id); err != nil {
+		return nil, fmt.Errorf("failed to create API token: %w", err)
 	}
 	return &APIToken{
 		ID:          id,
@@ -747,11 +732,6 @@ func (d *Database) CleanupOldAuditLogs(retentionDays int) error {
 	if retentionDays <= 0 {
 		return nil
 	}
-	if d.driver == "pgx" {
-		// Postgres: NOW() - interval
-		_, err := d.exec("DELETE FROM audit_logs WHERE timestamp < NOW() - ($1 || ' days')::interval", retentionDays)
-		return err
-	}
-	_, err := d.exec("DELETE FROM audit_logs WHERE timestamp < datetime('now', ?)", fmt.Sprintf("-%d days", retentionDays))
+	_, err := d.exec("DELETE FROM audit_logs WHERE timestamp < NOW() - ($1 || ' days')::interval", retentionDays)
 	return err
 }

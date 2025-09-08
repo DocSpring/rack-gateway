@@ -169,7 +169,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 
 func (s *TestServers) initTestDatabase(dbPath string) error {
 	// Create and initialize the database with test users
-	database, err := db.New(dbPath)
+	database, err := db.NewFromEnv()
 	if err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
 	}

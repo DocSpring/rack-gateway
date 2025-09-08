@@ -468,60 +468,7 @@ func extractAppFromPath(p string) string {
 	return ""
 }
 
-func (h *Handler) fetchLatestEnvMap(rack config.RackConfig, app string) (map[string]string, error) {
-	base := strings.TrimRight(rack.URL, "/")
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-	authHeader := fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey))))
-	// GET /apps/{app}/releases?limit=1
-	req1, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases?limit=1", base, app), nil)
-	req1.Header.Set("Authorization", authHeader)
-	resp1, err := client.Do(req1)
-	if err != nil {
-		return nil, err
-	}
-	defer resp1.Body.Close()
-	var list []map[string]interface{}
-	if err := json.NewDecoder(resp1.Body).Decode(&list); err != nil {
-		return nil, err
-	}
-	if len(list) == 0 {
-		return map[string]string{}, nil
-	}
-	id, _ := list[0]["id"].(string)
-	if id == "" {
-		return map[string]string{}, nil
-	}
-	req2, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases/%s", base, app, id), nil)
-	req2.Header.Set("Authorization", authHeader)
-	resp2, err := client.Do(req2)
-	if err != nil {
-		return nil, err
-	}
-	defer resp2.Body.Close()
-	var rel map[string]interface{}
-	if err := json.NewDecoder(resp2.Body).Decode(&rel); err != nil {
-		return nil, err
-	}
-	envStr, _ := rel["env"].(string)
-	return parseEnvString(envStr), nil
-}
-
-func parseEnvString(s string) map[string]string {
-	out := make(map[string]string)
-	for _, ln := range strings.Split(s, "\n") {
-		if strings.TrimSpace(ln) == "" {
-			continue
-		}
-		parts := strings.SplitN(ln, "=", 2)
-		k := parts[0]
-		v := ""
-		if len(parts) == 2 {
-			v = parts[1]
-		}
-		out[k] = v
-	}
-	return out
-}
+// (removed unused helpers fetchLatestEnvMap and parseEnvString)
 
 func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []EnvDiff) {
 	if len(diffs) == 0 {
@@ -977,20 +924,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	return http.StatusSwitchingProtocols, nil
 }
 
-func parseSubprotocols(h string) []string {
-	if h == "" {
-		return nil
-	}
-	parts := strings.Split(h, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		s := strings.TrimSpace(p)
-		if s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
+// (removed unused helper parseSubprotocols)
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC
 func (h *Handler) pathToResourceAction(path, method string) (string, string) {

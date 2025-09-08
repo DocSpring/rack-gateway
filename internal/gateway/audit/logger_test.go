@@ -2,23 +2,16 @@ package audit
 
 import (
 	"net/http"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuditLogger(t *testing.T) {
-	// Create temp database
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.New(dbPath)
-	require.NoError(t, err)
-	defer database.Close()
+	database := dbtest.NewDatabase(t)
 
 	logger := NewLogger(database)
 
