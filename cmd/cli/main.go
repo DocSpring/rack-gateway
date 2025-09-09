@@ -131,6 +131,7 @@ Rack management:
 	envCmd := &cobra.Command{
 		Use:   "env",
 		Short: "List environment variables for an app (masked by default)",
+		Args:  cobra.NoArgs, // prevent unknown subcommands like `env unknown`
 		RunE: func(cmd *cobra.Command, args []string) error {
 			app, err := resolveApp(appFlag)
 			if err != nil {
@@ -203,7 +204,18 @@ Rack management:
 			return wrapConvoxCommand(full)
 		},
 	}
-	envCmd.AddCommand(envGetCmd, envSetAlias)
+
+	envUnsetAlias := &cobra.Command{
+		Use:                "unset",
+		Short:              "Alias for 'convox env unset' (delegates to Convox CLI)",
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			full := append([]string{"env", "unset"}, args...)
+			return wrapConvoxCommand(full)
+		},
+	}
+
+	envCmd.AddCommand(envGetCmd, envSetAlias, envUnsetAlias)
 
 	rackCmd := &cobra.Command{
 		Use:          "rack",
