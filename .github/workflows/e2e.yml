@@ -69,6 +69,14 @@ jobs:
           docker load --input ${{ runner.temp }}/gateway-api.tar
           docker image ls -a | grep convox-gateway-api || true
 
+      - name: Build mock services
+        run: |
+          docker compose build mock-oauth mock-convox
+
+      - name: Pull dependent images
+        run: |
+          docker compose pull postgres || docker pull postgres:16-alpine
+
       - name: Start stack (gateway serves UI)
         run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api
 
@@ -130,13 +138,21 @@ jobs:
           docker load --input ${{ runner.temp }}/gateway-api.tar
           docker image ls -a | grep convox-gateway-api || true
 
-      - name: Start stack (gateway + dev UI)
-        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api web-dev
+      - name: Build mock services
+        run: |
+          docker compose build mock-oauth mock-convox
+
+      - name: Pull dependent images
+        run: |
+          docker compose pull postgres || docker pull postgres:16-alpine
+
+      - name: Start stack (gateway serves UI)
+        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api
 
       - name: Wait for services
         run: |
           chmod +x scripts/wait-services.sh
-          bash scripts/wait-services.sh
+          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
 
       - name: Install Convox CLI
         run: |
@@ -161,4 +177,3 @@ jobs:
       - name: Teardown
         if: always()
         run: docker compose down -v
-
