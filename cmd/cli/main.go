@@ -132,8 +132,9 @@ Rack management:
 		Use:   "env",
 		Short: "List environment variables for an app (masked by default)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if appFlag == "" {
-				return fmt.Errorf("missing app: use -a <app>")
+			app, err := resolveApp(appFlag)
+			if err != nil {
+				return err
 			}
 			rack, err := getCurrentRack()
 			if err != nil || rack == "" {
@@ -147,7 +148,7 @@ Rack management:
 			if err != nil {
 				return err
 			}
-			m, err := fetchEnvViaAPI(gatewayURL, tok.Token, appFlag, "", showSecrets)
+			m, err := fetchEnvViaAPI(gatewayURL, tok.Token, app, "", showSecrets)
 			if err != nil {
 				return err
 			}
@@ -166,8 +167,9 @@ Rack management:
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := args[0]
-			if appFlag == "" {
-				return fmt.Errorf("missing app: use -a <app>")
+			app, err := resolveApp(appFlag)
+			if err != nil {
+				return err
 			}
 			rack, err := getCurrentRack()
 			if err != nil || rack == "" {
@@ -181,7 +183,7 @@ Rack management:
 			if err != nil {
 				return err
 			}
-			m, err := fetchEnvViaAPI(gatewayURL, tok.Token, appFlag, key, showSecrets)
+			m, err := fetchEnvViaAPI(gatewayURL, tok.Token, app, key, showSecrets)
 			if err != nil {
 				return err
 			}
@@ -951,4 +953,43 @@ func unsetCurrentRack() error {
 		return err
 	}
 	return nil
+}
+
+// resolveApp determines the Convox app name using a similar precedence to the Convox CLI:
+// 1) explicit flag value
+// 2) CONVOX_APP env var
+// 3) contents of .convox/app in current or parent directories
+// 4) fallback to current directory name
+func resolveApp(flagVal string) (string, error) {
+	if strings.TrimSpace(flagVal) != "" {
+		return flagVal, nil
+	}
+	if v := os.Getenv("CONVOX_APP"); strings.TrimSpace(v) != "" {
+		return v, nil
+	}
+	// search upwards for .convox/app
+	wd, err := os.Getwd()
+	if err == nil {
+		dir := wd
+		for {
+			p := filepath.Join(dir, ".convox", "app")
+			if data, err := os.ReadFile(p); err == nil {
+				name := strings.TrimSpace(string(data))
+				if name != "" {
+					return name, nil
+				}
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir { // reached root
+				break
+			}
+			dir = parent
+		}
+		// fallback to basename of working directory
+		base := filepath.Base(wd)
+		if base != "" && base != "." && base != "/" {
+			return base, nil
+		}
+	}
+	return "", fmt.Errorf("missing app: use -a <app> or set CONVOX_APP or add .convox/app")
 }

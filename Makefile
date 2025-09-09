@@ -41,6 +41,7 @@ web-lint: web-deps
 
 dev:
 	@echo "Starting development environment with Docker Compose (rebuild + recreate)..."
+	@echo "Bringing up dev stack..."
 	@docker compose --profile dev up --build --force-recreate postgres mock-oauth mock-convox web-dev gateway-api-dev
 
 dev-build:
@@ -49,7 +50,13 @@ dev-build:
 
 dev-down:
 	@echo "Stopping development environment..."
-	@docker compose down
+	@docker compose down -v --remove-orphans || true
+
+.PHONY: dev-nuke
+dev-nuke:
+	@echo "Force-removing any leftover Compose containers and network for project 'convox-gateway'..."
+	@docker ps -a --filter "label=com.docker.compose.project=convox-gateway" -q | xargs -r docker rm -f || true
+	@docker network ls --format '{{.Name}}' | grep -E '^convox-gateway_gateway-net$$' >/dev/null 2>&1 && docker network rm convox-gateway_gateway-net || true
 
 dev-logs:
 	@echo "Showing development logs..."
