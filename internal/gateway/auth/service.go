@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
@@ -50,13 +51,13 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 			}
 		}
 		if authHeader == "" {
-			http.Error(w, "missing authorization", http.StatusUnauthorized)
+			a.writeUnauthorized(w, r, "missing authorization")
 			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 {
-			http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
+			a.writeUnauthorized(w, r, "invalid authorization header format")
 			return
 		}
 
@@ -78,12 +79,12 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 			// Convox CLI uses Basic auth - decode and check password field
 			user, err = a.validateBasicAuth(credentials)
 		default:
-			http.Error(w, "unsupported authorization type", http.StatusUnauthorized)
+			a.writeUnauthorized(w, r, "unsupported authorization type")
 			return
 		}
 
 		if err != nil {
-			http.Error(w, fmt.Sprintf("authentication failed: %v", err), http.StatusUnauthorized)
+			a.writeUnauthorized(w, r, fmt.Sprintf("authentication failed: %v", err))
 			return
 		}
 
@@ -99,6 +100,22 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeUnauthorized centralizes 401 responses and optional debug logging.
+func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, reason string) {
+	// Non-intrusive hint header + body for diagnostics
+	w.Header().Set("X-Error-Reason", reason)
+	// Optional structured debug for CI/E2E
+	if os.Getenv("GATEWAY_DEBUG_AUTH") == "true" {
+		// Minimal context: method path, source of auth
+		src := r.Header.Get("X-Auth-Source")
+		if src == "" {
+			src = "none"
+		}
+		fmt.Printf("[auth:401] %s %s src=%s reason=%s\n", r.Method, r.URL.Path, src, reason)
+	}
+	http.Error(w, reason, http.StatusUnauthorized)
 }
 
 func (a *AuthService) validateJWT(tokenString string) (*AuthUser, error) {

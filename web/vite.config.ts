@@ -21,6 +21,27 @@ export default defineConfig(() => ({
           process.env.VITE_API_BASE_URL ||
           `http://127.0.0.1:${process.env.GATEWAY_PORT || "8080"}`,
         changeOrigin: true,
+        configure: (proxy, options) => {
+          const debug = process.env.VITE_DEBUG_PROXY === "true";
+          if (!debug) return;
+          proxy.on("proxyReq", (_proxyReq, req) => {
+            try {
+              // @ts-ignore
+              const target = options?.target || "(unknown)";
+              console.log(`[vite-proxy] >> ${req.method} ${req.url} -> ${target}`);
+            } catch {}
+          });
+          proxy.on("proxyRes", (proxyRes, req) => {
+            try {
+              console.log(`[vite-proxy] << ${req.method} ${req.url} ${proxyRes.statusCode}`);
+            } catch {}
+          });
+          proxy.on("error", (err, req) => {
+            try {
+              console.error(`[vite-proxy] !! ${req.method} ${req.url} error: ${err.message}`);
+            } catch {}
+          });
+        },
       },
     },
   },

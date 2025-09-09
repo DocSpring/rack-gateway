@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -234,7 +235,9 @@ func main() {
 		r.Get("/csrf", uiHandler.GetCSRFToken)
 
 		// OAuth (web) endpoints
+		// Accept both GET and HEAD for login to support headless browser probes
 		r.Get("/web/login", handleWebLoginStart(oauthHandler, database))
+		r.Head("/web/login", handleWebLoginStart(oauthHandler, database))
 		r.Get("/web/callback", handleWebLoginCallback(oauthHandler, database))
 		r.Get("/web/logout", handleWebLogout(database))
 
@@ -381,6 +384,11 @@ func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 
 func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Optional detailed OAuth debug logging
+		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+			reqID := middleware.GetReqID(r.Context())
+			log.Printf("[oauth:web] start login req_id=%s host=%s ua=%q", reqID, r.Host, r.UserAgent())
+		}
 		if database != nil {
 			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      "",
@@ -397,7 +405,15 @@ func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 			})
 		}
 		authURL := oauth.StartWebLogin()
-		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+			if u, err := url.Parse(authURL); err == nil {
+				reqID := middleware.GetReqID(r.Context())
+				log.Printf("[oauth:web] redirecting req_id=%s to auth_endpoint host=%s path=%s (query=redacted)", reqID, u.Host, u.Path)
+			}
+		}
+		// Use 302 (Found) for broad browser compatibility with navigation flows
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Redirect(w, r, authURL, http.StatusFound)
 	}
 }
 
@@ -411,11 +427,19 @@ func handleCLILoginRedirectCallback(database *db.Database) http.HandlerFunc {
 			http.Error(w, "missing code or state parameter", http.StatusBadRequest)
 			return
 		}
+		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+			reqID := middleware.GetReqID(r.Context())
+			log.Printf("[oauth:cli] redirect callback req_id=%s code_present=%t state_present=%t", reqID, code != "", state != "")
+		}
 		if database != nil {
 			_ = database.SaveCLILoginCode(state, code)
 		}
 
 		// Redirect to a nicer static success page served by the web bundle
+		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+			reqID := middleware.GetReqID(r.Context())
+			log.Printf("[oauth:cli] redirecting req_id=%s to /.gateway/web/cli-auth-success.html", reqID)
+		}
 		http.Redirect(w, r, "/.gateway/web/cli-auth-success.html", http.StatusTemporaryRedirect)
 	}
 }
@@ -503,6 +527,10 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 			return
 		}
 
+		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+			reqID := middleware.GetReqID(r.Context())
+			log.Printf("[oauth:web] callback req_id=%s code_present=%t state_present=%t", reqID, code != "", state != "")
+		}
 		// Web flow doesn't use PKCE
 		resp, err := oauth.CompleteLogin(code, state, "")
 		if err != nil {
@@ -564,6 +592,10 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 		frontend := os.Getenv("FRONTEND_BASE_URL")
 		if frontend == "" {
 			frontend = "/.gateway/web/"
+		}
+		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+			reqID := middleware.GetReqID(r.Context())
+			log.Printf("[oauth:web] redirecting req_id=%s to frontend=%s", reqID, frontend)
 		}
 		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
 	}

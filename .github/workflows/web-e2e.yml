@@ -8,11 +8,29 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     timeout-minutes: 20
     env:
       WEB_PORT: 5173
       GATEWAY_PORT: 8447
       MOCK_OAUTH_PORT: 3345
+      GATEWAY_DEBUG_OAUTH: "true"
+      VITE_DEBUG_PROXY: "true"
+      DEBUG: pw:api
+      CHECK_VITE_PROXY: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,21 +46,31 @@ jobs:
           version: 10
           run_install: false
 
-      - name: Build and start dev stack
-        run: docker compose up -d --build mock-oauth mock-convox gateway-api web-dev
+      - name: Build and start dev stack (gateway serves UI)
+        run: docker compose up -d --build mock-oauth mock-convox gateway-api
+
+      - name: Wait for Postgres
+        run: |
+          echo "Waiting for Postgres service on 5432..."
+          for i in {1..60}; do
+            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && break || true
+            sleep 1
+          done
 
       - name: Wait for services
         run: |
           chmod +x scripts/wait-services.sh
-          bash scripts/wait-services.sh
+          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
 
       - name: Diagnose endpoints before E2E
         run: |
           set -x
-          curl -sv http://127.0.0.1:${WEB_PORT}/ | head -n 5
-          curl -sv http://127.0.0.1:${WEB_PORT}/api/.gateway/health || true
-          curl -sv http://127.0.0.1:${WEB_PORT}/.gateway/health || true
-          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/health || true
+          echo "docker compose ps"
+          docker compose ps
+          echo '--- gateway: /.gateway/api/health ---'
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/health || true
+          echo '--- gateway: login redirect (GET) ---'
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/web/login -o /dev/null || true
 
       - name: Show test and config snippets
         run: |
@@ -59,7 +87,7 @@ jobs:
 
       - name: Run Playwright E2E
         working-directory: web
-        run: pnpm e2e
+        run: WEB_PORT=${{ env.GATEWAY_PORT }} pnpm e2e
 
       - name: Docker logs (on failure)
         if: failure()

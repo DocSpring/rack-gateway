@@ -1,11 +1,8 @@
-import { expect, test } from '@playwright/test'
-
-const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://localhost:${WEB_PORT}`
+import { expect, test } from './fixtures'
 
 test('gateway health via web proxy is OK', async ({ page }) => {
   // Hit the site to ensure Vite dev server is accepting connections
-  await page.goto(`${BASE}/.gateway/web/`)
+  await page.goto('/.gateway/web/')
 
   // Fetch health via the browser context to avoid host resolution quirks
   const result = await page.evaluate(async () => {

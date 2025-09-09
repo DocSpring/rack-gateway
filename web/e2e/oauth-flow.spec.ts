@@ -1,18 +1,18 @@
-import { expect, test } from '@playwright/test'
-
-const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://localhost:${WEB_PORT}`
+import { expect, test } from './fixtures'
 
 test('full OAuth login flow succeeds and /me returns user', async ({ page }) => {
   // Hit login
-await page.goto(`${BASE}/.gateway/web/login`)
+  await page.goto('/.gateway/web/login')
 
-  // Click login and wait for gateway login redirect
-  const [loginResp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/.gateway/api/web/login')),
-    page.getByRole('button', { name: /Continue with (Mock OAuth|Google)/i }).click(),
+  const btn = page
+    .getByTestId('login-cta')
+    .or(page.getByRole('button', { name: /Continue with/i }))
+    .or(page.getByRole('link', { name: /Continue with/i }))
+  await expect(btn).toBeVisible({ timeout: 5000 })
+  await Promise.all([
+    page.waitForNavigation({ url: /oauth2\/v2\/auth|dev\/select-user/i }),
+    btn.click(),
   ])
-  expect(loginResp.status()).toBeGreaterThanOrEqual(300)
 
   // Navigate to OAuth selection page automatically
   await page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)

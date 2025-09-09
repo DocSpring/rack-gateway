@@ -41,9 +41,11 @@ services:
   gateway-api:
     build:
       context: .
-      dockerfile: Dockerfile.gateway-dev
+      dockerfile: Dockerfile.gateway-web
     environment:
       GATEWAY_PORT: ${GATEWAY_PORT:-8447}
+      GATEWAY_DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
+      GATEWAY_DEBUG_AUTH: ${GATEWAY_DEBUG_AUTH:-false}
       APP_JWT_KEY: dev-jwt-secret-key-change-in-production
       GOOGLE_CLIENT_ID: mock-client-id
       GOOGLE_CLIENT_SECRET: mock-client-secret
@@ -56,15 +58,13 @@ services:
       # Internal service URL for OIDC discovery/token endpoints
       GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
       REDIRECT_URL: http://localhost:${GATEWAY_PORT:-8447}
-      FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-5173}
+      FRONTEND_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}/.gateway/web/
       RACK: Dev # Convox sets this var automatically
       RACK_HOST: http://mock-convox:${MOCK_CONVOX_PORT:-5443}
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway?sslmode=disable
-      DEV_MODE: "true"
       GATEWAY_LOG_RESPONSE_BODIES: "true"
-      WEB_DEV_SERVER_URL: http://web-dev:5173
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
     volumes: []
@@ -106,18 +106,85 @@ services:
       - gateway-net
 
   web-dev:
+    profiles: [dev]
     build:
       context: ./web
       dockerfile: Dockerfile.dev
       target: dev
     environment:
       VITE_API_BASE_URL: http://gateway-api:${GATEWAY_PORT:-8447}
+      VITE_DEBUG_PROXY: ${VITE_DEBUG_PROXY:-false}
     ports:
       - "${WEB_PORT:-5173}:5173"
     volumes:
       - ./web:/app
       - /app/node_modules
     command: pnpm dev --host 0.0.0.0
+    networks:
+      - gateway-net
+
+  # Optional: precompiled static preview for E2E (build + serve dist)
+  web-preview:
+    profiles: [preview]
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+      target: dev
+    environment:
+      # Build-time base URL for API calls in the compiled SPA
+      VITE_API_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    command: sh -lc "pnpm build && pnpm preview --host 0.0.0.0 --port 5173"
+    networks:
+      - gateway-net
+
+  gateway-api-dev:
+    profiles: [dev]
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway-dev
+    environment:
+      GATEWAY_PORT: ${GATEWAY_PORT:-8447}
+      GATEWAY_DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
+      APP_JWT_KEY: dev-jwt-secret-key-change-in-production
+      GOOGLE_CLIENT_ID: mock-client-id
+      GOOGLE_CLIENT_SECRET: mock-client-secret
+      GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
+      CONVOX_SECRET_ENV_VARS: DATABASE_URL,REDIS_URL,SECRET_KEY_BASE
+      ADMIN_USERS: admin@company.com
+      VIEWER_USERS: viewer@company.com
+      DEPLOYER_USERS: deployer@company.com
+      OPERATIONS_USERS: ops@company.com
+      GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
+      REDIRECT_URL: http://localhost:${GATEWAY_PORT:-8447}
+      FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-5173}
+      RACK: Dev
+      RACK_HOST: http://mock-convox:${MOCK_CONVOX_PORT:-5443}
+      RACK_TOKEN: mock-rack-token-12345
+      RACK_USERNAME: convox
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway?sslmode=disable
+      DEV_MODE: "true"
+      GATEWAY_LOG_RESPONSE_BODIES: "true"
+      WEB_DEV_SERVER_URL: http://web-dev:5173
+    ports:
+      - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-convox:
+        condition: service_started
+      mock-oauth:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/api/health || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 3
     networks:
       - gateway-net
 

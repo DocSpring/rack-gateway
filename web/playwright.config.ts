@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// Prefer gateway port (single-origin prod-like E2E), fall back to WEB_PORT (dev)
+const port = process.env.GATEWAY_PORT || process.env.WEB_PORT || '5173'
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -9,7 +12,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     // Use localhost to match OAuth + cookie host set by the gateway
-    baseURL: `http://localhost:${process.env.WEB_PORT || '5173'}`,
+    baseURL: `http://localhost:${port}`,
     trace: 'on-first-retry',
   },
 

@@ -1,22 +1,27 @@
-import { expect, test } from '@playwright/test'
-
-const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://localhost:${WEB_PORT}`
+import { expect, test } from './fixtures'
 
 test('login button triggers gateway OAuth redirect', async ({ page }) => {
-await page.goto(`${BASE}/.gateway/web/login`)
+  page.on('console', (m) => console.log('console:', m.type(), m.text()))
+  page.on('pageerror', (e) => console.log('pageerror:', e))
 
-  const [resp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/.gateway/api/web/login')),
-    page.getByRole('button', { name: /Continue with (Mock OAuth|Google)/i }).click(),
+  await page.goto('/.gateway/web/login')
+
+  const btn = page
+    .getByTestId('login-cta')
+    .or(page.getByRole('button', { name: /Continue with/i }))
+    .or(page.getByRole('link', { name: /Continue with/i }))
+
+  try {
+    await expect(btn).toBeVisible({ timeout: 5000 })
+  } catch (e) {
+    const html = await page.content()
+    console.log('--- login page HTML (first 1200 chars) ---')
+    console.log(html.slice(0, 1200))
+    throw e
+  }
+
+  await Promise.all([
+    page.waitForNavigation({ url: /oauth2\/v2\/auth|dev\/select-user/i }),
+    btn.click(),
   ])
-
-  // Expect a redirect response from the gateway
-  const status = resp.status()
-  expect(status).toBeGreaterThanOrEqual(300)
-  expect(status).toBeLessThan(400)
-
-  const location = resp.headers()['location'] || resp.headers()['Location']
-  expect(location).toBeTruthy()
-  expect(location).toMatch(/oauth2\//i)
 })

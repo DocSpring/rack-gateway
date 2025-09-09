@@ -54,6 +54,7 @@ export function LoginPage() {
           <CardContent>
             <Button
               className="w-full text-white"
+              data-testid="login-cta"
               disabled={isLoading}
               onClick={handleLogin}
               size="lg"

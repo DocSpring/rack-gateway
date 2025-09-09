@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -72,6 +73,9 @@ func New(dsn string) (*Database, error) {
 	if source == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
+
+	// Ensure appropriate sslmode: require in non-dev unless explicitly set
+	source = ensureSSLMode(source)
 	db, err := sql.Open("pgx", source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open postgres: %w", err)
@@ -111,12 +115,40 @@ func NewFromEnv() (*Database, error) {
 	if dbname == "" {
 		dbname = user
 	}
+	// Default sslmode based on DEV_MODE unless PGSSLMODE explicitly set
 	ssl := os.Getenv("PGSSLMODE")
 	if ssl == "" {
-		ssl = "disable"
+		if os.Getenv("DEV_MODE") == "true" {
+			ssl = "disable"
+		} else {
+			ssl = "require"
+		}
 	}
 	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
 	return New(dsn)
+}
+
+// ensureSSLMode appends an sslmode if missing. In non-dev (DEV_MODE != true) default to require.
+func ensureSSLMode(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return dsn
+	}
+	// Only apply to postgres schemes
+	if !strings.HasPrefix(strings.ToLower(u.Scheme), "postgres") {
+		return dsn
+	}
+	q := u.Query()
+	if q.Get("sslmode") == "" {
+		mode := "require"
+		if os.Getenv("DEV_MODE") == "true" {
+			mode = "disable"
+		}
+		q.Set("sslmode", mode)
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	return dsn
 }
 
 // initSchema creates the database tables if they don't exist

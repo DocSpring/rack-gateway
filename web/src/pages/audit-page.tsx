@@ -270,6 +270,10 @@ export function AuditPage() {
           className: 'bg-amber-700 text-white',
         }
       case 'process':
+        return {
+          variant: 'default',
+          className: 'bg-yellow-200 text-black',
+        }
       case 'secret':
         return {
           variant: 'default',

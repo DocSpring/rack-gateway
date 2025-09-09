@@ -1,4 +1,5 @@
 environment:
+  - GATEWAY_DOMAIN # required, e.g. gateway.example.com
   - APP_JWT_KEY # required
   - GOOGLE_CLIENT_ID # required
   - GOOGLE_CLIENT_SECRET # required

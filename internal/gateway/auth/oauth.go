@@ -6,6 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -67,6 +70,10 @@ func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, iss
 		Endpoint:     provider.Endpoint(),
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
+	if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+		ep := provider.Endpoint()
+		log.Printf("[oauth:cfg] issuer=%s authURL=%s tokenURL=%s webRedirect=%s", issuerURL, ep.AuthURL, ep.TokenURL, oauth2ConfigWeb.RedirectURL)
+	}
 
 	// Create ID token verifier with proper configuration
 	verifierConfig := &oidc.Config{
@@ -118,6 +125,12 @@ func (h *OAuthHandler) StartWebLogin() string {
 		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
 
+	if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+		// Log only host + path to avoid leaking query (state, client_id)
+		if u, err := url.Parse(authURL); err == nil {
+			log.Printf("[oauth:web] built auth URL host=%s path=%s (query=redacted)", u.Host, u.Path)
+		}
+	}
 	return authURL
 }
 
@@ -211,3 +224,5 @@ func generatePKCEChallenge(verifier string) string {
 	sha := sha256.Sum256([]byte(verifier))
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sha[:])
 }
+
+// (no extra wrappers; keep logging simple and guarded by env)

@@ -1,0 +1,48 @@
+FROM node:20-alpine AS webbuild
+
+WORKDIR /app/web
+
+# Copy web package and lockfile
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+# Copy web source and build
+COPY web/ ./
+RUN pnpm build
+
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates make gcc musl-dev sqlite-dev
+
+WORKDIR /app
+
+# Cache go mod download
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    go mod download
+
+# Copy only the source needed to build the gateway
+COPY internal ./internal
+COPY cmd/gateway ./cmd/gateway
+
+# Build the gateway binary directly (avoid Makefile dependency)
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway \
+    && /out/convox-gateway-api help
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates curl
+
+WORKDIR /app
+
+COPY --from=builder /out/convox-gateway-api ./
+COPY --from=webbuild /app/web/dist ./web/dist
+COPY config ./config
+
+EXPOSE 8080
+
+CMD ["./convox-gateway-api"]
+

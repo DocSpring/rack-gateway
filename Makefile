@@ -41,7 +41,7 @@ web-lint: web-deps
 
 dev:
 	@echo "Starting development environment with Docker Compose (rebuild + recreate)..."
-	@docker compose up --build --force-recreate
+	@docker compose --profile dev up --build --force-recreate postgres mock-oauth mock-convox web-dev gateway-api-dev
 
 dev-build:
 	@echo "Building Docker images for development..."
@@ -102,12 +102,12 @@ e2e-devrack:
 
 web-e2e:
 	@echo "Starting backend services (web-dev + gateway + mocks)..."
-	@docker compose up -d --build mock-oauth mock-convox gateway-api web-dev
+	@docker compose up -d --build mock-oauth mock-convox gateway-api
 	@echo "Waiting for services to become ready..."
-	@WEB_PORT=$${WEB_PORT:-5173} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} bash scripts/wait-services.sh
+	@WEB_PORT=$${GATEWAY_PORT:-8447} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
 	@echo "Installing Playwright browsers (if needed) and running tests..."
 	@cd web && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps || pnpm exec playwright install
-	@cd web && pnpm e2e
+	@cd web && env WEB_PORT=$${GATEWAY_PORT:-8447} pnpm e2e
 	@echo "(Backend left running. Use 'make dev-down' to stop.)"
 
 cli-e2e:

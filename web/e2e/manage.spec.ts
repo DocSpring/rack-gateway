@@ -1,15 +1,16 @@
-import { expect, test } from '@playwright/test'
-
-const WEB_PORT = process.env.WEB_PORT || '5173'
-const BASE = `http://localhost:${WEB_PORT}`
+import { expect, test } from './fixtures'
 
 async function login(page: any) {
-  await page.goto(`${BASE}/.gateway/web/login`)
-  const [loginResp] = await Promise.all([
-    page.waitForResponse((r: any) => r.url().includes('/.gateway/api/web/login')),
-    page.getByRole('button', { name: /Continue with (Mock OAuth|Google)/i }).click(),
+  await page.goto('/.gateway/web/login')
+  const btn = page
+    .getByTestId('login-cta')
+    .or(page.getByRole('button', { name: /Continue with/i }))
+    .or(page.getByRole('link', { name: /Continue with/i }))
+  await expect(btn).toBeVisible({ timeout: 5000 })
+  await Promise.all([
+    page.waitForNavigation({ url: /oauth2\/v2\/auth|dev\/select-user/i }),
+    btn.click(),
   ])
-  expect(loginResp.status()).toBeGreaterThanOrEqual(300)
 
   // Mock OAuth user selection if shown
   const userCard = page.locator('text=Admin User')
@@ -28,7 +29,7 @@ test('users: add, edit role, delete', async ({ page }) => {
   await login(page)
 
   // Navigate to Users
-  await page.goto(`${BASE}/.gateway/web/users`)
+  await page.goto('/.gateway/web/users')
   await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible()
 
   const email = `e2e-user-${Date.now()}@company.com`
@@ -63,7 +64,7 @@ test('tokens: create, rename, delete', async ({ page }) => {
   await login(page)
 
   // Navigate to API Tokens
-  await page.goto(`${BASE}/.gateway/web/api_tokens`)
+  await page.goto('/.gateway/web/api_tokens')
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
 
   const name1 = `E2E Token ${Date.now()}`
@@ -97,7 +98,7 @@ test('audit logs: view and filter', async ({ page }) => {
   await login(page)
 
   // Create a token to ensure we have a recent audit entry to filter
-  await page.goto(`${BASE}/.gateway/web/api_tokens`)
+  await page.goto('/.gateway/web/api_tokens')
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
   const tokenName = `E2E Audit Token ${Date.now()}`
   await page.getByRole('button', { name: /Create Token/i }).click()
@@ -106,7 +107,7 @@ test('audit logs: view and filter', async ({ page }) => {
   await page.getByRole('button', { name: /Done/i }).click()
 
   // Navigate to Audit Logs
-  await page.goto(`${BASE}/.gateway/web/audit_logs`)
+  await page.goto('/.gateway/web/audit_logs')
   await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
 
   // Ensure table rendered

@@ -2,7 +2,9 @@ import type { AxiosError } from 'axios'
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
-const API_BASE = ''
+const API_BASE: string = import.meta.env.PROD
+  ? (import.meta.env.VITE_API_BASE_URL ?? '')
+  : ''
 
 export interface User {
   email: string
@@ -24,7 +26,6 @@ class AuthService {
   startLogin(rack = 'default'): void {
     // Store rack for callback
     sessionStorage.setItem('oauth_rack', rack)
-
     // Redirect directly to web login endpoint
     window.location.href = `${API_BASE}/.gateway/api/web/login`
   }

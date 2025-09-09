@@ -9,6 +9,22 @@ on:
 jobs:
   go-tests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +63,13 @@ jobs:
         run: go vet ./...
 
       - name: Run Go tests
-        run: make test-go
+        run: |
+          echo "Waiting for Postgres to be ready..."
+          for i in {1..60}; do
+            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && break || true
+            sleep 1
+          done
+          make test-go
 
       - name: Build Go binaries
         run: make go
