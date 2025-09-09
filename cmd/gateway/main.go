@@ -167,9 +167,14 @@ func main() {
 	}
 
 	// Derive redirect base from DOMAIN (production) or localhost in dev
+	// For localhost, always include scheme http and the bound port so callbacks hit the running gateway.
 	redirectInput := ""
 	if cfg.Domain != "" {
-		redirectInput = "https://" + cfg.Domain
+		if strings.EqualFold(cfg.Domain, "localhost") {
+			redirectInput = "http://localhost:" + cfg.Port
+		} else {
+			redirectInput = "https://" + cfg.Domain
+		}
 	} else if cfg.DevMode {
 		redirectInput = "http://localhost:" + cfg.Port
 	}
