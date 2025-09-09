@@ -53,16 +53,14 @@ openssl rand -base64 32
 
 ```
 convox env set \
+  RACK_TOKEN=xxxxx \
+  DOMAIN=gateway.example.com \
+  GOOGLE_ALLOWED_DOMAIN=yourcompany.com \
   APP_JWT_KEY=$(openssl rand -base64 32) \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
-  GOOGLE_ALLOWED_DOMAIN=yourcompany.com \
-  DOMAIN=gateway.example.com \
   ADMIN_USERS=admin@yourcompany.com \
-  RACK_HOST=https://api.target-rack.convox.cloud \
-  RACK_TOKEN=xxxxx \
-  POSTMARK_API_TOKEN=xxxx \
-  POSTMARK_FROM=no-reply@docspring.com
+  POSTMARK_API_TOKEN=xxxx
 ```
 
 See docs/CONFIGURATION.md for all options.

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"crypto/tls"
 	"net/url"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
@@ -562,8 +563,11 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	proxyReq.Header.Set("X-User-Email", userEmail)
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
 
+	// HTTP client for upstream with optional TLS overrides
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		Transport: transport,
 		// Never follow redirects so we can observe upstream responses and preserve methods
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
 	}

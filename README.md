@@ -285,7 +285,6 @@ make docker
 docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
   -e GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET \
-  -e RACK_HOST=api.convox-system.svc.cluster.local:5443 \
   -e RACK_TOKEN=$RACK_TOKEN \
   convox-gateway-api:latest
 ```

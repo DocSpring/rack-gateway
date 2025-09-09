@@ -97,10 +97,20 @@ func (c *Config) loadRacksFromEnv() {
 	rackToken := os.Getenv("RACK_TOKEN")
 	rackUsername := getEnv("RACK_USERNAME", "convox") // Default to "convox" for standard Convox racks
 
+	// Auto-infer RACK_HOST when running in Kubernetes and RACK is set (Convox convention)
+	if rackHost == "" {
+		if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+			if rack := getEnv("RACK", ""); rack != "" {
+				// Convox API service DNS format: api.<rack>-system.svc.cluster.local:5443 (TLS on 5443)
+				rackHost = fmt.Sprintf("https://api.%s-system.svc.cluster.local:5443", rack)
+			}
+		}
+	}
+
 	if rackHost != "" && rackToken != "" {
-		// Add https:// if no protocol specified
+		// Default to http:// if no protocol specified. Convox router endpoints are plain HTTP by default.
 		if !strings.HasPrefix(rackHost, "http://") && !strings.HasPrefix(rackHost, "https://") {
-			rackHost = "https://" + rackHost
+			rackHost = "http://" + rackHost
 		}
 
 		// The gateway protects a single rack

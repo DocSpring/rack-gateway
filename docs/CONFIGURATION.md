@@ -28,7 +28,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - Enforces a single allowed email domain, e.g. `company.com`.
 - `GOOGLE_OAUTH_BASE_URL` (default: `https://accounts.google.com`)
   - OIDC issuer base URL. Override in development for the mock OAuth server.
-Derived from `DOMAIN`. No separate redirect URL is needed.
+    Derived from `DOMAIN`. No separate redirect URL is needed.
   - OAuth callback URLs are derived from DOMAIN:
     - Web: `https://gateway.example.com/.gateway/api/auth/web/callback`
     - CLI: `https://gateway.example.com/.gateway/api/auth/cli/callback`
@@ -37,12 +37,11 @@ Derived from `DOMAIN`. No separate redirect URL is needed.
 
 ## Rack Connectivity
 
-- `RACK_HOST` (required in production)
-  - Convox rack API host or full URL. In Kubernetes, this is typically the rack service DNS.
 - `RACK_TOKEN` (required in production)
   - Convox rack API token (used as Basic Auth password).
 - `RACK_USERNAME` (default: `convox`)
   - Basic Auth username for the rack.
+- `RACK_HOST` is set automatically but can be overridden.
 
 ## Cookies and Session
 
@@ -56,7 +55,8 @@ Derived from `DOMAIN`. No separate redirect URL is needed.
 ## Database and Auditing
 
 Postgres is required; set `DATABASE_URL` or `PG*` variables.
-  - SQLite database path for users, tokens, and audit logs.
+
+- SQLite database path for users, tokens, and audit logs.
 - `AUDIT_LOG_RETENTION_DAYS` (optional)
   - If set, the server purges audit rows older than N days at startup.
   - Also used by the `convox-gateway audit-cleanup --days N` command (see [DEPLOY.md](DEPLOY.md)).
