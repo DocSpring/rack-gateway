@@ -6,9 +6,7 @@ import { ensureCsrfToken, getCsrfToken } from './csrf'
 
 // In production builds (gateway serves UI), allow overriding API base URL.
 // In dev, keep empty to let Vite proxy handle '/.gateway/api/*'.
-const API_BASE: string = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL ?? '')
-  : ''
+const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
 export interface UserConfig {
   name: string

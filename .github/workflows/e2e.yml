@@ -1,0 +1,164 @@
+name: E2E (Web + CLI, shared image)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    env:
+      GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build gateway image (with web UI) and export
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.gateway-web
+          tags: ${{ env.GATEWAY_IMAGE }}
+          load: false
+          outputs: type=docker,dest=${{ runner.temp }}/gateway-api.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-image
+          path: ${{ runner.temp }}/gateway-api.tar
+
+  web-e2e:
+    runs-on: ubuntu-latest
+    needs: build-image
+    env:
+      WEB_PORT: 5173
+      GATEWAY_PORT: 8447
+      MOCK_OAUTH_PORT: 3345
+      GATEWAY_DEBUG_OAUTH: "true"
+      DEBUG: pw:api
+      CHECK_VITE_PROXY: "false"
+      GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+          run_install: false
+
+      - name: Download gateway image
+        uses: actions/download-artifact@v4
+        with:
+          name: gateway-image
+          path: ${{ runner.temp }}
+
+      - name: Load gateway image
+        run: |
+          docker load --input ${{ runner.temp }}/gateway-api.tar
+          docker image ls -a | grep convox-gateway-api || true
+
+      - name: Start stack (gateway serves UI)
+        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api
+
+      - name: Wait for services
+        run: |
+          chmod +x scripts/wait-services.sh
+          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
+
+      - name: Diagnose endpoints
+        run: |
+          set -x
+          docker compose ps
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/health || true
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/web/login -o /dev/null || true
+
+      - name: Install Playwright and deps
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          npx playwright install --with-deps || npx playwright install
+
+      - name: Run Web E2E
+        working-directory: web
+        run: WEB_PORT=${{ env.GATEWAY_PORT }} pnpm e2e
+
+      - name: Docker logs (on failure)
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+
+  cli-e2e:
+    runs-on: ubuntu-latest
+    needs: build-image
+    env:
+      WEB_PORT: 5173
+      GATEWAY_PORT: 8447
+      MOCK_OAUTH_PORT: 3345
+      GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Download gateway image
+        uses: actions/download-artifact@v4
+        with:
+          name: gateway-image
+          path: ${{ runner.temp }}
+
+      - name: Load gateway image
+        run: |
+          docker load --input ${{ runner.temp }}/gateway-api.tar
+          docker image ls -a | grep convox-gateway-api || true
+
+      - name: Start stack (gateway + dev UI)
+        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api web-dev
+
+      - name: Wait for services
+        run: |
+          chmod +x scripts/wait-services.sh
+          bash scripts/wait-services.sh
+
+      - name: Install Convox CLI
+        run: |
+          set -euo pipefail
+          ARCH=$(uname -m)
+          URL="https://github.com/convox/convox/releases/latest/download/convox-linux"
+          if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            URL="https://github.com/convox/convox/releases/latest/download/convox-linux-arm64"
+          fi
+          curl -fsSL "$URL" -o /tmp/convox
+          sudo mv /tmp/convox /usr/local/bin/convox
+          sudo chmod 755 /usr/local/bin/convox
+          convox version || true
+
+      - name: Run CLI E2E
+        run: bash scripts/cli-e2e.sh
+
+      - name: Docker logs (on failure)
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+

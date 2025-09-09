@@ -2,9 +2,7 @@ import type { AxiosError } from 'axios'
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
-const API_BASE: string = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL ?? '')
-  : ''
+const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
 export interface User {
   email: string

@@ -42,6 +42,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gateway-web
+    image: ${GATEWAY_IMAGE:-convox-gateway-api:local}
     environment:
       GATEWAY_PORT: ${GATEWAY_PORT:-8447}
       GATEWAY_DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
