@@ -26,8 +26,8 @@ toml_get() {
   return 1
 }
 
-GW_PORT="${PORT:-}"
-[[ -z "$GW_PORT" ]] && GW_PORT="$(toml_get PORT "$MiseFile" || echo 8447)"
+GATEWAY_PORT="${GATEWAY_PORT:-}"
+[[ -z "$GATEWAY_PORT" ]] && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
 
 echo "Building CLI..."
 make -s cli
@@ -40,7 +40,7 @@ login_cli_as() {
   AUTH_FILE="$(mktemp)"
   echo "  - Running CLI login (no-open) and writing auth params to $AUTH_FILE ..."
   set -m
-  ./bin/convox-gateway login "${rack_name}" "http://127.0.0.1:${GW_PORT}" --no-open --auth-file "$AUTH_FILE" &
+  ./bin/convox-gateway login "${rack_name}" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" &
   local CLI_PID=$!
   # Wait for auth-file
   for _i in $(seq 1 50); do

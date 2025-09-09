@@ -1,4 +1,39 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e cli-e2e
+.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e cli-e2e cli-e2e-dev cli-e2e-release web-e2e-dev web-e2e-release free-prod-gateway free-dev-gateway
+
+# ----- Helpers (avoid duplication) -----
+define UP_DEV_STACK
+$(MAKE) free-prod-gateway
+docker compose up -d --build mock-oauth mock-convox gateway-api-dev web-dev
+WEB_PORT=$${WEB_PORT:-5173} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} bash scripts/wait-services.sh
+endef
+
+define UP_RELEASE_STACK
+$(MAKE) free-dev-gateway
+docker compose up -d --build mock-oauth mock-convox gateway-api
+WEB_PORT=$${GATEWAY_PORT:-8447} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
+endef
+
+define INSTALL_PLAYWRIGHT
+cd web && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps || pnpm exec playwright install
+endef
+
+define RUN_WEB_E2E_DEV
+$(INSTALL_PLAYWRIGHT)
+cd web && env WEB_PORT=$${WEB_PORT:-5173} pnpm e2e
+endef
+
+define RUN_WEB_E2E_RELEASE
+$(INSTALL_PLAYWRIGHT)
+cd web && env GATEWAY_PORT=$${GATEWAY_PORT:-8447} pnpm e2e
+endef
+
+define RUN_CLI_E2E
+bash scripts/cli-e2e.sh
+endef
+
+define TEARDOWN
+docker compose down -v --remove-orphans || true
+endef
 
 all: web-build gateway cli mock
 
@@ -107,21 +142,48 @@ e2e-devrack:
 	@echo "Running Convox Development Rack E2E (opt-in via E2E_DEV_RACK=1)..."
 	@bash scripts/e2e-devrack.sh
 
-web-e2e:
-	@echo "Starting backend services (web-dev + gateway + mocks)..."
-	@docker compose up -d --build mock-oauth mock-convox gateway-api
-	@echo "Waiting for services to become ready..."
-	@WEB_PORT=$${GATEWAY_PORT:-8447} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
-	@echo "Installing Playwright browsers (if needed) and running tests..."
-	@cd web && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps || pnpm exec playwright install
-	@cd web && env WEB_PORT=$${GATEWAY_PORT:-8447} pnpm e2e
+cli-e2e:
+	@echo "[alias] Running cli-e2e-dev (use cli-e2e-dev or cli-e2e-release explicitly)"
+	@$(MAKE) cli-e2e-dev
+
+cli-e2e-dev:
+	@echo "Starting dev stack for CLI E2E..."
+	@$(UP_DEV_STACK)
+	@echo "Running CLI E2E..."
+	@$(RUN_CLI_E2E)
 	@echo "(Backend left running. Use 'make dev-down' to stop.)"
 
-cli-e2e:
-	@echo "Starting backend services (web-dev + gateway + mocks)..."
-	@docker compose up -d --build mock-oauth mock-convox gateway-api web-dev
-	@echo "Waiting for services to become ready..."
-	@WEB_PORT=$${WEB_PORT:-5173} GATEWAY_PORT=$${GATEWAY_PORT:-8447} MOCK_OAUTH_PORT=$${MOCK_OAUTH_PORT:-3345} bash scripts/wait-services.sh
+cli-e2e-release:
+	@echo "Starting release stack for CLI E2E..."
+	@$(UP_RELEASE_STACK)
 	@echo "Running CLI E2E..."
-	@bash scripts/cli-e2e.sh
+	@$(RUN_CLI_E2E)
+	@echo "Tearing down prod-like backend..."
+	@$(TEARDOWN)
+
+web-e2e:
+	@echo "[alias] Running web-e2e-release (use web-e2e-dev or web-e2e-release explicitly)"
+	@$(MAKE) web-e2e-dev
+
+web-e2e-dev:
+	@echo "Starting dev backend for Web E2E..."
+	@$(UP_DEV_STACK)
+	@echo "Running Web E2E (dev)..."
+	@$(RUN_WEB_E2E_DEV)
 	@echo "(Backend left running. Use 'make dev-down' to stop.)"
+
+web-e2e-release:
+	@echo "Starting prod-like backend for Web E2E..."
+	@$(UP_RELEASE_STACK)
+	@echo "Running Web E2E (release)..."
+	@$(RUN_WEB_E2E_RELEASE)
+	@echo "Tearing down prod-like backend..."
+	@$(TEARDOWN)
+
+free-prod-gateway:
+	@echo "Ensuring prod gateway-api is not occupying port 8447..."
+	@docker compose ps -q gateway-api >/dev/null 2>&1 && (docker compose stop gateway-api && docker compose rm -f gateway-api) || true
+
+free-dev-gateway:
+	@echo "Ensuring dev gateway-api-dev is not occupying port 8447..."
+	@docker compose ps -q gateway-api-dev >/dev/null 2>&1 && (docker compose stop gateway-api-dev && docker compose rm -f gateway-api-dev) || true

@@ -117,13 +117,13 @@ toml_get() {
   return 1
 }
 
-GW_PORT="${GATEWAY_PORT:-}"
+GATEWAY_PORT="${GATEWAY_PORT:-}"
 WEB_P="${WEB_PORT:-}"
 OAUTH_P="${MOCK_OAUTH_PORT:-}"
 RACK_P="${MOCK_CONVOX_PORT:-}"
 CLI_DIR="${CONVOX_GATEWAY_CLI_CONFIG_DIR:-}"
 
-[[ -z "$GW_PORT" ]]   && GW_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
+[[ -z "$GATEWAY_PORT" ]]   && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
 [[ -z "$CLI_DIR" ]]   && CLI_DIR="$(toml_get CONVOX_GATEWAY_CLI_CONFIG_DIR "$MiseFile" || echo "$HOME/.config/convox-gateway")"
 
 echo
@@ -132,7 +132,7 @@ echo "  Production example:"
 echo "    convox-gateway login staging https://gateway.company.com"
 echo
 echo "  Local dev example:"
-echo "    convox-gateway login local http://localhost:${GW_PORT}"
+echo "    convox-gateway login local http://localhost:${GATEWAY_PORT}"
 
 echo
 echo "After login (examples):"
@@ -145,6 +145,6 @@ echo "  ${CLI_DIR}   # override with CONVOX_GATEWAY_CLI_CONFIG_DIR"
 
 echo
 echo "Use CLI against dev gateway:"
-echo "  convox-gateway login local http://localhost:${GW_PORT}"
+echo "  convox-gateway login local http://localhost:${GATEWAY_PORT}"
 echo "  convox-gateway convox rack"
 echo "  convox-gateway convox apps"

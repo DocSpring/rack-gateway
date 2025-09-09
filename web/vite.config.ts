@@ -19,7 +19,7 @@ export default defineConfig(() => ({
       "/.gateway/api": {
         target:
           process.env.VITE_API_BASE_URL ||
-          `http://127.0.0.1:${process.env.GATEWAY_PORT || "8080"}`,
+          `http://127.0.0.1:${process.env.GATEWAY_PORT || "8447"}`,
         changeOrigin: true,
         configure: (proxy, options) => {
           const debug = process.env.VITE_DEBUG_PROXY === "true";
