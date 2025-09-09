@@ -101,7 +101,7 @@ func main() {
 	if daysStr := os.Getenv("AUDIT_LOG_RETENTION_DAYS"); daysStr != "" {
 		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
 			if err := database.CleanupOldAuditLogs(d); err != nil {
-				log.Printf("Warning: audit retention cleanup failed: %v", err)
+				log.Fatalf("Audit retention cleanup failed: %v", err)
 			}
 		}
 	}
@@ -209,11 +209,14 @@ func main() {
 	pmStream := os.Getenv("POSTMARK_STREAM")
 	sender := email.NewSender(pmToken, from, pmStream)
 
-	// Determine rack name for notifications
+	// Determine rack config/name for notifications and downstream API
+	rackCfg := config.RackConfig{}
 	rackName := "default"
 	if rc, ok := cfg.Racks["default"]; ok {
+		rackCfg = rc
 		rackName = rc.Name
 	} else if rc, ok := cfg.Racks["local"]; ok {
+		rackCfg = rc
 		rackName = rc.Name
 	}
 
@@ -222,7 +225,7 @@ func main() {
 	if getEnv("DEV_MODE", "false") == "true" {
 		devProxyURL = os.Getenv("WEB_DEV_SERVER_URL")
 	}
-	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, devProxyURL)
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackCfg, devProxyURL)
 
 	r := chi.NewRouter()
 

@@ -715,6 +715,6 @@ func (d *Database) CleanupOldAuditLogs(retentionDays int) error {
 	if retentionDays <= 0 {
 		return nil
 	}
-	_, err := d.exec("DELETE FROM audit_logs WHERE timestamp < NOW() - ($1 || ' days')::interval", retentionDays)
+	_, err := d.exec("DELETE FROM audit_logs WHERE timestamp < NOW() - (INTERVAL '1 day' * ?::int)", retentionDays)
 	return err
 }

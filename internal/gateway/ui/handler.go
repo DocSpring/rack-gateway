@@ -34,10 +34,11 @@ type Handler struct {
 	database     *db.Database
 	emailer      email.Sender
 	rackName     string
+	rackConfig   config.RackConfig
 	devProxy     *httputil.ReverseProxy
 }
 
-func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string, devProxyURL string) *Handler {
+func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string, rackCfg config.RackConfig, devProxyURL string) *Handler {
 	var rp *httputil.ReverseProxy
 	if devProxyURL != "" {
 		if u, err := url.Parse(devProxyURL); err == nil {
@@ -51,6 +52,7 @@ func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *t
 		database:     database,
 		emailer:      mailer,
 		rackName:     rackName,
+		rackConfig:   rackCfg,
 		devProxy:     rp,
 	}
 }
@@ -269,18 +271,12 @@ func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fetch latest env via rack API
-	rackURL := os.Getenv("RACK_HOST")
-	rackUser := os.Getenv("RACK_USERNAME")
-	if rackUser == "" {
-		rackUser = "convox"
-	}
-	rackToken := os.Getenv("RACK_TOKEN")
-	if rackURL == "" || rackToken == "" {
+	// Fetch latest env via rack API using configured rack
+	rc := h.rackConfig
+	if rc.URL == "" || rc.APIKey == "" {
 		http.Error(w, "rack not configured", http.StatusInternalServerError)
 		return
 	}
-	rc := config.RackConfig{Name: h.rackName, URL: rackURL, Username: rackUser, APIKey: rackToken, Enabled: true}
 	envMap, err := envutil.FetchLatestEnvMap(rc, app)
 	if err != nil {
 		http.Error(w, "failed to fetch env", http.StatusBadGateway)
