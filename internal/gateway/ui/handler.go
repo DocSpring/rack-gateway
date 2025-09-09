@@ -655,14 +655,22 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		_ = h.emailer.Send(owner, subjectOwner, bodyOwner)
 
 		admins := h.getAdminEmails()
-		if len(admins) > 0 {
+		// Do not email the owner twice if they are also an admin
+		filteredAdmins := make([]string, 0, len(admins))
+		for _, a := range admins {
+			if strings.EqualFold(a, owner) {
+				continue
+			}
+			filteredAdmins = append(filteredAdmins, a)
+		}
+		if len(filteredAdmins) > 0 {
 			subjectAdmin := fmt.Sprintf("Convox Gateway: API token created for %s on %s", owner, h.rackName)
 			creator := "unknown"
 			if inviter != nil {
 				creator = inviter.Email
 			}
 			bodyAdmin := fmt.Sprintf("An API token '%s' was created for %s on rack '%s'.\nCreated by: %s", req.Name, owner, h.rackName, creator)
-			_ = h.emailer.SendMany(orderByInviterFirst(admins, inviter), subjectAdmin, bodyAdmin)
+			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, bodyAdmin)
 		}
 	}
 }
