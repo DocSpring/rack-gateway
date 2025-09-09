@@ -32,7 +32,7 @@ Create an OAuth client in Google Cloud Console for your Workspace domain:
 - Authorized JavaScript origins:
   - https://$WEB_DOMAIN (e.g., https://portal.example.com)
 - Authorized redirect URIs:
-- https://$GATEWAY_DOMAIN/.gateway/api/web/callback
+- https://$DOMAIN/.gateway/api/web/callback
 
 1. Copy the values:
 
@@ -70,7 +70,7 @@ See docs/CONFIGURATION.md for all options.
 
 Provide domains via environment or CI vars so Convox substitutes them in `convox.yml`:
 
-- `GATEWAY_DOMAIN` → gateway service (e.g., gateway.example.com)
+- `DOMAIN` → gateway service (e.g., gateway.example.com)
 - `WEB_DOMAIN` → web service (e.g., portal.example.com)
 
 ## 4) Deploy
@@ -87,7 +87,7 @@ This builds:
 ## 5) Verify
 
 ```
-curl -s https://$GATEWAY_DOMAIN/.gateway/api/health
+curl -s https://$DOMAIN/.gateway/api/health
 ```
 
 Open https://$WEB_DOMAIN and sign in.

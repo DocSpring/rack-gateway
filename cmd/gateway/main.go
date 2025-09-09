@@ -483,7 +483,7 @@ func handleCLILoginComplete(oauth *auth.OAuthHandler, database *db.Database) htt
 					ActionType:     "auth",
 					Action:         "login",
 					Resource:       "cli",
-					Details:        "{\"error\":\"oauth_failed\"}",
+					Details:        "error\":\"oauth_failed\"}",
 					IPAddress:      r.RemoteAddr,
 					UserAgent:      r.UserAgent(),
 					Status:         "error",

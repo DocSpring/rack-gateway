@@ -42,7 +42,7 @@ func Setup() (func() error, error) {
 	}
 
 	// ENFORCE: Tests MUST be run through safe-test.sh wrapper
-	if os.Getenv("CONVOX_GATEWAY_SAFE_TEST") != "1" {
+	if os.Getenv("GATEWAY_SAFE_TEST") != "1" {
 		panic(`
 CRITICAL SAFETY VIOLATION: Tests must be run through the safe wrapper script!
 
@@ -50,7 +50,7 @@ You attempted to run tests directly with 'go test' which could destroy your prod
 
 ALWAYS use one of these commands:
   make test              - Run all tests safely
-  make test-unit         - Run unit tests safely  
+  make test-unit         - Run unit tests safely
   make test-integration  - Run integration tests safely
   ./scripts/safe-test.sh - Run tests with custom flags
 

@@ -42,7 +42,7 @@ CONVOX_CFG_DIR="$(detect_config_dir)"
 GUARD_FILE="$CONVOX_CFG_DIR/GUARD_ACTIVE"
 
 # Set env var to indicate tests are running through the safe wrapper
-export CONVOX_GATEWAY_SAFE_TEST=1
+export GATEWAY_SAFE_TEST=1
 
 # Track if restore has already been called and if we created the backup
 RESTORE_DONE=0
@@ -56,18 +56,18 @@ restore_config() {
         return 0
     fi
     RESTORE_DONE=1
-    
+
     # Only restore if we created the backup
     if [ "$BACKUP_CREATED_BY_US" -eq 0 ]; then
         return 0
     fi
-    
+
     if [ ! -d "$BACKUP_PATH" ]; then
         echo -e "\033[31mCRITICAL: No backup found at $BACKUP_PATH!\033[0m"
         echo -e "\033[31mYour Convox config may need manual restoration\033[0m"
         exit 1
     fi
-    
+
     echo -e "\033[33mSAFETY: Running restore script...\033[0m"
     "$RESTORE_SCRIPT" || {
         echo -e "\033[31mCRITICAL: Failed to restore Convox config - YOU MUST MANUALLY RESTORE YOUR CONVOX CONFIG\033[0m"

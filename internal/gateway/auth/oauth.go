@@ -70,7 +70,7 @@ func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, iss
 		Endpoint:     provider.Endpoint(),
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
-	if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+	if os.Getenv("DEBUG_OAUTH") == "true" {
 		ep := provider.Endpoint()
 		log.Printf("[oauth:cfg] issuer=%s authURL=%s tokenURL=%s webRedirect=%s", issuerURL, ep.AuthURL, ep.TokenURL, oauth2ConfigWeb.RedirectURL)
 	}
@@ -125,7 +125,7 @@ func (h *OAuthHandler) StartWebLogin() string {
 		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
 
-	if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
+	if os.Getenv("DEBUG_OAUTH") == "true" {
 		// Log only host + path to avoid leaking query (state, client_id)
 		if u, err := url.Parse(authURL); err == nil {
 			log.Printf("[oauth:web] built auth URL host=%s path=%s (query=redacted)", u.Host, u.Path)

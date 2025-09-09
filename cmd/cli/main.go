@@ -473,7 +473,7 @@ PowerShell:
 	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, usersCmd, envCmd)
 
 	// Allow config path to be set via environment variable or flag
-	defaultConfigPath := getEnv("CONVOX_GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
+	defaultConfigPath := getEnv("GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", defaultConfigPath, "Config directory")
 
 	// Add --rack flag as a global flag for rack selection
@@ -552,12 +552,12 @@ func wrapConvoxCommand(args []string) error {
 
 	// Priority order for rack selection:
 	// 1. --rack flag (global flag, already parsed by cobra)
-	// 2. CONVOX_GATEWAY_RACK environment variable
+	// 2. GATEWAY_RACK environment variable
 	// 3. Current rack from file
 
 	if rackFlag != "" {
 		rack = rackFlag
-	} else if envRack := os.Getenv("CONVOX_GATEWAY_RACK"); envRack != "" {
+	} else if envRack := os.Getenv("GATEWAY_RACK"); envRack != "" {
 		rack = envRack
 	} else {
 		var err error

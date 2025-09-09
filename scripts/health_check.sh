@@ -10,7 +10,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-GATEWAY_URL=${GATEWAY_URL:-http://localhost:8080}
+URL=${URL:-http://localhost:8080}
 MOCK_URL=${MOCK_URL:-http://localhost:5443}
 
 echo "Checking services health..."
@@ -26,8 +26,8 @@ else
 fi
 
 # Check gateway API
-echo -n "Gateway API ($GATEWAY_URL): "
-if curl -s -f -o /dev/null "$GATEWAY_URL/.gateway/api/health"; then
+echo -n "Gateway API ($URL): "
+if curl -s -f -o /dev/null "$URL/.gateway/api/health"; then
     echo -e "${GREEN}✓ Healthy${NC}"
 else
     echo -e "${RED}✗ Not responding${NC}"
@@ -36,7 +36,7 @@ fi
 
 # Check gateway can reach mock server
 echo -n "Gateway → Mock connection: "
-if curl -s -f -o /dev/null -u "convox:mock-rack-token-12345" "$GATEWAY_URL/system"; then
+if curl -s -f -o /dev/null -u "convox:mock-rack-token-12345" "$URL/system"; then
     echo -e "${GREEN}✓ Connected${NC}"
 else
     echo -e "${YELLOW}⚠ Not connected (authentication may be required)${NC}"
@@ -46,6 +46,6 @@ echo ""
 echo -e "${GREEN}All services are healthy!${NC}"
 echo ""
 echo "You can now:"
-echo "- Test the CLI: ./bin/convox-gateway login local $GATEWAY_URL"
+echo "- Test the CLI: ./bin/convox-gateway login local $URL"
 echo "- View logs: make dev-logs"
 echo "- Stop services: make dev-down"

@@ -47,14 +47,14 @@ make dev
 2. Verify services
 
 - Web UI: `http://localhost:$WEB_PORT` (default 5173)
-- Gateway health: `curl http://localhost:$GATEWAY_PORT/.gateway/api/health`
+- Gateway health: `curl http://localhost:$PORT/.gateway/api/health`
 - Mock Convox: `curl http://localhost:$MOCK_CONVOX_PORT/health`
 
 3. Build CLI and log in
 
 ```bash
 make cli
-./bin/convox-gateway login local http://localhost:$GATEWAY_PORT
+./bin/convox-gateway login local http://localhost:$PORT
 # Browser opens (mock OAuth). Complete login, then CLI stores token locally.
 ```
 
@@ -103,13 +103,13 @@ The Convox Gateway is split into multiple components:
 - Uses SQLite database at `./data/db.sqlite` (or `/app/data/db.sqlite` in production)
 - Has access to real Convox rack tokens via environment variables
 - Runs OAuth authentication and audit logging
-- Environment variable: `GATEWAY_DB_PATH=./data/db.sqlite`
+- Environment variable: `DB_PATH=./data/db.sqlite`
 
 **CLI Client** (`config/cli/` in dev, `~/.config/convox-gateway/` in production):
 
 - Stores `config.json` with JWT tokens per rack
 - Never has direct access to Convox rack credentials
-- Environment variable: `CONVOX_GATEWAY_CLI_CONFIG_DIR=./config/cli` (dev only)
+- Environment variable: `GATEWAY_CLI_CONFIG_DIR=./config/cli` (dev only)
 
 **Web UI**:
 
@@ -154,7 +154,7 @@ The database stores:
 - API tokens for CI/CD
 - Audit logs
 
-The database location is controlled by the `GATEWAY_DB_PATH` environment variable (default: `./data/db.sqlite` in development, `/app/data/db.sqlite` in production).
+The database location is controlled by the `DB_PATH` environment variable (default: `./data/db.sqlite` in development, `/app/data/db.sqlite` in production).
 
 ## Google OAuth Setup
 
@@ -313,7 +313,7 @@ LOG_LEVEL = "debug"
 
 **CLI config issues**: The CLI stores config in different locations:
 
-- Development: `./config/cli/` (set by `CONVOX_GATEWAY_CLI_CONFIG_DIR`)
+- Development: `./config/cli/` (set by `GATEWAY_CLI_CONFIG_DIR`)
 - Production: `~/.config/convox-gateway/`
 
 ## File Structure

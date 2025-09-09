@@ -18,7 +18,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 ## Core Server
 
-- `GATEWAY_PORT` (default: `8080`)
+- `PORT` (default: `8080`)
   - TCP port the API listens on.
 - `APP_JWT_KEY` (required in production)
   - Secret used to sign JWTs for web sessions. Auto-generated in dev if missing.
@@ -53,7 +53,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 ## Database and Auditing
 
-- `GATEWAY_DB_PATH` (default: `/app/data/db.sqlite`)
+- `DB_PATH` (default: `/app/data/db.sqlite`)
   - SQLite database path for users, tokens, and audit logs.
 - `AUDIT_LOG_RETENTION_DAYS` (optional)
   - If set, the server purges audit rows older than N days at startup.
@@ -79,12 +79,12 @@ Email events:
 
 ## CLI Wrapper
 
-- `CONVOX_GATEWAY_RACK` (optional)
+- `GATEWAY_RACK` (optional)
   - Selects the rack for `convox-gateway convox …` when not using `--rack` or a current rack file.
-- `CONVOX_GATEWAY_CLI_CONFIG_DIR` (dev/testing)
+- `GATEWAY_CLI_CONFIG_DIR` (dev/testing)
   - Override the CLI config directory (defaults to `~/.config/convox-gateway`).
 
 ## Notes
 
-- Some platforms set `PORT`. The gateway binds to `GATEWAY_PORT`; ensure your process manager maps it appropriately.
+- Some platforms set `PORT`. The gateway binds to `PORT`; ensure your process manager maps it appropriately.
 - In development, the gateway can auto-configure a `local` rack for convenience.

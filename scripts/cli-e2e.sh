@@ -26,8 +26,8 @@ toml_get() {
   return 1
 }
 
-GW_PORT="${GATEWAY_PORT:-}"
-[[ -z "$GW_PORT" ]] && GW_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
+GW_PORT="${PORT:-}"
+[[ -z "$GW_PORT" ]] && GW_PORT="$(toml_get PORT "$MiseFile" || echo 8447)"
 
 echo "Building CLI..."
 make -s cli

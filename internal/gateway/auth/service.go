@@ -107,7 +107,7 @@ func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, 
 	// Non-intrusive hint header + body for diagnostics
 	w.Header().Set("X-Error-Reason", reason)
 	// Optional structured debug for CI/E2E
-	if os.Getenv("GATEWAY_DEBUG_AUTH") == "true" {
+	if os.Getenv("DEBUG_AUTH") == "true" {
 		// Minimal context: method path, source of auth
 		src := r.Header.Get("X-Auth-Source")
 		if src == "" {

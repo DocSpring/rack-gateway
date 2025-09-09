@@ -141,7 +141,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 	s.gatewayCmd = exec.Command("../../bin/convox-gateway-api")
 	s.gatewayCmd.Env = append(os.Environ(),
 		"PORT="+gatewayPort,
-		"GATEWAY_PORT="+gatewayPort,
+		"PORT="+gatewayPort,
 		"APP_JWT_KEY=test-secret-key-for-integration-testing",
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
@@ -153,7 +153,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"RACK_TOKEN="+mockRackToken,
 		"RACK_USERNAME=convox",
 		// Database path for testing
-		"GATEWAY_DB_PATH="+dbPath,
+		"DB_PATH="+dbPath,
 	)
 
 	// Capture output for debugging
@@ -415,7 +415,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	t.Run("version", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "version")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, _ := cmd.CombinedOutput()
@@ -427,7 +427,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	t.Run("convox", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "help")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, _ := cmd.CombinedOutput()
@@ -440,7 +440,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	t.Run("rack", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "rack")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, _ := cmd.CombinedOutput()
@@ -453,7 +453,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	t.Run("racks", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "racks")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, _ := cmd.CombinedOutput()
@@ -495,7 +495,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	// Try to run a command with invalid token
 	cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
 	cmd.Env = append(os.Environ(),
-		"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+		"GATEWAY_CLI_CONFIG_DIR="+configDir,
 	)
 
 	output, err := cmd.CombinedOutput()
@@ -541,7 +541,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	t.Run("convox_ps", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, err := cmd.CombinedOutput()
@@ -559,7 +559,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	t.Run("convox_rack", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "rack")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, err := cmd.CombinedOutput()
@@ -576,7 +576,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	t.Run("convox_apps", func(t *testing.T) {
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
 		cmd.Env = append(os.Environ(),
-			"CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir,
+			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, err := cmd.CombinedOutput()
@@ -643,7 +643,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to create an app (should be blocked)
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
 
@@ -652,7 +652,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to delete a process (should be blocked)
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "stop", "web-123", "-a", "myapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
 
@@ -666,7 +666,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to deploy (should be blocked)
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "deploy", "-a", "myapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
 
@@ -675,7 +675,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to create an app (should be blocked)
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
 
@@ -684,7 +684,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to update environment variables (should be blocked)
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "env", "set", "KEY=value", "-a", "myapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
 
@@ -698,7 +698,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to list apps (should be blocked)
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
 
@@ -708,7 +708,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to view processes (should be blocked)
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
 
@@ -717,7 +717,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		// Try to get rack info (should be blocked)
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "rack")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+configDir)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
 
@@ -731,7 +731,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		viewerConfig := createUserConfig(t, "viewer@example.com", "viewer")
 
 		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+viewerConfig)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+viewerConfig)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("viewer@example.com failed to list apps: %s", output)
@@ -743,7 +743,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		opsConfig := createUserConfig(t, "ops@example.com", "ops")
 
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+opsConfig)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+opsConfig)
 		output, err = cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("ops@example.com failed to list processes: %s", output)
@@ -755,7 +755,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		deployerConfig := createUserConfig(t, "deployer@example.com", "deployer")
 
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "builds", "-a", "myapp")
-		cmd.Env = append(os.Environ(), "CONVOX_GATEWAY_CLI_CONFIG_DIR="+deployerConfig)
+		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+deployerConfig)
 		output, err = cmd.CombinedOutput()
 		require.NoError(t, err, "deployer should be able to list builds")
 		assert.Contains(t, string(output), "BAPI") // Should see build IDs

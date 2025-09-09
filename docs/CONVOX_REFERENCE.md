@@ -83,6 +83,7 @@ convox apps  # Uses native convox CLI directly
 ```
 
 The convox-gateway CLI wrapper simply provides convenience features:
+
 - Manages multiple rack configurations
 - Handles JWT token storage
 - Provides login/logout commands
@@ -146,10 +147,10 @@ The CLI checks in this order (from `pkg/rack/rack.go`):
    convox --rack staging apps
    ```
 
-3. **`CONVOX_RACK` environment variable** - Rack name
+3. **`GATEWAY_RACK` environment variable** - Rack name
 
    ```bash
-   export CONVOX_RACK=staging
+   export GATEWAY_RACK=staging
    ```
 
 4. **Local `.convox/rack` file** - Project-specific rack selection

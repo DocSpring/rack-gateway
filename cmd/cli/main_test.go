@@ -116,12 +116,12 @@ func TestRackSelectionPriority(t *testing.T) {
 	assert.Equal(t, "staging", rack)
 
 	// Test 2: Environment variable override
-	os.Setenv("CONVOX_GATEWAY_RACK", "production")
-	defer os.Unsetenv("CONVOX_GATEWAY_RACK")
+	os.Setenv("GATEWAY_RACK", "production")
+	defer os.Unsetenv("GATEWAY_RACK")
 
 	// In the actual wrapConvoxCommand, env var overrides current
 	// We're just testing the helper functions here
-	envRack := os.Getenv("CONVOX_GATEWAY_RACK")
+	envRack := os.Getenv("GATEWAY_RACK")
 	if envRack != "" {
 		rack = envRack
 	}

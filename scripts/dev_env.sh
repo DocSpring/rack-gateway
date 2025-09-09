@@ -46,7 +46,7 @@ fi
 export PORT=${PORT:-8080}
 export DEV_MODE=${DEV_MODE:-true}
 export MOCK_CONVOX_PORT=${MOCK_CONVOX_PORT:-5443}
-export GATEWAY_DB_PATH=${GATEWAY_DB_PATH:-./data/db.sqlite}
+export DB_PATH=${DB_PATH:-./data/db.sqlite}
 
 # For development, use mock server if RACK_HOST is not set
 if [ -z "$RACK_HOST" ]; then
@@ -64,7 +64,7 @@ fi
 
 echo -e "${GREEN}Development environment ready!${NC}"
 echo -e "Gateway will run on port: ${PORT}"
-echo -e "Database path: ${GATEWAY_DB_PATH}"
+echo -e "Database path: ${DB_PATH}"
 
 # Execute the command passed to the script
 exec "$@"

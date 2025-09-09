@@ -1,4 +1,10 @@
 [env]
+# PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
+GATEWAY_PORT = "8447"
+WEB_PORT = "5173"
+MOCK_OAUTH_PORT = "3345"
+MOCK_CONVOX_PORT = "5443"
+
 # Google OAuth credentials (for production OAuth)
 GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET = "your-client-secret"

@@ -40,7 +40,7 @@ type RackConfig struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:                getEnv("GATEWAY_PORT", "8080"),
+		Port:                getEnv("PORT", "8080"),
 		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
@@ -49,10 +49,10 @@ func Load() (*Config, error) {
 		RedirectURL:         getEnv("REDIRECT_URL", ""),
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),
-		LogResponseBodies:   getEnv("GATEWAY_LOG_RESPONSE_BODIES", "false") == "true",
+		LogResponseBodies:   getEnv("LOG_RESPONSE_BODIES", "false") == "true",
 		LogResponseMaxBytes: 16384,
 	}
-	if mb := getEnv("GATEWAY_LOG_RESPONSE_MAX_BYTES", "65536"); mb != "" {
+	if mb := getEnv("LOG_RESPONSE_MAX_BYTES", "65536"); mb != "" {
 		if v, err := strconv.Atoi(mb); err == nil && v > 0 {
 			cfg.LogResponseMaxBytes = v
 		}
