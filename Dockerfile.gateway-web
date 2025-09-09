@@ -40,7 +40,6 @@ WORKDIR /app
 
 COPY --from=builder /out/convox-gateway-api ./
 COPY --from=webbuild /app/web/dist ./web/dist
-COPY config ./config
 
 EXPOSE 8080
 
