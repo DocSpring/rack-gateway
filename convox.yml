@@ -42,6 +42,7 @@ services:
     environment:
       - PORT=8080
       - AUDIT_LOG_RETENTION_DAYS=90
+      - PGSSLMODE=require
     health: /.gateway/api/health
     internal: false
     port: 8080

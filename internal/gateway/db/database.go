@@ -115,40 +115,55 @@ func NewFromEnv() (*Database, error) {
 	if dbname == "" {
 		dbname = user
 	}
-	// Default sslmode based on DEV_MODE unless PGSSLMODE explicitly set
-	ssl := os.Getenv("PGSSLMODE")
-	if ssl == "" {
-		if os.Getenv("DEV_MODE") == "true" {
-			ssl = "disable"
-		} else {
-			ssl = "require"
-		}
+	// Respect PGSSLMODE if present; otherwise omit sslmode from DSN
+	if ssl := strings.TrimSpace(os.Getenv("PGSSLMODE")); ssl != "" {
+		dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
+		return New(dsn)
 	}
-	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
+	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s", user, host, port, dbname)
 	return New(dsn)
 }
 
 // ensureSSLMode appends an sslmode if missing. In non-dev (DEV_MODE != true) default to require.
 func ensureSSLMode(dsn string) string {
-	u, err := url.Parse(dsn)
-	if err != nil {
+	s := strings.TrimSpace(dsn)
+	if s == "" {
 		return dsn
 	}
-	// Only apply to postgres schemes
-	if !strings.HasPrefix(strings.ToLower(u.Scheme), "postgres") {
+	// Only mutate sslmode when PGSSLMODE is explicitly set
+	mode := strings.TrimSpace(os.Getenv("PGSSLMODE"))
+	if mode == "" {
 		return dsn
 	}
-	q := u.Query()
-	if q.Get("sslmode") == "" {
-		mode := "require"
-		if os.Getenv("DEV_MODE") == "true" {
-			mode = "disable"
+
+	lower := strings.ToLower(s)
+
+	// URL DSN: postgres:// or postgresql://
+	if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
+		u, err := url.Parse(s)
+		if err != nil {
+			return dsn
 		}
-		q.Set("sslmode", mode)
+		q := u.Query()
+		q.Set("sslmode", mode) // override or set
 		u.RawQuery = q.Encode()
 		return u.String()
 	}
-	return dsn
+
+	// Keyword/libpq DSN: replace or append sslmode
+	parts := strings.Fields(s)
+	found := false
+	for i, p := range parts {
+		if strings.HasPrefix(strings.ToLower(p), "sslmode=") {
+			parts[i] = "sslmode=" + mode
+			found = true
+			break
+		}
+	}
+	if !found {
+		parts = append(parts, "sslmode="+mode)
+	}
+	return strings.Join(parts, " ")
 }
 
 // initSchema creates the database tables if they don't exist

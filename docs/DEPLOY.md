@@ -59,10 +59,7 @@ convox env set \
   REDIRECT_URL=https://gateway.example.com/.gateway/api/web/callback \
   ADMIN_USERS=admin@yourcompany.com \
   RACK_HOST=https://api.target-rack.convox.cloud \
-  RACK_TOKEN=xxxxx
-
-# Optional email
-convox env set \
+  RACK_TOKEN=xxxxx \
   POSTMARK_API_TOKEN=xxxx \
   POSTMARK_FROM=no-reply@docspring.com
 ```
