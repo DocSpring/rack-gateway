@@ -1,9 +1,11 @@
-import { FileText, Key, LogOut, Users } from 'lucide-react'
+import { FileText, Key, LogOut, TerminalSquare, Users } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
 import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 
 const navigation = [
@@ -15,6 +17,17 @@ const navigation = [
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const [showCliDialog, setShowCliDialog] = useState(false)
+
+  const rackName = user?.rack?.name || 'your-rack'
+  const gatewayOrigin = useMemo(() => {
+    try {
+      // Prefer current origin (handles http/https and host)
+      return window.location.origin
+    } catch {
+      return 'https://gateway.example.com'
+    }
+  }, [])
 
   return (
     <div className="flex h-screen bg-background">
@@ -82,6 +95,14 @@ export function Layout() {
               </div>
             </div>
           )}
+          <Button
+            className="mb-2 w-full"
+            onClick={() => setShowCliDialog(true)}
+            size="sm"
+            variant="secondary"
+          >
+            <TerminalSquare className="mr-2 h-4 w-4" /> Configure CLI
+          </Button>
           <Button className="w-full" onClick={logout} size="sm" variant="outline">
             <LogOut className="mr-2 h-4 w-4" />
             Logout
@@ -93,6 +114,46 @@ export function Layout() {
       <div className="flex-1 overflow-auto">
         <Outlet />
       </div>
+
+      {/* Configure CLI Dialog */}
+      <Dialog onOpenChange={setShowCliDialog} open={showCliDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configure CLI</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <p>Clone the repository and install the CLI:</p>
+            <div className="rounded-md border bg-muted p-3 font-mono text-xs">
+              <div>git clone git@github.com:DocSpring/convox-gateway.git</div>
+              <div className="mt-1">cd convox-gateway</div>
+              <div className="mt-1">./scripts/install.sh</div>
+            </div>
+
+            <p className="pt-1">Authenticate the CLI against this gateway:</p>
+            <div className="rounded-md border bg-muted p-3 font-mono text-xs">
+              <div>
+                $ convox-gateway login {rackName} {gatewayOrigin}
+              </div>
+            </div>
+            <p className="text-muted-foreground">
+              After logging in, you can run Convox commands via the gateway using{' '}
+              <span className="font-mono">convox-gateway convox …</span>
+            </p>
+            <p className="text-muted-foreground">
+              See the{' '}
+              <a
+                className="underline hover:no-underline"
+                href="https://github.com/DocSpring/convox-gateway/blob/main/README.md"
+                rel="noreferrer noopener"
+                target="_blank"
+              >
+                README
+              </a>{' '}
+              for more information.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
