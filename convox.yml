@@ -26,7 +26,7 @@ resources:
       storage: 20
       version: 15
       deletionProtection: true
-      durable: true
+      durable: false
       encrypted: true
       backupRetentionPeriod: 35
       preferredBackupWindow: 02:00-03:00
