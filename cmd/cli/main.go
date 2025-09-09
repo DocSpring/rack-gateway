@@ -428,8 +428,6 @@ PowerShell:
 		},
 	}
 
-	usersCmd := createUsersCmd()
-
 	// Two-step helpers as subcommands of login (visible only under `login --help`)
 	var completeState string
 	var completeCodeVerifier string
@@ -482,7 +480,7 @@ PowerShell:
 
 	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, usersCmd, envCmd)
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, envCmd)
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
