@@ -23,6 +23,8 @@ jobs:
           context: .
           file: Dockerfile.gateway-web
           tags: ${{ env.GATEWAY_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           load: false
           outputs: type=docker,dest=${{ runner.temp }}/gateway-api.tar
 
