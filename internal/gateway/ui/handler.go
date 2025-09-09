@@ -854,16 +854,23 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		}())
 		_ = h.emailer.Send(req.Email, subjectUser, bodyUser)
 
-		// Notify admins (including inviter)
+		// Notify admins (including inviter), but do not duplicate the end-user notification
 		admins := h.getAdminEmails()
-		if len(admins) > 0 {
+		filteredAdmins := make([]string, 0, len(admins))
+		for _, a := range admins {
+			if strings.EqualFold(a, req.Email) {
+				continue
+			}
+			filteredAdmins = append(filteredAdmins, a)
+		}
+		if len(filteredAdmins) > 0 {
 			subjectAdmin := fmt.Sprintf("Convox Gateway: New user added to %s", h.rackName)
 			creator := "unknown"
 			if inviter != nil {
 				creator = inviter.Email
 			}
 			bodyAdmin := fmt.Sprintf("%s added new user %s (%s) to rack '%s' with roles: %s", creator, req.Email, req.Name, h.rackName, strings.Join(req.Roles, ", "))
-			_ = h.emailer.SendMany(orderByInviterFirst(admins, inviter), subjectAdmin, bodyAdmin)
+			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, bodyAdmin)
 		}
 	}
 }
