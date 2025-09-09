@@ -1,5 +1,5 @@
 environment:
-  - GATEWAY_DOMAIN # required, e.g. gateway.example.com
+  - DOMAIN # required, e.g. gateway.example.com
   - APP_JWT_KEY # required
   - GOOGLE_CLIENT_ID # required
   - GOOGLE_CLIENT_SECRET # required
@@ -10,10 +10,10 @@ environment:
   - RACK_TOKEN # required API token for target rack
   - POSTMARK_API_TOKEN # optional email notifications
   - POSTMARK_FROM # optional sender address
-  - CONVOX_SECRET_ENV_VARS=DATABASE_URL,
+  - CONVOX_SECRET_ENV_VARS=DATABASE_URL
   # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
-  # - GATEWAY_DB_PATH=/app/data/db.sqlite
+  # - DB_PATH=/app/data/db.sqlite
   # - COOKIE_SECURE=true # in prod
   # - DEV_MODE=false
   # - RACK_USERNAME=convox # optional; defaults to convox
@@ -38,7 +38,7 @@ services:
       path: .
       manifest: Dockerfile
     command: ./convox-gateway-api
-    domain: ${GATEWAY_DOMAIN}
+    domain: ${DOMAIN}
     environment:
       - PORT=8080
       - AUDIT_LOG_RETENTION_DAYS=90

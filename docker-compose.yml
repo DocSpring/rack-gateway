@@ -44,9 +44,9 @@ services:
       dockerfile: Dockerfile.gateway-web
     image: ${GATEWAY_IMAGE:-convox-gateway-api:local}
     environment:
-      GATEWAY_PORT: ${GATEWAY_PORT:-8447}
-      GATEWAY_DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
-      GATEWAY_DEBUG_AUTH: ${GATEWAY_DEBUG_AUTH:-false}
+      PORT: ${GATEWAY_PORT:-8447}
+      DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
+      DEBUG_AUTH: ${GATEWAY_DEBUG_AUTH:-false}
       APP_JWT_KEY: dev-jwt-secret-key-change-in-production
       GOOGLE_CLIENT_ID: mock-client-id
       GOOGLE_CLIENT_SECRET: mock-client-secret
@@ -65,7 +65,7 @@ services:
       RACK_TOKEN: mock-rack-token-12345
       RACK_USERNAME: convox
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway?sslmode=disable
-      GATEWAY_LOG_RESPONSE_BODIES: "true"
+      LOG_RESPONSE_BODIES: "true"
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
     volumes: []
@@ -150,8 +150,8 @@ services:
       context: .
       dockerfile: Dockerfile.gateway-dev
     environment:
-      GATEWAY_PORT: ${GATEWAY_PORT:-8447}
-      GATEWAY_DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
+      PORT: ${GATEWAY_PORT:-8447}
+      DEBUG_OAUTH: ${GATEWAY_DEBUG_OAUTH:-false}
       APP_JWT_KEY: dev-jwt-secret-key-change-in-production
       GOOGLE_CLIENT_ID: mock-client-id
       GOOGLE_CLIENT_SECRET: mock-client-secret
@@ -170,7 +170,7 @@ services:
       RACK_USERNAME: convox
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway?sslmode=disable
       DEV_MODE: "true"
-      GATEWAY_LOG_RESPONSE_BODIES: "true"
+      LOG_RESPONSE_BODIES: "true"
       WEB_DEV_SERVER_URL: http://web-dev:5173
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
@@ -183,7 +183,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/api/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/api/health || exit 1",
+        ]
       interval: 2s
       timeout: 5s
       retries: 3
