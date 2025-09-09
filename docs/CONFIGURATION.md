@@ -53,7 +53,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 ## Database and Auditing
 
-- `DB_PATH` (default: `/app/data/db.sqlite`)
+Postgres is required; set `DATABASE_URL` or `PG*` variables.
   - SQLite database path for users, tokens, and audit logs.
 - `AUDIT_LOG_RETENTION_DAYS` (optional)
   - If set, the server purges audit rows older than N days at startup.

@@ -100,10 +100,9 @@ The Convox Gateway is split into multiple components:
 
 **Gateway Server**:
 
-- Uses SQLite database at `./data/db.sqlite` (or `/app/data/db.sqlite` in production)
+- Uses Postgres (set `DATABASE_URL` or `PG*` vars)
 - Has access to real Convox rack tokens via environment variables
 - Runs OAuth authentication and audit logging
-- Environment variable: `DB_PATH=./data/db.sqlite`
 
 **CLI Client** (`config/cli/` in dev, `~/.config/convox-gateway/` in production):
 
@@ -146,15 +145,13 @@ GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 
 ### 2. Database Configuration
 
-The gateway uses a SQLite database that is automatically initialized on first run. The first user to log in via Google OAuth will automatically be granted admin privileges.
+Use Postgres in all environments. Configure via `DATABASE_URL`, or via libpq-style env (`PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, and optionally `PGSSLMODE`).
 
 The database stores:
 
 - Users and their roles
 - API tokens for CI/CD
 - Audit logs
-
-The database location is controlled by the `DB_PATH` environment variable (default: `./data/db.sqlite` in development, `/app/data/db.sqlite` in production).
 
 ## Google OAuth Setup
 
@@ -196,7 +193,6 @@ The database location is controlled by the `DB_PATH` environment variable (defau
 The gateway automatically restricts access to users from your Google Workspace domain. Configure this in:
 
 - `mise.local.toml`: `GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"`
-- `config/gateway/config.yml`: `domain: "yourdomain.com"`
 
 ## Development Workflows
 

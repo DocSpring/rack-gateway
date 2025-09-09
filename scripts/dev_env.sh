@@ -33,20 +33,10 @@ fi
 # Load environment variables using mise
 eval "$(mise env --shell bash)"
 
-# Check if config.yml exists
-if [ ! -f config/config.yml ]; then
-    if [ -f config/config.yml.example ]; then
-        echo -e "${YELLOW}No config.yml found. Creating from example...${NC}"
-        cp config/config.yml.example config/config.yml
-        echo -e "${YELLOW}Please edit config/config.yml with your users and domain${NC}"
-    fi
-fi
-
 # Set default values if not provided
 export PORT=${PORT:-8080}
 export DEV_MODE=${DEV_MODE:-true}
 export MOCK_CONVOX_PORT=${MOCK_CONVOX_PORT:-5443}
-export DB_PATH=${DB_PATH:-./data/db.sqlite}
 
 # For development, use mock server if RACK_HOST is not set
 if [ -z "$RACK_HOST" ]; then
@@ -64,7 +54,6 @@ fi
 
 echo -e "${GREEN}Development environment ready!${NC}"
 echo -e "Gateway will run on port: ${PORT}"
-echo -e "Database path: ${DB_PATH}"
 
 # Execute the command passed to the script
 exec "$@"

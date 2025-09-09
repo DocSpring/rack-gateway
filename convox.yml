@@ -13,7 +13,7 @@ environment:
   - CONVOX_SECRET_ENV_VARS=DATABASE_URL
   # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
-  # - DB_PATH=/app/data/db.sqlite
+  # (Postgres only; no SQLite path)
   # - COOKIE_SECURE=true # in prod
   # - DEV_MODE=false
   # - RACK_USERNAME=convox # optional; defaults to convox

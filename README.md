@@ -216,10 +216,10 @@ The gateway uses a SQLite database to store users, API tokens, and audit logs:
 
 ```bash
 # Default location
-/app/data/db.sqlite
+Postgres is required; no SQLite support.
 
 # Override with environment variable
-GATEWAY_DB_PATH=/custom/path/db.sqlite
+DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
 ```
 
 The database is automatically initialized on first run with an admin user from the first Google OAuth login.
