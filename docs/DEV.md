@@ -305,7 +305,7 @@ LOG_LEVEL = "debug"
 
 **OAuth errors**: Ensure redirect URIs match exactly in Google Cloud Console and your local setup.
 
-**RBAC issues**: Check that your email is listed in `config/gateway/config.yml` with appropriate roles.
+**RBAC issues**: Ensure your email is allowed via roles in the database. For initial bootstrap in dev, set `ADMIN_USERS` to include your email.
 
 **CLI config issues**: The CLI stores config in different locations:
 
@@ -316,8 +316,6 @@ LOG_LEVEL = "debug"
 
 ```
 config/
-├── gateway/              # Gateway server configuration
-│   └── config.yml       # Users, roles, domain settings
 └── cli/                 # CLI development config (auto-created)
     ├── config.json      # JWT tokens and gateway URLs
     └── current          # Current rack selection
@@ -345,10 +343,9 @@ web/                   # React/TypeScript web UI
 ## Next Steps
 
 1. Set up your Google OAuth application
-2. Configure your domain and users in `config/gateway/config.yml`
-3. Add your OAuth credentials to `mise.local.toml`
-4. Run `make dev` and test the full authentication flow
-5. Try CLI commands: `./bin/convox-gateway login staging http://localhost:8447`
+2. Add your OAuth credentials to `mise.local.toml`
+3. Run `make dev` and test the full authentication flow
+4. Try CLI commands: `./bin/convox-gateway login staging http://localhost:8447`
 
 ## Production Deployment
 

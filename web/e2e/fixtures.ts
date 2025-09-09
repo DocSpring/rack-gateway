@@ -11,7 +11,7 @@ export const test = base.extend({
         const req = resp.request()
         const method = req.method()
         const url = resp.url()
-        const debugAuth = process.env.GATEWAY_DEBUG_AUTH === 'true'
+        const debugAuth = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug'
         if (status === 401 && url.includes('/.gateway/api/me') && !debugAuth) {
           return
         }

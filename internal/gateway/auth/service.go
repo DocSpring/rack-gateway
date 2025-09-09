@@ -5,11 +5,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/logging"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 )
 
@@ -106,15 +106,12 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, reason string) {
 	// Non-intrusive hint header + body for diagnostics
 	w.Header().Set("X-Error-Reason", reason)
-	// Optional structured debug for CI/E2E
-	if os.Getenv("DEBUG_AUTH") == "true" {
-		// Minimal context: method path, source of auth
-		src := r.Header.Get("X-Auth-Source")
-		if src == "" {
-			src = "none"
-		}
-		fmt.Printf("[auth:401] %s %s src=%s reason=%s\n", r.Method, r.URL.Path, src, reason)
+	// Structured debug at log level
+	src := r.Header.Get("X-Auth-Source")
+	if src == "" {
+		src = "none"
 	}
+	logging.Debugf("[auth:401] %s %s src=%s reason=%s", r.Method, r.URL.Path, src, reason)
 	http.Error(w, reason, http.StatusUnauthorized)
 }
 

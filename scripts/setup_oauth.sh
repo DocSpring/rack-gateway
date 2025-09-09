@@ -40,10 +40,10 @@ echo -e "${GREEN}Step 3: Create OAuth 2.0 Client ID${NC}"
 echo "1. Application type: Web application"
 echo "2. Name: Convox Gateway"
 echo "3. Authorized JavaScript origins:"
-echo "   - http://localhost:8080 (for development)"
+echo "   - http://localhost:8447 (for development)"
 echo "   - https://your-gateway-domain.com (for production)"
 echo "4. Authorized redirect URIs:"
-echo "   - http://localhost:8080/.gateway/api/cli/login/callback (for development)"
+echo "   - http://localhost:8447/.gateway/api/cli/login/callback (for development)"
 echo "   - https://your-gateway-domain.com/.gateway/api/cli/login/callback (for production)"
 echo "5. Click 'CREATE'"
 echo ""
@@ -94,15 +94,7 @@ else
     echo -e "${GREEN}Updated existing mise.local.toml${NC}"
 fi
 
-# Update config.yml domain if it exists
-if [ -f config/config.yml ]; then
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|^domain:.*|domain: $domain|" config/config.yml
-    else
-        sed -i "s|^domain:.*|domain: $domain|" config/config.yml
-    fi
-    echo -e "${GREEN}Updated domain in config/config.yml${NC}"
-fi
+# No YAML config to update; domain is enforced via GOOGLE_ALLOWED_DOMAIN
 
 echo ""
 echo -e "${GREEN}✓ OAuth setup complete!${NC}"
@@ -110,9 +102,9 @@ echo ""
 echo "Your credentials have been saved to mise.local.toml"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
-echo "1. Edit config/config.yml to add users with @$domain emails"
+echo "1. Ensure ADMIN_USERS includes your email for initial admin access (dev only)"
 echo "2. Run 'make dev' to start the development environment"
-echo "3. Test login at http://localhost:8080/.gateway/api/cli/login/start"
+echo "3. Test login at http://localhost:8447/.gateway/api/cli/login/start"
 echo ""
 echo -e "${BLUE}For production deployment:${NC}"
 echo "- Set these environment variables on your server"

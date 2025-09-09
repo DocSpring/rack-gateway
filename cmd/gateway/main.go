@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	"github.com/DocSpring/convox-gateway/internal/gateway/logging"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
@@ -155,10 +156,9 @@ func main() {
 	// Create combined auth service
 	authService := auth.NewAuthService(jwtManager, tokenService, database)
 
-	// Debug: Log OAuth configuration and PORT values
-	log.Printf("DEBUG: Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), cfg.Port)
-	log.Printf("DEBUG: OAuth config - ClientID: %s, BaseURL: %s, RedirectURL: %s",
-		cfg.GoogleClientID, cfg.GoogleOAuthBaseURL, cfg.RedirectURL)
+	// Debug: Log OAuth configuration and PORT values via log levels
+	logging.Debugf("Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), cfg.Port)
+	logging.Debugf("OAuth config - ClientID: %s, BaseURL: %s, RedirectURL: %s", cfg.GoogleClientID, cfg.GoogleOAuthBaseURL, cfg.RedirectURL)
 
 	// For OIDC, we need the issuer URL which is the base OAuth URL
 	issuerURL := cfg.GoogleOAuthBaseURL
@@ -405,11 +405,9 @@ func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 			})
 		}
 		authURL := oauth.StartWebLogin()
-		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
-			if u, err := url.Parse(authURL); err == nil {
-				reqID := middleware.GetReqID(r.Context())
-				log.Printf("[oauth:web] redirecting req_id=%s to auth_endpoint host=%s path=%s (query=redacted)", reqID, u.Host, u.Path)
-			}
+		if u, err := url.Parse(authURL); err == nil {
+			reqID := middleware.GetReqID(r.Context())
+			logging.Debugf("[oauth:web] redirecting req_id=%s to auth_endpoint host=%s path=%s (query=redacted)", reqID, u.Host, u.Path)
 		}
 		// Use 302 (Found) for broad browser compatibility with navigation flows
 		w.Header().Set("Allow", "GET, HEAD")
@@ -427,19 +425,13 @@ func handleCLILoginRedirectCallback(database *db.Database) http.HandlerFunc {
 			http.Error(w, "missing code or state parameter", http.StatusBadRequest)
 			return
 		}
-		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
-			reqID := middleware.GetReqID(r.Context())
-			log.Printf("[oauth:cli] redirect callback req_id=%s code_present=%t state_present=%t", reqID, code != "", state != "")
-		}
+		logging.Debugf("[oauth:cli] redirect callback req_id=%s code_present=%t state_present=%t", middleware.GetReqID(r.Context()), code != "", state != "")
 		if database != nil {
 			_ = database.SaveCLILoginCode(state, code)
 		}
 
 		// Redirect to a nicer static success page served by the web bundle
-		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
-			reqID := middleware.GetReqID(r.Context())
-			log.Printf("[oauth:cli] redirecting req_id=%s to /.gateway/web/cli-auth-success.html", reqID)
-		}
+		logging.Debugf("[oauth:cli] redirecting req_id=%s to /.gateway/web/cli-auth-success.html", middleware.GetReqID(r.Context()))
 		http.Redirect(w, r, "/.gateway/web/cli-auth-success.html", http.StatusTemporaryRedirect)
 	}
 }
@@ -527,10 +519,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 			return
 		}
 
-		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
-			reqID := middleware.GetReqID(r.Context())
-			log.Printf("[oauth:web] callback req_id=%s code_present=%t state_present=%t", reqID, code != "", state != "")
-		}
+		logging.Debugf("[oauth:web] callback req_id=%s code_present=%t state_present=%t", middleware.GetReqID(r.Context()), code != "", state != "")
 		// Web flow doesn't use PKCE
 		resp, err := oauth.CompleteLogin(code, state, "")
 		if err != nil {
@@ -593,10 +582,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 		if frontend == "" {
 			frontend = "/.gateway/web/"
 		}
-		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
-			reqID := middleware.GetReqID(r.Context())
-			log.Printf("[oauth:web] redirecting req_id=%s to frontend=%s", reqID, frontend)
-		}
+		logging.Debugf("[oauth:web] redirecting req_id=%s to frontend=%s", middleware.GetReqID(r.Context()), frontend)
 		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
 	}
 }
