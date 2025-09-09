@@ -41,8 +41,7 @@ jobs:
       WEB_PORT: 5173
       GATEWAY_PORT: 8447
       MOCK_OAUTH_PORT: 3345
-      GATEWAY_DEBUG_OAUTH: "true"
-      DEBUG: pw:api
+      GATEWAY_DEBUG_OAUTH: "false"
       CHECK_VITE_PROXY: "false"
       GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
     steps:
