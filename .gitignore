@@ -55,3 +55,4 @@ dev/mock-oauth/package-lock.json
 # Test artifacts
 web/test-results/
 web/coverage/
+web/playwright-report/

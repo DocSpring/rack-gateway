@@ -157,14 +157,17 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var config rbac.GatewayConfig
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	// Accept a minimal payload with users map; domain is read-only here
+	var payload struct {
+		Users map[string]*rbac.UserConfig `json:"users"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
 	// Update users in the database
-	for email, userConfig := range config.Users {
+	for email, userConfig := range payload.Users {
 		if err := h.rbacManager.SaveUser(email, userConfig); err != nil {
 			http.Error(w, "failed to save user", http.StatusInternalServerError)
 			return

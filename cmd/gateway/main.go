@@ -105,7 +105,7 @@ func main() {
 		}
 	}
 
-	// Initialize admin user if needed (legacy path)
+	// Initialize admin user if configured
 	if len(cfg.AdminUsers) > 0 {
 		adminEmail := strings.TrimSpace(cfg.AdminUsers[0])
 		if adminEmail != "" {
@@ -115,7 +115,7 @@ func main() {
 		}
 	}
 
-	// Migration from config.yml removed - database is the only source now
+	// Database is the only source of configuration/state now
 
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTExpiry)
 

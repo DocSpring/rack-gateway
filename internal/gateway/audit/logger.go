@@ -566,7 +566,7 @@ func (l *Logger) mapHttpStatusToStatus(httpStatus int) string {
 	}
 }
 
-// mapStatusToString kept for test compatibility; delegates to RBAC + HTTP mapping
+// mapStatusToString delegates to RBAC + HTTP mapping
 func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
 	if strings.ToLower(rbacDecision) == "deny" {
 		return "denied"

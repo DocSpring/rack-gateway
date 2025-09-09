@@ -244,7 +244,7 @@ func GetAuthUser(ctx context.Context) (*AuthUser, bool) {
 	return user, ok
 }
 
-// GetUser maintains backward compatibility for JWT-based claims
+// GetUser returns JWT claims for non-API token requests
 func GetUser(ctx context.Context) (*Claims, bool) {
 	authUser, ok := ctx.Value(UserContextKey).(*AuthUser)
 	if !ok || authUser.IsAPIToken {

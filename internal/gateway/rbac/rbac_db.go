@@ -2,9 +2,6 @@ package rbac
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
@@ -328,73 +325,4 @@ func (a *memoryAdapter) RemovePolicy(sec string, ptype string, rule []string) er
 
 func (a *memoryAdapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
 	return nil
-}
-
-// MigrateFromConfigFile migrates users from config.yml to the database
-func MigrateFromConfigFile(database *db.Database, configPath string) error {
-	// Check if config file exists
-	if configPath == "" {
-		return nil // No config file to migrate
-	}
-
-	// Load config.yml
-	config, err := LoadConfig(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config file: %w", err)
-	}
-
-	// Migrate each user
-	for email, userConfig := range config.Users {
-		existing, err := database.GetUser(email)
-		if err != nil {
-			return fmt.Errorf("failed to check existing user %s: %w", email, err)
-		}
-
-		if existing == nil {
-			// Create user if doesn't exist
-			_, err = database.CreateUser(email, userConfig.Name, userConfig.Roles)
-			if err != nil {
-				// If user already exists (race condition), update instead
-				if strings.Contains(err.Error(), "UNIQUE") {
-					err = database.UpdateUserRoles(email, userConfig.Roles)
-				}
-				if err != nil {
-					return fmt.Errorf("failed to migrate user %s: %w", email, err)
-				}
-			}
-		}
-	}
-
-	// Rename config file to indicate migration is complete
-	backupPath := configPath + ".migrated"
-	if err := renameFile(configPath, backupPath); err != nil {
-		// Log but don't fail - migration was successful
-		fmt.Printf("Warning: Could not rename config file: %v\n", err)
-	} else {
-		fmt.Printf("Migration complete. Config file renamed to: %s\n", backupPath)
-	}
-
-	return nil
-}
-
-// renameFile safely renames a file
-func renameFile(old, new string) error {
-	// Create backup directory if needed
-	dir := filepath.Dir(new)
-	if err := ensureDir(dir); err != nil {
-		return err
-	}
-
-	return renameFileAtomic(old, new)
-}
-
-// ensureDir creates a directory if it doesn't exist
-func ensureDir(dir string) error {
-	return os.MkdirAll(dir, 0755)
-}
-
-// renameFileAtomic performs an atomic file rename
-func renameFileAtomic(old, new string) error {
-	// On Unix systems, os.Rename is atomic
-	return os.Rename(old, new)
 }

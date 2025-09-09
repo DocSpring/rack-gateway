@@ -15,7 +15,6 @@ API proxy for Convox racks with SSO, RBAC, and audit logging
 - **[docs/DEPLOY.md](docs/DEPLOY.md)** - Production deployment guide
 - **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** - All environment variables and options
 - **[docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md)** - How Convox works
-- **[docs/TODO.md](docs/TODO.md)** - TODO list / Roadmap
 
 ## Features
 
