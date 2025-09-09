@@ -20,6 +20,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"strings"
 )
 
 const (
@@ -142,6 +143,8 @@ func (s *TestServers) startGateway(t *testing.T) {
 	s.gatewayCmd.Env = append(os.Environ(),
 		"PORT="+gatewayPort,
 		"PORT="+gatewayPort,
+		"DEV_MODE=true",
+		"DOMAIN=localhost",
 		"APP_JWT_KEY=test-secret-key-for-integration-testing",
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
@@ -189,8 +192,24 @@ func (s *TestServers) initTestDatabase(dbPath string) error {
 	}
 
 	for _, u := range testUsers {
-		if _, err := database.CreateUser(u.email, u.name, u.roles); err != nil {
-			return fmt.Errorf("failed to create user %s: %w", u.email, err)
+		existing, err := database.GetUser(u.email)
+		if err != nil {
+			return fmt.Errorf("failed to check user %s: %w", u.email, err)
+		}
+		if existing == nil {
+			if _, err := database.CreateUser(u.email, u.name, u.roles); err != nil {
+				// On duplicate, fall back to update
+				if !strings.Contains(err.Error(), "duplicate key value") && !strings.Contains(err.Error(), "UNIQUE") {
+					return fmt.Errorf("failed to create user %s: %w", u.email, err)
+				}
+				if err := database.UpdateUserRoles(u.email, u.roles); err != nil {
+					return fmt.Errorf("failed to upsert user %s: %w", u.email, err)
+				}
+			}
+		} else {
+			if err := database.UpdateUserRoles(u.email, u.roles); err != nil {
+				return fmt.Errorf("failed to update user %s: %w", u.email, err)
+			}
 		}
 	}
 

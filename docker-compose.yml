@@ -69,6 +69,7 @@ services:
     image: ${GATEWAY_IMAGE:-convox-gateway-api:local}
     environment:
       <<: *gateway_common_env
+      DOMAIN: localhost
       PORT: ${GATEWAY_PORT:-8447}
       # Internal service URL for OIDC discovery/token endpoints
       GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}

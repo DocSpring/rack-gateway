@@ -6,13 +6,15 @@ WEB_PORT="${WEB_PORT:-5173}"
 WEB_UI_PATH="${WEB_UI_PATH:-/.gateway/web/}"
 GATEWAY_PORT="${GATEWAY_PORT:-8447}"
 OAUTH_PORT="${MOCK_OAUTH_PORT:-3345}"
+# Max total wait (seconds)
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-30}"
 
 retry() {
   local url="$1"
   local i=0
   until curl -fsS "$url" >/dev/null 2>&1; do
     i=$((i+1))
-    if [ "$i" -gt 60 ]; then
+    if [ "$i" -gt "$MAX_WAIT_SECONDS" ]; then
       echo "Timed out waiting for $url"
       exit 1
     fi
@@ -20,11 +22,11 @@ retry() {
   done
 }
 
-echo "Waiting for Web UI on http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
-retry "http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
-
 echo "Waiting for Gateway on http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/health"
 retry "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/health"
+
+echo "Waiting for Web UI on http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
+retry "http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
 
 echo "Waiting for Mock OAuth on http://127.0.0.1:${OAUTH_PORT}/health"
 retry "http://127.0.0.1:${OAUTH_PORT}/health"

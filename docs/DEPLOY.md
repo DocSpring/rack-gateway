@@ -32,7 +32,8 @@ Create an OAuth client in Google Cloud Console for your Workspace domain:
 - Authorized JavaScript origins:
   - https://$WEB_DOMAIN (e.g., https://portal.example.com)
 - Authorized redirect URIs:
-- https://$DOMAIN/.gateway/api/web/callback
+  - https://$DOMAIN/.gateway/api/auth/web/callback
+  - https://$DOMAIN/.gateway/api/auth/cli/callback
 
 1. Copy the values:
 

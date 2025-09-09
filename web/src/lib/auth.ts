@@ -75,7 +75,7 @@ class AuthService {
   // Logout
   logout(): void {
     // Request server-side logout to clear HttpOnly cookie, then go to login
-  fetch(`${API_BASE}/.gateway/api/auth/web/logout`, { credentials: 'include' })
+    fetch(`${API_BASE}/.gateway/api/auth/web/logout`, { credentials: 'include' })
       .catch((_e) => {
         /* ignore network errors during logout */
       })

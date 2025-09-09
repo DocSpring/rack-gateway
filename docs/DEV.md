@@ -183,7 +183,7 @@ The database stores:
 4. Add authorized redirect URIs:
 
 - `http://localhost:8447/.gateway/api/auth/cli/callback` (development)
-- `https://your-production-domain.com/.gateway/api/cli/login/callback` (production)
+- `https://your-production-domain.com/.gateway/api/auth/cli/callback` (production)
 
 5. Save and copy the Client ID and Client Secret
 6. Update your `mise.local.toml` with these values
