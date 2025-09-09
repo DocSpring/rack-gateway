@@ -54,9 +54,8 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 ## Database and Auditing
 
-Postgres is required; set `DATABASE_URL` or `PG*` variables.
+Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
 
-- SQLite database path for users, tokens, and audit logs.
 - `AUDIT_LOG_RETENTION_DAYS` (optional)
   - If set, the server purges audit rows older than N days at startup.
   - Also used by the `convox-gateway audit-cleanup --days N` command (see [DEPLOY.md](DEPLOY.md)).

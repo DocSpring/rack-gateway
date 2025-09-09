@@ -212,14 +212,10 @@ See docs/CONFIGURATION.md for the full list of environment variables and configu
 
 ### Database
 
-The gateway uses a SQLite database to store users, API tokens, and audit logs:
+The gateway uses Postgres to store users, API tokens, and audit logs. Set a connection URL via `DATABASE_URL` (or equivalent `PG*` vars):
 
 ```bash
-# Default location
-Postgres is required; no SQLite support.
-
-# Override with environment variable
-DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+DATABASE_URL=postgres://user:pass@host:5432/dbname?sslmode=require
 ```
 
 The database is automatically initialized on first run with an admin user from the first Google OAuth login.
@@ -395,7 +391,7 @@ For issues or questions:
 
 ### Retention and scheduled cleanup
 
-Audit events are stored in SQLite for the UI and also emitted to stdout in structured JSON for CloudWatch. To keep the local DB small:
+Audit events are stored in Postgres and also emitted to stdout in structured JSON for CloudWatch. To keep the DB lean:
 
 - Environment-based cleanup at boot: set `AUDIT_LOG_RETENTION_DAYS` to purge old rows during startup.
 - Scheduled cleanup command (for Convox timers):
