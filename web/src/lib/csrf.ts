@@ -13,7 +13,7 @@ export async function ensureCsrfToken(): Promise<string | null> {
     return csrfCache
   }
   try {
-    const r = await fetch('/.gateway/api/csrf', { credentials: 'include' })
+    const r = await fetch('/.gateway/api/auth/web/csrf', { credentials: 'include' })
     const j = await r.json().catch(() => null)
     if (j?.token) {
       setCsrfToken(j.token)

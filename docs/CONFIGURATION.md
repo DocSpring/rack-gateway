@@ -28,8 +28,10 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - Enforces a single allowed email domain, e.g. `company.com`.
 - `GOOGLE_OAUTH_BASE_URL` (default: `https://accounts.google.com`)
   - OIDC issuer base URL. Override in development for the mock OAuth server.
-- `REDIRECT_URL` (required)
-  - OAuth callback URL for the web flow, e.g. `https://gateway.example.com/.gateway/api/web/callback`.
+Derived from `DOMAIN`. No separate redirect URL is needed.
+  - OAuth callback URLs are derived from DOMAIN:
+    - Web: `https://gateway.example.com/.gateway/api/auth/web/callback`
+    - CLI: `https://gateway.example.com/.gateway/api/auth/cli/callback`
 - `ADMIN_USERS` (optional)
   - Comma-separated emails to bootstrap admin access on first run.
 

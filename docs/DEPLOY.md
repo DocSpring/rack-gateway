@@ -56,7 +56,7 @@ convox env set \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
   GOOGLE_ALLOWED_DOMAIN=yourcompany.com \
-  REDIRECT_URL=https://gateway.example.com/.gateway/api/web/callback \
+  DOMAIN=gateway.example.com \
   ADMIN_USERS=admin@yourcompany.com \
   RACK_HOST=https://api.target-rack.convox.cloud \
   RACK_TOKEN=xxxxx \

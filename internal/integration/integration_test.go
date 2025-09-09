@@ -331,7 +331,7 @@ func testProxyWithInvalidToken(t *testing.T, s *TestServers) {
 
 func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 	// Test login start endpoint
-	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/.gateway/api/cli/login/start", "application/json", nil)
+	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/.gateway/api/auth/cli/start", "application/json", nil)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

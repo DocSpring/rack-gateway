@@ -619,7 +619,7 @@ func startLogin(gatewayURL string) (*LoginStartResponse, error) {
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/.gateway/api/cli/login/start", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/.gateway/api/auth/cli/start", strings.TrimSuffix(parsedURL, "/"))
 
 	resp, err := http.Post(url, "application/json", nil)
 	if err != nil {
@@ -645,7 +645,7 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/.gateway/api/cli/login/complete", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/.gateway/api/auth/cli/complete", strings.TrimSuffix(parsedURL, "/"))
 
 	payload := map[string]string{"state": state, "code_verifier": codeVerifier}
 

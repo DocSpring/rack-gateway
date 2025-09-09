@@ -158,7 +158,7 @@ func main() {
 
 	// Debug: Log OAuth configuration and PORT values via log levels
 	logging.Debugf("Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), cfg.Port)
-	logging.Debugf("OAuth config - ClientID: %s, BaseURL: %s, RedirectURL: %s", cfg.GoogleClientID, cfg.GoogleOAuthBaseURL, cfg.RedirectURL)
+	logging.Debugf("OAuth config - ClientID: %s, BaseURL: %s", cfg.GoogleClientID, cfg.GoogleOAuthBaseURL)
 
 	// For OIDC, we need the issuer URL which is the base OAuth URL
 	issuerURL := cfg.GoogleOAuthBaseURL
@@ -166,10 +166,20 @@ func main() {
 		issuerURL = "https://accounts.google.com"
 	}
 
+	// Derive redirect base from DOMAIN (production) or localhost in dev
+	redirectInput := ""
+	if cfg.Domain != "" {
+		redirectInput = "https://" + cfg.Domain
+	} else if cfg.DevMode {
+		redirectInput = "http://localhost:" + cfg.Port
+	}
+	if redirectInput == "" {
+		log.Fatalf("DOMAIN must be set (or use DEV_MODE with PORT) to derive OAuth redirect URLs")
+	}
 	oauthHandler, err := auth.NewOAuthHandler(
 		cfg.GoogleClientID,
 		cfg.GoogleClientSecret,
-		cfg.RedirectURL,
+		redirectInput,
 		allowedDomain,
 		issuerURL,
 		jwtManager,
@@ -217,8 +227,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// CLI OAuth endpoints under /.gateway/api/cli/*
-	// Serve UI static files under /.gateway/web/
+	// Auth + UI
 	r.Get("/.gateway/web", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/.gateway/web/", http.StatusMovedPermanently)
 	})
@@ -226,20 +235,21 @@ func main() {
 
 	// Expose API only under /.gateway/api/*
 	r.Route("/.gateway/api", func(r chi.Router) {
-		// CLI OAuth endpoints
-		r.Post("/cli/login/start", handleCLILoginStart(oauthHandler, database))
-		r.Get("/cli/login/callback", handleCLILoginRedirectCallback(database))
-		r.Post("/cli/login/complete", handleCLILoginComplete(oauthHandler, database))
-		// Health + CSRF (no auth required)
+		// Auth (scoped under /auth)
+		r.Post("/auth/cli/start", handleCLILoginStart(oauthHandler, database))
+		r.Get("/auth/cli/callback", handleCLILoginRedirectCallback(database))
+		r.Post("/auth/cli/complete", handleCLILoginComplete(oauthHandler, database))
+		// Health (no auth required)
 		r.Get("/health", uiHandler.Health)
-		r.Get("/csrf", uiHandler.GetCSRFToken)
+		// CSRF for web under /auth/web (no auth required)
+		r.Get("/auth/web/csrf", uiHandler.GetCSRFToken)
 
 		// OAuth (web) endpoints
 		// Accept both GET and HEAD for login to support headless browser probes
-		r.Get("/web/login", handleWebLoginStart(oauthHandler, database))
-		r.Head("/web/login", handleWebLoginStart(oauthHandler, database))
-		r.Get("/web/callback", handleWebLoginCallback(oauthHandler, database))
-		r.Get("/web/logout", handleWebLogout(database))
+		r.Get("/auth/web/login", handleWebLoginStart(oauthHandler, database))
+		r.Head("/auth/web/login", handleWebLoginStart(oauthHandler, database))
+		r.Get("/auth/web/callback", handleWebLoginCallback(oauthHandler, database))
+		r.Get("/auth/web/logout", handleWebLogout(database))
 
 		// Authenticated endpoints
 		r.Group(func(r chi.Router) {
@@ -385,10 +395,7 @@ func handleCLILoginStart(oauth *auth.OAuthHandler, database *db.Database) http.H
 func handleWebLoginStart(oauth *auth.OAuthHandler, database *db.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Optional detailed OAuth debug logging
-		if os.Getenv("GATEWAY_DEBUG_OAUTH") == "true" {
-			reqID := middleware.GetReqID(r.Context())
-			log.Printf("[oauth:web] start login req_id=%s host=%s ua=%q", reqID, r.Host, r.UserAgent())
-		}
+		logging.Debugf("[oauth:web] start login req_id=%s host=%s ua=%q", middleware.GetReqID(r.Context()), r.Host, r.UserAgent())
 		if database != nil {
 			_ = audit.LogDB(database, &db.AuditLog{
 				UserEmail:      "",

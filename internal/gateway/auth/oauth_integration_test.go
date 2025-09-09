@@ -21,7 +21,7 @@ func TestOAuthEndpoint_UsesCustomBaseURL(t *testing.T) {
 	handler := NewOAuthHandler(
 		"mock-client-id",
 		"mock-client-secret",
-		"http://localhost:8447/.gateway/api/cli/login/callback",
+		"http://localhost:8447",
 		"company.com",
 		"http://mock-oauth:3001", // This should make it use mock endpoints
 		jwtManager,

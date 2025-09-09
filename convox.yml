@@ -4,7 +4,6 @@ environment:
   - GOOGLE_CLIENT_ID # required
   - GOOGLE_CLIENT_SECRET # required
   - GOOGLE_ALLOWED_DOMAIN # required, e.g. company.com
-  - REDIRECT_URL # required, e.g. https://gateway.example.com/.gateway/web/callback
   - ADMIN_USERS # comma-separated bootstrap admins
   - RACK_HOST # required for gateway to proxy to target Convox API (host or full URL)
   - RACK_TOKEN # required API token for target rack

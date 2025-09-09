@@ -25,7 +25,7 @@ class AuthService {
     // Store rack for callback
     sessionStorage.setItem('oauth_rack', rack)
     // Redirect directly to web login endpoint
-    window.location.href = `${API_BASE}/.gateway/api/web/login`
+    window.location.href = `${API_BASE}/.gateway/api/auth/web/login`
   }
 
   // Handle OAuth callback
@@ -75,7 +75,7 @@ class AuthService {
   // Logout
   logout(): void {
     // Request server-side logout to clear HttpOnly cookie, then go to login
-    fetch(`${API_BASE}/.gateway/api/web/logout`, { credentials: 'include' })
+  fetch(`${API_BASE}/.gateway/api/auth/web/logout`, { credentials: 'include' })
       .catch((_e) => {
         /* ignore network errors during logout */
       })

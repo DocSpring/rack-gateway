@@ -6,9 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -44,7 +42,8 @@ type LoginResponse struct {
 }
 
 // NewOAuthHandler creates a new OAuth handler using vetted OIDC libraries
-func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, issuerURL string, jwtManager *JWTManager) (*OAuthHandler, error) {
+// The third parameter can be either a base URL (scheme+host) or a full web callback URL.
+func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string, jwtManager *JWTManager) (*OAuthHandler, error) {
 	ctx := context.Background()
 
 	// Use vetted OIDC provider discovery
@@ -53,11 +52,17 @@ func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, iss
 		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
 
+	// Derive redirects from provided value (accept base or full web callback)
+	_, webRedirect, cliRedirect, err := deriveRedirects(redirectURLOrBase)
+	if err != nil {
+		return nil, err
+	}
+
 	// Configure OAuth2 for CLI flow (with PKCE)
 	oauth2ConfigCLI := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		RedirectURL:  baseRedirectURL + "/.gateway/api/cli/login/callback",
+		RedirectURL:  cliRedirect,
 		Endpoint:     provider.Endpoint(),
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
@@ -66,14 +71,11 @@ func NewOAuthHandler(clientID, clientSecret, baseRedirectURL, allowedDomain, iss
 	oauth2ConfigWeb := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		RedirectURL:  baseRedirectURL + "/.gateway/api/web/callback",
+		RedirectURL:  webRedirect,
 		Endpoint:     provider.Endpoint(),
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
-	if os.Getenv("DEBUG_OAUTH") == "true" {
-		ep := provider.Endpoint()
-		log.Printf("[oauth:cfg] issuer=%s authURL=%s tokenURL=%s webRedirect=%s", issuerURL, ep.AuthURL, ep.TokenURL, oauth2ConfigWeb.RedirectURL)
-	}
+	// optional: log at debug level happens in main
 
 	// Create ID token verifier with proper configuration
 	verifierConfig := &oidc.Config{
@@ -125,12 +127,6 @@ func (h *OAuthHandler) StartWebLogin() string {
 		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
 
-	if os.Getenv("DEBUG_OAUTH") == "true" {
-		// Log only host + path to avoid leaking query (state, client_id)
-		if u, err := url.Parse(authURL); err == nil {
-			log.Printf("[oauth:web] built auth URL host=%s path=%s (query=redacted)", u.Host, u.Path)
-		}
-	}
 	return authURL
 }
 
@@ -225,4 +221,26 @@ func generatePKCEChallenge(verifier string) string {
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(sha[:])
 }
 
-// (no extra wrappers; keep logging simple and guarded by env)
+// deriveRedirects builds web and CLI redirect URIs from a provided base or full web callback
+func deriveRedirects(input string) (base string, web string, cli string, err error) {
+	in := strings.TrimSpace(input)
+	if in == "" {
+		return "", "", "", fmt.Errorf("missing domain: cannot derive OAuth redirect URLs")
+	}
+	u, perr := url.Parse(in)
+	if perr != nil || u.Scheme == "" || u.Host == "" {
+		return "", "", "", fmt.Errorf("invalid redirect base: must include scheme and host")
+	}
+	base = u.Scheme + "://" + u.Host
+	p := strings.TrimSuffix(u.Path, "/")
+	if strings.HasSuffix(p, "/.gateway/api/auth/web/callback") || strings.HasSuffix(p, "/.gateway/web/callback") {
+		// Treat input as full web callback URL
+		web = u.String()
+		cli = base + "/.gateway/api/auth/cli/callback"
+		return
+	}
+	// Treat input as base URL
+	web = base + "/.gateway/api/auth/web/callback"
+	cli = base + "/.gateway/api/auth/cli/callback"
+	return
+}

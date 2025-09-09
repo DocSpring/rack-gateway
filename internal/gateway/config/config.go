@@ -12,13 +12,13 @@ import (
 
 type Config struct {
 	Port                string
+	Domain              string
 	JWTSecret           string
 	JWTExpiry           time.Duration
 	GoogleClientID      string
 	GoogleClientSecret  string
 	GoogleAllowedDomain string
 	GoogleOAuthBaseURL  string
-	RedirectURL         string
 	AdminUsers          []string
 	ViewerUsers         []string
 	DeployerUsers       []string
@@ -41,12 +41,12 @@ type RackConfig struct {
 func Load() (*Config, error) {
 	cfg := &Config{
 		Port:                getEnv("PORT", "8080"),
+		Domain:              getEnv("DOMAIN", ""),
 		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", ""),
 		GoogleOAuthBaseURL:  getEnv("GOOGLE_OAUTH_BASE_URL", ""),
-		RedirectURL:         getEnv("REDIRECT_URL", ""),
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),
 		LogResponseBodies:   getEnv("LOG_RESPONSE_BODIES", "false") == "true",

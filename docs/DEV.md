@@ -182,7 +182,7 @@ The database stores:
 3. Choose "Web application"
 4. Add authorized redirect URIs:
 
-- `http://localhost:8447/.gateway/api/cli/login/callback` (development)
+- `http://localhost:8447/.gateway/api/auth/cli/callback` (development)
 - `https://your-production-domain.com/.gateway/api/cli/login/callback` (production)
 
 5. Save and copy the Client ID and Client Secret

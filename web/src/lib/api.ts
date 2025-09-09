@@ -106,7 +106,7 @@ class ApiService {
           const method: string = (err.config?.method || 'get').toUpperCase()
           if (method !== 'GET' && url.startsWith('/.gateway/api/admin')) {
             // refresh token
-            fetch('/.gateway/api/csrf', { credentials: 'include' }).catch(() => {
+            fetch('/.gateway/api/auth/web/csrf', { credentials: 'include' }).catch(() => {
               /* ignore */
             })
           }

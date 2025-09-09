@@ -15,6 +15,6 @@ describe('authService', () => {
         }) as unknown as Promise<Response>
     )
     authService.logout()
-    expect(fetchSpy).toHaveBeenCalledWith('/.gateway/api/web/logout', { credentials: 'include' })
+    expect(fetchSpy).toHaveBeenCalledWith('/.gateway/api/auth/web/logout', { credentials: 'include' })
   })
 })
