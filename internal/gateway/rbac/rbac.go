@@ -85,6 +85,7 @@ var policies = [][]string{
 	{"p", "deployer", "convox:build:create", "*"},
 	{"p", "deployer", "convox:object:create", "*"},
 	{"p", "deployer", "convox:release:create", "*"},
+	{"p", "deployer", "convox:release:get", "*"},
 	{"p", "deployer", "convox:release:promote", "*"},
 	{"p", "deployer", "convox:env:view", "*"},
 	{"p", "deployer", "convox:env:set", "*"},

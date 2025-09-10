@@ -147,7 +147,7 @@ login_cli_as "admin@company.com" "e2e"
 verify_command "rack" "Current rack: e2e" "Logged in as admin@company.com"
 verify_command "convox rack" "mock-rack" "mock-rack.example.com"
 verify_command "convox apps" "convox-gateway" "RAPI123456"
-verify_command "convox apps info -a convox-gateway" \
+verify_command "convox apps info" \
   "Name        convox-gateway" "Status      running"
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
@@ -166,23 +166,24 @@ verify_command "convox exec p-worker-1 'echo hello'" \
   'Session closed.'
 
 # List environment for a known app
-verify_command "convox env -a convox-gateway" \
-  "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
+verify_command "convox env" \
+  "DATABASE_URL=********************" \
+  "NODE_ENV=production" \
+  "PORT=3000"
 
 # Fetch secret
-verify_command "env get DATABASE_URL -a convox-gateway --secrets" \
+verify_command "env get DATABASE_URL --secrets" \
   "postgres://user:pass@localhost/db"
 
-
 # Test env set without promote
-verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "Release:"
+verify_command "convox env set FOO=bar" "Setting FOO... OK" "Release:"
 
 # Test env set with promote
-verify_command "convox env set -a convox-gateway FOO=bar --promote" \
+verify_command "convox env set FOO=bar --promote" \
   "Setting FOO... OK" "Release:" "Promoting "
 
 # Test full build + release flow
-verify_command "convox deploy -a convox-gateway" \
+verify_command "convox deploy" \
   "Packaging source..." "Uploading source..." "Starting build..." \
   "Building app..." \
   "Step 1/1: mock build step" \
@@ -206,15 +207,15 @@ login_cli_as "deployer@company.com" "e2e"
 verify_command "convox ps" "p-web-1" "p-worker-1"
 
 # List environment for a known app
-verify_command "convox env -a convox-gateway" \
+verify_command "convox env" \
   "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
 
 # Cannot fetch secret
-verify_command_failure "env get DATABASE_URL -a convox-gateway --secrets" \
+verify_command_failure "env get DATABASE_URL --secrets" \
   "Error: failed to fetch env: forbidden"
 
 # Test env set without promote
-verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "Release:"
+verify_command "convox env set FOO=bar" "Setting FOO... OK" "Release:"
 
 # Should not be able to delete apps
 verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
@@ -233,7 +234,7 @@ verify_command_failure "convox env" \
   "ERROR: permission denied"
 
 # Cannot fetch secret
-verify_command_failure "env get DATABASE_URL -a convox-gateway --secrets" \
+verify_command_failure "env get DATABASE_URL --secrets" \
   "Error: failed to fetch env: forbidden"
 
 # Viewer should not be able to set env or delete apps
