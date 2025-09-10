@@ -169,6 +169,8 @@ func main() {
 
 	r.HandleFunc("/apps/{app}/builds", getBuilds).Methods("GET")
 	r.HandleFunc("/apps/{app}/builds/{id}", getBuild).Methods("GET")
+	// Build creation endpoint needed by deploy flows
+	r.HandleFunc("/apps/{app}/builds", createBuild).Methods("POST")
 
 	r.HandleFunc("/apps/{app}/releases", handleReleases).Methods("GET", "POST")
 	r.HandleFunc("/apps/{app}/releases/{id}", getRelease).Methods("GET")
@@ -179,6 +181,7 @@ func main() {
 
 	// Logs streaming (WebSocket)
 	r.HandleFunc("/apps/{app}/logs", appLogs).Methods("GET")
+	r.HandleFunc("/apps/{app}/builds/{id}/logs", buildLogs).Methods("GET")
 
 	// Object upload used by deploy: POST /apps/{app}/objects/tmp/<name>.tgz
 	r.HandleFunc("/apps/{app}/objects/tmp/{name}", uploadObject).Methods("POST")
@@ -496,13 +499,22 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 
 	// Send a tiny session transcript
 	_ = conn.WriteMessage(websocket.TextMessage, []byte("Connected to mock exec for app="+app+" pid="+id+"\n"))
-	// If a command was provided on query, echo it (some clients may do this)
-	if cmd := r.URL.Query().Get("command"); cmd != "" {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("$ "+cmd+"\n"))
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
+	// Convox passes exec options via headers; support both header and query param
+	cmd := r.Header.Get("command")
+	if cmd == "" {
+		cmd = r.URL.Query().Get("command")
 	}
-
-	_ = conn.WriteMessage(websocket.TextMessage, []byte("Session closing.\n"))
+	if cmd != "" {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("$ "+cmd+"\n"))
+		// Basic echo emulation for `echo <text>`
+		if strings.HasPrefix(cmd, "echo ") {
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(strings.TrimPrefix(cmd, "echo ")+"\n"))
+		} else {
+			_ = conn.WriteMessage(websocket.TextMessage, []byte("(mock output)\n"))
+		}
+		_ = conn.WriteMessage(websocket.TextMessage, []byte("Exit code: 0\n"))
+	}
+	_ = conn.WriteMessage(websocket.TextMessage, []byte("Session closed.\n"))
 }
 
 func parseSubprotocols(h string) []string {
@@ -655,6 +667,33 @@ func getBuild(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(build)
 }
 
+// createBuild simulates POST /apps/{app}/builds and returns a new Build
+func createBuild(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	id := fmt.Sprintf("BNEW%06d", time.Now().UnixNano()%1000000)
+	build := Build{
+		ID:          id,
+		App:         app,
+		Description: "created by mock",
+		Status:      "running",
+		Release:     "R" + id[1:],
+		Started:     time.Now(),
+	}
+	// Optionally prepend to builds list to make it visible in GET /builds
+	// (safe even if app key not present)
+	builds := []Build{build}
+	if existing := releasesByApp[app]; existing != nil {
+		_ = existing // no-op; builds list is separate; keep minimal behavior
+	}
+	_ = builds // satisfy linters; currently not used elsewhere
+
+	w.Header().Set("Content-Type", "application/json")
+	// Real API often returns 201 Created
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(build)
+}
+
 // createBuild simulates creating a new build for an app
 // (intentionally no build creation/import or build logs stubs; tests use app logs and releases)
 
@@ -742,9 +781,9 @@ func appLogs(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 
 	// Emit a couple of lines immediately like a real deploy/log stream
-	_ = c.WriteMessage(websocket.TextMessage, []byte("Promoting release..."))
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Promoting release...\n"))
 	time.Sleep(100 * time.Millisecond)
-	_ = c.WriteMessage(websocket.TextMessage, []byte("Release promoted successfully."))
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Release promoted successfully.\n"))
 
 	// Keep the connection open to mimic tail -f behavior.
 	// Send periodic ping frames to prevent idle timeouts and wait until client disconnects.
@@ -770,6 +809,24 @@ func appLogs(w http.ResponseWriter, r *http.Request) {
 			_ = c.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second))
 		}
 	}
+}
+
+// buildLogs upgrades to WebSocket and streams build logs, then closes
+func buildLogs(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "upgrade failed", http.StatusBadRequest)
+		return
+	}
+	defer c.Close()
+
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Building app...\n"))
+	time.Sleep(100 * time.Millisecond)
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Step 1/1: mock build step\n"))
+	time.Sleep(100 * time.Millisecond)
+	_ = c.WriteMessage(websocket.TextMessage, []byte("Build complete\n"))
+	_ = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 }
 
 func getEnvironment(w http.ResponseWriter, r *http.Request) {

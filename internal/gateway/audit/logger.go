@@ -341,6 +341,19 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 			}
 		}
 
+	// Logs (check before other resource matches in case of /builds/{id}/logs, etc.)
+	case strings.Contains(path, "/logs"):
+		action = "logs.view"
+		// /apps/{app}/logs or /system/logs or /apps/{app}/builds/{id}/logs
+		p2 := strings.Split(strings.TrimPrefix(path, "/"), "/")
+		if len(p2) >= 3 && p2[0] == "apps" && p2[2] == "logs" {
+			resource = p2[1]
+		} else if len(p2) >= 2 && p2[0] == "system" && p2[1] == "logs" {
+			resource = "system"
+		} else if len(p2) >= 5 && p2[0] == "apps" && p2[2] == "builds" && p2[4] == "logs" {
+			resource = p2[1]
+		}
+
 	case strings.Contains(path, "/builds"):
 		if method == "GET" {
 			action = "builds.list"
@@ -416,17 +429,6 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 				resource = parts[i-1]
 				break
 			}
-		}
-
-	// Logs
-	case strings.Contains(path, "/logs"):
-		action = "logs.view"
-		// /apps/{app}/logs or /system/logs
-		parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
-		if len(parts) >= 3 && parts[0] == "apps" && parts[2] == "logs" {
-			resource = parts[1]
-		} else if len(parts) >= 2 && parts[0] == "system" && parts[1] == "logs" {
-			resource = "system"
 		}
 
 	// Start/list processes via service: /apps/{app}/services/{service}/processes
