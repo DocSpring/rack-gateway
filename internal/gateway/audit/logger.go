@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
 	"github.com/google/uuid"
 )
 
@@ -317,213 +318,41 @@ func getClientIP(r *http.Request) string {
 
 // parseConvoxAction extracts meaningful action and resource from the request
 func (l *Logger) parseConvoxAction(path, method string) (action, resource string) {
-	path = strings.TrimPrefix(path, "/")
-	parts := strings.Split(path, "/")
-
-	if len(parts) == 0 {
-		return "unknown", "unknown"
-	}
-
-	// Handle common Convox API patterns - check more specific paths first
-	switch {
-	// Check for specific sub-resources first (more specific matches)
-	case strings.Contains(path, "/env"):
-		if method == "GET" {
-			action = "env.get"
-		} else {
-			action = "env.set"
-		}
-		// Find app name - it's usually before /env
-		for i, part := range parts {
-			if part == "env" && i > 0 {
-				resource = parts[i-1]
-				break
-			}
-		}
-
-	// Logs (check before other resource matches in case of /builds/{id}/logs, etc.)
-	case strings.Contains(path, "/logs"):
-		action = "logs.view"
-		// /apps/{app}/logs or /system/logs or /apps/{app}/builds/{id}/logs
-		p2 := strings.Split(strings.TrimPrefix(path, "/"), "/")
-		if len(p2) >= 3 && p2[0] == "apps" && p2[2] == "logs" {
-			resource = p2[1]
-		} else if len(p2) >= 2 && p2[0] == "system" && p2[1] == "logs" {
-			resource = "system"
-		} else if len(p2) >= 5 && p2[0] == "apps" && p2[2] == "builds" && p2[4] == "logs" {
-			resource = p2[1]
-		}
-
-	case strings.Contains(path, "/builds"):
-		if method == "GET" {
-			action = "builds.list"
-		} else if method == "POST" {
-			action = "builds.create"
-		}
-		// Find app name - it's usually before /builds
-		for i, part := range parts {
-			if part == "builds" && i > 0 {
-				resource = parts[i-1]
-				break
-			}
-		}
-
-	case strings.Contains(path, "/releases"):
-		// Determine whether this is list, get, create, or promote
-		idx := -1
-		for i, part := range parts {
-			if part == "releases" {
-				idx = i
-				break
-			}
-		}
-		if idx > 0 {
-			resource = parts[idx-1]
-		}
-		switch method {
-		case "GET":
-			// /apps/{app}/releases (list) vs /apps/{app}/releases/{id} (get)
-			if idx+1 < len(parts) && parts[idx+1] != "" {
-				// if there is an id segment after 'releases' and no further subresource
-				if idx+2 == len(parts) {
-					action = "releases.get"
-				} else {
-					action = fmt.Sprintf("%s.get", parts[idx])
-				}
-			} else {
-				action = "releases.list"
-			}
-		case "POST":
-			// /apps/{app}/releases (create) OR /apps/{app}/releases/{id}/promote (promote)
-			if idx+2 < len(parts) && parts[idx+2] == "promote" {
-				action = "releases.promote"
-				// resource remains app name
-			} else if idx+1 == len(parts) { // ends with /releases
-				action = "releases.create"
-			} else {
-				action = "releases.create"
-			}
-		default:
-			action = fmt.Sprintf("releases.%s", strings.ToLower(method))
-		}
-
-	case strings.Contains(path, "/run"):
-		action = "run.command"
-		// Find app name - it's usually before /run
-		for i, part := range parts {
-			if part == "run" && i > 0 {
-				resource = parts[i-1]
-				break
-			}
-		}
-
-	case strings.Contains(path, "/ps"):
-		if method == "GET" {
-			action = "ps.list"
-		} else {
-			action = "ps.manage"
-		}
-		// Find app name - it's usually before /ps
-		for i, part := range parts {
-			if part == "ps" && i > 0 {
-				resource = parts[i-1]
-				break
-			}
-		}
-
-	// Start/list processes via service: /apps/{app}/services/{service}/processes
-	case len(parts) >= 5 && parts[0] == "apps" && parts[2] == "services" && parts[4] == "processes":
-		if method == "POST" {
-			action = "process.start"
-		} else if method == "GET" {
-			action = "process.list"
-		} else {
-			action = strings.ToLower(method)
-		}
-		appName := parts[1]
-		svcName := parts[3]
-		if appName != "" && svcName != "" {
-			resource = appName + "/" + svcName
-		} else {
-			resource = svcName
-		}
-
-	case strings.Contains(path, "/processes/") && strings.HasSuffix(path, "/exec"):
-		// /apps/{app}/processes/{pid}/exec
-		action = "process.exec"
-		// Extract process id as resource
-		for i, part := range parts {
-			if part == "processes" && i+1 < len(parts) {
-				resource = parts[i+1]
-				break
-			}
-		}
-
-	case strings.Contains(path, "/processes/"):
-		// /apps/{app}/processes/{pid}
-		switch method {
-		case "DELETE":
-			action = "process.terminate"
-		case "GET":
-			action = "process.get"
-		default:
-			action = "process.manage"
-		}
-		for i, part := range parts {
-			if part == "processes" && i+1 < len(parts) {
-				resource = parts[i+1]
-				break
-			}
-		}
-
-	// Object uploads used by deploy: /apps/{app}/objects/tmp/{name}
-	case len(parts) >= 5 && parts[0] == "apps" && parts[2] == "objects" && parts[3] == "tmp":
-		if method == "POST" {
-			action = "objects.create"
-		} else {
-			action = strings.ToLower(method)
-		}
-		resource = parts[1]
-
-	// Apps root and app-level operations only; do NOT infer create for deeper nested routes
-	case parts[0] == "apps":
-		if method == "GET" {
-			if len(parts) == 1 {
-				action = "apps.list"
-			} else if len(parts) == 2 {
-				action = "apps.get"
-			}
-		} else if method == "POST" {
-			if len(parts) == 1 {
-				// Only POST /apps is app creation
-				action = "apps.create"
-			}
-		} else if method == "DELETE" {
-			if len(parts) == 2 {
-				action = "apps.delete"
-			}
-		}
-		if len(parts) > 1 {
-			resource = parts[1]
-		}
-
-	default:
-		// Special-case racks collection
-		if parts[0] == "racks" && len(parts) == 1 && strings.ToUpper(method) == "GET" {
-			action = "racks.list"
-		} else {
-			action = fmt.Sprintf("%s.%s", parts[0], strings.ToLower(method))
-		}
-		if len(parts) > 1 {
-			resource = parts[1]
+	// For audit purposes, treat WebSocket GET upgrades as SOCKET method for matching
+	res, act, ok := routes.Match(method, path)
+	if !ok && method == http.MethodGet && strings.Contains(path, "/logs") {
+		if r2, a2, ok2 := routes.Match("SOCKET", path); ok2 {
+			res, act, ok = r2, a2, true
 		}
 	}
-
-	if resource == "" {
-		resource = "unknown"
+	if ok {
+		return res + "." + act, resourceInstance(path, res, act)
 	}
+	return "unknown", "unknown"
+}
 
-	return action, resource
+func resourceInstance(path, resource, action string) string {
+	p := strings.TrimPrefix(path, "/")
+	parts := strings.Split(p, "/")
+	// Processes with ID
+	if resource == "process" {
+		for i, seg := range parts {
+			if seg == "processes" && i+1 < len(parts) {
+				return parts[i+1]
+			}
+		}
+	}
+	// App-scoped routes: return app name if present
+	if len(parts) >= 2 && parts[0] == "apps" {
+		if parts[1] != "" {
+			return parts[1]
+		}
+	}
+	// For collection list actions, prefer "unknown" (UI will render as "all")
+	if action == "list" {
+		return "unknown"
+	}
+	return resource
 }
 
 // buildDetailsJSON creates a JSON string with request details

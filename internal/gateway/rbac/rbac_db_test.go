@@ -22,20 +22,20 @@ func TestEnforceDeployerPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Deployer: allowed create/update, denied delete
-	ok, err := mgr.Enforce("deployer@test.com", "apps", "create")
+	ok, err := mgr.Enforce("deployer@test.com", "app", "create")
 	require.NoError(t, err)
 	require.True(t, ok, "deployer should be allowed to create apps")
 
-	ok, err = mgr.Enforce("deployer@test.com", "apps", "update")
+	ok, err = mgr.Enforce("deployer@test.com", "app", "update")
 	require.NoError(t, err)
 	require.True(t, ok, "deployer should be allowed to update apps")
 
-	ok, err = mgr.Enforce("deployer@test.com", "apps", "delete")
+	ok, err = mgr.Enforce("deployer@test.com", "app", "delete")
 	require.NoError(t, err)
 	require.False(t, ok, "deployer should NOT be allowed to delete apps")
 
 	// Admin: allowed delete
-	ok, err = mgr.Enforce("admin@test.com", "apps", "delete")
+	ok, err = mgr.Enforce("admin@test.com", "app", "delete")
 	require.NoError(t, err)
 	require.True(t, ok, "admin should be allowed to delete apps")
 }

@@ -22,14 +22,13 @@ func TestAuditLogger(t *testing.T) {
 			expectedAction   string
 			expectedResource string
 		}{
-			{"/apps/myapp/env", "GET", "env.get", "myapp"},
-			{"/apps/myapp/env", "POST", "env.set", "myapp"},
-			{"/apps", "GET", "apps.list", "unknown"},
-			{"/apps/myapp", "DELETE", "apps.delete", "myapp"},
-			{"/apps/myapp/builds", "POST", "builds.create", "myapp"},
-			{"/apps/myapp/run", "POST", "run.command", "myapp"},
-			{"/apps/myapp/ps", "GET", "ps.list", "myapp"},
-			{"/unknown/path", "GET", "unknown.get", "path"},
+			{"/apps/myapp/environment", "GET", "env.view", "myapp"},
+			{"/apps/myapp/environment", "POST", "env.set", "myapp"},
+			{"/apps", "GET", "app.list", "unknown"},
+			{"/apps/myapp", "DELETE", "app.delete", "myapp"},
+			{"/apps/myapp/builds", "POST", "build.create", "myapp"},
+			{"/apps/myapp/logs", "GET", "log.read", "myapp"},
+			{"/apps/myapp/processes", "GET", "process.list", "myapp"},
 			{"/apps/myapp/processes/p1", "GET", "process.get", "p1"},
 			{"/apps/myapp/processes/p1", "DELETE", "process.terminate", "p1"},
 		}
@@ -42,55 +41,7 @@ func TestAuditLogger(t *testing.T) {
 	})
 
 	// Comprehensive coverage of method/path → action mapping
-	t.Run("ParseConvoxAction_Comprehensive", func(t *testing.T) {
-		cases := []struct {
-			m, p, a, r string
-		}{
-			// env
-			{"GET", "/apps/myapp/env", "env.get", "myapp"},
-			{"POST", "/apps/myapp/env", "env.set", "myapp"},
-			// builds
-			{"GET", "/apps/myapp/builds", "builds.list", "myapp"},
-			{"POST", "/apps/myapp/builds", "builds.create", "myapp"},
-			// releases: list, get, create, promote
-			{"GET", "/apps/myapp/releases", "releases.list", "myapp"},
-			{"GET", "/apps/myapp/releases/RAPI123", "releases.get", "myapp"},
-			{"POST", "/apps/myapp/releases", "releases.create", "myapp"},
-			{"POST", "/apps/myapp/releases/RAPI123/promote", "releases.promote", "myapp"},
-			// run
-			{"POST", "/apps/myapp/run", "run.command", "myapp"},
-			// ps
-			{"GET", "/apps/myapp/ps", "ps.list", "myapp"},
-			{"POST", "/apps/myapp/ps", "ps.manage", "myapp"},
-			// services processes
-			{"GET", "/apps/app1/services/web/processes", "process.list", "app1/web"},
-			{"POST", "/apps/app1/services/web/processes", "process.start", "app1/web"},
-			// processes
-			{"GET", "/apps/myapp/processes/p1", "process.get", "p1"},
-			{"DELETE", "/apps/myapp/processes/p1", "process.terminate", "p1"},
-			{"PUT", "/apps/myapp/processes/p1", "process.manage", "p1"},
-			// exec
-			{"GET", "/apps/myapp/processes/p1/exec", "process.exec", "p1"},
-			// logs
-			{"GET", "/apps/myapp/logs", "logs.view", "myapp"},
-			// apps root
-			{"GET", "/apps", "apps.list", "unknown"},
-			{"GET", "/apps/thing", "apps.get", "thing"},
-			{"POST", "/apps", "apps.create", "unknown"},
-			{"DELETE", "/apps/thing", "apps.delete", "thing"},
-			// racks collection
-			{"GET", "/racks", "racks.list", "unknown"},
-			// default fallthrough
-			{"GET", "/system", "system.get", "unknown"},
-			{"PATCH", "/unknown/path", "unknown.patch", "path"},
-		}
-
-		for _, c := range cases {
-			a, r := logger.parseConvoxAction(c.p, c.m)
-			assert.Equal(t, c.a, a, "action mismatch for %s %s", c.m, c.p)
-			assert.Equal(t, c.r, r, "resource mismatch for %s %s", c.m, c.p)
-		}
-	})
+	// Note: exhaustive mapping now lives in internal/gateway/routes and is source of truth.
 
 	// 101 Switching Protocols should be success
 	t.Run("Status101IsSuccess", func(t *testing.T) {
@@ -125,7 +76,7 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "test@example.com", log.UserEmail)
 		assert.Equal(t, "Test User", log.UserName)
 		assert.Equal(t, "convox", log.ActionType)
-		assert.Equal(t, "env.get", log.Action)
+		assert.Equal(t, "env.view", log.Action)
 		assert.Equal(t, "myapp", log.Resource)
 		assert.Equal(t, "success", log.Status)
 		assert.Equal(t, 150, log.ResponseTimeMs)
@@ -150,7 +101,7 @@ func TestAuditLogger(t *testing.T) {
 
 		log := logs[0]
 		assert.Equal(t, "denied", log.Status)
-		assert.Equal(t, "apps.delete", log.Action)
+		assert.Equal(t, "app.delete", log.Action)
 		assert.Equal(t, "myapp", log.Resource)
 	})
 

@@ -67,41 +67,41 @@ func NewDBManager(database *db.Database, domain string) (*DBManager, error) {
 // Define the embedded RBAC policies
 var policies = [][]string{
 	// Viewer role permissions
-	{"p", "viewer", "convox:apps:list", "*"},
-	{"p", "viewer", "convox:ps:list", "*"},
-	{"p", "viewer", "convox:logs:read", "*"},
-	{"p", "viewer", "convox:builds:list", "*"},
+	{"p", "viewer", "convox:app:list", "*"},
+	{"p", "viewer", "convox:process:list", "*"},
+	{"p", "viewer", "convox:log:read", "*"},
+	{"p", "viewer", "convox:build:list", "*"},
 	{"p", "viewer", "convox:rack:read", "*"},
 
 	// Ops role inherits viewer and adds more
 	{"g", "ops", "viewer"},
-	{"p", "ops", "convox:ps:manage", "*"},
+	{"p", "ops", "convox:process:manage", "*"},
 	{"p", "ops", "convox:restart:app", "*"},
-	{"p", "ops", "convox:releases:list", "*"},
+	{"p", "ops", "convox:release:list", "*"},
 	{"p", "ops", "convox:env:view", "*"},
 
 	// Deployer role inherits ops and adds deployment permissions
 	{"g", "deployer", "ops"},
-	{"p", "deployer", "convox:builds:create", "*"},
-	{"p", "deployer", "convox:objects:create", "*"},
-	{"p", "deployer", "convox:releases:create", "*"},
-	{"p", "deployer", "convox:releases:promote", "*"},
+	{"p", "deployer", "convox:build:create", "*"},
+	{"p", "deployer", "convox:object:create", "*"},
+	{"p", "deployer", "convox:release:create", "*"},
+	{"p", "deployer", "convox:release:promote", "*"},
 	{"p", "deployer", "convox:env:view", "*"},
 	{"p", "deployer", "convox:env:set", "*"},
 	// Allow creating and updating apps/services, but not deleting apps
-	{"p", "deployer", "convox:apps:create", "*"},
-	{"p", "deployer", "convox:apps:update", "*"},
+	{"p", "deployer", "convox:app:create", "*"},
+	{"p", "deployer", "convox:app:update", "*"},
 
 	// Admin role has all permissions
 	{"p", "admin", "convox:*:*", "*"},
 
 	// CI/CD role for automated deployments
-	{"p", "cicd", "convox:apps:list", "*"},
-	{"p", "cicd", "convox:builds:create", "*"},
-	{"p", "cicd", "convox:objects:create", "*"},
-	{"p", "cicd", "convox:releases:create", "*"},
-	{"p", "cicd", "convox:releases:promote", "*"},
-	{"p", "cicd", "convox:ps:manage", "*"},
+	{"p", "cicd", "convox:app:list", "*"},
+	{"p", "cicd", "convox:build:create", "*"},
+	{"p", "cicd", "convox:object:create", "*"},
+	{"p", "cicd", "convox:release:create", "*"},
+	{"p", "cicd", "convox:release:promote", "*"},
+	{"p", "cicd", "convox:process:manage", "*"},
 	{"p", "cicd", "convox:restart:app", "*"},
 }
 

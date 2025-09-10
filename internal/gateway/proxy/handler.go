@@ -21,6 +21,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -88,7 +89,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForAllow = "SOCKET"
 	}
-	if !h.isAllowedConvoxPath(path, methodForAllow) {
+	if !routes.IsAllowed(methodForAllow, path) {
 		// Return 404 without writing an audit DB entry for non-Convox noise (e.g., .well-known, favicon, etc.)
 		http.NotFound(w, r)
 		return
@@ -101,7 +102,12 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
 	}
-	resource, action := h.pathToResourceAction(path, methodForRBAC)
+	resource, action, ok := routes.Match(methodForRBAC, path)
+	if !ok {
+		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
+		http.NotFound(w, r)
+		return
+	}
 
 	if authUser.IsAPIToken {
 		// For API tokens, check permissions directly
@@ -183,7 +189,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForAllow = "SOCKET"
 	}
-	if !h.isAllowedConvoxPath("/"+path, methodForAllow) {
+	if !routes.IsAllowed(methodForAllow, "/"+path) {
 		http.NotFound(w, r)
 		return
 	}
@@ -194,7 +200,12 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
 	}
-	resource, action := h.pathToResourceAction(path, methodForRBAC)
+	resource, action, ok := routes.Match(methodForRBAC, "/"+path)
+	if !ok {
+		h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
+		http.NotFound(w, r)
+		return
+	}
 
 	if authUser.IsAPIToken {
 		// For API tokens, check permissions directly
@@ -942,62 +953,11 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC
 func (h *Handler) pathToResourceAction(path, method string) (string, string) {
-	// Explicit mapping aligned to Convox routes
-	type rule struct{ m, p, res, act string }
-	rules := []rule{
-		{"SOCKET", "/apps/{app}/processes/{pid}/exec", "ps", "manage"},
-		{"DELETE", "/apps/{app}/processes/{pid}", "ps", "manage"},
-		{"GET", "/apps/{app}/processes/{pid}", "ps", "list"},
-		{"GET", "/apps/{app}/processes", "ps", "list"},
-		{"POST", "/apps/{app}/services/{service}/processes", "ps", "manage"},
-
-		{"SOCKET", "/apps/{app}/processes/{pid}/logs", "logs", "read"},
-		{"SOCKET", "/apps/{app}/builds/{id}/logs", "logs", "read"},
-		{"SOCKET", "/apps/{app}/logs", "logs", "read"},
-		{"SOCKET", "/system/logs", "logs", "read"},
-
-		{"GET", "/apps/{app}/builds", "builds", "list"},
-		{"GET", "/apps/{app}/builds/{id}", "builds", "list"},
-		{"GET", "/apps/{app}/builds/{id}.tgz", "builds", "list"},
-		{"POST", "/apps/{app}/builds", "builds", "create"},
-		{"POST", "/apps/{app}/builds/import", "builds", "create"},
-		{"PUT", "/apps/{app}/builds/{id}", "builds", "create"},
-
-		// Deploy object upload
-		{"POST", "/apps/{app}/objects/tmp/{name}", "objects", "create"},
-
-		{"GET", "/apps/{app}/releases", "releases", "list"},
-		{"GET", "/apps/{app}/releases/{id}", "releases", "list"},
-		{"POST", "/apps/{app}/releases", "releases", "create"},
-		{"POST", "/apps/{app}/releases/{id}/promote", "releases", "promote"},
-
-		// Note: Env reads are via releases endpoints; no separate env route mapping required
-
-		{"GET", "/apps", "apps", "list"},
-		{"GET", "/apps/{name}", "apps", "list"},
-		{"POST", "/apps", "apps", "create"},
-		{"PUT", "/apps/{name}", "apps", "update"},
-		{"POST", "/apps/{name}/cancel", "apps", "update"},
-		{"PUT", "/apps/{app}/services/{name}", "apps", "update"},
-		{"DELETE", "/apps/{name}", "apps", "delete"},
-
-		{"GET", "/system", "rack", "read"},
-		{"GET", "/system/capacity", "rack", "read"},
-		{"GET", "/system/metrics", "rack", "read"},
-		{"GET", "/system/processes", "rack", "read"},
-		{"GET", "/system/releases", "rack", "read"},
+	res, act, ok := routes.Match(method, path)
+	if !ok {
+		return "", ""
 	}
-
-	for _, rl := range rules {
-		if (rl.m == method || rl.m == "*") && keyMatch3(path, rl.p) {
-			return rl.res, rl.act
-		}
-	}
-	// Default conservative: only GET maps to list; all others map to unknown to deny
-	if method == "GET" {
-		return "apps", "list"
-	}
-	return "apps", "unknown"
+	return res, act
 }
 
 // keyMatch3 simplified: supports {var} placeholders and wildcards
@@ -1030,31 +990,8 @@ func keyMatch3(path, pattern string) bool {
 }
 
 // isAllowedConvoxPath returns true if the requested path/method is a known Convox API route that the gateway proxies.
-func (h *Handler) isAllowedConvoxPath(path, _ string) bool {
-	// Allow by documented root prefixes from reference/convox_rack/pkg/structs/routes.go
-	if path == "" {
-		return false
-	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	allowedRoots := []string{
-		"/apps",
-		"/system",
-		"/certificates",
-		"/events",
-		"/instances",
-		"/objects",
-		"/proxy",
-		"/registries",
-		"/resources",
-	}
-	for _, root := range allowedRoots {
-		if path == root || strings.HasPrefix(path, root+"/") {
-			return true
-		}
-	}
-	return false
+func (h *Handler) isAllowedConvoxPath(path, method string) bool {
+	return routes.IsAllowed(method, path)
 }
 
 // hasAPITokenPermission checks if an API token has the required permission
