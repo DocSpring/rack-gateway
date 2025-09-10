@@ -19,10 +19,11 @@ type Service struct {
 
 // APITokenRequest represents a request to create an API token
 type APITokenRequest struct {
-	Name        string     `json:"name"`
-	UserID      int64      `json:"user_id"`
-	Permissions []string   `json:"permissions"`
-	ExpiresAt   *time.Time `json:"expires_at"`
+	Name            string     `json:"name"`
+	UserID          int64      `json:"user_id"`
+	Permissions     []string   `json:"permissions"`
+	ExpiresAt       *time.Time `json:"expires_at"`
+	CreatedByUserID *int64     `json:"created_by_user_id,omitempty"`
 }
 
 // APITokenResponse represents the response when creating an API token
@@ -54,7 +55,7 @@ func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, err
 	tokenHash := hex.EncodeToString(hash[:])
 
 	// Store in database
-	apiToken, err := s.db.CreateAPIToken(tokenHash, req.Name, req.UserID, req.Permissions, req.ExpiresAt)
+	apiToken, err := s.db.CreateAPIToken(tokenHash, req.Name, req.UserID, req.Permissions, req.ExpiresAt, req.CreatedByUserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API token: %w", err)
 	}
@@ -102,6 +103,11 @@ func (s *Service) ValidateAPIToken(token string) (*db.APIToken, error) {
 // ListTokensForUser returns all API tokens for a user
 func (s *Service) ListTokensForUser(userID int64) ([]*db.APIToken, error) {
 	return s.db.ListAPITokensByUser(userID)
+}
+
+// ListAllTokens returns all API tokens
+func (s *Service) ListAllTokens() ([]*db.APIToken, error) {
+	return s.db.ListAllAPITokens()
 }
 
 // DeleteToken removes an API token

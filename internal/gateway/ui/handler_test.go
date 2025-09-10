@@ -43,11 +43,16 @@ func newMockRBACManager() *mockRBACManager {
 				Name:  "Ops User",
 				Roles: []string{"ops"},
 			},
+			"deployer@example.com": {
+				Name:  "Deployer User",
+				Roles: []string{"deployer"},
+			},
 		},
 		userRoles: map[string][]string{
-			"admin@example.com":  {"admin"},
-			"viewer@example.com": {"viewer"},
-			"ops@example.com":    {"ops"},
+			"admin@example.com":    {"admin"},
+			"viewer@example.com":   {"viewer"},
+			"ops@example.com":      {"ops"},
+			"deployer@example.com": {"deployer"},
 		},
 	}
 }
@@ -163,19 +168,19 @@ func TestListUsers(t *testing.T) {
 			name:       "admin can list users",
 			userEmail:  "admin@example.com",
 			wantStatus: http.StatusOK,
-			wantUsers:  3,
+			wantUsers:  4,
 		},
 		{
-			name:       "viewer cannot list users",
+			name:       "viewer can list users",
 			userEmail:  "viewer@example.com",
-			wantStatus: http.StatusForbidden,
-			wantUsers:  0,
+			wantStatus: http.StatusOK,
+			wantUsers:  4,
 		},
 		{
-			name:       "ops cannot list users",
+			name:       "ops can list users",
 			userEmail:  "ops@example.com",
-			wantStatus: http.StatusForbidden,
-			wantUsers:  0,
+			wantStatus: http.StatusOK,
+			wantUsers:  4,
 		},
 		{
 			name:       "unknown user cannot list users",
@@ -742,17 +747,20 @@ func TestCreateAPIToken_SendsEmails(t *testing.T) {
 	}
 	assert.True(t, hasAdmin)
 
-	// Clear and test self-created token (viewer creates own)
+	// Clear and test self-created token (deployer creates own)
 	mailer.sent = nil
 	mailer.sentBatch = nil
 	reqBody2 := map[string]interface{}{
 		"name": "dev-token",
 	}
-	req2 := createAuthenticatedRequest("POST", "/.gateway/admin/tokens", reqBody2, "viewer@example.com")
+	// Seed DB for deployer user as token owner
+	_, err = database.CreateUser("deployer@example.com", "Deployer User", []string{"deployer"})
+	require.NoError(t, err)
+	req2 := createAuthenticatedRequest("POST", "/.gateway/admin/tokens", reqBody2, "deployer@example.com")
 	rr2 := httptest.NewRecorder()
 	handler.CreateAPIToken(rr2, req2)
 	require.Equal(t, http.StatusOK, rr2.Code)
 	require.GreaterOrEqual(t, len(mailer.sent), 1)
-	assert.Equal(t, "viewer@example.com", mailer.sent[0].To)
+	assert.Equal(t, "deployer@example.com", mailer.sent[0].To)
 	require.GreaterOrEqual(t, len(mailer.sentBatch), 1)
 }

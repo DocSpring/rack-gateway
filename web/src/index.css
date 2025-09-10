@@ -117,4 +117,13 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Global text selection colors across themes */
+  ::selection {
+    background-color: var(--primary);
+    color: #fff;
+  }
+  ::-moz-selection {
+    background-color: var(--primary);
+    color: #fff;
+  }
 }

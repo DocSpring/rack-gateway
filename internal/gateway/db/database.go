@@ -33,14 +33,17 @@ type User struct {
 
 // APIToken represents an API token for CI/CD
 type APIToken struct {
-	ID          int64      `json:"id"`
-	TokenHash   string     `json:"-"` // Never expose the actual token
-	Name        string     `json:"name"`
-	UserID      int64      `json:"user_id"`
-	Permissions []string   `json:"permissions"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
+	ID              int64      `json:"id"`
+	TokenHash       string     `json:"-"` // Never expose the actual token
+	Name            string     `json:"name"`
+	UserID          int64      `json:"user_id"`
+	CreatedByUserID *int64     `json:"created_by_user_id,omitempty"`
+	CreatedByEmail  string     `json:"created_by_email,omitempty"`
+	CreatedByName   string     `json:"created_by_name,omitempty"`
+	Permissions     []string   `json:"permissions"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ExpiresAt       *time.Time `json:"expires_at"`
+	LastUsedAt      *time.Time `json:"last_used_at"`
 }
 
 // AuditLog represents an audit log entry
@@ -564,7 +567,7 @@ func (d *Database) GetAuditLogsPaged(userEmail string, since time.Time, limit, o
 }
 
 // CreateAPIToken creates a new API token
-func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt *time.Time) (*APIToken, error) {
+func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt *time.Time, createdByUserID *int64) (*APIToken, error) {
 	permissionsJSON, err := json.Marshal(permissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal permissions: %w", err)
@@ -578,17 +581,18 @@ func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissi
 	}
 
 	var id int64
-	if err := d.queryRow("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id", tokenHash, name, userID, string(permissionsJSON), expVal).Scan(&id); err != nil {
+	if err := d.queryRow("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id", tokenHash, name, userID, string(permissionsJSON), expVal, createdByUserID).Scan(&id); err != nil {
 		return nil, fmt.Errorf("failed to create API token: %w", err)
 	}
 	return &APIToken{
-		ID:          id,
-		TokenHash:   tokenHash,
-		Name:        name,
-		UserID:      userID,
-		Permissions: permissions,
-		CreatedAt:   time.Now(),
-		ExpiresAt:   expiresAt,
+		ID:              id,
+		TokenHash:       tokenHash,
+		Name:            name,
+		UserID:          userID,
+		CreatedByUserID: createdByUserID,
+		Permissions:     permissions,
+		CreatedAt:       time.Now(),
+		ExpiresAt:       expiresAt,
 	}, nil
 }
 
@@ -599,11 +603,12 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 	var expiresAtNull sql.NullTime
 	var lastUsedAtNull sql.NullTime
 
+	var createdByNull sql.NullInt64
 	err := d.queryRow(
-		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at FROM api_tokens WHERE token_hash = ?",
+		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at, created_by_user_id FROM api_tokens WHERE token_hash = ?",
 		tokenHash,
 	).Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON,
-		&token.CreatedAt, &expiresAtNull, &lastUsedAtNull)
+		&token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -623,6 +628,10 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 	if lastUsedAtNull.Valid {
 		token.LastUsedAt = &lastUsedAtNull.Time
 	}
+	if createdByNull.Valid {
+		v := createdByNull.Int64
+		token.CreatedByUserID = &v
+	}
 
 	return &token, nil
 }
@@ -630,7 +639,7 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 // ListAPITokensByUser returns all API tokens for a user
 func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 	rows, err := d.query(
-		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC",
+		"SELECT t.id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.user_id = ? ORDER BY t.created_at DESC",
 		userID,
 	)
 	if err != nil {
@@ -644,9 +653,12 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 		var permissionsJSON string
 		var expiresAtNull sql.NullTime
 		var lastUsedAtNull sql.NullTime
+		var createdByNull sql.NullInt64
+		var createdByEmail sql.NullString
+		var createdByName sql.NullString
 
 		err := rows.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID,
-			&permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull)
+			&permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan API token: %w", err)
 		}
@@ -661,6 +673,70 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 		}
 		if lastUsedAtNull.Valid {
 			token.LastUsedAt = &lastUsedAtNull.Time
+		}
+		if createdByNull.Valid {
+			v := createdByNull.Int64
+			token.CreatedByUserID = &v
+		}
+		if createdByEmail.Valid {
+			token.CreatedByEmail = createdByEmail.String
+		}
+		if createdByName.Valid {
+			token.CreatedByName = createdByName.String
+		}
+
+		tokens = append(tokens, &token)
+	}
+
+	return tokens, nil
+}
+
+// ListAllAPITokens returns all API tokens with creator metadata
+func (d *Database) ListAllAPITokens() ([]*APIToken, error) {
+	rows, err := d.query(
+		"SELECT t.id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id ORDER BY t.created_at DESC",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API tokens: %w", err)
+	}
+	defer rows.Close()
+
+	var tokens []*APIToken
+	for rows.Next() {
+		var token APIToken
+		var permissionsJSON string
+		var expiresAtNull sql.NullTime
+		var lastUsedAtNull sql.NullTime
+		var createdByNull sql.NullInt64
+		var createdByEmail sql.NullString
+		var createdByName sql.NullString
+
+		err := rows.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID,
+			&permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan API token: %w", err)
+		}
+
+		if err := json.Unmarshal([]byte(permissionsJSON), &token.Permissions); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal permissions: %w", err)
+		}
+
+		if expiresAtNull.Valid {
+			t := expiresAtNull.Time
+			token.ExpiresAt = &t
+		}
+		if lastUsedAtNull.Valid {
+			token.LastUsedAt = &lastUsedAtNull.Time
+		}
+		if createdByNull.Valid {
+			v := createdByNull.Int64
+			token.CreatedByUserID = &v
+		}
+		if createdByEmail.Valid {
+			token.CreatedByEmail = createdByEmail.String
+		}
+		if createdByName.Valid {
+			token.CreatedByName = createdByName.String
 		}
 
 		tokens = append(tokens, &token)

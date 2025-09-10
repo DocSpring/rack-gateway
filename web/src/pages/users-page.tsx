@@ -81,7 +81,7 @@ export function UsersPage() {
   }
 
   // Check if current user is admin
-  const isAdmin = currentUser?.roles?.includes('admin')
+  const isAdmin = !!currentUser?.roles?.includes('admin')
 
   // Fetch users
   const {
@@ -200,21 +200,7 @@ export function UsersPage() {
 
   // Single role only; radios control selectedRole
 
-  if (!isAdmin) {
-    return (
-      <div className="p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-destructive">Access Denied</CardTitle>
-            <CardDescription>
-              You don't have permission to view the user management interface. Admin role is
-              required.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
+  // All authenticated users can view this page; actions are gated by role.
 
   if (isLoading) {
     return (
@@ -257,10 +243,12 @@ export function UsersPage() {
                 {users.length} {users.length === 1 ? 'user' : 'users'} configured
               </CardDescription>
             </div>
-            <Button onClick={handleAddUser}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
+            {isAdmin && (
+              <Button onClick={handleAddUser}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -275,7 +263,7 @@ export function UsersPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Updated</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -321,27 +309,29 @@ export function UsersPage() {
                         return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
                       })()}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          aria-label={`Edit User ${user.email}`}
-                          onClick={() => handleEditUser(user)}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          aria-label={`Delete User ${user.email}`}
-                          disabled={user.email === currentUser?.email}
-                          onClick={() => handleDeleteUser(user.email)}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            aria-label={`Edit User ${user.email}`}
+                            onClick={() => handleEditUser(user)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            aria-label={`Delete User ${user.email}`}
+                            disabled={user.email === currentUser?.email}
+                            onClick={() => handleDeleteUser(user.email)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

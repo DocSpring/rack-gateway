@@ -369,7 +369,9 @@ func (h *Handler) GetCSRFToken(w http.ResponseWriter, r *http.Request) {
 // ListAuditLogs returns audit logs (admin only). Minimal implementation returns an empty list
 // while full audit storage is being implemented.
 func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
+	// Allow any authenticated role (admin, deployer, ops, viewer) to view audit logs
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok || !h.hasReadAccess(&auth.Claims{Email: au.Email}) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		h.auditUserAction(r, "audit.list", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
 		return
@@ -443,7 +445,9 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 // ExportAuditLogs returns CSV export of audit logs (admin only). Minimal empty CSV.
 func (h *Handler) ExportAuditLogs(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
+	// Allow any authenticated role to export
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok || !h.hasReadAccess(&auth.Claims{Email: au.Email}) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		h.auditUserAction(r, "audit.export", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
 		return
@@ -578,6 +582,22 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		targetUserEmail = req.UserEmail
 	} else {
 		// User creating token for themselves
+		// Only admins and deployers can create tokens for themselves
+		roles, _ := h.rbacManager.GetUserRoles(authUser.Email)
+		isDeployer := false
+		isAdmin := false
+		for _, role := range roles {
+			if role == "admin" {
+				isAdmin = true
+			}
+			if role == "deployer" {
+				isDeployer = true
+			}
+		}
+		if !(isAdmin || isDeployer) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		targetUserEmail = authUser.Email
 	}
 
@@ -612,12 +632,19 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		permissions = token.DefaultCICDPermissions()
 	}
 
+	// Lookup creator user ID (who is making this request)
+	var creatorID *int64
+	if cu, err := h.rbacManager.GetUserWithID(authUser.Email); err == nil && cu != nil {
+		creatorID = &cu.ID
+	}
+
 	// Create token
 	tokenResp, err := h.tokenService.GenerateAPIToken(&token.APITokenRequest{
-		Name:        req.Name,
-		UserID:      user.ID,
-		Permissions: permissions,
-		ExpiresAt:   expiresAt,
+		Name:            req.Name,
+		UserID:          user.ID,
+		Permissions:     permissions,
+		ExpiresAt:       expiresAt,
+		CreatedByUserID: creatorID,
 	})
 	if err != nil {
 		http.Error(w, "failed to create token", http.StatusInternalServerError)
@@ -673,20 +700,15 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 
 // ListAPITokens returns API tokens for the current user
 func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
-	authUser, isAuth := auth.GetAuthUser(r.Context())
+	au, isAuth := auth.GetAuthUser(r.Context())
 	if !isAuth {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Get user ID from the database
-	user, err := h.rbacManager.GetUserWithID(authUser.Email)
-	if err != nil || user == nil {
-		http.Error(w, "user not found", http.StatusNotFound)
-		return
-	}
-
-	tokens, err := h.tokenService.ListTokensForUser(user.ID)
+	// All authenticated users can view all API tokens (read-only; edit/delete guarded elsewhere)
+	_ = au
+	tokens, err := h.tokenService.ListAllTokens()
 	if err != nil {
 		http.Error(w, "failed to list tokens", http.StatusInternalServerError)
 		return
@@ -711,9 +733,28 @@ func (h *Handler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Verify user owns this token or is admin
-	// For now, allow deletion (should check ownership)
-	_ = authUser // Suppress unused variable warning
+	// Verify ownership or admin
+	isAdmin := h.isAdmin(r)
+	ownerID := int64(0)
+	if u, err := h.rbacManager.GetUserWithID(authUser.Email); err == nil && u != nil {
+		ownerID = u.ID
+	}
+	owns := false
+	if ownerID != 0 {
+		if toks, err := h.tokenService.ListTokensForUser(ownerID); err == nil {
+			for _, t := range toks {
+				if t.ID == tokenID {
+					owns = true
+					break
+				}
+			}
+		}
+	}
+	if !(isAdmin || owns) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	if err := h.tokenService.DeleteToken(tokenID); err != nil {
 		http.Error(w, "failed to delete token", http.StatusInternalServerError)
 		h.auditUserAction(r, "api_token.delete", tokenIDStr, "error", nil, time.Now())
@@ -747,8 +788,27 @@ func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In the future, verify ownership or admin; for now allow
-	_ = authUser
+	// Verify ownership or admin
+	isAdmin := h.isAdmin(r)
+	ownerID := int64(0)
+	if u, err := h.rbacManager.GetUserWithID(authUser.Email); err == nil && u != nil {
+		ownerID = u.ID
+	}
+	owns := false
+	if ownerID != 0 {
+		if toks, err := h.tokenService.ListTokensForUser(ownerID); err == nil {
+			for _, t := range toks {
+				if t.ID == tokenID {
+					owns = true
+					break
+				}
+			}
+		}
+	}
+	if !(isAdmin || owns) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	if err := h.tokenService.UpdateTokenName(tokenID, req.Name); err != nil {
 		http.Error(w, "failed to update token", http.StatusInternalServerError)
@@ -762,7 +822,14 @@ func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers returns all users (admin only)
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
+	// Admin: full; Deployer: read-only list; others: forbidden
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "user.list", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
+		return
+	}
+	if !h.hasReadAccess(&auth.Claims{Email: au.Email}) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		h.auditUserAction(r, "user.list", "", "denied", map[string]interface{}{"reason": "forbidden"}, time.Now())
 		return
@@ -1029,7 +1096,7 @@ func (h *Handler) hasReadAccess(user *auth.Claims) bool {
 		return false
 	}
 	for _, role := range roles {
-		if role == "admin" || role == "ops" || role == "deployer" {
+		if role == "admin" || role == "ops" || role == "deployer" || role == "viewer" {
 			return true
 		}
 	}

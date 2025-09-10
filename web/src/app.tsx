@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import { Layout } from './components/layout'
-import { ProtectedRoute } from './components/protected-route'
 import { Toaster } from './components/ui/sonner'
 import { AuthProvider } from './contexts/auth-context'
 import { AuditPage } from './pages/audit-page'
@@ -28,13 +27,11 @@ function App() {
             <Route element={<LoginPage />} path="/login" />
             <Route element={<CallbackPage />} path="/auth/callback" />
 
-            <Route element={<ProtectedRoute />}>
-              <Route element={<Layout />}>
-                <Route element={<Navigate replace to="/users" />} path="/" />
-                <Route element={<UsersPage />} path="/users" />
-                <Route element={<TokensPage />} path="/api_tokens" />
-                <Route element={<AuditPage />} path="/audit_logs" />
-              </Route>
+            <Route element={<Layout />}>
+              <Route element={<Navigate replace to="/users" />} path="/" />
+              <Route element={<UsersPage />} path="/users" />
+              <Route element={<TokensPage />} path="/api_tokens" />
+              <Route element={<AuditPage />} path="/audit_logs" />
             </Route>
           </Routes>
         </Router>
