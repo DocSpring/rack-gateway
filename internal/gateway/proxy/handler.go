@@ -989,11 +989,6 @@ func keyMatch3(path, pattern string) bool {
 	return ok
 }
 
-// isAllowedConvoxPath returns true if the requested path/method is a known Convox API route that the gateway proxies.
-func (h *Handler) isAllowedConvoxPath(path, method string) bool {
-	return routes.IsAllowed(method, path)
-}
-
 // hasAPITokenPermission checks if an API token has the required permission
 func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource, action string) bool {
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)

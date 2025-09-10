@@ -91,6 +91,10 @@ test('tokens: create, rename, delete', async ({ page }) => {
   const row2 = page.locator('tr', { hasText: name2 })
   // Delete token using aria label
   await row2.getByRole('button', { name: /Delete Token/i }).click()
+  // Confirm modal: type DELETE then confirm
+  const confirmDialog = page.getByRole('dialog')
+  await confirmDialog.getByLabel('Confirmation').fill('DELETE')
+  await confirmDialog.getByRole('button', { name: /Delete Token/i }).click()
   await expect(row2).toHaveCount(0)
 })
 

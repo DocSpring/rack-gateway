@@ -225,6 +225,26 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
+## Pre-Push Checks
+
+- Default `make` (aka `make check`) runs ALL linters and ALL tests:
+  - Web Biome lint via `pnpm lint`
+  - Go vet/fmt/staticcheck
+  - Go unit and integration tests (through the safe wrapper)
+  - Web unit tests (Vitest)
+  - Web and CLI E2E tests (Playwright + scripts)
+
+Use this before pushing any changes:
+
+```bash
+make        # or: make check
+```
+
+Standard target prefixes:
+- go-*: `go-lint`, `go-test`, `go-test-unit`, `go-test-integration`
+- web-*: `web-lint`, `web-test`, `web-build`
+- e2e-*: `e2e-cli`, `web-e2e` (+ dev/release variants)
+
 ## Related Documentation
 
 - [Convox Rack API](https://docs.convox.com/reference/rack-api) (if it exists)

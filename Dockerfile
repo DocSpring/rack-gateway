@@ -5,10 +5,13 @@ WORKDIR /webapp
 # Enable corepack to use pnpm
 RUN corepack enable
 
-# Copy web app and install deps
-COPY web ./
-RUN pnpm install --frozen-lockfile \
-  && pnpm build -- --base=/.gateway/web/
+# Install deps with maximum cache reuse: copy only lockfile + manifest first
+COPY web/pnpm-lock.yaml web/package.json web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# Copy the rest of the web app and build
+COPY web/ ./
+RUN pnpm build -- --base=/.gateway/web/
 
 FROM golang:1.23-alpine AS builder
 
@@ -26,7 +29,7 @@ COPY cmd/gateway ./cmd/gateway
 
 # Build the gateway binary directly (avoid Makefile dependency)
 RUN CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway \
-  && /out/convox-gateway-api help
+    && /out/convox-gateway-api help
 
 FROM alpine:latest
 

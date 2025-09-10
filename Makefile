@@ -1,4 +1,7 @@
-.PHONY: go dev dev-build dev-down dev-logs gateway cli mock test test-go test-unit test-integration lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e cli-e2e cli-e2e-dev cli-e2e-release web-e2e-dev web-e2e-release free-prod-gateway free-dev-gateway
+.PHONY: check go dev dev-build dev-down dev-logs gateway cli mock test go-test go-test-unit go-test-integration lint go-lint docker clean build all deps tools web-deps web-build web-test web-lint e2e-devrack web-e2e e2e-cli e2e-cli-dev e2e-cli-release web-e2e-dev web-e2e-release free-prod-gateway free-dev-gateway
+
+# Run all linters and tests by default
+.DEFAULT_GOAL := check
 
 # ----- Helpers (avoid duplication) -----
 define UP_DEV_STACK
@@ -34,6 +37,9 @@ endef
 define TEARDOWN
 docker compose down -v --remove-orphans || true
 endef
+
+# Aggregate target: run all linters and all tests
+check: lint test
 
 all: web-build gateway cli mock
 
@@ -109,23 +115,29 @@ mock:
 	@echo "Building mock Convox server..."
 	@go build -o bin/mock-convox ./cmd/mock-convox/
 
-test: test-unit test-integration web-test web-e2e cli-e2e
+test: go-test web-test web-e2e e2e-cli
 
-test-go: test-unit test-integration
+# Standardized Go test targets
+go-test: go-test-unit go-test-integration
 
-test-unit:
-	@echo "Running unit tests..."
+go-test-unit:
+	@echo "Running Go unit tests..."
 	@./scripts/safe-test.sh -v -race -short -timeout 30s ./...
 
-test-integration:
-	@echo "Running integration tests..."
+go-test-integration:
+	@echo "Running Go integration tests..."
 	@./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
-lint: web-lint
+
+
+go-lint:
 	@echo "Running Go linters..."
 	@go vet ./...
 	@go fmt ./...
 	@staticcheck ./...
+
+lint: web-lint go-lint
+	@echo "All linters passed"
 
 docker:
 	@echo "Building Docker image..."
@@ -142,18 +154,22 @@ e2e-devrack:
 	@echo "Running Convox Development Rack E2E (opt-in via E2E_DEV_RACK=1)..."
 	@bash scripts/e2e-devrack.sh
 
-cli-e2e:
-	@echo "[alias] Running cli-e2e-dev (use cli-e2e-dev or cli-e2e-release explicitly)"
-	@$(MAKE) cli-e2e-dev
 
-cli-e2e-dev:
+e2e-cli:
 	@echo "Starting dev stack for CLI E2E..."
 	@$(UP_DEV_STACK)
 	@echo "Running CLI E2E..."
 	@$(RUN_CLI_E2E)
 	@echo "(Backend left running. Use 'make dev-down' to stop.)"
 
-cli-e2e-release:
+e2e-cli-dev:
+	@echo "Starting dev stack for CLI E2E..."
+	@$(UP_DEV_STACK)
+	@echo "Running CLI E2E..."
+	@$(RUN_CLI_E2E)
+	@echo "(Backend left running. Use 'make dev-down' to stop.)"
+
+e2e-cli-release:
 	@echo "Starting release stack for CLI E2E..."
 	@$(UP_RELEASE_STACK)
 	@echo "Running CLI E2E..."

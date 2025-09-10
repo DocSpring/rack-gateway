@@ -2,11 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { TokensPage } from './tokens-page'
 
 const CREATE_TOKEN_RE = /Create Token/i
 const COPY_TOKEN_NOW_RE = /Copy this token now/i
+const DELETE_TOKEN_RE = /Delete Token/i
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -23,6 +25,13 @@ vi.mock('sonner', () => ({
     success: vi.fn(),
     error: vi.fn(),
   },
+}))
+
+// Mock useAuth globally to control roles
+const mockUseAuth = vi.fn()
+vi.mock('../contexts/auth-context', () => ({
+  useAuth: () => mockUseAuth(),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // Mock clipboard API
@@ -49,7 +58,7 @@ const mockTokens = [
   },
 ]
 
-const createWrapper = () => {
+const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -57,9 +66,19 @@ const createWrapper = () => {
     },
   })
 
+  // Set up the mock for this test
+  mockUseAuth.mockReturnValue({
+    user,
+    isAuthenticated: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+  })
+
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>{children}</BrowserRouter>
+      <BrowserRouter>
+        <AuthProvider>{children}</AuthProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   )
 }
@@ -307,6 +326,10 @@ describe('TokensPage', () => {
         throw new Error('Delete button not found')
       }
       fireEvent.click(deleteButton)
+      // Confirm modal: type DELETE and confirm
+      const confirmInput = await screen.findByLabelText('Confirmation')
+      fireEvent.change(confirmInput, { target: { value: 'DELETE' } })
+      fireEvent.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/token-1')
@@ -387,6 +410,9 @@ describe('TokensPage', () => {
         throw new Error('Delete button not found')
       }
       fireEvent.click(deleteButton)
+      const confirmInput = await screen.findByLabelText('Confirmation')
+      fireEvent.change(confirmInput, { target: { value: 'DELETE' } })
+      fireEvent.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(api.delete).toHaveBeenCalled()

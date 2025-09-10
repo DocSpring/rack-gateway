@@ -9,7 +9,6 @@ import { UsersPage } from './users-page'
 const ADMIN_LABEL_RE = /Administrator/i
 
 const ADD_USER_RE = /Add User/i
-const DONT_HAVE_PERMISSION_RE = /don't have permission/i
 const UPDATE_USER_RE = /Update User/i
 
 // Mock the API
@@ -290,25 +289,42 @@ describe('UsersPage', () => {
   })
 
   describe('Non-Admin User', () => {
-    it('shows access denied for viewer user', () => {
-      // Mock the API to return empty array to avoid undefined error
-      vi.mocked(api.get).mockResolvedValueOnce([])
+    it('renders list for viewer without admin actions', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
 
       const Wrapper = createWrapper({ email: 'viewer@example.com', roles: ['viewer'] })
       render(<UsersPage />, { wrapper: Wrapper })
 
-      expect(screen.getByText('Access Denied')).toBeInTheDocument()
-      expect(screen.getByText(DONT_HAVE_PERMISSION_RE)).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
+      // No Add User button for non-admin
+      expect(screen.queryByRole('button', { name: ADD_USER_RE })).toBeNull()
+      // No action buttons column
+      const rows = screen.getAllByRole('row')
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
+      if (!viewerRow) {
+        throw new Error('Viewer row not found')
+      }
+      expect(within(viewerRow).queryByRole('button')).toBeNull()
     })
 
-    it('shows access denied for ops user', () => {
-      // Mock the API to return empty array to avoid undefined error
-      vi.mocked(api.get).mockResolvedValueOnce([])
+    it('renders list for ops without admin actions', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
 
       const Wrapper = createWrapper({ email: 'ops@example.com', roles: ['ops'] })
       render(<UsersPage />, { wrapper: Wrapper })
 
-      expect(screen.getByText('Access Denied')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('button', { name: ADD_USER_RE })).toBeNull()
+      const rows = screen.getAllByRole('row')
+      const adminRow = rows.find((row) => row.textContent?.includes('admin@example.com'))
+      if (!adminRow) {
+        throw new Error('Admin row not found')
+      }
+      expect(within(adminRow).queryByRole('button')).toBeNull()
     })
   })
 
