@@ -474,18 +474,32 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 			}
 		}
 
-		// Check for apps at the root level (less specific match)
-	case strings.HasPrefix(path, "apps"):
+	// Object uploads used by deploy: /apps/{app}/objects/tmp/{name}
+	case len(parts) >= 5 && parts[0] == "apps" && parts[2] == "objects" && parts[3] == "tmp":
+		if method == "POST" {
+			action = "objects.create"
+		} else {
+			action = strings.ToLower(method)
+		}
+		resource = parts[1]
+
+	// Apps root and app-level operations only; do NOT infer create for deeper nested routes
+	case parts[0] == "apps":
 		if method == "GET" {
 			if len(parts) == 1 {
 				action = "apps.list"
-			} else {
+			} else if len(parts) == 2 {
 				action = "apps.get"
 			}
 		} else if method == "POST" {
-			action = "apps.create"
+			if len(parts) == 1 {
+				// Only POST /apps is app creation
+				action = "apps.create"
+			}
 		} else if method == "DELETE" {
-			action = "apps.delete"
+			if len(parts) == 2 {
+				action = "apps.delete"
+			}
 		}
 		if len(parts) > 1 {
 			resource = parts[1]

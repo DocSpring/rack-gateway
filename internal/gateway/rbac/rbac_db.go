@@ -83,6 +83,7 @@ var policies = [][]string{
 	// Deployer role inherits ops and adds deployment permissions
 	{"g", "deployer", "ops"},
 	{"p", "deployer", "convox:builds:create", "*"},
+	{"p", "deployer", "convox:objects:create", "*"},
 	{"p", "deployer", "convox:releases:create", "*"},
 	{"p", "deployer", "convox:releases:promote", "*"},
 	{"p", "deployer", "convox:env:view", "*"},
@@ -97,6 +98,7 @@ var policies = [][]string{
 	// CI/CD role for automated deployments
 	{"p", "cicd", "convox:apps:list", "*"},
 	{"p", "cicd", "convox:builds:create", "*"},
+	{"p", "cicd", "convox:objects:create", "*"},
 	{"p", "cicd", "convox:releases:create", "*"},
 	{"p", "cicd", "convox:releases:promote", "*"},
 	{"p", "cicd", "convox:ps:manage", "*"},

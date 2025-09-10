@@ -101,6 +101,35 @@ function verify_command_failure() {
   verify_command_status_and_output "$1" "1" "${@:2}"
 }
 
+# verify_raw_command_status_and_output <raw_shell_command> <expected_status> <expected1> <expected2> ...
+# Runs the command exactly as given (used for timeout-wrapped flows)
+function verify_raw_command_status_and_output() {
+  local shell_cmd="$1" expected_status="$2" expected_output=("${@:3}")
+  echo -e "${BLUE}Running: $shell_cmd...${NC}"
+  set +e
+  local output
+  output=$(bash -lc "$shell_cmd" 2>&1)
+  local exit_status=$?
+  set -e
+  if [[ "$exit_status" == "$expected_status" ]]; then
+    echo -e "${GREEN}$output${NC}"
+  else
+    echo -e "${RED}Expected status $expected_status, but got $exit_status" >&2
+    echo -e "${RED}$output${NC}" >&2
+    exit 1
+  fi
+  local missing=()
+  for exp in "${expected_output[@]}"; do
+    if ! echo "$output" | grep -q -F "$exp"; then
+      missing+=("$exp")
+    fi
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo -e "${RED}$shell_cmd did not show expected strings: ${missing[*]}${NC}" >&2
+    exit 1
+  fi
+}
+
 function logout_cli() {
   echo -e "${YELLOW}Logging out...${NC}"
   verify_command "logout" "Removed rack: e2e"
@@ -142,6 +171,18 @@ verify_command "convox env set -a convox-gateway FOO=bar" "Setting FOO... OK" "R
 # Test env set with promote
 verify_command "convox env set -a convox-gateway FOO=bar --promote" \
   "Setting FOO... OK" "Release:" "Promoting "
+
+# Smoke test: deploy via timeout (ensures it starts build flow)
+# Expect timeout exit (124) after a few seconds, but logs should include local CLI messages
+verify_raw_command_status_and_output "timeout 5s ./bin/convox-gateway convox deploy -a convox-gateway" \
+  "124" \
+  "Packaging source..." "Uploading source..." "Starting build..."
+
+# Smoke test: logs via timeout (WebSocket)
+# Expect timeout exit (124) but should receive mocked WS log lines
+verify_raw_command_status_and_output "timeout 3s ./bin/convox-gateway convox logs -a convox-gateway -f" \
+  "124" \
+  "Promoting release" "Release promoted successfully."
 
 logout_cli
 

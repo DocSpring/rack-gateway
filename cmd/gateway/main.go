@@ -233,7 +233,6 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(filteredLogger())
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
 
 	// Auth + UI
 	r.Get("/.gateway/web", func(w http.ResponseWriter, r *http.Request) {
@@ -241,8 +240,9 @@ func main() {
 	})
 	r.Get("/.gateway/web/*", uiHandler.ServeStatic)
 
-	// Expose API only under /.gateway/api/*
+	// Expose API only under /.gateway/api/* (apply timeout here, not on WS proxy routes)
 	r.Route("/.gateway/api", func(r chi.Router) {
+		r.Use(middleware.Timeout(60 * time.Second))
 		// Auth (scoped under /auth)
 		r.Post("/auth/cli/start", handleCLILoginStart(oauthHandler, database))
 		r.Get("/auth/cli/callback", handleCLILoginRedirectCallback(database))

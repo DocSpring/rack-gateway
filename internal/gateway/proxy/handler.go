@@ -564,7 +564,15 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
 
 	// HTTP client for upstream with optional TLS overrides
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	transport := &http.Transport{
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		ForceAttemptHTTP2:     false,
+		Proxy:                 http.ProxyFromEnvironment,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 	client := &http.Client{
 		Timeout:   30 * time.Second,
 		Transport: transport,
@@ -827,6 +835,8 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	}
 	d := *websocket.DefaultDialer
 	d.HandshakeTimeout = 10 * time.Second
+	// Force HTTP/1.1 for WebSocket handshake over TLS; HTTP/2 does not support 101 Upgrade
+	d.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"http/1.1"}}
 
 	// Follow up to 3 redirects for WS dial (some servers redirect mounting paths)
 	var upstreamConn *websocket.Conn
@@ -953,6 +963,9 @@ func (h *Handler) pathToResourceAction(path, method string) (string, string) {
 		{"POST", "/apps/{app}/builds/import", "builds", "create"},
 		{"PUT", "/apps/{app}/builds/{id}", "builds", "create"},
 
+		// Deploy object upload
+		{"POST", "/apps/{app}/objects/tmp/{name}", "objects", "create"},
+
 		{"GET", "/apps/{app}/releases", "releases", "list"},
 		{"GET", "/apps/{app}/releases/{id}", "releases", "list"},
 		{"POST", "/apps/{app}/releases", "releases", "create"},
@@ -1035,7 +1048,6 @@ func (h *Handler) isAllowedConvoxPath(path, _ string) bool {
 		"/proxy",
 		"/registries",
 		"/resources",
-		"/racks",
 	}
 	for _, root := range allowedRoots {
 		if path == root || strings.HasPrefix(path, root+"/") {

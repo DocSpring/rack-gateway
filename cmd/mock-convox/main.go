@@ -180,6 +180,9 @@ func main() {
 	// Logs streaming (WebSocket)
 	r.HandleFunc("/apps/{app}/logs", appLogs).Methods("GET")
 
+	// Object upload used by deploy: POST /apps/{app}/objects/tmp/<name>.tgz
+	r.HandleFunc("/apps/{app}/objects/tmp/{name}", uploadObject).Methods("POST")
+
 	// Optional racks listing used by CLI in some flows
 	r.HandleFunc("/racks", listRacks).Methods("GET")
 
@@ -270,8 +273,8 @@ func requestLogger(next http.Handler) http.Handler {
 				}
 			}
 		}
-		// Log request body for write methods, but cap size to avoid noise
-		if getBoolEnv("MOCK_CONVOX_LOG_REQUEST_BODY", false) && r.Body != nil && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
+		// Log request body for write methods unless it's an object upload (huge tarball)
+		if getBoolEnv("MOCK_CONVOX_LOG_REQUEST_BODY", false) && r.Body != nil && !isObjectUploadPath(r.URL.Path) && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
 			// Read and restore body
 			buf, _ := io.ReadAll(r.Body)
 			r.Body.Close()
@@ -289,7 +292,7 @@ func requestLogger(next http.Handler) http.Handler {
 		}
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sr, r)
-		if getBoolEnv("MOCK_CONVOX_LOG_RESPONSE_BODY", false) {
+		if getBoolEnv("MOCK_CONVOX_LOG_RESPONSE_BODY", false) && !isObjectUploadPath(r.URL.Path) {
 			// Log response body preview
 			max := 4096
 			preview := string(sr.body)
@@ -300,6 +303,11 @@ func requestLogger(next http.Handler) http.Handler {
 		}
 		log.Printf("Response: %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
 	})
+}
+
+// isObjectUploadPath returns true for deploy tarball uploads
+func isObjectUploadPath(p string) bool {
+	return strings.Contains(p, "/objects/tmp/")
 }
 
 type statusRecorder struct {
@@ -647,6 +655,9 @@ func getBuild(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(build)
 }
 
+// createBuild simulates creating a new build for an app
+// (intentionally no build creation/import or build logs stubs; tests use app logs and releases)
+
 func handleReleases(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
@@ -729,12 +740,36 @@ func appLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer c.Close()
-	// Stream a couple of lines quickly then close
+
+	// Emit a couple of lines immediately like a real deploy/log stream
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Promoting release..."))
 	time.Sleep(100 * time.Millisecond)
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Release promoted successfully."))
-	// Close the WS cleanly
-	_ = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+
+	// Keep the connection open to mimic tail -f behavior.
+	// Send periodic ping frames to prevent idle timeouts and wait until client disconnects.
+	ping := time.NewTicker(30 * time.Second)
+	defer ping.Stop()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			// Read to detect client close; ignore content
+			if _, _, err := c.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-ping.C:
+			_ = c.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second))
+		}
+	}
 }
 
 func getEnvironment(w http.ResponseWriter, r *http.Request) {
@@ -757,6 +792,17 @@ func setEnvironment(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(merged)
+}
+
+// uploadObject accepts a tarball upload for deploy and returns 200 OK
+func uploadObject(w http.ResponseWriter, r *http.Request) {
+	// Drain body to simulate upload and avoid connection reuse issues
+	_, _ = io.Copy(io.Discard, r.Body)
+	r.Body.Close()
+	// Return a minimal JSON response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "uploaded"})
 }
 
 // Helpers
