@@ -205,6 +205,14 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Auth + UI
+	// Quiet common browser noise to avoid console 404s
+	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("User-agent: *\nDisallow:"))
+	})
+
 	r.Get("/.gateway/web", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/.gateway/web/", http.StatusMovedPermanently)
 	})

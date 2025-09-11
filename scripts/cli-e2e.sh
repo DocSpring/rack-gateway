@@ -30,7 +30,7 @@ GATEWAY_PORT="${GATEWAY_PORT:-}"
 [[ -z "$GATEWAY_PORT" ]] && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
 
 echo "Building CLI..."
-task go:build:cli >/dev/null 2>&1 || task go:build:cli
+task go:build:cli
 
 login_cli_as() {
   local user_email="$1"

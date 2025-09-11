@@ -231,6 +231,17 @@ func (h *Handler) UpdateProtectedEnvVars(w http.ResponseWriter, r *http.Request)
 			HTTPStatus:     http.StatusOK,
 			ResponseTimeMs: 0,
 		})
+
+		// Email admins about the settings change
+		if h.emailer != nil {
+			admins := h.getAdminEmails()
+			if len(admins) > 0 {
+				subject := fmt.Sprintf("Convox Gateway: Settings changed (%s)", "protected_env_vars")
+				changer := au.Email
+				body := fmt.Sprintf("%s updated setting '%s' on rack '%s'.\n\nNew value:\n%s\n", changer, "protected_env_vars", h.rackName, strings.Join(out, ", "))
+				_ = h.emailer.SendMany(orderByInviterFirst(admins, au), subject, body)
+			}
+		}
 	}
 	// Update in-memory cache for current handler
 	if h.database != nil {
