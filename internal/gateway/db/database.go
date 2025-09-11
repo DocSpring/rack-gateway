@@ -468,6 +468,81 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 	return nil
 }
 
+// Settings helpers
+
+// GetSettingRaw returns the raw JSON value for a setting key.
+func (d *Database) GetSettingRaw(key string) ([]byte, bool, error) {
+	var raw []byte
+	err := d.queryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&raw)
+	if err == sql.ErrNoRows {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get setting %s: %w", key, err)
+	}
+	return raw, true, nil
+}
+
+// UpsertSetting sets the setting value (as JSON) with optional updated_by_user_id.
+func (d *Database) UpsertSetting(key string, value interface{}, updatedByUserID *int64) error {
+	b, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal setting %s: %w", key, err)
+	}
+	if updatedByUserID != nil {
+		_, err = d.exec(`INSERT INTO settings (key, value, updated_at, updated_by_user_id)
+            VALUES (?, ?::jsonb, NOW(), ?)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`, key, string(b), *updatedByUserID)
+	} else {
+		_, err = d.exec(`INSERT INTO settings (key, value, updated_at)
+            VALUES (?, ?::jsonb, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, key, string(b))
+	}
+	if err != nil {
+		return fmt.Errorf("failed to upsert setting %s: %w", key, err)
+	}
+	return nil
+}
+
+// GetProtectedEnvVars returns the list of protected env var names (normalized upper-case unique).
+func (d *Database) GetProtectedEnvVars() ([]string, error) {
+	raw, ok, err := d.GetSettingRaw("protected_env_vars")
+	if err != nil || !ok {
+		return []string{}, err
+	}
+	var arr []string
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return []string{}, fmt.Errorf("invalid protected_env_vars setting: %w", err)
+	}
+	// normalize
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(arr))
+	for _, k := range arr {
+		k = strings.TrimSpace(strings.ToUpper(k))
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+// GetAllowDestructiveActions returns whether destructive actions are allowed (default false).
+func (d *Database) GetAllowDestructiveActions() (bool, error) {
+	raw, ok, err := d.GetSettingRaw("allow_destructive_actions")
+	if err != nil || !ok {
+		return false, err
+	}
+	var v bool
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return false, fmt.Errorf("invalid allow_destructive_actions setting: %w", err)
+	}
+	return v, nil
+}
+
 // GetAuditLogs retrieves audit logs with optional filters
 func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([]*AuditLog, error) {
 	query := `

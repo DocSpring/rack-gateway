@@ -23,5 +23,5 @@ export default defineConfig({
     },
   ],
 
-  // Expect the dev stack to be running (make dev). No internal webServer starter.
+  // Expect the dev stack to be running (task dev). No internal webServer starter.
 })

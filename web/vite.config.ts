@@ -8,6 +8,13 @@ export default defineConfig(() => ({
   // Serve UI consistently under /.gateway/web/ in all envs
   base: "/.gateway/web/",
   plugins: [react(), tailwindcss()],
+  build: process.env.VITE_FAST_BUILD === "true" ? {
+    minify: false,
+    cssMinify: false,
+    sourcemap: false,
+    target: "esnext",
+    modulePreload: false,
+  } : undefined,
   resolve: {
     alias: {
       "@": path.resolve(process.cwd(), "src"),
@@ -15,6 +22,7 @@ export default defineConfig(() => ({
   },
   server: {
     port: parseInt(process.env.WEB_PORT || "5173"),
+    hmr: process.env.VITE_DISABLE_HMR === "true" ? false : undefined,
     proxy: {
       "/.gateway/api": {
         target:

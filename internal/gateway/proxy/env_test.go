@@ -24,7 +24,7 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager)
 	require.NoError(t, err)
 	h := NewHandler(&config.Config{Racks: map[string]config.RackConfig{
 		"default": {Name: "default", URL: "http://mock", Username: "convox", APIKey: "token", Enabled: true},
-	}}, mgr, audit.NewLogger(database))
+	}}, mgr, audit.NewLogger(database), database)
 	// Configure extra secret names
 	h.secretNames["DATABASE_URL"] = struct{}{}
 	h.secretNames["REDIS_URL"] = struct{}{}

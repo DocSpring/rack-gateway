@@ -27,7 +27,7 @@ RUN go mod download
 COPY internal ./internal
 COPY cmd/gateway ./cmd/gateway
 
-# Build the gateway binary directly (avoid Makefile dependency)
+# Build the gateway binary directly in this stage
 RUN CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway \
     && /out/convox-gateway-api help
 

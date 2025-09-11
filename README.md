@@ -89,8 +89,8 @@ sh scripts/dev-setup.sh
 task build
 
 # Individual targets
-task go:gateway # Build gateway API server -> bin/convox-gateway-api
-task go:cli     # Build gateway CLI -> bin/convox-gateway
+task go:build:gateway # Build gateway API server -> bin/convox-gateway-api
+task go:build:cli     # Build gateway CLI -> bin/convox-gateway
 task docker     # Build Docker image
 task test       # Run all tests
 ```

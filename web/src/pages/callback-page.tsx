@@ -1,17 +1,19 @@
+import { useNavigate, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
 import { authService } from '../lib/auth'
 
 export function CallbackPage() {
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const handleCallback = async () => {
-      const code = searchParams.get('code')
-      const state = searchParams.get('state')
-      const urlError = searchParams.get('error')
+      const search = router.history.location.search || ''
+      const sp = new URLSearchParams(search)
+      const code = sp.get('code')
+      const state = sp.get('state')
+      const urlError = sp.get('error')
 
       if (urlError) {
         setError(`Authentication failed: ${urlError}`)
@@ -25,15 +27,15 @@ export function CallbackPage() {
 
       try {
         await authService.handleCallback(code, state)
-        // Redirect to main app
-        navigate('/', { replace: true })
+        // Redirect to Users page after successful login
+        navigate({ to: '/users', replace: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Authentication failed')
       }
     }
 
     handleCallback()
-  }, [searchParams, navigate])
+  }, [router, navigate])
 
   if (error) {
     return (
@@ -44,7 +46,7 @@ export function CallbackPage() {
             <p className="mt-1 text-red-700 text-sm">{error}</p>
             <button
               className="mt-3 font-medium text-red-600 text-sm hover:text-red-500"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate({ to: '/login' })}
               type="button"
             >
               Back to login

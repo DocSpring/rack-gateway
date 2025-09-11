@@ -558,6 +558,10 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 }
 
 func wrapConvoxCommand(args []string) error {
+	// Ban rack uninstall via gateway wrapper
+	if len(args) >= 2 && strings.EqualFold(args[0], "rack") && strings.EqualFold(args[1], "uninstall") {
+		return fmt.Errorf("'convox rack uninstall' is disabled in convox-gateway. Use the official Convox CLI directly with a local rack token")
+	}
 	var rack string
 
 	// Priority order for rack selection:

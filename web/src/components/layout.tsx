@@ -1,6 +1,6 @@
+import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
 import { FileText, Key, LogOut, TerminalSquare, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
 import { ThemeToggle } from './theme-toggle'
@@ -28,6 +28,11 @@ export function Layout() {
       return 'https://gateway.example.com'
     }
   }, [])
+
+  // Declarative redirect: when at layout root, go to Users
+  if (location.pathname === '/') {
+    return <Navigate replace to="/users" />
+  }
 
   return (
     <div className="flex h-screen bg-background">

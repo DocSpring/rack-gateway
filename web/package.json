@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:fast": "vite build --mode development",
+    "typecheck": "tsc -b --noEmit --pretty false",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:unsafe": "biome check --write --unsafe .",
@@ -36,7 +38,7 @@
     "next-themes": "^0.4.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.8.0",
+    "@tanstack/react-router": "^1.76.5",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1"
   },

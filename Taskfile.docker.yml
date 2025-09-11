@@ -1,0 +1,162 @@
+version: "3"
+
+env:
+  WEB_PORT: "{{.WEB_PORT | default 5173}}"
+  GATEWAY_PORT: "{{.GATEWAY_PORT | default 8447}}"
+  MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT | default 3345}}"
+  DOCKER_BUILDKIT: "1"
+  COMPOSE_DOCKER_CLI_BUILD: "1"
+  BUILDKIT_PROGRESS: "plain"
+
+tasks:
+  # ------------------------------
+  # DEV stack (Vite + dev gateway)
+  # ------------------------------
+  up:dev:
+    desc: Up full dev stack (infra + web + gateway)
+    run: once
+    aliases: [up]
+    deps: ["stop:preview:web", "stop:preview:gateway"]
+    cmds:
+      - docker compose up -d --build postgres mock-oauth mock-convox web-dev gateway-api-dev
+
+  up:dev:web:
+    desc: Up dev web (Vite)
+    run: once
+    deps: ["stop:preview:web"]
+    cmds:
+      - docker compose up -d --build web-dev
+
+  up:dev:gateway:
+    desc: Up dev gateway
+    run: once
+    deps: ["stop:preview:gateway"]
+    cmds:
+      - docker compose up -d --build gateway-api-dev
+
+  wait:dev:
+    desc: Wait for dev stack readiness (Vite web under WEB_PORT)
+    run: once
+    aliases: [wait]
+    cmds:
+      - WEB_PORT={{.WEB_PORT}} GATEWAY_PORT={{.GATEWAY_PORT}} MOCK_OAUTH_PORT={{.MOCK_OAUTH_PORT}} CHECK_VITE_PROXY={{.CHECK_VITE_PROXY | default "true"}} bash scripts/wait-services.sh
+
+  down:dev:
+    desc: Down full dev stack (infra + web + gateway)
+    run: once
+    cmds:
+      - docker compose down -v --remove-orphans postgres mock-oauth mock-convox web-dev gateway-api-dev
+
+  down:dev:web:
+    desc: Down dev web (Vite)
+    run: once
+    cmds:
+      - docker compose down -v --remove-orphans web-dev
+
+  down:dev:gateway:
+    desc: Down dev gateway
+    run: once
+    cmds:
+      - docker compose down -v --remove-orphans gateway-api-dev
+
+  stop:dev:
+    desc: Stop dev stack
+    run: once
+    deps: ["stop:dev:web", "stop:dev:gateway"]
+
+  stop:dev:web:
+    desc: Stop dev web (Vite)
+    run: once
+    cmds:
+      - docker compose stop web-dev
+
+  stop:dev:gateway:
+    desc: Stop dev gateway
+    run: once
+    cmds:
+      - docker compose stop gateway-api-dev
+
+  # ----------------------------------------------
+  # PREVIEW stack (compiled SPA + preview gateway)
+  # ----------------------------------------------
+  up:preview:
+    desc: Up full preview stack (infra + web + gateway)
+    run: once
+    deps: ["stop:dev:web", "stop:dev:gateway"]
+    cmds:
+      - docker compose up -d --build postgres mock-oauth mock-convox web-preview gateway-api-preview
+
+  up:preview:web:
+    desc: Up preview web (compiled SPA)
+    run: once
+    deps: ["stop:dev:web"]
+    cmds:
+      - docker compose up -d --build web-preview
+
+  up:preview:gateway:
+    desc: Up preview gateway (serves compiled SPA)
+    run: once
+    deps: ["stop:dev:gateway"]
+    cmds:
+      - docker compose up -d --build gateway-api-preview
+
+  wait:preview:
+    desc: Wait for preview stack readiness (gateway serves SPA under GATEWAY_PORT)
+    run: once
+    cmds:
+      - WEB_PORT={{.GATEWAY_PORT}} GATEWAY_PORT={{.GATEWAY_PORT}} MOCK_OAUTH_PORT={{.MOCK_OAUTH_PORT}} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
+
+  down:preview:
+    desc: Down full preview stack
+    run: once
+    cmds:
+      - docker compose down -v --remove-orphans postgres mock-oauth mock-convox web-preview gateway-api-preview
+
+  down:preview:web:
+    desc: Down preview web
+    run: once
+    cmds:
+      - docker compose down -v --remove-orphans web-preview
+
+  down:preview:gateway:
+    desc: Down preview gateway
+    run: once
+    cmds:
+      - docker compose down -v --remove-orphans gateway-api-preview
+
+  stop:preview:
+    desc: Stop preview stack
+    run: once
+    deps: ["stop:preview:web", "stop:preview:gateway"]
+
+  stop:preview:web:
+    desc: Stop preview web
+    run: once
+    cmds:
+      - docker compose stop web-preview
+
+  stop:preview:gateway:
+    desc: Stop preview gateway
+    run: once
+    cmds:
+      - docker compose stop gateway-api-preview
+
+  # ------------------------------
+  # Misc
+  # ------------------------------
+  logs:
+    desc: Tail logs for the active stack
+    cmds:
+      - docker compose logs -f
+
+  down:
+    desc: Tear down everything (all profiles) and remove volumes
+    run: once
+    cmds:
+      - docker compose --profile dev --profile preview down -v --remove-orphans
+
+  build:
+    desc: Build Docker image for the gateway API
+    run: once
+    cmds:
+      - docker build -t convox-gateway-api:latest .

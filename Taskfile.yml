@@ -1,59 +1,34 @@
-version: '3'
+version: "3"
 
 vars:
-  WEB_PORT: '{{.WEB_PORT | default 5173}}'
-  GATEWAY_PORT: '{{.GATEWAY_PORT | default 8447}}'
-  MOCK_OAUTH_PORT: '{{.MOCK_OAUTH_PORT | default 3345}}'
+  WEB_PORT: "{{.WEB_PORT | default 5173}}"
+  GATEWAY_PORT: "{{.GATEWAY_PORT | default 8447}}"
+  MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT | default 3345}}"
 
 includes:
+  docker: ./Taskfile.docker.yml
   go: ./Taskfile.go.yml
   web: ./Taskfile.web.yml
-  e2e: ./Taskfile.e2e.yml
 
 tasks:
-  default:
-    desc: Run all linters and tests
-    cmds:
-      - task: lint
-      - task: test
+  all:
+    desc: Run linters, tests, and build
+    deps: [lint, test, build]
 
   lint:
     desc: Run web + Go linters and typecheck
-    cmds:
-      - task: web:lint
-      - task: go:lint
+    deps: [web:lint, go:lint]
 
   test:
-    desc: Run Go + Web unit tests and Web E2E (dev stack)
-    cmds:
-      - task: go:test
-      - task: web:test
-      - task: e2e:web:dev
+    desc: Run all tests (single preview stack)
+    deps: [go:test, go:e2e:dev, web:test, web:e2e:dev]
 
   build:
     desc: Build web + gateway + cli + mock binaries
-    cmds:
-      - task: web:build
-      - task: go:gateway
-      - task: go:cli
-      - task: go:mock
+    deps: [web:build, go:build]
 
+  # Convenience alias for local dev stack (delegates to docker tasks)
   dev:
-    desc: Start development environment with Docker Compose (profile dev)
+    desc: Start development environment (alias for :docker:up)
     cmds:
-      - docker compose --profile dev up --build --force-recreate postgres mock-oauth mock-convox web-dev gateway-api-dev
-
-  dev:down:
-    desc: Stop development environment
-    cmds:
-      - docker compose down -v --remove-orphans || true
-
-  dev:logs:
-    desc: Tail development logs
-    cmds:
-      - docker compose logs -f
-
-  docker:
-    desc: Build Docker image for the gateway API
-    cmds:
-      - docker build -t convox-gateway-api:latest .
+      - task: docker:up:dev

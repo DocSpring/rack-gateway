@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Copy, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -104,7 +104,6 @@ export function TokensPage() {
   return <TokensPageInner />
 }
 
-/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI component aggregates multiple concerns; splitting harms readability */
 function TokensPageInner() {
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
@@ -226,25 +225,6 @@ function TokensPageInner() {
     deleteTokenMutation.mutate(tokenToDelete.id)
   }
 
-  if (isLoading || error) {
-    return (
-      <div className="p-8">
-        {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-destructive">Error</CardTitle>
-              <CardDescription>Failed to load API tokens</CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -254,74 +234,67 @@ function TokensPageInner() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>API Tokens</CardTitle>
-              <CardDescription>
-                Tokens allow external services to authenticate with the gateway
-              </CardDescription>
-            </div>
-            {canCreate && (
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Token
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {tokenList.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">No API tokens created yet</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead>Created By</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tokenList.map((token: APIToken) => {
-                  const isOwner =
-                    token.created_by_email && currentUser?.email
-                      ? token.created_by_email.toLowerCase() === currentUser.email.toLowerCase()
-                      : false
-                  const canEdit = isAdmin || (isDeployer && isOwner)
-                  return (
-                    <TokenRow
-                      canEdit={canEdit}
-                      deletePending={deleteTokenMutation.isPending}
-                      key={token.id}
-                      onDelete={() => {
-                        if (!canEdit) {
-                          return
-                        }
-                        openDeleteDialog(token)
-                      }}
-                      onEdit={() => {
-                        if (!canEdit) {
-                          return
-                        }
-                        setEditToken(token)
-                        setEditName(token.name)
-                        setIsEditOpen(true)
-                      }}
-                      token={token}
-                    />
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <TablePane
+        description="Tokens allow external services to authenticate with the gateway"
+        empty={tokenList.length === 0}
+        emptyMessage="No API tokens created yet"
+        error={error ? 'Failed to load API tokens' : null}
+        headerRight={
+          canCreate ? (
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Token
+            </Button>
+          ) : undefined
+        }
+        loading={!!isLoading}
+        title="API Tokens"
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last Used</TableHead>
+              <TableHead>Created By</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Expires</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tokenList.map((token: APIToken) => {
+              const isOwner =
+                token.created_by_email && currentUser?.email
+                  ? token.created_by_email.toLowerCase() === currentUser.email.toLowerCase()
+                  : false
+              const canEdit = isAdmin || (isDeployer && isOwner)
+              return (
+                <TokenRow
+                  canEdit={canEdit}
+                  deletePending={deleteTokenMutation.isPending}
+                  key={token.id}
+                  onDelete={() => {
+                    if (!canEdit) {
+                      return
+                    }
+                    openDeleteDialog(token)
+                  }}
+                  onEdit={() => {
+                    if (!canEdit) {
+                      return
+                    }
+                    setEditToken(token)
+                    setEditName(token.name)
+                    setIsEditOpen(true)
+                  }}
+                  token={token}
+                />
+              )
+            })}
+          </TableBody>
+        </Table>
+      </TablePane>
 
       {/* Create Token Dialog */}
       <Dialog onOpenChange={handleCloseDialog} open={isCreateOpen}>

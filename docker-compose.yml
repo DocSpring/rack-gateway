@@ -17,7 +17,11 @@ x-gateway-env: &gateway_common_env
   LOG_RESPONSE_BODIES: "true"
 
 x-gateway-health: &gateway_healthcheck
-  test: ["CMD-SHELL", "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/api/health || exit 1"]
+  test:
+    [
+      "CMD-SHELL",
+      "curl -fsS http://localhost:${GATEWAY_PORT:-8447}/.gateway/api/health || exit 1",
+    ]
   interval: 2s
   timeout: 5s
   retries: 3
@@ -62,7 +66,8 @@ services:
     networks:
       - gateway-net
 
-  gateway-api:
+  gateway-api-preview:
+    profiles: [preview]
     build:
       context: .
       dockerfile: Dockerfile.gateway-web
@@ -116,6 +121,7 @@ services:
       # In dev profile, proxy API requests to gateway-api-dev (same Compose network)
       VITE_API_BASE_URL: http://gateway-api-dev:${GATEWAY_PORT:-8447}
       VITE_DEBUG_PROXY: ${VITE_DEBUG_PROXY:-false}
+      VITE_DISABLE_HMR: "true"
     ports:
       - "${WEB_PORT:-5173}:5173"
     volumes:
@@ -136,12 +142,13 @@ services:
     environment:
       # Build-time base URL for API calls in the compiled SPA
       VITE_API_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}
+      VITE_FAST_BUILD: "true"
     ports:
       - "${WEB_PORT:-5173}:5173"
     volumes:
       - ./web:/app
       - /app/node_modules
-    command: sh -lc "pnpm build && pnpm preview --host 0.0.0.0 --port 5173"
+    command: sh -lc "pnpm build:fast && pnpm preview --host 0.0.0.0 --port 5173"
     networks:
       - gateway-net
 

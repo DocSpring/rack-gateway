@@ -53,7 +53,7 @@ task dev
 3. Build CLI and log in
 
 ```bash
-task go:cli
+task go:build:cli
 ./bin/convox-gateway login local http://localhost:$PORT
 # Browser opens (mock OAuth). Complete login, then CLI stores token locally.
 ```

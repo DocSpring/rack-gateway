@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { Layout } from './components/layout'
 import { Toaster } from './components/ui/sonner'
 import { AuthProvider } from './contexts/auth-context'
@@ -18,23 +24,111 @@ const queryClient = new QueryClient({
   },
 })
 
+function buildRouteTree() {
+  const rootRoute = createRootRoute({
+    component: () => <Outlet />,
+  })
+
+  // Public routes
+  const loginRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: 'login',
+    component: LoginPage,
+  })
+  const callbackRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: 'auth/callback',
+    component: CallbackPage,
+  })
+
+  // App layout route with nested pages
+  const layoutRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: Layout,
+  })
+
+  // No separate index route; default redirect handled by Layout component
+
+  const usersRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'users',
+    component: UsersPage,
+  })
+
+  const tokensRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'api_tokens',
+    component: TokensPage,
+  })
+
+  const auditRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'audit_logs',
+    component: AuditPage,
+  })
+
+  return rootRoute.addChildren([
+    loginRoute,
+    callbackRoute,
+    layoutRoute.addChildren([usersRoute, tokensRoute, auditRoute]),
+  ])
+}
+
+const TRAILING_SLASH_RE = /\/$/
+
+export function detectBasepath() {
+  // Avoid any by narrowing to a minimal env shape
+  const envBase = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL
+  const base = envBase && envBase !== '' ? envBase : '/'
+  if (base === '/' && typeof window !== 'undefined') {
+    try {
+      const p = window.location.pathname || '/'
+      if (p.startsWith('/.gateway/web')) {
+        return '/.gateway/web'
+      }
+    } catch {
+      // Ignore errors in non-browser test environments
+    }
+  }
+  return base.replace(TRAILING_SLASH_RE, '')
+}
+
+export function createAppRouter(basepath?: string) {
+  return createRouter({
+    routeTree: buildRouteTree(),
+    basepath: basepath ?? detectBasepath(),
+  })
+}
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: ReturnType<typeof createAppRouter>
+  }
+}
+
+function getSingletonRouter() {
+  // Reuse a single router instance across HMR to avoid double route registration
+  try {
+    const w = window as unknown as { __APP_ROUTER__?: ReturnType<typeof createAppRouter> }
+    if (w.__APP_ROUTER__) {
+      return w.__APP_ROUTER__
+    }
+    const r = createAppRouter()
+    w.__APP_ROUTER__ = r
+    return r
+  } catch {
+    // Non-browser (tests): create a fresh router
+    return createAppRouter()
+  }
+}
+
 function App() {
+  const router = getSingletonRouter()
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router basename={import.meta.env.BASE_URL}>
-          <Routes>
-            <Route element={<LoginPage />} path="/login" />
-            <Route element={<CallbackPage />} path="/auth/callback" />
-
-            <Route element={<Layout />}>
-              <Route element={<Navigate replace to="/users" />} path="/" />
-              <Route element={<UsersPage />} path="/users" />
-              <Route element={<TokensPage />} path="/api_tokens" />
-              <Route element={<AuditPage />} path="/audit_logs" />
-            </Route>
-          </Routes>
-        </Router>
+        <RouterProvider router={router} />
         <Toaster position="top-right" />
       </AuthProvider>
     </QueryClientProvider>

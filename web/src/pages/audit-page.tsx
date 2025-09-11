@@ -2,9 +2,10 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Download, Eye, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -124,6 +125,7 @@ export function AuditPage() {
     data: logs = [],
     error,
     isError,
+    isLoading,
     refetch,
   } = useQuery<AuditLog[], Error>({
     queryKey: [
@@ -500,195 +502,186 @@ export function AuditPage() {
       </Card>
 
       {/* Logs Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Audit Logs</CardTitle>
-          <CardDescription>
-            Showing {stats.total} logs · Page {currentPage} of {totalPages}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isError && (
-            <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
-              Failed to load audit logs: {String((error as Error)?.message || 'Unknown error')}
-            </div>
-          )}
-          {stats.total === 0 && !isError ? (
-            <div className="py-8 text-center text-muted-foreground">No audit logs found</div>
-          ) : (
-            <Table className="text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Resource Type</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead className="text-right">View</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageItems.map((log: AuditLog) => (
-                  <TableRow
-                    className="cursor-pointer hover:bg-accent/50"
-                    key={log.id}
-                    onClick={() => setSelected(log)}
-                  >
-                    <TableCell className="font-mono text-sm">
-                      {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{log.user_email}</div>
-                        {log.user_name && (
-                          <div className="text-muted-foreground text-xs">{log.user_name}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const ap = getActionTypeBadgeAppearance(log.action_type)
-                        return (
-                          <Badge className={ap.className} variant={ap.variant}>
-                            {log.action_type.replace('_', ' ')}
-                          </Badge>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex action rendering for exec */}
-                      {(() => {
-                        if (log.action_type === 'convox' && log.action === 'process.exec') {
-                          const raw = (() => {
-                            try {
-                              const d = JSON.parse(log.details || '{}') as {
-                                command?: string
-                              }
-                              return (log.command || d.command || '').trim()
-                            } catch {
-                              return (log.command || '').trim()
-                            }
-                          })()
-                          let cmd = raw
-                          if (
-                            (cmd.startsWith("'") && cmd.endsWith("'")) ||
-                            (cmd.startsWith('"') && cmd.endsWith('"'))
-                          ) {
-                            cmd = cmd.slice(1, -1)
+      <TablePane
+        description={`Showing ${stats.total} logs · Page ${currentPage} of ${totalPages}`}
+        empty={stats.total === 0 && !isError}
+        emptyMessage="No audit logs found"
+        error={
+          isError
+            ? `Failed to load audit logs: ${String((error as Error)?.message || 'Unknown error')}`
+            : null
+        }
+        loading={!!(isLoading && logs.length === 0)}
+        title="Audit Logs"
+      >
+        <Table className="text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Timestamp</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Action</TableHead>
+              <TableHead>Resource Type</TableHead>
+              <TableHead>Resource</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>IP Address</TableHead>
+              <TableHead className="text-right">View</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageItems.map((log: AuditLog) => (
+              <TableRow
+                className="cursor-pointer hover:bg-accent/50"
+                key={log.id}
+                onClick={() => setSelected(log)}
+              >
+                <TableCell className="font-mono text-sm">
+                  {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
+                </TableCell>
+                <TableCell>
+                  <div>
+                    <div className="font-medium">{log.user_email}</div>
+                    {log.user_name && (
+                      <div className="text-muted-foreground text-xs">{log.user_name}</div>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const ap = getActionTypeBadgeAppearance(log.action_type)
+                    return (
+                      <Badge className={ap.className} variant={ap.variant}>
+                        {log.action_type.replace('_', ' ')}
+                      </Badge>
+                    )
+                  })()}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex action rendering for exec */}
+                  {(() => {
+                    if (log.action_type === 'convox' && log.action === 'process.exec') {
+                      const raw = (() => {
+                        try {
+                          const d = JSON.parse(log.details || '{}') as {
+                            command?: string
                           }
-                          const truncated = cmd.length > 64 ? `${cmd.slice(0, 64)}…` : cmd
-                          return (
-                            <div className="flex flex-col">
-                              <Badge
-                                className="w-fit border border-border bg-muted font-mono text-muted-foreground"
-                                variant="outline"
-                              >
-                                {log.action}
-                              </Badge>
-                              {cmd && (
-                                <code
-                                  className="mt-1 w-fit whitespace-nowrap rounded border border-border bg-secondary px-1 py-0.5 font-mono text-blue-600 shadow-sm dark:text-blue-300"
-                                  title={cmd}
-                                >
-                                  {truncated}
-                                </code>
-                              )}
-                            </div>
-                          )
+                          return (log.command || d.command || '').trim()
+                        } catch {
+                          return (log.command || '').trim()
                         }
-                        return (
+                      })()
+                      let cmd = raw
+                      if (
+                        (cmd.startsWith("'") && cmd.endsWith("'")) ||
+                        (cmd.startsWith('"') && cmd.endsWith('"'))
+                      ) {
+                        cmd = cmd.slice(1, -1)
+                      }
+                      const truncated = cmd.length > 64 ? `${cmd.slice(0, 64)}…` : cmd
+                      return (
+                        <div className="flex flex-col">
                           <Badge
-                            className="border border-border bg-muted font-mono text-muted-foreground"
+                            className="w-fit border border-border bg-muted font-mono text-muted-foreground"
                             variant="outline"
                           >
                             {log.action}
                           </Badge>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const rt = log.resource_type || log.action_type?.split('.')[0] || 'unknown'
-                        const ap = getResourceTypeBadgeAppearance(rt)
-                        return (
-                          <Badge className={ap.className} variant={ap.variant}>
-                            {rt}
-                          </Badge>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="max-w-[260px] truncate" title={log.resource}>
-                        <Badge
-                          className="max-w-full truncate border border-border bg-muted font-mono text-muted-foreground"
-                          variant="outline"
-                        >
-                          {log.resource || '-'}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const ap = getStatusBadgeAppearance(log.status)
-                        const statusLabel = (() => {
-                          if (log.status === 'denied') {
-                            return 'denied (RBAC)'
-                          }
-                          if (
-                            (log.status === 'failed' || log.status === 'error') &&
-                            log.http_status
-                          ) {
-                            return `${log.status} (${log.http_status})`
-                          }
-                          return log.status
-                        })()
-                        return (
-                          <Badge className={ap.className} variant={ap.variant}>
-                            {statusLabel}
-                          </Badge>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button onClick={() => setSelected(log)} size="sm" variant="ghost">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                          {cmd && (
+                            <code
+                              className="mt-1 w-fit whitespace-nowrap rounded border border-border bg-secondary px-1 py-0.5 font-mono text-blue-600 shadow-sm dark:text-blue-300"
+                              title={cmd}
+                            >
+                              {truncated}
+                            </code>
+                          )}
+                        </div>
+                      )
+                    }
+                    return (
+                      <Badge
+                        className="border border-border bg-muted font-mono text-muted-foreground"
+                        variant="outline"
+                      >
+                        {log.action}
+                      </Badge>
+                    )
+                  })()}
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const rt = log.resource_type || log.action_type?.split('.')[0] || 'unknown'
+                    const ap = getResourceTypeBadgeAppearance(rt)
+                    return (
+                      <Badge className={ap.className} variant={ap.variant}>
+                        {rt}
+                      </Badge>
+                    )
+                  })()}
+                </TableCell>
+                <TableCell>
+                  <div className="max-w-[260px] truncate" title={log.resource}>
+                    <Badge
+                      className="max-w-full truncate border border-border bg-muted font-mono text-muted-foreground"
+                      variant="outline"
+                    >
+                      {log.resource || '-'}
+                    </Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const ap = getStatusBadgeAppearance(log.status)
+                    const statusLabel = (() => {
+                      if (log.status === 'denied') {
+                        return 'denied (RBAC)'
+                      }
+                      if ((log.status === 'failed' || log.status === 'error') && log.http_status) {
+                        return `${log.status} (${log.http_status})`
+                      }
+                      return log.status
+                    })()
+                    return (
+                      <Badge className={ap.className} variant={ap.variant}>
+                        {statusLabel}
+                      </Badge>
+                    )
+                  })()}
+                </TableCell>
+                <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                  <Button onClick={() => setSelected(log)} size="sm" variant="ghost">
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
 
-          {stats.total > 0 && (
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-muted-foreground text-sm">
-                Showing {startIdx + 1}–{endIdx} of {stats.total} logs
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  disabled={currentPage === 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  variant="outline"
-                >
-                  Previous
-                </Button>
-                <Button
-                  disabled={currentPage === totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  variant="outline"
-                >
-                  Next
-                </Button>
-              </div>
+        {stats.total > 0 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-muted-foreground text-sm">
+              Showing {startIdx + 1}–{endIdx} of {stats.total} logs
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex gap-2">
+              <Button
+                disabled={currentPage === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                variant="outline"
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                variant="outline"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </TablePane>
 
       {/* Centered detail modal */}
       <Dialog onOpenChange={(open) => !open && setSelected(null)} open={!!selected}>

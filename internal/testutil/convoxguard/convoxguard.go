@@ -49,9 +49,8 @@ CRITICAL SAFETY VIOLATION: Tests must be run through the safe wrapper script!
 You attempted to run tests directly with 'go test' which could destroy your production Convox configuration.
 
 ALWAYS use one of these commands:
-  make test              - Run all tests safely
-  make test-unit         - Run unit tests safely
-  make test-integration  - Run integration tests safely
+  task test              - Run all tests (web + go + e2e)
+  task go:test           - Run Go tests safely
   ./scripts/safe-test.sh - Run tests with custom flags
 
 DO NOT run 'go test' directly!

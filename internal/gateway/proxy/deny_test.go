@@ -36,7 +36,7 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 		},
 	}}
 
-	h := NewHandler(cfg, mgr, audit.NewLogger(database))
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database)
 
 	// Create request: DELETE /apps/myapp
 	req := httptest.NewRequest(http.MethodDelete, "/apps/myapp", nil)

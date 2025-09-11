@@ -1,13 +1,14 @@
-version: '3'
+version: "3"
 
 env:
-  WEB_PORT: '{{.WEB_PORT | default 5173}}'
-  GATEWAY_PORT: '{{.GATEWAY_PORT | default 8447}}'
+  WEB_PORT: "{{.WEB_PORT | default 5173}}"
+  GATEWAY_PORT: "{{.GATEWAY_PORT | default 8447}}"
 
 tasks:
   deps:
     dir: web
     desc: Install web dependencies (pnpm)
+    run: once
     cmds:
       - pnpm install --frozen-lockfile
 
@@ -18,28 +19,50 @@ tasks:
     cmds:
       - pnpm build
 
-  typecheck:
+  lint:
+    desc: Run TypeScript typecheck and Biome lint
+    deps: [lint:typecheck, lint:biome]
+
+  lint:typecheck:
     dir: web
     desc: Run TypeScript type checking
     deps: [deps]
     cmds:
       - pnpm typecheck
 
-  test:
+  lint:biome:
     dir: web
-    desc: Run web unit tests (Vitest)
-    deps: [typecheck]
-    cmds:
-      - pnpm test --run
-
-  lint:
-    dir: web
-    desc: Typecheck + Biome lint (with autofix disabled by default)
-    deps: [typecheck]
+    desc: Run Biome lint
+    deps: [deps]
     cmds:
       - pnpm lint
 
-  dev:
-    desc: Start only the Vite dev server via Docker Compose
+  test:
+    dir: web
+    desc: Run web unit tests (Vitest)
+    deps: [deps]
     cmds:
-      - docker compose up -d --build web-dev
+      - pnpm test --run
+
+  e2e:deps:
+    dir: web
+    desc: Ensure Playwright browsers and deps installed for E2E
+    run: once
+    deps: [deps]
+    cmds:
+      - pnpm exec playwright install --with-deps || pnpm exec playwright install
+
+  e2e:dev:
+    dir: web
+    aliases: [e2e]
+    desc: Run Web E2E against dev stack (Vite/HMR)
+    deps: [":docker:up:dev", "e2e:deps"]
+    cmds:
+      - env WEB_PORT={{.WEB_PORT}} pnpm e2e
+
+  e2e:preview:
+    dir: web
+    desc: Run Web E2E against preview stack (compiled SPA)
+    deps: [":docker:up:preview", "e2e:deps"]
+    cmds:
+      - env GATEWAY_PORT={{.GATEWAY_PORT}} pnpm e2e

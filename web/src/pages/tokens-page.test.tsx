@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
@@ -76,9 +75,7 @@ const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) 
 
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>{children}</AuthProvider>
-      </BrowserRouter>
+      <AuthProvider>{children}</AuthProvider>
     </QueryClientProvider>
   )
 }

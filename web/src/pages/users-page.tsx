@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Edit2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Edit2, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -202,29 +202,6 @@ export function UsersPage() {
 
   // All authenticated users can view this page; actions are gated by role.
 
-  if (isLoading) {
-    return (
-      <div className="p-8">
-        <div className="flex h-64 items-center justify-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    )
-  }
-
-  if (queryError) {
-    return (
-      <div className="p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-destructive">Error</CardTitle>
-            <CardDescription>Failed to load users</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -234,111 +211,104 @@ export function UsersPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Users</CardTitle>
-              <CardDescription>
-                {users.length} {users.length === 1 ? 'user' : 'users'} configured
-              </CardDescription>
-            </div>
-            {isAdmin && (
-              <Button onClick={handleAddUser}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add User
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {users.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">No users configured yet</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Roles</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Updated</TableHead>
-                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.email}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {user.name}
-                          {user.email === currentUser?.email && (
-                            <Badge className="ml-2" variant="outline">
-                              You
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-muted-foreground text-sm">{user.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {user.roles.map((role) => {
-                          const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
-                          return (
-                            <Badge className={cfg?.className} key={role} variant={'default'}>
-                              {cfg?.label || role}
-                            </Badge>
-                          )
-                        })}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={'default'}>Active</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {(() => {
-                        const d = user.created_at ? new Date(user.created_at) : null
-                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {(() => {
-                        const d = user.updated_at ? new Date(user.updated_at) : null
-                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                      })()}
-                    </TableCell>
-                    {isAdmin && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            aria-label={`Edit User ${user.email}`}
-                            onClick={() => handleEditUser(user)}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            aria-label={`Delete User ${user.email}`}
-                            disabled={user.email === currentUser?.email}
-                            onClick={() => handleDeleteUser(user.email)}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <TablePane
+        description={`${users.length} ${users.length === 1 ? 'user' : 'users'} configured`}
+        empty={users.length === 0}
+        emptyMessage="No users configured yet"
+        error={queryError ? 'Failed to load users' : null}
+        headerRight={
+          isAdmin ? (
+            <Button onClick={handleAddUser}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add User
+            </Button>
+          ) : undefined
+        }
+        loading={!!isLoading}
+        title="Users"
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Roles</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Updated</TableHead>
+              {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.email}>
+                <TableCell>
+                  <div>
+                    <div className="font-medium">
+                      {user.name}
+                      {user.email === currentUser?.email && (
+                        <Badge className="ml-2" variant="outline">
+                          You
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground text-sm">{user.email}</div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {user.roles.map((role) => {
+                      const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
+                      return (
+                        <Badge className={cfg?.className} key={role} variant={'default'}>
+                          {cfg?.label || role}
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={'default'}>Active</Badge>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {(() => {
+                    const d = user.created_at ? new Date(user.created_at) : null
+                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                  })()}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {(() => {
+                    const d = user.updated_at ? new Date(user.updated_at) : null
+                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                  })()}
+                </TableCell>
+                {isAdmin && (
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        aria-label={`Edit User ${user.email}`}
+                        onClick={() => handleEditUser(user)}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        aria-label={`Delete User ${user.email}`}
+                        disabled={user.email === currentUser?.email}
+                        onClick={() => handleDeleteUser(user.email)}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TablePane>
 
       {/* User Dialog */}
       <Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>

@@ -6,38 +6,39 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 
 **All development ports are defined in `mise.toml`. NEVER hardcode ports elsewhere.**
 
-| Service | Port | Environment Variable | Description |
-|---------|------|---------------------|-------------|
-| **Gateway API** | 8447 | `GATEWAY_PORT` | Main API server |
-| **Web Frontend** | 5173 | `WEB_PORT` | Vite dev server |
-| **Mock OAuth** | 3345 | `MOCK_OAUTH_PORT` | Mock Google OAuth server |
-| **Mock Convox** | 5443 | `MOCK_CONVOX_PORT` | Mock Convox API server |
+| Service          | Port | Environment Variable | Description              |
+| ---------------- | ---- | -------------------- | ------------------------ |
+| **Gateway API**  | 8447 | `GATEWAY_PORT`       | Main API server          |
+| **Web Frontend** | 5173 | `WEB_PORT`           | Vite dev server          |
+| **Mock OAuth**   | 3345 | `MOCK_OAUTH_PORT`    | Mock Google OAuth server |
+| **Mock Convox**  | 5443 | `MOCK_CONVOX_PORT`   | Mock Convox API server   |
 
 **URLs in Development:**
+
 - Gateway API: `http://localhost:8447`
 - Web UI: `http://localhost:5173`
 - Mock OAuth: `http://localhost:3345`
 - Mock Convox API: `http://localhost:5443`
 
 **Configuration References:**
+
 - `mise.toml` - Defines all port environment variables
 - `web/vite.config.ts` - Uses `process.env.GATEWAY_PORT` for proxy
 - `Procfile.dev` - Uses `$MOCK_OAUTH_PORT` and `$MOCK_CONVOX_PORT`
- - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Full list of environment variables
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - Full list of environment variables
 
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
 **NEVER mark a task as "completed" unless ALL of these pass:**
 
 ### 🔧 Build Requirements
+
 **⛔ FORBIDDEN: Never use `go build` directly - creates unwanted binaries in root**
-- `task go:gateway` - Backend builds without errors (or use `go run ./cmd/gateway/`)
-- `task go:cli` - CLI builds without errors (or use `go run ./cmd/cli/`)
-- `task web:build` - Frontend builds without errors (or `cd web && pnpm build`)
-- `task test` - All tests pass
-- `cd web && pnpm test` - All frontend tests pass
+
+- `task all` - All linters, typechecks, unit tests, builds, and E2E tests pass
 
 ### 📏 Code Quality
+
 - `go vet ./...` - No vet issues
 - `golangci-lint run` or equivalent linting passes
 - `cd web && pnpm lint` - Frontend linting passes
@@ -45,12 +46,14 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 - No unused imports or variables
 
 ### 🧪 Integration Tests
+
 - `./dev.sh` - Development environment starts successfully
 - `curl http://localhost:8447/.gateway/api/health` - Gateway health check passes
 - `curl http://localhost:3345/health` - Mock OAuth health check passes
 - `curl http://localhost:5443/health` - Mock Convox health check passes
 
 ### 🚀 Production Readiness
+
 - `task docker` - Docker build command passes
 
 **If ANY of these fail, the task is NOT complete. Fix all issues before marking done.**
@@ -146,6 +149,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete and current 
 Environment variables are automatically loaded when you `cd` into the project directory via mise. No need to source .env files or manually export variables.
 
 Example `mise.local.toml`:
+
 ```toml
 [env]
 APP_JWT_KEY = "your-local-jwt-key"
@@ -216,6 +220,13 @@ internal/
 - When a web E2E test fails, first reproduce the failure with a focused unit test; fix it there, then re‑run E2E.
 - Do not run `docker compose` manually; use `task` targets (e.g., `task web:test`, `task e2e:web:release`).
 
+## Refactor & Organization Policy (Important)
+
+- Never optimize for “don’t break what’s working” when the structure is wrong. Prefer the obviously better organization and implement it decisively.
+- Proactively refactor for clarity and maintainability without waiting for prompts when the intent is clear.
+
+When in doubt, choose the straightforward, well‑named, maintainable structure — even if it means removing or renaming existing files. Don’t defer obvious organization or code quality improvements.
+
 ## Useful Commands for Development
 
 ```bash
@@ -238,7 +249,7 @@ go tool cover -html=coverage.out
 
 ## Pre-Push Checks
 
-- Default `task` (aka `task default`) runs ALL linters and ALL tests:
+- `task all` runs ALL linters and ALL tests:
   - Web Biome lint via `pnpm lint`
   - Go vet/fmt/staticcheck
   - Go unit and integration tests (through the safe wrapper)
@@ -248,13 +259,14 @@ go tool cover -html=coverage.out
 Use this before pushing any changes:
 
 ```bash
-task        # or: task default
+task all
 ```
 
 Standard target prefixes:
-- go:*: `go:lint`, `go:test`
-- web:*: `web:lint`, `web:test`, `web:build`, `web:typecheck`
-- e2e:*: `e2e:web:dev`, `e2e:web:release`, `e2e:cli`
+
+- go:\*: `go:lint`, `go:test`
+- web:\*: `web:lint`, `web:test`, `web:build`, `web:typecheck`
+- e2e:\*: `e2e:web:dev`, `e2e:web:release`, `e2e:cli`
 
 ## Related Documentation
 

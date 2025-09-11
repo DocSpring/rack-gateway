@@ -1,8 +1,9 @@
-version: '3'
+version: "3"
 
 tasks:
   deps:
     desc: Install Go module dependencies
+    run: once
     cmds:
       - go mod download
       - go mod tidy
@@ -13,31 +14,52 @@ tasks:
       - go install honnef.co/go/tools/cmd/staticcheck@latest
       - go install gotest.tools/gotestsum@latest
 
-  gateway:
+  build:
+    desc: Build Go binaries (gateway, cli, mock)
+    deps: [build:gateway, build:cli, build:mock]
+
+  build:gateway:
     desc: Build gateway API server -> bin/convox-gateway-api
+    deps: [deps]
     cmds:
       - go build -o bin/convox-gateway-api ./cmd/gateway/
 
-  cli:
+  build:cli:
     desc: Build gateway CLI -> bin/convox-gateway
+    deps: [deps]
     cmds:
       - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/convox-gateway ./cmd/cli/
 
-  mock:
+  build:mock:
     desc: Build mock Convox server -> bin/mock-convox
+    deps: [deps]
     cmds:
       - go build -o bin/mock-convox ./cmd/mock-convox/
 
   test:
     desc: Run Go unit and integration tests safely
+    deps: [deps]
     cmds:
       - ./scripts/safe-test.sh -v -race -short -timeout 30s ./...
       - ./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
   lint:
     desc: Run Go vet/fmt/staticcheck
+    deps: [deps]
     cmds:
       - go vet ./...
       - go fmt ./...
       - staticcheck ./...
 
+  e2e:dev:
+    aliases: [e2e]
+    desc: Run CLI E2E flow on dev stack
+    deps: [":docker:up:dev"]
+    cmds:
+      - bash scripts/cli-e2e.sh
+
+  e2e:preview:
+    desc: Run CLI E2E flow on preview stack
+    deps: [":docker:up:preview"]
+    cmds:
+      - bash scripts/cli-e2e.sh

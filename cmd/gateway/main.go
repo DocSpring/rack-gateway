@@ -97,14 +97,7 @@ func main() {
 	}
 	defer database.Close()
 
-	// Audit retention cleanup
-	if daysStr := os.Getenv("AUDIT_LOG_RETENTION_DAYS"); daysStr != "" {
-		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
-			if err := database.CleanupOldAuditLogs(d); err != nil {
-				log.Fatalf("Audit retention cleanup failed: %v", err)
-			}
-		}
-	}
+	// Note: We no longer delete old audit logs on boot. Keep all logs for now.
 
 	// Initialize admin user if configured
 	if len(cfg.AdminUsers) > 0 {
@@ -194,7 +187,23 @@ func main() {
 	}
 
 	auditLogger := audit.NewLogger(database)
-	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger)
+	// Seed protected env vars from DB_SEED_PROTECTED_ENV_VARS if provided and not set
+	if seed := strings.TrimSpace(os.Getenv("DB_SEED_PROTECTED_ENV_VARS")); seed != "" {
+		if raw, ok, _ := database.GetSettingRaw("protected_env_vars"); !ok || len(raw) == 0 {
+			keys := []string{}
+			for _, k := range strings.Split(seed, ",") {
+				k = strings.TrimSpace(k)
+				if k != "" {
+					keys = append(keys, k)
+				}
+			}
+			if len(keys) > 0 {
+				_ = database.UpsertSetting("protected_env_vars", keys, nil)
+			}
+		}
+	}
+
+	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger, database)
 
 	// Email sender (Postmark)
 	pmToken := os.Getenv("POSTMARK_API_TOKEN")
@@ -597,8 +606,23 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 		if frontend == "" {
 			frontend = "/.gateway/web/"
 		}
-		logging.Debugf("[oauth:web] redirecting req_id=%s to frontend=%s", middleware.GetReqID(r.Context()), frontend)
-		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
+		// Normalize
+		if !strings.HasSuffix(frontend, "/") {
+			frontend += "/"
+		}
+		// Compute default landing page: Users list under the web UI base
+		trimmed := strings.TrimRight(frontend, "/")
+		dest := frontend
+		if strings.HasSuffix(trimmed, "/.gateway/web") {
+			// Frontend already points at web base; append users
+			dest = frontend + "users"
+		} else {
+			// Frontend is likely a dev root like http://localhost:5173/
+			// Send to the web base path with users
+			dest = strings.TrimRight(frontend, "/") + "/.gateway/web/users"
+		}
+		logging.Debugf("[oauth:web] redirecting req_id=%s to frontend=%s", middleware.GetReqID(r.Context()), dest)
+		http.Redirect(w, r, dest, http.StatusTemporaryRedirect)
 	}
 }
 

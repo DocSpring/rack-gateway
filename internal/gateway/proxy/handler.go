@@ -28,20 +28,26 @@ import (
 )
 
 type Handler struct {
-	config      *config.Config
-	rbacManager rbac.RBACManager
-	auditLogger *audit.Logger
-	secretNames map[string]struct{}
+	config           *config.Config
+	rbacManager      rbac.RBACManager
+	auditLogger      *audit.Logger
+	secretNames      map[string]struct{}
+	database         *db.Database
+	protectedEnv     map[string]struct{}
+	allowDestructive bool
 }
 
 const maskedSecret = envutil.MaskedSecret
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database) *Handler {
 	h := &Handler{
-		config:      cfg,
-		rbacManager: rbacManager,
-		auditLogger: auditLogger,
-		secretNames: make(map[string]struct{}),
+		config:           cfg,
+		rbacManager:      rbacManager,
+		auditLogger:      auditLogger,
+		secretNames:      make(map[string]struct{}),
+		database:         database,
+		protectedEnv:     make(map[string]struct{}),
+		allowDestructive: false,
 	}
 	// Load additional secret env var names from env (comma-separated)
 	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
@@ -50,6 +56,17 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 			if k != "" {
 				h.secretNames[k] = struct{}{}
 			}
+		}
+	}
+	// Load settings from DB
+	if database != nil {
+		if arr, err := database.GetProtectedEnvVars(); err == nil {
+			for _, k := range arr {
+				h.protectedEnv[strings.ToUpper(k)] = struct{}{}
+			}
+		}
+		if v, err := database.GetAllowDestructiveActions(); err == nil {
+			h.allowDestructive = v
 		}
 	}
 	return h
@@ -141,6 +158,14 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
 		return
+	}
+
+	// Block destructive actions when not allowed by settings
+	if !h.allowDestructive {
+		if isDestructive(methodForRBAC, resource, action) {
+			h.handleError(w, r, "destructive actions are disabled by policy", http.StatusForbidden, rackConfig.Name, start)
+			return
+		}
 	}
 
 	// Forward the request to the rack
@@ -239,6 +264,13 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
 		return
+	}
+
+	if !h.allowDestructive {
+		if isDestructive(methodForRBAC, resource, action) {
+			h.handleError(w, r, "destructive actions are disabled by policy", http.StatusForbidden, rack, start)
+			return
+		}
 	}
 
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
@@ -431,6 +463,17 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		return false, nil, nil
 	}
 
+	// Prevent removal of protected keys (must be present and unchanged)
+	for pk := range h.protectedEnv {
+		if baseVal, ok := baseEnv[pk]; ok {
+			if _, present := posted[pk]; !present {
+				return false, nil, nil
+			}
+			// If posting a different explicit value (not masked), will be caught below in diffs check
+			_ = baseVal
+		}
+	}
+
 	// Merge masked values and compute diffs
 	merged := make(map[string]string)
 	diffs := make([]EnvDiff, 0)
@@ -450,6 +493,13 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		merged[key] = val
 		if val != base {
 			diffs = append(diffs, EnvDiff{Key: key, OldVal: base, NewVal: val, Secret: isSecret})
+		}
+	}
+
+	// Deny any modifications to protected env vars
+	for _, d := range diffs {
+		if h.isProtectedKey(d.Key) {
+			return false, nil, nil
 		}
 	}
 
@@ -789,12 +839,35 @@ func (h *Handler) filterEnvironmentMapForUser(email string, body []byte) []byte 
 }
 
 func (h *Handler) isSecretKey(key string) bool {
-	// Merge configured secret names
-	extra := make([]string, 0, len(h.secretNames))
+	// Merge configured secret names and protected names (always masked)
+	extra := make([]string, 0, len(h.secretNames)+len(h.protectedEnv))
 	for k := range h.secretNames {
 		extra = append(extra, k)
 	}
+	for k := range h.protectedEnv {
+		extra = append(extra, k)
+	}
 	return envutil.IsSecretKey(key, extra)
+}
+
+func (h *Handler) isProtectedKey(key string) bool {
+	_, ok := h.protectedEnv[strings.ToUpper(strings.TrimSpace(key))]
+	return ok
+}
+
+// isDestructive returns true for destructive actions (delete, terminate, uninstall equivalents)
+func isDestructive(method, resource, action string) bool {
+	if strings.EqualFold(method, http.MethodDelete) {
+		return true
+	}
+	// known destructive mappings
+	if resource == "app" && action == "delete" {
+		return true
+	}
+	if resource == "process" && (action == "terminate" || action == "stop") {
+		return true
+	}
+	return false
 }
 
 // proxyWebSocket upgrades the client connection and bridges it to the rack via a WebSocket connection
