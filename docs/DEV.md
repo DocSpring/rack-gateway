@@ -25,7 +25,7 @@ cd web && pnpm install && cd ..
 cp mise.local.toml.example mise.local.toml
 
 # Start development environment
-make dev
+task dev
 ```
 
 The development environment will start:
@@ -41,7 +41,7 @@ Use this concise flow to spin up, explore endpoints, and test the CLI. Port sele
 1. Start services
 
 ```bash
-make dev
+task dev
 ```
 
 2. Verify services
@@ -53,7 +53,7 @@ make dev
 3. Build CLI and log in
 
 ```bash
-make cli
+task go:cli
 ./bin/convox-gateway login local http://localhost:$PORT
 # Browser opens (mock OAuth). Complete login, then CLI stores token locally.
 ```
@@ -74,8 +74,8 @@ make cli
 6. Stop/cleanup
 
 ```bash
-make dev-down   # stop
-make dev-logs   # view logs
+task dev:down   # stop
+task dev:logs   # view logs
 ```
 
 ## Architecture Overview
@@ -196,7 +196,7 @@ The gateway automatically restricts access to users from your Google Workspace d
 
 ```bash
 # Build binaries
-make all
+task build
 
 # Run gateway server directly (useful for debugging)
 ./bin/convox-gateway-api
@@ -210,16 +210,16 @@ make all
 
 ```bash
 # Start all services
-make dev
+task dev
 
 # View logs
-make dev-logs
+task dev:logs
 
 # Rebuild images
-make dev-build
+task docker
 
 # Stop everything
-make dev-down
+task dev:down
 ```
 
 ### Testing the Full Flow
@@ -227,7 +227,7 @@ make dev-down
 1. **Start development environment**:
 
    ```bash
-   make dev
+   task dev
    ```
 
 2. **Access the web UI**:
@@ -262,13 +262,13 @@ make dev-down
 ### Unit Tests
 
 ```bash
-make test-unit
+task go:test
 ```
 
 ### Integration Tests
 
 ```bash
-make test-integration
+task go:test
 ```
 
 Integration tests use different ports to avoid conflicts:
@@ -340,7 +340,7 @@ web/                   # React/TypeScript web UI
 
 1. Set up your Google OAuth application
 2. Add your OAuth credentials to `mise.local.toml`
-3. Run `make dev` and test the full authentication flow
+3. Run `task dev` and test the full authentication flow
 4. Try CLI commands: `./bin/convox-gateway login staging http://localhost:8447`
 
 ## Production Deployment

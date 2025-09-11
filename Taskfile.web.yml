@@ -1,0 +1,45 @@
+version: '3'
+
+env:
+  WEB_PORT: '{{.WEB_PORT | default 5173}}'
+  GATEWAY_PORT: '{{.GATEWAY_PORT | default 8447}}'
+
+tasks:
+  deps:
+    dir: web
+    desc: Install web dependencies (pnpm)
+    cmds:
+      - pnpm install --frozen-lockfile
+
+  build:
+    dir: web
+    desc: Build the web SPA with Vite
+    deps: [deps]
+    cmds:
+      - pnpm build
+
+  typecheck:
+    dir: web
+    desc: Run TypeScript type checking
+    deps: [deps]
+    cmds:
+      - pnpm typecheck
+
+  test:
+    dir: web
+    desc: Run web unit tests (Vitest)
+    deps: [typecheck]
+    cmds:
+      - pnpm test --run
+
+  lint:
+    dir: web
+    desc: Typecheck + Biome lint (with autofix disabled by default)
+    deps: [typecheck]
+    cmds:
+      - pnpm lint
+
+  dev:
+    desc: Start only the Vite dev server via Docker Compose
+    cmds:
+      - docker compose up -d --build web-dev

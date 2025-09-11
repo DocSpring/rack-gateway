@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -28,83 +28,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: '1.23.x'
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Install Convox CLI
+      - name: Install Task
         run: |
-          curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
-          sudo mv /tmp/convox /usr/local/bin/convox
-          sudo chmod +x /usr/local/bin/convox
-          convox --version
+          curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+          task --version
 
-      - name: Run go fmt
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "The following files are not formatted:"
-            gofmt -s -l .
-            exit 1
-          fi
-
-      - name: Run go vet
-        run: go vet ./...
-
-      - name: Run Go tests
-        run: |
-          echo "Waiting for Postgres to be ready..."
-          for i in {1..60}; do
-            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && break || true
-            sleep 1
-          done
-          make test-go
-
-      - name: Build Go binaries
-        run: make go
+      - name: Go tests
+        run: task go:test
 
   web-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./web
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: "./web/pnpm-lock.yaml"
+          node-version: '20'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Enable corepack
+        run: corepack enable
 
-      - name: Run Biome lint
-        run: pnpm lint
+      - name: Install Task
+        run: |
+          curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+          task --version
 
-      - name: Run TypeScript check
-        run: pnpm tsc --noEmit
-
-      - name: Run tests
-        run: pnpm test --run
-
-      - name: Build
-        run: pnpm build
+      - name: Web tests
+        run: task web:test

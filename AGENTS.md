@@ -31,10 +31,10 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 
 ### 🔧 Build Requirements
 **⛔ FORBIDDEN: Never use `go build` directly - creates unwanted binaries in root**
-- `make gateway` - Backend builds without errors (or use `go run ./cmd/gateway/`)
-- `make cli` - CLI builds without errors (or use `go run ./cmd/cli/`)
-- `make web` - Frontend builds without errors (or `cd web && pnpm build`)
-- `make test` - All Go tests pass
+- `task go:gateway` - Backend builds without errors (or use `go run ./cmd/gateway/`)
+- `task go:cli` - CLI builds without errors (or use `go run ./cmd/cli/`)
+- `task web:build` - Frontend builds without errors (or `cd web && pnpm build`)
+- `task test` - All tests pass
 - `cd web && pnpm test` - All frontend tests pass
 
 ### 📏 Code Quality
@@ -51,7 +51,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 - `curl http://localhost:5443/health` - Mock Convox health check passes
 
 ### 🚀 Production Readiness
-- `make docker` - Docker build command passes
+- `task docker` - Docker build command passes
 
 **If ANY of these fail, the task is NOT complete. Fix all issues before marking done.**
 
@@ -205,6 +205,17 @@ internal/
 6. Set up CI/CD pipeline
 7. Add OpenTelemetry tracing
 
+## Web Testing Policy (Vite + TanStack)
+
+- Prefer fast feedback: write unit tests and run type checks before E2E.
+- Always run `cd web && pnpm typecheck` and keep types clean.
+- Unit tests should cover:
+  - Router basepath handling for `/.gateway/web`, including `/login` and `/auth/callback` routes.
+  - Auth flows and API adapters (mock network; do not depend on browser).
+  - Critical UI/behavior for Users, Tokens, and Audit pages.
+- When a web E2E test fails, first reproduce the failure with a focused unit test; fix it there, then re‑run E2E.
+- Do not run `docker compose` manually; use `task` targets (e.g., `task web:test`, `task e2e:web:release`).
+
 ## Useful Commands for Development
 
 ```bash
@@ -227,7 +238,7 @@ go tool cover -html=coverage.out
 
 ## Pre-Push Checks
 
-- Default `make` (aka `make check`) runs ALL linters and ALL tests:
+- Default `task` (aka `task default`) runs ALL linters and ALL tests:
   - Web Biome lint via `pnpm lint`
   - Go vet/fmt/staticcheck
   - Go unit and integration tests (through the safe wrapper)
@@ -237,13 +248,13 @@ go tool cover -html=coverage.out
 Use this before pushing any changes:
 
 ```bash
-make        # or: make check
+task        # or: task default
 ```
 
 Standard target prefixes:
-- go-*: `go-lint`, `go-test`, `go-test-unit`, `go-test-integration`
-- web-*: `web-lint`, `web-test`, `web-build`
-- e2e-*: `e2e-cli`, `web-e2e` (+ dev/release variants)
+- go:*: `go:lint`, `go:test`
+- web:*: `web:lint`, `web:test`, `web:build`, `web:typecheck`
+- e2e:*: `e2e:web:dev`, `e2e:web:release`, `e2e:cli`
 
 ## Related Documentation
 

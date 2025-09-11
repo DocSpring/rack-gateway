@@ -59,7 +59,7 @@ The mock OAuth server is included in the main development setup:
 
 ```bash
 # From project root
-make dev
+task dev
 ```
 
 ## Integration

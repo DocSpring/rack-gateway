@@ -1,0 +1,59 @@
+version: '3'
+
+vars:
+  WEB_PORT: '{{.WEB_PORT | default 5173}}'
+  GATEWAY_PORT: '{{.GATEWAY_PORT | default 8447}}'
+  MOCK_OAUTH_PORT: '{{.MOCK_OAUTH_PORT | default 3345}}'
+
+includes:
+  go: ./Taskfile.go.yml
+  web: ./Taskfile.web.yml
+  e2e: ./Taskfile.e2e.yml
+
+tasks:
+  default:
+    desc: Run all linters and tests
+    cmds:
+      - task: lint
+      - task: test
+
+  lint:
+    desc: Run web + Go linters and typecheck
+    cmds:
+      - task: web:lint
+      - task: go:lint
+
+  test:
+    desc: Run Go + Web unit tests and Web E2E (dev stack)
+    cmds:
+      - task: go:test
+      - task: web:test
+      - task: e2e:web:dev
+
+  build:
+    desc: Build web + gateway + cli + mock binaries
+    cmds:
+      - task: web:build
+      - task: go:gateway
+      - task: go:cli
+      - task: go:mock
+
+  dev:
+    desc: Start development environment with Docker Compose (profile dev)
+    cmds:
+      - docker compose --profile dev up --build --force-recreate postgres mock-oauth mock-convox web-dev gateway-api-dev
+
+  dev:down:
+    desc: Stop development environment
+    cmds:
+      - docker compose down -v --remove-orphans || true
+
+  dev:logs:
+    desc: Tail development logs
+    cmds:
+      - docker compose logs -f
+
+  docker:
+    desc: Build Docker image for the gateway API
+    cmds:
+      - docker build -t convox-gateway-api:latest .

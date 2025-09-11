@@ -5,7 +5,7 @@ Admin UI and client for Convox Gateway. Provides user management, API token mana
 ## Development
 
 - Run the full dev stack with Docker Compose:
-  - `make dev`
+  - `task dev`
   - Web UI: `http://localhost:${WEB_PORT:-5173}`
   - Gateway API: `http://localhost:${GATEWAY_PORT:-8447}`
 
@@ -13,7 +13,7 @@ Admin UI and client for Convox Gateway. Provides user management, API token mana
   - `pnpm test --run`
 
 - Run end‑to‑end tests (requires dev stack):
-  - `make web-e2e`
+  - `task e2e:web:release`
 
 ## Tech Stack
 

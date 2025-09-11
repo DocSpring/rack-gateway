@@ -42,7 +42,7 @@ cd web && pnpm install && cd ..
 cp mise.local.toml.example mise.local.toml
 
 # 3. Start everything
-make dev
+task dev
 ```
 
 **🎉 You're done!** Open these URLs:
@@ -69,17 +69,30 @@ make dev
 - Node.js 20+ and pnpm
 - mise (for environment variables) - [Install mise](https://mise.jdx.dev/getting-started.html)
 
+Install the task runner (recommended):
+
+```bash
+# macOS (Homebrew)
+brew install go-task/tap/go-task
+
+# Linux (curl)
+curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+
+# Or use the convenience script
+sh scripts/dev-setup.sh
+```
+
 ### Building
 
 ```bash
 # Build everything
-make all
+task build
 
 # Individual targets
-make gateway # Build gateway API server -> bin/convox-gateway-api
-make cli     # Build gateway CLI -> bin/convox-gateway
-make docker  # Build Docker image
-make test    # Run all tests
+task go:gateway # Build gateway API server -> bin/convox-gateway-api
+task go:cli     # Build gateway CLI -> bin/convox-gateway
+task docker     # Build Docker image
+task test       # Run all tests
 ```
 
 ### Real Google OAuth Setup
@@ -277,7 +290,7 @@ Sensitive data is automatically redacted:
 ### Docker
 
 ```bash
-make docker
+task docker
 docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
   -e GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET \
@@ -329,13 +342,13 @@ aws logs put-metric-filter \
 Run unit tests:
 
 ```bash
-make test
+task test
 ```
 
 Run linters:
 
 ```bash
-make lint
+task lint
 ```
 
 Run integration test:
@@ -375,7 +388,7 @@ Run end-to-end test (deprecated):
 1. Fork the repository
 2. Create a feature branch
 3. Make changes with tests
-4. Run `make test` and `make lint`
+4. Run `task test` and `task lint`
 5. Submit pull request
 
 ## License
