@@ -559,8 +559,11 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 
 func wrapConvoxCommand(args []string) error {
 	// Ban rack uninstall via gateway wrapper
-	if len(args) >= 2 && strings.EqualFold(args[0], "rack") && strings.EqualFold(args[1], "uninstall") {
-		return fmt.Errorf("'convox rack uninstall' is disabled in convox-gateway. Use the official Convox CLI directly with a local rack token")
+	// Detect the subcommand sequence "rack uninstall" anywhere in the args list
+	for i := 0; i+1 < len(args); i++ {
+		if strings.EqualFold(args[i], "rack") && strings.EqualFold(args[i+1], "uninstall") {
+			return fmt.Errorf("'convox rack uninstall' is disabled in convox-gateway. Use the official Convox CLI directly with a local rack token")
+		}
 	}
 	var rack string
 
