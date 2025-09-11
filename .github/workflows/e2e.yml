@@ -79,7 +79,7 @@ jobs:
           docker compose pull postgres || docker pull postgres:16-alpine
 
       - name: Start stack (gateway serves UI)
-        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api
+        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api-preview
 
       - name: Wait for services
         run: |
@@ -126,7 +126,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'
+          go-version: "1.23.x"
 
       - name: Download gateway image
         uses: actions/download-artifact@v4
@@ -148,7 +148,7 @@ jobs:
           docker compose pull postgres || docker pull postgres:16-alpine
 
       - name: Start stack (gateway serves UI)
-        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api
+        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api-preview
 
       - name: Wait for services
         run: |

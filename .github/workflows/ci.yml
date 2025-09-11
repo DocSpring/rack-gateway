@@ -31,12 +31,25 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'
+          go-version: "1.23.x"
 
       - name: Install Task
         run: |
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
+
+      - name: Install Convox CLI
+        run: |
+          set -euo pipefail
+          ARCH=$(uname -m)
+          URL="https://github.com/convox/convox/releases/latest/download/convox-linux"
+          if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            URL="https://github.com/convox/convox/releases/latest/download/convox-linux-arm64"
+          fi
+          curl -fsSL "$URL" -o /tmp/convox
+          sudo mv /tmp/convox /usr/local/bin/convox
+          sudo chmod 755 /usr/local/bin/convox
+          convox version || true
 
       - name: Go tests
         run: task go:test
@@ -49,7 +62,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable corepack
         run: corepack enable
