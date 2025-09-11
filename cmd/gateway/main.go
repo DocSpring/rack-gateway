@@ -240,6 +240,9 @@ func main() {
 				r.Use(csrfMiddleware())
 				r.Get("/config", uiHandler.GetConfig)
 				r.Put("/config", uiHandler.UpdateConfig)
+				// Settings endpoints
+				r.Get("/settings", uiHandler.GetSettings)
+				r.Put("/settings/protected_env_vars", uiHandler.UpdateProtectedEnvVars)
 				r.Get("/roles", uiHandler.ListRoles)
 				r.Get("/audit", uiHandler.ListAuditLogs)
 				r.Get("/audit/export", uiHandler.ExportAuditLogs)

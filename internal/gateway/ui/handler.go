@@ -151,6 +151,99 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(apiConfig)
 }
 
+// GetSettings returns gateway settings stored in the database
+func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok || !h.hasReadAccess(&auth.Claims{Email: au.Email}) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	resp := map[string]interface{}{}
+	if h.database != nil {
+		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+			resp["protected_env_vars"] = arr
+		} else {
+			resp["protected_env_vars"] = []string{}
+		}
+	} else {
+		resp["protected_env_vars"] = []string{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// UpdateProtectedEnvVars updates the protected env var names in the settings table.
+func (h *Handler) UpdateProtectedEnvVars(w http.ResponseWriter, r *http.Request) {
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok || !h.hasWriteAccess(&auth.Claims{Email: au.Email}) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var payload struct {
+		Protected []string `json:"protected_env_vars"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	// Normalize and de-dup to uppercase
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(payload.Protected))
+	for _, k := range payload.Protected {
+		k = strings.TrimSpace(strings.ToUpper(k))
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	// Determine updating user id if available
+	var uid *int64
+	if h.rbacManager != nil {
+		if u, err := h.rbacManager.GetUserWithID(au.Email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+	if h.database != nil {
+		if err := h.database.UpsertSetting("protected_env_vars", out, uid); err != nil {
+			http.Error(w, "failed to save setting", http.StatusInternalServerError)
+			return
+		}
+		// Emit a setting:changed audit event
+		_ = audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    au.Email,
+			UserName:     r.Header.Get("X-User-Name"),
+			ActionType:   "settings",
+			Action:       "setting.changed",
+			ResourceType: "setting",
+			Resource:     "protected_env_vars",
+			Details: func() string {
+				b, _ := json.Marshal(map[string]interface{}{"protected_env_vars": out})
+				return string(b)
+			}(),
+			IPAddress:      r.RemoteAddr,
+			UserAgent:      r.UserAgent(),
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     http.StatusOK,
+			ResponseTimeMs: 0,
+		})
+	}
+	// Update in-memory cache for current handler
+	if h.database != nil {
+		// reload from db to be safe
+		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+			// Note: proxy handler maintains its own cache; it will pick up on next restart.
+			_ = arr // no local cache here; provided via proxy handler at init
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
 // UpdateConfig updates the entire gateway configuration
 func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	user, _ := auth.GetUser(r.Context())

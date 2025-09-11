@@ -137,7 +137,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Additional RBAC for release environment set operations and body rewrite
+	// Additional RBAC for release/environment set operations and body rewrite
 	var envDiffs []EnvDiff
 	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
 		ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, authUser.Email)
@@ -149,6 +149,17 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			// Deny without emitting an additional high-level releases.create deny;
 			// per-key env/secrets denies were already logged in prepareReleaseCreate.
+			http.Error(w, "permission denied", http.StatusForbidden)
+			return
+		}
+	} else if allowed && r.Method == http.MethodPost && (keyMatch3(path, "/apps/{app}/environment") || keyMatch3(path, "/apps/{app}/env")) {
+		ok, diffs, err := h.prepareEnvironmentSetJSON(r, rackConfig, authUser.Email)
+		if err != nil {
+			h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
+			return
+		}
+		envDiffs = diffs
+		if !ok {
 			http.Error(w, "permission denied", http.StatusForbidden)
 			return
 		}
@@ -518,6 +529,89 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	r.Body = io.NopCloser(bytes.NewReader(newBody))
 	// Ensure Content-Length is ignored downstream (we strip it in response), request side proxy will re-create
 	r.ContentLength = int64(len(newBody))
+	return true, diffs, nil
+}
+
+// prepareEnvironmentSetJSON inspects POST /apps/{app}/environment (or /env) JSON body
+// to enforce env/secrets permissions and protected env vars. Returns (ok, diffs, err).
+func (h *Handler) prepareEnvironmentSetJSON(r *http.Request, rack config.RackConfig, email string) (bool, []EnvDiff, error) {
+	// Buffer original body
+	var bodyBuf []byte
+	if r.Body != nil {
+		var err error
+		bodyBuf, err = io.ReadAll(r.Body)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		r.Body.Close()
+	}
+	// Parse JSON map[string]string
+	posted := map[string]string{}
+	if len(bodyBuf) > 0 {
+		var raw map[string]interface{}
+		if err := json.Unmarshal(bodyBuf, &raw); err != nil {
+			return false, nil, fmt.Errorf("invalid JSON body: %w", err)
+		}
+		for k, v := range raw {
+			if v == nil {
+				posted[k] = ""
+				continue
+			}
+			switch t := v.(type) {
+			case string:
+				posted[k] = t
+			default:
+				posted[k] = fmt.Sprintf("%v", t)
+			}
+		}
+	}
+
+	// Determine app name from path /apps/{app}/environment
+	app := ""
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) >= 3 && parts[0] == "apps" && (parts[2] == "environment" || parts[2] == "env") {
+		app = parts[1]
+	}
+	if app == "" {
+		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		return false, nil, fmt.Errorf("could not infer app name from path")
+	}
+
+	// Fetch current env from rack for comparison
+	baseEnv, err := envutil.FetchLatestEnvMap(rack, app)
+	if err != nil {
+		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+		return false, nil, fmt.Errorf("failed to fetch latest env: %w", err)
+	}
+
+	// RBAC checks
+	canEnvSet, _ := h.rbacManager.Enforce(email, "env", "set")
+	if !canEnvSet {
+		return false, nil, nil
+	}
+	canSecretsSet, _ := h.rbacManager.Enforce(email, "secrets", "set")
+
+	diffs := make([]EnvDiff, 0)
+	// Compare posted values against base; block secret changes without permission and any protected key changes
+	for k, newVal := range posted {
+		baseVal := baseEnv[k]
+		isSecret := h.isSecretKey(k)
+		if isSecret && !canSecretsSet && newVal != baseVal {
+			// Deny secret change without permission
+			return false, nil, nil
+		}
+		if h.isProtectedKey(k) && newVal != baseVal {
+			// Deny changes to protected keys
+			return false, nil, nil
+		}
+		if newVal != baseVal {
+			diffs = append(diffs, EnvDiff{Key: k, OldVal: baseVal, NewVal: newVal, Secret: isSecret})
+		}
+	}
+
+	// Restore body for forwarding unchanged
+	r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
+	r.ContentLength = int64(len(bodyBuf))
 	return true, diffs, nil
 }
 

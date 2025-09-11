@@ -56,6 +56,11 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
 
+- Protected Env Vars
+  - Stored in the `settings` table under the key `protected_env_vars` (JSON array of variable names, e.g. `["DATABASE_URL","RACK_TOKEN"]`).
+  - Protected keys are always masked in API responses and cannot be changed via the gateway, even by admins.
+  - Seed on first boot from `DB_SEED_PROTECTED_ENV_VARS` (comma-separated), when the setting is not yet present.
+
 ## Email (Postmark)
 
 - `POSTMARK_API_TOKEN` (optional)
