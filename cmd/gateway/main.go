@@ -251,6 +251,7 @@ func main() {
 				// Settings endpoints
 				r.Get("/settings", uiHandler.GetSettings)
 				r.Put("/settings/protected_env_vars", uiHandler.UpdateProtectedEnvVars)
+				r.Put("/settings/allow_destructive_actions", uiHandler.UpdateAllowDestructiveActions)
 				r.Get("/roles", uiHandler.ListRoles)
 				r.Get("/audit", uiHandler.ListAuditLogs)
 				r.Get("/audit/export", uiHandler.ExportAuditLogs)

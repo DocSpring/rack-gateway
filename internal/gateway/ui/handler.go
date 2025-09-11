@@ -165,8 +165,14 @@ func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		} else {
 			resp["protected_env_vars"] = []string{}
 		}
+		if v, err := h.database.GetAllowDestructiveActions(); err == nil {
+			resp["allow_destructive_actions"] = v
+		} else {
+			resp["allow_destructive_actions"] = false
+		}
 	} else {
 		resp["protected_env_vars"] = []string{}
+		resp["allow_destructive_actions"] = false
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -249,6 +255,65 @@ func (h *Handler) UpdateProtectedEnvVars(w http.ResponseWriter, r *http.Request)
 		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
 			// Note: proxy handler maintains its own cache; it will pick up on next restart.
 			_ = arr // no local cache here; provided via proxy handler at init
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
+// UpdateAllowDestructiveActions updates the allow_destructive_actions setting.
+func (h *Handler) UpdateAllowDestructiveActions(w http.ResponseWriter, r *http.Request) {
+	au, ok := auth.GetAuthUser(r.Context())
+	if !ok || !h.hasWriteAccess(&auth.Claims{Email: au.Email}) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var payload struct {
+		Allow bool `json:"allow_destructive_actions"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	var uid *int64
+	if h.rbacManager != nil {
+		if u, err := h.rbacManager.GetUserWithID(au.Email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+	if h.database != nil {
+		if err := h.database.UpsertSetting("allow_destructive_actions", payload.Allow, uid); err != nil {
+			http.Error(w, "failed to save setting", http.StatusInternalServerError)
+			return
+		}
+		// Audit
+		_ = audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    au.Email,
+			UserName:     r.Header.Get("X-User-Name"),
+			ActionType:   "settings",
+			Action:       "setting.changed",
+			ResourceType: "setting",
+			Resource:     "allow_destructive_actions",
+			Details: func() string {
+				b, _ := json.Marshal(map[string]bool{"allow_destructive_actions": payload.Allow})
+				return string(b)
+			}(),
+			IPAddress:      r.RemoteAddr,
+			UserAgent:      r.UserAgent(),
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     http.StatusOK,
+			ResponseTimeMs: 0,
+		})
+		// Email admins
+		if h.emailer != nil {
+			admins := h.getAdminEmails()
+			if len(admins) > 0 {
+				subject := "Convox Gateway: Settings changed (allow_destructive_actions)"
+				changer := au.Email
+				body := fmt.Sprintf("%s updated setting 'allow_destructive_actions' on rack '%s'.\n\nNew value: %t\n", changer, h.rackName, payload.Allow)
+				_ = h.emailer.SendMany(orderByInviterFirst(admins, au), subject, body)
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

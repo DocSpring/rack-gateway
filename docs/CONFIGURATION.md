@@ -61,6 +61,11 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
   - Protected keys are always masked in API responses and cannot be changed via the gateway, even by admins.
   - Seed on first boot from `DB_SEED_PROTECTED_ENV_VARS` (comma-separated), when the setting is not yet present.
 
+- Destructive Actions Guard
+  - Stored under the key `allow_destructive_actions` (boolean; default `false` if unset).
+  - When `false`, the gateway blocks destructive API calls (e.g., app deletes, process terminations) even for admins.
+  - To perform a destructive operation, temporarily set it to `true` via the admin settings API, perform the action, then set it back to `false`.
+
 ## Email (Postmark)
 
 - `POSTMARK_API_TOKEN` (optional)
