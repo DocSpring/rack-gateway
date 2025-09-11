@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -41,46 +40,8 @@ func main() {
 			defer database.Close()
 			fmt.Println("Database migrations applied")
 			return
-		case "audit-cleanup":
-			// Usage: convox-gateway audit-cleanup --days 90
-			// Falls back to AUDIT_LOG_RETENTION_DAYS if --days not provided
-			days := 0
-			// Parse a very small flag set: --days N
-			for i := 2; i < len(os.Args); i++ {
-				if strings.HasPrefix(os.Args[i], "--days=") {
-					if v, err := strconv.Atoi(strings.TrimPrefix(os.Args[i], "--days=")); err == nil {
-						days = v
-					}
-				} else if os.Args[i] == "--days" && i+1 < len(os.Args) {
-					if v, err := strconv.Atoi(os.Args[i+1]); err == nil {
-						days = v
-					}
-					i++
-				}
-			}
-			if days == 0 {
-				if ds := os.Getenv("AUDIT_LOG_RETENTION_DAYS"); ds != "" {
-					if v, err := strconv.Atoi(ds); err == nil {
-						days = v
-					}
-				}
-			}
-			if days <= 0 {
-				log.Fatalf("audit-cleanup requires --days N or AUDIT_LOG_RETENTION_DAYS")
-			}
-
-			database, err := db.NewFromEnv()
-			if err != nil {
-				log.Fatalf("Failed to open database: %v", err)
-			}
-			defer database.Close()
-			if err := database.CleanupOldAuditLogs(days); err != nil {
-				log.Fatalf("Audit cleanup failed: %v", err)
-			}
-			log.Printf("Audit cleanup successful: removed entries older than %d days", days)
-			return
 		case "help", "--help", "-h":
-			fmt.Println("convox-gateway commands:\n  (no args)            Start the API server\n  audit-cleanup        Delete audit logs older than N days\n                        --days N (or set AUDIT_LOG_RETENTION_DAYS)")
+			fmt.Println("convox-gateway commands:\n  (no args)            Start the API server")
 			return
 		}
 	}
@@ -97,7 +58,7 @@ func main() {
 	}
 	defer database.Close()
 
-	// Note: We no longer delete old audit logs on boot. Keep all logs for now.
+	// We do not delete audit logs on boot; keep all logs.
 
 	// Initialize admin user if configured
 	if len(cfg.AdminUsers) > 0 {

@@ -56,10 +56,6 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
 
-- `AUDIT_LOG_RETENTION_DAYS` (optional)
-  - If set, the server purges audit rows older than N days at startup.
-  - Also used by the `convox-gateway audit-cleanup --days N` command (see [DEPLOY.md](DEPLOY.md)).
-
 ## Email (Postmark)
 
 - `POSTMARK_API_TOKEN` (optional)

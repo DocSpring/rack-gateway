@@ -91,21 +91,7 @@ curl -s https://$DOMAIN/.gateway/api/health
 
 Open https://$WEB_DOMAIN and sign in.
 
-## 6) Audit retention (built in)
-
-The `convox.yml` in this repo includes a daily timer that runs the built‑in cleanup command:
-
-```
-timers:
-  audit_cleanup:
-    schedule: "0 3 * * *"
-    service: gateway
-    command: "convox-gateway audit-cleanup --days 90"
-```
-
-Adjust the schedule or days as needed. You can also set `AUDIT_LOG_RETENTION_DAYS` to trigger a cleanup on boot.
-
-## 7) CI/CD
+## 6) CI/CD
 
 ```
 convox apps create convox-gateway || true

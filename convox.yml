@@ -39,7 +39,6 @@ services:
     domain: ${DOMAIN}
     environment:
       - PORT=8080
-      - AUDIT_LOG_RETENTION_DAYS=90
       - PGSSLMODE=require
     health: /.gateway/api/health
     internal: false
@@ -53,8 +52,4 @@ services:
     sticky: true
     volumes: []
 
-timers:
-  audit-cleanup:
-    schedule: "0 3 * * *"
-    service: gateway
-    command: "convox-gateway audit-cleanup --days 90"
+timers: {}
