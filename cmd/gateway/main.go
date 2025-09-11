@@ -241,6 +241,8 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(authService.Middleware)
 			r.Get("/me", uiHandler.GetMe)
+			// Rack info (non-admin, read-only)
+			r.Get("/rack", uiHandler.GetRackInfo)
 			// Env view API (safe masking by default, request secrets via ?secrets=true)
 			r.Get("/env", uiHandler.GetEnvValues)
 

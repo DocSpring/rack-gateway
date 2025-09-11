@@ -20,8 +20,12 @@ tasks:
     deps: [web:lint, go:lint]
 
   test:
-    desc: Run all tests (single preview stack)
-    deps: [go:test, go:e2e:dev, web:test, web:e2e:dev]
+    desc: Run all tests (prefer preview for web E2E)
+    cmds:
+      - task: go:test
+      - task: go:e2e:dev
+      - task: web:test
+      - task: web:e2e:preview
 
   build:
     desc: Build web + gateway + cli + mock binaries

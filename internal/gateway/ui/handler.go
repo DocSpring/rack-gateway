@@ -2,9 +2,11 @@ package ui
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -380,6 +382,44 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// GetRackInfo fetches rack /system info from the upstream rack and returns it.
+func (h *Handler) GetRackInfo(w http.ResponseWriter, r *http.Request) {
+	au, isAuth := auth.GetAuthUser(r.Context())
+	if !isAuth || !h.hasReadAccess(&auth.Claims{Email: au.Email}) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	// Build upstream URL
+	base := strings.TrimRight(h.rackConfig.URL, "/")
+	url := base + "/system"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		http.Error(w, "failed to create request", http.StatusInternalServerError)
+		return
+	}
+	// Basic auth to rack
+	user := h.rackConfig.Username
+	if user == "" {
+		user = "convox"
+	}
+	authz := base64.StdEncoding.EncodeToString([]byte(user + ":" + h.rackConfig.APIKey))
+	req.Header.Set("Authorization", "Basic "+authz)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "failed to fetch rack info", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		http.Error(w, string(b), resp.StatusCode)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	io.Copy(w, resp.Body)
 }
 
 // ListRoles returns the hardcoded roles

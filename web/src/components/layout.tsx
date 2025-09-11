@@ -1,5 +1,5 @@
 import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
-import { FileText, Key, LogOut, TerminalSquare, Users } from 'lucide-react'
+import { FileText, Key, LogOut, Server, TerminalSquare, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 
 const navigation = [
+  { name: 'Rack', href: '/rack', icon: Server },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'API Tokens', href: '/api_tokens', icon: Key },
   { name: 'Audit Logs', href: '/audit_logs', icon: FileText },
@@ -29,9 +30,9 @@ export function Layout() {
     }
   }, [])
 
-  // Declarative redirect: when at layout root, go to Users
+  // Declarative redirect: when at layout root, go to Rack
   if (location.pathname === '/') {
-    return <Navigate replace to="/users" />
+    return <Navigate replace to="/rack" />
   }
 
   return (
@@ -41,14 +42,7 @@ export function Layout() {
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
           {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
-          <img
-            alt=""
-            aria-hidden
-            className="mr-2 h-8 w-8"
-            height={32}
-            src="/.gateway/web/logo.svg"
-            width={32}
-          />
+          <img alt="" aria-hidden className="mr-2 h-8 w-8" height={32} src="logo.svg" width={32} />
           <h1 className="font-semibold text-xl">Convox Gateway</h1>
         </div>
 

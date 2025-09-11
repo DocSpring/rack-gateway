@@ -12,6 +12,7 @@ import { AuthProvider } from './contexts/auth-context'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
 import { LoginPage } from './pages/login-page'
+import { RackPage } from './pages/rack-page'
 import { TokensPage } from './pages/tokens-page'
 import { UsersPage } from './pages/users-page'
 
@@ -68,10 +69,16 @@ function buildRouteTree() {
     component: AuditPage,
   })
 
+  const rackRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'rack',
+    component: RackPage,
+  })
+
   return rootRoute.addChildren([
     loginRoute,
     callbackRoute,
-    layoutRoute.addChildren([usersRoute, tokensRoute, auditRoute]),
+    layoutRoute.addChildren([rackRoute, usersRoute, tokensRoute, auditRoute]),
   ])
 }
 
