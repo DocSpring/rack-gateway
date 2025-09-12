@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { format } from 'date-fns'
 import { useState } from 'react'
 import { PageLayout } from '../components/page-layout'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Button } from '../components/ui/button'
 import {
   Table,
@@ -78,12 +78,7 @@ export function AllReleasesPage() {
                 <TableCell className="font-mono text-xs">{r.id}</TableCell>
                 <TableCell>{r.description || '—'}</TableCell>
                 <TableCell>{r.version ?? '—'}</TableCell>
-                <TableCell>
-                  {(() => {
-                    const d = r.created ? new Date(r.created) : null
-                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '—'
-                  })()}
-                </TableCell>
+                <TableCell>{r.created ? <TimeAgo date={r.created} /> : '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

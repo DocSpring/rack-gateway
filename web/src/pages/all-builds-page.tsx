@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { format } from 'date-fns'
 import { useState } from 'react'
 import { PageLayout } from '../components/page-layout'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Button } from '../components/ui/button'
 import {
   Table,
@@ -89,12 +89,7 @@ export function AllBuildsPage() {
                   {b.description || '—'}
                 </TableCell>
                 <TableCell>{b.status}</TableCell>
-                <TableCell>
-                  {(() => {
-                    const d = b.started ? new Date(b.started) : null
-                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '—'
-                  })()}
-                </TableCell>
+                <TableCell>{b.started ? <TimeAgo date={b.started} /> : '—'}</TableCell>
                 <TableCell>{b.release}</TableCell>
               </TableRow>
             ))}

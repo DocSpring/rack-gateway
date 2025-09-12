@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { useState } from 'react'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Button } from '../components/ui/button'
 import {
   Table,
@@ -21,6 +22,7 @@ type Process = {
   status: string
   release: string
   command?: string
+  started?: string
 }
 
 export function AppProcessesPage() {
@@ -40,6 +42,7 @@ export function AppProcessesPage() {
           status: string
           release: string
           command?: string
+          started?: string
         }[]
       >(`/apps/${app}/processes`)
       return ps.map((p) => ({ ...p, service: p.service ?? p.name ?? '' })) as Process[]
@@ -66,6 +69,7 @@ export function AppProcessesPage() {
             <TableHead>ID</TableHead>
             <TableHead>Service</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Started</TableHead>
             <TableHead>Release</TableHead>
           </TableRow>
         </TableHeader>
@@ -75,6 +79,7 @@ export function AppProcessesPage() {
               <TableCell className="font-mono text-xs">{p.id}</TableCell>
               <TableCell>{p.service}</TableCell>
               <TableCell>{p.status}</TableCell>
+              <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
               <TableCell>{p.release}</TableCell>
             </TableRow>
           ))}

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { useState } from 'react'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Button } from '../components/ui/button'
 import {
   Table,
@@ -54,6 +55,7 @@ export function AppBuildsPage() {
             <TableHead>ID</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Started</TableHead>
             <TableHead>Release</TableHead>
           </TableRow>
         </TableHeader>
@@ -65,6 +67,7 @@ export function AppBuildsPage() {
                 {b.description}
               </TableCell>
               <TableCell>{b.status}</TableCell>
+              <TableCell>{b.started ? <TimeAgo date={b.started} /> : '—'}</TableCell>
               <TableCell>{b.release}</TableCell>
             </TableRow>
           ))}

@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { PageLayout } from '../components/page-layout'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Button } from '../components/ui/button'
 import {
   Table,
@@ -23,6 +24,7 @@ type Proc = {
   status: string
   release: string
   app: string
+  started?: string
 }
 
 export function AllProcessesPage() {
@@ -43,6 +45,7 @@ export function AllProcessesPage() {
               name?: string
               status: string
               release: string
+              started?: string
             }[]
           >(`/apps/${a.name}/processes`)
           return ps.map((p) => ({
@@ -64,6 +67,7 @@ export function AllProcessesPage() {
               status: string
               release: string
               app?: string
+              started?: string
             }[]
           >('/system/processes')
         systemProcs = (sys || []).map((p) => ({
@@ -101,6 +105,7 @@ export function AllProcessesPage() {
               <TableHead>ID</TableHead>
               <TableHead>Service</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Started</TableHead>
               <TableHead>Release</TableHead>
             </TableRow>
           </TableHeader>
@@ -119,6 +124,7 @@ export function AllProcessesPage() {
                 <TableCell className="font-mono text-xs">{p.id}</TableCell>
                 <TableCell>{p.service ?? p.name ?? '—'}</TableCell>
                 <TableCell>{p.status}</TableCell>
+                <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
                 <TableCell>{p.release}</TableCell>
               </TableRow>
             ))}
