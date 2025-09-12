@@ -147,7 +147,10 @@ tasks:
   logs:
     desc: Tail logs for the active stack
     cmds:
-      - docker compose logs -f
+      - cmd: docker compose logs -f
+        interactive: true
+        tty: true
+        ignore_error: true
 
   down:
     desc: Tear down everything (all profiles) and remove volumes

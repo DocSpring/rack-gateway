@@ -25,7 +25,12 @@ export function AppPage() {
       <div className="mb-4 flex gap-2">
         {tabs.map((t) => (
           <Link
-            className="rounded-md border px-3 py-1 text-sm hover:bg-accent hover:text-accent-foreground"
+            activeOptions={{ exact: true }}
+            activeProps={{
+              className: 'bg-accent text-white hover:bg-accent/90',
+            }}
+            className="rounded-md border px-3 py-1 text-muted-foreground text-sm hover:bg-accent hover:text-accent-foreground"
+            data-testid={`app-tab-${t.key}`}
             key={t.key}
             params={{ app }}
             to={t.to}

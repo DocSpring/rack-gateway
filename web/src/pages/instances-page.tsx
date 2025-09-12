@@ -1,5 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { PageLayout } from '../components/page-layout'
+import { TablePane } from '../components/table-pane'
+import { Button } from '../components/ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table'
 import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type Instance = {
   id: string
@@ -10,43 +23,105 @@ type Instance = {
 }
 
 export function InstancesPage() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['instances'],
-    queryFn: async () => api.get<Instance[]>('/.gateway/api/instances'),
+  type RackInfo = { provider?: string; region?: string }
+  const { data: rack } = useQuery({
+    queryKey: ['rack-info'],
+    queryFn: async () => api.get<RackInfo>('/.gateway/api/rack'),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
   })
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['instances'],
+    queryFn: async () => api.get<Instance[]>('/instances'),
+  })
+  const perPage = DEFAULT_PER_PAGE
+  const total = data.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const [page, setPage] = useState(1)
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const rows = data.slice(start, end)
+
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <h2 className="mb-4 font-semibold text-2xl">Instances</h2>
-      {isLoading && <div>Loading instances…</div>}
-      {error && (
-        <div className="text-destructive">Failed to load instances: {(error as Error).message}</div>
-      )}
-      {data && (
-        <div className="overflow-x-auto">
-          <table className="w-full border text-left text-sm">
-            <thead>
-              <tr className="bg-muted">
-                <th className="border px-3 py-2">ID</th>
-                <th className="border px-3 py-2">Status</th>
-                <th className="border px-3 py-2">Private IP</th>
-                <th className="border px-3 py-2">Public IP</th>
-                <th className="border px-3 py-2">Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((i) => (
-                <tr key={i.id}>
-                  <td className="border px-3 py-2 font-mono text-xs">{i.id}</td>
-                  <td className="border px-3 py-2">{i.status}</td>
-                  <td className="border px-3 py-2">{i.private_ip || '—'}</td>
-                  <td className="border px-3 py-2">{i.public_ip || '—'}</td>
-                  <td className="border px-3 py-2">{i.instance_type || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <PageLayout description="Rack instances across the cluster" title="Instances">
+      <TablePane
+        empty={total === 0}
+        emptyMessage="No instances found"
+        error={error ? (error as Error).message : null}
+        loading={isLoading}
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Private IP</TableHead>
+              <TableHead>Public IP</TableHead>
+              <TableHead>Type</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((i) => (
+              <TableRow key={i.id}>
+                <TableCell className="font-mono text-xs">
+                  {(() => {
+                    const isAWS = (rack?.provider || '').toLowerCase() === 'aws'
+                    const region = rack?.region || ''
+                    const href = isAWS
+                      ? `https://console.aws.amazon.com/ec2/v2/home?region=${region}#InstanceDetails:instanceId=${i.id}`
+                      : ''
+                    return isAWS && region ? (
+                      <a
+                        className="underline hover:no-underline"
+                        href={href}
+                        rel="noreferrer noopener"
+                        target="_blank"
+                        title={`Open ${i.id} in AWS Console`}
+                      >
+                        {i.id}
+                      </a>
+                    ) : (
+                      i.id
+                    )
+                  })()}
+                </TableCell>
+                <TableCell>{i.status}</TableCell>
+                <TableCell>{i.private_ip || '—'}</TableCell>
+                <TableCell>{i.public_ip || '—'}</TableCell>
+                <TableCell>{i.instance_type || '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        {total > 0 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-muted-foreground text-sm">
+              Showing {start + 1}–{end} of {total} instances
+            </div>
+            <div className="flex gap-2">
+              <Button
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                variant="outline"
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                variant="outline"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </TablePane>
+    </PageLayout>
   )
 }

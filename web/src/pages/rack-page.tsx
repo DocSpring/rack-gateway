@@ -1,4 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
+import { CardGrid } from '../components/card-grid'
+import { PageLayout } from '../components/page-layout'
+import { TablePane } from '../components/table-pane'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table'
 import { api } from '../lib/api'
 
 type RackInfo = {
@@ -23,56 +34,45 @@ export function RackPage() {
       return res
     },
   })
+  // Parameters come from the rack info response (/system)
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <h2 className="mb-4 font-semibold text-2xl">Rack Information</h2>
-      {isLoading && <div>Loading rack info…</div>}
+    <PageLayout description="Overview, parameters, and outputs for the selected rack" title="Rack">
       {error && (
-        <div className="text-destructive">Failed to load rack info: {(error as Error).message}</div>
-      )}
-      {data && (
-        <div className="space-y-8">
-          <section>
-            <h3 className="mb-2 font-medium text-lg">Overview</h3>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <InfoRow label="Name" value={data.name} />
-              <InfoRow label="Domain" value={data.domain} />
-              <InfoRow label="Rack Domain" value={data['rack-domain']} />
-              <InfoRow label="Provider" value={data.provider} />
-              <InfoRow label="Region" value={data.region} />
-              <InfoRow label="Type" value={data.type} />
-              <InfoRow label="Version" value={data.version} />
-              <InfoRow label="Count" value={String(data.count ?? '')} />
-              <InfoRow label="Status" value={data.status} />
-            </div>
-          </section>
-
-          {data.parameters && Object.keys(data.parameters).length > 0 && (
-            <section>
-              <h3 className="mb-2 font-medium text-lg">Parameters</h3>
-              <KVTable obj={data.parameters} />
-            </section>
-          )}
-
-          {data.outputs && Object.keys(data.outputs).length > 0 && (
-            <section>
-              <h3 className="mb-2 font-medium text-lg">Outputs</h3>
-              <KVTable obj={data.outputs} />
-            </section>
-          )}
+        <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
+          {(error as Error).message}
         </div>
       )}
-    </div>
-  )
-}
+      {isLoading && <div className="text-muted-foreground">Loading rack info…</div>}
+      {data && (
+        <div className="space-y-8">
+          <CardGrid
+            items={[
+              { label: 'Name', value: data.name },
+              { label: 'Domain', value: data.domain },
+              { label: 'Rack Domain', value: data['rack-domain'] },
+              { label: 'Provider', value: data.provider },
+              { label: 'Region', value: data.region },
+              { label: 'Type', value: data.type },
+              { label: 'Version', value: data.version },
+              { label: 'Count', value: data.count ?? '' },
+              { label: 'Status', value: data.status },
+            ]}
+          />
 
-function InfoRow({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="ml-4 truncate font-medium">{value || '—'}</div>
-    </div>
+          {(() => {
+            const p = data.parameters || {}
+            return p && Object.keys(p).length > 0 ? (
+              <TablePane empty={false} emptyMessage="No parameters found" title="Rack Parameters">
+                <KVTable obj={p} />
+              </TablePane>
+            ) : null
+          })()}
+
+          {/* Outputs intentionally hidden */}
+        </div>
+      )}
+    </PageLayout>
   )
 }
 
@@ -80,22 +80,22 @@ function KVTable({ obj }: { obj: Record<string, string> }) {
   const entries = Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0]))
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border text-left text-sm">
-        <thead>
-          <tr className="bg-muted">
-            <th className="border px-3 py-2">Key</th>
-            <th className="border px-3 py-2">Value</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Key</TableHead>
+            <TableHead>Value</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {entries.map(([k, v]) => (
-            <tr key={k}>
-              <td className="border px-3 py-1 font-mono text-xs">{k}</td>
-              <td className="truncate border px-3 py-1 font-mono text-xs">{v}</td>
-            </tr>
+            <TableRow key={k}>
+              <TableCell className="font-mono text-xs">{k}</TableCell>
+              <TableCell className="truncate font-mono text-xs">{v}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

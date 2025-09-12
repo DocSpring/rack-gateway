@@ -26,6 +26,7 @@ import {
 } from '../components/ui/table'
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 interface User {
   email: string
@@ -95,6 +96,15 @@ export function UsersPage() {
       return response
     },
   })
+
+  // Pagination for users list
+  const perPage = DEFAULT_PER_PAGE
+  const [page, setPage] = useState(1)
+  const total = users.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const rows = users.slice(start, end)
 
   // Create user mutation
   const createUserMutation = useMutation({
@@ -212,8 +222,8 @@ export function UsersPage() {
       </div>
 
       <TablePane
-        description={`${users.length} ${users.length === 1 ? 'user' : 'users'} configured`}
-        empty={users.length === 0}
+        description={`${total} ${total === 1 ? 'user' : 'users'} configured`}
+        empty={total === 0}
         emptyMessage="No users configured yet"
         error={queryError ? 'Failed to load users' : null}
         headerRight={
@@ -225,90 +235,112 @@ export function UsersPage() {
           ) : undefined
         }
         loading={!!isLoading}
-        title="Users"
       >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Roles</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Updated</TableHead>
-              {isAdmin && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.email}>
-                <TableCell>
-                  <div>
-                    <div className="font-medium">
-                      {user.name}
-                      {user.email === currentUser?.email && (
-                        <Badge className="ml-2" variant="outline">
-                          You
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-muted-foreground text-sm">{user.email}</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {user.roles.map((role) => {
-                      const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
-                      return (
-                        <Badge className={cfg?.className} key={role} variant={'default'}>
-                          {cfg?.label || role}
-                        </Badge>
-                      )
-                    })}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={'default'}>Active</Badge>
-                </TableCell>
-                <TableCell className="text-sm">
-                  {(() => {
-                    const d = user.created_at ? new Date(user.created_at) : null
-                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                  })()}
-                </TableCell>
-                <TableCell className="text-sm">
-                  {(() => {
-                    const d = user.updated_at ? new Date(user.updated_at) : null
-                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                  })()}
-                </TableCell>
-                {isAdmin && (
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        aria-label={`Edit User ${user.email}`}
-                        onClick={() => handleEditUser(user)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        aria-label={`Delete User ${user.email}`}
-                        disabled={user.email === currentUser?.email}
-                        onClick={() => handleDeleteUser(user.email)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TablePane>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Roles</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Updated</TableHead>
+                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((user) => (
+                  <TableRow key={user.email}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">
+                          {user.name}
+                          {user.email === currentUser?.email && (
+                            <Badge className="ml-2" variant="outline">
+                              You
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-muted-foreground text-sm">{user.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.roles.map((role) => {
+                          const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
+                          return (
+                            <Badge className={cfg?.className} key={role} variant={'default'}>
+                              {cfg?.label || role}
+                            </Badge>
+                          )
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={'default'}>Active</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {(() => {
+                        const d = user.created_at ? new Date(user.created_at) : null
+                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {(() => {
+                        const d = user.updated_at ? new Date(user.updated_at) : null
+                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                      })()}
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            aria-label={`Edit User ${user.email}`}
+                            onClick={() => handleEditUser(user)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            aria-label={`Delete User ${user.email}`}
+                            disabled={user.email === currentUser?.email}
+                            onClick={() => handleDeleteUser(user.email)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {total > 0 && (
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-muted-foreground text-sm">
+                  Showing {start + 1}–{end} of {total} users
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    variant="outline"
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    variant="outline"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TablePane>
 
       {/* User Dialog */}
       <Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>

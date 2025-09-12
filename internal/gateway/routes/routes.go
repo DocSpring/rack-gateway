@@ -66,6 +66,10 @@ var specs = []RouteSpec{
 	{"PUT", "/apps/{app}/services/{name}", "app", "update"},
 	{"DELETE", "/apps/{name}", "app", "delete"},
 
+	// Instances
+	{"GET", "/instances", "rack", "read"},
+	{"GET", "/instances/{id}", "rack", "read"},
+
 	// System
 	{"GET", "/system", "rack", "read"},
 	{"GET", "/system/capacity", "rack", "read"},

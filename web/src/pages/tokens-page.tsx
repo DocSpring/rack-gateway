@@ -26,6 +26,7 @@ import {
 } from '../components/ui/table'
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 interface APIToken {
   id: string
@@ -131,6 +132,13 @@ function TokensPageInner() {
   })
 
   const tokenList: APIToken[] = Array.isArray(tokens) ? tokens : []
+  const perPage = DEFAULT_PER_PAGE
+  const total = tokenList.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const [page, setPage] = useState(1)
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const rows = tokenList.slice(start, end)
 
   const roles = currentUser?.roles || []
   const isAdmin = roles.includes('admin')
@@ -248,7 +256,6 @@ function TokensPageInner() {
           ) : undefined
         }
         loading={!!isLoading}
-        title="API Tokens"
       >
         <Table>
           <TableHeader>
@@ -263,7 +270,7 @@ function TokensPageInner() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tokenList.map((token: APIToken) => {
+            {rows.map((token: APIToken) => {
               const isOwner =
                 token.created_by_email && currentUser?.email
                   ? token.created_by_email.toLowerCase() === currentUser.email.toLowerCase()
@@ -294,6 +301,30 @@ function TokensPageInner() {
             })}
           </TableBody>
         </Table>
+
+        {total > 0 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-muted-foreground text-sm">
+              Showing {start + 1}–{end} of {total} tokens
+            </div>
+            <div className="flex gap-2">
+              <Button
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                variant="outline"
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                variant="outline"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </TablePane>
 
       {/* Create Token Dialog */}

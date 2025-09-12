@@ -2,7 +2,7 @@ import { RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 
 interface TablePaneProps {
-  title: string
+  title?: string
   description?: string
   headerRight?: React.ReactNode
   loading?: boolean
@@ -26,15 +26,17 @@ export function TablePane({
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{title}</CardTitle>
-            {description ? <CardDescription>{description}</CardDescription> : null}
+      {(title || description || headerRight) && (
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              {title ? <CardTitle>{title}</CardTitle> : null}
+              {description ? <CardDescription>{description}</CardDescription> : null}
+            </div>
+            {headerRight ? <div>{headerRight}</div> : null}
           </div>
-          {headerRight ? <div>{headerRight}</div> : null}
-        </div>
-      </CardHeader>
+        </CardHeader>
+      )}
       <CardContent>
         {errorMessage ? (
           <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">

@@ -51,6 +51,24 @@ export default defineConfig(() => ({
           });
         },
       },
+      "/apps": {
+        target:
+          process.env.VITE_API_BASE_URL ||
+          `http://127.0.0.1:${process.env.GATEWAY_PORT || "8447"}`,
+        changeOrigin: true,
+      },
+      "/instances": {
+        target:
+          process.env.VITE_API_BASE_URL ||
+          `http://127.0.0.1:${process.env.GATEWAY_PORT || "8447"}`,
+        changeOrigin: true,
+      },
+      "/system": {
+        target:
+          process.env.VITE_API_BASE_URL ||
+          `http://127.0.0.1:${process.env.GATEWAY_PORT || "8447"}`,
+        changeOrigin: true,
+      },
     },
   },
 }));

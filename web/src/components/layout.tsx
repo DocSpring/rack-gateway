@@ -47,7 +47,14 @@ export function Layout() {
         {/* Logo */}
         <div className="flex h-16 items-center px-6">
           {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
-          <img alt="" aria-hidden className="mr-2 h-8 w-8" height={32} src="logo.svg" width={32} />
+          <img
+            alt=""
+            aria-hidden
+            className="mr-2 h-8 w-8"
+            height={32}
+            src="/.gateway/web/logo.svg"
+            width={32}
+          />
           <h1 className="font-semibold text-xl">Convox Gateway</h1>
         </div>
 
@@ -59,11 +66,12 @@ export function Layout() {
             const Icon = item.icon
             return (
               <Link
+                activeOptions={{ exact: !!(item.href === '/rack' || item.href === '/') }}
+                activeProps={{
+                  className: 'bg-accent text-white',
+                }}
                 className={cn(
-                  'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
-                  location.pathname === item.href
-                    ? 'bg-primary text-white'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  'flex items-center rounded-md px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-accent hover:text-accent-foreground'
                 )}
                 key={item.name}
                 to={item.href}

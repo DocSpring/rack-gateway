@@ -25,6 +25,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 interface AuditLog {
   id: number
@@ -92,9 +93,9 @@ export function AuditPage() {
   const [perPage, setPerPage] = useState<number>(() => {
     try {
       const v = localStorage.getItem('audit_per_page')
-      return v ? Math.max(1, Number.parseInt(v, 10)) : 50
+      return v ? Math.max(1, Number.parseInt(v, 10)) : DEFAULT_PER_PAGE
     } catch {
-      return 50
+      return DEFAULT_PER_PAGE
     }
   })
 
@@ -480,6 +481,7 @@ export function AuditPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
                   <SelectItem value="200">200</SelectItem>

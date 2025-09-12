@@ -20,12 +20,12 @@ tasks:
     deps: [web:lint, go:lint]
 
   test:
-    desc: Run all tests (prefer preview for web E2E)
+    desc: Run all tests
     cmds:
       - task: go:test
       - task: go:e2e:dev
       - task: web:test
-      - task: web:e2e:preview
+      - task: web:e2e:dev
 
   build:
     desc: Build web + gateway + cli + mock binaries
@@ -33,6 +33,8 @@ tasks:
 
   # Convenience alias for local dev stack (delegates to docker tasks)
   dev:
-    desc: Start development environment (alias for :docker:up)
+    desc: Start dev stack and follow logs
     cmds:
       - task: docker:up:dev
+      - task: docker:wait:dev
+      - task: docker:logs
