@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { PageLayout } from '../components/page-layout'
 import { TablePane } from '../components/table-pane'
@@ -15,7 +16,14 @@ import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type App = { name: string }
-type Proc = { id: string; service: string; status: string; release: string; app: string }
+type Proc = {
+  id: string
+  service: string
+  name?: string
+  status: string
+  release: string
+  app: string
+}
 
 export function AllProcessesPage() {
   const {
@@ -28,15 +36,41 @@ export function AllProcessesPage() {
       const apps = await api.get<App[]>('/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const ps = await api.get<Proc[]>(`/apps/${a.name}/processes`)
-          return ps.map((p) => ({ ...p, app: a.name }))
+          const ps = await api.get<
+            {
+              id: string
+              service?: string
+              name?: string
+              status: string
+              release: string
+            }[]
+          >(`/apps/${a.name}/processes`)
+          return ps.map((p) => ({
+            ...p,
+            app: a.name,
+            service: p.service ?? p.name ?? '',
+          })) as Proc[]
         })
       )
       // Also include system processes
       let systemProcs: Proc[] = []
       try {
-        const sys = await api.get<Proc[]>('/system/processes')
-        systemProcs = (sys || []).map((p) => ({ ...p, app: p.app || 'system' }))
+        const sys =
+          await api.get<
+            {
+              id: string
+              service?: string
+              name?: string
+              status: string
+              release: string
+              app?: string
+            }[]
+          >('/system/processes')
+        systemProcs = (sys || []).map((p) => ({
+          ...p,
+          app: p.app || 'system',
+          service: p.service ?? p.name ?? '',
+        })) as Proc[]
       } catch (_e) {
         // ignore if rack doesn't provide system processes
       }
@@ -73,9 +107,17 @@ export function AllProcessesPage() {
           <TableBody>
             {rows.map((p) => (
               <TableRow key={`${p.app}/${p.id}`}>
-                <TableCell>{p.app}</TableCell>
+                <TableCell>
+                  <Link
+                    className="underline hover:no-underline"
+                    params={{ app: p.app }}
+                    to="/apps/$app/processes"
+                  >
+                    {p.app}
+                  </Link>
+                </TableCell>
                 <TableCell className="font-mono text-xs">{p.id}</TableCell>
-                <TableCell>{p.service}</TableCell>
+                <TableCell>{p.service ?? p.name ?? '—'}</TableCell>
                 <TableCell>{p.status}</TableCell>
                 <TableCell>{p.release}</TableCell>
               </TableRow>

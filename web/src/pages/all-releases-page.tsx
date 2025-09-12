@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { format } from 'date-fns'
 import { useState } from 'react'
 import { PageLayout } from '../components/page-layout'
 import { TablePane } from '../components/table-pane'
@@ -15,7 +17,7 @@ import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type App = { name: string }
-type Release = { id: string; description?: string; version?: number; app?: string }
+type Release = { id: string; description?: string; version?: number; app: string; created?: string }
 
 export function AllReleasesPage() {
   const {
@@ -58,15 +60,30 @@ export function AllReleasesPage() {
               <TableHead>ID</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Version</TableHead>
+              <TableHead>Created</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
               <TableRow key={`${r.app}/${r.id}`}>
-                <TableCell>{r.app}</TableCell>
+                <TableCell>
+                  <Link
+                    className="underline hover:no-underline"
+                    params={{ app: r.app! as string }}
+                    to="/apps/$app/releases"
+                  >
+                    {r.app}
+                  </Link>
+                </TableCell>
                 <TableCell className="font-mono text-xs">{r.id}</TableCell>
                 <TableCell>{r.description || '—'}</TableCell>
                 <TableCell>{r.version ?? '—'}</TableCell>
+                <TableCell>
+                  {(() => {
+                    const d = r.created ? new Date(r.created) : null
+                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '—'
+                  })()}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

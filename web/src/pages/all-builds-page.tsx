@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { format } from 'date-fns'
 import { useState } from 'react'
 import { PageLayout } from '../components/page-layout'
 import { TablePane } from '../components/table-pane'
@@ -15,7 +17,15 @@ import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type App = { name: string }
-type Build = { id: string; description?: string; status: string; release: string; app?: string }
+type Build = {
+  id: string
+  description?: string
+  status: string
+  release: string
+  started?: string
+  ended?: string
+  app: string
+}
 
 export function AllBuildsPage() {
   const {
@@ -58,16 +68,33 @@ export function AllBuildsPage() {
               <TableHead>ID</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Started</TableHead>
               <TableHead>Release</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((b) => (
               <TableRow key={`${b.app}/${b.id}`}>
-                <TableCell>{b.app}</TableCell>
+                <TableCell>
+                  <Link
+                    className="underline hover:no-underline"
+                    params={{ app: b.app! as string }}
+                    to="/apps/$app/builds"
+                  >
+                    {b.app}
+                  </Link>
+                </TableCell>
                 <TableCell className="font-mono text-xs">{b.id}</TableCell>
-                <TableCell>{b.description || '—'}</TableCell>
+                <TableCell className="max-w-[420px] whitespace-normal break-words">
+                  {b.description || '—'}
+                </TableCell>
                 <TableCell>{b.status}</TableCell>
+                <TableCell>
+                  {(() => {
+                    const d = b.started ? new Date(b.started) : null
+                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '—'
+                  })()}
+                </TableCell>
                 <TableCell>{b.release}</TableCell>
               </TableRow>
             ))}

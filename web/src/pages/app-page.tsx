@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation, useParams } from '@tanstack/react-router'
 import { useEffect } from 'react'
+import { PageLayout } from '../components/page-layout'
 
 export function AppPage() {
   const { app } = useParams({ from: '/apps/$app' }) as { app: string }
@@ -20,8 +21,7 @@ export function AppPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <h2 className="mb-4 font-semibold text-2xl">App: {app}</h2>
+    <PageLayout title={`App: ${app}`}>
       <div className="mb-4 flex gap-2">
         {tabs.map((t) => (
           <Link
@@ -40,6 +40,6 @@ export function AppPage() {
         ))}
       </div>
       <Outlet />
-    </div>
+    </PageLayout>
   )
 }

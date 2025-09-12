@@ -236,111 +236,111 @@ export function UsersPage() {
         }
         loading={!!isLoading}
       >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Roles</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Updated</TableHead>
-                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((user) => (
-                  <TableRow key={user.email}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">
-                          {user.name}
-                          {user.email === currentUser?.email && (
-                            <Badge className="ml-2" variant="outline">
-                              You
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-muted-foreground text-sm">{user.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {user.roles.map((role) => {
-                          const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
-                          return (
-                            <Badge className={cfg?.className} key={role} variant={'default'}>
-                              {cfg?.label || role}
-                            </Badge>
-                          )
-                        })}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={'default'}>Active</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {(() => {
-                        const d = user.created_at ? new Date(user.created_at) : null
-                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {(() => {
-                        const d = user.updated_at ? new Date(user.updated_at) : null
-                        return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                      })()}
-                    </TableCell>
-                    {isAdmin && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            aria-label={`Edit User ${user.email}`}
-                            onClick={() => handleEditUser(user)}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            aria-label={`Delete User ${user.email}`}
-                            disabled={user.email === currentUser?.email}
-                            onClick={() => handleDeleteUser(user.email)}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {total > 0 && (
-              <div className="mt-4 flex items-center justify-between">
-                <div className="text-muted-foreground text-sm">
-                  Showing {start + 1}–{end} of {total} users
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    variant="outline"
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    variant="outline"
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </TablePane>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Roles</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Updated</TableHead>
+              {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((user) => (
+              <TableRow key={user.email}>
+                <TableCell>
+                  <div>
+                    <div className="font-medium">
+                      {user.name}
+                      {user.email === currentUser?.email && (
+                        <Badge className="ml-2" variant="outline">
+                          You
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground text-sm">{user.email}</div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {user.roles.map((role) => {
+                      const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
+                      return (
+                        <Badge className={cfg?.className} key={role} variant={'default'}>
+                          {cfg?.label || role}
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={'default'}>Active</Badge>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {(() => {
+                    const d = user.created_at ? new Date(user.created_at) : null
+                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                  })()}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {(() => {
+                    const d = user.updated_at ? new Date(user.updated_at) : null
+                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
+                  })()}
+                </TableCell>
+                {isAdmin && (
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        aria-label={`Edit User ${user.email}`}
+                        onClick={() => handleEditUser(user)}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        aria-label={`Delete User ${user.email}`}
+                        disabled={user.email === currentUser?.email}
+                        onClick={() => handleDeleteUser(user.email)}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {total > 0 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-muted-foreground text-sm">
+              Showing {start + 1}–{end} of {total} users
+            </div>
+            <div className="flex gap-2">
+              <Button
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                variant="outline"
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                variant="outline"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </TablePane>
 
       {/* User Dialog */}
       <Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>

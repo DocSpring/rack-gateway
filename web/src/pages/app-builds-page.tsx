@@ -61,7 +61,9 @@ export function AppBuildsPage() {
           {rows.map((b) => (
             <TableRow key={b.id}>
               <TableCell className="font-mono text-xs">{b.id}</TableCell>
-              <TableCell>{b.description}</TableCell>
+              <TableCell className="max-w-[420px] whitespace-normal break-words">
+                {b.description}
+              </TableCell>
               <TableCell>{b.status}</TableCell>
               <TableCell>{b.release}</TableCell>
             </TableRow>

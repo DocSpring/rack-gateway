@@ -17,6 +17,7 @@ import { DEFAULT_PER_PAGE } from '../lib/constants'
 type Process = {
   id: string
   service: string
+  name?: string
   status: string
   release: string
   command?: string
@@ -30,7 +31,19 @@ export function AppProcessesPage() {
     error,
   } = useQuery({
     queryKey: ['app-processes', app],
-    queryFn: async () => api.get<Process[]>(`/apps/${app}/processes`),
+    queryFn: async () => {
+      const ps = await api.get<
+        {
+          id: string
+          service?: string
+          name?: string
+          status: string
+          release: string
+          command?: string
+        }[]
+      >(`/apps/${app}/processes`)
+      return ps.map((p) => ({ ...p, service: p.service ?? p.name ?? '' })) as Process[]
+    },
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length
