@@ -1,5 +1,5 @@
 import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
-import { FileText, Key, LogOut, Server, TerminalSquare, Users } from 'lucide-react'
+import { Boxes, FileText, Key, LogOut, Server, TerminalSquare, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
@@ -10,6 +10,11 @@ import { Separator } from './ui/separator'
 
 const navigation = [
   { name: 'Rack', href: '/rack', icon: Server },
+  { name: 'Apps', href: '/apps', icon: Boxes },
+  { name: 'Processes', href: '/processes', icon: TerminalSquare },
+  { name: 'Instances', href: '/instances', icon: TerminalSquare },
+  { name: 'Builds', href: '/builds', icon: FileText },
+  { name: 'Releases', href: '/releases', icon: FileText },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'API Tokens', href: '/api_tokens', icon: Key },
   { name: 'Audit Logs', href: '/audit_logs', icon: FileText },

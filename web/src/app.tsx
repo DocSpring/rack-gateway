@@ -9,8 +9,17 @@ import {
 import { Layout } from './components/layout'
 import { Toaster } from './components/ui/sonner'
 import { AuthProvider } from './contexts/auth-context'
+import { AllBuildsPage } from './pages/all-builds-page'
+import { AllProcessesPage } from './pages/all-processes-page'
+import { AllReleasesPage } from './pages/all-releases-page'
+import { AppBuildsPage } from './pages/app-builds-page'
+import { AppPage } from './pages/app-page'
+import { AppProcessesPage } from './pages/app-processes-page'
+import { AppReleasesPage } from './pages/app-releases-page'
+import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
+import { InstancesPage } from './pages/instances-page'
 import { LoginPage } from './pages/login-page'
 import { RackPage } from './pages/rack-page'
 import { TokensPage } from './pages/tokens-page'
@@ -75,10 +84,69 @@ function buildRouteTree() {
     component: RackPage,
   })
 
+  const appsListRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'apps',
+    component: AppsListPage,
+  })
+  const instancesRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'instances',
+    component: InstancesPage,
+  })
+  const allBuildsRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'builds',
+    component: AllBuildsPage,
+  })
+  const allReleasesRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'releases',
+    component: AllReleasesPage,
+  })
+  const allProcessesRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'processes',
+    component: AllProcessesPage,
+  })
+
+  const appRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'apps/$app',
+    component: AppPage,
+  })
+
+  const appProcsRoute = createRoute({
+    getParentRoute: () => appRoute,
+    path: 'processes',
+    component: AppProcessesPage,
+  })
+  const appBuildsRoute = createRoute({
+    getParentRoute: () => appRoute,
+    path: 'builds',
+    component: AppBuildsPage,
+  })
+  const appReleasesRoute = createRoute({
+    getParentRoute: () => appRoute,
+    path: 'releases',
+    component: AppReleasesPage,
+  })
+
   return rootRoute.addChildren([
     loginRoute,
     callbackRoute,
-    layoutRoute.addChildren([rackRoute, usersRoute, tokensRoute, auditRoute]),
+    layoutRoute.addChildren([
+      rackRoute,
+      instancesRoute,
+      allBuildsRoute,
+      allReleasesRoute,
+      allProcessesRoute,
+      appsListRoute,
+      appRoute.addChildren([appProcsRoute, appBuildsRoute, appReleasesRoute]),
+      usersRoute,
+      tokensRoute,
+      auditRoute,
+    ]),
   ])
 }
 
