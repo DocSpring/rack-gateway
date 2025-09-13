@@ -24,6 +24,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
@@ -39,9 +40,10 @@ type Handler struct {
 	rackName     string
 	rackConfig   config.RackConfig
 	devProxy     *httputil.ReverseProxy
+	publicBase   string
 }
 
-func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string, rackCfg config.RackConfig, devProxyURL string) *Handler {
+func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName string, rackCfg config.RackConfig, devProxyURL string, publicBase string) *Handler {
 	var rp *httputil.ReverseProxy
 	if devProxyURL != "" {
 		if u, err := url.Parse(devProxyURL); err == nil {
@@ -57,6 +59,7 @@ func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *t
 		rackName:     rackName,
 		rackConfig:   rackCfg,
 		devProxy:     rp,
+		publicBase:   publicBase,
 	}
 }
 
@@ -245,10 +248,10 @@ func (h *Handler) UpdateProtectedEnvVars(w http.ResponseWriter, r *http.Request)
 		if h.emailer != nil {
 			admins := h.getAdminEmails()
 			if len(admins) > 0 {
-				subject := fmt.Sprintf("Convox Gateway: Settings changed (%s)", "protected_env_vars")
-				changer := au.Email
-				body := fmt.Sprintf("%s updated setting '%s' on rack '%s'.\n\nNew value:\n%s\n", changer, "protected_env_vars", h.rackName, strings.Join(out, ", "))
-				_ = h.emailer.SendMany(orderByInviterFirst(admins, au), subject, body)
+				subject := fmt.Sprintf("Convox Gateway (%s): %s changed the %s setting", h.rackName, au.Email, "protected_env_vars")
+				value := strings.Join(out, ", ")
+				text, html, _ := emailtemplates.RenderSettingsChanged(h.rackName, au.Email, "protected_env_vars", value)
+				_ = h.emailer.SendMany(orderByInviterFirst(admins, au), subject, text, html)
 			}
 		}
 	}
@@ -312,10 +315,10 @@ func (h *Handler) UpdateAllowDestructiveActions(w http.ResponseWriter, r *http.R
 		if h.emailer != nil {
 			admins := h.getAdminEmails()
 			if len(admins) > 0 {
-				subject := "Convox Gateway: Settings changed (allow_destructive_actions)"
-				changer := au.Email
-				body := fmt.Sprintf("%s updated setting 'allow_destructive_actions' on rack '%s'.\n\nNew value: %t\n", changer, h.rackName, payload.Allow)
-				_ = h.emailer.SendMany(orderByInviterFirst(admins, au), subject, body)
+				subject := fmt.Sprintf("Convox Gateway (%s): %s changed the %s setting", h.rackName, au.Email, "allow_destructive_actions")
+				val := fmt.Sprintf("%t", payload.Allow)
+				text, html, _ := emailtemplates.RenderSettingsChanged(h.rackName, au.Email, "allow_destructive_actions", val)
+				_ = h.emailer.SendMany(orderByInviterFirst(admins, au), subject, text, html)
 			}
 		}
 	}
@@ -878,14 +881,13 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	if h.emailer != nil {
 		inviter, _ := auth.GetAuthUser(r.Context())
 		owner := targetUserEmail
-		subjectOwner := fmt.Sprintf("Convox Gateway: New API token created on %s", h.rackName)
-		bodyOwner := fmt.Sprintf("A new API token '%s' was created for your account on rack '%s'.\n\nCreated by: %s\nIf this wasn't expected, please contact an admin.", req.Name, h.rackName, func() string {
-			if inviter != nil {
-				return inviter.Email
-			}
-			return ""
-		}())
-		_ = h.emailer.Send(owner, subjectOwner, bodyOwner)
+		subjectOwner := fmt.Sprintf("Convox Gateway (%s): New API token created", h.rackName)
+		creator := ""
+		if inviter != nil {
+			creator = inviter.Email
+		}
+		txt, html, _ := emailtemplates.RenderTokenCreatedOwner(h.rackName, req.Name, creator)
+		_ = h.emailer.Send(owner, subjectOwner, txt, html)
 
 		admins := h.getAdminEmails()
 		// Do not email the owner twice if they are also an admin
@@ -897,13 +899,13 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 			filteredAdmins = append(filteredAdmins, a)
 		}
 		if len(filteredAdmins) > 0 {
-			subjectAdmin := fmt.Sprintf("Convox Gateway: API token created for %s on %s", owner, h.rackName)
-			creator := "unknown"
+			subjectAdmin := fmt.Sprintf("Convox Gateway (%s): API token created for %s", h.rackName, owner)
+			creator := ""
 			if inviter != nil {
 				creator = inviter.Email
 			}
-			bodyAdmin := fmt.Sprintf("An API token '%s' was created for %s on rack '%s'.\nCreated by: %s", req.Name, owner, h.rackName, creator)
-			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, bodyAdmin)
+			txt, html, _ := emailtemplates.RenderTokenCreatedAdmin(h.rackName, req.Name, owner, creator)
+			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, txt, html)
 		}
 	}
 }
@@ -1183,14 +1185,14 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if h.emailer != nil {
 		inviter, _ := auth.GetAuthUser(r.Context())
 		// To the new user
-		subjectUser := fmt.Sprintf("You've been granted access to Convox Gateway for the %s rack", h.rackName)
-		bodyUser := fmt.Sprintf("You've been added to the '%s' Convox rack.\n\nName: %s\nRoles: %s\nAdded by: %s", h.rackName, req.Name, strings.Join(req.Roles, ", "), func() string {
-			if inviter != nil {
-				return inviter.Email
-			}
-			return ""
-		}())
-		_ = h.emailer.Send(req.Email, subjectUser, bodyUser)
+		subjectUser := fmt.Sprintf("Convox Gateway (%s): You've been granted access", h.rackName)
+		inviterEmail := ""
+		if inviter != nil {
+			inviterEmail = inviter.Email
+		}
+		// Use public base for web and CLI (dev/prod aware)
+		txt, html, _ := emailtemplates.RenderWelcome(h.rackName, req.Email, inviterEmail, h.publicBase, h.publicBase)
+		_ = h.emailer.Send(req.Email, subjectUser, txt, html)
 
 		// Notify admins (including inviter), but do not duplicate the end-user notification
 		admins := h.getAdminEmails()
@@ -1202,13 +1204,18 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			filteredAdmins = append(filteredAdmins, a)
 		}
 		if len(filteredAdmins) > 0 {
-			subjectAdmin := fmt.Sprintf("Convox Gateway: New user added to %s", h.rackName)
-			creator := "unknown"
+			creator := ""
 			if inviter != nil {
 				creator = inviter.Email
 			}
-			bodyAdmin := fmt.Sprintf("%s added new user %s (%s) to rack '%s' with roles: %s", creator, req.Email, req.Name, h.rackName, strings.Join(req.Roles, ", "))
-			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, bodyAdmin)
+			subjectAdmin := fmt.Sprintf("Convox Gateway (%s): %s added %s (%s)", h.rackName, creator, req.Email, req.Name)
+			rolesStr := strings.Join(req.Roles, ", ")
+			txt, html, _ := emailtemplates.RenderUserAddedAdmin(h.rackName, creator, req.Email, req.Name, req.Roles)
+			// In case of error above, fallback simple body
+			if txt == "" {
+				txt = fmt.Sprintf("%s added new user %s (%s) with roles: %s.", creator, req.Email, req.Name, rolesStr)
+			}
+			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, txt, html)
 		}
 	}
 }

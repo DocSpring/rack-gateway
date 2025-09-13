@@ -11,15 +11,15 @@ import (
 
 // Sender is a minimal interface for sending emails.
 type Sender interface {
-	Send(to, subject, textBody string) error
-	SendMany(to []string, subject, textBody string) error
+	Send(to, subject, textBody, htmlBody string) error
+	SendMany(to []string, subject, textBody, htmlBody string) error
 }
 
 // NoopSender implements Sender but does nothing (used when not configured).
 type NoopSender struct{}
 
-func (NoopSender) Send(to, subject, textBody string) error              { return nil }
-func (NoopSender) SendMany(to []string, subject, textBody string) error { return nil }
+func (NoopSender) Send(to, subject, textBody, htmlBody string) error              { return nil }
+func (NoopSender) SendMany(to []string, subject, textBody, htmlBody string) error { return nil }
 
 // PostmarkSender sends emails using Postmark's API.
 type PostmarkSender struct {
@@ -53,7 +53,7 @@ func NewSender(token, from, stream string) Sender {
 	return NoopSender{}
 }
 
-func (p *PostmarkSender) Send(to, subject, textBody string) error {
+func (p *PostmarkSender) Send(to, subject, textBody, htmlBody string) error {
 	if to == "" {
 		return nil
 	}
@@ -63,6 +63,9 @@ func (p *PostmarkSender) Send(to, subject, textBody string) error {
 		"Subject":       subject,
 		"TextBody":      textBody,
 		"MessageStream": p.Stream,
+	}
+	if htmlBody != "" {
+		payload["HtmlBody"] = htmlBody
 	}
 	b, _ := json.Marshal(payload)
 	req, err := http.NewRequest("POST", p.APIBase+"/email", bytes.NewReader(b))
@@ -82,7 +85,7 @@ func (p *PostmarkSender) Send(to, subject, textBody string) error {
 	return nil
 }
 
-func (p *PostmarkSender) SendMany(to []string, subject, textBody string) error {
+func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody string) error {
 	if len(to) == 0 {
 		return nil
 	}
@@ -105,6 +108,9 @@ func (p *PostmarkSender) SendMany(to []string, subject, textBody string) error {
 		"Subject":       subject,
 		"TextBody":      textBody,
 		"MessageStream": p.Stream,
+	}
+	if htmlBody != "" {
+		payload["HtmlBody"] = htmlBody
 	}
 	if bcc != "" {
 		payload["Bcc"] = bcc
@@ -130,12 +136,16 @@ func (p *PostmarkSender) SendMany(to []string, subject, textBody string) error {
 // LoggerSender writes emails to stdout (useful in development)
 type LoggerSender struct{ From string }
 
-func (l *LoggerSender) Send(to, subject, textBody string) error {
+func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
+	if htmlBody != "" {
+		log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n[text]\n%s\n[html]\n%s", to, l.From, subject, textBody, htmlBody)
+		return nil
+	}
 	log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n%s", to, l.From, subject, textBody)
 	return nil
 }
 
-func (l *LoggerSender) SendMany(to []string, subject, textBody string) error {
+func (l *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string) error {
 	primary := ""
 	if len(to) > 0 {
 		primary = to[0]
@@ -145,6 +155,10 @@ func (l *LoggerSender) SendMany(to []string, subject, textBody string) error {
 		bcc = append(bcc, to[1:]...)
 	}
 	b, _ := json.Marshal(bcc)
+	if htmlBody != "" {
+		log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n[text]\n%s\n[html]\n%s", primary, string(b), l.From, subject, textBody, htmlBody)
+		return nil
+	}
 	log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n%s", primary, string(b), l.From, subject, textBody)
 	return nil
 }

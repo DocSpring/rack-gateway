@@ -181,13 +181,28 @@ func main() {
 
 	// Determine rack config/name for notifications and downstream API
 	rackCfg := config.RackConfig{}
-	rackName := "default"
-	if rc, ok := cfg.Racks["default"]; ok {
-		rackCfg = rc
-		rackName = rc.Name
-	} else if rc, ok := cfg.Racks["local"]; ok {
-		rackCfg = rc
-		rackName = rc.Name
+	// Prefer explicit RACK env (Convox provides this). Fallback to config racks.
+	rackName := strings.TrimSpace(os.Getenv("RACK"))
+	if rackName == "" {
+		rackName = "default"
+		if rc, ok := cfg.Racks["default"]; ok {
+			rackCfg = rc
+			if strings.TrimSpace(rc.Name) != "" {
+				rackName = rc.Name
+			}
+		} else if rc, ok := cfg.Racks["local"]; ok {
+			rackCfg = rc
+			if strings.TrimSpace(rc.Name) != "" {
+				rackName = rc.Name
+			}
+		}
+	} else {
+		// Try to populate rackCfg if there is a matching entry (optional)
+		if rc, ok := cfg.Racks[rackName]; ok {
+			rackCfg = rc
+		} else if rc, ok := cfg.Racks["default"]; ok {
+			rackCfg = rc
+		}
 	}
 
 	// Dev proxy for web UI: if DEV_MODE and WEB_DEV_SERVER_URL provided, proxy /.gateway/web/* to Vite
@@ -195,7 +210,9 @@ func main() {
 	if getEnv("DEV_MODE", "false") == "true" {
 		devProxyURL = os.Getenv("WEB_DEV_SERVER_URL")
 	}
-	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackCfg, devProxyURL)
+	// Public base URL used in emails and links
+	publicBase := redirectInput
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackCfg, devProxyURL, publicBase)
 
 	r := chi.NewRouter()
 
