@@ -72,9 +72,40 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 	return h
 }
 
+// SetAllowDestructive updates the in-memory destructive action toggle.
+func (h *Handler) SetAllowDestructive(v bool) { h.allowDestructive = v }
+
+// ReplaceProtectedEnv replaces the in-memory set of protected env var names.
+func (h *Handler) ReplaceProtectedEnv(keys []string) {
+	m := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		k = strings.ToUpper(strings.TrimSpace(k))
+		if k == "" {
+			continue
+		}
+		m[k] = struct{}{}
+	}
+	h.protectedEnv = m
+}
+
 // ProxyToRack handles all requests that should be proxied to the Convox rack
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+
+	// Refresh dynamic settings from DB
+	if h.database != nil {
+		if v, err := h.database.GetAllowDestructiveActions(); err == nil {
+			h.allowDestructive = v
+		}
+		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+			// rebuild map quickly (small set)
+			m := make(map[string]struct{}, len(arr))
+			for _, k := range arr {
+				m[strings.ToUpper(strings.TrimSpace(k))] = struct{}{}
+			}
+			h.protectedEnv = m
+		}
+	}
 
 	// Get the default rack (there's only one per gateway instance)
 	rackConfig, exists := h.config.Racks["default"]
@@ -174,7 +205,9 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Block destructive actions when not allowed by settings
 	if !h.allowDestructive {
 		if isDestructive(methodForRBAC, resource, action) {
-			h.handleError(w, r, "destructive actions are disabled by policy", http.StatusForbidden, rackConfig.Name, start)
+			// Log as denied (RBAC) for consistency
+			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("destructive actions are disabled by policy"))
+			http.Error(w, "permission denied", http.StatusForbidden)
 			return
 		}
 	}
@@ -279,7 +312,8 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 
 	if !h.allowDestructive {
 		if isDestructive(methodForRBAC, resource, action) {
-			h.handleError(w, r, "destructive actions are disabled by policy", http.StatusForbidden, rack, start)
+			h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("destructive actions are disabled by policy"))
+			http.Error(w, "permission denied", http.StatusForbidden)
 			return
 		}
 	}
@@ -440,6 +474,29 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		}
 	}
 
+	// If posting any protected key explicitly, deny immediately (no change to protected keys allowed)
+	for k := range posted {
+		if h.isProtectedKey(k) {
+			userName := r.Header.Get("X-User-Name")
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "env.set",
+				ResourceType:   "env",
+				Resource:       fmt.Sprintf("%s/%s", app, k),
+				Details:        "{\"error\":\"protected key change denied\"}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
+			return false, nil, nil
+		}
+	}
+
 	// Fetch latest env map from rack (needed to fill back masked values and compute diffs)
 	baseEnv, err := envutil.FetchLatestEnvMap(rack, app)
 	if err != nil {
@@ -474,16 +531,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		return false, nil, nil
 	}
 
-	// Prevent removal of protected keys (must be present and unchanged)
-	for pk := range h.protectedEnv {
-		if baseVal, ok := baseEnv[pk]; ok {
-			if _, present := posted[pk]; !present {
-				return false, nil, nil
-			}
-			// If posting a different explicit value (not masked), will be caught below in diffs check
-			_ = baseVal
-		}
-	}
+	// Do not require protected keys to be present in the payload; we will carry them over from base below.
 
 	// Merge masked values and compute diffs
 	merged := make(map[string]string)
@@ -510,12 +558,31 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	// Deny any modifications to protected env vars
 	for _, d := range diffs {
 		if h.isProtectedKey(d.Key) {
+			// Log denied change for protected key
+			userName := r.Header.Get("X-User-Name")
+			app := extractAppFromPath(r.URL.Path)
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "env.set",
+				ResourceType:   "env",
+				Resource:       fmt.Sprintf("%s/%s", app, d.Key),
+				Details:        "{\"error\":\"protected key change denied\"}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
 			return false, nil, nil
 		}
 	}
 
-	// Recompose env string preserving order
+	// Recompose env string preserving submitted order and appending any base-only keys
 	var b strings.Builder
+	used := map[string]struct{}{}
 	for i, k := range order {
 		if i > 0 {
 			b.WriteString("\n")
@@ -523,6 +590,19 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		b.WriteString(k)
 		b.WriteString("=")
 		b.WriteString(merged[k])
+		used[k] = struct{}{}
+	}
+	// Append remaining base keys to ensure full env for release
+	for k, v := range baseEnv {
+		if _, ok := used[k]; ok {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(k)
+		b.WriteString("=")
+		b.WriteString(v)
 	}
 	vals.Set("env", b.String())
 	newBody := []byte(vals.Encode())
@@ -584,9 +664,61 @@ func (h *Handler) prepareEnvironmentSetJSON(r *http.Request, rack config.RackCon
 		return false, nil, fmt.Errorf("failed to fetch latest env: %w", err)
 	}
 
+	// Early deny if posting any protected key explicitly
+	for k := range posted {
+		if h.isProtectedKey(k) {
+			userName := r.Header.Get("X-User-Name")
+			app := ""
+			parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+			if len(parts) >= 3 {
+				app = parts[1]
+			}
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "env.set",
+				ResourceType:   "env",
+				Resource:       fmt.Sprintf("%s/%s", app, k),
+				Details:        "{\"error\":\"protected key change denied\"}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
+			return false, nil, nil
+		}
+	}
+
 	// RBAC checks
 	canEnvSet, _ := h.rbacManager.Enforce(email, "env", "set")
 	if !canEnvSet {
+		// Log denied per posted key
+		userName := r.Header.Get("X-User-Name")
+		app := ""
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) >= 3 {
+			app = parts[1]
+		}
+		for k := range posted {
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "env.set",
+				ResourceType:   "env",
+				Resource:       fmt.Sprintf("%s/%s", app, k),
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
+		}
 		return false, nil, nil
 	}
 	canSecretsSet, _ := h.rbacManager.Enforce(email, "secrets", "set")
@@ -598,10 +730,42 @@ func (h *Handler) prepareEnvironmentSetJSON(r *http.Request, rack config.RackCon
 		isSecret := h.isSecretKey(k)
 		if isSecret && !canSecretsSet && newVal != baseVal {
 			// Deny secret change without permission
+			userName := r.Header.Get("X-User-Name")
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "secrets.set",
+				ResourceType:   "secret",
+				Resource:       fmt.Sprintf("%s/%s", app, k),
+				Details:        "{}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
 			return false, nil, nil
 		}
 		if h.isProtectedKey(k) && newVal != baseVal {
 			// Deny changes to protected keys
+			userName := r.Header.Get("X-User-Name")
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				UserEmail:      email,
+				UserName:       userName,
+				ActionType:     "convox",
+				Action:         "env.set",
+				ResourceType:   "env",
+				Resource:       fmt.Sprintf("%s/%s", app, k),
+				Details:        "{\"error\":\"protected key change denied\"}",
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: 0,
+			})
 			return false, nil, nil
 		}
 		if newVal != baseVal {

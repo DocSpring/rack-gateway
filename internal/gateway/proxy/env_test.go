@@ -146,3 +146,39 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	h.ProxyToRack(rr, req)
 	require.Equal(t, http.StatusForbidden, rr.Code)
 }
+
+func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
+	h, database, mgr := newProxyForEnvTest(t)
+	// Set protected env var
+	require.NoError(t, database.UpsertSetting("protected_env_vars", []string{"DATABASE_URL"}, nil))
+	// Reload handler protected set
+	if arr, err := database.GetProtectedEnvVars(); err == nil {
+		for _, k := range arr {
+			h.protectedEnv[strings.ToUpper(k)] = struct{}{}
+		}
+	}
+	// Admin user (even admin should be blocked from protected changes)
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	// Attempt to change protected key via releases form
+	form := url.Values{}
+	form.Set("env", "DATABASE_URL=abc\nPORT=3000")
+	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	au := &auth.AuthUser{Email: "admin@test.com", Name: "Admin"}
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, req)
+	require.Equal(t, http.StatusForbidden, rr.Code)
+
+	logs, err := database.GetAuditLogs("admin@test.com", time.Time{}, 50)
+	require.NoError(t, err)
+	found := false
+	for _, l := range logs {
+		if l.Action == "env.set" && l.Status == "denied" && strings.Contains(l.Resource, "/DATABASE_URL") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected denied env.set audit for protected key change")
+}

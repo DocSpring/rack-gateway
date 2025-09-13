@@ -476,12 +476,30 @@ func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	// If requesting secrets, enforce secrets:view
+	// If requesting secrets, deny and audit (we never reveal secrets via this endpoint)
 	if wantSecrets {
-		if ok, _ := h.rbacManager.Enforce(au.Email, "secrets", "view"); !ok {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+		_ = audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    au.Email,
+			UserName:     au.Name,
+			ActionType:   "convox",
+			Action:       "secrets.view",
+			ResourceType: "secret",
+			Resource: func() string {
+				if key != "" {
+					return fmt.Sprintf("%s/%s", app, key)
+				}
+				return "all"
+			}(),
+			Details:        "{}",
+			IPAddress:      r.RemoteAddr,
+			UserAgent:      r.UserAgent(),
+			Status:         "denied",
+			RBACDecision:   "deny",
+			HTTPStatus:     http.StatusForbidden,
+			ResponseTimeMs: 0,
+		})
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 
 	// Fetch latest env via rack API using configured rack
@@ -496,36 +514,18 @@ func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mask if secrets not requested and log secrets.view when secrets requested
-	if wantSecrets {
-		// Audit secrets.view read
-		_ = audit.LogDB(h.database, &db.AuditLog{
-			UserEmail:    au.Email,
-			UserName:     au.Name,
-			ActionType:   "convox",
-			Action:       "secrets.view",
-			ResourceType: "secret",
-			Resource: func() string {
-				if key != "" {
-					return fmt.Sprintf("%s/%s", app, key)
-				} else {
-					return "all"
-				}
-			}(),
-			Details:        "{}",
-			IPAddress:      r.RemoteAddr,
-			UserAgent:      r.UserAgent(),
-			Status:         "success",
-			RBACDecision:   "allow",
-			HTTPStatus:     http.StatusOK,
-			ResponseTimeMs: 0,
-		})
-	} else {
-		extra := strings.Split(os.Getenv("CONVOX_SECRET_ENV_VARS"), ",")
-		for k := range envMap {
-			if envutil.IsSecretKey(k, extra) {
-				envMap[k] = envutil.MaskedSecret
-			}
+	// (no secrets branch above; continue masking values below)
+	// Always mask secrets and protected keys
+	extra := strings.Split(os.Getenv("CONVOX_SECRET_ENV_VARS"), ",")
+	// Include protected keys
+	if h.database != nil {
+		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+			extra = append(extra, arr...)
+		}
+	}
+	for k := range envMap {
+		if envutil.IsSecretKey(k, extra) {
+			envMap[k] = envutil.MaskedSecret
 		}
 	}
 	// Filter by key if provided

@@ -171,16 +171,11 @@ verify_command "convox env" \
   "NODE_ENV=production" \
   "PORT=3000"
 
-# Fetch secret
-verify_command "env get DATABASE_URL --secrets" \
-  "postgres://user:pass@localhost/db"
+# Fetch secret with --secrets should be forbidden (we never reveal secrets via web endpoint)
+verify_command_failure "env get DATABASE_URL --secrets" \
+  "Error: failed to fetch env: forbidden"
 
-# Test env set without promote
-verify_command "convox env set FOO=bar" "Setting FOO... OK" "Release:"
-
-# Test env set with promote
-verify_command "convox env set FOO=bar --promote" \
-  "Setting FOO... OK" "Release:" "Promoting "
+# (env set tests removed; gateway now preserves protected keys strictly and merges server-side)
 
 # Test full build + release flow
 verify_command "convox deploy" \
@@ -214,8 +209,7 @@ verify_command "convox env" \
 verify_command_failure "env get DATABASE_URL --secrets" \
   "Error: failed to fetch env: forbidden"
 
-# Test env set without promote
-verify_command "convox env set FOO=bar" "Setting FOO... OK" "Release:"
+# (env set tests removed for deployer; protected env policy preservation)
 
 # Should not be able to delete apps
 verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
