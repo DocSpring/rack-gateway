@@ -144,10 +144,20 @@ tasks:
   # ------------------------------
   # Misc
   # ------------------------------
-  logs:
-    desc: Tail logs for the active stack
+  logs:dev:
+    aliases: [logs]
+    deps: [wait:dev]
+    desc: Tail logs for the dev stack
     cmds:
-      - cmd: docker compose logs -f
+      - cmd: exec docker compose --profile dev logs -f $SRVS
+        interactive: true
+        tty: true
+        ignore_error: true
+
+  logs:preview:
+    desc: Tail logs for the preview stack
+    cmds:
+      - cmd: exec docker compose --profile preview logs -f $SRVS
         interactive: true
         tty: true
         ignore_error: true
@@ -163,3 +173,16 @@ tasks:
     run: once
     cmds:
       - docker build -t convox-gateway-api:latest .
+
+  start:dev:
+    aliases: [start]
+    desc: Start dev stack and follow logs
+    cmds:
+      - task: up:dev
+      - task: logs:dev
+
+  start:preview:
+    desc: Start preview stack and follow logs
+    cmds:
+      - task: up:preview
+      - task: logs:preview

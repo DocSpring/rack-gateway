@@ -1,5 +1,5 @@
 import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
-import { Boxes, FileText, Key, LogOut, Server, TerminalSquare, Users } from 'lucide-react'
+import { Boxes, FileText, Key, LogOut, Server, Settings, TerminalSquare, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
@@ -8,7 +8,7 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 
-const navigation = [
+const baseNavigation = [
   { name: 'Rack', href: '/rack', icon: Server },
   { name: 'Apps', href: '/apps', icon: Boxes },
   { name: 'Processes', href: '/processes', icon: TerminalSquare },
@@ -34,6 +34,15 @@ export function Layout() {
       return 'https://gateway.example.com'
     }
   }, [])
+
+  // Add Settings for admins
+  const navigation = useMemo(() => {
+    const nav = [...baseNavigation]
+    if (user?.roles?.includes('admin')) {
+      nav.push({ name: 'Settings', href: '/settings', icon: Settings })
+    }
+    return nav
+  }, [user?.roles])
 
   // Declarative redirect: when at layout root, go to Rack
   if (location.pathname === '/') {

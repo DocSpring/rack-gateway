@@ -34,7 +34,4 @@ tasks:
   # Convenience alias for local dev stack (delegates to docker tasks)
   dev:
     desc: Start dev stack and follow logs
-    cmds:
-      - task: docker:up:dev
-      - task: docker:wait:dev
-      - task: docker:logs
+    deps: [docker:start:dev]

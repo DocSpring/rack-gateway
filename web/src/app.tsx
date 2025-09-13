@@ -22,6 +22,7 @@ import { CallbackPage } from './pages/callback-page'
 import { InstancesPage } from './pages/instances-page'
 import { LoginPage } from './pages/login-page'
 import { RackPage } from './pages/rack-page'
+import { SettingsPage } from './pages/settings-page'
 import { TokensPage } from './pages/tokens-page'
 import { UsersPage } from './pages/users-page'
 
@@ -76,6 +77,12 @@ function buildRouteTree() {
     getParentRoute: () => layoutRoute,
     path: 'audit_logs',
     component: AuditPage,
+  })
+
+  const settingsRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'settings',
+    component: SettingsPage,
   })
 
   const rackRoute = createRoute({
@@ -146,6 +153,7 @@ function buildRouteTree() {
       usersRoute,
       tokensRoute,
       auditRoute,
+      settingsRoute,
     ]),
   ])
 }
