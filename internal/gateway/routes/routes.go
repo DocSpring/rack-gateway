@@ -72,6 +72,7 @@ var specs = []RouteSpec{
 
 	// System
 	{"GET", "/system", "rack", "read"},
+	{"PUT", "/system", "rack", "update"},
 	{"GET", "/system/capacity", "rack", "read"},
 	{"GET", "/system/metrics", "rack", "read"},
 	{"GET", "/system/processes", "rack", "read"},

@@ -48,6 +48,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -140,6 +141,18 @@ var (
 			{ID: "RAPI123455", App: "convox-gateway", Build: "BAPI123455", Description: "Deployed by mock", Version: 9, Created: time.Now().Add(-48 * time.Hour), Env: envString()},
 		},
 	}
+	// In-memory, mutable rack parameters for GET/PUT /system
+	mockSystemParameters = map[string]string{
+		"access_log_retention_in_days": "7",
+		"availability_zones":           "us-east-1a,us-east-1b,us-east-1d,us-east-1e,us-east-1f",
+		"cidr":                         "10.2.0.0/16",
+		"internal_router":              "false",
+		"node_capacity_type":           "on_demand",
+		"node_type":                    "t3a.large",
+		"proxy_protocol":               "true",
+		"schedule_rack_scale_down":     "30 9 * * *",
+		"schedule_rack_scale_up":       "30 18 * * MON-THU",
+	}
 )
 
 func main() {
@@ -193,6 +206,7 @@ func main() {
 	r.HandleFunc("/instances/{id}", getInstance).Methods("GET")
 
 	r.HandleFunc("/system", getSystem).Methods("GET")
+	r.HandleFunc("/system", putSystem).Methods("PUT")
 	r.HandleFunc("/system/processes", getSystemProcesses).Methods("GET")
 
 	// Services command processes (stub for convox run)
@@ -931,6 +945,11 @@ func getInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSystem(w http.ResponseWriter, r *http.Request) {
+	// Return current in-memory state including any updates from PUT /system
+	params := make(map[string]string, len(mockSystemParameters))
+	for k, v := range mockSystemParameters {
+		params[k] = v
+	}
 	system := System{
 		Count:      2,
 		Domain:     "mock-rack.example.com",
@@ -941,21 +960,82 @@ func getSystem(w http.ResponseWriter, r *http.Request) {
 		Status:     "running",
 		Type:       "production",
 		Version:    "3.5.0",
-		Parameters: map[string]string{
-			"access_log_retention_in_days": "7",
-			"availability_zones":           "us-east-1a,us-east-1b,us-east-1d,us-east-1e,us-east-1f",
-			"cidr":                         "10.2.0.0/16",
-			"internal_router":              "false",
-			"node_capacity_type":           "on_demand",
-			"node_type":                    "t3a.large",
-			"proxy_protocol":               "true",
-			"schedule_rack_scale_down":     "30 9 * * *",
-			"schedule_rack_scale_up":       "30 18 * * MON-THU",
-		},
+		Parameters: params,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(system)
+}
+
+// putSystem accepts parameter updates similar to `convox rack params set`.
+// It accepts either JSON bodies like {"parameters":{"k":"v"}} or a flat JSON map {"k":"v"},
+// and also tolerates application/x-www-form-urlencoded such as "proxy_protocol=false".
+func putSystem(w http.ResponseWriter, r *http.Request) {
+	// Read full body (it can be small)
+	var body []byte
+	if r.Body != nil {
+		b, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+		body = b
+	}
+
+	updated := 0
+	ct := strings.ToLower(r.Header.Get("Content-Type"))
+
+	// Try JSON first when content-type indicates JSON or looks like JSON
+	tryJSON := strings.Contains(ct, "application/json") || (len(body) > 0 && (body[0] == '{' || body[0] == '['))
+	if tryJSON && len(body) > 0 {
+		var any map[string]interface{}
+		if err := json.Unmarshal(body, &any); err == nil {
+			// Prefer nested {parameters:{...}}
+			if pv, ok := any["parameters"].(map[string]interface{}); ok {
+				for k, v := range pv {
+					sval := fmt.Sprintf("%v", v)
+					mockSystemParameters[k] = sval
+					updated++
+				}
+			} else {
+				// Flat map
+				for k, v := range any {
+					sval := fmt.Sprintf("%v", v)
+					mockSystemParameters[k] = sval
+					updated++
+				}
+			}
+		}
+	}
+
+	// If nothing updated yet and body exists, attempt to parse as form-encoded
+	if updated == 0 && len(body) > 0 {
+		if vals, err := url.ParseQuery(string(body)); err == nil {
+			// Accept either direct keys (k=v) or a serialized parameters JSON in a field named "parameters"
+			if pjson := vals.Get("parameters"); pjson != "" {
+				var m map[string]interface{}
+				if err := json.Unmarshal([]byte(pjson), &m); err == nil {
+					for k, v := range m {
+						mockSystemParameters[k] = fmt.Sprintf("%v", v)
+						updated++
+					}
+				}
+			}
+			for k, vs := range vals {
+				if k == "parameters" { // handled above
+					continue
+				}
+				if len(vs) == 0 {
+					continue
+				}
+				mockSystemParameters[k] = vs[len(vs)-1]
+				updated++
+			}
+		}
+	}
+
+	// Respond with updated system state
+	w.Header().Set("Content-Type", "application/json")
+	// Match real API behavior: 200 OK
+	// Reuse getSystem composition
+	getSystem(w, r)
 }
 
 func getSystemProcesses(w http.ResponseWriter, r *http.Request) {
