@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { Download, Eye, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -24,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
@@ -45,6 +47,60 @@ interface AuditLog {
   http_status?: number
   response_time_ms: number
 }
+
+// Extract trailing "(id: N)" from legacy resource strings
+const RESOURCE_ID_TAIL_RE = /\s*\(id:\s*\d+\)\s*$/
+const MAX_LABEL_LEN = 23
+
+function safeParseDetails(details: string): Record<string, unknown> {
+  try {
+    return JSON.parse(details || '{}') as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+function resourceLabelForLog(log: AuditLog): string {
+  const d = safeParseDetails(log.details)
+  let label = ''
+  if (log.action_type === 'users' || log.action.startsWith('user.')) {
+    label = (d.email as string) || ''
+  } else if (log.action_type === 'tokens' || log.action.startsWith('api_token.')) {
+    label = (d.name as string) || ''
+  }
+  if (!label) {
+    label = (log.resource || '').replace(RESOURCE_ID_TAIL_RE, '').trim() || '-'
+  }
+  return label
+}
+
+function LabelBadge({ label }: { label: string }) {
+  const needsTruncate = label.length > MAX_LABEL_LEN
+  const shortText = needsTruncate ? `${label.slice(0, MAX_LABEL_LEN - 3)}...` : label
+  const content = (
+    <Badge
+      className="border border-border bg-muted font-mono text-muted-foreground"
+      variant="outline"
+    >
+      {shortText || '-'}
+    </Badge>
+  )
+  if (!needsTruncate) {
+    return content
+  }
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipContent>
+          <span className="font-mono">{label}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+// Regex helpers for legacy resource strings like "Name (id: 12)"
 
 const RESOURCE_TYPES = {
   all: 'All Resources',
@@ -159,6 +215,9 @@ export function AuditPage() {
       return response
     },
     placeholderData: keepPreviousData,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
 
   const handleExport = () => {
@@ -519,7 +578,6 @@ export function AuditPage() {
         <Table className="text-sm">
           <TableHeader>
             <TableRow>
-              <TableHead>Timestamp</TableHead>
               <TableHead>User</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Action</TableHead>
@@ -527,6 +585,7 @@ export function AuditPage() {
               <TableHead>Resource</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>IP Address</TableHead>
+              <TableHead>Timestamp</TableHead>
               <TableHead className="text-right">View</TableHead>
             </TableRow>
           </TableHeader>
@@ -537,9 +596,6 @@ export function AuditPage() {
                 key={log.id}
                 onClick={() => setSelected(log)}
               >
-                <TableCell className="font-mono text-sm">
-                  {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
-                </TableCell>
                 <TableCell>
                   <div>
                     <div className="font-medium">{log.user_email}</div>
@@ -621,14 +677,7 @@ export function AuditPage() {
                   })()}
                 </TableCell>
                 <TableCell>
-                  <div className="max-w-[260px] truncate" title={log.resource}>
-                    <Badge
-                      className="max-w-full truncate border border-border bg-muted font-mono text-muted-foreground"
-                      variant="outline"
-                    >
-                      {log.resource || '-'}
-                    </Badge>
-                  </div>
+                  <LabelBadge label={resourceLabelForLog(log)} />
                 </TableCell>
                 <TableCell>
                   {(() => {
@@ -650,6 +699,9 @@ export function AuditPage() {
                   })()}
                 </TableCell>
                 <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
+                <TableCell className="font-mono text-sm">
+                  <TimeAgo date={log.timestamp} />
+                </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <Button onClick={() => setSelected(log)} size="sm" variant="ghost">
                     <Eye className="h-4 w-4" />

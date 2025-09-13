@@ -37,6 +37,20 @@ tasks:
     cmds:
       - pnpm lint
 
+  lint:fix:
+    dir: web
+    desc: Auto-fix Biome issues (safe)
+    deps: [deps]
+    cmds:
+      - pnpm lint:fix
+
+  lint:unsafe:
+    dir: web
+    desc: Auto-fix Biome issues (unsafe, may change code semantics)
+    deps: [deps]
+    cmds:
+      - pnpm lint:unsafe
+
   test:
     dir: web
     desc: Run web unit tests (Vitest)

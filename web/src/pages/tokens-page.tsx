@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+/* biome-ignore format: keep legacy formatting for now */
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from 'date-fns'
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
@@ -70,10 +71,9 @@ function TokenRow({
           {isExpired ? 'Expired' : 'Active'}
         </Badge>
       </TableCell>
-      <TableCell>{token.last_used ? formatDate(token.last_used) : 'Never'}</TableCell>
       <TableCell>{token.created_by_email || token.created_by_name || '-'}</TableCell>
+      <TableCell>{token.last_used ? formatDate(token.last_used) : 'Never'}</TableCell>
       <TableCell>{formatDate(token.created_at)}</TableCell>
-      <TableCell>{formatDate(token.expires_at)}</TableCell>
       <TableCell className="text-right">
         {canEdit ? (
           <div className="flex justify-end gap-2">
@@ -129,6 +129,9 @@ function TokensPageInner() {
       const response = await api.get<APIToken[]>('/.gateway/api/admin/tokens')
       return response
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
 
   const tokenList: APIToken[] = Array.isArray(tokens) ? tokens : []
@@ -149,7 +152,9 @@ function TokensPageInner() {
   // Create token mutation
   const createTokenMutation = useMutation({
     mutationFn: async (name: string) => {
-      const response = await api.post<APIToken>('/.gateway/api/admin/tokens', { name })
+      const response = await api.post<APIToken>('/.gateway/api/admin/tokens', {
+        name,
+      })
       return response
     },
     onSuccess: (data) => {
@@ -214,7 +219,13 @@ function TokensPageInner() {
     }
   }
 
-  const handleCloseDialog = () => {
+  // Close create dialog without resetting content to avoid flash during fade-out
+  const closeCreateModal = () => {
+    setIsCreateOpen(false)
+  }
+
+  // Close and reset create dialog state (used by Cancel)
+  const closeCreateModalAndReset = () => {
     setIsCreateOpen(false)
     setNewTokenName('')
     setCreatedToken(null)
@@ -249,7 +260,13 @@ function TokensPageInner() {
         error={error ? 'Failed to load API tokens' : null}
         headerRight={
           canCreate ? (
-            <Button onClick={() => setIsCreateOpen(true)}>
+            <Button
+              onClick={() => {
+                setNewTokenName('')
+                setCreatedToken(null)
+                setIsCreateOpen(true)
+              }}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Create Token
             </Button>
@@ -262,10 +279,9 @@ function TokensPageInner() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Last Used</TableHead>
               <TableHead>Created By</TableHead>
+              <TableHead>Last Used</TableHead>
               <TableHead>Created</TableHead>
-              <TableHead>Expires</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -328,7 +344,7 @@ function TokensPageInner() {
       </TablePane>
 
       {/* Create Token Dialog */}
-      <Dialog onOpenChange={handleCloseDialog} open={isCreateOpen}>
+      <Dialog onOpenChange={(open) => setIsCreateOpen(open)} open={isCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create API Token</DialogTitle>
@@ -375,10 +391,10 @@ function TokensPageInner() {
 
           <DialogFooter>
             {createdToken ? (
-              <Button onClick={handleCloseDialog}>Done</Button>
+              <Button onClick={closeCreateModal}>Done</Button>
             ) : (
               <>
-                <Button onClick={handleCloseDialog} variant="outline">
+                <Button onClick={closeCreateModalAndReset} variant="outline">
                   Cancel
                 </Button>
                 <Button disabled={createTokenMutation.isPending} onClick={handleCreateToken}>
@@ -405,7 +421,10 @@ function TokensPageInner() {
                 onChange={(e) => setEditName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && editToken) {
-                    updateTokenMutation.mutate({ id: editToken.id, name: editName })
+                    updateTokenMutation.mutate({
+                      id: editToken.id,
+                      name: editName,
+                    })
                   }
                 }}
                 value={editName}

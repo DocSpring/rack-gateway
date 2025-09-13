@@ -80,6 +80,9 @@ export function AllProcessesPage() {
       }
       return lists.flat().concat(systemProcs)
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   // Simple client-side pagination like Audit page
   const perPage = DEFAULT_PER_PAGE
@@ -105,8 +108,8 @@ export function AllProcessesPage() {
               <TableHead>ID</TableHead>
               <TableHead>Service</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Started</TableHead>
               <TableHead>Release</TableHead>
+              <TableHead>Started</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -124,8 +127,8 @@ export function AllProcessesPage() {
                 <TableCell className="font-mono text-xs">{p.id}</TableCell>
                 <TableCell>{p.service ?? p.name ?? '—'}</TableCell>
                 <TableCell>{p.status}</TableCell>
-                <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
                 <TableCell>{p.release}</TableCell>
+                <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

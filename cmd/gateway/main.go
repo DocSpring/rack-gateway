@@ -260,6 +260,7 @@ func main() {
 				r.Get("/users", uiHandler.ListUsers)
 				r.Post("/users", uiHandler.CreateUser)
 				r.Delete("/users/{email}", uiHandler.DeleteUser)
+				r.Put("/users/{email}", uiHandler.UpdateUserProfile)
 				r.Put("/users/{email}/roles", uiHandler.UpdateUserRoles)
 				r.Post("/tokens", uiHandler.CreateAPIToken)
 				r.Get("/tokens", uiHandler.ListAPITokens)

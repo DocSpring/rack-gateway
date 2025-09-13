@@ -30,6 +30,9 @@ export function AppReleasesPage() {
   } = useQuery({
     queryKey: ['app-releases', app],
     queryFn: async () => api.get<Release[]>(`/apps/${app}/releases`),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length

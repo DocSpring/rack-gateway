@@ -1,4 +1,5 @@
 import { format, formatDistanceToNow } from 'date-fns'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 
 export function TimeAgo({ date }: { date?: string | Date | null }) {
   if (!date) {
@@ -10,5 +11,16 @@ export function TimeAgo({ date }: { date?: string | Date | null }) {
   }
   const rel = formatDistanceToNow(d, { addSuffix: true })
   const exact = format(d, 'yyyy-MM-dd HH:mm:ss XXX')
-  return <span title={exact}>{rel}</span>
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-help">{rel}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span className="font-mono">{exact}</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 }

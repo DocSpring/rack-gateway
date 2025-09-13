@@ -37,6 +37,9 @@ export function InstancesPage() {
   } = useQuery({
     queryKey: ['instances'],
     queryFn: async () => api.get<Instance[]>('/instances'),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length

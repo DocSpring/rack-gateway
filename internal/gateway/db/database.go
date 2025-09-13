@@ -424,7 +424,7 @@ func (d *Database) DeleteUser(email string) error {
 // ListUsers returns all users
 func (d *Database) ListUsers() ([]*User, error) {
 	rows, err := d.query(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended FROM users ORDER BY email",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended FROM users ORDER BY created_at DESC, email",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
@@ -846,6 +846,24 @@ func (d *Database) UpdateAPITokenName(id int64, name string) error {
 	_, err := d.exec("UPDATE api_tokens SET name = ? WHERE id = ?", name, id)
 	if err != nil {
 		return fmt.Errorf("failed to update API token name: %w", err)
+	}
+	return nil
+}
+
+// UpdateUserName updates a user's display name by email
+func (d *Database) UpdateUserName(email, name string) error {
+	_, err := d.exec("UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ?", name, email)
+	if err != nil {
+		return fmt.Errorf("failed to update user name: %w", err)
+	}
+	return nil
+}
+
+// UpdateUserEmail updates a user's email address
+func (d *Database) UpdateUserEmail(oldEmail, newEmail string) error {
+	_, err := d.exec("UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ?", newEmail, oldEmail)
+	if err != nil {
+		return fmt.Errorf("failed to update user email: %w", err)
 	}
 	return nil
 }

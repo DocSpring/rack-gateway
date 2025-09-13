@@ -29,6 +29,9 @@ export function AppsListPage() {
   } = useQuery({
     queryKey: ['apps-list'],
     queryFn: async () => api.get<App[]>('/apps'),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length

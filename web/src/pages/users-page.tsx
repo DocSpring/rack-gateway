@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
 import { Edit2, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import {
@@ -35,6 +35,8 @@ interface User {
   created_at: string
   updated_at: string
   suspended: boolean
+  created_by_email?: string
+  created_by_name?: string
 }
 
 const AVAILABLE_ROLES = {
@@ -95,6 +97,9 @@ export function UsersPage() {
       const response = await api.get<User[]>('/.gateway/api/admin/users')
       return response
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
 
   // Pagination for users list
@@ -112,13 +117,29 @@ export function UsersPage() {
       await api.post('/.gateway/api/admin/users', data)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast.success('User created successfully')
-      handleCloseDialog()
+      // handled in handleSaveUser to sequence refetch/close deterministically
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
       toast.error(message || 'Failed to create user')
+    },
+  })
+
+  // Update user profile (name/email) mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async ({
+      originalEmail,
+      email,
+      name,
+    }: {
+      originalEmail: string
+      email: string
+      name: string
+    }) => {
+      await api.put(`/.gateway/api/admin/users/${encodeURIComponent(originalEmail)}`, {
+        email,
+        name,
+      })
     },
   })
 
@@ -128,9 +149,7 @@ export function UsersPage() {
       await api.put(`/.gateway/api/admin/users/${email}/roles`, { roles })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast.success('User roles updated successfully')
-      handleCloseDialog()
+      // No-op: combined success handling happens in handleSaveUser
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
@@ -177,24 +196,104 @@ export function UsersPage() {
     setSelectedRole('viewer')
   }
 
-  const handleSaveUser = () => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    handleSaveUser()
+  }
+
+  // Smaller helpers to keep complexity down
+  const finalizeUpdate = () => {
+    queryClient.invalidateQueries({ queryKey: ['users'] })
+    toast.success('User updated successfully')
+    handleCloseDialog()
+  }
+
+  const updateRolesOnly = () =>
+    updateRolesMutation
+      .mutateAsync({ email: formData.email, roles: [selectedRole] })
+      .then(finalizeUpdate)
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : ''
+        toast.error(message || 'Failed to update user')
+      })
+
+  const updateNameThenRoles = (originalEmail: string) =>
+    updateProfileMutation
+      .mutateAsync({ originalEmail, email: formData.email, name: formData.name })
+      .then(() => updateRolesMutation.mutateAsync({ email: formData.email, roles: [selectedRole] }))
+      .then(finalizeUpdate)
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : ''
+        toast.error(message || 'Failed to update user')
+      })
+
+  const changeEmailFlow = (originalEmail: string) =>
+    createUserMutation
+      .mutateAsync({ email: formData.email, name: formData.name, roles: [selectedRole] })
+      .then(() => deleteUserMutation.mutateAsync(originalEmail))
+      .then(finalizeUpdate)
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : ''
+        toast.error(message || 'Failed to update user email')
+      })
+
+  const createUserFlow = async () => {
+    try {
+      await createUserMutation.mutateAsync({
+        email: formData.email,
+        name: formData.name,
+        roles: [selectedRole],
+      })
+      // Close dialog early to avoid overlay hiding the table
+      handleCloseDialog()
+      // Optimistically add to cache for immediate visibility
+      queryClient.setQueryData<User[] | undefined>(['users'], (prev) => {
+        const arr = Array.isArray(prev) ? prev.slice() : []
+        arr.push({
+          email: formData.email,
+          name: formData.name,
+          roles: [selectedRole],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          suspended: false,
+          created_by_email: currentUser?.email,
+          created_by_name: currentUser?.name,
+        } as User)
+        return arr
+      })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.refetchQueries({ queryKey: ['users'] })
+      toast.success('User created successfully')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to create user')
+    }
+  }
+
+  const handleSaveUser = async () => {
     if (!(formData.email && formData.name && selectedRole)) {
       toast.error('Please fill in all fields')
       return
     }
 
-    if (editingUser) {
-      updateRolesMutation.mutate({
-        email: formData.email,
-        roles: [selectedRole],
-      })
-    } else {
-      createUserMutation.mutate({
-        email: formData.email,
-        name: formData.name,
-        roles: [selectedRole],
-      })
+    if (!editingUser) {
+      await createUserFlow()
+      return
     }
+
+    const originalEmail = editingUser.email
+    const changedEmail = formData.email !== originalEmail
+    const changedName = formData.name !== editingUser.name
+
+    if (changedEmail) {
+      await changeEmailFlow(originalEmail)
+      return
+    }
+    if (changedName) {
+      await updateNameThenRoles(originalEmail)
+      return
+    }
+    await updateRolesOnly()
   }
 
   const handleDeleteUser = (email: string) => {
@@ -242,8 +341,8 @@ export function UsersPage() {
               <TableHead>User</TableHead>
               <TableHead>Roles</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Added By</TableHead>
               <TableHead>Created</TableHead>
-              <TableHead>Updated</TableHead>
               {isAdmin && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -279,16 +378,10 @@ export function UsersPage() {
                   <Badge variant={'default'}>Active</Badge>
                 </TableCell>
                 <TableCell className="text-sm">
-                  {(() => {
-                    const d = user.created_at ? new Date(user.created_at) : null
-                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                  })()}
+                  {user.created_by_email || user.created_by_name || '-'}
                 </TableCell>
                 <TableCell className="text-sm">
-                  {(() => {
-                    const d = user.updated_at ? new Date(user.updated_at) : null
-                    return d && !Number.isNaN(d.getTime()) ? format(d, 'MMM d, yyyy') : '-'
-                  })()}
+                  <TimeAgo date={user.created_at} />
                 </TableCell>
                 {isAdmin && (
                   <TableCell className="text-right">
@@ -352,20 +445,20 @@ export function UsersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <form className="space-y-4" noValidate={false} onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 autoCapitalize="none"
-                autoComplete="off"
+                autoComplete="email"
                 autoCorrect="off"
                 data-1p-ignore
                 data-bwignore="true"
                 data-lpignore="true"
-                disabled={!!editingUser}
+                disabled={!isAdmin}
                 id="email"
                 inputMode="email"
-                name="user_email"
+                name="email"
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="user@example.com"
                 required
@@ -384,7 +477,7 @@ export function UsersPage() {
                 data-1p-ignore
                 data-bwignore="true"
                 data-lpignore="true"
-                disabled={!!editingUser}
+                disabled={!isAdmin}
                 id="name"
                 inputMode="text"
                 name="user_name"
@@ -424,24 +517,31 @@ export function UsersPage() {
                 ))}
               </div>
             </div>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={handleCloseDialog} variant="outline">
-              Cancel
-            </Button>
-            <Button
-              disabled={createUserMutation.isPending || updateRolesMutation.isPending}
-              onClick={handleSaveUser}
-            >
-              {(() => {
-                if (createUserMutation.isPending || updateRolesMutation.isPending) {
-                  return 'Saving...'
+            <DialogFooter>
+              <Button onClick={handleCloseDialog} type="button" variant="outline">
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  createUserMutation.isPending ||
+                  updateRolesMutation.isPending ||
+                  updateProfileMutation.isPending
                 }
-                return editingUser ? 'Update User' : 'Add User'
-              })()}
-            </Button>
-          </DialogFooter>
+                type="submit"
+              >
+                {(() => {
+                  if (
+                    createUserMutation.isPending ||
+                    updateRolesMutation.isPending ||
+                    updateProfileMutation.isPending
+                  ) {
+                    return 'Saving...'
+                  }
+                  return editingUser ? 'Update User' : 'Add User'
+                })()}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

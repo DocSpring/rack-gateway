@@ -17,7 +17,13 @@ import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type App = { name: string }
-type Release = { id: string; description?: string; version?: number; app: string; created?: string }
+type Release = {
+  id: string
+  description?: string
+  version?: number
+  app: string
+  created?: string
+}
 
 export function AllReleasesPage() {
   const {
@@ -36,6 +42,9 @@ export function AllReleasesPage() {
       )
       return lists.flat()
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length

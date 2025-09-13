@@ -627,6 +627,9 @@ func stopProcess(w http.ResponseWriter, r *http.Request) {
 
 func getBuilds(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	// Create a recent sample build with a fixed elapsed time of 2m30s
+	startRecent := time.Now().Add(-30 * time.Minute)
+	endRecent := startRecent.Add(150 * time.Second) // 2m30s
 	builds := []Build{
 		{
 			ID:          "BAPI123456",
@@ -634,8 +637,8 @@ func getBuilds(w http.ResponseWriter, r *http.Request) {
 			Description: "git sha: abc123",
 			Status:      "complete",
 			Release:     "RAPI123456",
-			Started:     time.Now().Add(-25 * time.Hour),
-			Ended:       time.Now().Add(-24 * time.Hour),
+			Started:     startRecent,
+			Ended:       endRecent,
 		},
 		{
 			ID:          "BAPI123455",
@@ -654,14 +657,17 @@ func getBuilds(w http.ResponseWriter, r *http.Request) {
 
 func getBuild(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	// Match the sample elapsed of 2m30s for demonstration when looking up an individual build
+	startRecent := time.Now().Add(-30 * time.Minute)
+	endRecent := startRecent.Add(150 * time.Second)
 	build := Build{
 		ID:          vars["id"],
 		App:         vars["app"],
 		Description: "git sha: abc123",
 		Status:      "complete",
 		Release:     "R" + vars["id"][1:],
-		Started:     time.Now().Add(-25 * time.Hour),
-		Ended:       time.Now().Add(-24 * time.Hour),
+		Started:     startRecent,
+		Ended:       endRecent,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

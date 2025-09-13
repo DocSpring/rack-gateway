@@ -26,7 +26,9 @@ type Process = {
 }
 
 export function AppProcessesPage() {
-  const { app } = useParams({ from: '/apps/$app/processes' }) as { app: string }
+  const { app } = useParams({ from: '/apps/$app/processes' }) as {
+    app: string
+  }
   const {
     data = [],
     isLoading,
@@ -45,8 +47,14 @@ export function AppProcessesPage() {
           started?: string
         }[]
       >(`/apps/${app}/processes`)
-      return ps.map((p) => ({ ...p, service: p.service ?? p.name ?? '' })) as Process[]
+      return ps.map((p) => ({
+        ...p,
+        service: p.service ?? p.name ?? '',
+      })) as Process[]
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length
@@ -69,8 +77,8 @@ export function AppProcessesPage() {
             <TableHead>ID</TableHead>
             <TableHead>Service</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Started</TableHead>
             <TableHead>Release</TableHead>
+            <TableHead>Started</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -79,8 +87,8 @@ export function AppProcessesPage() {
               <TableCell className="font-mono text-xs">{p.id}</TableCell>
               <TableCell>{p.service}</TableCell>
               <TableCell>{p.status}</TableCell>
-              <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
               <TableCell>{p.release}</TableCell>
+              <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
             </TableRow>
           ))}
         </TableBody>

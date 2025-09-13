@@ -2,6 +2,7 @@ package ui
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -863,7 +864,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokenResp)
-	// Use the token ID as the resource for audit clarity
+	// Use "<name> (id: <id>)" as the resource for clarity
 	h.auditUserAction(
 		r,
 		"api_token.create",
@@ -971,7 +972,21 @@ func (h *Handler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	h.auditUserAction(r, "api_token.delete", tokenIDStr, "success", nil, time.Now())
+	// Include name in details if we can resolve it post-delete context (best-effort before delete)
+	var tName string
+	if toks, err := h.tokenService.ListAllTokens(); err == nil {
+		for _, t := range toks {
+			if t.ID == tokenID {
+				tName = t.Name
+				break
+			}
+		}
+	}
+	det := map[string]interface{}{}
+	if strings.TrimSpace(tName) != "" {
+		det["name"] = tName
+	}
+	h.auditUserAction(r, "api_token.delete", tokenIDStr, "success", det, time.Now())
 }
 
 // UpdateAPITokenName updates the name of an API token
@@ -1026,6 +1041,7 @@ func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+	// Use id as resource; include new name in details
 	h.auditUserAction(r, "api_token.update", tokenIDStr, "success", map[string]interface{}{"name": req.Name}, time.Now())
 }
 
@@ -1044,20 +1060,64 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := h.rbacManager.GetUsers()
-	if err != nil {
-		http.Error(w, "failed to get users", http.StatusInternalServerError)
-		return
-	}
-
-	// Convert map to slice for easier consumption
-	userList := make([]map[string]interface{}, 0)
-	for email, user := range users {
-		userList = append(userList, map[string]interface{}{
-			"email": email,
-			"name":  user.Name,
-			"roles": user.Roles,
-		})
+	var userList []map[string]interface{}
+	if h.database != nil {
+		// Prefer full details from DB when available
+		dbUsers, err := h.database.ListUsers()
+		if err != nil {
+			http.Error(w, "failed to get users", http.StatusInternalServerError)
+			return
+		}
+		userList = make([]map[string]interface{}, 0, len(dbUsers))
+		// Optionally derive "added by" from audit logs (first user.create for this email)
+		sqlDB := h.database.DB()
+		for _, u := range dbUsers {
+			var addedByEmail, addedByName sql.NullString
+			if sqlDB != nil {
+				_ = sqlDB.QueryRow(
+					`SELECT user_email, user_name
+                     FROM audit_logs
+                     WHERE action_type = 'users' AND action = 'user.create' AND resource = $1
+                     ORDER BY timestamp ASC
+                     LIMIT 1`, fmt.Sprintf("%d", u.ID),
+				).Scan(&addedByEmail, &addedByName)
+			}
+			userList = append(userList, map[string]interface{}{
+				"email":      u.Email,
+				"name":       u.Name,
+				"roles":      u.Roles,
+				"created_at": u.CreatedAt,
+				"updated_at": u.UpdatedAt,
+				"suspended":  u.Suspended,
+				"created_by_email": func() string {
+					if addedByEmail.Valid {
+						return addedByEmail.String
+					}
+					return ""
+				}(),
+				"created_by_name": func() string {
+					if addedByName.Valid {
+						return addedByName.String
+					}
+					return ""
+				}(),
+			})
+		}
+	} else {
+		// Fallback to RBAC-only data if DB not provided (tests)
+		users, err := h.rbacManager.GetUsers()
+		if err != nil {
+			http.Error(w, "failed to get users", http.StatusInternalServerError)
+			return
+		}
+		userList = make([]map[string]interface{}, 0, len(users))
+		for email, user := range users {
+			userList = append(userList, map[string]interface{}{
+				"email": email,
+				"name":  user.Name,
+				"roles": user.Roles,
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1111,7 +1171,13 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "created"})
-	h.auditUserAction(r, "user.create", req.Email, "success", map[string]interface{}{"name": req.Name, "roles": req.Roles}, start)
+	// Resolve user ID for audit resource; include email in details
+	createdUser, _ := h.rbacManager.GetUserWithID(req.Email)
+	res := req.Email
+	if createdUser != nil && createdUser.ID > 0 {
+		res = fmt.Sprintf("%d", createdUser.ID)
+	}
+	h.auditUserAction(r, "user.create", res, "success", map[string]interface{}{"email": req.Email, "roles": req.Roles}, start)
 
 	// Notifications
 	if h.emailer != nil {
@@ -1207,14 +1273,26 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch ID before deletion for audit clarity
+	delUser, _ := h.rbacManager.GetUserWithID(email)
 	if err := h.rbacManager.DeleteUser(email); err != nil {
 		http.Error(w, "failed to delete user", http.StatusInternalServerError)
-		h.auditUserAction(r, "user.delete", email, "error", map[string]interface{}{"error": "delete failed"}, start)
+		h.auditUserAction(r, "user.delete", func() string {
+			if delUser != nil {
+				return fmt.Sprintf("%d", delUser.ID)
+			}
+			return email
+		}(), "error", map[string]interface{}{"error": "delete failed", "email": email}, start)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	h.auditUserAction(r, "user.delete", email, "success", nil, start)
+	h.auditUserAction(r, "user.delete", func() string {
+		if delUser != nil {
+			return fmt.Sprintf("%d", delUser.ID)
+		}
+		return email
+	}(), "success", map[string]interface{}{"email": email}, start)
 }
 
 // UpdateUserRoles updates a user's roles (admin only)
@@ -1261,7 +1339,99 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
-	h.auditUserAction(r, "user.update_roles", email, "success", map[string]interface{}{"roles": req.Roles}, start)
+	// Resolve user ID for audit resource; include email in details
+	updUser, _ := h.rbacManager.GetUserWithID(email)
+	h.auditUserAction(r, "user.update_roles", func() string {
+		if updUser != nil {
+			return fmt.Sprintf("%d", updUser.ID)
+		}
+		return email
+	}(), "success", map[string]interface{}{"email": email, "roles": req.Roles}, start)
+}
+
+// UpdateUserProfile updates a user's name and/or email (admin only)
+func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	if !h.isAdmin(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		h.auditUserAction(r, "user.update", "", "denied", map[string]interface{}{"reason": "forbidden"}, start)
+		return
+	}
+	oldEmail := chi.URLParam(r, "email")
+	if strings.TrimSpace(oldEmail) == "" {
+		http.Error(w, "email required", http.StatusBadRequest)
+		h.auditUserAction(r, "user.update", "", "error", map[string]interface{}{"error": "missing email"}, start)
+		return
+	}
+	var req struct {
+		Email *string `json:"email"`
+		Name  *string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		h.auditUserAction(r, "user.update", oldEmail, "error", map[string]interface{}{"error": "invalid body"}, start)
+		return
+	}
+	// Load existing directly from DB to avoid any cache staleness
+	if h.database == nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	dbUser, err := h.database.GetUser(oldEmail)
+	if err != nil || dbUser == nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		h.auditUserAction(r, "user.update", oldEmail, "error", map[string]interface{}{"error": "not found"}, start)
+		return
+	}
+	// Apply name
+	if req.Name != nil {
+		if err := h.database.UpdateUserName(oldEmail, strings.TrimSpace(*req.Name)); err != nil {
+			http.Error(w, "failed to update name", http.StatusInternalServerError)
+			h.auditUserAction(r, "user.update", oldEmail, "error", map[string]interface{}{"error": "name update failed"}, start)
+			return
+		}
+	}
+	newEmail := oldEmail
+	// Apply email change
+	if req.Email != nil {
+		candidate := strings.TrimSpace(*req.Email)
+		if !isValidEmail(candidate) {
+			http.Error(w, "invalid email format", http.StatusBadRequest)
+			return
+		}
+		// If the candidate email is the same as the current (case-insensitive), skip update
+		if !strings.EqualFold(candidate, oldEmail) {
+			// Conflict check only when changing to a different email
+			if u, _ := h.rbacManager.GetUser(candidate); u != nil {
+				http.Error(w, "user already exists", http.StatusConflict)
+				return
+			}
+			if err := h.database.UpdateUserEmail(oldEmail, candidate); err != nil {
+				http.Error(w, "failed to update email", http.StatusInternalServerError)
+				h.auditUserAction(r, "user.update", oldEmail, "error", map[string]interface{}{"error": "email update failed"}, start)
+				return
+			}
+			newEmail = candidate
+			// Ensure RBAC enforcer has grouping for the new email
+			_ = h.rbacManager.SaveUser(newEmail, &rbac.UserConfig{Name: dbUser.Name, Roles: dbUser.Roles})
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	// Resolve ID for resource; include email in details
+	userWithID, _ := h.rbacManager.GetUserWithID(newEmail)
+	res := newEmail
+	if userWithID != nil && userWithID.ID > 0 {
+		res = fmt.Sprintf("%d", userWithID.ID)
+	}
+	details := map[string]interface{}{"email": newEmail}
+	if req.Name != nil {
+		details["name"] = strings.TrimSpace(*req.Name)
+	}
+	if req.Email != nil {
+		details["prev_email"] = oldEmail
+	}
+	h.auditUserAction(r, "user.update", res, "success", details, start)
 }
 
 // ServeStatic serves the React app's static files

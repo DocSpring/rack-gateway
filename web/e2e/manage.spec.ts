@@ -45,6 +45,16 @@ test('users: add, edit role, delete', async ({ page }) => {
   const row = page.locator('tr', { hasText: email })
   await expect(row).toBeVisible()
 
+  // Ensure "Added By" column exists and has a value for this row
+  const headers = page.locator('table thead th')
+  await expect(headers.getByText(/Added By/i)).toBeVisible()
+  const headerTexts = await headers.allTextContents()
+  const addedByIdx = headerTexts.findIndex((t: string) => /Added By/i.test(t))
+  if (addedByIdx >= 0) {
+    const addedByCell = row.locator('td').nth(addedByIdx)
+    await expect(addedByCell).toHaveText(/.+/)
+  }
+
   // Edit role to admin
   await row.getByRole('button', { name: /Edit User/i }).click()
   // Choose Administrator within the open dialog to avoid strict matches
@@ -58,6 +68,47 @@ test('users: add, edit role, delete', async ({ page }) => {
   page.once('dialog', (d) => d.accept())
   await row.getByRole('button', { name: /Delete User/i }).click()
   await expect(row).toHaveCount(0)
+})
+
+test('users: add shows all fields and persists after refresh', async ({ page }) => {
+  await login(page)
+
+  // Navigate to Users
+  await page.goto('/.gateway/web/users')
+  await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible()
+
+  const email = `e2e-persist-${Date.now()}@company.com`
+
+  // Add user
+  await page.getByRole('button', { name: /Add User/i }).click()
+  await page.getByLabel('Email').fill(email)
+  await page.getByLabel('Name').fill('E2E Persist')
+  await page.getByRole('button', { name: /Add User/i }).click()
+
+  // Verify row appears with expected fields
+  let row = page.locator('tr', { hasText: email })
+  await expect(row).toBeVisible()
+
+  // Refresh and ensure the row and fields persist, then validate columns
+  await page.reload()
+  row = page.locator('tr', { hasText: email })
+  await expect(row).toBeVisible()
+  // Determine column indices after reload
+  const headers = page.locator('table thead th')
+  const headerTexts = await headers.allTextContents()
+  const createdIdx = headerTexts.findIndex((t: string) => /Created/i.test(t))
+  const addedByIdx = headerTexts.findIndex((t: string) => /Added By/i.test(t))
+  if (createdIdx >= 0) {
+    const createdCell = row.locator('td').nth(createdIdx)
+    const createdText = (await createdCell.innerText()).trim()
+    expect(createdText).not.toBe('—')
+    expect(createdText).not.toBe('-')
+    expect(createdText.length).toBeGreaterThan(0)
+  }
+  if (addedByIdx >= 0) {
+    const addedByCell = row.locator('td').nth(addedByIdx)
+    await expect(addedByCell).toHaveText(/admin@/i)
+  }
 })
 
 test('tokens: create, rename, delete', async ({ page }) => {

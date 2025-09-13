@@ -15,6 +15,7 @@ import {
 } from '../components/ui/table'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
+import { formatElapsed } from '../lib/time'
 
 type App = { name: string }
 type Build = {
@@ -44,6 +45,9 @@ export function AllBuildsPage() {
       )
       return lists.flat()
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
   const perPage = DEFAULT_PER_PAGE
   const total = data.length
@@ -68,8 +72,9 @@ export function AllBuildsPage() {
               <TableHead>ID</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Started</TableHead>
               <TableHead>Release</TableHead>
+              <TableHead>Started</TableHead>
+              <TableHead>Elapsed</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -89,8 +94,9 @@ export function AllBuildsPage() {
                   {b.description || '—'}
                 </TableCell>
                 <TableCell>{b.status}</TableCell>
-                <TableCell>{b.started ? <TimeAgo date={b.started} /> : '—'}</TableCell>
                 <TableCell>{b.release}</TableCell>
+                <TableCell>{b.started ? <TimeAgo date={b.started} /> : '—'}</TableCell>
+                <TableCell>{formatElapsed(b.started, b.ended)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
