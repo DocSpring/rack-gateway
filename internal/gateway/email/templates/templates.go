@@ -101,6 +101,33 @@ func RenderSettingsChanged(rack, actor, key, value string) (string, string, erro
 	return tb.String(), hb.String(), nil
 }
 
+// Rack parameters changed
+var rackParamsText = texttmpl.Must(texttmpl.New("rack_params_text").Parse(
+	"Convox Gateway ({{.Rack}})\n\n" +
+		"{{.Actor}} changed rack parameters:\n\n" +
+		"{{.Changes}}\n",
+))
+
+var rackParamsHTML = template.Must(template.New("rack_params_html").Parse(
+	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
+		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<p><strong>{{.Actor}}</strong> changed rack parameters:</p>" +
+		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">{{.Changes}}</pre>" +
+		"</body></html>",
+))
+
+func RenderRackParamsChanged(rack, actor, changes string) (string, string, error) {
+	data := map[string]string{"Rack": rack, "Actor": actor, "Changes": changes}
+	var tb, hb bytes.Buffer
+	if err := rackParamsText.Execute(&tb, data); err != nil {
+		return "", "", err
+	}
+	if err := rackParamsHTML.Execute(&hb, data); err != nil {
+		return "", "", err
+	}
+	return tb.String(), hb.String(), nil
+}
+
 // Token created
 var tokenOwnerText = texttmpl.Must(texttmpl.New("token_owner_text").Parse(
 	"Convox Gateway ({{.Rack}})\n\n" +

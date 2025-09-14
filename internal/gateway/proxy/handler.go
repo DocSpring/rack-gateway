@@ -19,6 +19,8 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
@@ -35,11 +37,13 @@ type Handler struct {
 	database         *db.Database
 	protectedEnv     map[string]struct{}
 	allowDestructive bool
+	emailer          email.Sender
+	rackName         string
 }
 
 const maskedSecret = envutil.MaskedSecret
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName string) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
@@ -48,6 +52,8 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 		database:         database,
 		protectedEnv:     make(map[string]struct{}),
 		allowDestructive: false,
+		emailer:          mailer,
+		rackName:         rackName,
 	}
 	// Load additional secret env var names from env (comma-separated)
 	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
@@ -212,6 +218,15 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Pre-capture system parameters if this is a rack params update
+	var beforeParams map[string]string
+	isRackParamsUpdate := (r.Method == http.MethodPut && keyMatch3(path, "/system"))
+	if isRackParamsUpdate {
+		if params, err := h.fetchSystemParams(rackConfig); err == nil {
+			beforeParams = params
+		}
+	}
+
 	// Forward the request to the rack
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
 	if err != nil {
@@ -227,6 +242,16 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
 		h.logEnvDiffs(r, authUser.Email, rackConfig.Name, envDiffs)
+		// If this was a rack params update, compute diff and notify admins + audit
+		if isRackParamsUpdate {
+			if afterParams, err := h.fetchSystemParams(rackConfig); err == nil {
+				changes := diffParams(beforeParams, afterParams)
+				if len(changes) > 0 {
+					h.notifyRackParamsChanged(r, authUser.Email, changes)
+					h.auditRackParamsChanged(r, authUser.Email, changes)
+				}
+			}
+		}
 	}
 }
 
@@ -318,6 +343,15 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Pre-capture params for PUT /system on rack-scoped proxy too
+	var beforeParams map[string]string
+	isRackParamsUpdate := (r.Method == http.MethodPut && keyMatch3("/"+path, "/system"))
+	if isRackParamsUpdate {
+		if params, err := h.fetchSystemParams(rackConfig); err == nil {
+			beforeParams = params
+		}
+	}
+
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
 	if err != nil {
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rack, start)
@@ -327,6 +361,150 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
+	if status >= 200 && status < 300 && isRackParamsUpdate {
+		if afterParams, err := h.fetchSystemParams(rackConfig); err == nil {
+			changes := diffParams(beforeParams, afterParams)
+			if len(changes) > 0 {
+				h.notifyRackParamsChanged(r, authUser.Email, changes)
+				h.auditRackParamsChanged(r, authUser.Email, changes)
+			}
+		}
+	}
+}
+
+// fetchSystemParams retrieves /system and returns its Parameters map.
+func (h *Handler) fetchSystemParams(rack config.RackConfig) (map[string]string, error) {
+	base := strings.TrimRight(rack.URL, "/")
+	targetURL := base + "/system"
+	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, ForceAttemptHTTP2: false}
+	client := &http.Client{Timeout: 15 * time.Second, Transport: transport}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("upstream status %d", resp.StatusCode)
+	}
+	var payload struct {
+		Parameters map[string]string `json:"parameters"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+	if payload.Parameters == nil {
+		payload.Parameters = map[string]string{}
+	}
+	// Copy
+	out := make(map[string]string, len(payload.Parameters))
+	for k, v := range payload.Parameters {
+		out[k] = v
+	}
+	return out, nil
+}
+
+// paramChange represents a single parameter change
+type paramChange struct{ Key, Old, New string }
+
+func diffParams(before, after map[string]string) []paramChange {
+	changes := []paramChange{}
+	if after == nil {
+		return changes
+	}
+	// include keys from both maps
+	keys := map[string]struct{}{}
+	for k := range after {
+		keys[k] = struct{}{}
+	}
+	for k := range before {
+		keys[k] = struct{}{}
+	}
+	for k := range keys {
+		ov := before[k]
+		nv := after[k]
+		if ov != nv {
+			changes = append(changes, paramChange{Key: k, Old: ov, New: nv})
+		}
+	}
+	return changes
+}
+
+// notifyRackParamsChanged emails admins about rack parameter changes.
+func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes []paramChange) {
+	if h.emailer == nil || h.rbacManager == nil || len(changes) == 0 {
+		return
+	}
+	admins := h.getAdminEmails()
+	if len(admins) == 0 {
+		return
+	}
+	// Build value string listing changes
+	var b strings.Builder
+	for i, c := range changes {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "%s: %s -> %s", c.Key, c.Old, c.New)
+	}
+	subject := fmt.Sprintf("Convox Gateway (%s): %s changed rack parameters", h.rackName, actor)
+	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackName, actor, b.String())
+	_ = h.emailer.SendMany(admins, subject, text, html)
+}
+
+// auditRackParamsChanged writes a DB audit entry with specific change details.
+func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes []paramChange) {
+	if h.database == nil || len(changes) == 0 {
+		return
+	}
+	// Build details JSON
+	payload := map[string]interface{}{"changes": func() map[string]map[string]string {
+		m := map[string]map[string]string{}
+		for _, c := range changes {
+			m[c.Key] = map[string]string{"old": c.Old, "new": c.New}
+		}
+		return m
+	}()}
+	b, _ := json.Marshal(payload)
+	_ = audit.LogDB(h.database, &db.AuditLog{
+		UserEmail:    actor,
+		UserName:     r.Header.Get("X-User-Name"),
+		ActionType:   "convox",
+		Action:       "rack.params.set",
+		ResourceType: "rack",
+		Resource:     h.rackName,
+		Details:      string(b),
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+		Status:       "success",
+		RBACDecision: "allow",
+		HTTPStatus:   http.StatusOK,
+	})
+}
+
+// getAdminEmails returns emails of users with the admin role.
+func (h *Handler) getAdminEmails() []string {
+	if h.rbacManager == nil {
+		return nil
+	}
+	users, err := h.rbacManager.GetUsers()
+	if err != nil {
+		return nil
+	}
+	emails := make([]string, 0)
+	for emailAddr, u := range users {
+		for _, r := range u.Roles {
+			if r == "admin" {
+				emails = append(emails, emailAddr)
+				break
+			}
+		}
+	}
+	return emails
 }
 
 // checkEnvSetPermissions inspects request headers for env vars being set and enforces environment/secrets set permissions.

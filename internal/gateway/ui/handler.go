@@ -1356,6 +1356,9 @@ func (h *Handler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	}(), "success", map[string]interface{}{"email": email, "roles": req.Roles}, start)
 }
 
+// DevListEmails returns recent dev outbox emails (LoggerSender), admin-only.
+// DevListEmails is defined in dev build only (see dev_emails_dev.go).
+
 // UpdateUserProfile updates a user's name and/or email (admin only)
 func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()

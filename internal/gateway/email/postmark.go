@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 )
 
 // Sender is a minimal interface for sending emails.
@@ -139,9 +141,11 @@ type LoggerSender struct{ From string }
 func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 	if htmlBody != "" {
 		log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n[text]\n%s\n[html]\n%s", to, l.From, subject, textBody, htmlBody)
+		appendDevEmail([]string{to}, subject, textBody, htmlBody)
 		return nil
 	}
 	log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n%s", to, l.From, subject, textBody)
+	appendDevEmail([]string{to}, subject, textBody, htmlBody)
 	return nil
 }
 
@@ -157,9 +161,11 @@ func (l *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string)
 	b, _ := json.Marshal(bcc)
 	if htmlBody != "" {
 		log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n[text]\n%s\n[html]\n%s", primary, string(b), l.From, subject, textBody, htmlBody)
+		appendDevEmail(to, subject, textBody, htmlBody)
 		return nil
 	}
 	log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n%s", primary, string(b), l.From, subject, textBody)
+	appendDevEmail(to, subject, textBody, htmlBody)
 	return nil
 }
 
@@ -168,4 +174,42 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// Dev email outbox (in-memory) for E2E tests and local development
+type DevEmail struct {
+	To      []string  `json:"to"`
+	Subject string    `json:"subject"`
+	Text    string    `json:"text"`
+	Html    string    `json:"html"`
+	TS      time.Time `json:"ts"`
+}
+
+var (
+	devMu     sync.Mutex
+	devOutbox []DevEmail
+	devMax    = 100
+)
+
+func appendDevEmail(to []string, subject, text, html string) {
+	devMu.Lock()
+	defer devMu.Unlock()
+	devOutbox = append(devOutbox, DevEmail{To: to, Subject: subject, Text: text, Html: html, TS: time.Now().UTC()})
+	if len(devOutbox) > devMax {
+		devOutbox = devOutbox[len(devOutbox)-devMax:]
+	}
+}
+
+// GetDevOutbox returns up to 'limit' most recent dev emails (newest last)
+func GetDevOutbox(limit int) []DevEmail {
+	devMu.Lock()
+	defer devMu.Unlock()
+	n := len(devOutbox)
+	if limit <= 0 || limit > n {
+		limit = n
+	}
+	start := n - limit
+	out := make([]DevEmail, limit)
+	copy(out, devOutbox[start:])
+	return out
 }

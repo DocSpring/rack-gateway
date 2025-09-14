@@ -9,6 +9,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,7 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 		},
 	}}
 
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database)
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "testrack")
 
 	// Create request: DELETE /apps/myapp
 	req := httptest.NewRequest(http.MethodDelete, "/apps/myapp", nil)

@@ -1016,8 +1016,22 @@ func putSystem(w http.ResponseWriter, r *http.Request) {
 						mockSystemParameters[k] = fmt.Sprintf("%v", v)
 						updated++
 					}
+				} else {
+					// Not JSON; attempt to parse as querystring like "k=v&k2=v2"
+					if pvals, err2 := url.ParseQuery(pjson); err2 == nil {
+						for pk, pvs := range pvals {
+							if len(pvs) == 0 {
+								continue
+							}
+							mockSystemParameters[pk] = pvs[len(pvs)-1]
+							updated++
+						}
+					}
 				}
 			}
+			// Handle bracketed array pairs: params[0][name]=k & params[0][value]=v
+			indexToName := map[string]string{}
+			indexToValue := map[string]string{}
 			for k, vs := range vals {
 				if k == "parameters" { // handled above
 					continue
@@ -1025,7 +1039,76 @@ func putSystem(w http.ResponseWriter, r *http.Request) {
 				if len(vs) == 0 {
 					continue
 				}
-				mockSystemParameters[k] = vs[len(vs)-1]
+				v := vs[len(vs)-1]
+				// parameters[key]=value form
+				if strings.HasPrefix(k, "parameters[") && strings.HasSuffix(k, "]") {
+					name := k[len("parameters[") : len(k)-1]
+					if name != "" {
+						mockSystemParameters[name] = v
+						updated++
+						continue
+					}
+				}
+				// params[0][name] or params[0][key]
+				if strings.HasPrefix(k, "params[") && strings.HasSuffix(k, "][name]") {
+					idx := k[len("params[") : len(k)-len("][name]")]
+					indexToName[idx] = v
+					continue
+				}
+				if strings.HasPrefix(k, "params[") && strings.HasSuffix(k, "][key]") {
+					idx := k[len("params[") : len(k)-len("][key]")]
+					indexToName[idx] = v
+					continue
+				}
+				if strings.HasPrefix(k, "params[") && strings.HasSuffix(k, "][value]") {
+					idx := k[len("params[") : len(k)-len("][value]")]
+					indexToValue[idx] = v
+					continue
+				}
+				// Direct k=v
+				mockSystemParameters[k] = v
+				updated++
+			}
+			for idx, name := range indexToName {
+				if val, ok := indexToValue[idx]; ok {
+					mockSystemParameters[name] = val
+					updated++
+				}
+			}
+		}
+	}
+
+	// Last-resort fallback: parse simple ampersand-separated pairs without full encoding.
+	// If present, also attempt to interpret a bare 'parameters=' payload as querystring.
+	if updated == 0 && len(body) > 0 {
+		raw := string(body)
+		if strings.HasPrefix(raw, "parameters=") {
+			pv := strings.TrimPrefix(raw, "parameters=")
+			if pvals, err := url.ParseQuery(pv); err == nil {
+				for pk, pvs := range pvals {
+					if len(pvs) == 0 {
+						continue
+					}
+					mockSystemParameters[pk] = pvs[len(pvs)-1]
+					updated++
+				}
+			}
+		} else {
+			parts := strings.Split(raw, "&")
+			for _, p := range parts {
+				if p == "" {
+					continue
+				}
+				kv := strings.SplitN(p, "=", 2)
+				if len(kv) != 2 {
+					continue
+				}
+				k, _ := url.QueryUnescape(kv[0])
+				v, _ := url.QueryUnescape(kv[1])
+				if k == "" {
+					continue
+				}
+				mockSystemParameters[k] = v
 				updated++
 			}
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager)
 	require.NoError(t, err)
 	h := NewHandler(&config.Config{Racks: map[string]config.RackConfig{
 		"default": {Name: "default", URL: "http://mock", Username: "convox", APIKey: "token", Enabled: true},
-	}}, mgr, audit.NewLogger(database), database)
+	}}, mgr, audit.NewLogger(database), database, email.NoopSender{}, "testrack")
 	// Configure extra secret names
 	h.secretNames["DATABASE_URL"] = struct{}{}
 	h.secretNames["REDIS_URL"] = struct{}{}

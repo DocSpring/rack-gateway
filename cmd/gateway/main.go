@@ -164,8 +164,6 @@ func main() {
 		}
 	}
 
-	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger, database)
-
 	// Email sender (Postmark)
 	pmToken := os.Getenv("POSTMARK_API_TOKEN")
 	from := os.Getenv("POSTMARK_FROM")
@@ -212,6 +210,9 @@ func main() {
 	}
 	// Public base URL used in emails and links
 	publicBase := redirectInput
+	// Initialize proxy with email sender and rack name for notifications
+	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger, database, sender, rackName)
+
 	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackCfg, devProxyURL, publicBase)
 
 	r := chi.NewRouter()
@@ -271,6 +272,8 @@ func main() {
 				r.Get("/settings", uiHandler.GetSettings)
 				r.Put("/settings/protected_env_vars", uiHandler.UpdateProtectedEnvVars)
 				r.Put("/settings/allow_destructive_actions", uiHandler.UpdateAllowDestructiveActions)
+				// Dev-only utilities (compiled in with -tags=dev)
+				ui.RegisterDevAdminRoutes(r, uiHandler)
 				r.Get("/roles", uiHandler.ListRoles)
 				r.Get("/audit", uiHandler.ListAuditLogs)
 				r.Get("/audit/export", uiHandler.ExportAuditLogs)
