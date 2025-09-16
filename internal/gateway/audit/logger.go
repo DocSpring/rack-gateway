@@ -346,6 +346,13 @@ func resourceInstance(path, resource, action string) string {
 			}
 		}
 	}
+	if resource == "release" {
+		for i, seg := range parts {
+			if seg == "releases" && i+1 < len(parts) {
+				return parts[i+1]
+			}
+		}
+	}
 	// App-scoped routes: return app name if present
 	if len(parts) >= 2 && parts[0] == "apps" {
 		if parts[1] != "" {
@@ -427,6 +434,9 @@ func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
 func (l *Logger) inferResourceType(path, action string) string {
 	p := strings.TrimPrefix(path, "/")
 	parts := strings.Split(p, "/")
+	if strings.HasPrefix(action, "release.") {
+		return "release"
+	}
 	// Priority by path patterns
 	if strings.Contains(path, "/processes/") {
 		return "process"

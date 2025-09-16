@@ -202,6 +202,12 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.Method == http.MethodPost {
+		if releaseID := extractReleaseIDFromPath(path); releaseID != "" {
+			r.Header.Set("X-Audit-Resource", releaseID)
+		}
+	}
+
 	if !allowed {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
 		http.Error(w, "permission denied", http.StatusForbidden)
@@ -1185,6 +1191,9 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		if id, ok := payload["id"].(string); ok {
 			setResource("build", id)
 		}
+		if rel, ok := payload["release"].(string); ok {
+			setResource("release", rel)
+		}
 	}
 	if keyMatch3(path, "/apps/{app}/releases") {
 		if id, ok := payload["id"].(string); ok {
@@ -1547,6 +1556,16 @@ func keyMatch3(path, pattern string) bool {
 	re := b.String()
 	ok, _ := regexp.MatchString(re, path)
 	return ok
+}
+
+func extractReleaseIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, seg := range parts {
+		if seg == "releases" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
 }
 
 // hasAPITokenPermission checks if an API token has the required permission
