@@ -26,6 +26,7 @@ type Build = {
   started?: string
   ended?: string
   app: string
+  created_by?: string
 }
 
 export function AllBuildsPage() {
@@ -43,7 +44,25 @@ export function AllBuildsPage() {
           return bs.map((b) => ({ ...b, app: a.name }))
         })
       )
-      return lists.flat()
+      const items = lists.flat()
+      // Fetch created-by mapping
+      try {
+        const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
+        if (ids) {
+          const map = await api.get<Record<string, { email: string; name: string }>>(
+            `/.gateway/api/created-by?type=build&ids=${encodeURIComponent(ids)}`
+          )
+          for (const b of items) {
+            const m = map[b.id]
+            if (m) {
+              b.created_by = m.email || m.name
+            }
+          }
+        }
+      } catch (_e) {
+        // ignore
+      }
+      return items
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
@@ -73,6 +92,7 @@ export function AllBuildsPage() {
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Release</TableHead>
+              <TableHead>Created By</TableHead>
               <TableHead>Started</TableHead>
               <TableHead>Elapsed</TableHead>
             </TableRow>
@@ -95,6 +115,7 @@ export function AllBuildsPage() {
                 </TableCell>
                 <TableCell>{b.status}</TableCell>
                 <TableCell>{b.release}</TableCell>
+                <TableCell>{b.created_by || '—'}</TableCell>
                 <TableCell>{b.started ? <TimeAgo date={b.started} /> : '—'}</TableCell>
                 <TableCell>{formatElapsed(b.started, b.ended)}</TableCell>
               </TableRow>

@@ -23,6 +23,7 @@ type Release = {
   version?: number
   app: string
   created?: string
+  created_by?: string
 }
 
 export function AllReleasesPage() {
@@ -40,7 +41,24 @@ export function AllReleasesPage() {
           return rs.map((r) => ({ ...r, app: a.name }))
         })
       )
-      return lists.flat()
+      const items = lists.flat()
+      try {
+        const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
+        if (ids) {
+          const map = await api.get<Record<string, { email: string; name: string }>>(
+            `/.gateway/api/created-by?type=release&ids=${encodeURIComponent(ids)}`
+          )
+          for (const r of items) {
+            const m = map[r.id]
+            if (m) {
+              r.created_by = m.email || m.name
+            }
+          }
+        }
+      } catch (_e) {
+        // ignore
+      }
+      return items
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
@@ -69,6 +87,7 @@ export function AllReleasesPage() {
               <TableHead>ID</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Version</TableHead>
+              <TableHead>Created By</TableHead>
               <TableHead>Created</TableHead>
             </TableRow>
           </TableHeader>
@@ -87,6 +106,7 @@ export function AllReleasesPage() {
                 <TableCell className="font-mono text-xs">{r.id}</TableCell>
                 <TableCell>{r.description || '—'}</TableCell>
                 <TableCell>{r.version ?? '—'}</TableCell>
+                <TableCell>{r.created_by || '—'}</TableCell>
                 <TableCell>{r.created ? <TimeAgo date={r.created} /> : '—'}</TableCell>
               </TableRow>
             ))}

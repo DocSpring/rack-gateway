@@ -19,6 +19,7 @@ type App = {
   status: string
   generation?: string
   release?: string
+  created_by?: string
 }
 
 export function AppsListPage() {
@@ -28,7 +29,26 @@ export function AppsListPage() {
     error,
   } = useQuery({
     queryKey: ['apps-list'],
-    queryFn: async () => api.get<App[]>('/apps'),
+    queryFn: async () => {
+      const items = await api.get<App[]>('/apps')
+      try {
+        const ids = Array.from(new Set(items.map((a) => a.name))).join(',')
+        if (ids) {
+          const map = await api.get<Record<string, { email: string; name: string }>>(
+            `/.gateway/api/created-by?type=app&ids=${encodeURIComponent(ids)}`
+          )
+          for (const a of items) {
+            const m = map[a.name]
+            if (m) {
+              a.created_by = m.email || m.name
+            }
+          }
+        }
+      } catch (_e) {
+        // ignore errors
+      }
+      return items
+    },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
@@ -55,6 +75,7 @@ export function AppsListPage() {
               <TableHead>Name</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Release</TableHead>
+              <TableHead>Created By</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -71,6 +92,7 @@ export function AppsListPage() {
                 </TableCell>
                 <TableCell>{a.status}</TableCell>
                 <TableCell>{a.release || '—'}</TableCell>
+                <TableCell>{a.created_by || '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>

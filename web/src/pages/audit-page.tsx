@@ -131,7 +131,7 @@ const STATUS_TYPES = {
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: acceptable complexity for this page component
-export function AuditPage() {
+export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: string } = {}) {
   const [selected, setSelected] = useState<AuditLog | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -192,6 +192,7 @@ export function AuditPage() {
       resourceTypeFilter,
       dateRange,
       debouncedSearch,
+      userId || '',
     ],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -209,6 +210,9 @@ export function AuditPage() {
       }
       if (debouncedSearch) {
         params.append('search', debouncedSearch)
+      }
+      if (userId) {
+        params.append('user_id', userId)
       }
 
       const response = await api.get<AuditLog[]>(`/.gateway/api/admin/audit?${params}`)
@@ -388,10 +392,12 @@ export function AuditPage() {
   const endIdx = Math.min(startIdx + perPage, stats.total)
   const pageItems = logs.slice(startIdx, endIdx)
 
+  const title = userId && userEmail ? `Audit Logs: ${userEmail}` : 'Audit Logs'
+
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="font-bold text-3xl">Audit Logs</h1>
+        <h1 className="font-bold text-3xl">{title}</h1>
         <p className="mt-2 text-muted-foreground">
           Monitor all gateway activity and access patterns
         </p>
@@ -573,7 +579,7 @@ export function AuditPage() {
             : null
         }
         loading={!!(isLoading && logs.length === 0)}
-        title="Audit Logs"
+        title={title}
       >
         <Table className="text-sm">
           <TableHeader>

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Edit2, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -29,6 +30,7 @@ import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 interface User {
+  id?: number
   email: string
   name: string
   roles: string[]
@@ -352,14 +354,36 @@ export function UsersPage() {
                 <TableCell>
                   <div>
                     <div className="font-medium">
-                      {user.name}
+                      {user.id ? (
+                        <Link
+                          className="underline hover:no-underline"
+                          params={{ id: String(user.id) }}
+                          to="/users/$id/audit_logs"
+                        >
+                          {user.name}
+                        </Link>
+                      ) : (
+                        user.name
+                      )}
                       {user.email === currentUser?.email && (
                         <Badge className="ml-2" variant="outline">
                           You
                         </Badge>
                       )}
                     </div>
-                    <div className="text-muted-foreground text-sm">{user.email}</div>
+                    <div className="text-muted-foreground text-sm">
+                      {user.id ? (
+                        <Link
+                          className="underline hover:no-underline"
+                          params={{ id: String(user.id) }}
+                          to="/users/$id/audit_logs"
+                        >
+                          {user.email}
+                        </Link>
+                      ) : (
+                        user.email
+                      )}
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell>

@@ -232,7 +232,7 @@ func main() {
 	})
 
 	r.Get("/.gateway/web", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/.gateway/web/", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/.gateway/web/rack", http.StatusTemporaryRedirect)
 	})
 	r.Get("/.gateway/web/*", uiHandler.ServeStatic)
 
@@ -259,6 +259,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(authService.Middleware)
 			r.Get("/me", uiHandler.GetMe)
+			r.Get("/created-by", uiHandler.GetCreators)
 			// Rack info (non-admin, read-only)
 			r.Get("/rack", uiHandler.GetRackInfo)
 			// Env view API (safe masking by default, request secrets via ?secrets=true)

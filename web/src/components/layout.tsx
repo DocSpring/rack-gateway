@@ -20,6 +20,8 @@ const baseNavigation = [
   { name: 'Audit Logs', href: '/audit_logs', icon: FileText },
 ]
 
+const USER_AUDIT_RE = /\/users\/[^/]+\/audit_logs/
+
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
@@ -73,14 +75,26 @@ export function Layout() {
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
             const Icon = item.icon
+            // Custom active logic so nested routes can highlight desired parent
+            const p = location.pathname || ''
+            let isActive = false
+            if (item.href === '/rack') {
+              isActive = p === '/rack'
+            } else if (item.href === '/audit_logs') {
+              // Highlight for global audit list and user-specific audit routes
+              isActive = p.startsWith('/audit_logs') || USER_AUDIT_RE.test(p)
+            } else if (item.href === '/') {
+              isActive = p === '/'
+            } else {
+              isActive = p === item.href || p.startsWith(`${item.href}/`)
+            }
             return (
               <Link
-                activeOptions={{ exact: !!(item.href === '/rack' || item.href === '/') }}
-                activeProps={{
-                  className: 'bg-accent text-white',
-                }}
                 className={cn(
-                  'flex items-center rounded-md px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-accent hover:text-accent-foreground'
+                  'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
+                  isActive
+                    ? 'bg-accent text-white'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 )}
                 key={item.name}
                 to={item.href}

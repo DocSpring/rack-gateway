@@ -24,6 +24,7 @@ import { LoginPage } from './pages/login-page'
 import { RackPage } from './pages/rack-page'
 import { SettingsPage } from './pages/settings-page'
 import { TokensPage } from './pages/tokens-page'
+import { UserAuditPage } from './pages/user-audit-page'
 import { UsersPage } from './pages/users-page'
 
 const queryClient = new QueryClient({
@@ -65,6 +66,11 @@ function buildRouteTree() {
     getParentRoute: () => layoutRoute,
     path: 'users',
     component: UsersPage,
+  })
+  const userAuditRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'users/$id/audit_logs',
+    component: UserAuditPage,
   })
 
   const tokensRoute = createRoute({
@@ -151,6 +157,7 @@ function buildRouteTree() {
       appsListRoute,
       appRoute.addChildren([appProcsRoute, appBuildsRoute, appReleasesRoute]),
       usersRoute,
+      userAuditRoute,
       tokensRoute,
       auditRoute,
       settingsRoute,

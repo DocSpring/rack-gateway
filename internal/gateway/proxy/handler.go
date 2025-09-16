@@ -1046,7 +1046,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	for key, values := range r.Header {
 		lk := strings.ToLower(key)
-		if lk == "authorization" || lk == "env" || lk == "environment" || lk == "release-env" {
+		if lk == "authorization" || lk == "env" || lk == "environment" || lk == "release-env" || lk == "x-audit-resource" {
 			continue
 		}
 		for _, value := range values {
@@ -1098,6 +1098,39 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		// Filter release payloads that include "env" string
 		if keyMatch3(pth, "/apps/{app}/releases") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
 			body = h.filterReleaseEnvForUser(userEmail, body, false)
+			// Capture creator for newly-created resources (POST endpoints)
+			if r.Method == http.MethodPost {
+				// apps create -> resource: app name
+				if keyMatch3(pth, "/apps") {
+					var m map[string]interface{}
+					if json.Unmarshal(body, &m) == nil {
+						if name, ok := m["name"].(string); ok && name != "" {
+							h.recordResourceCreator("app", name, userEmail)
+							r.Header.Set("X-Audit-Resource", name)
+						}
+					}
+				}
+				// builds create -> resource: id
+				if keyMatch3(pth, "/apps/{app}/builds") {
+					var m map[string]interface{}
+					if json.Unmarshal(body, &m) == nil {
+						if id, ok := m["id"].(string); ok && id != "" {
+							h.recordResourceCreator("build", id, userEmail)
+							r.Header.Set("X-Audit-Resource", id)
+						}
+					}
+				}
+				// releases create -> resource: id
+				if keyMatch3(pth, "/apps/{app}/releases") {
+					var m map[string]interface{}
+					if json.Unmarshal(body, &m) == nil {
+						if id, ok := m["id"].(string); ok && id != "" {
+							h.recordResourceCreator("release", id, userEmail)
+							r.Header.Set("X-Audit-Resource", id)
+						}
+					}
+				}
+			}
 		}
 		// Filter environment map
 		if keyMatch3(pth, "/apps/{app}/environment") && r.Method == http.MethodGet {
@@ -1143,6 +1176,18 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	return resp.StatusCode, nil
+}
+
+// recordResourceCreator stores the user->resource mapping if possible
+func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) {
+	if h.database == nil || h.rbacManager == nil {
+		return
+	}
+	u, err := h.rbacManager.GetUserWithID(email)
+	if err != nil || u == nil {
+		return
+	}
+	_ = h.database.CreateUserResource(u.ID, resourceType, resourceID)
 }
 
 // filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.
@@ -1343,6 +1388,9 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 			continue
 		case "x-user-email", "x-request-id":
 			// already set explicitly above; avoid duplicates
+			continue
+		case "x-audit-resource":
+			// internal auditing header; never forward upstream
 			continue
 		}
 		for _, v := range vals {

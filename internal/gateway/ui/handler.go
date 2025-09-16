@@ -184,6 +184,59 @@ func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// GetCreators returns a map of resource_id -> {email,name,user_id} for requested resources.
+// Accessible to any authenticated user.
+func (h *Handler) GetCreators(w http.ResponseWriter, r *http.Request) {
+	// Ensure user is authenticated
+	if _, ok := auth.GetAuthUser(r.Context()); !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	typ := strings.TrimSpace(r.URL.Query().Get("type"))
+	if typ == "" {
+		http.Error(w, "type required", http.StatusBadRequest)
+		return
+	}
+	switch typ {
+	case "app", "build", "release":
+	default:
+		http.Error(w, "invalid type", http.StatusBadRequest)
+		return
+	}
+	idsParam := strings.TrimSpace(r.URL.Query().Get("ids"))
+	if idsParam == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{}"))
+		return
+	}
+	parts := strings.Split(idsParam, ",")
+	ids := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		ids = append(ids, p)
+	}
+	if len(ids) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("{}"))
+		return
+	}
+	creators, err := h.database.GetResourceCreators(typ, ids)
+	if err != nil {
+		http.Error(w, "failed to fetch creators", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(creators)
+}
+
 // UpdateProtectedEnvVars updates the protected env var names in the settings table.
 func (h *Handler) UpdateProtectedEnvVars(w http.ResponseWriter, r *http.Request) {
 	au, ok := auth.GetAuthUser(r.Context())
@@ -633,8 +686,25 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional filter by user_id
+	userIDParam := q.Get("user_id")
+	var userEmailFilter string
+	if userIDParam != "" {
+		if uid, err := strconv.ParseInt(userIDParam, 10, 64); err == nil {
+			if u, err := h.database.GetUserByID(uid); err == nil && u != nil {
+				userEmailFilter = u.Email
+			} else {
+				http.Error(w, "user not found", http.StatusNotFound)
+				return
+			}
+		}
+	}
+
 	filtered := make([]*db.AuditLog, 0, len(logs))
 	for _, l := range logs {
+		if userEmailFilter != "" && l.UserEmail != userEmailFilter {
+			continue
+		}
 		if actionType != "" && actionType != "all" && l.ActionType != actionType {
 			continue
 		}
@@ -1085,6 +1155,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 				).Scan(&addedByEmail, &addedByName)
 			}
 			userList = append(userList, map[string]interface{}{
+				"id":         u.ID,
 				"email":      u.Email,
 				"name":       u.Name,
 				"roles":      u.Roles,
@@ -1446,6 +1517,10 @@ func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 
 // ServeStatic serves the React app's static files
 func (h *Handler) ServeStatic(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/.gateway/web/" {
+		http.Redirect(w, r, "/.gateway/web/rack", http.StatusTemporaryRedirect)
+		return
+	}
 	// In dev, proxy to Vite dev server if configured
 	if h.devProxy != nil {
 		h.devProxy.ServeHTTP(w, r)

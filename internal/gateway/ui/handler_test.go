@@ -659,6 +659,18 @@ func TestExportAuditLogs_CSV(t *testing.T) {
 	assert.Contains(t, body, "admin@example.com")
 }
 
+func TestServeStaticRedirectsRack(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", config.RackConfig{}, "", "http://localhost:8447")
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/", nil)
+	handler.ServeStatic(rr, req)
+
+	assert.Equal(t, http.StatusTemporaryRedirect, rr.Code)
+	assert.Equal(t, "/.gateway/web/rack", rr.Header().Get("Location"))
+}
+
 // Mock email sender to capture notifications
 type mockEmailSender struct {
 	sent      []struct{ To, Subject, Text, HTML string }

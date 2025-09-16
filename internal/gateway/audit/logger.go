@@ -114,6 +114,10 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 
 	// Determine action and resource from path
 	action, resource := l.parseConvoxAction(r.URL.Path, r.Method)
+	// Allow override of resource via header for create events where we know the created ID
+	if override := r.Header.Get("X-Audit-Resource"); override != "" {
+		resource = override
+	}
 	// Normalize list actions to resource="all"
 	if strings.HasSuffix(action, ".list") {
 		resource = "all"
