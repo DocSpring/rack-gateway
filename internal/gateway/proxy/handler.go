@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"crypto/tls"
 	"net/url"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
@@ -22,6 +21,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
 	"github.com/go-chi/chi/v5"
@@ -381,8 +381,9 @@ func (h *Handler) fetchSystemParams(rack config.RackConfig) (map[string]string, 
 		return nil, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, ForceAttemptHTTP2: false}
-	client := &http.Client{Timeout: 15 * time.Second, Transport: transport}
+	client := httpclient.NewRackClient(15 * time.Second)
+	// Do not follow redirects for rack system fetches
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -1061,15 +1062,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
 
 	// HTTP client for upstream with optional TLS overrides
-	transport := &http.Transport{
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
-		ForceAttemptHTTP2:     false,
-		Proxy:                 http.ProxyFromEnvironment,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
+	transport := httpclient.NewRackTransport()
 	client := &http.Client{
 		Timeout:   30 * time.Second,
 		Transport: transport,
@@ -1414,7 +1407,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	d := *websocket.DefaultDialer
 	d.HandshakeTimeout = 10 * time.Second
 	// Force HTTP/1.1 for WebSocket handshake over TLS; HTTP/2 does not support 101 Upgrade
-	d.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"http/1.1"}}
+	d.TLSClientConfig = httpclient.NewRackTLSConfig()
 
 	// Follow up to 3 redirects for WS dial (some servers redirect mounting paths)
 	var upstreamConn *websocket.Conn

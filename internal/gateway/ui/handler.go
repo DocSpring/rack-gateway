@@ -26,6 +26,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
@@ -463,7 +464,7 @@ func (h *Handler) GetRackInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	authz := base64.StdEncoding.EncodeToString([]byte(user + ":" + h.rackConfig.APIKey))
 	req.Header.Set("Authorization", "Basic "+authz)
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := httpclient.NewRackClient(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		http.Error(w, "failed to fetch rack info", http.StatusBadGateway)

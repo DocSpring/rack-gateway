@@ -1,7 +1,6 @@
 package envutil
 
 import (
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
 )
 
 const MaskedSecret = "********************"
@@ -53,8 +53,7 @@ func MaskEnvString(s string, maskAll bool, isSecret func(string) bool) string {
 func FetchLatestEnvMap(rack config.RackConfig, app string) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
 	// Disable TLS verification for Convox API (internal/self-signed certs)
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	client := &http.Client{Timeout: 10 * time.Second, Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	client := httpclient.NewRackClient(10 * time.Second)
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))
 	// List releases
 	req1, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases?limit=1", base, app), nil)
