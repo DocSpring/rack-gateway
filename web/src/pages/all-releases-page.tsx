@@ -41,7 +41,11 @@ export function AllReleasesPage() {
           return rs.map((r) => ({ ...r, app: a.name }))
         })
       )
-      const items = lists.flat()
+      const items = lists.flat().sort((a, b) => {
+        const at = a.created ? new Date(a.created).getTime() : 0
+        const bt = b.created ? new Date(b.created).getTime() : 0
+        return bt - at
+      })
       try {
         const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
         if (ids) {
@@ -104,7 +108,9 @@ export function AllReleasesPage() {
                   </Link>
                 </TableCell>
                 <TableCell className="font-mono text-xs">{r.id}</TableCell>
-                <TableCell>{r.description || '—'}</TableCell>
+                <TableCell className="max-w-[420px] whitespace-normal break-words">
+                  {r.description || '—'}
+                </TableCell>
                 <TableCell>{r.version ?? '—'}</TableCell>
                 <TableCell>{r.created_by || '—'}</TableCell>
                 <TableCell>{r.created ? <TimeAgo date={r.created} /> : '—'}</TableCell>

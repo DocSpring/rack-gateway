@@ -44,7 +44,11 @@ export function AllBuildsPage() {
           return bs.map((b) => ({ ...b, app: a.name }))
         })
       )
-      const items = lists.flat()
+      const items = lists.flat().sort((a, b) => {
+        const at = a.started ? new Date(a.started).getTime() : 0
+        const bt = b.started ? new Date(b.started).getTime() : 0
+        return bt - at
+      })
       // Fetch created-by mapping
       try {
         const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
