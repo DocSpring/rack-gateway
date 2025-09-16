@@ -11,7 +11,6 @@ environment:
   # - GOOGLE_OAUTH_BASE_URL # optional; default Google; set to your OIDC issuer if needed
   # - POSTMARK_STREAM=outbound # optional stream
   # - POSTMARK_FROM # optional sender address
-  # (Postgres only; no SQLite path)
   # - COOKIE_SECURE=true # in prod
   # - DEV_MODE=false
   # - RACK_USERNAME=convox # optional; defaults to convox

@@ -1,11 +1,13 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
@@ -88,15 +90,16 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
 
 	cases := []struct {
-		name       string
-		path       string
-		body       string
-		typeExpect string
-		idExpect   string
+		name         string
+		path         string
+		body         string
+		typeExpect   string
+		idExpect     string
+		expectHeader bool
 	}{
-		{"app", "/apps", `{"name":"my-app"}`, "app", "my-app"},
-		{"build", "/apps/my-app/builds", `{"id":"B123"}`, "build", "B123"},
-		{"release", "/apps/my-app/releases", `{"id":"R456"}`, "release", "R456"},
+		{"app", "/apps", `{"name":"my-app"}`, "app", "my-app", true},
+		{"build", "/apps/my-app/builds", `{"id":"B123","release":"R456"}`, "build", "B123", true},
+		{"release", "/apps/my-app/releases", `{"id":"R456"}`, "release", "R456", false},
 	}
 
 	for _, tc := range cases {
@@ -110,9 +113,91 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 			info := creators[tc.idExpect]
 			require.NotNil(t, info)
 			require.Equal(t, "creator@example.com", info.Email)
-			require.Equal(t, tc.idExpect, req.Header.Get("X-Audit-Resource"))
+			if tc.expectHeader {
+				require.Equal(t, tc.idExpect, req.Header.Get("X-Audit-Resource"))
+			} else {
+				require.Empty(t, req.Header.Get("X-Audit-Resource"))
+			}
 		})
 	}
+}
+
+func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
+	h, database, mgr := newProxyForCreatorTest(t)
+	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
+
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
+	req.Header = make(http.Header)
+
+	h.captureResourceCreator(req, "/apps/my-app/builds", []byte(`{"id":"B123","release":"R456"}`), "creator@example.com")
+
+	creators, err := database.GetResourceCreators("release", []string{"R456"})
+	require.NoError(t, err)
+	info := creators["R456"]
+	require.NotNil(t, info)
+	require.Equal(t, "creator@example.com", info.Email)
+	require.ElementsMatch(t, []string{"R456"}, req.Header.Values("X-Release-Created"))
+}
+
+func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	mgr, err := rbac.NewDBManager(database, "company.com")
+	require.NoError(t, err)
+	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/apps/my-app/builds", r.URL.Path)
+		require.Equal(t, "Basic Y29udm94OnRva2Vu", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":"B321","release":"R654","status":"created"}`)
+	}))
+	defer ts.Close()
+
+	cfg := &config.Config{Racks: map[string]config.RackConfig{
+		"default": {
+			Name:     "default",
+			URL:      ts.URL,
+			Username: "convox",
+			APIKey:   "token",
+			Enabled:  true,
+		},
+	}}
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default")
+
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Name", "Creator")
+	au := &auth.AuthUser{Email: "creator@example.com", Name: "Creator"}
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
+
+	rr := httptest.NewRecorder()
+	h.ProxyToRack(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Empty(t, req.Header.Values("X-Release-Created"))
+
+	buildCreators, err := database.GetResourceCreators("build", []string{"B321"})
+	require.NoError(t, err)
+	bInfo := buildCreators["B321"]
+	require.NotNil(t, bInfo)
+	require.Equal(t, "creator@example.com", bInfo.Email)
+
+	releaseCreators, err := database.GetResourceCreators("release", []string{"R654"})
+	require.NoError(t, err)
+	rInfo := releaseCreators["R654"]
+	require.NotNil(t, rInfo)
+	require.Equal(t, "creator@example.com", rInfo.Email)
+
+	logs, err := database.GetAuditLogs("creator@example.com", time.Time{}, 20)
+	require.NoError(t, err)
+	foundRelease := false
+	for _, log := range logs {
+		if log.Action == "release.create" && log.Resource == "R654" {
+			foundRelease = true
+			require.Equal(t, "release", log.ResourceType)
+			require.Equal(t, "success", log.Status)
+		}
+	}
+	require.True(t, foundRelease, "expected release.create audit log entry")
 }
 
 func TestForwardRequestRecordsBuildCreator(t *testing.T) {

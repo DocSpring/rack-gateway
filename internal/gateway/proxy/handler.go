@@ -247,6 +247,29 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
+		releaseIDs := r.Header.Values("X-Release-Created")
+		if len(releaseIDs) > 0 {
+			for _, rel := range releaseIDs {
+				rel = strings.TrimSpace(rel)
+				if rel == "" {
+					continue
+				}
+				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+					UserEmail:      authUser.Email,
+					UserName:       r.Header.Get("X-User-Name"),
+					ActionType:     "convox",
+					Action:         "release.create",
+					ResourceType:   "release",
+					Resource:       rel,
+					Status:         "success",
+					RBACDecision:   "allow",
+					HTTPStatus:     status,
+					ResponseTimeMs: int(time.Since(start).Milliseconds()),
+					IPAddress:      r.RemoteAddr,
+					UserAgent:      r.UserAgent(),
+				})
+			}
+		}
 		h.logEnvDiffs(r, authUser.Email, rackConfig.Name, envDiffs)
 		// If this was a rack params update, compute diff and notify admins + audit
 		if isRackParamsUpdate {
@@ -259,6 +282,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	r.Header.Del("X-Release-Created")
 }
 
 func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
@@ -367,6 +391,33 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
+
+	if status >= 200 && status < 300 {
+		releaseIDs := r.Header.Values("X-Release-Created")
+		if len(releaseIDs) > 0 {
+			for _, rel := range releaseIDs {
+				rel = strings.TrimSpace(rel)
+				if rel == "" {
+					continue
+				}
+				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+					UserEmail:      authUser.Email,
+					UserName:       r.Header.Get("X-User-Name"),
+					ActionType:     "convox",
+					Action:         "release.create",
+					ResourceType:   "release",
+					Resource:       rel,
+					Status:         "success",
+					RBACDecision:   "allow",
+					HTTPStatus:     status,
+					ResponseTimeMs: int(time.Since(start).Milliseconds()),
+					IPAddress:      r.RemoteAddr,
+					UserAgent:      r.UserAgent(),
+				})
+			}
+		}
+	}
+	r.Header.Del("X-Release-Created")
 	if status >= 200 && status < 300 && isRackParamsUpdate {
 		if afterParams, err := h.fetchSystemParams(rackConfig); err == nil {
 			changes := diffParams(beforeParams, afterParams)
@@ -1165,41 +1216,72 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 	if h.database == nil || h.rbacManager == nil {
 		return
 	}
-	if r.Method != http.MethodPost {
-		return
-	}
 	if len(body) == 0 {
 		return
 	}
-	var payload map[string]interface{}
+
+	var payload interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return
 	}
-	setResource := func(resourceType, resourceID string) {
+
+	setResource := func(resourceType, resourceID string, setAudit bool) {
 		if strings.TrimSpace(resourceID) == "" {
 			return
 		}
 		h.recordResourceCreator(resourceType, resourceID, email)
-		r.Header.Set("X-Audit-Resource", resourceID)
-	}
-	if keyMatch3(path, "/apps") {
-		if name, ok := payload["name"].(string); ok {
-			setResource("app", name)
+		if setAudit {
+			r.Header.Set("X-Audit-Resource", resourceID)
 		}
 	}
-	if keyMatch3(path, "/apps/{app}/builds") {
-		if id, ok := payload["id"].(string); ok {
-			setResource("build", id)
-		}
-		if rel, ok := payload["release"].(string); ok {
-			setResource("release", rel)
+
+	obj, ok := payload.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	if r.Method == http.MethodPost && keyMatch3(path, "/apps") {
+		if name := extractJSONString(obj["name"]); name != "" {
+			setResource("app", name, true)
 		}
 	}
-	if keyMatch3(path, "/apps/{app}/releases") {
-		if id, ok := payload["id"].(string); ok {
-			setResource("release", id)
+
+	if r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/builds") {
+		if id := extractJSONString(obj["id"]); id != "" {
+			setResource("build", id, true)
+		}
+		if rel := extractJSONString(obj["release"]); rel != "" {
+			h.recordResourceCreator("release", rel, email)
+			r.Header.Add("X-Release-Created", rel)
 		}
 	}
+
+	if keyMatch3(path, "/apps/{app}/builds/{id}") {
+		if id := extractJSONString(obj["id"]); id != "" {
+			h.recordResourceCreator("build", id, email)
+		}
+		if rel := extractJSONString(obj["release"]); rel != "" {
+			h.recordResourceCreator("release", rel, email)
+			r.Header.Add("X-Release-Created", rel)
+		}
+	}
+
+	if r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/releases") {
+		if id := extractJSONString(obj["id"]); id != "" {
+			h.recordResourceCreator("release", id, email)
+			r.Header.Add("X-Release-Created", id)
+		}
+	}
+}
+
+func extractJSONString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 // filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.

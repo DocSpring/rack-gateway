@@ -569,7 +569,6 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	}
 
 	if !since.IsZero() {
-		// Normalize to UTC to match SQLite CURRENT_TIMESTAMP storage
 		query += " AND timestamp >= ?"
 		args = append(args, since.UTC())
 	}

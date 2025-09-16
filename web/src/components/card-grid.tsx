@@ -14,10 +14,20 @@ export function CardGrid({ items }: { items: CardItem[] }) {
             <CardTitle className="text-muted-foreground text-sm">{it.label}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="truncate font-medium">{it.value ?? '—'}</div>
+            <div className="truncate font-medium">{formatValue(it.value)}</div>
           </CardContent>
         </Card>
       ))}
     </div>
   )
+}
+
+function formatValue(value?: string | number | null) {
+  if (value === null || value === undefined) {
+    return '—'
+  }
+  if (typeof value === 'string' && value.trim() === '') {
+    return '—'
+  }
+  return value
 }

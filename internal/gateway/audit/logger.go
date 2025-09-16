@@ -106,7 +106,7 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 	return database.CreateAuditLog(al)
 }
 
-// storeInDatabase stores the audit log in SQLite for admin UI and compliance
+// storeInDatabase stores the audit log for admin UI and compliance
 func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
 	if l.database == nil {
 		return // Skip database logging if not configured

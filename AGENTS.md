@@ -115,7 +115,7 @@ Flow:
 
 ### Authorization (RBAC)
 
-- Database-backed RBAC manager (SQLite)
+- Database-backed RBAC manager (Postgres)
 - Roles: viewer, ops, deployer, admin
 - Permission mapping to Convox routes/actions, e.g., `convox:{resource}:{action}`
 - Admin role has wildcard access
