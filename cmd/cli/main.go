@@ -221,6 +221,7 @@ Rack management:
 		Use:          "rack",
 		Short:        "Show current rack and gateway information",
 		SilenceUsage: true,
+		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rack, err := getCurrentRack()
 			if err != nil {
@@ -254,6 +255,7 @@ Rack management:
 		Use:          "racks",
 		Short:        "List all configured racks",
 		SilenceUsage: true,
+		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configFile := filepath.Join(configPath, "config.json")
 			data, err := os.ReadFile(configFile)
