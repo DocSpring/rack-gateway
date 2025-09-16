@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,9 +50,7 @@ func TestIntegration(t *testing.T) {
 
 	// Build binaries - fix paths to be relative to project root
 	t.Log("Building binaries...")
-	require.NoError(t, buildBinary("../../cmd/mock-convox", "../../bin/mock-convox"))
-	require.NoError(t, buildBinary("../../cmd/gateway", "../../bin/convox-gateway-api"))
-	require.NoError(t, buildBinary("../../cmd/cli", "../../bin/convox-gateway"))
+	require.NoError(t, buildAllBinaries())
 
 	// Start servers
 	servers := &TestServers{
@@ -105,6 +104,36 @@ func TestIntegration(t *testing.T) {
 	t.Run("AdminEndpointProtection", func(t *testing.T) {
 		testAdminEndpointProtection(t, servers)
 	})
+}
+
+func buildAllBinaries() error {
+	type buildJob struct {
+		src string
+		out string
+	}
+	jobs := []buildJob{
+		{src: "../../cmd/mock-convox", out: "../../bin/mock-convox"},
+		{src: "../../cmd/gateway", out: "../../bin/convox-gateway-api"},
+		{src: "../../cmd/cli", out: "../../bin/convox-gateway"},
+	}
+	errCh := make(chan error, len(jobs))
+	var wg sync.WaitGroup
+	for _, job := range jobs {
+		job := job
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errCh <- buildBinary(job.src, job.out)
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildBinary(source, output string) error {
