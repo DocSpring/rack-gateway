@@ -1098,39 +1098,9 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		// Filter release payloads that include "env" string
 		if keyMatch3(pth, "/apps/{app}/releases") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
 			body = h.filterReleaseEnvForUser(userEmail, body, false)
-			// Capture creator for newly-created resources (POST endpoints)
-			if r.Method == http.MethodPost {
-				// apps create -> resource: app name
-				if keyMatch3(pth, "/apps") {
-					var m map[string]interface{}
-					if json.Unmarshal(body, &m) == nil {
-						if name, ok := m["name"].(string); ok && name != "" {
-							h.recordResourceCreator("app", name, userEmail)
-							r.Header.Set("X-Audit-Resource", name)
-						}
-					}
-				}
-				// builds create -> resource: id
-				if keyMatch3(pth, "/apps/{app}/builds") {
-					var m map[string]interface{}
-					if json.Unmarshal(body, &m) == nil {
-						if id, ok := m["id"].(string); ok && id != "" {
-							h.recordResourceCreator("build", id, userEmail)
-							r.Header.Set("X-Audit-Resource", id)
-						}
-					}
-				}
-				// releases create -> resource: id
-				if keyMatch3(pth, "/apps/{app}/releases") {
-					var m map[string]interface{}
-					if json.Unmarshal(body, &m) == nil {
-						if id, ok := m["id"].(string); ok && id != "" {
-							h.recordResourceCreator("release", id, userEmail)
-							r.Header.Set("X-Audit-Resource", id)
-						}
-					}
-				}
-			}
+		}
+		if r.Method == http.MethodPost {
+			h.captureResourceCreator(r, pth, body, userEmail)
 		}
 		// Filter environment map
 		if keyMatch3(pth, "/apps/{app}/environment") && r.Method == http.MethodGet {
@@ -1188,6 +1158,46 @@ func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) 
 		return
 	}
 	_ = h.database.CreateUserResource(u.ID, resourceType, resourceID)
+}
+
+// captureResourceCreator persists the creator information for app/build/release create responses
+// and records the resource ID for audit logging.
+func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string) {
+	if h.database == nil || h.rbacManager == nil {
+		return
+	}
+	if r.Method != http.MethodPost {
+		return
+	}
+	if len(body) == 0 {
+		return
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return
+	}
+	setResource := func(resourceType, resourceID string) {
+		if strings.TrimSpace(resourceID) == "" {
+			return
+		}
+		h.recordResourceCreator(resourceType, resourceID, email)
+		r.Header.Set("X-Audit-Resource", resourceID)
+	}
+	if keyMatch3(path, "/apps") {
+		if name, ok := payload["name"].(string); ok {
+			setResource("app", name)
+		}
+	}
+	if keyMatch3(path, "/apps/{app}/builds") {
+		if id, ok := payload["id"].(string); ok {
+			setResource("build", id)
+		}
+	}
+	if keyMatch3(path, "/apps/{app}/releases") {
+		if id, ok := payload["id"].(string); ok {
+			setResource("release", id)
+		}
+	}
 }
 
 // filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.

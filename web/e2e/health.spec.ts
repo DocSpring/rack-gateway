@@ -1,8 +1,8 @@
 import { expect, test } from './fixtures'
 
 test('gateway health via web proxy is OK', async ({ page }) => {
-  // Hit the site to ensure Vite dev server is accepting connections
-  await page.goto('/.gateway/web/')
+  // Hit the login page to ensure Vite dev server is accepting connections without triggering redirects
+  await page.goto('/.gateway/web/login')
 
   // Fetch health via the browser context to avoid host resolution quirks
   const result = await page.evaluate(async () => {

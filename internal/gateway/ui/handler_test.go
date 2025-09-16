@@ -671,6 +671,30 @@ func TestServeStaticRedirectsRack(t *testing.T) {
 	assert.Equal(t, "/.gateway/web/rack", rr.Header().Get("Location"))
 }
 
+func TestServeStaticNoRedirectWithQuery(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", config.RackConfig{}, "", "http://localhost:8447")
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/?token=abc", nil)
+	handler.ServeStatic(rr, req)
+
+	assert.NotEqual(t, http.StatusTemporaryRedirect, rr.Code)
+}
+
+func TestServeStaticNoRedirectForWebsocket(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "test", config.RackConfig{}, "", "http://localhost:8447")
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/", nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	handler.ServeStatic(rr, req)
+
+	assert.NotEqual(t, http.StatusTemporaryRedirect, rr.Code)
+}
+
 // Mock email sender to capture notifications
 type mockEmailSender struct {
 	sent      []struct{ To, Subject, Text, HTML string }

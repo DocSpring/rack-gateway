@@ -25,6 +25,18 @@ const USER_AUDIT_RE = /\/users\/[^/]+\/audit_logs/
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const pathname = useMemo(() => {
+    const p = location.pathname || ''
+    const base = '/.gateway/web'
+    if (p === base) {
+      return '/'
+    }
+    if (p.startsWith(`${base}/`)) {
+      const trimmed = p.slice(base.length)
+      return trimmed === '' ? '/' : trimmed
+    }
+    return p || '/'
+  }, [location.pathname])
   const [showCliDialog, setShowCliDialog] = useState(false)
 
   const rackName = user?.rack?.name || 'your-rack'
@@ -47,7 +59,7 @@ export function Layout() {
   }, [user?.roles])
 
   // Declarative redirect: when at layout root, go to Rack
-  if (location.pathname === '/') {
+  if (pathname === '/') {
     return <Navigate replace to="/rack" />
   }
 
@@ -76,7 +88,7 @@ export function Layout() {
           {navigation.map((item) => {
             const Icon = item.icon
             // Custom active logic so nested routes can highlight desired parent
-            const p = location.pathname || ''
+            const p = pathname
             let isActive = false
             if (item.href === '/rack') {
               isActive = p === '/rack'

@@ -1517,7 +1517,7 @@ func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 
 // ServeStatic serves the React app's static files
 func (h *Handler) ServeStatic(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/.gateway/web/" {
+	if shouldRedirectToRack(r) {
 		http.Redirect(w, r, "/.gateway/web/rack", http.StatusTemporaryRedirect)
 		return
 	}
@@ -1547,6 +1547,21 @@ func (h *Handler) ServeStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, fullPath)
+}
+
+func shouldRedirectToRack(r *http.Request) bool {
+	if r.URL.Path != "/.gateway/web/" {
+		return false
+	}
+	if r.URL.RawQuery != "" {
+		return false
+	}
+	conn := strings.ToLower(r.Header.Get("Connection"))
+	upgrade := strings.ToLower(r.Header.Get("Upgrade"))
+	if strings.Contains(conn, "upgrade") && upgrade == "websocket" {
+		return false
+	}
+	return true
 }
 
 // Helper functions
