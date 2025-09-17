@@ -897,19 +897,23 @@ func (d *Database) CleanupOldAuditLogs(retentionDays int) error {
 }
 
 // CreateUserResource records the creator for a resource. Upserts on (resource_type, resource_id).
-func (d *Database) CreateUserResource(userID int64, resourceType, resourceID string) error {
+func (d *Database) CreateUserResource(userID int64, resourceType, resourceID string) (bool, error) {
 	if strings.TrimSpace(resourceType) == "" || strings.TrimSpace(resourceID) == "" {
-		return fmt.Errorf("invalid resource: type and id required")
+		return false, fmt.Errorf("invalid resource: type and id required")
 	}
-	_, err := d.exec(`
+	res, err := d.exec(`
         INSERT INTO user_resources (user_id, resource_type, resource_id)
         VALUES (?, ?, ?)
         ON CONFLICT (resource_type, resource_id) DO NOTHING
     `, userID, resourceType, resourceID)
 	if err != nil {
-		return fmt.Errorf("failed to create user_resource: %w", err)
+		return false, fmt.Errorf("failed to create user_resource: %w", err)
 	}
-	return nil
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect user_resource insert: %w", err)
+	}
+	return rows > 0, nil
 }
 
 // GetResourceCreator returns the user_id for a given resource if present.

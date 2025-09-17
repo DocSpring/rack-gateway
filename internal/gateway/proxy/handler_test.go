@@ -99,7 +99,7 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 	}{
 		{"app", "/apps", `{"name":"my-app"}`, "app", "my-app", true},
 		{"build", "/apps/my-app/builds", `{"id":"B123","release":"R456"}`, "build", "B123", true},
-		{"release", "/apps/my-app/releases", `{"id":"R456"}`, "release", "R456", false},
+		{"release", "/apps/my-app/releases", `{"id":"R456"}`, "release", "R456", true},
 	}
 
 	for _, tc := range cases {
@@ -137,6 +137,12 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	require.NotNil(t, info)
 	require.Equal(t, "creator@example.com", info.Email)
 	require.ElementsMatch(t, []string{"R456"}, req.Header.Values("X-Release-Created"))
+
+	// Subsequent GET for the same build should not enqueue duplicates
+	reqGet := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B123", nil)
+	reqGet.Header = make(http.Header)
+	h.captureResourceCreator(reqGet, "/apps/my-app/builds/B123", []byte(`{"id":"B123","release":"R456"}`), "creator@example.com")
+	require.Empty(t, reqGet.Header.Values("X-Release-Created"))
 }
 
 func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {

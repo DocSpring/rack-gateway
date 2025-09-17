@@ -247,11 +247,15 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
+		skipManualReleaseLog := r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/releases")
 		releaseIDs := r.Header.Values("X-Release-Created")
 		if len(releaseIDs) > 0 {
 			for _, rel := range releaseIDs {
 				rel = strings.TrimSpace(rel)
 				if rel == "" {
+					continue
+				}
+				if skipManualReleaseLog {
 					continue
 				}
 				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
@@ -393,11 +397,15 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
 
 	if status >= 200 && status < 300 {
+		skipManualReleaseLog := r.Method == http.MethodPost && keyMatch3("/"+path, "/apps/{app}/releases")
 		releaseIDs := r.Header.Values("X-Release-Created")
 		if len(releaseIDs) > 0 {
 			for _, rel := range releaseIDs {
 				rel = strings.TrimSpace(rel)
 				if rel == "" {
+					continue
+				}
+				if skipManualReleaseLog {
 					continue
 				}
 				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
@@ -1149,7 +1157,13 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		if keyMatch3(pth, "/apps/{app}/releases") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
 			body = h.filterReleaseEnvForUser(userEmail, body, false)
 		}
-		if r.Method == http.MethodPost {
+		shouldCapture := r.Method == http.MethodPost
+		if !shouldCapture && r.Method == http.MethodGet {
+			if keyMatch3(pth, "/apps/{app}/builds/{id}") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
+				shouldCapture = true
+			}
+		}
+		if shouldCapture {
 			h.captureResourceCreator(r, pth, body, userEmail)
 		}
 		// Filter environment map
@@ -1199,15 +1213,19 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 }
 
 // recordResourceCreator stores the user->resource mapping if possible
-func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) {
+func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) bool {
 	if h.database == nil || h.rbacManager == nil {
-		return
+		return false
 	}
 	u, err := h.rbacManager.GetUserWithID(email)
 	if err != nil || u == nil {
-		return
+		return false
 	}
-	_ = h.database.CreateUserResource(u.ID, resourceType, resourceID)
+	created, err := h.database.CreateUserResource(u.ID, resourceType, resourceID)
+	if err != nil {
+		return false
+	}
+	return created
 }
 
 // captureResourceCreator persists the creator information for app/build/release create responses
@@ -1225,14 +1243,15 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
-	setResource := func(resourceType, resourceID string, setAudit bool) {
+	setResource := func(resourceType, resourceID string, setAudit bool) bool {
 		if strings.TrimSpace(resourceID) == "" {
-			return
+			return false
 		}
-		h.recordResourceCreator(resourceType, resourceID, email)
-		if setAudit {
+		created := h.recordResourceCreator(resourceType, resourceID, email)
+		if setAudit && created {
 			r.Header.Set("X-Audit-Resource", resourceID)
 		}
+		return created
 	}
 
 	obj, ok := payload.(map[string]interface{})
@@ -1251,8 +1270,9 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			setResource("build", id, true)
 		}
 		if rel := extractJSONString(obj["release"]); rel != "" {
-			h.recordResourceCreator("release", rel, email)
-			r.Header.Add("X-Release-Created", rel)
+			if h.recordResourceCreator("release", rel, email) {
+				r.Header.Add("X-Release-Created", rel)
+			}
 		}
 	}
 
@@ -1261,15 +1281,18 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			h.recordResourceCreator("build", id, email)
 		}
 		if rel := extractJSONString(obj["release"]); rel != "" {
-			h.recordResourceCreator("release", rel, email)
-			r.Header.Add("X-Release-Created", rel)
+			if h.recordResourceCreator("release", rel, email) {
+				r.Header.Add("X-Release-Created", rel)
+			}
 		}
 	}
 
 	if r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/releases") {
 		if id := extractJSONString(obj["id"]); id != "" {
-			h.recordResourceCreator("release", id, email)
-			r.Header.Add("X-Release-Created", id)
+			r.Header.Set("X-Audit-Resource", id)
+			if h.recordResourceCreator("release", id, email) {
+				r.Header.Add("X-Release-Created", id)
+			}
 		}
 	}
 }
