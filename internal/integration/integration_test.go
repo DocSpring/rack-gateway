@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -107,29 +106,16 @@ func TestIntegration(t *testing.T) {
 }
 
 func buildAllBinaries() error {
-	type buildJob struct {
+	jobs := []struct {
 		src string
 		out string
-	}
-	jobs := []buildJob{
+	}{
 		{src: "../../cmd/mock-convox", out: "../../bin/mock-convox"},
 		{src: "../../cmd/gateway", out: "../../bin/convox-gateway-api"},
 		{src: "../../cmd/cli", out: "../../bin/convox-gateway"},
 	}
-	errCh := make(chan error, len(jobs))
-	var wg sync.WaitGroup
 	for _, job := range jobs {
-		job := job
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errCh <- buildBinary(job.src, job.out)
-		}()
-	}
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
-		if err != nil {
+		if err := buildBinary(job.src, job.out); err != nil {
 			return err
 		}
 	}

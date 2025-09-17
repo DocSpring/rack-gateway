@@ -51,6 +51,9 @@ jobs:
           sudo chmod 755 /usr/local/bin/convox
           convox version || true
 
+      - name: Pre-build binaries for integration tests
+        run: task go:build
+
       - name: Go tests
         run: task go:test
 
