@@ -614,7 +614,7 @@ func handleWebLoginCallback(oauth *auth.OAuthHandler, database *db.Database) htt
 			// Frontend already points at web base; append users
 			dest = frontend + "users"
 		} else {
-			// Frontend is likely a dev root like http://localhost:5173/
+			// Frontend is likely a dev root like http://localhost:5223/
 			// Send to the web base path with users
 			dest = strings.TrimRight(frontend, "/") + "/.gateway/web/users"
 		}

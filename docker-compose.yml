@@ -122,8 +122,9 @@ services:
       VITE_API_BASE_URL: http://gateway-api-dev:${GATEWAY_PORT:-8447}
       VITE_DEBUG_PROXY: ${VITE_DEBUG_PROXY:-false}
       VITE_DISABLE_HMR: "true"
+      WEB_PORT: "5173"
     ports:
-      - "${WEB_PORT:-5173}:5173"
+      - "${WEB_PORT:-5223}:5173"
     volumes:
       - ./web:/app
       - /app/node_modules
@@ -144,7 +145,7 @@ services:
       VITE_API_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}
       VITE_FAST_BUILD: "true"
     ports:
-      - "${WEB_PORT:-5173}:5173"
+      - "${WEB_PORT:-5223}:5173"
     volumes:
       - ./web:/app
       - /app/node_modules
@@ -161,7 +162,7 @@ services:
       <<: *gateway_common_env
       PORT: ${GATEWAY_PORT:-8447}
       GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
-      FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-5173}
+      FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-5223}
       DEV_MODE: "true"
       WEB_DEV_SERVER_URL: http://web-dev:5173
     ports:

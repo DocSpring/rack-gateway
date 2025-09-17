@@ -31,7 +31,7 @@ task dev
 The development environment will start:
 
 - **Gateway API**: http://localhost:8447
-- **Web UI**: http://localhost:5173
+- **Web UI**: http://localhost:5223
 - **Mock Convox API**: http://localhost:5443
 
 ## Local Dev Walkthrough (Step-by-step)
@@ -46,7 +46,7 @@ task dev
 
 2. Verify services
 
-- Web UI: `http://localhost:$WEB_PORT` (default 5173)
+- Web UI: `http://localhost:$WEB_PORT` (default 5223)
 - Gateway health: `curl http://localhost:$PORT/.gateway/api/health`
 - Mock Convox: `curl http://localhost:$MOCK_CONVOX_PORT/health`
 
@@ -232,7 +232,7 @@ task dev:down
 
 2. **Access the web UI**:
 
-   - Open http://localhost:5173
+   - Open http://localhost:5223
    - Click "Login with Google"
    - Complete OAuth flow
 
@@ -254,7 +254,7 @@ task dev:down
 ## Development Environment Ports
 
 - **8447**: Gateway API server
-- **5173**: Web UI (Vite dev server)
+- **5223**: Web UI (Vite dev server)
 - **5443**: Mock Convox server
 
 ## Testing
@@ -297,7 +297,7 @@ LOG_LEVEL = "debug"
 
 ### Common Issues
 
-**Port conflicts**: If ports 8447, 5173, or 5443 are in use, stop other services or update the ports in `docker-compose.yml`.
+**Port conflicts**: If ports 8447, 5223, or 5443 are in use, stop other services or update the ports in `docker-compose.yml`.
 
 **OAuth errors**: Ensure redirect URIs match exactly in Google Cloud Console and your local setup.
 

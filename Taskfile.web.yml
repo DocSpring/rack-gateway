@@ -1,7 +1,7 @@
 version: "3"
 
 env:
-  WEB_PORT: "{{.WEB_PORT | default 5173}}"
+  WEB_PORT: "{{.WEB_PORT | default 5223}}"
   GATEWAY_PORT: "{{.GATEWAY_PORT | default 8447}}"
 
 tasks:

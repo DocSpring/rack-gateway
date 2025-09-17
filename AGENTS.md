@@ -9,14 +9,14 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 | Service          | Port | Environment Variable | Description              |
 | ---------------- | ---- | -------------------- | ------------------------ |
 | **Gateway API**  | 8447 | `GATEWAY_PORT`       | Main API server          |
-| **Web Frontend** | 5173 | `WEB_PORT`           | Vite dev server          |
+| **Web Frontend** | 5223 | `WEB_PORT`           | Vite dev server          |
 | **Mock OAuth**   | 3345 | `MOCK_OAUTH_PORT`    | Mock Google OAuth server |
 | **Mock Convox**  | 5443 | `MOCK_CONVOX_PORT`   | Mock Convox API server   |
 
 **URLs in Development:**
 
 - Gateway API: `http://localhost:8447`
-- Web UI: `http://localhost:5173`
+- Web UI: `http://localhost:5223`
 - Mock OAuth: `http://localhost:3345`
 - Mock Convox API: `http://localhost:5443`
 

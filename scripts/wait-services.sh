@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WEB_PORT="${WEB_PORT:-5173}"
+WEB_PORT="${WEB_PORT:-5223}"
 # Default to the SPA mount path used by both dev and preview
 WEB_UI_PATH="${WEB_UI_PATH:-/.gateway/web/}"
 GATEWAY_PORT="${GATEWAY_PORT:-8447}"

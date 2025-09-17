@@ -6,7 +6,7 @@ Admin UI and client for Convox Gateway. Provides user management, API token mana
 
 - Run the full dev stack with Docker Compose:
   - `task dev`
-  - Web UI: `http://localhost:${WEB_PORT:-5173}`
+  - Web UI: `http://localhost:${WEB_PORT:-5223}`
   - Gateway API: `http://localhost:${GATEWAY_PORT:-8447}`
 
 - Run unit tests:

@@ -47,7 +47,7 @@ task dev
 
 **🎉 You're done!** Open these URLs:
 
-- **Web UI**: http://localhost:5173 (test users: admin@company.com, deployer@company.com, ops@company.com, viewer@company.com)
+- **Web UI**: http://localhost:5223 (test users: admin@company.com, deployer@company.com, ops@company.com, viewer@company.com)
 - **Gateway API**: http://localhost:8447
 - **Mock Convox**: http://localhost:5443
 
@@ -102,7 +102,7 @@ For complete development setup with real Google OAuth (instead of mock), see **[
 **Development URLs:**
 
 - Gateway API: http://localhost:8447
-- Web UI: http://localhost:5173
+- Web UI: http://localhost:5223
 - Mock Convox: http://localhost:5443
 - Mock OAuth: http://localhost:3001
 

@@ -21,7 +21,8 @@ export default defineConfig(() => ({
     },
   },
   server: {
-    port: parseInt(process.env.WEB_PORT || "5173"),
+    port: parseInt(process.env.WEB_PORT || "5223"),
+    strictPort: true,
     hmr: process.env.VITE_DISABLE_HMR === "true" ? false : undefined,
     proxy: {
       "/.gateway/api": {

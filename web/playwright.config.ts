@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Prefer gateway port (single-origin prod-like E2E), fall back to WEB_PORT (dev)
-const port = process.env.GATEWAY_PORT || process.env.WEB_PORT || '5173'
+const port = process.env.GATEWAY_PORT || process.env.WEB_PORT || '5223'
 
 export default defineConfig({
   testDir: './e2e',

@@ -48,7 +48,7 @@ func TestOAuthEndpoint_UsesCustomBaseURL(t *testing.T) {
 		"code_challenge": "test-challenge",
 		"state":          "test-state",
 		"rack":           "default",
-		"redirect_uri":   "http://localhost:5173/auth/callback",
+		"redirect_uri":   "http://localhost:5223/auth/callback",
 	}
 	body, _ := json.Marshal(reqBody)
 
