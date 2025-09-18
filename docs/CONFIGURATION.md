@@ -25,7 +25,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (required)
   - OAuth client credentials for Google Workspace (or your OIDC provider).
 - `GOOGLE_ALLOWED_DOMAIN` (required)
-  - Enforces a single allowed email domain, e.g. `company.com`.
+  - Enforces a single allowed email domain, e.g. `example.com`.
 - `GOOGLE_OAUTH_BASE_URL` (default: `https://accounts.google.com`)
   - OIDC issuer base URL. Override in development for the mock OAuth server.
     Derived from `DOMAIN`. No separate redirect URL is needed.
@@ -57,6 +57,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
 
 - Protected Env Vars
+
   - Stored in the `settings` table under the key `protected_env_vars` (JSON array of variable names, e.g. `["DATABASE_URL","RACK_TOKEN"]`).
   - Protected keys are always masked in API responses and cannot be changed via the gateway, even by admins.
   - Seed on first boot from `DB_SEED_PROTECTED_ENV_VARS` (comma-separated), when the setting is not yet present.
@@ -71,7 +72,7 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
 - `POSTMARK_API_TOKEN` (optional)
   - Enables sending email via Postmark. If unset, emails are disabled unless dev logging is on.
 - `POSTMARK_FROM` (recommended)
-  - Sender address, e.g. `no-reply@company.com`. If unset, defaults to `no-reply@<GOOGLE_ALLOWED_DOMAIN>`.
+  - Sender address, e.g. `no-reply@example.com`. If unset, defaults to `no-reply@<GOOGLE_ALLOWED_DOMAIN>`.
 - `POSTMARK_STREAM` (default: `outbound`)
   - Postmark message stream.
 - `POSTMARK_API_BASE` (advanced, default: `https://api.postmarkapp.com`)

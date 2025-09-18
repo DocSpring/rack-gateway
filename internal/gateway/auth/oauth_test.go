@@ -34,7 +34,7 @@ func TestOAuthHandler_UsesCustomBaseURL(t *testing.T) {
 		"mock-client-id",
 		"mock-client-secret",
 		"http://localhost:8447",
-		"company.com",
+		"example.com",
 		baseURL, // Custom issuer URL
 		jwtManager,
 	)
@@ -68,7 +68,7 @@ func TestOAuthHandler_UsesGoogleByDefault(t *testing.T) {
 		"real-client-id",
 		"real-client-secret",
 		"http://localhost:8447",
-		"company.com",
+		"example.com",
 		"https://accounts.google.com", // Google issuer URL
 		jwtManager,
 	)

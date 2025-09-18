@@ -38,7 +38,7 @@ Create an OAuth client in Google Cloud Console for your Workspace domain:
 1. Copy the values:
 
 - GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-- Set GOOGLE_ALLOWED_DOMAIN to your Workspace domain (e.g., company.com)
+- Set GOOGLE_ALLOWED_DOMAIN to your Workspace domain (e.g., example.com)
 - Leave GOOGLE_OAUTH_BASE_URL empty for Google (defaults to accounts.google.com)
 
 ### 2.2 Generate APP_JWT_KEY
@@ -55,11 +55,11 @@ openssl rand -base64 32
 convox env set \
   RACK_TOKEN=xxxxx \
   DOMAIN=gateway.example.com \
-  GOOGLE_ALLOWED_DOMAIN=yourcompany.com \
+  GOOGLE_ALLOWED_DOMAIN=yourexample.com \
   APP_JWT_KEY=$(openssl rand -base64 32) \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
-  ADMIN_USERS=admin@yourcompany.com \
+  ADMIN_USERS=admin@yourexample.com \
   POSTMARK_API_TOKEN=xxxx
 ```
 

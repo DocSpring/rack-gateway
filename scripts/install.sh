@@ -129,7 +129,7 @@ CLI_DIR="${CONVOX_GATEWAY_CLI_CONFIG_DIR:-}"
 echo
 echo "Authenticate with the gateway:"
 echo "  Production example:"
-echo "    convox-gateway login staging https://gateway.company.com"
+echo "    convox-gateway login staging https://gateway.example.com"
 echo
 echo "  Local dev example:"
 echo "    convox-gateway login local http://localhost:${GATEWAY_PORT}"

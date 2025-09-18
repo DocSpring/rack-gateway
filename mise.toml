@@ -12,7 +12,7 @@ LOG_LEVEL = "debug"
 # OAuth configuration (override in mise.local.toml)
 GOOGLE_CLIENT_ID = "mock-client-id"
 GOOGLE_CLIENT_SECRET = "mock-client-secret"
-GOOGLE_ALLOWED_DOMAIN = "company.com"
+GOOGLE_ALLOWED_DOMAIN = "example.com"
 GOOGLE_OAUTH_BASE_URL = "http://localhost:3345"
 
 # JWT configuration

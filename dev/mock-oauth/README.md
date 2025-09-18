@@ -15,10 +15,10 @@ A simple Node.js server that mimics Google's OAuth 2.0 endpoints for development
 
 The dev server comes with four pre-configured test users:
 
-- `admin@company.com` - Admin User
-- `deployer@company.com` - Deployer User
-- `ops@company.com` - Ops User
-- `viewer@company.com` - Viewer User
+- `admin@example.com` - Admin User
+- `deployer@example.com` - Deployer User
+- `ops@example.com` - Ops User
+- `viewer@example.com` - Viewer User
 
 ## Endpoints
 

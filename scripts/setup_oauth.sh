@@ -31,7 +31,7 @@ echo "3. If prompted, configure the OAuth consent screen:"
 echo "   - User Type: Internal (for Google Workspace)"
 echo "   - App name: Convox Gateway"
 echo "   - User support email: Your email"
-echo "   - Authorized domains: Your company domain (e.g., company.com)"
+echo "   - Authorized domains: Your company domain (e.g., example.com)"
 echo ""
 read -p "Press Enter when consent screen is configured..."
 
@@ -58,7 +58,7 @@ echo ""
 echo -e "${BLUE}Enter your OAuth credentials:${NC}"
 read -p "Client ID: " client_id
 read -p "Client Secret: " client_secret
-read -p "Allowed domain (e.g., company.com): " domain
+read -p "Allowed domain (e.g., example.com): " domain
 
 # Create mise.local.toml if it doesn't exist
 if [ ! -f mise.local.toml ]; then

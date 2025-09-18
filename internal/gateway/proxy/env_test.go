@@ -21,7 +21,7 @@ import (
 
 func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
 	database := dbtest.NewDatabase(t)
-	mgr, err := rbac.NewDBManager(database, "company.com")
+	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 	h := NewHandler(&config.Config{Racks: map[string]config.RackConfig{
 		"default": {Name: "default", URL: "http://mock", Username: "convox", APIKey: "token", Enabled: true},

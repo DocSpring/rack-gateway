@@ -21,7 +21,7 @@ import (
 
 func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
 	database := dbtest.NewDatabase(t)
-	mgr, err := rbac.NewDBManager(database, "company.com")
+	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 	cfg := &config.Config{Racks: map[string]config.RackConfig{
 		"default": {
@@ -147,7 +147,7 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 
 func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	mgr, err := rbac.NewDBManager(database, "company.com")
+	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
 
@@ -250,7 +250,7 @@ func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
 
 func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	mgr, err := rbac.NewDBManager(database, "company.com")
+	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
 

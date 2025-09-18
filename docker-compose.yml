@@ -3,12 +3,12 @@ x-gateway-env: &gateway_common_env
   APP_JWT_KEY: dev-jwt-secret-key-change-in-production
   GOOGLE_CLIENT_ID: mock-client-id
   GOOGLE_CLIENT_SECRET: mock-client-secret
-  GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-company.com}
+  GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-example.com}
   CONVOX_SECRET_ENV_VARS: DATABASE_URL,REDIS_URL,SECRET_KEY_BASE
-  ADMIN_USERS: admin@company.com
-  VIEWER_USERS: viewer@company.com
-  DEPLOYER_USERS: deployer@company.com
-  OPERATIONS_USERS: ops@company.com
+  ADMIN_USERS: admin@example.com
+  VIEWER_USERS: viewer@example.com
+  DEPLOYER_USERS: deployer@example.com
+  OPERATIONS_USERS: ops@example.com
   RACK: Dev
   RACK_HOST: http://mock-convox:${MOCK_CONVOX_PORT:-5443}
   RACK_TOKEN: mock-rack-token-12345

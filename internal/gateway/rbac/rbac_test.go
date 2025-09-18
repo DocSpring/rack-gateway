@@ -18,7 +18,7 @@ func TestEnforceDeployerPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// RBAC manager (DB-backed)
-	mgr, err := NewDBManager(database, "company.com")
+	mgr, err := NewDBManager(database, "example.com")
 	require.NoError(t, err)
 
 	// Deployer: allowed create/update, denied delete

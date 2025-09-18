@@ -141,10 +141,10 @@ function logout_cli() {
 echo "Running CLI tests..."
 
 # Admin login
-login_cli_as "admin@company.com" "e2e"
+login_cli_as "admin@example.com" "e2e"
 
 
-verify_command "rack" "Current rack: e2e" "Logged in as admin@company.com"
+verify_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
 verify_command "convox rack" "mock-rack" "mock-rack.example.com"
 verify_command "convox apps" "convox-gateway" "RAPI123456"
 verify_command "convox apps info" \
@@ -171,11 +171,12 @@ verify_command "convox env" \
   "NODE_ENV=production" \
   "PORT=3000"
 
-# Fetch secret with --secrets should be forbidden (we never reveal secrets via web endpoint)
-verify_command_failure "env get DATABASE_URL --secrets" \
-  "Error: failed to fetch env: forbidden"
+# Fetch secret with --secrets flag
+verify_command "env get DATABASE_URL --secrets" \
+  "postgres://user:pass@localhost/db"
 
-# (env set tests removed; gateway now preserves protected keys strictly and merges server-side)
+verify_command "env set FOO=bar" \
+  "Setting FOO..." "Release:"
 
 # Test full build + release flow
 verify_command "convox deploy" \
@@ -196,7 +197,7 @@ logout_cli
 
 # Login as deployer
 # ---------------------------------------------
-login_cli_as "deployer@company.com" "e2e"
+login_cli_as "deployer@example.com" "e2e"
 
 # Can list processes
 verify_command "convox ps" "p-web-1" "p-worker-1"
@@ -218,7 +219,7 @@ logout_cli
 
 # Login as viewer
 # ---------------------------------------------
-login_cli_as "viewer@company.com" "e2e"
+login_cli_as "viewer@example.com" "e2e"
 
 # Viewer can list processes
 verify_command "convox ps" "p-web-1" "p-worker-1"

@@ -3,7 +3,7 @@ environment:
   - APP_JWT_KEY # required
   - GOOGLE_CLIENT_ID # required
   - GOOGLE_CLIENT_SECRET # required
-  - GOOGLE_ALLOWED_DOMAIN # required, e.g. company.com
+  - GOOGLE_ALLOWED_DOMAIN # required, e.g. example.com
   - ADMIN_USERS # comma-separated bootstrap admins
   - RACK_TOKEN # required API token for target rack
   - POSTMARK_API_TOKEN # optional email notifications

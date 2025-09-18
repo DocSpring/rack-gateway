@@ -106,10 +106,10 @@ Flow:
 
 ### Authentication Flow
 
-1. User runs `convox-gateway login staging https://convox-gateway.company.com`
+1. User runs `convox-gateway login staging https://convox-gateway.example.com`
 2. CLI opens browser for Google OAuth (PKCE flow)
 3. User authenticates with Google Workspace account
-4. Gateway validates domain (@company.com)
+4. Gateway validates domain (@example.com)
 5. Gateway issues JWT token (30 day TTL)
 6. CLI stores gateway URL and token in `~/.config/convox-gateway/config.json`
 
@@ -155,7 +155,7 @@ Example `mise.local.toml`:
 APP_JWT_KEY = "your-local-jwt-key"
 GOOGLE_CLIENT_ID = "your-oauth-client-id"
 GOOGLE_CLIENT_SECRET = "your-oauth-secret"
-GOOGLE_ALLOWED_DOMAIN = "yourcompany.com"
+GOOGLE_ALLOWED_DOMAIN = "yourexample.com"
 ```
 
 ## Deployment Notes

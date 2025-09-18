@@ -47,7 +47,7 @@ task dev
 
 **🎉 You're done!** Open these URLs:
 
-- **Web UI**: http://localhost:5223 (test users: admin@company.com, deployer@company.com, ops@company.com, viewer@company.com)
+- **Web UI**: http://localhost:5223 (test users: admin@example.com, deployer@example.com, ops@example.com, viewer@example.com)
 - **Gateway API**: http://localhost:8447
 - **Mock Convox**: http://localhost:5443
 
@@ -108,10 +108,10 @@ For complete development setup with real Google OAuth (instead of mock), see **[
 
 The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
 
-- **admin@company.com** - Admin User (full access)
-- **deployer@company.com** - Deployer User (full deployment permissions including env vars)
-- **ops@company.com** - Ops User (restart apps, view environments, manage processes)
-- **viewer@company.com** - Viewer User
+- **admin@example.com** - Admin User (full access)
+- **deployer@example.com** - Deployer User (full deployment permissions including env vars)
+- **ops@example.com** - Ops User (restart apps, view environments, manage processes)
+- **viewer@example.com** - Viewer User
 
 When logging in via http://localhost:8447 during development, you'll be redirected to the mock OAuth server to select which test user to authenticate as.
 
@@ -125,11 +125,11 @@ The gateway acts as a transparent proxy that speaks the Convox API protocol. It 
 
 ```bash
 # For CI/CD with API token
-export RACK_URL="https://convox:<api-token>@gateway.company.com"
+export RACK_URL="https://convox:<api-token>@gateway.example.com"
 convox apps  # Uses standard convox CLI directly
 
 # For developers with JWT token
-export RACK_URL="https://convox:<jwt-token>@gateway.company.com"
+export RACK_URL="https://convox:<jwt-token>@gateway.example.com"
 convox apps  # Uses standard convox CLI directly
 ```
 
@@ -137,7 +137,7 @@ convox apps  # Uses standard convox CLI directly
 
 ```bash
 # Use our wrapper for easier multi-rack management
-convox-gateway login staging https://gateway.company.com
+convox-gateway login staging https://gateway.example.com
 convox-gateway convox apps  # Automatically sets RACK_URL with stored token
 
 # Set up convenient shell alias
@@ -160,7 +160,7 @@ The `convox-gateway` CLI wrapper is optional - it just provides:
 
 ```bash
 # Login to a rack (sets it as current)
-convox-gateway login staging https://gateway.company.com
+convox-gateway login staging https://gateway.example.com
 # Opens browser for Google OAuth
 # Stores configuration in ~/.config/convox-gateway/config.json
 ```

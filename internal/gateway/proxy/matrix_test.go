@@ -22,7 +22,7 @@ func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
 	_, err = database.CreateUser("admin@test.com", "Admin", []string{"admin"})
 	require.NoError(t, err)
 
-	mgr, err := rbac.NewDBManager(database, "company.com")
+	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 
 	h := &Handler{}

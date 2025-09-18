@@ -13,6 +13,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
@@ -152,6 +153,124 @@ func createAuthenticatedRequest(method, path string, body interface{}, email str
 	})
 
 	return req.WithContext(ctx)
+}
+
+func newUIHandlerWithRBAC(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
+	t.Helper()
+	database := dbtest.NewDatabase(t)
+	mgr, err := rbac.NewDBManager(database, "example.com")
+	require.NoError(t, err)
+	handler := NewHandler(mgr, "", nil, database, nil, "testrack", "testrack", config.RackConfig{
+		Name:     "testrack",
+		URL:      "http://mock",
+		Username: "convox",
+		APIKey:   "token",
+	}, "", "http://localhost:8447")
+	return handler, database, mgr
+}
+
+func TestGetEnvValuesMaskedByDefault(t *testing.T) {
+	t.Setenv("CONVOX_SECRET_ENV_VARS", "DATABASE_URL")
+	handler, database, mgr := newUIHandlerWithRBAC(t)
+	require.NoError(t, mgr.SaveUser("ops@test.com", &rbac.UserConfig{Name: "Ops", Roles: []string{"ops"}}))
+	origFetch := handler.fetchEnv
+	handler.fetchEnv = func(config.RackConfig, string) (map[string]string, error) {
+		return map[string]string{
+			"DATABASE_URL": "postgres://...",
+			"SECRET_KEY":   "abc",
+			"PORT":         "3000",
+		}, nil
+	}
+	t.Cleanup(func() { handler.fetchEnv = origFetch })
+
+	req := createAuthenticatedRequest("GET", "/.gateway/api/env?app=myapp", nil, "ops@test.com")
+	rr := httptest.NewRecorder()
+	handler.GetEnvValues(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var payload struct {
+		Env map[string]string `json:"env"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &payload))
+	require.Equal(t, envutil.MaskedSecret, payload.Env["DATABASE_URL"])
+	require.Equal(t, envutil.MaskedSecret, payload.Env["SECRET_KEY"])
+	require.Equal(t, "3000", payload.Env["PORT"])
+
+	logs, err := database.GetAuditLogs("ops@test.com", time.Time{}, 10)
+	require.NoError(t, err)
+	found := false
+	for _, l := range logs {
+		if l.Action == "env.view" && l.Status == "success" {
+			require.Equal(t, "convox", l.ActionType)
+			require.Equal(t, "myapp", l.Resource)
+			found = true
+		}
+	}
+	require.True(t, found, "expected env.view audit log")
+}
+
+func TestGetEnvValuesSecretsViewAllowed(t *testing.T) {
+	t.Setenv("CONVOX_SECRET_ENV_VARS", "DATABASE_URL")
+	handler, database, mgr := newUIHandlerWithRBAC(t)
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+	origFetch := handler.fetchEnv
+	handler.fetchEnv = func(config.RackConfig, string) (map[string]string, error) {
+		return map[string]string{
+			"DATABASE_URL": "postgres://...",
+			"SECRET_KEY":   "abc",
+			"PORT":         "3000",
+		}, nil
+	}
+	t.Cleanup(func() { handler.fetchEnv = origFetch })
+
+	req := createAuthenticatedRequest("GET", "/.gateway/api/env?app=myapp&secrets=true", nil, "admin@test.com")
+	rr := httptest.NewRecorder()
+	handler.GetEnvValues(rr, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var payload struct {
+		Env map[string]string `json:"env"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &payload))
+	require.Equal(t, "postgres://...", payload.Env["DATABASE_URL"])
+	require.Equal(t, "abc", payload.Env["SECRET_KEY"])
+	require.Equal(t, "3000", payload.Env["PORT"])
+
+	logs, err := database.GetAuditLogs("admin@test.com", time.Time{}, 10)
+	require.NoError(t, err)
+	found := false
+	for _, l := range logs {
+		if l.Action == "secrets.view" && l.Status == "success" {
+			require.Equal(t, "convox", l.ActionType)
+			require.Equal(t, "myapp", l.Resource)
+			found = true
+		}
+	}
+	require.True(t, found, "expected secrets.view audit log")
+}
+
+func TestGetEnvValuesSecretsViewDenied(t *testing.T) {
+	t.Setenv("CONVOX_SECRET_ENV_VARS", "DATABASE_URL")
+	handler, database, mgr := newUIHandlerWithRBAC(t)
+	require.NoError(t, mgr.SaveUser("ops@test.com", &rbac.UserConfig{Name: "Ops", Roles: []string{"ops"}}))
+
+	req := createAuthenticatedRequest("GET", "/.gateway/api/env?app=myapp&secrets=true", nil, "ops@test.com")
+	rr := httptest.NewRecorder()
+	handler.GetEnvValues(rr, req)
+	require.Equal(t, http.StatusForbidden, rr.Code)
+	require.Contains(t, rr.Body.String(), "forbidden")
+
+	logs, err := database.GetAuditLogs("ops@test.com", time.Time{}, 10)
+	require.NoError(t, err)
+	foundDenied := false
+	for _, l := range logs {
+		if l.Action == "secrets.view" && l.Status == "denied" {
+			require.Equal(t, "convox", l.ActionType)
+			require.Equal(t, "myapp", l.Resource)
+			foundDenied = true
+		}
+	}
+	require.True(t, foundDenied, "expected denied secrets.view audit log")
 }
 
 func TestListUsers(t *testing.T) {

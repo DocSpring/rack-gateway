@@ -58,6 +58,17 @@ var (
 	BuildTime  = "unknown"
 )
 
+func silenceOnError(fn func(cmd *cobra.Command, args []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		err := fn(cmd, args)
+		if err != nil {
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+		}
+		return err
+	}
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:           "convox-gateway",
@@ -91,11 +102,11 @@ Rack management:
 	loginCmd := &cobra.Command{
 		Use:   "login [rack] [gateway-url]",
 		Short: "Login to a Convox rack via OAuth",
-		Long:  "Authenticate with SSO provider and store token for the specified rack.\n\nExample: convox-gateway login staging https://convox-gateway.company.com",
+		Long:  "Authenticate with SSO provider and store token for the specified rack.\n\nExample: convox-gateway login staging https://convox-gateway.example.com",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			return loginCommandWithFlags(args, noOpen, authFile)
-		},
+		}),
 	}
 	loginCmd.Flags().BoolVar(&noOpen, "no-open", false, "Do not open a browser; print auth URL and wait for completion")
 	loginCmd.Flags().StringVar(&authFile, "auth-file", "", "Write AUTH_URL, STATE, CODE_VERIFIER to this file for automation")
@@ -132,7 +143,7 @@ Rack management:
 		Use:   "env",
 		Short: "List environment variables for an app (masked by default)",
 		Args:  cobra.NoArgs, // prevent unknown subcommands like `env unknown`
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			app, err := resolveApp(appFlag)
 			if err != nil {
 				return err
@@ -157,7 +168,7 @@ Rack management:
 				fmt.Printf("%s=%s\n", k, v)
 			}
 			return nil
-		},
+		}),
 	}
 	envCmd.Flags().StringVarP(&appFlag, "app", "a", "", "App name")
 	envCmd.Flags().BoolVar(&showSecrets, "secrets", false, "Show secret values (requires permission)")
@@ -166,7 +177,7 @@ Rack management:
 		Use:   "get <KEY>",
 		Short: "Get a single environment variable (masked by default)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			key := args[0]
 			app, err := resolveApp(appFlag)
 			if err != nil {
@@ -190,7 +201,7 @@ Rack management:
 			}
 			fmt.Println(m[key])
 			return nil
-		},
+		}),
 	}
 	envGetCmd.Flags().StringVarP(&appFlag, "app", "a", "", "App name")
 	envGetCmd.Flags().BoolVar(&showSecrets, "secrets", false, "Show secret values (requires permission)")
@@ -199,30 +210,29 @@ Rack management:
 		Use:                "set",
 		Short:              "Alias for 'convox env set' (delegates to Convox CLI)",
 		DisableFlagParsing: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			full := append([]string{"env", "set"}, args...)
 			return wrapConvoxCommand(full)
-		},
+		}),
 	}
 
 	envUnsetAlias := &cobra.Command{
 		Use:                "unset",
 		Short:              "Alias for 'convox env unset' (delegates to Convox CLI)",
 		DisableFlagParsing: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			full := append([]string{"env", "unset"}, args...)
 			return wrapConvoxCommand(full)
-		},
+		}),
 	}
 
 	envCmd.AddCommand(envGetCmd, envSetAlias, envUnsetAlias)
 
 	rackCmd := &cobra.Command{
-		Use:          "rack",
-		Short:        "Show current rack and gateway information",
-		SilenceUsage: true,
-		Args:         cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Use:   "rack",
+		Short: "Show current rack and gateway information",
+		Args:  cobra.NoArgs,
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			rack, err := getCurrentRack()
 			if err != nil {
 				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
@@ -248,15 +258,14 @@ Rack management:
 			}
 
 			return nil
-		},
+		}),
 	}
 
 	racksCmd := &cobra.Command{
-		Use:          "racks",
-		Short:        "List all configured racks",
-		SilenceUsage: true,
-		Args:         cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Use:   "racks",
+		Short: "List all configured racks",
+		Args:  cobra.NoArgs,
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			configFile := filepath.Join(configPath, "config.json")
 			data, err := os.ReadFile(configFile)
 			if err != nil {
@@ -285,7 +294,7 @@ Rack management:
 			}
 
 			return nil
-		},
+		}),
 	}
 
 	versionCmd := &cobra.Command{
@@ -300,7 +309,7 @@ Rack management:
 		Use:   "web [rack]",
 		Short: "Open the Convox Gateway web UI",
 		Args:  cobra.RangeArgs(0, 1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			var rack string
 			if len(args) == 1 {
 				rack = args[0]
@@ -323,14 +332,14 @@ Rack management:
 			url = strings.TrimSuffix(url, "/") + "/.gateway/web/"
 			fmt.Printf("Opening %s\n", url)
 			return openBrowser(url)
-		},
+		}),
 	}
 
 	logoutCmd := &cobra.Command{
 		Use:   "logout [rack]",
 		Short: "Remove a rack (deletes config and token)",
 		Args:  cobra.RangeArgs(0, 1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			var rack string
 			if len(args) == 1 {
 				rack = args[0]
@@ -358,14 +367,14 @@ Rack management:
 				fmt.Printf("Rack not found: %s (nothing to remove)\n", rack)
 			}
 			return nil
-		},
+		}),
 	}
 
 	switchCmd := &cobra.Command{
 		Use:   "switch [rack]",
 		Short: "Switch to a different rack",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			rack := args[0]
 
 			// Verify the rack exists in our config
@@ -379,7 +388,7 @@ Rack management:
 
 			fmt.Printf("Switched to rack: %s\n", rack)
 			return nil
-		},
+		}),
 	}
 
 	completionCmd := &cobra.Command{
@@ -437,7 +446,7 @@ PowerShell:
 		Use:   "start [rack] [gateway-url]",
 		Short: "Start login and print parameters (advanced)",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			rack := args[0]
 			gatewayURL := args[1]
 			if err := saveGatewayConfig(rack, gatewayURL); err != nil {
@@ -451,13 +460,13 @@ PowerShell:
 			b, _ := json.Marshal(startResp)
 			fmt.Printf("JSON=%s\n", string(b))
 			return nil
-		},
+		}),
 	}
 	loginCompleteCmd := &cobra.Command{
 		Use:   "complete [rack] [gateway-url]",
 		Short: "Complete login after browser authorization (advanced)",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			rack := args[0]
 			gatewayURL := args[1]
 			if completeState == "" || completeCodeVerifier == "" {
@@ -475,7 +484,7 @@ PowerShell:
 			}
 			fmt.Printf("Successfully logged in as %s\n", loginResp.Email)
 			return nil
-		},
+		}),
 	}
 	loginCompleteCmd.Flags().StringVar(&completeState, "state", "", "OAuth state returned by login start")
 	loginCompleteCmd.Flags().StringVar(&completeCodeVerifier, "code-verifier", "", "PKCE code verifier from login start")

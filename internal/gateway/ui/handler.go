@@ -43,6 +43,7 @@ type Handler struct {
 	rackConfig   config.RackConfig
 	devProxy     *httputil.ReverseProxy
 	publicBase   string
+	fetchEnv     func(config.RackConfig, string) (map[string]string, error)
 }
 
 func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *token.Service, database *db.Database, mailer email.Sender, rackName, rackAlias string, rackCfg config.RackConfig, devProxyURL string, publicBase string) *Handler {
@@ -63,6 +64,7 @@ func NewHandler(rbacManager rbac.RBACManager, configPath string, tokenService *t
 		rackConfig:   rackCfg,
 		devProxy:     rp,
 		publicBase:   publicBase,
+		fetchEnv:     envutil.FetchLatestEnvMap,
 	}
 }
 
@@ -533,36 +535,44 @@ func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
 	}
 	key := r.URL.Query().Get("key")
 	wantSecrets := strings.EqualFold(r.URL.Query().Get("secrets"), "true")
+	start := time.Now()
 
 	// Enforce env:view
 	if ok, _ := h.rbacManager.Enforce(au.Email, "env", "view"); !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	// If requesting secrets, deny and audit (we never reveal secrets via this endpoint)
+	allowedSecrets := false
 	if wantSecrets {
-		_ = audit.LogDB(h.database, &db.AuditLog{
-			UserEmail:    au.Email,
-			UserName:     au.Name,
-			ActionType:   "convox",
-			Action:       "secrets.view",
-			ResourceType: "secret",
-			Resource: func() string {
-				if key != "" {
-					return fmt.Sprintf("%s/%s", app, key)
-				}
-				return "all"
-			}(),
-			Details:        "{}",
-			IPAddress:      r.RemoteAddr,
-			UserAgent:      r.UserAgent(),
-			Status:         "denied",
-			RBACDecision:   "deny",
-			HTTPStatus:     http.StatusForbidden,
-			ResponseTimeMs: 0,
-		})
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+		if ok, _ := h.rbacManager.Enforce(au.Email, "secrets", "view"); !ok {
+			res := app
+			if key != "" {
+				res = fmt.Sprintf("%s/%s", app, key)
+			}
+			details := map[string]interface{}{"app": app, "secrets": true}
+			if key != "" {
+				details["key"] = key
+			}
+			detailsJSON, _ := json.Marshal(details)
+			_ = audit.LogDB(h.database, &db.AuditLog{
+				UserEmail:      au.Email,
+				UserName:       au.Name,
+				ActionType:     "convox",
+				Action:         "secrets.view",
+				ResourceType:   "secret",
+				Resource:       res,
+				Details:        string(detailsJSON),
+				IPAddress:      r.RemoteAddr,
+				UserAgent:      r.UserAgent(),
+				Status:         "denied",
+				RBACDecision:   "deny",
+				HTTPStatus:     http.StatusForbidden,
+				ResponseTimeMs: int(time.Since(start).Milliseconds()),
+			})
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		allowedSecrets = true
 	}
 
 	// Fetch latest env via rack API using configured rack
@@ -571,24 +581,24 @@ func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "rack not configured", http.StatusInternalServerError)
 		return
 	}
-	envMap, err := envutil.FetchLatestEnvMap(rc, app)
+	envMap, err := h.fetchEnv(rc, app)
 	if err != nil {
 		http.Error(w, "failed to fetch env", http.StatusBadGateway)
 		return
 	}
 
-	// (no secrets branch above; continue masking values below)
-	// Always mask secrets and protected keys
-	extra := strings.Split(os.Getenv("CONVOX_SECRET_ENV_VARS"), ",")
-	// Include protected keys
-	if h.database != nil {
-		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
-			extra = append(extra, arr...)
+	// Mask secrets unless explicit access was granted
+	if !allowedSecrets {
+		extra := strings.Split(os.Getenv("CONVOX_SECRET_ENV_VARS"), ",")
+		if h.database != nil {
+			if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+				extra = append(extra, arr...)
+			}
 		}
-	}
-	for k := range envMap {
-		if envutil.IsSecretKey(k, extra) {
-			envMap[k] = envutil.MaskedSecret
+		for k := range envMap {
+			if envutil.IsSecretKey(k, extra) {
+				envMap[k] = envutil.MaskedSecret
+			}
 		}
 	}
 	// Filter by key if provided
@@ -596,6 +606,41 @@ func (h *Handler) GetEnvValues(w http.ResponseWriter, r *http.Request) {
 		v := envMap[key]
 		envMap = map[string]string{key: v}
 	}
+
+	resource := app
+	if key != "" {
+		resource = fmt.Sprintf("%s/%s", app, key)
+	}
+	details := map[string]interface{}{"app": app}
+	if key != "" {
+		details["key"] = key
+	}
+	if wantSecrets {
+		details["secrets"] = true
+	}
+	detailsJSON, _ := json.Marshal(details)
+	action := "env.view"
+	resourceType := "env"
+	if allowedSecrets {
+		action = "secrets.view"
+		resourceType = "secret"
+	}
+	_ = audit.LogDB(h.database, &db.AuditLog{
+		UserEmail:      au.Email,
+		UserName:       au.Name,
+		ActionType:     "convox",
+		Action:         action,
+		ResourceType:   resourceType,
+		Resource:       resource,
+		Details:        string(detailsJSON),
+		IPAddress:      r.RemoteAddr,
+		UserAgent:      r.UserAgent(),
+		Status:         "success",
+		RBACDecision:   "allow",
+		HTTPStatus:     http.StatusOK,
+		ResponseTimeMs: int(time.Since(start).Milliseconds()),
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"env": envMap})
 }

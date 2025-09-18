@@ -22,7 +22,7 @@ func TestOAuthEndpoint_UsesCustomBaseURL(t *testing.T) {
 		"mock-client-id",
 		"mock-client-secret",
 		"http://localhost:8447",
-		"company.com",
+		"example.com",
 		"http://mock-oauth:3001", // This should make it use mock endpoints
 		jwtManager,
 	)

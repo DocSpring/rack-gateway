@@ -23,19 +23,19 @@ Developer → convox-gateway CLI → Gateway API Server → Convox Rack
 ### Developer Setup
 
 1. **Install CLI**: Binary installed at `/usr/local/bin/convox-gateway`
-2. **Login to Rack**: `convox-gateway login staging https://convox-gateway.company.com`
+2. **Login to Rack**: `convox-gateway login staging https://convox-gateway.example.com`
 3. **Configuration**: Stored in `~/.config/convox-gateway/config.json`
    ```json
    {
      "gateways": {
        "staging": {
-         "url": "https://convox-gateway.company.com"
+         "url": "https://convox-gateway.example.com"
        }
      },
      "tokens": {
        "staging": {
          "token": "jwt-token-here",
-         "email": "user@company.com",
+         "email": "user@example.com",
          "expires_at": "2024-02-01T00:00:00Z"
        }
      }
@@ -62,7 +62,7 @@ The `convox-gateway` CLI wraps the real `convox` CLI:
 
 1. Developer runs: `convox-gateway apps`
 2. CLI loads gateway URL and JWT token from `~/.config/convox-gateway/config.json`
-3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.company.com`
+3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.example.com`
 4. CLI executes: `convox apps` with the RACK_URL environment variable
 5. Real convox CLI connects to gateway using JWT as password
 6. Gateway validates JWT, checks RBAC permissions
@@ -74,11 +74,11 @@ The gateway is fully compatible with the native Convox CLI - no wrapper needed:
 
 ```bash
 # For CI/CD with API token
-export RACK_URL="https://convox:<api-token>@gateway.company.com"
+export RACK_URL="https://convox:<api-token>@gateway.example.com"
 convox apps  # Uses native convox CLI directly
 
 # For developers with JWT token
-export RACK_URL="https://convox:<jwt-token>@gateway.company.com"
+export RACK_URL="https://convox:<jwt-token>@gateway.example.com"
 convox apps  # Uses native convox CLI directly
 ```
 

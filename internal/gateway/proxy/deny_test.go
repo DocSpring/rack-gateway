@@ -23,7 +23,7 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 	require.NoError(t, err)
 
 	// RBAC manager (DB)
-	mgr, err := rbac.NewDBManager(database, "company.com")
+	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 
 	// Minimal config with a default rack
