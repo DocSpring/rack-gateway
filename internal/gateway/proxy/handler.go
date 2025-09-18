@@ -789,6 +789,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	// Merge masked values and compute diffs
 	merged := make(map[string]string)
 	diffs := make([]EnvDiff, 0)
+	removed := make(map[string]EnvDiff)
 	for _, key := range order {
 		val := posted[key]
 		base := baseEnv[key]
@@ -805,6 +806,17 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		merged[key] = val
 		if val != base {
 			diffs = append(diffs, EnvDiff{Key: key, OldVal: base, NewVal: val, Secret: isSecret})
+		}
+	}
+	for key, base := range baseEnv {
+		if _, ok := posted[key]; ok {
+			continue
+		}
+		removed[key] = EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)}
+	}
+	if len(removed) > 0 {
+		for _, diff := range removed {
+			diffs = append(diffs, diff)
 		}
 	}
 
@@ -848,6 +860,9 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	// Append remaining base keys to ensure full env for release
 	for k, v := range baseEnv {
 		if _, ok := used[k]; ok {
+			continue
+		}
+		if _, removed := removed[k]; removed {
 			continue
 		}
 		if b.Len() > 0 {

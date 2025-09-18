@@ -29,6 +29,7 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager)
 	// Configure extra secret names
 	h.secretNames["DATABASE_URL"] = struct{}{}
 	h.secretNames["REDIS_URL"] = struct{}{}
+	h.secretNames["SECRET_KEY"] = struct{}{}
 	return h, database, mgr
 }
 
