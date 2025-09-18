@@ -404,7 +404,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       </div>
 
       {/* Statistics Cards */}
-      <div className="mb-6 grid gap-4 md:grid-cols-4">
+      <div className="mb-6 grid gap-6 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="font-medium text-muted-foreground text-sm">Total Logs</CardTitle>
