@@ -39,11 +39,12 @@ type Handler struct {
 	allowDestructive bool
 	emailer          email.Sender
 	rackName         string
+	rackAlias        string
 }
 
 const maskedSecret = envutil.MaskedSecret
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName string) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
@@ -54,6 +55,7 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 		allowDestructive: false,
 		emailer:          mailer,
 		rackName:         rackName,
+		rackAlias:        strings.TrimSpace(rackAlias),
 	}
 	// Load additional secret env var names from env (comma-separated)
 	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
@@ -76,6 +78,13 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 		}
 	}
 	return h
+}
+
+func (h *Handler) rackDisplay() string {
+	if alias := strings.TrimSpace(h.rackAlias); alias != "" {
+		return alias
+	}
+	return h.rackName
 }
 
 // SetAllowDestructive updates the in-memory destructive action toggle.
@@ -517,8 +526,8 @@ func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes
 		}
 		fmt.Fprintf(&b, "%s: %s -> %s", c.Key, c.Old, c.New)
 	}
-	subject := fmt.Sprintf("Convox Gateway (%s): %s changed rack parameters", h.rackName, actor)
-	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackName, actor, b.String())
+	subject := fmt.Sprintf("Convox Gateway (%s): %s changed rack parameters", h.rackDisplay(), actor)
+	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, b.String())
 	_ = h.emailer.SendMany(admins, subject, text, html)
 }
 
@@ -1054,6 +1063,13 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []EnvDi
 		if d.Secret {
 			action = "secrets.set"
 			rtype = "secret"
+		}
+		if strings.TrimSpace(d.NewVal) == "" {
+			if d.Secret {
+				action = "secrets.unset"
+			} else {
+				action = "env.unset"
+			}
 		}
 		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:      email,

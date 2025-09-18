@@ -32,7 +32,7 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACMana
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default")
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default", "default")
 	return h, database, mgr
 }
 
@@ -168,7 +168,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default")
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default", "default")
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -206,6 +206,48 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	require.True(t, foundRelease, "expected release.create audit log entry")
 }
 
+func TestLogEnvDiffsLogsUnset(t *testing.T) {
+	h, database, _ := newProxyForEnvTest(t)
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/releases", nil)
+	req.Header.Set("X-User-Name", "Tester")
+	req.RemoteAddr = "127.0.0.1:1234"
+
+	h.logEnvDiffs(req, "user@example.com", "default", []EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}})
+
+	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, logs)
+	found := false
+	for _, log := range logs {
+		if log.Action == "env.unset" && log.Resource == "my-app/FOO" {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected env.unset audit log for unset env var")
+}
+
+func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
+	h, database, _ := newProxyForEnvTest(t)
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/releases", nil)
+	req.Header.Set("X-User-Name", "Tester")
+	req.RemoteAddr = "127.0.0.1:1234"
+
+	h.logEnvDiffs(req, "user@example.com", "default", []EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}})
+
+	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, logs)
+	found := false
+	for _, log := range logs {
+		if log.Action == "secrets.unset" && log.Resource == "my-app/SECRET_KEY" {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected secrets.unset audit log for unset secret")
+}
+
 func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	mgr, err := rbac.NewDBManager(database, "company.com")
@@ -230,7 +272,7 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default")
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default", "default")
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"foo":"bar"}`))
 	req.Header.Set("Content-Type", "application/json")

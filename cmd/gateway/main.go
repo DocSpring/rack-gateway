@@ -203,6 +203,11 @@ func main() {
 		}
 	}
 
+	rackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
+	if rackAlias == "" {
+		rackAlias = rackName
+	}
+
 	// Dev proxy for web UI: if DEV_MODE and WEB_DEV_SERVER_URL provided, proxy /.gateway/web/* to Vite
 	devProxyURL := ""
 	if getEnv("DEV_MODE", "false") == "true" {
@@ -211,9 +216,9 @@ func main() {
 	// Public base URL used in emails and links
 	publicBase := redirectInput
 	// Initialize proxy with email sender and rack name for notifications
-	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger, database, sender, rackName)
+	proxyHandler := proxy.NewHandler(cfg, rbacManager, auditLogger, database, sender, rackName, rackAlias)
 
-	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackCfg, devProxyURL, publicBase)
+	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackAlias, rackCfg, devProxyURL, publicBase)
 
 	r := chi.NewRouter()
 
