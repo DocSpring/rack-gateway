@@ -183,23 +183,6 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 		TokenID:     &apiToken.ID,
 	}
 
-	// Audit successful token validation / usage (no sensitive values; include token id)
-	if a.database != nil {
-		_ = audit.LogDB(a.database, &db.AuditLog{
-			UserEmail:      user.Email,
-			UserName:       user.Name,
-			ActionType:     "auth",
-			Action:         "token.validate",
-			ResourceType:   "api_token",
-			Resource:       fmt.Sprintf("token_id:%d", apiToken.ID),
-			Details:        "{\"result\":\"success\"}",
-			IPAddress:      "",
-			UserAgent:      "",
-			Status:         "success",
-			ResponseTimeMs: 0,
-		})
-	}
-
 	return userResp, nil
 }
 
