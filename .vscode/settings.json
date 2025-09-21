@@ -1,0 +1,13 @@
+{
+  "typescript.tsdk": "web/node_modules/typescript/lib",
+  "typescript.tsserver.projectDetection": "workspace",
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
+  "typescript.tsserver.implicitProjectConfig": {
+    "checkJs": false,
+    "jsx": "react-jsx",
+    "module": "esnext",
+    "target": "esnext"
+  },
+  "biome.lsp.bin": "web/node_modules/.bin/biome",
+  "biome.requireConfiguration": true
+}

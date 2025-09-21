@@ -25,7 +25,6 @@ data
 docker-compose.override.yml
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
