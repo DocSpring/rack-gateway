@@ -47,11 +47,6 @@ web/node_modules/
 web/.vite/
 mock-convox
 
-# Dev mock OAuth
-dev/mock-oauth/node_modules/
-dev/mock-oauth/pnpm-lock.yaml
-dev/mock-oauth/package-lock.json
-
 # Test artifacts
 web/test-results/
 web/coverage/

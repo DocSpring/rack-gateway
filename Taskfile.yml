@@ -9,6 +9,7 @@ includes:
   docker: ./Taskfile.docker.yml
   go: ./Taskfile.go.yml
   web: ./Taskfile.web.yml
+  mock-oauth: ./Taskfile.mock-oauth.yml
 
 tasks:
   all:
@@ -17,7 +18,11 @@ tasks:
 
   lint:
     desc: Run web + Go linters and typecheck
-    deps: [web:lint, go:lint]
+    deps: [web:lint, go:lint, mock-oauth:lint]
+
+  lint:fix:
+    desc: Run web + Go linters and typecheck
+    deps: [web:lint:fix, go:lint:fix, mock-oauth:lint:fix]
 
   test:
     desc: Run all tests
@@ -35,7 +40,7 @@ tasks:
 
   build:
     desc: Build web + gateway + cli + mock binaries
-    deps: [web:build, go:build]
+    deps: [web:build, go:build, mock-oauth:build]
 
   # Convenience alias for local dev stack (delegates to docker tasks)
   dev:

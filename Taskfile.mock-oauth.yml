@@ -1,0 +1,49 @@
+version: "3"
+
+tasks:
+  deps:
+    dir: dev/mock-oauth
+    desc: Install dependencies for mock OAuth server
+    run: once
+    cmds:
+      - pnpm install
+
+  build:
+    dir: dev/mock-oauth
+    desc: Build the TypeScript mock OAuth server
+    deps: [deps]
+    cmds:
+      - pnpm build
+
+  lint:
+    desc: Run TypeScript typecheck and Biome lint
+    deps: [lint:typecheck, lint:biome]
+
+  lint:typecheck:
+    dir: dev/mock-oauth
+    desc: Run TypeScript type checking
+    deps: [deps]
+    cmds:
+      - pnpm typecheck
+
+  lint:biome:
+    dir: dev/mock-oauth
+    desc: Run Biome lint
+    deps: [deps]
+    cmds:
+      - pnpm exec biome check .
+
+  lint:biome:fix:
+    dir: dev/mock-oauth
+    aliases: [lint:fix]
+    desc: Lint mock OAuth server and apply safe fixes
+    deps: [deps]
+    cmds:
+      - pnpm exec biome check . --write
+
+  dev:
+    dir: dev/mock-oauth
+    desc: Run mock OAuth server in watch mode
+    deps: [deps]
+    cmds:
+      - pnpm dev

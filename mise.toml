@@ -1,3 +1,6 @@
+[tools]
+node = "22.19.0"
+
 [env]
 # PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
 GATEWAY_PORT = "8447"

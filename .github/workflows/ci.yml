@@ -75,8 +75,29 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
 
-      - name: Web lint
+      - name: Web lint (Typecheck and Biome)
         run: task web:lint
 
       - name: Web tests
         run: task web:test
+
+  mock-oauth-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install Task
+        run: |
+          curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+          task --version
+
+      - name: Mock OAuth lint (Typecheck and Biome)
+        run: task mock-oauth:lint

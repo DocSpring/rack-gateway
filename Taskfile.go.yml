@@ -44,6 +44,7 @@ tasks:
       - ./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
   lint:
+    aliases: [lint:fix]
     desc: Run Go vet/fmt/staticcheck
     deps: [deps]
     cmds:
