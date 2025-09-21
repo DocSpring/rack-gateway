@@ -59,7 +59,7 @@ func TestTokenService(t *testing.T) {
 		req := &APITokenRequest{
 			Name:        "Limited Token",
 			UserID:      user.ID,
-			Permissions: []string{"convox:apps:read", "convox:builds:create"},
+			Permissions: []string{"convox:app:list", "convox:build:create"},
 			ExpiresAt:   DefaultTokenExpiry(),
 		}
 
@@ -67,8 +67,8 @@ func TestTokenService(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test permissions
-		assert.True(t, service.HasPermission(resp.APIToken, "apps", "read"))
-		assert.True(t, service.HasPermission(resp.APIToken, "builds", "create"))
+		assert.True(t, service.HasPermission(resp.APIToken, "app", "list"))
+		assert.True(t, service.HasPermission(resp.APIToken, "build", "create"))
 		assert.False(t, service.HasPermission(resp.APIToken, "env", "set"))
 
 		// Test wildcard token
@@ -82,7 +82,7 @@ func TestTokenService(t *testing.T) {
 		wildcardResp, err := service.GenerateAPIToken(wildcardReq)
 		require.NoError(t, err)
 
-		assert.True(t, service.HasPermission(wildcardResp.APIToken, "apps", "read"))
+		assert.True(t, service.HasPermission(wildcardResp.APIToken, "app", "list"))
 		assert.True(t, service.HasPermission(wildcardResp.APIToken, "env", "set"))
 		assert.True(t, service.HasPermission(wildcardResp.APIToken, "anything", "delete"))
 	})

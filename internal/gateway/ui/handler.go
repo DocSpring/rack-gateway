@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/go-chi/chi/v5"
 )
@@ -84,6 +86,13 @@ func isValidEmail(email string) bool {
 	return emailRegex.MatchString(email)
 }
 
+type tokenRolePayload struct {
+	Name        string   `json:"name"`
+	Label       string   `json:"label"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
 // auditUserAction records an audit log for a user-management action
 func (h *Handler) auditUserAction(r *http.Request, action, resource, status string, details map[string]interface{}, start time.Time) {
 	if h.database == nil {
@@ -135,6 +144,80 @@ func (h *Handler) auditUserAction(r *http.Request, action, resource, status stri
 		Status:         status,
 		ResponseTimeMs: int(time.Since(start).Milliseconds()),
 	})
+}
+
+func sanitizePermissions(perms []string) []string {
+	if len(perms) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(perms))
+	for _, p := range perms {
+		perm := strings.TrimSpace(strings.ToLower(p))
+		if perm == "" {
+			continue
+		}
+		set[perm] = struct{}{}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(set))
+	for perm := range set {
+		result = append(result, perm)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func parsePermission(perm string) (string, string, error) {
+	parts := strings.Split(perm, ":")
+	if len(parts) != 3 || parts[0] != "convox" {
+		return "", "", fmt.Errorf("invalid permission: %s", perm)
+	}
+	resource := strings.TrimSpace(parts[1])
+	action := strings.TrimSpace(parts[2])
+	if resource == "" || action == "" {
+		return "", "", fmt.Errorf("invalid permission: %s", perm)
+	}
+	return resource, action, nil
+}
+
+func (h *Handler) rolePermissionSets() (map[string][]string, error) {
+	return rbac.DefaultRolePermissions(), nil
+}
+
+func (h *Handler) knownPermissionSet(rolePerms map[string][]string) map[string]struct{} {
+	known := make(map[string]struct{})
+	for _, perms := range rolePerms {
+		for _, perm := range perms {
+			known[perm] = struct{}{}
+		}
+	}
+	for _, perm := range routes.AllPermissions() {
+		known[perm] = struct{}{}
+	}
+	known["convox:*:*"] = struct{}{}
+	return known
+}
+
+func sortedPermissionsFromSet(set map[string]struct{}) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	perms := make([]string, 0, len(set))
+	wildcard := false
+	for perm := range set {
+		if perm == "convox:*:*" {
+			wildcard = true
+			continue
+		}
+		perms = append(perms, perm)
+	}
+	sort.Strings(perms)
+	if wildcard {
+		perms = append(perms, "convox:*:*")
+	}
+	return perms
 }
 
 // GetConfig returns the current gateway configuration
@@ -493,27 +576,25 @@ func (h *Handler) GetRackInfo(w http.ResponseWriter, r *http.Request) {
 
 // ListRoles returns the hardcoded roles
 func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
-	roles := map[string]interface{}{
-		"viewer": map[string]interface{}{
-			"name":        "viewer",
-			"description": "Read-only access to apps, processes, and logs",
-			"permissions": []string{"convox:apps:list", "convox:ps:list", "convox:logs:view"},
-		},
-		"ops": map[string]interface{}{
-			"name":        "ops",
-			"description": "Restart apps, view environments, manage processes",
-			"permissions": []string{"convox:apps:*", "convox:ps:*", "convox:releases:list", "convox:env:view", "convox:logs:*"},
-		},
-		"deployer": map[string]interface{}{
-			"name":        "deployer",
-			"description": "Full deployment permissions including env vars",
-			"permissions": []string{"convox:*:*"},
-		},
-		"admin": map[string]interface{}{
-			"name":        "admin",
-			"description": "Complete access to all operations",
-			"permissions": []string{"*"},
-		},
+	rolePerms, err := h.rolePermissionSets()
+	if err != nil {
+		http.Error(w, "failed to load role permissions", http.StatusInternalServerError)
+		return
+	}
+
+	metaMap := rbac.RoleMetadataMap()
+	roles := make(map[string]interface{}, len(metaMap))
+	for _, role := range rbac.RoleOrder() {
+		meta, ok := metaMap[role]
+		if !ok {
+			continue
+		}
+		roles[role] = map[string]interface{}{
+			"name":        role,
+			"label":       meta.Label,
+			"description": meta.Description,
+			"permissions": rolePerms[role],
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -895,6 +976,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	start := time.Now()
 
 	// Only admins can create tokens for other users
 	var targetUserEmail string
@@ -964,10 +1046,43 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		expiresAt = token.DefaultTokenExpiry()
 	}
 
-	// Use default CICD permissions if none provided
-	permissions := req.Permissions
+	// Normalize requested permissions (lower-case, deduplicated)
+	permissions := sanitizePermissions(req.Permissions)
 	if len(permissions) == 0 {
-		permissions = token.DefaultCICDPermissions()
+		permissions = sanitizePermissions(token.DefaultCICDPermissions())
+	}
+
+	rolePerms, err := h.rolePermissionSets()
+	if err != nil {
+		http.Error(w, "failed to load role permissions", http.StatusInternalServerError)
+		h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "role permissions unavailable"}, start)
+		return
+	}
+	knownPerms := h.knownPermissionSet(rolePerms)
+
+	for _, perm := range permissions {
+		if _, ok := knownPerms[perm]; !ok {
+			http.Error(w, fmt.Sprintf("unknown permission: %s", perm), http.StatusBadRequest)
+			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "unknown permission", "permission": perm}, start)
+			return
+		}
+		resource, action, err := parsePermission(perm)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": err.Error()}, start)
+			return
+		}
+		allowed, err := h.rbacManager.Enforce(authUser.Email, resource, action)
+		if err != nil {
+			http.Error(w, "failed to verify permissions", http.StatusInternalServerError)
+			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "rbac enforcement failed"}, start)
+			return
+		}
+		if !allowed {
+			http.Error(w, "forbidden: permission exceeds your role", http.StatusForbidden)
+			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "permission denied", "permission": perm}, start)
+			return
+		}
 	}
 
 	// Lookup creator user ID (who is making this request)
@@ -986,7 +1101,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, "failed to create token", http.StatusInternalServerError)
-		h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name}, time.Now())
+		h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "token creation failed"}, start)
 		return
 	}
 
@@ -998,8 +1113,8 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		"api_token.create",
 		fmt.Sprintf("%d", tokenResp.APIToken.ID),
 		"success",
-		map[string]interface{}{"name": req.Name},
-		time.Now(),
+		map[string]interface{}{"name": req.Name, "permissions": permissions},
+		start,
 	)
 
 	// Notifications
@@ -1033,6 +1148,111 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 			_ = h.emailer.SendMany(orderByInviterFirst(filteredAdmins, inviter), subjectAdmin, txt, html)
 		}
 	}
+}
+
+// GetTokenPermissionMetadata returns the available permissions and role shortcuts for API tokens
+func (h *Handler) GetTokenPermissionMetadata(w http.ResponseWriter, r *http.Request) {
+	authUser, isAuth := auth.GetAuthUser(r.Context())
+	if !isAuth {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	rolePerms, err := h.rolePermissionSets()
+	if err != nil {
+		http.Error(w, "failed to load role permissions", http.StatusInternalServerError)
+		return
+	}
+
+	known := h.knownPermissionSet(rolePerms)
+	allPermissions := sortedPermissionsFromSet(known)
+
+	metaMap := rbac.RoleMetadataMap()
+	rolesPayload := make([]tokenRolePayload, 0, len(metaMap))
+	for _, role := range rbac.RoleOrder() {
+		perms, ok := rolePerms[role]
+		if !ok {
+			continue
+		}
+		meta, ok := metaMap[role]
+		if !ok {
+			continue
+		}
+		rolesPayload = append(rolesPayload, tokenRolePayload{
+			Name:        role,
+			Label:       meta.Label,
+			Description: meta.Description,
+			Permissions: perms,
+		})
+	}
+
+	userRoles, err := h.rbacManager.GetUserRoles(authUser.Email)
+	if err != nil {
+		http.Error(w, "failed to load user roles", http.StatusInternalServerError)
+		return
+	}
+	sort.Strings(userRoles)
+
+	userPermSet := make(map[string]struct{})
+	for _, role := range userRoles {
+		perms, ok := rolePerms[role]
+		if !ok {
+			continue
+		}
+		for _, perm := range perms {
+			userPermSet[perm] = struct{}{}
+		}
+	}
+	userPermissions := sortedPermissionsFromSet(userPermSet)
+	defaultPerms := sanitizePermissions(token.DefaultCICDPermissions())
+
+	response := struct {
+		Permissions        []string           `json:"permissions"`
+		Roles              []tokenRolePayload `json:"roles"`
+		DefaultPermissions []string           `json:"default_permissions"`
+		UserRoles          []string           `json:"user_roles"`
+		UserPermissions    []string           `json:"user_permissions"`
+	}{
+		Permissions:        allPermissions,
+		Roles:              rolesPayload,
+		DefaultPermissions: defaultPerms,
+		UserRoles:          userRoles,
+		UserPermissions:    userPermissions,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetAPIToken returns a specific API token by ID
+func (h *Handler) GetAPIToken(w http.ResponseWriter, r *http.Request) {
+	authUser, isAuth := auth.GetAuthUser(r.Context())
+	if !isAuth {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	_ = authUser // read access for all authenticated users; mutating actions handled elsewhere
+
+	tokenIDStr := chi.URLParam(r, "tokenID")
+	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid token ID", http.StatusBadRequest)
+		return
+	}
+
+	token, err := h.database.GetAPITokenByID(tokenID)
+	if err != nil {
+		http.Error(w, "failed to load token", http.StatusInternalServerError)
+		return
+	}
+	if token == nil {
+		http.Error(w, "token not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(token)
 }
 
 // ListAPITokens returns API tokens for the current user

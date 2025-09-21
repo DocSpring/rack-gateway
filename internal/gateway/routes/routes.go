@@ -1,7 +1,9 @@
 package routes
 
 import (
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -21,6 +23,7 @@ var specs = []RouteSpec{
 	{"GET", "/apps/{app}/processes/{pid}", "process", "get"},
 	{"DELETE", "/apps/{app}/processes/{pid}", "process", "terminate"},
 	{"SOCKET", "/apps/{app}/processes/{pid}/exec", "process", "exec"},
+	{"GET", "/apps/{app}/processes/{pid}/exec", "process", "exec"},
 	{"POST", "/apps/{app}/services/{service}/processes", "process", "start"},
 
 	// Logs (app/system/build)
@@ -62,9 +65,13 @@ var specs = []RouteSpec{
 	{"GET", "/apps/{name}", "app", "get"},
 	{"POST", "/apps", "app", "create"},
 	{"PUT", "/apps/{name}", "app", "update"},
-	{"POST", "/apps/{name}/cancel", "app", "update"},
-	{"PUT", "/apps/{app}/services/{name}", "app", "update"},
+	{"POST", "/apps/{app}/restart", "app", "restart"},
 	{"DELETE", "/apps/{name}", "app", "delete"},
+
+	// Services
+	{"PUT", "/apps/{app}/services/{name}", "app", "update"},
+	{"GET", "/apps/{app}/services", "app", "get"},
+	{"POST", "/apps/{app}/services/{service}/restart", "process", "start"},
 
 	// Instances
 	{"GET", "/instances", "rack", "read"},
@@ -87,6 +94,22 @@ func Match(method, path string) (string, string, bool) {
 		}
 	}
 	return "", "", false
+}
+
+// AllPermissions returns the list of known convox:<resource>:<action> strings derived from route specs.
+func AllPermissions() []string {
+	set := make(map[string]struct{})
+	for _, s := range specs {
+		perm := fmt.Sprintf("convox:%s:%s", s.Resource, s.Action)
+		set[perm] = struct{}{}
+	}
+	// Additional permissions that are not represented in the route specs but exist in RBAC policies.
+	perms := make([]string, 0, len(set))
+	for perm := range set {
+		perms = append(perms, perm)
+	}
+	sort.Strings(perms)
+	return perms
 }
 
 // IsAllowed returns true if a path+method is known.

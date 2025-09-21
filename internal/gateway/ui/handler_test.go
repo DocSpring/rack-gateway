@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
@@ -24,12 +27,18 @@ import (
 
 // Mock RBAC Manager for testing
 type mockRBACManager struct {
-	users       map[string]*rbac.UserConfig
-	userRoles   map[string][]string
-	shouldError bool
+	users           map[string]*rbac.UserConfig
+	userRoles       map[string][]string
+	rolePermissions map[string][]string
+	shouldError     bool
 }
 
 func newMockRBACManager() *mockRBACManager {
+	rolePerms := rbac.DefaultRolePermissions()
+	rolePermCopy := make(map[string][]string, len(rolePerms))
+	for role, perms := range rolePerms {
+		rolePermCopy[role] = append([]string(nil), perms...)
+	}
 	return &mockRBACManager{
 		users: map[string]*rbac.UserConfig{
 			"admin@example.com": {
@@ -55,6 +64,7 @@ func newMockRBACManager() *mockRBACManager {
 			"ops@example.com":      {"ops"},
 			"deployer@example.com": {"deployer"},
 		},
+		rolePermissions: rolePermCopy,
 	}
 }
 
@@ -62,11 +72,20 @@ func (m *mockRBACManager) Enforce(user, resource, action string) (bool, error) {
 	if m.shouldError {
 		return false, assert.AnError
 	}
-	// Only admins can manage users
-	roles := m.userRoles[user]
-	for _, role := range roles {
-		if role == "admin" {
+	permission := fmt.Sprintf("convox:%s:%s", resource, action)
+	perms := m.permissionsForUser(user)
+	for _, perm := range perms {
+		if perm == "convox:*:*" {
 			return true, nil
+		}
+		if perm == permission {
+			return true, nil
+		}
+		if strings.HasSuffix(perm, ":*") {
+			prefix := strings.TrimSuffix(perm, "*")
+			if strings.HasPrefix(permission, prefix) {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
@@ -108,6 +127,11 @@ func (m *mockRBACManager) SaveUser(email string, user *rbac.UserConfig) error {
 	}
 	m.users[email] = user
 	m.userRoles[email] = user.Roles
+	for _, role := range user.Roles {
+		if _, ok := m.rolePermissions[role]; !ok {
+			m.rolePermissions[role] = []string{}
+		}
+	}
 	return nil
 }
 
@@ -132,8 +156,27 @@ func (m *mockRBACManager) GetAllowedDomain() string {
 }
 
 func (m *mockRBACManager) GetRolePermissions(role string) ([]string, error) {
-	// Not used in these tests
-	return []string{}, nil
+	perms, ok := m.rolePermissions[role]
+	if !ok {
+		return []string{}, nil
+	}
+	return perms, nil
+}
+
+func (m *mockRBACManager) permissionsForUser(email string) []string {
+	roles := m.userRoles[email]
+	set := make(map[string]struct{})
+	for _, role := range roles {
+		for _, perm := range m.rolePermissions[role] {
+			set[perm] = struct{}{}
+		}
+	}
+	perms := make([]string, 0, len(set))
+	for perm := range set {
+		perms = append(perms, perm)
+	}
+	sort.Strings(perms)
+	return perms
 }
 
 // Helper function to create a request with auth context
@@ -917,4 +960,106 @@ func TestCreateAPIToken_SendsEmails(t *testing.T) {
 	require.GreaterOrEqual(t, len(mailer.sent), 1)
 	assert.Equal(t, "deployer@example.com", mailer.sent[0].To)
 	require.GreaterOrEqual(t, len(mailer.sentBatch), 1)
+}
+
+func TestCreateAPIToken_RejectsUnknownPermission(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	tokenService := token.NewService(database)
+	handler := NewHandler(rbacManager, "", tokenService, database, nil, "testrack", "testrack", config.RackConfig{}, "", "http://localhost:8447")
+
+	_, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+	require.NoError(t, err)
+
+	reqBody := map[string]interface{}{
+		"name":        "bad-token",
+		"permissions": []string{"convox:unknown:perm"},
+	}
+	req := createAuthenticatedRequest("POST", "/.gateway/admin/tokens", reqBody, "admin@example.com")
+	rr := httptest.NewRecorder()
+	handler.CreateAPIToken(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestCreateAPIToken_RejectsEscalation(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	tokenService := token.NewService(database)
+	handler := NewHandler(rbacManager, "", tokenService, database, nil, "testrack", "testrack", config.RackConfig{}, "", "http://localhost:8447")
+
+	_, err := database.CreateUser("deployer@example.com", "Deployer User", []string{"deployer"})
+	require.NoError(t, err)
+
+	reqBody := map[string]interface{}{
+		"name":        "too-powerful",
+		"permissions": []string{"convox:rack:update"},
+	}
+	req := createAuthenticatedRequest("POST", "/.gateway/admin/tokens", reqBody, "deployer@example.com")
+	rr := httptest.NewRecorder()
+	handler.CreateAPIToken(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestGetTokenPermissionMetadata(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	handler := NewHandler(rbacManager, "", nil, nil, nil, "testrack", "testrack", config.RackConfig{}, "", "http://localhost:8447")
+
+	req := createAuthenticatedRequest("GET", "/.gateway/admin/tokens/permissions", nil, "admin@example.com")
+	rr := httptest.NewRecorder()
+	handler.GetTokenPermissionMetadata(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var resp struct {
+		Permissions        []string           `json:"permissions"`
+		Roles              []tokenRolePayload `json:"roles"`
+		DefaultPermissions []string           `json:"default_permissions"`
+		UserRoles          []string           `json:"user_roles"`
+		UserPermissions    []string           `json:"user_permissions"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+
+	assert.Contains(t, resp.Permissions, "convox:app:list")
+	assert.Contains(t, resp.Permissions, "convox:rack:read")
+	require.NotEmpty(t, resp.Roles)
+	assert.Equal(t, "viewer", resp.Roles[0].Name)
+	assert.Contains(t, resp.UserRoles, "admin")
+	assert.Contains(t, resp.UserPermissions, "convox:*:*")
+
+	expectedDefault := append([]string(nil), token.DefaultCICDPermissions()...)
+	sort.Strings(expectedDefault)
+	assert.Equal(t, expectedDefault, resp.DefaultPermissions)
+}
+
+func TestGetAPIToken(t *testing.T) {
+	rbacManager := newMockRBACManager()
+	database := createTempDB(t)
+	tokenService := token.NewService(database)
+	handler := NewHandler(rbacManager, "", tokenService, database, nil, "testrack", "testrack", config.RackConfig{}, "", "http://localhost:8447")
+
+	user, err := database.CreateUser("admin@example.com", "Admin", []string{"admin"})
+	require.NoError(t, err)
+
+	resp, err := tokenService.GenerateAPIToken(&token.APITokenRequest{
+		Name:        "ci",
+		UserID:      user.ID,
+		Permissions: []string{"convox:app:list"},
+	})
+	require.NoError(t, err)
+
+	req := createAuthenticatedRequest("GET", fmt.Sprintf("/.gateway/admin/tokens/%d", resp.APIToken.ID), nil, "admin@example.com")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("tokenID", fmt.Sprintf("%d", resp.APIToken.ID))
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+	handler.GetAPIToken(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	var body db.APIToken
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
+	assert.Equal(t, resp.APIToken.ID, body.ID)
+	assert.Equal(t, "ci", body.Name)
+	assert.Equal(t, []string{"convox:app:list"}, body.Permissions)
 }

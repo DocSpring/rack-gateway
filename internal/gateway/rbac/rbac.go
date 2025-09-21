@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
@@ -15,6 +16,107 @@ type DBManager struct {
 	enforcer *casbin.Enforcer
 	mu       sync.RWMutex
 	domain   string
+}
+
+// RoleMetadata describes presentation attributes for a role exposed to the UI.
+type RoleMetadata struct {
+	Label       string
+	Description string
+}
+
+type roleConfig struct {
+	Permissions []string
+	Parents     []string
+}
+
+var roleOrder = []string{"viewer", "ops", "deployer", "cicd", "admin"}
+
+var roleMetadata = map[string]RoleMetadata{
+	"viewer": {
+		Label:       "Viewer",
+		Description: "Read-only access to apps, builds, processes, and rack status",
+	},
+	"ops": {
+		Label:       "Operations",
+		Description: "Restart apps, manage processes, and view environments",
+	},
+	"deployer": {
+		Label:       "Deployer",
+		Description: "Full deployment permissions including env updates",
+	},
+	"cicd": {
+		Label:       "CI/CD",
+		Description: "Recommended scope for automation tokens",
+	},
+	"admin": {
+		Label:       "Admin",
+		Description: "Complete access to all gateway operations",
+	},
+}
+
+var roleConfigs = map[string]roleConfig{
+	"viewer": {
+		Permissions: []string{
+			"convox:app:list",
+			"convox:app:get",
+			"convox:process:list",
+			"convox:process:get",
+			"convox:log:read",
+			"convox:build:list",
+			"convox:build:get",
+			"convox:rack:read",
+		},
+	},
+	"ops": {
+		Permissions: []string{
+			"convox:app:restart",
+			"convox:process:start",
+			"convox:process:exec",
+			"convox:process:terminate",
+			"convox:release:list",
+			"convox:env:view",
+		},
+		Parents: []string{"viewer"},
+	},
+	"deployer": {
+		Permissions: []string{
+			"convox:app:restart",
+			"convox:build:create",
+			"convox:object:create",
+			"convox:release:create",
+			"convox:release:get",
+			"convox:release:promote",
+			"convox:env:view",
+			"convox:env:set",
+			"convox:app:create",
+			"convox:app:update",
+		},
+		Parents: []string{"ops"},
+	},
+	// Only specific permissions that CI/CD pipelines need for deployments
+	"cicd": {
+		Permissions: []string{
+			"convox:app:list",
+			"convox:app:get",
+			"convox:build:create",
+			"convox:build:list",
+			"convox:build:get",
+			"convox:log:read",
+			"convox:object:create",
+			"convox:release:create",
+			"convox:release:list",
+			"convox:release:promote",
+			"convox:process:list",
+			"convox:process:get",
+			"convox:process:start",
+			"convox:process:exec",
+			"convox:process:terminate",
+			"convox:rack:read",
+		},
+	},
+	"admin": {
+		Permissions: []string{"convox:*:*"},
+	},
 }
 
 const modelConf = `
@@ -64,46 +166,100 @@ func NewDBManager(database *db.Database, domain string) (*DBManager, error) {
 	return manager, nil
 }
 
-// Define the embedded RBAC policies
-var policies = [][]string{
-	// Viewer role permissions
-	{"p", "viewer", "convox:app:list", "*"},
-	{"p", "viewer", "convox:process:list", "*"},
-	{"p", "viewer", "convox:log:read", "*"},
-	{"p", "viewer", "convox:build:list", "*"},
-	{"p", "viewer", "convox:rack:read", "*"},
+var (
+	policies               = buildPolicies(roleConfigs)
+	defaultRolePermissions = buildDefaultRolePermissions(roleConfigs)
+)
 
-	// Ops role inherits viewer and adds more
-	{"g", "ops", "viewer"},
-	{"p", "ops", "convox:process:manage", "*"},
-	{"p", "ops", "convox:restart:app", "*"},
-	{"p", "ops", "convox:release:list", "*"},
-	{"p", "ops", "convox:env:view", "*"},
+func buildPolicies(cfg map[string]roleConfig) [][]string {
+	var out [][]string
+	for _, role := range roleOrder {
+		config, ok := cfg[role]
+		if !ok {
+			continue
+		}
+		perms := append([]string(nil), config.Permissions...)
+		sort.Strings(perms)
+		for _, perm := range perms {
+			out = append(out, []string{"p", role, perm, "*"})
+		}
+		parents := append([]string(nil), config.Parents...)
+		sort.Strings(parents)
+		for _, parent := range parents {
+			out = append(out, []string{"g", role, parent})
+		}
+	}
+	return out
+}
 
-	// Deployer role inherits ops and adds deployment permissions
-	{"g", "deployer", "ops"},
-	{"p", "deployer", "convox:build:create", "*"},
-	{"p", "deployer", "convox:object:create", "*"},
-	{"p", "deployer", "convox:release:create", "*"},
-	{"p", "deployer", "convox:release:get", "*"},
-	{"p", "deployer", "convox:release:promote", "*"},
-	{"p", "deployer", "convox:env:view", "*"},
-	{"p", "deployer", "convox:env:set", "*"},
-	// Allow creating and updating apps/services, but not deleting apps
-	{"p", "deployer", "convox:app:create", "*"},
-	{"p", "deployer", "convox:app:update", "*"},
+func buildDefaultRolePermissions(cfg map[string]roleConfig) map[string][]string {
+	result := make(map[string][]string, len(cfg))
+	cache := make(map[string]map[string]struct{}, len(cfg))
+	var flatten func(role string) map[string]struct{}
+	flatten = func(role string) map[string]struct{} {
+		if set, ok := cache[role]; ok {
+			return set
+		}
+		config, ok := cfg[role]
+		if !ok {
+			cache[role] = map[string]struct{}{}
+			return cache[role]
+		}
+		set := make(map[string]struct{})
+		for _, perm := range config.Permissions {
+			set[perm] = struct{}{}
+		}
+		for _, parent := range config.Parents {
+			for perm := range flatten(parent) {
+				set[perm] = struct{}{}
+			}
+		}
+		cache[role] = set
+		return set
+	}
 
-	// Admin role has all permissions
-	{"p", "admin", "convox:*:*", "*"},
+	for _, role := range roleOrder {
+		set := flatten(role)
+		perms := make([]string, 0, len(set))
+		for perm := range set {
+			perms = append(perms, perm)
+		}
+		sort.Strings(perms)
+		result[role] = perms
+	}
 
-	// CI/CD role for automated deployments
-	{"p", "cicd", "convox:app:list", "*"},
-	{"p", "cicd", "convox:build:create", "*"},
-	{"p", "cicd", "convox:object:create", "*"},
-	{"p", "cicd", "convox:release:create", "*"},
-	{"p", "cicd", "convox:release:promote", "*"},
-	{"p", "cicd", "convox:process:manage", "*"},
-	{"p", "cicd", "convox:restart:app", "*"},
+	return result
+}
+
+// RoleOrder returns the canonical display order for roles.
+func RoleOrder() []string {
+	return append([]string(nil), roleOrder...)
+}
+
+// RoleMetadataMap returns a copy of the role metadata keyed by role name.
+func RoleMetadataMap() map[string]RoleMetadata {
+	out := make(map[string]RoleMetadata, len(roleMetadata))
+	for k, v := range roleMetadata {
+		out[k] = v
+	}
+	return out
+}
+
+// DefaultRolePermissions returns a copy of the flattened permissions per role.
+func DefaultRolePermissions() map[string][]string {
+	clone := make(map[string][]string, len(defaultRolePermissions))
+	for role, perms := range defaultRolePermissions {
+		clone[role] = append([]string(nil), perms...)
+	}
+	return clone
+}
+
+// DefaultPermissionsForRole returns the flattened permission list for a specific role.
+func DefaultPermissionsForRole(role string) []string {
+	if perms, ok := defaultRolePermissions[role]; ok {
+		return append([]string(nil), perms...)
+	}
+	return nil
 }
 
 // syncUsersFromDB loads user-role mappings from the database
@@ -278,13 +434,21 @@ func (m *DBManager) GetRolePermissions(role string) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	permissions, _ := m.enforcer.GetPermissionsForUser(role)
-	var result []string
+	permissions, err := m.enforcer.GetImplicitPermissionsForUser(role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get implicit permissions: %w", err)
+	}
+	set := make(map[string]struct{}, len(permissions))
 	for _, p := range permissions {
 		if len(p) > 1 {
-			result = append(result, p[1]) // The permission is at index 1
+			set[p[1]] = struct{}{}
 		}
 	}
+	result := make([]string, 0, len(set))
+	for perm := range set {
+		result = append(result, perm)
+	}
+	sort.Strings(result)
 	return result, nil
 }
 

@@ -178,6 +178,10 @@ verify_command "env get DATABASE_URL --secrets" \
 verify_command "env set FOO=bar" \
   "Setting FOO..." "Release:"
 
+verify_command "convox restart" \
+  "Restarting web... OK" \
+  "Restarting worker... OK"
+
 # Test full build + release flow
 verify_command "convox deploy" \
   "Packaging source..." "Uploading source..." "Starting build..." \
@@ -193,7 +197,74 @@ verify_raw_command_status_and_output "timeout 3s ./bin/convox-gateway convox log
   "Promoting release" \
   "Release promoted successfully."
 
+# Create a CI/CD API token and exercise pipeline-style commands using the raw token
+echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
+API_TOKEN_JSON=$(./bin/convox-gateway api-token create \
+  --name "cli-e2e-cicd" \
+  --role cicd \
+  --output json)
+
+API_TOKEN=$(jq -r '.token' <<<"$API_TOKEN_JSON")
+API_TOKEN_ID=$(jq -r '.api_token.id' <<<"$API_TOKEN_JSON")
+
+if [[ -z "$API_TOKEN" || -z "$API_TOKEN_ID" ]]; then
+  echo -e "${RED}Failed to parse API token response${NC}" >&2
+  exit 1
+fi
+
 logout_cli
+
+export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
+export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+
+echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
+
+# Show rack info via API token
+verify_raw_command_status_and_output \
+  "./bin/convox-gateway convox rack" \
+  "0" \
+  "Name" \
+  "Status"
+
+# Show processes via API token
+verify_raw_command_status_and_output \
+  "./bin/convox-gateway convox ps --app convox-gateway" \
+  "0" \
+  "p-web-1"
+
+# Create build and capture release identifier
+set +e
+build_output=$(./bin/convox-gateway convox build --app convox-gateway --description "cli-e2e" --id 2>&1)
+build_status=$?
+set -e
+if [[ $build_status -ne 0 ]]; then
+  echo -e "${RED}convox build failed:${NC}\n$build_output" >&2
+  exit 1
+fi
+echo "$build_output"
+RELEASE_ID=$(echo "$build_output" | tail -n1 | tr -d '[:space:]')
+if [[ -z "$RELEASE_ID" ]]; then
+  echo -e "${RED}Failed to parse release id from build output${NC}" >&2
+  exit 1
+fi
+
+# Run mock migration command on the new release
+verify_raw_command_status_and_output \
+  "./bin/convox-gateway convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
+  "0" \
+  "migrate"
+
+# Promote the release
+verify_raw_command_status_and_output \
+  "./bin/convox-gateway convox releases promote $RELEASE_ID --app convox-gateway" \
+  "0" \
+  "OK"
+
+# Clean up the API token now that the pipeline simulation is complete
+./bin/convox-gateway api-token delete "$API_TOKEN_ID"
+
+unset CONVOX_GATEWAY_API_TOKEN
+unset CONVOX_GATEWAY_URL
 
 # Login as deployer
 # ---------------------------------------------

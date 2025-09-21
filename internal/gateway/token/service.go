@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 )
 
 // Service handles API token operations
@@ -140,17 +141,11 @@ func (s *Service) HasPermission(apiToken *db.APIToken, resource, action string) 
 
 // DefaultCICDPermissions returns the default permissions for CI/CD tokens
 func DefaultCICDPermissions() []string {
-	return []string{
-		"convox:apps:read",
-		"convox:builds:create",
-		"convox:builds:list",
-		"convox:releases:list",
-		"convox:releases:create",
-		"convox:releases:promote",
-		"convox:ps:list",
-		"convox:ps:manage",
-		"convox:restart:app",
+	perms := rbac.DefaultPermissionsForRole("cicd")
+	if perms == nil {
+		return nil
 	}
+	return perms
 }
 
 // DefaultTokenExpiry: tokens do not expire by default (nil)

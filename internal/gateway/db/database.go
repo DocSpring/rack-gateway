@@ -719,6 +719,53 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 	return &token, nil
 }
 
+// GetAPITokenByID retrieves an API token by ID
+func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
+	var token APIToken
+	var permissionsJSON string
+	var expiresAtNull sql.NullTime
+	var lastUsedAtNull sql.NullTime
+	var createdByNull sql.NullInt64
+	var createdByEmail sql.NullString
+	var createdByName sql.NullString
+
+	row := d.queryRow(
+		"SELECT t.id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.id = ?",
+		id,
+	)
+	err := row.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API token: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(permissionsJSON), &token.Permissions); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal permissions: %w", err)
+	}
+	if expiresAtNull.Valid {
+		v := expiresAtNull.Time
+		token.ExpiresAt = &v
+	}
+	if lastUsedAtNull.Valid {
+		v := lastUsedAtNull.Time
+		token.LastUsedAt = &v
+	}
+	if createdByNull.Valid {
+		v := createdByNull.Int64
+		token.CreatedByUserID = &v
+	}
+	if createdByEmail.Valid {
+		token.CreatedByEmail = createdByEmail.String
+	}
+	if createdByName.Valid {
+		token.CreatedByName = createdByName.String
+	}
+
+	return &token, nil
+}
+
 // ListAPITokensByUser returns all API tokens for a user
 func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 	rows, err := d.query(

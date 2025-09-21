@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -128,6 +130,36 @@ func TestRackSelectionPriority(t *testing.T) {
 	assert.Equal(t, "production", rack)
 }
 
+func TestSelectedRackEnvOverride(t *testing.T) {
+	configPath = t.TempDir()
+	rackFlag = ""
+	defer func() {
+		os.Unsetenv("CONVOX_GATEWAY_RACK")
+		os.Unsetenv("CONVOX_GATEWAY_URL")
+	}()
+
+	os.Setenv("CONVOX_GATEWAY_RACK", "env-rack")
+
+	rack, err := selectedRack()
+	require.NoError(t, err)
+	assert.Equal(t, "env-rack", rack)
+}
+
+func TestSelectedRackFallsBackToURL(t *testing.T) {
+	configPath = t.TempDir()
+	rackFlag = ""
+	defer func() {
+		os.Unsetenv("CONVOX_GATEWAY_URL")
+		os.Unsetenv("CONVOX_GATEWAY_RACK")
+	}()
+
+	os.Setenv("CONVOX_GATEWAY_URL", "https://gateway.example.com")
+
+	rack, err := selectedRack()
+	require.NoError(t, err)
+	assert.Equal(t, "(from environment)", rack)
+}
+
 func TestLoginSetsCurrentRack(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
@@ -187,4 +219,67 @@ func TestSetCurrentRackCreatesDirectory(t *testing.T) {
 	data, err := os.ReadFile(currentFile)
 	require.NoError(t, err)
 	assert.Equal(t, "staging", string(data))
+}
+
+func TestResolveRackStatusPrefersConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath = tmpDir
+	defer func() {
+		os.Unsetenv("CONVOX_GATEWAY_URL")
+		os.Unsetenv("CONVOX_GATEWAY_API_TOKEN")
+	}()
+
+	config := Config{
+		Gateways: map[string]GatewayConfig{
+			"staging": {URL: "https://gateway-staging.example.com"},
+		},
+		Tokens: map[string]Token{
+			"staging": {
+				Token:     "abc123",
+				Email:     "user@example.com",
+				ExpiresAt: time.Now().Add(24 * time.Hour).UTC(),
+			},
+		},
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "config.json"), data, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "current"), []byte("staging"), 0600))
+
+	status, err := resolveRackStatus(time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, "staging", status.Rack)
+	assert.Equal(t, "https://gateway-staging.example.com", status.GatewayURL)
+	assert.Contains(t, strings.Join(status.StatusLines, " "), "Logged in as user@example.com")
+}
+
+func TestResolveRackStatusFallsBackToEnv(t *testing.T) {
+	configPath = t.TempDir()
+	os.Unsetenv("CONVOX_GATEWAY_RACK")
+	os.Setenv("CONVOX_GATEWAY_URL", "https://env-gateway.example.com")
+	os.Setenv("CONVOX_GATEWAY_API_TOKEN", "token-from-env")
+	defer func() {
+		os.Unsetenv("CONVOX_GATEWAY_URL")
+		os.Unsetenv("CONVOX_GATEWAY_API_TOKEN")
+	}()
+
+	status, err := resolveRackStatus(time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, "Using CONVOX_GATEWAY_API_TOKEN from environment", status.Rack)
+	assert.Equal(t, "https://env-gateway.example.com", status.GatewayURL)
+	assert.Len(t, status.StatusLines, 0)
+}
+
+func TestResolveRackStatusEnvRequiresToken(t *testing.T) {
+	configPath = t.TempDir()
+	os.Unsetenv("CONVOX_GATEWAY_RACK")
+	os.Setenv("CONVOX_GATEWAY_URL", "https://env-gateway.example.com")
+	defer func() {
+		os.Unsetenv("CONVOX_GATEWAY_URL")
+	}()
+
+	_, err := resolveRackStatus(time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CONVOX_GATEWAY_API_TOKEN")
 }

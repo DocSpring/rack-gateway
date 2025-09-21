@@ -290,6 +290,8 @@ func main() {
 				r.Put("/users/{email}/roles", uiHandler.UpdateUserRoles)
 				r.Post("/tokens", uiHandler.CreateAPIToken)
 				r.Get("/tokens", uiHandler.ListAPITokens)
+				r.Get("/tokens/{tokenID}", uiHandler.GetAPIToken)
+				r.Get("/tokens/permissions", uiHandler.GetTokenPermissionMetadata)
 				r.Put("/tokens/{tokenID}", uiHandler.UpdateAPITokenName)
 				r.Delete("/tokens/{tokenID}", uiHandler.DeleteAPIToken)
 			})
@@ -359,6 +361,10 @@ func getEnv(key, defaultVal string) string {
 func csrfMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.TrimSpace(r.Header.Get("Authorization")) != "" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			switch r.Method {
 			case http.MethodGet, http.MethodHead, http.MethodOptions:
 				next.ServeHTTP(w, r)

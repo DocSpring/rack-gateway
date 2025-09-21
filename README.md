@@ -110,7 +110,7 @@ The development environment includes a mock Google OAuth server that simulates t
 
 - **admin@example.com** - Admin User (full access)
 - **deployer@example.com** - Deployer User (full deployment permissions including env vars)
-- **ops@example.com** - Ops User (restart apps, view environments, manage processes)
+- **ops@example.com** - Ops User (manage processes and view environments)
 - **viewer@example.com** - Viewer User
 
 When logging in via http://localhost:8447 during development, you'll be redirected to the mock OAuth server to select which test user to authenticate as.
@@ -252,10 +252,9 @@ Format: `convox:{resource}:{action}`
 
 Examples:
 
-- `convox:apps:list` - List applications
-- `convox:ps:manage` - Manage processes
-- `convox:run:command` - Run commands
-- `convox:restart:app` - Restart applications
+- `convox:app:list` - List applications
+- `convox:app:restart` - Restart an application
+- `convox:process:exec` - Exec into a running process
 
 ## Audit Logging
 

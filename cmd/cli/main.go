@@ -32,6 +32,12 @@ type Token struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type rackStatus struct {
+	Rack        string
+	GatewayURL  string
+	StatusLines []string
+}
+
 type LoginStartResponse struct {
 	AuthURL      string `json:"auth_url"`
 	State        string `json:"state"`
@@ -233,28 +239,15 @@ Rack management:
 		Short: "Show current rack and gateway information",
 		Args:  cobra.NoArgs,
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := getCurrentRack()
+			status, err := resolveRackStatus(time.Now())
 			if err != nil {
-				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+				return err
 			}
 
-			gatewayURL, err := loadGatewayURL(rack)
-			if err != nil {
-				return fmt.Errorf("rack %s not configured", rack)
-			}
-
-			fmt.Printf("Current rack: %s\n", rack)
-			fmt.Printf("Gateway URL: %s\n", gatewayURL)
-
-			// Check if token exists and is valid
-			token, err := loadToken(rack)
-			if err != nil {
-				fmt.Printf("Status: Not logged in\n")
-			} else if time.Now().After(token.ExpiresAt) {
-				fmt.Printf("Status: Token expired\n")
-			} else {
-				fmt.Printf("Status: Logged in as %s\n", token.Email)
-				fmt.Printf("Token expires: %s\n", token.ExpiresAt.Format(time.RFC3339))
+			fmt.Printf("Current rack: %s\n", status.Rack)
+			fmt.Printf("Gateway URL: %s\n", status.GatewayURL)
+			for _, line := range status.StatusLines {
+				fmt.Println(line)
 			}
 
 			return nil
@@ -491,7 +484,7 @@ PowerShell:
 
 	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, envCmd)
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, envCmd, newAPITokenCommand())
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
@@ -576,60 +569,48 @@ func wrapConvoxCommand(args []string) error {
 			return fmt.Errorf("'convox rack uninstall' is disabled in convox-gateway. Use the official Convox CLI directly with a local rack token")
 		}
 	}
-	var rack string
 
-	// Priority order for rack selection:
-	// 1. --rack flag (global flag, already parsed by cobra)
-	// 2. GATEWAY_RACK environment variable
-	// 3. Current rack from file
-
-	if rackFlag != "" {
-		rack = rackFlag
-	} else if envRack := os.Getenv("GATEWAY_RACK"); envRack != "" {
-		rack = envRack
-	} else {
-		var err error
-		rack, err = getCurrentRack()
-		if err != nil {
-			return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url> or use --rack flag")
-		}
+	rack, err := selectedRack()
+	if err != nil {
+		return err
 	}
 
 	// Load gateway config and token for the rack
-	gatewayURL, err := loadGatewayURL(rack)
+	gatewayURL := os.Getenv("CONVOX_GATEWAY_URL")
+	if strings.TrimSpace(gatewayURL) == "" {
+		var err error
+		gatewayURL, err = loadGatewayURL(rack)
+		if err != nil {
+			return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+		}
+	}
+
+	normalizedURL, err := normalizeGatewayURL(gatewayURL)
 	if err != nil {
-		return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+		return err
 	}
 
-	token, err := loadToken(rack)
-	if err != nil {
-		return fmt.Errorf("not logged in to rack %s. Run: convox-gateway login %s %s", rack, rack, gatewayURL)
+	password := os.Getenv("CONVOX_GATEWAY_API_TOKEN")
+	if password == "" {
+		token, err := loadToken(rack)
+		if err != nil {
+			return fmt.Errorf("not logged in to rack %s. Run: convox-gateway login %s %s", rack, rack, gatewayURL)
+		}
+		if time.Now().After(token.ExpiresAt) {
+			return fmt.Errorf("token expired for rack %s. Run: convox-gateway login %s %s", rack, rack, gatewayURL)
+		}
+		password = token.Token
 	}
-
-	// Check if token is expired
-	if time.Now().After(token.ExpiresAt) {
-		return fmt.Errorf("token expired for rack %s. Run: convox-gateway login %s %s", rack, rack, gatewayURL)
-	}
-
-	// Build RACK_URL with JWT token as password
-	// The convox CLI expects RACK_URL to point directly to the API server
-	// In our case, the gateway will act as the API server and proxy to the real rack
-	parsedURL := gatewayURL
-	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
-		parsedURL = "https://" + parsedURL
-	}
-	parsedURL = strings.TrimSuffix(parsedURL, "/")
 
 	var rackURL string
-	if strings.HasPrefix(parsedURL, "http://") {
-		// For local testing, preserve http
+	if strings.HasPrefix(normalizedURL, "http://") {
 		rackURL = fmt.Sprintf("http://convox:%s@%s",
-			token.Token,
-			strings.TrimPrefix(parsedURL, "http://"))
+			password,
+			strings.TrimPrefix(normalizedURL, "http://"))
 	} else {
 		rackURL = fmt.Sprintf("https://convox:%s@%s",
-			token.Token,
-			strings.TrimPrefix(parsedURL, "https://"))
+			password,
+			strings.TrimPrefix(normalizedURL, "https://"))
 	}
 
 	// Execute the convox CLI with RACK_URL set
@@ -859,6 +840,101 @@ func loadGatewayURL(rack string) (string, error) {
 	}
 
 	return gateway.URL, nil
+}
+
+func resolveRackStatus(now time.Time) (*rackStatus, error) {
+	if rack, err := getCurrentRack(); err == nil && strings.TrimSpace(rack) != "" {
+		gatewayURL, err := loadGatewayURL(rack)
+		if err != nil {
+			return nil, fmt.Errorf("rack %s not configured", rack)
+		}
+
+		status := &rackStatus{
+			Rack:       rack,
+			GatewayURL: gatewayURL,
+		}
+
+		token, err := loadToken(rack)
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "expired") {
+				status.StatusLines = append(status.StatusLines, "Status: Token expired")
+			} else {
+				status.StatusLines = append(status.StatusLines, "Status: Not logged in")
+			}
+			return status, nil
+		}
+
+		if now.After(token.ExpiresAt) {
+			status.StatusLines = append(status.StatusLines, "Status: Token expired")
+			return status, nil
+		}
+
+		status.StatusLines = append(status.StatusLines,
+			fmt.Sprintf("Status: Logged in as %s", token.Email))
+		status.StatusLines = append(status.StatusLines,
+			fmt.Sprintf("Token expires: %s", token.ExpiresAt.Format(time.RFC3339)))
+		return status, nil
+	}
+
+	envURL := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_URL"))
+	if envURL == "" {
+		return nil, fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+	}
+
+	label := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_RACK"))
+	tokenEnv := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_API_TOKEN"))
+	if label == "" {
+		if tokenEnv == "" {
+			return nil, fmt.Errorf("CONVOX_GATEWAY_API_TOKEN must be set when relying on CONVOX_GATEWAY_URL without a rack name")
+		}
+		label = "Using CONVOX_GATEWAY_API_TOKEN from environment"
+	}
+
+	status := &rackStatus{
+		Rack:       label,
+		GatewayURL: envURL,
+	}
+
+	if tokenEnv == "" {
+		status.StatusLines = append(status.StatusLines, "Status: CONVOX_GATEWAY_API_TOKEN not set in environment")
+	}
+
+	return status, nil
+}
+
+func selectedRack() (string, error) {
+	if rackFlag != "" {
+		return rackFlag, nil
+	}
+	if env := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_RACK")); env != "" {
+		return env, nil
+	}
+	if url := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_URL")); url != "" {
+		if label := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_RACK")); label != "" {
+			return label, nil
+		}
+		return "(from environment)", nil
+	}
+	rack, err := getCurrentRack()
+	if err != nil {
+		return "", fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url> or use --rack flag")
+	}
+	if strings.TrimSpace(rack) == "" {
+		return "", fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url> or use --rack flag")
+	}
+	return rack, nil
+}
+
+func normalizeGatewayURL(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("invalid gateway url")
+	}
+	if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+		trimmed = "https://" + trimmed
+	}
+	trimmed = strings.TrimSuffix(trimmed, "/")
+	return trimmed, nil
 }
 
 // removeRack deletes both the gateway config and token for a rack.

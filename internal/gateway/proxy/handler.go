@@ -1486,14 +1486,14 @@ func (h *Handler) isProtectedKey(key string) bool {
 
 // isDestructive returns true for destructive actions (delete, terminate, uninstall equivalents)
 func isDestructive(method, resource, action string) bool {
+	if resource == "process" && (action == "terminate" || action == "stop") {
+		return false
+	}
 	if strings.EqualFold(method, http.MethodDelete) {
 		return true
 	}
 	// known destructive mappings
 	if resource == "app" && action == "delete" {
-		return true
-	}
-	if resource == "process" && (action == "terminate" || action == "stop") {
 		return true
 	}
 	return false

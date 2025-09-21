@@ -51,9 +51,13 @@ func TestPathToResourceAction_AppRoutes(t *testing.T) {
 	require.Equal(t, "app", res)
 	require.Equal(t, "update", act)
 
-	res, act = h.pathToResourceAction("/apps/myapp/cancel", "POST")
+	res, act = h.pathToResourceAction("/apps/myapp/restart", "POST")
 	require.Equal(t, "app", res)
-	require.Equal(t, "update", act)
+	require.Equal(t, "restart", act)
+
+	res, act = h.pathToResourceAction("/apps/myapp/services", "GET")
+	require.Equal(t, "app", res)
+	require.Equal(t, "get", act)
 
 	res, act = h.pathToResourceAction("/apps/myapp", "DELETE")
 	require.Equal(t, "app", res)

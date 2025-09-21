@@ -210,7 +210,10 @@ func main() {
 	r.HandleFunc("/system/processes", getSystemProcesses).Methods("GET")
 
 	// Services command processes (stub for convox run)
+	r.HandleFunc("/apps/{app}/restart", restartApp).Methods("POST")
+	r.HandleFunc("/apps/{app}/services", listServices).Methods("GET")
 	r.HandleFunc("/apps/{app}/services/{service}/processes", serviceProcesses).Methods("POST", "GET")
+	r.HandleFunc("/apps/{app}/services/{service}/restart", restartService).Methods("POST")
 
 	// Generic API endpoint for testing
 	r.HandleFunc("/api/{path:.*}", handleAPI).Methods("GET", "POST", "PUT", "DELETE")
@@ -490,6 +493,40 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 		"service": service,
 		"id":      "proc-123456",
 	})
+}
+
+func listServices(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	log.Printf("SERVICES list app=%s", app)
+	services := []map[string]interface{}{
+		{
+			"name":    "web",
+			"process": "web",
+			"status":  "running",
+		},
+		{
+			"name":    "worker",
+			"process": "worker",
+			"status":  "running",
+		},
+	}
+	json.NewEncoder(w).Encode(services)
+}
+
+func restartService(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	service := vars["service"]
+	log.Printf("SERVICE restart app=%s service=%s", app, service)
+	json.NewEncoder(w).Encode(map[string]string{"status": "restarting"})
+}
+
+func restartApp(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	log.Printf("APP restart app=%s", app)
+	json.NewEncoder(w).Encode(map[string]string{"status": "restarting"})
 }
 
 // execProcess upgrades to a WebSocket and streams a short mock session, then closes

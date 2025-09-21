@@ -57,6 +57,53 @@ const mockTokens = [
   },
 ]
 
+const defaultPermissions = [
+  'convox:app:list',
+  'convox:build:create',
+  'convox:build:list',
+  'convox:log:read',
+  'convox:object:create',
+  'convox:process:list',
+  'convox:process:start',
+  'convox:rack:read',
+  'convox:release:create',
+  'convox:release:list',
+  'convox:release:promote',
+]
+
+const APP_LIST_REGEX = /convox:app:list/i
+const RELEASE_PROMOTE_REGEX = /convox:release:promote/i
+const RACK_UPDATE_REGEX = /convox:rack:update/i
+const WILDCARD_REGEX = /convox:\*:\*/i
+const ALL_HEADING_REGEX = /^All$/i
+
+const mockPermissionMetadata = {
+  permissions: [...defaultPermissions, 'convox:app:restart', 'convox:*:*'],
+  roles: [
+    {
+      name: 'viewer',
+      label: 'Viewer',
+      description: 'Read only',
+      permissions: ['convox:app:list'],
+    },
+    {
+      name: 'cicd',
+      label: 'CI/CD',
+      description: 'Automation',
+      permissions: defaultPermissions,
+    },
+    {
+      name: 'admin',
+      label: 'Admin',
+      description: 'All access',
+      permissions: ['convox:*:*'],
+    },
+  ],
+  default_permissions: defaultPermissions,
+  user_roles: ['admin'],
+  user_permissions: ['convox:*:*'],
+}
+
 const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -87,7 +134,9 @@ describe('TokensPage', () => {
 
   describe('Token List', () => {
     it('renders tokens list', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -104,7 +153,7 @@ describe('TokensPage', () => {
     })
 
     it('shows empty state when no tokens', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce([])
+      vi.mocked(api.get).mockResolvedValueOnce(mockPermissionMetadata).mockResolvedValueOnce([])
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -115,7 +164,9 @@ describe('TokensPage', () => {
     })
 
     it('displays last used date', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -128,7 +179,7 @@ describe('TokensPage', () => {
 
     it('renders gracefully when API returns null or non-array', async () => {
       // @ts-expect-error simulate bad API response
-      vi.mocked(api.get).mockResolvedValueOnce(null)
+      vi.mocked(api.get).mockResolvedValueOnce(mockPermissionMetadata).mockResolvedValueOnce(null)
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -141,7 +192,9 @@ describe('TokensPage', () => {
 
   describe('Token Creation', () => {
     it('opens create token dialog', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -154,10 +207,14 @@ describe('TokensPage', () => {
 
       expect(screen.getByText('Create API Token')).toBeInTheDocument()
       expect(screen.getByLabelText('Token Name')).toBeInTheDocument()
+      expect(screen.getByRole('checkbox', { name: APP_LIST_REGEX })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: WILDCARD_REGEX })).toBeInTheDocument()
+      expect(screen.queryByText(ALL_HEADING_REGEX, { selector: 'p' })).not.toBeInTheDocument()
     })
 
     it('creates a new token and displays it', async () => {
       vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
         .mockResolvedValueOnce(mockTokens)
         .mockResolvedValueOnce([
           ...mockTokens,
@@ -197,6 +254,7 @@ describe('TokensPage', () => {
       await waitFor(() => {
         expect(api.post).toHaveBeenCalledWith('/.gateway/api/admin/tokens', {
           name: 'New Token',
+          permissions: defaultPermissions,
         })
       })
 
@@ -209,6 +267,7 @@ describe('TokensPage', () => {
 
     it('copies token to clipboard', async () => {
       vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
         .mockResolvedValueOnce(mockTokens)
         .mockResolvedValueOnce([
           ...mockTokens,
@@ -251,8 +310,80 @@ describe('TokensPage', () => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gat_abc123xyz456')
     })
 
+    it('applies role shortcut selections', async () => {
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
+        .mockResolvedValueOnce([
+          ...mockTokens,
+          {
+            id: 'viewer-token',
+            name: 'Viewer Token',
+            last_used: null,
+            created_at: '2024-01-25T00:00:00Z',
+            expires_at: null,
+          },
+        ])
+      vi.mocked(api.post).mockResolvedValueOnce({
+        id: 'viewer-token',
+        name: 'Viewer Token',
+        token: 'gat_viewer123',
+        created_at: '2024-01-25T00:00:00Z',
+        expires_at: '2025-01-25T00:00:00Z',
+      })
+
+      const Wrapper = createWrapper()
+      render(<TokensPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('Create Token'))
+      fireEvent.click(screen.getByText('Viewer'))
+
+      expect(screen.getByRole('checkbox', { name: APP_LIST_REGEX })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: RELEASE_PROMOTE_REGEX })).not.toBeChecked()
+
+      const nameInput = screen.getByLabelText('Token Name')
+      fireEvent.change(nameInput, { target: { value: 'Viewer Token' } })
+      fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
+
+      await waitFor(() => {
+        expect(api.post).toHaveBeenCalledWith('/.gateway/api/admin/tokens', {
+          name: 'Viewer Token',
+          permissions: ['convox:app:list'],
+        })
+      })
+    })
+
+    it('disables permissions that exceed current user roles', async () => {
+      const deployerMetadata = {
+        ...mockPermissionMetadata,
+        permissions: [...mockPermissionMetadata.permissions, 'convox:rack:update'],
+        user_roles: ['deployer'],
+        user_permissions: defaultPermissions,
+      }
+
+      vi.mocked(api.get).mockResolvedValueOnce(deployerMetadata).mockResolvedValueOnce(mockTokens)
+
+      const Wrapper = createWrapper({ email: 'deployer@example.com', roles: ['deployer'] })
+      render(<TokensPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('Create Token'))
+
+      const restrictedCheckbox = screen.getByRole('checkbox', { name: RACK_UPDATE_REGEX })
+      expect(restrictedCheckbox).toBeDisabled()
+    })
+
     it('validates token name is not empty', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -284,7 +415,9 @@ describe('TokensPage', () => {
         } as unknown as APIToken,
       ]
       // @ts-expect-error partial fields
-      vi.mocked(api.get).mockResolvedValueOnce(badTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(badTokens)
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -302,6 +435,7 @@ describe('TokensPage', () => {
   describe('Token Deletion', () => {
     it('deletes a token', async () => {
       vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
         .mockResolvedValueOnce(mockTokens)
         .mockResolvedValueOnce(mockTokens.filter((t) => t.id !== 'token-1')) // After deletion
       vi.mocked(api.delete).mockResolvedValueOnce({})
@@ -336,7 +470,9 @@ describe('TokensPage', () => {
 
   describe('Error Handling', () => {
     it('displays error when loading fails', async () => {
-      vi.mocked(api.get).mockRejectedValueOnce(new Error('API Error'))
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockRejectedValueOnce(new Error('API Error'))
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -347,12 +483,14 @@ describe('TokensPage', () => {
     })
 
     it('shows loading state', () => {
-      vi.mocked(api.get).mockImplementation(
-        () =>
-          new Promise(() => {
-            /* never resolves in this test */
-          })
-      )
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockImplementationOnce(
+          () =>
+            new Promise(() => {
+              /* never resolves in this test */
+            })
+        )
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -363,7 +501,9 @@ describe('TokensPage', () => {
     })
 
     it('handles token creation error', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
       vi.mocked(api.post).mockRejectedValueOnce(new Error('Creation failed'))
 
       const Wrapper = createWrapper()
@@ -388,7 +528,9 @@ describe('TokensPage', () => {
     })
 
     it('handles token deletion error', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
       vi.mocked(api.delete).mockRejectedValueOnce(new Error('Deletion failed'))
 
       const Wrapper = createWrapper()
