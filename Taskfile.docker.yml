@@ -141,6 +141,14 @@ tasks:
     cmds:
       - docker compose stop gateway-api-preview
 
+  reset:dev:
+    desc: Reset dev stack (down + up to recreate volumes and DB)
+    run: once
+    aliases: [reset]
+    cmds:
+      - task: down:dev
+      - task: up:dev
+
   # ------------------------------
   # Misc
   # ------------------------------
