@@ -62,6 +62,7 @@ var (
 	rackFlag   string
 	Version    = "dev"
 	BuildTime  = "unknown"
+	httpClient = &http.Client{Timeout: 30 * time.Second}
 )
 
 func silenceOnError(fn func(cmd *cobra.Command, args []string) error) func(*cobra.Command, []string) error {
@@ -630,7 +631,13 @@ func startLogin(gatewayURL string) (*LoginStartResponse, error) {
 	}
 	url := fmt.Sprintf("%s/.gateway/api/auth/cli/start", strings.TrimSuffix(parsedURL, "/"))
 
-	resp, err := http.Post(url, "application/json", nil)
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -663,7 +670,13 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 		return nil, err
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
