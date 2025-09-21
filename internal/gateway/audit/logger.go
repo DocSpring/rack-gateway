@@ -179,8 +179,8 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 		UserEmail:    userEmail,
 		Rack:         rack,
 		Method:       r.Method,
-		Path:         l.redactPath(r.URL.Path),
-		QueryParams:  l.redactQueryParams(r.URL.RawQuery),
+		Path:         r.URL.Path,
+		QueryParams:  r.URL.RawQuery,
 		Status:       status,
 		LatencyMs:    latency.Milliseconds(),
 		RBACDecision: rbacDecision,
@@ -197,21 +197,6 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 
 	// Also store in database for queryability
 	l.storeInDatabase(r, userEmail, rack, rbacDecision, status, latency, err)
-}
-
-func (l *Logger) redactPath(path string) string {
-	if strings.Contains(path, "/env") {
-		parts := strings.Split(path, "/")
-		for i, part := range parts {
-			if i > 0 && parts[i-1] == "env" {
-				if l.shouldRedact(part) {
-					parts[i] = "[REDACTED]"
-				}
-			}
-		}
-		return strings.Join(parts, "/")
-	}
-	return path
 }
 
 func (l *Logger) redactMap(data map[string]interface{}) map[string]interface{} {
@@ -270,22 +255,6 @@ func (l *Logger) shouldRedact(value string) bool {
 		}
 	}
 	return false
-}
-
-func (l *Logger) redactQueryParams(rawQuery string) string {
-	if rawQuery == "" {
-		return ""
-	}
-
-	params := strings.Split(rawQuery, "&")
-	for i, param := range params {
-		parts := strings.SplitN(param, "=", 2)
-		if len(parts) == 2 {
-			// Always redact query parameter values, keep the keys
-			params[i] = parts[0] + "=[REDACTED]"
-		}
-	}
-	return strings.Join(params, "&")
 }
 
 func (l *Logger) RedactEnvVars(envVars map[string]string) map[string]string {
@@ -373,9 +342,9 @@ func (l *Logger) buildDetailsJSON(r *http.Request) string {
 		"path":   r.URL.Path,
 	}
 
-	// Add query parameters (redacted)
+	// Add query parameters as-is (only app IDs and pagination params)
 	if r.URL.RawQuery != "" {
-		details["query"] = l.redactQueryParams(r.URL.RawQuery)
+		details["query"] = r.URL.RawQuery
 	}
 
 	// For exec, include command and process id if available

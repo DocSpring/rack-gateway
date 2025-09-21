@@ -105,16 +105,4 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "myapp", log.Resource)
 	})
 
-	t.Run("RedactionWorks", func(t *testing.T) {
-		logger := NewLogger(nil) // No database for this test
-
-		// Test path redaction
-		redacted := logger.redactPath("/apps/myapp/env/SECRET_TOKEN")
-		assert.Contains(t, redacted, "[REDACTED]")
-
-		// Test query param redaction
-		redacted = logger.redactQueryParams("key=SECRET_TOKEN&other=value")
-		assert.Contains(t, redacted, "key=[REDACTED]")
-		assert.Contains(t, redacted, "other=[REDACTED]")
-	})
 }

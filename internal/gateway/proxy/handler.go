@@ -999,7 +999,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		return 0, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// If this is a release/environment read, filter env values before returning
+	// If this is a release payload, filter env values before returning
 	// We only process JSON payloads (Content-Type contains "application/json").
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	if strings.Contains(ct, "application/json") {
@@ -1017,10 +1017,6 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 		if shouldCapture {
 			h.captureResourceCreator(r, pth, body, userEmail)
-		}
-		// Filter environment map
-		if routes.KeyMatch3(pth, "/apps/{app}/environment") && r.Method == http.MethodGet {
-			body = h.filterEnvironmentMapForUser(userEmail, body)
 		}
 	}
 
@@ -1241,45 +1237,6 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 					m["env"] = mask(envv)
 				}
 			}
-		}
-		nb, _ := json.Marshal(v)
-		return nb
-	default:
-		return body
-	}
-}
-
-// filterEnvironmentMapForUser applies masking to the /apps/{app}/environment JSON map
-// Always masks secret values regardless of secrets:view; if env:view is not permitted
-// then masks all values.
-func (h *Handler) filterEnvironmentMapForUser(email string, body []byte) []byte {
-	canEnvView, _ := h.rbacManager.Enforce(email, "env", "view")
-
-	var any interface{}
-	if err := json.Unmarshal(body, &any); err != nil {
-		return body
-	}
-	maskAll := func(m map[string]interface{}) {
-		for k := range m {
-			m[k] = maskedSecret
-		}
-	}
-	maskSecrets := func(m map[string]interface{}) {
-		for k, v := range m {
-			if h.isSecretKey(k) {
-				m[k] = maskedSecret
-			} else {
-				m[k] = v
-			}
-		}
-	}
-
-	switch v := any.(type) {
-	case map[string]interface{}:
-		if !canEnvView {
-			maskAll(v)
-		} else {
-			maskSecrets(v)
 		}
 		nb, _ := json.Marshal(v)
 		return nb

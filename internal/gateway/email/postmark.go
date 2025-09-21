@@ -32,6 +32,8 @@ type PostmarkSender struct {
 	client  *http.Client
 }
 
+var postmarkHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
 // NewSender chooses the best available sender based on token and dev flags.
 // - With POSTMARK token -> PostmarkSender
 // - Else if DEV_EMAIL_LOG=true or DEV_MODE=true -> LoggerSender (prints to stdout)
@@ -46,7 +48,7 @@ func NewSender(token, from, stream string) Sender {
 			From:    from,
 			Stream:  stream,
 			APIBase: getEnv("POSTMARK_API_BASE", "https://api.postmarkapp.com"),
-			client:  &http.Client{},
+			client:  postmarkHTTPClient,
 		}
 	}
 	if getEnv("DEV_EMAIL_LOG", "") == "true" || getEnv("DEV_MODE", "") == "true" {
