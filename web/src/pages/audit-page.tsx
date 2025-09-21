@@ -29,7 +29,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-interface AuditLog {
+type AuditLog = {
   id: number
   timestamp: string
   user_email: string

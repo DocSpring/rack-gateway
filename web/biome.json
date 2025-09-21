@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.1.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
   "files": {
     "includes": ["**/*.{js,ts,jsx,tsx}", "*.{js,ts,jsx,tsx}"]
   },
@@ -16,11 +16,15 @@
       "recommended": true,
       "style": {
         "noNonNullAssertion": "off",
-        "useBlockStatements": "off"
+        "useBlockStatements": "off",
+        "useNamingConvention": "off",
+        "noMagicNumbers": "off"
       },
       "suspicious": {
         "noExplicitAny": "warn",
-        "noEmptyBlockStatements": "off"
+        "noEmptyBlockStatements": "off",
+        "noUnknownAtRules": "off",
+        "noAlert": "off"
       }
     }
   },

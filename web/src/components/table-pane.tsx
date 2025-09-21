@@ -1,7 +1,7 @@
 import { RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 
-interface TablePaneProps {
+type TablePaneProps = {
   title?: string
   description?: string
   headerRight?: React.ReactNode

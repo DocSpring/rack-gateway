@@ -1,7 +1,7 @@
 import type { FullConfig } from '@playwright/test'
 import { Client } from 'pg'
 
-async function cleanupE2EResources(client: Client) {
+async function cleanupE2eResources(client: Client) {
   // Tokens created via UI tests
   await client.query("DELETE FROM api_tokens WHERE name LIKE 'E2E Web%';")
   // Audit logs that reference those tokens/users to keep tables tidy
@@ -26,7 +26,7 @@ export default async function globalSetup(_config: FullConfig) {
 
   try {
     await client.connect()
-    await cleanupE2EResources(client)
+    await cleanupE2eResources(client)
   } catch (error) {
     console.warn('[e2e] Failed to cleanup database', error)
   } finally {

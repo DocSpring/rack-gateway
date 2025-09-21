@@ -4,14 +4,14 @@ import Cookies from 'js-cookie'
 
 const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
-export interface User {
+export type User = {
   email: string
   name: string
   roles: string[]
   rack?: { name: string; host: string }
 }
 
-export interface AuthState {
+export type AuthState = {
   user: User | null
   token: string | null
   isAuthenticated: boolean

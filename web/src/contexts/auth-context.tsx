@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import type { User } from '../lib/auth'
 import { authService } from '../lib/auth'
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean

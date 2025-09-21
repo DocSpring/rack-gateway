@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect } from './fixtures'
 
-export interface LoginOptions {
+export type LoginOptions = {
   /**
    * Display text of the mock OAuth user card to select.
    * Defaults to "Admin User" when omitted.

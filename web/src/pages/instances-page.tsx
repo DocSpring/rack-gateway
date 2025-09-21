@@ -72,12 +72,12 @@ export function InstancesPage() {
               <TableRow key={i.id}>
                 <TableCell className="font-mono text-xs">
                   {(() => {
-                    const isAWS = (rack?.provider || '').toLowerCase() === 'aws'
+                    const isAws = (rack?.provider || '').toLowerCase() === 'aws'
                     const region = rack?.region || ''
-                    const href = isAWS
+                    const href = isAws
                       ? `https://console.aws.amazon.com/ec2/v2/home?region=${region}#InstanceDetails:instanceId=${i.id}`
                       : ''
-                    return isAWS && region ? (
+                    return isAws && region ? (
                       <a
                         className="underline hover:no-underline"
                         href={href}

@@ -8,12 +8,12 @@ import { ensureCsrfToken, getCsrfToken } from './csrf'
 // In dev, keep empty to let Vite proxy handle '/.gateway/api/*'.
 const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
-export interface UserConfig {
+export type UserConfig = {
   name: string
   roles: string[]
 }
 
-export interface GatewayConfig {
+export type GatewayConfig = {
   domain: string
   users: Record<string, UserConfig>
 }
@@ -41,7 +41,7 @@ export const AVAILABLE_ROLES = {
 export type RoleName = keyof typeof AVAILABLE_ROLES
 
 class ApiService {
-  private client: AxiosInstance
+  private readonly client: AxiosInstance
 
   constructor() {
     this.client = axios.create({

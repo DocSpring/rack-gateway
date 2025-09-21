@@ -64,7 +64,7 @@ export function RackPage() {
             const p = data.parameters || {}
             return p && Object.keys(p).length > 0 ? (
               <TablePane empty={false} emptyMessage="No parameters found" title="Rack Parameters">
-                <KVTable obj={p} />
+                <KvTable obj={p} />
               </TablePane>
             ) : null
           })()}
@@ -76,7 +76,7 @@ export function RackPage() {
   )
 }
 
-function KVTable({ obj }: { obj: Record<string, string> }) {
+function KvTable({ obj }: { obj: Record<string, string> }) {
   const entries = Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0]))
   return (
     <div className="overflow-x-auto">

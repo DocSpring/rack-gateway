@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { UserConfig } from '../lib/api'
 import { AVAILABLE_ROLES } from '../lib/api'
 
-interface UserEditModalProps {
+type UserEditModalProps = {
   email: string
   user: UserConfig
   isNew: boolean

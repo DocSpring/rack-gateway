@@ -30,7 +30,7 @@ import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-export interface APIToken {
+export type APIToken = {
   id: string
   name: string
   token?: string
@@ -42,14 +42,14 @@ export interface APIToken {
   created_by_name?: string
 }
 
-interface TokenRoleInfo {
+type TokenRoleInfo = {
   name: string
   label: string
   description: string
   permissions: string[]
 }
 
-interface TokenPermissionMetadata {
+type TokenPermissionMetadata = {
   permissions: string[]
   roles: TokenRoleInfo[]
   default_permissions: string[]
@@ -57,14 +57,14 @@ interface TokenPermissionMetadata {
   user_permissions: string[]
 }
 
-interface PermissionOption {
+type PermissionOption = {
   value: string
   title: string
   description: string
   sortKey: string
 }
 
-interface PermissionGroup {
+type PermissionGroup = {
   key: string
   label: string
   sortKey: string
@@ -992,7 +992,7 @@ function TokenPermissionsEditor({
   )
 }
 
-interface CreateTokenDialogProps {
+type CreateTokenDialogProps = {
   activeRole: string | null
   availablePermissions: string[]
   canAssignPermission: (permission: string) => boolean

@@ -191,12 +191,6 @@ export function createAppRouter(basepath?: string) {
   })
 }
 
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: ReturnType<typeof createAppRouter>
-  }
-}
-
 function getSingletonRouter() {
   // Reuse a single router instance across HMR to avoid double route registration
   try {

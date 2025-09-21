@@ -10,7 +10,7 @@ import { Separator } from '../components/ui/separator'
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 
-interface SettingsResponse {
+type SettingsResponse = {
   protected_env_vars: string[]
   allow_destructive_actions: boolean
 }

@@ -29,7 +29,7 @@ import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-interface User {
+type User = {
   id?: number
   email: string
   name: string
