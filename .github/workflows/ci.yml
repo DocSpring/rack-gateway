@@ -75,5 +75,8 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
 
+      - name: Web lint
+        run: task web:lint
+
       - name: Web tests
         run: task web:test

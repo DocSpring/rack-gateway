@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
+import type { APIToken } from './tokens-page'
 import { TokensPage } from './tokens-page'
 
 const CREATE_TOKEN_RE = /Create Token/i
@@ -178,8 +179,9 @@ describe('TokensPage', () => {
     })
 
     it('renders gracefully when API returns null or non-array', async () => {
-      // @ts-expect-error simulate bad API response
-      vi.mocked(api.get).mockResolvedValueOnce(mockPermissionMetadata).mockResolvedValueOnce(null)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(null as unknown as APIToken[])
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
@@ -367,7 +369,10 @@ describe('TokensPage', () => {
 
       vi.mocked(api.get).mockResolvedValueOnce(deployerMetadata).mockResolvedValueOnce(mockTokens)
 
-      const Wrapper = createWrapper({ email: 'deployer@example.com', roles: ['deployer'] })
+      const Wrapper = createWrapper({
+        email: 'deployer@example.com',
+        roles: ['deployer'],
+      })
       render(<TokensPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
@@ -376,7 +381,9 @@ describe('TokensPage', () => {
 
       fireEvent.click(screen.getByText('Create Token'))
 
-      const restrictedCheckbox = screen.getByRole('checkbox', { name: RACK_UPDATE_REGEX })
+      const restrictedCheckbox = screen.getByRole('checkbox', {
+        name: RACK_UPDATE_REGEX,
+      })
       expect(restrictedCheckbox).toBeDisabled()
     })
 
@@ -405,16 +412,16 @@ describe('TokensPage', () => {
 
   describe('Date Rendering', () => {
     it('handles missing or invalid dates without crashing', async () => {
-      const badTokens = [
+      const badTokens: APIToken[] = [
         {
           id: 't1',
           name: 'Bad Token',
           token: undefined,
           last_used: null,
-          // created_at / expires_at missing
-        } as unknown as APIToken,
+          created_at: '',
+          expires_at: null,
+        },
       ]
-      // @ts-expect-error partial fields
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockPermissionMetadata)
         .mockResolvedValueOnce(badTokens)

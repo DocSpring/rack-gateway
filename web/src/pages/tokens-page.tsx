@@ -30,7 +30,7 @@ import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-interface APIToken {
+export interface APIToken {
   id: string
   name: string
   token?: string
