@@ -41,9 +41,9 @@ type APIToken struct {
 	CreatedByEmail  string     `json:"created_by_email,omitempty"`
 	CreatedByName   string     `json:"created_by_name,omitempty"`
 	Permissions     []string   `json:"permissions"`
-	CreatedAt       time.Time  `json:"created_at"`
-	ExpiresAt       *time.Time `json:"expires_at"`
-	LastUsedAt      *time.Time `json:"last_used_at"`
+	CreatedAt       time.Time  `json:"created_at" ts_type:"string"`
+	ExpiresAt       *time.Time `json:"expires_at" ts_type:"string | null"`
+	LastUsedAt      *time.Time `json:"last_used_at" ts_type:"string | null"`
 }
 
 // AuditLog represents an audit log entry

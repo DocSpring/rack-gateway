@@ -13,6 +13,13 @@ tasks:
     cmds:
       - go install honnef.co/go/tools/cmd/staticcheck@latest
       - go install gotest.tools/gotestsum@latest
+      - go install github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest
+
+  types:export:
+    desc: Generate TypeScript models from Go structs
+    deps: [deps]
+    cmds:
+      - go run ./internal/tools/typescriptify
 
   build:
     desc: Build Go binaries (gateway, cli, mock)

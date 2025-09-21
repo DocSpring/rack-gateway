@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { format } from 'date-fns'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
@@ -25,6 +26,19 @@ vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+  },
+}))
+
+vi.mock('../components/time-ago', () => ({
+  TimeAgo: ({ date }: { date?: string | Date | null }) => {
+    if (!date) {
+      return <span>—</span>
+    }
+    const parsed = typeof date === 'string' ? new Date(date) : date
+    if (Number.isNaN(parsed.getTime())) {
+      return <span>—</span>
+    }
+    return <span>{format(parsed, 'MMM d, yyyy')}</span>
   },
 }))
 
@@ -58,16 +72,18 @@ const defaultPermissions = [
 
 const mockTokens: APIToken[] = [
   {
-    id: 'token-1',
+    id: 1,
     name: 'CI/CD Pipeline',
+    user_id: 10,
     permissions: defaultPermissions,
     last_used_at: '2024-01-15T00:00:00Z',
     created_at: '2024-01-01T00:00:00Z',
     expires_at: '2026-01-01T00:00:00Z', // Active - expires in future
   },
   {
-    id: 'token-2',
+    id: 2,
     name: 'Development Token',
+    user_id: 11,
     permissions: ['convox:app:list'],
     last_used_at: null,
     created_at: '2024-01-10T00:00:00Z',
@@ -226,19 +242,26 @@ describe('TokensPage', () => {
         .mockResolvedValueOnce([
           ...mockTokens,
           {
-            id: 'new-token',
+            id: 3,
             name: 'New Token',
+            user_id: 12,
+            permissions: defaultPermissions,
             last_used_at: null,
             created_at: '2024-01-20T00:00:00Z',
             expires_at: '2026-01-20T00:00:00Z',
           },
         ])
       vi.mocked(api.post).mockResolvedValueOnce({
-        id: 'new-token',
-        name: 'New Token',
         token: 'gat_abc123xyz456',
-        created_at: '2024-01-20T00:00:00Z',
-        expires_at: '2025-01-20T00:00:00Z',
+        api_token: {
+          id: 3,
+          name: 'New Token',
+          user_id: 12,
+          permissions: defaultPermissions,
+          last_used_at: null,
+          created_at: '2024-01-20T00:00:00Z',
+          expires_at: '2025-01-20T00:00:00Z',
+        },
       })
 
       const Wrapper = createWrapper()
@@ -279,19 +302,26 @@ describe('TokensPage', () => {
         .mockResolvedValueOnce([
           ...mockTokens,
           {
-            id: 'new-token',
+            id: 3,
             name: 'New Token',
+            user_id: 12,
+            permissions: defaultPermissions,
             last_used_at: null,
             created_at: '2024-01-20T00:00:00Z',
             expires_at: '2026-01-20T00:00:00Z',
           },
         ])
       vi.mocked(api.post).mockResolvedValueOnce({
-        id: 'new-token',
-        name: 'New Token',
         token: 'gat_abc123xyz456',
-        created_at: '2024-01-20T00:00:00Z',
-        expires_at: '2025-01-20T00:00:00Z',
+        api_token: {
+          id: 3,
+          name: 'New Token',
+          user_id: 12,
+          permissions: defaultPermissions,
+          last_used_at: null,
+          created_at: '2024-01-20T00:00:00Z',
+          expires_at: '2025-01-20T00:00:00Z',
+        },
       })
 
       const Wrapper = createWrapper()
@@ -324,19 +354,26 @@ describe('TokensPage', () => {
         .mockResolvedValueOnce([
           ...mockTokens,
           {
-            id: 'viewer-token',
+            id: 4,
             name: 'Viewer Token',
+            user_id: 13,
+            permissions: ['convox:app:list'],
             last_used_at: null,
             created_at: '2024-01-25T00:00:00Z',
             expires_at: null,
           },
         ])
       vi.mocked(api.post).mockResolvedValueOnce({
-        id: 'viewer-token',
-        name: 'Viewer Token',
         token: 'gat_viewer123',
-        created_at: '2024-01-25T00:00:00Z',
-        expires_at: '2025-01-25T00:00:00Z',
+        api_token: {
+          id: 4,
+          name: 'Viewer Token',
+          user_id: 13,
+          permissions: ['convox:app:list'],
+          last_used_at: null,
+          created_at: '2024-01-25T00:00:00Z',
+          expires_at: '2025-01-25T00:00:00Z',
+        },
       })
 
       const Wrapper = createWrapper()
@@ -419,9 +456,10 @@ describe('TokensPage', () => {
     it('handles missing or invalid dates without crashing', async () => {
       const badTokens: APIToken[] = [
         {
-          id: 't1',
+          id: 999,
           name: 'Bad Token',
-          token: undefined,
+          user_id: 42,
+          permissions: [],
           last_used_at: null,
           created_at: '',
           expires_at: null,
@@ -439,7 +477,7 @@ describe('TokensPage', () => {
       })
 
       // Should show placeholders
-      expect(screen.getAllByText('-').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('—').length).toBeGreaterThan(0)
       expect(screen.getByText('Never')).toBeInTheDocument()
     })
   })
@@ -449,7 +487,7 @@ describe('TokensPage', () => {
       vi.mocked(api.get)
         .mockResolvedValueOnce(mockPermissionMetadata)
         .mockResolvedValueOnce(mockTokens)
-        .mockResolvedValueOnce(mockTokens.filter((t) => t.id !== 'token-1')) // After deletion
+        .mockResolvedValueOnce(mockTokens.filter((t) => t.id !== 1)) // After deletion
       vi.mocked(api.delete).mockResolvedValueOnce({})
 
       const Wrapper = createWrapper()
@@ -475,7 +513,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/token-1')
+        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/1')
       })
     })
   })

@@ -1,9 +1,11 @@
 /* biome-ignore format: keep legacy formatting for now */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from 'date-fns'
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+
+import { TimeAgo } from '@/components/time-ago'
 import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -29,18 +31,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
+import type { APIToken as APITokenModel, APITokenResponse } from '../lib/generated/gateway-types'
 
-export type APIToken = {
-  id: string
-  name: string
-  token?: string
-  permissions?: string[]
-  last_used_at: string | null
-  created_at: string
-  expires_at: string | null
-  created_by_email?: string
-  created_by_name?: string
-}
+export type APIToken = APITokenModel
 
 type TokenRoleInfo = {
   name: string
@@ -184,14 +177,6 @@ function humanizeAction(value: string): string {
   return value.replace(/_/g, ' ')
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) {
-    return '-'
-  }
-  const d = new Date(dateStr)
-  return Number.isNaN(d.getTime()) ? '-' : format(d, 'MMM d, yyyy')
-}
-
 function TokenRow({
   token,
   deletePending,
@@ -216,8 +201,10 @@ function TokenRow({
         </Badge>
       </TableCell>
       <TableCell>{token.created_by_email || token.created_by_name || '-'}</TableCell>
-      <TableCell>{token.last_used_at ? formatDate(token.last_used_at) : 'Never'}</TableCell>
-      <TableCell>{formatDate(token.created_at)}</TableCell>
+      <TableCell>{token.last_used_at ? <TimeAgo date={token.last_used_at} /> : 'Never'}</TableCell>
+      <TableCell>
+        <TimeAgo date={token.created_at} />
+      </TableCell>
       <TableCell className="text-right">
         {canEdit ? (
           <div className="flex justify-end gap-2">
@@ -361,7 +348,7 @@ function TokensPageInner() {
   // Create token mutation
   const createTokenMutation = useMutation({
     mutationFn: async (payload: { name: string; permissions: string[] }) => {
-      const response = await api.post<APIToken>('/.gateway/api/admin/tokens', {
+      const response = await api.post<APITokenResponse>('/.gateway/api/admin/tokens', {
         name: payload.name,
         permissions: payload.permissions,
       })
@@ -380,7 +367,7 @@ function TokensPageInner() {
 
   // Delete token mutation
   const deleteTokenMutation = useMutation({
-    mutationFn: async (tokenId: string) => {
+    mutationFn: async (tokenId: number) => {
       await api.delete(`/.gateway/api/admin/tokens/${tokenId}`)
     },
     onSuccess: () => {
@@ -403,7 +390,7 @@ function TokensPageInner() {
       name,
       permissions,
     }: {
-      id: string
+      id: number
       name: string
       permissions: string[]
     }) => {

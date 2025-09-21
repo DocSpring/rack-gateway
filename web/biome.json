@@ -1,7 +1,11 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
   "files": {
-    "includes": ["**/*.{js,ts,jsx,tsx}", "*.{js,ts,jsx,tsx}"]
+    "includes": [
+      "**/*.{js,ts,jsx,tsx}",
+      "*.{js,ts,jsx,tsx}",
+      "!src/lib/generated/**/*.ts"
+    ]
   },
   "formatter": {
     "enabled": true,
