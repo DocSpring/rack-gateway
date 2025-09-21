@@ -1,6 +1,25 @@
 # Convox Gateway
 
-API proxy for Convox racks with SSO, RBAC, and audit logging
+API proxy for Convox racks with SSO, RBAC, and audit logging. SOC2 compliant.
+
+## Convox Console: Community Edition
+
+[Convox](https://convox.com) is an open-source PaaS based on Kubernetes available for multiple cloud providers.
+The Convox source code is available on GitHub: https://github.com/convox/convox
+
+Convox Console is a closed-source, paid service that provides a web interface for
+managing your rack, including user management, RBAC, audit logging, workflows, and more.
+
+Convox Gateway can be thought of as a "community edition" for the hosted Convox console.
+It is an open source, self-hosted interface for managing your rack with OAuth login,
+fine-grained access control, audit logs, and secret redaction in env vars. We provide everything you need
+for SOC2 compliance on your own self-hosted infrastructure, but we do not support workflows or
+any other advanced features.
+
+**Convox Gateway is provided without any warranty or support. Use at your own risk.**
+
+Sign up for the official Convox Console or inquire about their enterprise license
+if you need more features or paid support.
 
 ## 📖 Start Here
 
