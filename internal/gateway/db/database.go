@@ -422,7 +422,27 @@ func (d *Database) UpdateUserRoles(email string, roles []string) error {
 }
 
 // DeleteUser removes a user from the database
+func (d *Database) deleteUserAuditLogs(email string) error {
+	var uid sql.NullInt64
+	if err := d.queryRow("SELECT id FROM users WHERE email = ?", email).Scan(&uid); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("failed to load user id for audit cleanup: %w", err)
+	}
+	if !uid.Valid {
+		return nil
+	}
+	if _, err := d.exec("DELETE FROM audit_logs WHERE user_email = ?", email); err != nil {
+		return fmt.Errorf("failed to delete audit logs for user: %w", err)
+	}
+	return nil
+}
+
 func (d *Database) DeleteUser(email string) error {
+	if err := d.deleteUserAuditLogs(email); err != nil {
+		return err
+	}
 	_, err := d.exec("DELETE FROM users WHERE email = ?", email)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)

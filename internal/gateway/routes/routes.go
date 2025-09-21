@@ -54,12 +54,6 @@ var specs = []RouteSpec{
 	// Objects (deploy bundle upload)
 	{"POST", "/apps/{app}/objects/tmp/{name}", "object", "create"},
 
-	// Environment (legacy + current)
-	{"GET", "/apps/{app}/env", "env", "view"},
-	{"POST", "/apps/{app}/env", "env", "set"},
-	{"GET", "/apps/{app}/environment", "env", "view"},
-	{"POST", "/apps/{app}/environment", "env", "set"},
-
 	// Apps
 	{"GET", "/apps", "app", "list"},
 	{"GET", "/apps/{name}", "app", "get"},

@@ -22,8 +22,6 @@ func TestAuditLogger(t *testing.T) {
 			expectedAction   string
 			expectedResource string
 		}{
-			{"/apps/myapp/environment", "GET", "env.view", "myapp"},
-			{"/apps/myapp/environment", "POST", "env.set", "myapp"},
 			{"/apps", "GET", "app.list", "unknown"},
 			{"/apps/myapp", "DELETE", "app.delete", "myapp"},
 			{"/apps/myapp/builds", "POST", "build.create", "myapp"},
@@ -31,6 +29,8 @@ func TestAuditLogger(t *testing.T) {
 			{"/apps/myapp/processes", "GET", "process.list", "myapp"},
 			{"/apps/myapp/processes/p1", "GET", "process.get", "p1"},
 			{"/apps/myapp/processes/p1", "DELETE", "process.terminate", "p1"},
+			{"/apps/myapp/releases", "GET", "release.list", "myapp"},
+			{"/apps/myapp/releases/REL123/promote", "POST", "release.promote", "REL123"},
 		}
 
 		for _, test := range tests {
@@ -58,7 +58,7 @@ func TestAuditLogger(t *testing.T) {
 
 	t.Run("LogRequest", func(t *testing.T) {
 		// Create a mock HTTP request
-		req, err := http.NewRequest("GET", "/apps/myapp/env?key=SECRET_TOKEN", nil)
+		req, err := http.NewRequest("GET", "/apps/myapp/releases?limit=1", nil)
 		require.NoError(t, err)
 
 		req.Header.Set("X-User-Name", "Test User")
@@ -76,13 +76,13 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "test@example.com", log.UserEmail)
 		assert.Equal(t, "Test User", log.UserName)
 		assert.Equal(t, "convox", log.ActionType)
-		assert.Equal(t, "env.view", log.Action)
-		assert.Equal(t, "myapp", log.Resource)
+		assert.Equal(t, "release.list", log.Action)
+		assert.Equal(t, "all", log.Resource)
 		assert.Equal(t, "success", log.Status)
 		assert.Equal(t, 150, log.ResponseTimeMs)
 		assert.Equal(t, "192.168.1.1", log.IPAddress)
 		assert.Contains(t, log.Details, "GET")
-		assert.Contains(t, log.Details, "/apps/myapp/env")
+		assert.Contains(t, log.Details, "/apps/myapp/releases")
 	})
 
 	t.Run("LogDeniedRequest", func(t *testing.T) {

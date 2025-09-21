@@ -41,3 +41,7 @@ tasks:
   dev:
     desc: Start dev stack and follow logs
     deps: [docker:start:dev]
+
+  logs:
+    desc: Tail logs for the dev stack
+    deps: [docker:logs:dev]

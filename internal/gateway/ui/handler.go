@@ -827,12 +827,17 @@ func (h *Handler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	var userEmailFilter string
 	if userIDParam != "" {
 		if uid, err := strconv.ParseInt(userIDParam, 10, 64); err == nil {
-			if u, err := h.database.GetUserByID(uid); err == nil && u != nil {
-				userEmailFilter = u.Email
-			} else {
-				http.Error(w, "user not found", http.StatusNotFound)
+			u, err := h.database.GetUserByID(uid)
+			if err != nil {
+				http.Error(w, "failed to load user", http.StatusInternalServerError)
 				return
 			}
+			if u == nil {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode([]*db.AuditLog{})
+				return
+			}
+			userEmailFilter = u.Email
 		}
 	}
 

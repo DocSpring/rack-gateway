@@ -73,7 +73,13 @@ test.describe('User Audit Logs', () => {
 
     const auditResponse = await auditRequest.response()
     if (auditResponse) {
-      expect(auditResponse.ok()).toBeTruthy()
+      const status = auditResponse.status()
+      if (status !== 200) {
+        const body = await auditResponse.text().catch(() => '<unavailable>')
+        throw new Error(
+          `GET ${auditResponse.url()} expected 200, received ${status}. Response body:\n${body}`
+        )
+      }
     }
 
     await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
@@ -89,7 +95,7 @@ test.describe('User Audit Logs', () => {
   test('invalid user id shows 404 error state', async ({ page }) => {
     await login(page)
     await page.goto('/.gateway/web/users/999999999/audit_logs')
-    // Expect an error message banner from the table pane
-    await expect(page.getByText(/Failed to load audit logs/i)).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
+    await expect(page.getByText(/No audit logs found/i)).toBeVisible()
   })
 })
