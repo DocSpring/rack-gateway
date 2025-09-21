@@ -37,12 +37,13 @@ test("users: add, edit role, delete", async ({ page }) => {
   await page.goto("/.gateway/web/users");
   await expect(page.getByRole("heading", { name: /Users/i })).toBeVisible();
 
-  const email = `e2e-user-${Date.now()}@example.com`;
+  const timestamp = Date.now();
+  const email = `e2e-web-user-${timestamp}@example.com`;
 
   // Add user
   await page.getByRole("button", { name: /Add User/i }).click();
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Name").fill("E2E User");
+  await page.getByLabel("Name").fill(`E2E Web User ${timestamp}`);
   // Role defaults to viewer; save
   await page.getByRole("button", { name: /Add User/i }).click();
 
@@ -84,12 +85,13 @@ test("users: add shows all fields and persists after refresh", async ({
   await page.goto("/.gateway/web/users");
   await expect(page.getByRole("heading", { name: /Users/i })).toBeVisible();
 
-  const email = `e2e-persist-${Date.now()}@example.com`;
+  const timestamp = Date.now();
+  const email = `e2e-web-user-${timestamp}@example.com`;
 
   // Add user
   await page.getByRole("button", { name: /Add User/i }).click();
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Name").fill("E2E Persist");
+  await page.getByLabel("Name").fill(`E2E Web User ${timestamp}`);
   await page.getByRole("button", { name: /Add User/i }).click();
 
   // Verify row appears with expected fields
@@ -116,6 +118,11 @@ test("users: add shows all fields and persists after refresh", async ({
     const addedByCell = row.locator("td").nth(addedByIdx);
     await expect(addedByCell).toHaveText(/admin@/i);
   }
+
+  // Delete user to keep DB clean between runs
+  page.once("dialog", (d) => d.accept());
+  await row.getByRole("button", { name: /Delete User/i }).click();
+  await expect(row).toHaveCount(0);
 });
 
 test("tokens: create, rename, delete", async ({ page }) => {
@@ -127,7 +134,8 @@ test("tokens: create, rename, delete", async ({ page }) => {
     page.getByRole("heading", { name: /API Tokens/i })
   ).toBeVisible();
 
-  const name1 = `E2E Token ${Date.now()}`;
+  const timestamp = Date.now();
+  const name1 = `E2E Web API Token ${timestamp}`;
 
   // Create token
   await page.getByRole("button", { name: /Create Token/i }).click();
@@ -166,7 +174,8 @@ test("audit logs: view and filter", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: /API Tokens/i })
   ).toBeVisible();
-  const tokenName = `E2E Audit Token ${Date.now()}`;
+  const timestamp = Date.now();
+  const tokenName = `E2E Web API Token ${timestamp}`;
   await page.getByRole("button", { name: /Create Token/i }).click();
   await page.getByLabel("Token Name").fill(tokenName);
   await page.getByRole("button", { name: /Create Token/i }).click();
@@ -195,4 +204,14 @@ test("audit logs: view and filter", async ({ page }) => {
 
   // Verify at least one data row remains
   await expect(page.locator("table tbody tr").first()).toBeVisible();
+
+  // Clean up token to avoid test fixture buildup
+  await page.goto("/.gateway/web/api_tokens");
+  const row = page.locator("tr", { hasText: tokenName });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /Delete Token/i }).click();
+  const confirmDialog = page.getByRole("dialog");
+  await confirmDialog.getByLabel("Confirmation").fill("DELETE");
+  await confirmDialog.getByRole("button", { name: /Delete Token/i }).click();
+  await expect(row).toHaveCount(0);
 });

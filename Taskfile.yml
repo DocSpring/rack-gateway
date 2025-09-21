@@ -27,6 +27,12 @@ tasks:
       - task: web:test
       - task: web:e2e:dev
 
+  e2e:
+    desc: Run all E2E tests
+    cmds:
+      - task: go:e2e:dev
+      - task: web:e2e:dev
+
   build:
     desc: Build web + gateway + cli + mock binaries
     deps: [web:build, go:build]

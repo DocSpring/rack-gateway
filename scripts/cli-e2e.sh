@@ -11,6 +11,8 @@ NC='\033[0m' # No Color
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+E2E_TS="$(date +%s%3N)"
+
 # Resolve ports from mise.toml or environment
 MiseFile="mise.toml"
 toml_get() {
@@ -200,7 +202,7 @@ verify_raw_command_status_and_output "timeout 3s ./bin/convox-gateway convox log
 # Create a CI/CD API token and exercise pipeline-style commands using the raw token
 echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
 API_TOKEN_JSON=$(./bin/convox-gateway api-token create \
-  --name "cli-e2e-cicd" \
+  --name "E2E CLI API Token ${E2E_TS}" \
   --role cicd \
   --output json)
 
@@ -261,10 +263,13 @@ verify_raw_command_status_and_output \
   "OK"
 
 # Clean up the API token now that the pipeline simulation is complete
-./bin/convox-gateway api-token delete "$API_TOKEN_ID"
-
 unset CONVOX_GATEWAY_API_TOKEN
 unset CONVOX_GATEWAY_URL
+
+# Delete via admin login to validate deletion flow
+login_cli_as "admin@example.com" "e2e"
+verify_command "api-token delete $API_TOKEN_ID" "Deleted token $API_TOKEN_ID"
+logout_cli
 
 # Login as deployer
 # ---------------------------------------------
