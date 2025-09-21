@@ -2,6 +2,10 @@
 
 API proxy for Convox racks with SSO, RBAC, and audit logging. SOC2 compliant.
 
+![Screenshot of audit logs](./docs/images/audit-logs.jpg)
+
+_[More screenshots](./docs/SCREENSHOTS.md)_
+
 ## Convox Console: Community Edition
 
 [Convox](https://convox.com) is an open-source PaaS based on Kubernetes available for multiple cloud providers.
