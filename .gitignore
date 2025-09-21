@@ -45,6 +45,7 @@ tmp/
 web/dist/
 web/node_modules/
 web/.vite/
+mock-convox
 
 # Dev mock OAuth
 dev/mock-oauth/node_modules/
