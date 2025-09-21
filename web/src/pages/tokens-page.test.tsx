@@ -580,9 +580,9 @@ describe('TokensPage', () => {
       const getMock = vi.mocked(api.get)
       getMock.mockImplementation((url: string) => {
         if (url.includes('/tokens/permissions')) {
-          return mockPermissionMetadata as unknown as APIToken[]
+          return Promise.resolve(mockPermissionMetadata as unknown as APIToken[])
         }
-        return mockTokens
+        return Promise.resolve(mockTokens)
       })
       vi.mocked(api.put).mockResolvedValueOnce(mockTokens[0])
 
