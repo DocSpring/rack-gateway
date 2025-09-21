@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b tsconfig.build.json && vite build",
     "build:fast": "vite build --mode development",
     "typecheck": "tsc -b --noEmit --pretty false",
     "lint": "biome check .",
