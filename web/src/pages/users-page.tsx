@@ -165,7 +165,7 @@ export function UsersPage() {
       await api.delete(`/.gateway/api/admin/users/${email}`)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
       toast.success('User deleted successfully')
     },
     onError: (err: unknown) => {
@@ -205,7 +205,7 @@ export function UsersPage() {
 
   // Smaller helpers to keep complexity down
   const finalizeUpdate = () => {
-    queryClient.invalidateQueries({ queryKey: ['users'] })
+    queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
     toast.success('User updated successfully')
     handleCloseDialog()
   }
@@ -263,7 +263,7 @@ export function UsersPage() {
         } as User)
         return arr
       })
-      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
       await queryClient.refetchQueries({ queryKey: ['users'] })
       toast.success('User created successfully')
     } catch (err) {

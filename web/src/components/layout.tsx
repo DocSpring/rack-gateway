@@ -95,6 +95,8 @@ export function Layout() {
             } else if (item.href === '/audit_logs') {
               // Highlight for global audit list and user-specific audit routes
               isActive = p.startsWith('/audit_logs') || USER_AUDIT_RE.test(p)
+            } else if (item.href === '/users') {
+              isActive = p === '/users' || (p.startsWith('/users/') && !USER_AUDIT_RE.test(p))
             } else if (item.href === '/') {
               isActive = p === '/'
             } else {
