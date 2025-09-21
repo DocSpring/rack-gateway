@@ -17,9 +17,9 @@ web/coverage
 web/playwright-report
 
 # Dev mock oauth
-dev/mock-oauth/node_modules
-dev/mock-oauth/package-lock.json
-dev/mock-oauth/pnpm-lock.yaml
+mock-oauth/node_modules
+mock-oauth/package-lock.json
+mock-oauth/pnpm-lock.yaml
 
 # Local config/examples not needed in image
 docker-compose.override.yml

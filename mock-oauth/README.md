@@ -41,7 +41,7 @@ The dev server comes with four pre-configured test users:
 ### Standalone
 
 ```bash
-cd dev/mock-oauth
+cd mock-oauth
 npm install
 npm start
 ```
@@ -49,7 +49,7 @@ npm start
 ### With Docker
 
 ```bash
-docker build -t mock-oauth ./dev/mock-oauth
+docker build -t mock-oauth ./mock-oauth
 docker run -p 3345:3345 mock-oauth
 ```
 

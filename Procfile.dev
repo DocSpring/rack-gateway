@@ -1,9 +1,9 @@
 # Mock services (using env vars for ports)
-mock-oauth: cd dev/mock-oauth && PORT=$MOCK_OAUTH_PORT npm start
+mock-oauth: cd mock-oauth && PORT=$MOCK_OAUTH_PORT npm start
 mock-convox: MOCK_CONVOX_PORT=$MOCK_CONVOX_PORT go run cmd/mock-convox/main.go
 
 # Gateway API (Go with hot reload)
 gateway: go run cmd/gateway/main.go
 
-# Frontend (local with hot reload)  
+# Frontend (local with hot reload)
 web: cd web && pnpm dev

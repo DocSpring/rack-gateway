@@ -29,7 +29,7 @@ x-gateway-health: &gateway_healthcheck
 services:
   mock-oauth:
     build:
-      context: ./dev/mock-oauth
+      context: ./mock-oauth
     environment:
       PORT: ${MOCK_OAUTH_PORT:-3345}
       NODE_ENV: development
