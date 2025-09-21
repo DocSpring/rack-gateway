@@ -34,6 +34,7 @@ export interface APIToken {
   id: string
   name: string
   token?: string
+  permissions?: string[]
   last_used: string | null
   created_at: string
   expires_at: string | null
@@ -257,6 +258,8 @@ function TokensPageInner() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editToken, setEditToken] = useState<APIToken | null>(null)
   const [editName, setEditName] = useState('')
+  const [editPermissions, setEditPermissions] = useState<string[]>([])
+  const [editActiveRole, setEditActiveRole] = useState<string | null>(null)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [tokenToDelete, setTokenToDelete] = useState<APIToken | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
@@ -317,6 +320,7 @@ function TokensPageInner() {
   const userPermissionsSet = useMemo(() => new Set(userPermissions), [userPermissions])
   const hasWildcardPermission = userPermissionsSet.has('convox:*:*')
   const selectedPermissionsSet = useMemo(() => new Set(selectedPermissions), [selectedPermissions])
+  const editPermissionsSet = useMemo(() => new Set(editPermissions), [editPermissions])
 
   const canAssignPermission = (permission: string): boolean => {
     if (hasWildcardPermission) {
@@ -344,6 +348,15 @@ function TokensPageInner() {
     setSelectedPermissions(defaults)
     setActiveRole(findMatchingRole(defaults, roleShortcuts))
   }, [isCreateOpen, permissionMetadata, roleShortcuts, selectedPermissions.length])
+
+  useEffect(() => {
+    if (!(isEditOpen && editToken)) {
+      return
+    }
+    const normalized = normalizePermissions(editToken.permissions ?? [])
+    setEditPermissions(normalized)
+    setEditActiveRole(findMatchingRole(normalized, roleShortcuts))
+  }, [isEditOpen, editToken, roleShortcuts])
 
   // Create token mutation
   const createTokenMutation = useMutation({
@@ -383,21 +396,34 @@ function TokensPageInner() {
     },
   })
 
-  // Update token name mutation
+  // Update token mutation (name and permissions)
   const updateTokenMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      await api.put(`/.gateway/api/admin/tokens/${id}`, { name })
+    mutationFn: async ({
+      id,
+      name,
+      permissions,
+    }: {
+      id: string
+      name: string
+      permissions: string[]
+    }) => {
+      await api.put(`/.gateway/api/admin/tokens/${id}`, {
+        name,
+        permissions,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
-      toast.success('Token renamed successfully')
+      toast.success('Token updated successfully')
       setIsEditOpen(false)
       setEditToken(null)
       setEditName('')
+      setEditPermissions([])
+      setEditActiveRole(null)
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to rename token')
+      toast.error(message || 'Failed to update token')
     },
   })
 
@@ -479,6 +505,51 @@ function TokensPageInner() {
     })
   }
 
+  const handleEditRoleShortcut = (role: TokenRoleInfo) => {
+    const normalized = normalizePermissions(role.permissions)
+    if (!normalized.every(canAssignPermission)) {
+      return
+    }
+    setEditPermissions(normalized)
+    setEditActiveRole(role.name)
+  }
+
+  const handleEditPermissionToggle = (permission: string) => {
+    if (!canAssignPermission(permission)) {
+      return
+    }
+    setEditPermissions((prev) => {
+      const nextSet = new Set(prev)
+      if (nextSet.has(permission)) {
+        nextSet.delete(permission)
+      } else {
+        nextSet.add(permission)
+      }
+      const next = Array.from(nextSet).sort()
+      setEditActiveRole(findMatchingRole(next, roleShortcuts))
+      return next
+    })
+  }
+
+  const handleUpdateToken = () => {
+    if (!editToken) {
+      return
+    }
+    if (!editName.trim()) {
+      toast.error('Please enter a token name')
+      return
+    }
+    if (editPermissions.length === 0) {
+      toast.error('Select at least one permission')
+      return
+    }
+    updateTokenMutation.mutate({
+      id: editToken.id,
+      name: editName.trim(),
+      permissions: editPermissions,
+    })
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -546,6 +617,9 @@ function TokensPageInner() {
                     }
                     setEditToken(token)
                     setEditName(token.name)
+                    const normalized = normalizePermissions(token.permissions ?? [])
+                    setEditPermissions(normalized)
+                    setEditActiveRole(findMatchingRole(normalized, roleShortcuts))
                     setIsEditOpen(true)
                   }}
                   token={token}
@@ -603,43 +677,67 @@ function TokensPageInner() {
       />
 
       {/* Edit Token Dialog */}
-      <Dialog onOpenChange={setIsEditOpen} open={isEditOpen}>
+      <Dialog
+        onOpenChange={(open) => {
+          setIsEditOpen(open)
+          if (!open) {
+            setEditToken(null)
+            setEditName('')
+            setEditPermissions([])
+            setEditActiveRole(null)
+          }
+        }}
+        open={isEditOpen}
+      >
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename API Token</DialogTitle>
-            <DialogDescription>Update the display name for this token.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Token Name</Label>
-              <Input
-                id="edit-name"
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && editToken) {
-                    updateTokenMutation.mutate({
-                      id: editToken.id,
-                      name: editName,
-                    })
-                  }
-                }}
-                value={editName}
+          <TooltipProvider>
+            <DialogHeader>
+              <DialogTitle>Edit API Token</DialogTitle>
+              <DialogDescription>Update the name and permissions for this token.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Token Name</Label>
+                <Input
+                  id="edit-name"
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleUpdateToken()
+                    }
+                  }}
+                  value={editName}
+                />
+              </div>
+              <TokenPermissionsEditor
+                activeRole={editActiveRole}
+                availablePermissions={availablePermissions}
+                canAssignPermission={canAssignPermission}
+                isPermissionLoading={isPermissionLoading}
+                onPermissionToggle={handleEditPermissionToggle}
+                onRoleSelect={handleEditRoleShortcut}
+                roleShortcuts={roleShortcuts}
+                selectedPermissions={editPermissions}
+                selectedPermissionsSet={editPermissionsSet}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setIsEditOpen(false)} variant="outline">
-              Cancel
-            </Button>
-            <Button
-              disabled={updateTokenMutation.isPending || !editToken || !editName.trim()}
-              onClick={() =>
-                editToken && updateTokenMutation.mutate({ id: editToken.id, name: editName })
-              }
-            >
-              {updateTokenMutation.isPending ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button onClick={() => setIsEditOpen(false)} variant="outline">
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  updateTokenMutation.isPending ||
+                  !editToken ||
+                  !editName.trim() ||
+                  editPermissions.length === 0
+                }
+                onClick={handleUpdateToken}
+              >
+                {updateTokenMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </TooltipProvider>
         </DialogContent>
       </Dialog>
 
@@ -853,6 +951,47 @@ function PermissionCheckboxGrid({
   )
 }
 
+function TokenPermissionsEditor({
+  availablePermissions,
+  roleShortcuts,
+  activeRole,
+  selectedPermissions,
+  selectedPermissionsSet,
+  onRoleSelect,
+  onPermissionToggle,
+  canAssignPermission,
+  isPermissionLoading,
+}: {
+  availablePermissions: string[]
+  roleShortcuts: TokenRoleInfo[]
+  activeRole: string | null
+  selectedPermissions: string[]
+  selectedPermissionsSet: Set<string>
+  onRoleSelect: (role: TokenRoleInfo) => void
+  onPermissionToggle: (permission: string) => void
+  canAssignPermission: (permission: string) => boolean
+  isPermissionLoading: boolean
+}) {
+  return (
+    <div className="space-y-4">
+      <RoleShortcutButtons
+        activeRole={activeRole}
+        canAssignPermission={canAssignPermission}
+        onRoleSelect={onRoleSelect}
+        roleShortcuts={roleShortcuts}
+        selectedPermissions={selectedPermissions}
+      />
+      <PermissionCheckboxGrid
+        availablePermissions={availablePermissions}
+        canAssignPermission={canAssignPermission}
+        isLoading={isPermissionLoading}
+        onPermissionToggle={onPermissionToggle}
+        selectedPermissionsSet={selectedPermissionsSet}
+      />
+    </div>
+  )
+}
+
 interface CreateTokenDialogProps {
   activeRole: string | null
   availablePermissions: string[]
@@ -940,18 +1079,15 @@ function CreateTokenDialog({
                   value={tokenName}
                 />
               </div>
-              <RoleShortcutButtons
+              <TokenPermissionsEditor
                 activeRole={activeRole}
+                availablePermissions={availablePermissions}
                 canAssignPermission={canAssignPermission}
+                isPermissionLoading={isPermissionLoading}
+                onPermissionToggle={onPermissionToggle}
                 onRoleSelect={onRoleSelect}
                 roleShortcuts={roleShortcuts}
                 selectedPermissions={selectedPermissions}
-              />
-              <PermissionCheckboxGrid
-                availablePermissions={availablePermissions}
-                canAssignPermission={canAssignPermission}
-                isLoading={isPermissionLoading}
-                onPermissionToggle={onPermissionToggle}
                 selectedPermissionsSet={selectedPermissionsSet}
               />
             </div>

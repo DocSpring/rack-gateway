@@ -925,6 +925,19 @@ func (d *Database) UpdateAPITokenName(id int64, name string) error {
 	return nil
 }
 
+// UpdateAPITokenPermissions replaces the permission set for an API token
+func (d *Database) UpdateAPITokenPermissions(id int64, permissions []string) error {
+	permsJSON, err := json.Marshal(permissions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal permissions: %w", err)
+	}
+	_, err = d.exec("UPDATE api_tokens SET permissions = ? WHERE id = ?", string(permsJSON), id)
+	if err != nil {
+		return fmt.Errorf("failed to update API token permissions: %w", err)
+	}
+	return nil
+}
+
 // UpdateUserName updates a user's display name by email
 func (d *Database) UpdateUserName(email, name string) error {
 	_, err := d.exec("UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE email = ?", name, email)

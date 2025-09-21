@@ -16,6 +16,7 @@ vi.mock('../lib/api', () => ({
     get: vi.fn(),
     post: vi.fn(),
     delete: vi.fn(),
+    put: vi.fn(),
   },
 }))
 
@@ -41,23 +42,6 @@ Object.assign(navigator, {
   },
 })
 
-const mockTokens = [
-  {
-    id: 'token-1',
-    name: 'CI/CD Pipeline',
-    last_used: '2024-01-15T00:00:00Z',
-    created_at: '2024-01-01T00:00:00Z',
-    expires_at: '2026-01-01T00:00:00Z', // Active - expires in future
-  },
-  {
-    id: 'token-2',
-    name: 'Development Token',
-    last_used: null,
-    created_at: '2024-01-10T00:00:00Z',
-    expires_at: '2023-12-31T00:00:00Z', // Expired
-  },
-]
-
 const defaultPermissions = [
   'convox:app:list',
   'convox:build:create',
@@ -72,11 +56,32 @@ const defaultPermissions = [
   'convox:release:promote',
 ]
 
+const mockTokens: APIToken[] = [
+  {
+    id: 'token-1',
+    name: 'CI/CD Pipeline',
+    permissions: defaultPermissions,
+    last_used: '2024-01-15T00:00:00Z',
+    created_at: '2024-01-01T00:00:00Z',
+    expires_at: '2026-01-01T00:00:00Z', // Active - expires in future
+  },
+  {
+    id: 'token-2',
+    name: 'Development Token',
+    permissions: ['convox:app:list'],
+    last_used: null,
+    created_at: '2024-01-10T00:00:00Z',
+    expires_at: '2023-12-31T00:00:00Z', // Expired
+  },
+]
+
 const APP_LIST_REGEX = /convox:app:list/i
 const RELEASE_PROMOTE_REGEX = /convox:release:promote/i
 const RACK_UPDATE_REGEX = /convox:rack:update/i
 const WILDCARD_REGEX = /convox:\*:\*/i
 const ALL_HEADING_REGEX = /^All$/i
+const APP_RESTART_REGEX = /convox:app:restart/i
+const SAVE_BUTTON_REGEX = /save/i
 
 const mockPermissionMetadata = {
   permissions: [...defaultPermissions, 'convox:app:restart', 'convox:*:*'],
@@ -568,5 +573,44 @@ describe('TokensPage', () => {
       expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
     })
     // moved to top-level
+  })
+
+  describe('Token Editing', () => {
+    it('allows updating token name and permissions', async () => {
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(mockPermissionMetadata)
+        .mockResolvedValueOnce(mockTokens)
+      vi.mocked(api.put).mockResolvedValueOnce(undefined)
+
+      const Wrapper = createWrapper()
+      render(<TokensPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('Edit Token CI/CD Pipeline'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit API Token')).toBeInTheDocument()
+      })
+
+      const nameInput = screen.getByLabelText('Token Name')
+      fireEvent.change(nameInput, { target: { value: 'Updated Token' } })
+
+      const restartOption = screen.getByText(APP_RESTART_REGEX)
+      fireEvent.click(restartOption)
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON_REGEX }))
+
+      await waitFor(() => {
+        expect(api.put).toHaveBeenCalledTimes(1)
+      })
+
+      const [, payload] = vi.mocked(api.put).mock.calls[0]
+      const castPayload = payload as { name: string; permissions: string[] }
+      expect(castPayload).toMatchObject({ name: 'Updated Token' })
+      expect(castPayload.permissions).toContain('convox:app:restart')
+    })
   })
 })

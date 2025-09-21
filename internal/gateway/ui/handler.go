@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"regexp"
+	"slices"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
@@ -167,6 +168,45 @@ func sanitizePermissions(perms []string) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+type permissionValidationError struct {
+	status  int
+	message string
+}
+
+func (e *permissionValidationError) Error() string { return e.message }
+
+func (h *Handler) normalizeAndValidateTokenPermissions(perms []string, actingUserEmail string) ([]string, error) {
+	normalized := sanitizePermissions(perms)
+	if len(normalized) == 0 {
+		return nil, &permissionValidationError{status: http.StatusBadRequest, message: "at least one permission must be selected"}
+	}
+
+	rolePerms, err := h.rolePermissionSets()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load role permissions: %w", err)
+	}
+	knownPerms := h.knownPermissionSet(rolePerms)
+
+	for _, perm := range normalized {
+		if _, ok := knownPerms[perm]; !ok {
+			return nil, &permissionValidationError{status: http.StatusBadRequest, message: fmt.Sprintf("unknown permission: %s", perm)}
+		}
+		resource, action, parseErr := parsePermission(perm)
+		if parseErr != nil {
+			return nil, &permissionValidationError{status: http.StatusBadRequest, message: parseErr.Error()}
+		}
+		allowed, enforceErr := h.rbacManager.Enforce(actingUserEmail, resource, action)
+		if enforceErr != nil {
+			return nil, fmt.Errorf("failed to verify permissions: %w", enforceErr)
+		}
+		if !allowed {
+			return nil, &permissionValidationError{status: http.StatusForbidden, message: fmt.Sprintf("forbidden: permission exceeds your role (%s)", perm)}
+		}
+	}
+
+	return normalized, nil
 }
 
 func parsePermission(perm string) (string, string, error) {
@@ -1051,43 +1091,21 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		expiresAt = token.DefaultTokenExpiry()
 	}
 
-	// Normalize requested permissions (lower-case, deduplicated)
-	permissions := sanitizePermissions(req.Permissions)
-	if len(permissions) == 0 {
-		permissions = sanitizePermissions(token.DefaultCICDPermissions())
+	requestedPermissions := req.Permissions
+	if len(requestedPermissions) == 0 {
+		requestedPermissions = token.DefaultCICDPermissions()
 	}
 
-	rolePerms, err := h.rolePermissionSets()
+	permissions, err := h.normalizeAndValidateTokenPermissions(requestedPermissions, authUser.Email)
 	if err != nil {
-		http.Error(w, "failed to load role permissions", http.StatusInternalServerError)
-		h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "role permissions unavailable"}, start)
+		if vErr, ok := err.(*permissionValidationError); ok {
+			http.Error(w, vErr.message, vErr.status)
+			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": vErr.message}, start)
+			return
+		}
+		http.Error(w, "failed to verify permissions", http.StatusInternalServerError)
+		h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "rbac enforcement failed"}, start)
 		return
-	}
-	knownPerms := h.knownPermissionSet(rolePerms)
-
-	for _, perm := range permissions {
-		if _, ok := knownPerms[perm]; !ok {
-			http.Error(w, fmt.Sprintf("unknown permission: %s", perm), http.StatusBadRequest)
-			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "unknown permission", "permission": perm}, start)
-			return
-		}
-		resource, action, err := parsePermission(perm)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": err.Error()}, start)
-			return
-		}
-		allowed, err := h.rbacManager.Enforce(authUser.Email, resource, action)
-		if err != nil {
-			http.Error(w, "failed to verify permissions", http.StatusInternalServerError)
-			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "rbac enforcement failed"}, start)
-			return
-		}
-		if !allowed {
-			http.Error(w, "forbidden: permission exceeds your role", http.StatusForbidden)
-			h.auditUserAction(r, "api_token.create", targetUserEmail, "error", map[string]interface{}{"name": req.Name, "error": "permission denied", "permission": perm}, start)
-			return
-		}
 	}
 
 	// Lookup creator user ID (who is making this request)
@@ -1341,13 +1359,14 @@ func (h *Handler) DeleteAPIToken(w http.ResponseWriter, r *http.Request) {
 	h.auditUserAction(r, "api_token.delete", tokenIDStr, "success", det, time.Now())
 }
 
-// UpdateAPITokenName updates the name of an API token
-func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
+// UpdateAPIToken updates the mutable fields of an API token
+func (h *Handler) UpdateAPIToken(w http.ResponseWriter, r *http.Request) {
 	authUser, isAuth := auth.GetAuthUser(r.Context())
 	if !isAuth {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	start := time.Now()
 
 	tokenIDStr := chi.URLParam(r, "tokenID")
 	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
@@ -1357,10 +1376,25 @@ func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name        *string   `json:"name"`
+		Permissions *[]string `json:"permissions"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Name == nil && req.Permissions == nil {
+		http.Error(w, "request must include name or permissions", http.StatusBadRequest)
+		return
+	}
+
+	existing, err := h.database.GetAPITokenByID(tokenID)
+	if err != nil {
+		http.Error(w, "failed to load token", http.StatusInternalServerError)
+		return
+	}
+	if existing == nil {
+		http.Error(w, "token not found", http.StatusNotFound)
 		return
 	}
 
@@ -1370,31 +1404,68 @@ func (h *Handler) UpdateAPITokenName(w http.ResponseWriter, r *http.Request) {
 	if u, err := h.rbacManager.GetUserWithID(authUser.Email); err == nil && u != nil {
 		ownerID = u.ID
 	}
-	owns := false
-	if ownerID != 0 {
-		if toks, err := h.tokenService.ListTokensForUser(ownerID); err == nil {
-			for _, t := range toks {
-				if t.ID == tokenID {
-					owns = true
-					break
-				}
-			}
-		}
-	}
+	owns := ownerID != 0 && existing.UserID == ownerID
 	if !(isAdmin || owns) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
-	if err := h.tokenService.UpdateTokenName(tokenID, req.Name); err != nil {
-		http.Error(w, "failed to update token", http.StatusInternalServerError)
-		h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"name": req.Name}, time.Now())
-		return
+	updates := make(map[string]interface{})
+
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		if trimmed == "" {
+			http.Error(w, "invalid token name", http.StatusBadRequest)
+			h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"error": "empty name"}, start)
+			return
+		}
+		if trimmed != existing.Name {
+			if err := h.tokenService.UpdateTokenName(tokenID, trimmed); err != nil {
+				http.Error(w, "failed to update token", http.StatusInternalServerError)
+				h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"error": "failed to update name"}, start)
+				return
+			}
+			updates["name"] = trimmed
+			existing.Name = trimmed
+		}
 	}
 
-	w.WriteHeader(http.StatusNoContent)
-	// Use id as resource; include new name in details
-	h.auditUserAction(r, "api_token.update", tokenIDStr, "success", map[string]interface{}{"name": req.Name}, time.Now())
+	if req.Permissions != nil {
+		perms, permErr := h.normalizeAndValidateTokenPermissions(*req.Permissions, authUser.Email)
+		if permErr != nil {
+			if vErr, ok := permErr.(*permissionValidationError); ok {
+				http.Error(w, vErr.message, vErr.status)
+				h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"error": vErr.message}, start)
+				return
+			}
+			http.Error(w, "failed to verify permissions", http.StatusInternalServerError)
+			h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"error": "rbac enforcement failed"}, start)
+			return
+		}
+		existingPerms := sanitizePermissions(existing.Permissions)
+		if !slices.Equal(existingPerms, perms) {
+			if err := h.tokenService.UpdateTokenPermissions(tokenID, perms); err != nil {
+				http.Error(w, "failed to update token", http.StatusInternalServerError)
+				h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"error": "failed to update permissions"}, start)
+				return
+			}
+			updates["permissions"] = perms
+			existing.Permissions = perms
+		}
+	}
+
+	// Always refresh cache/clients regardless of whether changes occurred
+	details := updates
+	if len(details) == 0 {
+		details = map[string]interface{}{"updated": "no changes"}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(existing); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		h.auditUserAction(r, "api_token.update", tokenIDStr, "error", map[string]interface{}{"error": "failed to encode response"}, start)
+		return
+	}
+	h.auditUserAction(r, "api_token.update", tokenIDStr, "success", details, start)
 }
 
 // ListUsers returns all users (admin only)

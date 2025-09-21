@@ -121,6 +121,11 @@ func (s *Service) UpdateTokenName(tokenID int64, name string) error {
 	return s.db.UpdateAPITokenName(tokenID, name)
 }
 
+// UpdateTokenPermissions updates the permission list for an API token
+func (s *Service) UpdateTokenPermissions(tokenID int64, permissions []string) error {
+	return s.db.UpdateAPITokenPermissions(tokenID, permissions)
+}
+
 // HasPermission checks if an API token has a specific permission
 func (s *Service) HasPermission(apiToken *db.APIToken, resource, action string) bool {
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)

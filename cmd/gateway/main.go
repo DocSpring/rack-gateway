@@ -299,7 +299,7 @@ func main() {
 				r.Get("/tokens", uiHandler.ListAPITokens)
 				r.Get("/tokens/{tokenID}", uiHandler.GetAPIToken)
 				r.Get("/tokens/permissions", uiHandler.GetTokenPermissionMetadata)
-				r.Put("/tokens/{tokenID}", uiHandler.UpdateAPITokenName)
+				r.Put("/tokens/{tokenID}", uiHandler.UpdateAPIToken)
 				r.Delete("/tokens/{tokenID}", uiHandler.DeleteAPIToken)
 			})
 		})
