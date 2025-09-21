@@ -8,8 +8,12 @@ data
 *.log
 .DS_Store
 
+# other repos checked out for reference
+reference
+
 # Web app artifacts
 web/node_modules
+web/.pnpm-store
 web/dist
 web/.vite
 web/test-results
@@ -18,6 +22,8 @@ web/playwright-report
 
 # Dev mock oauth
 mock-oauth/node_modules
+mock-oauth/dist
+mock-oauth/.pnpm-store
 mock-oauth/package-lock.json
 mock-oauth/pnpm-lock.yaml
 
