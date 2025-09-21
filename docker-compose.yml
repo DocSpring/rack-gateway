@@ -123,13 +123,14 @@ services:
       VITE_DEBUG_PROXY: ${VITE_DEBUG_PROXY:-false}
       VITE_DISABLE_HMR: "true"
       WEB_PORT: "5173"
+      CI: true  # allows pnpm to recreate node_modules
     ports:
       - "${WEB_PORT:-5223}:5173"
     volumes:
       - ./web:/app
       - /app/node_modules
     # Always ensure deps are installed inside the container to reflect lockfile changes
-    command: sh -lc "pnpm install --frozen-lockfile && pnpm dev --host 0.0.0.0"
+    command: sh -lc "pnpm install && pnpm dev --host 0.0.0.0"
     networks:
       - gateway-net
 
