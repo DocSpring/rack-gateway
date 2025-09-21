@@ -577,10 +577,14 @@ describe('TokensPage', () => {
 
   describe('Token Editing', () => {
     it('allows updating token name and permissions', async () => {
-      vi.mocked(api.get)
-        .mockResolvedValueOnce(mockPermissionMetadata)
-        .mockResolvedValueOnce(mockTokens)
-      vi.mocked(api.put).mockResolvedValueOnce(undefined)
+      const getMock = vi.mocked(api.get)
+      getMock.mockImplementation((url: string) => {
+        if (url.includes('/tokens/permissions')) {
+          return mockPermissionMetadata as unknown as APIToken[]
+        }
+        return mockTokens
+      })
+      vi.mocked(api.put).mockResolvedValueOnce(mockTokens[0])
 
       const Wrapper = createWrapper()
       render(<TokensPage />, { wrapper: Wrapper })
