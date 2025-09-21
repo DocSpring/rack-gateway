@@ -84,7 +84,7 @@ describe('UsersPage', () => {
 
   describe('Admin User', () => {
     it('renders users list for admin', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
@@ -98,7 +98,7 @@ describe('UsersPage', () => {
     })
 
     it('opens add user dialog when clicking Add User', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
@@ -119,7 +119,7 @@ describe('UsersPage', () => {
     })
 
     it('creates a new user', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
       vi.mocked(api.post).mockResolvedValueOnce({})
 
       const Wrapper = createWrapper()
@@ -161,7 +161,7 @@ describe('UsersPage', () => {
     })
 
     it('updates user roles', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
       vi.mocked(api.put).mockResolvedValueOnce({})
 
       const Wrapper = createWrapper()
@@ -204,9 +204,11 @@ describe('UsersPage', () => {
     // suspend/unsuspend removed from UI; no test required
 
     it('deletes a user with confirmation', async () => {
-      vi.mocked(api.get)
+      const mockedGet = vi.mocked(api.get)
+      mockedGet
         .mockResolvedValueOnce(mockUsers)
-        .mockResolvedValueOnce(mockUsers.filter((u) => u.email !== 'viewer@example.com')) // After deletion
+        .mockResolvedValueOnce(mockUsers.filter((u) => u.email !== 'viewer@example.com'))
+      mockedGet.mockResolvedValue(mockUsers)
       vi.mocked(api.delete).mockResolvedValueOnce({})
 
       // Mock window.confirm
@@ -242,7 +244,7 @@ describe('UsersPage', () => {
     })
 
     it('prevents deleting own account', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
@@ -271,7 +273,7 @@ describe('UsersPage', () => {
           suspended: false,
         },
       ]
-      vi.mocked(api.get).mockResolvedValueOnce(users)
+      vi.mocked(api.get).mockResolvedValue(users)
 
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
@@ -287,7 +289,7 @@ describe('UsersPage', () => {
 
   describe('Non-Admin User', () => {
     it('renders list for viewer without admin actions', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper({ email: 'viewer@example.com', roles: ['viewer'] })
       render(<UsersPage />, { wrapper: Wrapper })
@@ -307,7 +309,7 @@ describe('UsersPage', () => {
     })
 
     it('renders list for ops without admin actions', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockUsers)
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper({ email: 'ops@example.com', roles: ['ops'] })
       render(<UsersPage />, { wrapper: Wrapper })
