@@ -1,31 +1,5 @@
-import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
-
-async function login(page: Page) {
-  await page.goto('/.gateway/web/login')
-  const btn = page
-    .getByTestId('login-cta')
-    .or(page.getByRole('button', { name: /Continue with/i }))
-    .or(page.getByRole('link', { name: /Continue with/i }))
-  await expect(btn).toBeVisible({ timeout: 5000 })
-  const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
-  await btn.click()
-  await navPromise
-
-  const userCard = page.locator('text=Admin User')
-  if (
-    await userCard
-      .first()
-      .isVisible()
-      .catch(() => false)
-  ) {
-    await userCard.first().click()
-  }
-
-  await page.waitForResponse((r) => r.url().includes('/.gateway/api/me') && r.status() === 200, {
-    timeout: 20_000,
-  })
-}
+import { login } from './helpers'
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -33,12 +7,17 @@ function escapeRegex(value: string) {
 
 test.describe('User Audit Logs', () => {
   test('navigating from Users to user audit logs filters by that user', async ({ page }) => {
-    await login(page)
+    await login(page, { userCardText: 'Deployer User' })
     await page.goto('/.gateway/web/users')
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
 
-    // Click the first available audit link and capture its metadata
-    const auditLink = page.locator('table tbody tr td a[href*="/users/"]').first()
+    const targetEmail = 'deployer@example.com'
+
+    const userRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
+    await expect(userRow).toBeVisible()
+
+    // Click the user-specific audit link and capture its metadata
+    const auditLink = userRow.locator('a[href*="/users/"]').first()
     await expect(auditLink).toBeVisible()
 
     const href = (await auditLink.getAttribute('href')) ?? ''
