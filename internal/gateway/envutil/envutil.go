@@ -31,24 +31,6 @@ func IsSecretKey(key string, explicit []string) bool {
 	return false
 }
 
-// MaskEnvString masks env values in a newline-delimited KEY=VALUE string.
-// If maskAll is true, masks every value; otherwise masks only when isSecret returns true.
-func MaskEnvString(s string, maskAll bool, isSecret func(string) bool) string {
-	lines := strings.Split(s, "\n")
-	for i, ln := range lines {
-		if ln == "" {
-			continue
-		}
-		parts := strings.SplitN(ln, "=", 2)
-		key := parts[0]
-		if len(parts) == 2 && (maskAll || isSecret(key)) {
-			parts[1] = MaskedSecret
-			lines[i] = parts[0] + "=" + parts[1]
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
 // FetchLatestEnvMap pulls the latest release then returns its env as a map.
 func FetchLatestEnvMap(rack config.RackConfig, app string) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")

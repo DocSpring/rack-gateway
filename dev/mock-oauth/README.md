@@ -32,9 +32,9 @@ The dev server comes with four pre-configured test users:
 
 ## Environment Variables
 
-- `PORT` - Server port (default: 3001)
+- `PORT` - Server port (default: 3345 via `MOCK_OAUTH_PORT`)
 - `NODE_ENV` - Environment (default: development)
-- `OAUTH_ISSUER` - OAuth issuer URL (default: http://localhost:3001)
+- `OAUTH_ISSUER` - OAuth issuer URL (default: http://localhost:3345)
 
 ## Usage
 
@@ -50,7 +50,7 @@ npm start
 
 ```bash
 docker build -t mock-oauth ./dev/mock-oauth
-docker run -p 3001:3001 mock-oauth
+docker run -p 3345:3345 mock-oauth
 ```
 
 ### With Docker Compose
@@ -70,9 +70,9 @@ Configure your OAuth client to use these endpoints:
 const config = {
   clientId: "mock-client-id",
   clientSecret: "mock-client-secret",
-  authorizeURL: "http://localhost:3001/oauth2/v2/auth",
-  tokenURL: "http://localhost:3001/oauth2/v4/token",
-  userInfoURL: "http://localhost:3001/oauth2/v2/userinfo",
+  authorizeURL: "http://localhost:3345/oauth2/v2/auth",
+  tokenURL: "http://localhost:3345/oauth2/v4/token",
+  userInfoURL: "http://localhost:3345/oauth2/v2/userinfo",
 };
 ```
 

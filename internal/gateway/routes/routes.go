@@ -83,7 +83,7 @@ var specs = []RouteSpec{
 // Match returns the resource/action for a given method and path. If not matched, ok=false.
 func Match(method, path string) (string, string, bool) {
 	for _, s := range specs {
-		if s.Method == method && keyMatch3(path, s.Pattern) {
+		if s.Method == method && KeyMatch3(path, s.Pattern) {
 			return s.Resource, s.Action, true
 		}
 	}
@@ -113,7 +113,7 @@ func IsAllowed(method, path string) bool {
 }
 
 // keyMatch3 simplified: supports {var} placeholders and wildcards
-func keyMatch3(path, pattern string) bool {
+func KeyMatch3(path, pattern string) bool {
 	var b strings.Builder
 	b.WriteString("^")
 	for i := 0; i < len(pattern); i++ {

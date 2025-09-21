@@ -104,7 +104,7 @@ For complete development setup with real Google OAuth (instead of mock), see **[
 - Gateway API: http://localhost:8447
 - Web UI: http://localhost:5223
 - Mock Convox: http://localhost:5443
-- Mock OAuth: http://localhost:3001
+- Mock OAuth: http://localhost:3345 (configurable via `MOCK_OAUTH_PORT`)
 
 The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
 

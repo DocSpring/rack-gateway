@@ -60,13 +60,17 @@ func main() {
 
 	// We do not delete audit logs on boot; keep all logs.
 
-	// Initialize admin user if configured
+	// Initialize admin user if configured (only needed when database is empty)
 	if len(cfg.AdminUsers) > 0 {
-		adminEmail := strings.TrimSpace(cfg.AdminUsers[0])
-		if adminEmail != "" {
-			if err := database.InitializeAdmin(adminEmail, "Admin User"); err != nil {
-				log.Printf("Warning: Failed to initialize admin: %v", err)
+		for _, raw := range cfg.AdminUsers {
+			email := strings.TrimSpace(raw)
+			if email == "" {
+				continue
 			}
+			if err := database.InitializeAdmin(email, "Admin User"); err != nil {
+				log.Printf("Warning: Failed to initialize admin %s: %v", email, err)
+			}
+			break
 		}
 	}
 
@@ -93,6 +97,9 @@ func main() {
 				log.Printf("Warning: failed to seed %s user %s: %v", role, email, err)
 			}
 		}
+	}
+	if len(cfg.AdminUsers) > 0 {
+		seedUsers("admin", cfg.AdminUsers, "Admin User")
 	}
 	if len(cfg.ViewerUsers) > 0 {
 		seedUsers("viewer", cfg.ViewerUsers, "Viewer User")

@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -224,7 +223,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-capture system parameters if this is a rack params update
 	var beforeParams map[string]string
-	isRackParamsUpdate := (r.Method == http.MethodPut && keyMatch3(path, "/system"))
+	isRackParamsUpdate := (r.Method == http.MethodPut && routes.KeyMatch3(path, "/system"))
 	if isRackParamsUpdate {
 		if params, err := h.fetchSystemParams(rackConfig); err == nil {
 			beforeParams = params
@@ -245,7 +244,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
-		skipManualReleaseLog := r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/releases")
+		skipManualReleaseLog := r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps/{app}/releases")
 		releaseIDs := r.Header.Values("X-Release-Created")
 		if len(releaseIDs) > 0 {
 			for _, rel := range releaseIDs {
@@ -377,7 +376,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-capture params for PUT /system on rack-scoped proxy too
 	var beforeParams map[string]string
-	isRackParamsUpdate := (r.Method == http.MethodPut && keyMatch3("/"+path, "/system"))
+	isRackParamsUpdate := (r.Method == http.MethodPut && routes.KeyMatch3("/"+path, "/system"))
 	if isRackParamsUpdate {
 		if params, err := h.fetchSystemParams(rackConfig); err == nil {
 			beforeParams = params
@@ -395,7 +394,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
 
 	if status >= 200 && status < 300 {
-		skipManualReleaseLog := r.Method == http.MethodPost && keyMatch3("/"+path, "/apps/{app}/releases")
+		skipManualReleaseLog := r.Method == http.MethodPost && routes.KeyMatch3("/"+path, "/apps/{app}/releases")
 		releaseIDs := r.Header.Values("X-Release-Created")
 		if len(releaseIDs) > 0 {
 			for _, rel := range releaseIDs {
@@ -1007,12 +1006,12 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		// Normalize path used for RBAC routing match
 		pth := path
 		// Filter release payloads that include "env" string
-		if keyMatch3(pth, "/apps/{app}/releases") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
+		if routes.KeyMatch3(pth, "/apps/{app}/releases") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 			body = h.filterReleaseEnvForUser(userEmail, body, false)
 		}
 		shouldCapture := r.Method == http.MethodPost
 		if !shouldCapture && r.Method == http.MethodGet {
-			if keyMatch3(pth, "/apps/{app}/builds/{id}") || keyMatch3(pth, "/apps/{app}/releases/{id}") {
+			if routes.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 				shouldCapture = true
 			}
 		}
@@ -1020,7 +1019,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			h.captureResourceCreator(r, pth, body, userEmail)
 		}
 		// Filter environment map
-		if keyMatch3(pth, "/apps/{app}/environment") && r.Method == http.MethodGet {
+		if routes.KeyMatch3(pth, "/apps/{app}/environment") && r.Method == http.MethodGet {
 			body = h.filterEnvironmentMapForUser(userEmail, body)
 		}
 	}
@@ -1112,13 +1111,13 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
-	if r.Method == http.MethodPost && keyMatch3(path, "/apps") {
+	if r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps") {
 		if name := extractJSONString(obj["name"]); name != "" {
 			setResource("app", name, true)
 		}
 	}
 
-	if r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/builds") {
+	if r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps/{app}/builds") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			setResource("build", id, true)
 		}
@@ -1129,7 +1128,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if keyMatch3(path, "/apps/{app}/builds/{id}") {
+	if routes.KeyMatch3(path, "/apps/{app}/builds/{id}") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			h.recordResourceCreator("build", id, email)
 		}
@@ -1140,7 +1139,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if r.Method == http.MethodPost && keyMatch3(path, "/apps/{app}/releases") {
+	if r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps/{app}/releases") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			r.Header.Set("X-Audit-Resource", id)
 			if h.recordResourceCreator("release", id, email) {
@@ -1485,35 +1484,6 @@ func (h *Handler) pathToResourceAction(path, method string) (string, string) {
 		return "", ""
 	}
 	return res, act
-}
-
-// keyMatch3 simplified: supports {var} placeholders and wildcards
-func keyMatch3(path, pattern string) bool {
-	// Convert pattern to regex
-	var b strings.Builder
-	b.WriteString("^")
-	for i := 0; i < len(pattern); i++ {
-		c := pattern[i]
-		if c == '{' {
-			for i < len(pattern) && pattern[i] != '}' {
-				i++
-			}
-			b.WriteString("[^/]+")
-			continue
-		}
-		if c == '*' {
-			b.WriteString(".*")
-			continue
-		}
-		if strings.ContainsRune(".+?^$()[]{}|\\", rune(c)) {
-			b.WriteByte('\\')
-		}
-		b.WriteByte(c)
-	}
-	b.WriteString("$")
-	re := b.String()
-	ok, _ := regexp.MatchString(re, path)
-	return ok
 }
 
 func extractReleaseIDFromPath(path string) string {
