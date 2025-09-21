@@ -35,7 +35,7 @@ export type APIToken = {
   name: string
   token?: string
   permissions?: string[]
-  last_used: string | null
+  last_used_at: string | null
   created_at: string
   expires_at: string | null
   created_by_email?: string
@@ -216,7 +216,7 @@ function TokenRow({
         </Badge>
       </TableCell>
       <TableCell>{token.created_by_email || token.created_by_name || '-'}</TableCell>
-      <TableCell>{token.last_used ? formatDate(token.last_used) : 'Never'}</TableCell>
+      <TableCell>{token.last_used_at ? formatDate(token.last_used_at) : 'Never'}</TableCell>
       <TableCell>{formatDate(token.created_at)}</TableCell>
       <TableCell className="text-right">
         {canEdit ? (

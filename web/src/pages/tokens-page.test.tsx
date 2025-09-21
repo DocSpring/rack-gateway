@@ -61,7 +61,7 @@ const mockTokens: APIToken[] = [
     id: 'token-1',
     name: 'CI/CD Pipeline',
     permissions: defaultPermissions,
-    last_used: '2024-01-15T00:00:00Z',
+    last_used_at: '2024-01-15T00:00:00Z',
     created_at: '2024-01-01T00:00:00Z',
     expires_at: '2026-01-01T00:00:00Z', // Active - expires in future
   },
@@ -69,7 +69,7 @@ const mockTokens: APIToken[] = [
     id: 'token-2',
     name: 'Development Token',
     permissions: ['convox:app:list'],
-    last_used: null,
+    last_used_at: null,
     created_at: '2024-01-10T00:00:00Z',
     expires_at: '2023-12-31T00:00:00Z', // Expired
   },
@@ -228,7 +228,7 @@ describe('TokensPage', () => {
           {
             id: 'new-token',
             name: 'New Token',
-            last_used: null,
+            last_used_at: null,
             created_at: '2024-01-20T00:00:00Z',
             expires_at: '2026-01-20T00:00:00Z',
           },
@@ -281,7 +281,7 @@ describe('TokensPage', () => {
           {
             id: 'new-token',
             name: 'New Token',
-            last_used: null,
+            last_used_at: null,
             created_at: '2024-01-20T00:00:00Z',
             expires_at: '2026-01-20T00:00:00Z',
           },
@@ -326,7 +326,7 @@ describe('TokensPage', () => {
           {
             id: 'viewer-token',
             name: 'Viewer Token',
-            last_used: null,
+            last_used_at: null,
             created_at: '2024-01-25T00:00:00Z',
             expires_at: null,
           },
@@ -422,7 +422,7 @@ describe('TokensPage', () => {
           id: 't1',
           name: 'Bad Token',
           token: undefined,
-          last_used: null,
+          last_used_at: null,
           created_at: '',
           expires_at: null,
         },
