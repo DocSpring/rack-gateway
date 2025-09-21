@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.1.4/schema.json",
   "files": {
-    "includes": ["src/**/*.{js,ts,jsx,tsx}", "*.{js,jsx}"]
+    "includes": ["**/*.{js,ts,jsx,tsx}"]
   },
   "formatter": {
     "enabled": true,
@@ -15,10 +15,12 @@
     "rules": {
       "recommended": true,
       "style": {
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "off",
+        "useBlockStatements": "off"
       },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "warn",
+        "noEmptyBlockStatements": "off"
       }
     }
   },
@@ -28,5 +30,24 @@
       "semicolons": "asNeeded"
     }
   },
+  "overrides": [
+    {
+      "includes": ["**/*.spec.{ts,tsx,js,jsx}", "e2e/**/*.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "useTopLevelRegex": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noConsole": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    }
+  ],
   "extends": ["ultracite"]
 }

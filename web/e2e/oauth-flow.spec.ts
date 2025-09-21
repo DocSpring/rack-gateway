@@ -9,28 +9,31 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
     .or(page.getByRole('button', { name: /Continue with/i }))
     .or(page.getByRole('link', { name: /Continue with/i }))
   await expect(btn).toBeVisible({ timeout: 5000 })
-  await Promise.all([
-    page.waitForNavigation({ url: /oauth2\/v2\/auth|dev\/select-user/i }),
-    btn.click(),
-  ])
+  const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
+  await btn.click()
+  await navPromise
 
   // Navigate to OAuth selection page automatically
   await page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
 
   // If user selection page is shown, click a user card; otherwise, proceed
   const userCard = page.locator('text=Admin User')
-  if (await userCard.first().isVisible().catch(() => false)) {
+  if (
+    await userCard
+      .first()
+      .isVisible()
+      .catch(() => false)
+  ) {
     await userCard.first().click()
   }
 
   // After authorize, wait for the app to fetch the current user successfully
-  await page.waitForResponse(
-    (r) => r.url().includes('/.gateway/api/me') && r.status() === 200,
-    { timeout: 20000 },
-  )
+  await page.waitForResponse((r) => r.url().includes('/.gateway/api/me') && r.status() === 200, {
+    timeout: 20_000,
+  })
 
   // Land on the protected area (Users page)
-  await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible({ timeout: 10000 })
+  await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible({ timeout: 10_000 })
 
   // The protected Users page should render for an authenticated admin
   await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible()
@@ -47,8 +50,10 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   // Now the cookie should be set; /.gateway/api/me should return the current user
   const me = await page.evaluate(async () => {
     const r = await fetch('/.gateway/api/me', { credentials: 'include' })
-    let data = null
-    try { data = await r.json() } catch {}
+    let data: Record<string, unknown> | null = null
+    try {
+      data = await r.json()
+    } catch {}
     return { ok: r.ok, status: r.status, data }
   })
   expect(me.ok).toBeTruthy()
