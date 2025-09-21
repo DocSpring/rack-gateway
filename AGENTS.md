@@ -198,6 +198,7 @@ internal/
 2. **Token Refresh** - No refresh tokens, users re-auth after 30 days
 3. **Audit Log Encryption** - Relies on CloudWatch/KMS
 4. **Rate Limiting** - Not implemented, needed for production
+5. **Internal Rack TLS** - Rack-to-gateway traffic uses TLS on 5443 with certificate verification disabled because racks expose self-signed/internal endpoints only. Treat this as an intentional private-network trade-off; do not re-flag `InsecureSkipVerify` in `internal/gateway/httpclient`.
 
 ## Next Steps for Production
 

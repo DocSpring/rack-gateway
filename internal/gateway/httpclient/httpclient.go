@@ -7,6 +7,11 @@ import (
 )
 
 // NewRackTLSConfig returns a TLS configuration that skips verification for internal Convox racks.
+//
+// Convox racks run on private DNS names with certs issued by the rack itself, so there is no
+// trustworthy public CA chain to validate against. They still require TLS on 5443 to protect
+// traffic on the internal network, and skipping verification is an intentional, documented
+// trade-off for that deployment model.
 func NewRackTLSConfig() *tls.Config {
 	return &tls.Config{
 		InsecureSkipVerify: true,
