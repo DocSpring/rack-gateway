@@ -43,6 +43,44 @@ type Handler struct {
 
 const maskedSecret = envutil.MaskedSecret
 
+type logAccumulator struct {
+	buf       bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+func newLogAccumulator(limit int) *logAccumulator {
+	return &logAccumulator{limit: limit}
+}
+
+func (l *logAccumulator) Write(p []byte) (int, error) {
+	if l.limit <= 0 {
+		return l.buf.Write(p)
+	}
+	remaining := l.limit - l.buf.Len()
+	if remaining > 0 {
+		if remaining > len(p) {
+			remaining = len(p)
+		}
+		if _, err := l.buf.Write(p[:remaining]); err != nil {
+			return 0, err
+		}
+	}
+	if len(p) > remaining {
+		l.truncated = true
+	}
+	return len(p), nil
+}
+
+func (l *logAccumulator) Bytes() []byte {
+	if !l.truncated {
+		return l.buf.Bytes()
+	}
+	out := append([]byte{}, l.buf.Bytes()...)
+	out = append(out, []byte("…(truncated)")...)
+	return out
+}
+
 func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string) *Handler {
 	h := &Handler{
 		config:           cfg,
@@ -994,30 +1032,42 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	defer resp.Body.Close()
 
 	// Read full response body (so we can optionally log it and/or filter) then send to client
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// If this is a release payload, filter env values before returning
-	// We only process JSON payloads (Content-Type contains "application/json").
+	// Decide whether we need to buffer the response (only for JSON we mutate or inspect)
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
-	if strings.Contains(ct, "application/json") {
-		// Normalize path used for RBAC routing match
-		pth := path
-		// Filter release payloads that include "env" string
-		if routes.KeyMatch3(pth, "/apps/{app}/releases") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
-			body = h.filterReleaseEnvForUser(userEmail, body, false)
-		}
-		shouldCapture := r.Method == http.MethodPost
-		if !shouldCapture && r.Method == http.MethodGet {
+	isJSON := strings.Contains(ct, "application/json")
+	pth := path
+	filterRelease := isJSON && (routes.KeyMatch3(pth, "/apps/{app}/releases") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
+	shouldCapture := false
+	if isJSON {
+		if r.Method == http.MethodPost {
+			shouldCapture = true
+		} else if r.Method == http.MethodGet {
 			if routes.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 				shouldCapture = true
 			}
 		}
+	}
+	needsBuffer := filterRelease || shouldCapture
+
+	var body []byte
+	var respReader io.Reader
+	var bytesWritten int64
+	var logSnippet []byte
+	if needsBuffer {
+		var err error
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return 0, fmt.Errorf("failed to read response body: %w", err)
+		}
+		if filterRelease {
+			body = h.filterReleaseEnvForUser(userEmail, body, false)
+		}
 		if shouldCapture {
 			h.captureResourceCreator(r, pth, body, userEmail)
 		}
+		respReader = bytes.NewReader(body)
+	} else {
+		respReader = resp.Body
 	}
 
 	// Copy headers, but drop Content-Length since we may have modified the body; let Go recalculate
@@ -1032,15 +1082,43 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	w.WriteHeader(resp.StatusCode)
 
+	if needsBuffer {
+		var err error
+		bytesWritten, err = io.Copy(w, respReader)
+		if err != nil {
+			return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
+		}
+		if h.config.LogResponseBodies {
+			max := h.config.LogResponseMaxBytes
+			logBody := body
+			if max > 0 && len(logBody) > max {
+				logBody = append([]byte{}, logBody[:max]...)
+				logBody = append(logBody, []byte("…(truncated)")...)
+			}
+			logSnippet = logBody
+		}
+	} else {
+		if h.config.LogResponseBodies {
+			acc := newLogAccumulator(h.config.LogResponseMaxBytes)
+			reader := io.TeeReader(respReader, acc)
+			var err error
+			bytesWritten, err = io.Copy(w, reader)
+			if err != nil {
+				return resp.StatusCode, fmt.Errorf("failed to stream response body: %w", err)
+			}
+			logSnippet = acc.Bytes()
+		} else {
+			var err error
+			bytesWritten, err = io.Copy(w, respReader)
+			if err != nil {
+				return resp.StatusCode, fmt.Errorf("failed to stream response body: %w", err)
+			}
+		}
+	}
+
 	// Optional response logging
 	if h.config.LogResponseBodies {
-		max := h.config.LogResponseMaxBytes
-		logBody := body
-		if max > 0 && len(logBody) > max {
-			logBody = append([]byte{}, logBody[:max]...)
-			logBody = append(logBody, []byte("…(truncated)")...)
-		}
-		ct := resp.Header.Get("Content-Type")
+		ctHeader := resp.Header.Get("Content-Type")
 		upstreamMethod := ""
 		upstreamURL := ""
 		if resp.Request != nil {
@@ -1050,11 +1128,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			}
 		}
 		fmt.Printf("DEBUG RESPONSE %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q body=%s\n",
-			r.Method, path, resp.StatusCode, ct, len(body), upstreamMethod, upstreamURL, string(logBody))
-	}
-
-	if _, err := w.Write(body); err != nil {
-		return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
+			r.Method, path, resp.StatusCode, ctHeader, bytesWritten, upstreamMethod, upstreamURL, string(logSnippet))
 	}
 
 	return resp.StatusCode, nil
