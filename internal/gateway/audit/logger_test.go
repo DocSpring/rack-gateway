@@ -1,11 +1,13 @@
 package audit
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,27 +18,20 @@ func TestAuditLogger(t *testing.T) {
 	logger := NewLogger(database)
 
 	t.Run("ParseConvoxAction", func(t *testing.T) {
-		tests := []struct {
-			path             string
-			method           string
-			expectedAction   string
-			expectedResource string
-		}{
-			{"/apps", "GET", "app.list", "unknown"},
-			{"/apps/myapp", "DELETE", "app.delete", "myapp"},
-			{"/apps/myapp/builds", "POST", "build.create", "myapp"},
-			{"/apps/myapp/logs", "GET", "log.read", "myapp"},
-			{"/apps/myapp/processes", "GET", "process.list", "myapp"},
-			{"/apps/myapp/processes/p1", "GET", "process.get", "p1"},
-			{"/apps/myapp/processes/p1", "DELETE", "process.terminate", "p1"},
-			{"/apps/myapp/releases", "GET", "release.list", "myapp"},
-			{"/apps/myapp/releases/REL123/promote", "POST", "release.promote", "REL123"},
-		}
-
-		for _, test := range tests {
-			action, resource := logger.parseConvoxAction(test.path, test.method)
-			assert.Equal(t, test.expectedAction, action, "Path: %s %s", test.method, test.path)
-			assert.Equal(t, test.expectedResource, resource, "Path: %s %s", test.method, test.path)
+		for _, spec := range routematch.Specs() {
+			if spec.Action == "*" {
+				continue
+			}
+			path := routematch.ExamplePath(spec)
+			method := spec.Method
+			if method == "SOCKET" {
+				method = http.MethodGet
+			}
+			action, resource := logger.parseConvoxAction(path, method)
+			expectedAction := fmt.Sprintf("%s.%s", spec.Resource, spec.Action)
+			expectedResource := resourceInstance(path, spec.Resource, spec.Action)
+			assert.Equal(t, expectedAction, action, "pattern %s %s", spec.Method, spec.Pattern)
+			assert.Equal(t, expectedResource, resource, "pattern %s %s", spec.Method, spec.Pattern)
 		}
 	})
 

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"strings"
 )
 
 const (
@@ -691,7 +691,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "viewer should be blocked from stopping processes")
-		assert.Contains(t, string(output), "permission denied")
+		assert.Contains(t, string(output), "You don't have permission to stop processes.")
 	})
 
 	// Test 2: Ops role - should be blocked from deployment operations
@@ -705,7 +705,8 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err := cmd.CombinedOutput()
 
 		require.Error(t, err, "ops should be blocked from deploying")
-		assert.Contains(t, string(output), "permission denied")
+		msg := string(output)
+		assert.True(t, strings.Contains(msg, "You don't have permission to deploy releases.") || strings.Contains(msg, "permission denied"))
 
 		// Try to create an app (should be blocked)
 		cmd = exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
@@ -723,7 +724,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "ops should be blocked from setting env vars")
-		assert.Contains(t, string(output), "permission denied")
+		assert.Contains(t, string(output), "You don't have permission to deploy releases.")
 	})
 
 	// Test 4: Unknown/unregistered user - should be blocked from everything

@@ -687,7 +687,7 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("login callback failed: %s", string(body))
+		return nil, fmt.Errorf("login callback failed: %s", renderGatewayError(body))
 	}
 
 	var result LoginResponse
@@ -723,7 +723,7 @@ func fetchEnvViaAPI(gatewayURL, bearerToken, app, key string, showSecrets bool) 
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch env: %s", string(b))
+		return nil, fmt.Errorf("failed to fetch env: %s", renderGatewayError(b))
 	}
 	var payload struct {
 		Env map[string]string `json:"env"`
@@ -735,6 +735,22 @@ func fetchEnvViaAPI(gatewayURL, bearerToken, app, key string, showSecrets bool) 
 		payload.Env = map[string]string{}
 	}
 	return payload.Env, nil
+}
+
+func renderGatewayError(body []byte) string {
+	msg := strings.TrimSpace(string(body))
+	if msg == "" {
+		return "forbidden"
+	}
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if trimmed := strings.TrimSpace(parsed.Error); trimmed != "" {
+			return trimmed
+		}
+	}
+	return msg
 }
 
 func saveToken(rack string, loginResp *LoginResponse) error {

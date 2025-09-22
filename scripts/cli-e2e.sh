@@ -13,6 +13,26 @@ cd "$ROOT_DIR"
 
 E2E_TS="$(date +%s%3N)"
 
+# Run a subset of tests and skip the slow ones
+STAGES="ADMIN API_TOKEN DEPLOYER VIEWER"
+
+# If ONLY_x is set, skip all the others
+for stage in $STAGES; do
+  var="ONLY_${stage}_TESTS"
+  val="$(eval "echo \${$var:-}")"
+  if [ -n "$val" ]; then
+    for other in $STAGES; do
+      [ "$other" != "$stage" ] && eval "SKIP_${other}_TESTS=true"
+    done
+    break
+  fi
+done
+
+# Ensure each SKIP_x has a default
+for stage in $STAGES; do
+  eval "SKIP_${stage}_TESTS=\${SKIP_${stage}_TESTS:-}"
+done
+
 # Resolve ports from mise.toml or environment
 MiseFile="mise.toml"
 toml_get() {
@@ -138,179 +158,191 @@ function logout_cli() {
   verify_command "logout" "Removed rack: e2e"
 }
 
+
 # Tests
 # --------------------------------------------
 echo "Running CLI tests..."
 
-# Admin login
-login_cli_as "admin@example.com" "e2e"
+if [ -z "$SKIP_ADMIN_TESTS" ]; then
+  # Admin login
+  login_cli_as "admin@example.com" "e2e"
 
+  verify_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
+  verify_command "convox rack" "mock-rack" "mock-rack.example.com"
+  verify_command "convox apps" "convox-gateway" "RAPI123456"
+  verify_command "convox apps info" \
+    "Name        convox-gateway" "Status      running"
+  verify_command "convox ps" "p-web-1" "p-worker-1"
 
-verify_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
-verify_command "convox rack" "mock-rack" "mock-rack.example.com"
-verify_command "convox apps" "convox-gateway" "RAPI123456"
-verify_command "convox apps info" \
-  "Name        convox-gateway" "Status      running"
-verify_command "convox ps" "p-web-1" "p-worker-1"
+  verify_command "convox run web 'echo hello'" \
+    'Connected to mock exec for app=convox-gateway pid=proc-123456' \
+    "$ 'echo hello'" \
+    'hello' \
+    'Exit code: 0' \
+    'Session closed.'
 
-verify_command "convox run web 'echo hello'" \
-  'Connected to mock exec for app=convox-gateway pid=proc-123456' \
-  "$ 'echo hello'" \
-  'hello' \
-  'Exit code: 0' \
-  'Session closed.'
+  verify_command "convox exec p-worker-1 'echo hello'" \
+    'Connected to mock exec for app=convox-gateway pid=p-worker-1' \
+    "$ 'echo hello'" \
+    'hello' \
+    'Exit code: 0' \
+    'Session closed.'
 
-verify_command "convox exec p-worker-1 'echo hello'" \
-  'Connected to mock exec for app=convox-gateway pid=p-worker-1' \
-  "$ 'echo hello'" \
-  'hello' \
-  'Exit code: 0' \
-  'Session closed.'
+  # List environment for a known app
+  verify_command "convox env" \
+    "DATABASE_URL=********************" \
+    "NODE_ENV=production" \
+    "PORT=3000"
 
-# List environment for a known app
-verify_command "convox env" \
-  "DATABASE_URL=********************" \
-  "NODE_ENV=production" \
-  "PORT=3000"
+  # Fetch secret with --secrets flag
+  verify_command "env get DATABASE_URL --secrets" \
+    "postgres://user:pass@localhost/db"
 
-# Fetch secret with --secrets flag
-verify_command "env get DATABASE_URL --secrets" \
-  "postgres://user:pass@localhost/db"
+  verify_command "env set FOO=bar" \
+    "Setting FOO..." "Release:"
 
-verify_command "env set FOO=bar" \
-  "Setting FOO..." "Release:"
+  verify_command "convox restart" \
+    "Restarting web... OK" \
+    "Restarting worker... OK"
 
-verify_command "convox restart" \
-  "Restarting web... OK" \
-  "Restarting worker... OK"
+  # Test full build + release flow
+  verify_command "convox deploy" \
+    "Packaging source..." "Uploading source..." "Starting build..." \
+    "Building app..." \
+    "Step 1/1: mock build step" \
+    "Build complete" \
+    "Promoting RNEW" \
+    "OK"
 
-# Test full build + release flow
-verify_command "convox deploy" \
-  "Packaging source..." "Uploading source..." "Starting build..." \
-  "Building app..." \
-  "Step 1/1: mock build step" \
-  "Build complete" \
-  "Promoting RNEW" \
-  "OK"
+  # Check logs via websockets (this stream is long-lived; kill after 3s)
+  verify_raw_command_status_and_output "timeout 3s ./bin/convox-gateway convox logs" \
+    "124" \
+    "Promoting release" \
+    "Release promoted successfully."
 
-# Check logs via websockets (this stream is long-lived; kill after 3s)
-verify_raw_command_status_and_output "timeout 3s ./bin/convox-gateway convox logs" \
-  "124" \
-  "Promoting release" \
-  "Release promoted successfully."
-
-# Create a CI/CD API token and exercise pipeline-style commands using the raw token
-echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
-API_TOKEN_JSON=$(./bin/convox-gateway api-token create \
-  --name "E2E CLI API Token ${E2E_TS}" \
-  --role cicd \
-  --output json)
-
-API_TOKEN=$(jq -r '.token' <<<"$API_TOKEN_JSON")
-API_TOKEN_ID=$(jq -r '.api_token.id' <<<"$API_TOKEN_JSON")
-
-if [[ -z "$API_TOKEN" || -z "$API_TOKEN_ID" ]]; then
-  echo -e "${RED}Failed to parse API token response${NC}" >&2
-  exit 1
+  if [ -n "$SKIP_API_TOKEN_TESTS" ]; then
+    # Log out now if we're not running API token tests
+    logout_cli
+  fi
 fi
 
-logout_cli
+if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
+  # Create a CI/CD API token and exercise pipeline-style commands using the raw token
+  echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
+  API_TOKEN_JSON=$(./bin/convox-gateway api-token create \
+    --name "E2E CLI API Token ${E2E_TS}" \
+    --role cicd \
+    --output json)
 
-export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
-export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  API_TOKEN=$(jq -r '.token' <<<"$API_TOKEN_JSON")
+  API_TOKEN_ID=$(jq -r '.api_token.id' <<<"$API_TOKEN_JSON")
 
-echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
+  if [[ -z "$API_TOKEN" || -z "$API_TOKEN_ID" ]]; then
+    echo -e "${RED}Failed to parse API token response${NC}" >&2
+    exit 1
+  fi
 
-# Show rack info via API token
-verify_raw_command_status_and_output \
-  "./bin/convox-gateway convox rack" \
-  "0" \
-  "Name" \
-  "Status"
+  logout_cli
 
-# Show processes via API token
-verify_raw_command_status_and_output \
-  "./bin/convox-gateway convox ps --app convox-gateway" \
-  "0" \
-  "p-web-1"
+  export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
+  export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
 
-# Create build and capture release identifier
-set +e
-build_output=$(./bin/convox-gateway convox build --app convox-gateway --description "cli-e2e" --id 2>&1)
-build_status=$?
-set -e
-if [[ $build_status -ne 0 ]]; then
-  echo -e "${RED}convox build failed:${NC}\n$build_output" >&2
-  exit 1
+  echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
+
+  # Show rack info via API token
+  verify_raw_command_status_and_output \
+    "./bin/convox-gateway convox rack" \
+    "0" \
+    "Name" \
+    "Status"
+
+  # Show processes via API token
+  verify_raw_command_status_and_output \
+    "./bin/convox-gateway convox ps --app convox-gateway" \
+    "0" \
+    "p-web-1"
+
+  # Create build and capture release identifier
+  set +e
+  build_output=$(./bin/convox-gateway convox build --app convox-gateway --description "cli-e2e" --id 2>&1)
+  build_status=$?
+  set -e
+  if [[ $build_status -ne 0 ]]; then
+    echo -e "${RED}convox build failed:${NC}\n$build_output" >&2
+    exit 1
+  fi
+  echo "$build_output"
+  RELEASE_ID=$(echo "$build_output" | tail -n1 | tr -d '[:space:]')
+  if [[ -z "$RELEASE_ID" ]]; then
+    echo -e "${RED}Failed to parse release id from build output${NC}" >&2
+    exit 1
+  fi
+
+  # Run mock migration command on the new release
+  verify_raw_command_status_and_output \
+    "./bin/convox-gateway convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
+    "0" \
+    "migrate"
+
+  # Promote the release
+  verify_raw_command_status_and_output \
+    "./bin/convox-gateway convox releases promote $RELEASE_ID --app convox-gateway" \
+    "0" \
+    "OK"
+
+  # Clean up the API token now that the pipeline simulation is complete
+  unset CONVOX_GATEWAY_API_TOKEN
+  unset CONVOX_GATEWAY_URL
+
+  # Delete via admin login to validate token deletion flow
+  login_cli_as "admin@example.com" "e2e"
+  verify_command "api-token delete $API_TOKEN_ID" "Deleted token $API_TOKEN_ID"
+  logout_cli
 fi
-echo "$build_output"
-RELEASE_ID=$(echo "$build_output" | tail -n1 | tr -d '[:space:]')
-if [[ -z "$RELEASE_ID" ]]; then
-  echo -e "${RED}Failed to parse release id from build output${NC}" >&2
-  exit 1
+
+if [ -z "$SKIP_DEPLOYER_TESTS" ]; then
+  # Login as deployer
+  # ---------------------------------------------
+  login_cli_as "deployer@example.com" "e2e"
+
+  # Can list processes
+  verify_command "convox ps" "p-web-1" "p-worker-1"
+
+  # List environment for a known app
+  verify_command "convox env" \
+    "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
+
+  # Cannot fetch secret
+  verify_command_failure "env get DATABASE_URL --secrets" \
+    "Error: failed to fetch env: You don't have permission to view secrets."
+
+  # (env set tests removed for deployer; protected env policy preservation)
+
+  # Should not be able to delete apps
+  verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
+
+  logout_cli
 fi
 
-# Run mock migration command on the new release
-verify_raw_command_status_and_output \
-  "./bin/convox-gateway convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
-  "0" \
-  "migrate"
+if [ -z "$SKIP_VIEWER_TESTS" ]; then
+  # Login as viewer
+  # ---------------------------------------------
+  login_cli_as "viewer@example.com" "e2e"
 
-# Promote the release
-verify_raw_command_status_and_output \
-  "./bin/convox-gateway convox releases promote $RELEASE_ID --app convox-gateway" \
-  "0" \
-  "OK"
+  # Viewer can list processes
+  verify_command "convox ps" "p-web-1" "p-worker-1"
 
-# Clean up the API token now that the pipeline simulation is complete
-unset CONVOX_GATEWAY_API_TOKEN
-unset CONVOX_GATEWAY_URL
+  # Cannot fetch env
+  verify_command_failure "convox env" \
+    "ERROR: permission denied"
 
-# Delete via admin login to validate deletion flow
-login_cli_as "admin@example.com" "e2e"
-verify_command "api-token delete $API_TOKEN_ID" "Deleted token $API_TOKEN_ID"
-logout_cli
+  # Cannot fetch secret
+  verify_command_failure "env get DATABASE_URL --secrets" \
+    "Error: failed to fetch env: You don't have permission to view environment variables."
 
-# Login as deployer
-# ---------------------------------------------
-login_cli_as "deployer@example.com" "e2e"
-
-# Can list processes
-verify_command "convox ps" "p-web-1" "p-worker-1"
-
-# List environment for a known app
-verify_command "convox env" \
-  "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
-
-# Cannot fetch secret
-verify_command_failure "env get DATABASE_URL --secrets" \
-  "Error: failed to fetch env: forbidden"
-
-# (env set tests removed for deployer; protected env policy preservation)
-
-# Should not be able to delete apps
-verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
-
-logout_cli
-
-# Login as viewer
-# ---------------------------------------------
-login_cli_as "viewer@example.com" "e2e"
-
-# Viewer can list processes
-verify_command "convox ps" "p-web-1" "p-worker-1"
-
-# Cannot fetch env
-verify_command_failure "convox env" \
-  "ERROR: permission denied"
-
-# Cannot fetch secret
-verify_command_failure "env get DATABASE_URL --secrets" \
-  "Error: failed to fetch env: forbidden"
-
-# Viewer should not be able to set env or delete apps
-verify_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
-verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
-
+  # Viewer should not be able to set env or delete apps
+  verify_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
+  verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
+fi
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"

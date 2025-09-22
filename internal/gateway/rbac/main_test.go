@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/DocSpring/convox-gateway/internal/testutil/convoxguard"
+	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/convoxguard"
 )
 
 func TestMain(m *testing.M) {

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
+	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

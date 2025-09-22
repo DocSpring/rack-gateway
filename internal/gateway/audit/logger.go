@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
 )
 
@@ -292,9 +292,9 @@ func getClientIP(r *http.Request) string {
 // parseConvoxAction extracts meaningful action and resource from the request
 func (l *Logger) parseConvoxAction(path, method string) (action, resource string) {
 	// For audit purposes, treat WebSocket GET upgrades as SOCKET method for matching
-	res, act, ok := routes.Match(method, path)
+	res, act, ok := routematch.Match(method, path)
 	if !ok && method == http.MethodGet && strings.Contains(path, "/logs") {
-		if r2, a2, ok2 := routes.Match("SOCKET", path); ok2 {
+		if r2, a2, ok2 := routematch.Match("SOCKET", path); ok2 {
 			res, act, ok = r2, a2, true
 		}
 	}

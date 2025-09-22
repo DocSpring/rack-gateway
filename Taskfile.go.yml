@@ -47,7 +47,7 @@ tasks:
     desc: Run Go unit and integration tests safely
     deps: [deps]
     cmds:
-      - ./scripts/safe-test.sh -v -race -short -timeout 30s ./...
+      - ./scripts/safe-test.sh -v -race -short -timeout 30s ./cmd/gateway/... ./cmd/cli/... ./cmd/mock-convox/... ./internal/gateway/... ./internal/integration/...
       - ./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
   lint:
@@ -63,11 +63,29 @@ tasks:
     aliases: [e2e]
     desc: Run CLI E2E flow on dev stack
     deps: [":docker:up:dev"]
-    cmds:
-      - bash scripts/cli-e2e.sh
+    cmds: [scripts/cli-e2e.sh]
+
+  e2e:dev:admin:
+    desc: Run CLI E2E flow on dev stack with only admin tests
+    deps: [":docker:up:dev"]
+    cmds: [ONLY_ADMIN_TESTS=true bash scripts/cli-e2e.sh]
+
+  e2e:dev:api-token:
+    desc: Run CLI E2E flow on dev stack with only API token tests
+    deps: [":docker:up:dev"]
+    cmds: [ONLY_API_TOKEN_TESTS=true bash scripts/cli-e2e.sh]
+
+  e2e:dev:deployer:
+    desc: Run CLI E2E flow on dev stack with only deployer tests
+    deps: [":docker:up:dev"]
+    cmds: [ONLY_DEPLOYER_TESTS=true bash scripts/cli-e2e.sh]
+
+  e2e:dev:viewer:
+    desc: Run CLI E2E flow on dev stack with only viewer tests
+    deps: [":docker:up:dev"]
+    cmds: [ONLY_VIEWER_TESTS=true bash scripts/cli-e2e.sh]
 
   e2e:preview:
     desc: Run CLI E2E flow on preview stack
     deps: [":docker:up:preview"]
-    cmds:
-      - bash scripts/cli-e2e.sh
+    cmds: [scripts/cli-e2e.sh]

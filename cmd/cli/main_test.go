@@ -283,3 +283,20 @@ func TestResolveRackStatusEnvRequiresToken(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CONVOX_GATEWAY_API_TOKEN")
 }
+
+func TestRenderGatewayError(t *testing.T) {
+	t.Run("json payload", func(t *testing.T) {
+		msg := renderGatewayError([]byte(`{"error":"You don't have permission"}`))
+		assert.Equal(t, "You don't have permission", msg)
+	})
+
+	t.Run("empty body", func(t *testing.T) {
+		msg := renderGatewayError([]byte(""))
+		assert.Equal(t, "forbidden", msg)
+	})
+
+	t.Run("plain text", func(t *testing.T) {
+		msg := renderGatewayError([]byte("permission denied"))
+		assert.Equal(t, "permission denied", msg)
+	})
+}

@@ -3,7 +3,7 @@ package rbac
 import (
 	"testing"
 
-	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
+	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
 

@@ -22,8 +22,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
-	"github.com/go-chi/chi/v5"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -189,7 +188,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForAllow = "SOCKET"
 	}
-	if !routes.IsAllowed(methodForAllow, path) {
+	if !routematch.IsAllowed(methodForAllow, path) {
 		// Return 404 without writing an audit DB entry for non-Convox noise (e.g., .well-known, favicon, etc.)
 		http.NotFound(w, r)
 		return
@@ -202,7 +201,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
 	}
-	resource, action, ok := routes.Match(methodForRBAC, path)
+	resource, action, ok := routematch.Match(methodForRBAC, path)
 	if !ok {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
 		http.NotFound(w, r)
@@ -232,7 +231,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			// Deny without emitting an additional high-level releases.create deny;
 			// per-key env/secrets denies were already logged in prepareReleaseCreate.
-			http.Error(w, "permission denied", http.StatusForbidden)
+			http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
 			return
 		}
 	}
@@ -245,7 +244,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	if !allowed {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
-		http.Error(w, "permission denied", http.StatusForbidden)
+		http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
 		return
 	}
 
@@ -254,14 +253,14 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		if isDestructive(methodForRBAC, resource, action) {
 			// Log as denied (RBAC) for consistency
 			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("destructive actions are disabled by policy"))
-			http.Error(w, "permission denied", http.StatusForbidden)
+			http.Error(w, "Destructive rack actions are disabled by policy", http.StatusForbidden)
 			return
 		}
 	}
 
 	// Pre-capture system parameters if this is a rack params update
 	var beforeParams map[string]string
-	isRackParamsUpdate := (r.Method == http.MethodPut && routes.KeyMatch3(path, "/system"))
+	isRackParamsUpdate := (r.Method == http.MethodPut && routematch.KeyMatch3(path, "/system"))
 	if isRackParamsUpdate {
 		if params, err := h.fetchSystemParams(rackConfig); err == nil {
 			beforeParams = params
@@ -282,7 +281,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
-		skipManualReleaseLog := r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps/{app}/releases")
+		skipManualReleaseLog := r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/releases")
 		releaseIDs := r.Header.Values("X-Release-Created")
 		if len(releaseIDs) > 0 {
 			for _, rel := range releaseIDs {
@@ -322,154 +321,6 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	r.Header.Del("X-Release-Created")
-}
-
-func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-
-	rack := chi.URLParam(r, "rack")
-	path := chi.URLParam(r, "*")
-
-	rackConfig, exists := h.config.Racks[rack]
-	if !exists {
-		h.handleError(w, r, "unknown rack", http.StatusNotFound, rack, start)
-		return
-	}
-
-	if !rackConfig.Enabled {
-		h.handleError(w, r, "rack disabled", http.StatusForbidden, rack, start)
-		return
-	}
-
-	authUser, ok := auth.GetAuthUser(r.Context())
-	if !ok {
-		h.handleError(w, r, "unauthorized", http.StatusUnauthorized, rack, start)
-		return
-	}
-
-	// Enforce allowlist for rack-scoped proxy as well
-	methodForAllow := r.Method
-	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		methodForAllow = "SOCKET"
-	}
-	if !routes.IsAllowed(methodForAllow, "/"+path) {
-		http.NotFound(w, r)
-		return
-	}
-
-	var allowed bool
-	var err error
-	methodForRBAC := r.Method
-	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		methodForRBAC = "SOCKET"
-	}
-	resource, action, ok := routes.Match(methodForRBAC, "/"+path)
-	if !ok {
-		h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
-		http.NotFound(w, r)
-		return
-	}
-
-	if authUser.IsAPIToken {
-		// For API tokens, check permissions directly
-		allowed = h.hasAPITokenPermission(authUser, resource, action)
-	} else {
-		// For JWT users, use RBAC
-		allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action)
-		if err != nil {
-			allowed = false
-		}
-	}
-
-	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
-		if au, ok := auth.GetAuthUser(r.Context()); ok {
-			ok2, diffs, err := h.prepareReleaseCreate(r, rackConfig, au.Email)
-			if err != nil {
-				h.handleError(w, r, err.Error(), http.StatusBadRequest, rack, start)
-				return
-			}
-			if !ok2 {
-				// Deny without duplicating high-level releases.create deny; per-key denies logged already
-				http.Error(w, "permission denied", http.StatusForbidden)
-				return
-			}
-			// success path will log diffs via outer caller (this code path is for ProxyRequest route)
-			_ = diffs
-		}
-	}
-
-	if !allowed {
-		h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
-		http.Error(w, "permission denied", http.StatusForbidden)
-		return
-	}
-
-	if !h.allowDestructive {
-		if isDestructive(methodForRBAC, resource, action) {
-			h.auditLogger.LogRequest(r, authUser.Email, rack, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("destructive actions are disabled by policy"))
-			http.Error(w, "permission denied", http.StatusForbidden)
-			return
-		}
-	}
-
-	// Pre-capture params for PUT /system on rack-scoped proxy too
-	var beforeParams map[string]string
-	isRackParamsUpdate := (r.Method == http.MethodPut && routes.KeyMatch3("/"+path, "/system"))
-	if isRackParamsUpdate {
-		if params, err := h.fetchSystemParams(rackConfig); err == nil {
-			beforeParams = params
-		}
-	}
-
-	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
-	if err != nil {
-		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rack, start)
-		return
-	}
-	if status == 0 {
-		status = http.StatusOK
-	}
-	h.auditLogger.LogRequest(r, authUser.Email, rack, "allow", status, time.Since(start), nil)
-
-	if status >= 200 && status < 300 {
-		skipManualReleaseLog := r.Method == http.MethodPost && routes.KeyMatch3("/"+path, "/apps/{app}/releases")
-		releaseIDs := r.Header.Values("X-Release-Created")
-		if len(releaseIDs) > 0 {
-			for _, rel := range releaseIDs {
-				rel = strings.TrimSpace(rel)
-				if rel == "" {
-					continue
-				}
-				if skipManualReleaseLog {
-					continue
-				}
-				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
-					UserEmail:      authUser.Email,
-					UserName:       r.Header.Get("X-User-Name"),
-					ActionType:     "convox",
-					Action:         "release.create",
-					ResourceType:   "release",
-					Resource:       rel,
-					Status:         "success",
-					RBACDecision:   "allow",
-					HTTPStatus:     status,
-					ResponseTimeMs: int(time.Since(start).Milliseconds()),
-					IPAddress:      r.RemoteAddr,
-					UserAgent:      r.UserAgent(),
-				})
-			}
-		}
-	}
-	r.Header.Del("X-Release-Created")
-	if status >= 200 && status < 300 && isRackParamsUpdate {
-		if afterParams, err := h.fetchSystemParams(rackConfig); err == nil {
-			changes := diffParams(beforeParams, afterParams)
-			if len(changes) > 0 {
-				h.notifyRackParamsChanged(r, authUser.Email, changes)
-				h.auditRackParamsChanged(r, authUser.Email, changes)
-			}
-		}
-	}
 }
 
 // fetchSystemParams retrieves /system and returns its Parameters map.
@@ -1036,13 +887,13 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	isJSON := strings.Contains(ct, "application/json")
 	pth := path
-	filterRelease := isJSON && (routes.KeyMatch3(pth, "/apps/{app}/releases") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
+	filterRelease := isJSON && (routematch.KeyMatch3(pth, "/apps/{app}/releases") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
 	shouldCapture := false
 	if isJSON {
 		if r.Method == http.MethodPost {
 			shouldCapture = true
 		} else if r.Method == http.MethodGet {
-			if routes.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routes.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
+			if routematch.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 				shouldCapture = true
 			}
 		}
@@ -1181,13 +1032,13 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
-	if r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps") {
+	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps") {
 		if name := extractJSONString(obj["name"]); name != "" {
 			setResource("app", name, true)
 		}
 	}
 
-	if r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps/{app}/builds") {
+	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/builds") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			setResource("build", id, true)
 		}
@@ -1198,7 +1049,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if routes.KeyMatch3(path, "/apps/{app}/builds/{id}") {
+	if routematch.KeyMatch3(path, "/apps/{app}/builds/{id}") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			h.recordResourceCreator("build", id, email)
 		}
@@ -1209,7 +1060,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if r.Method == http.MethodPost && routes.KeyMatch3(path, "/apps/{app}/releases") {
+	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/releases") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			r.Header.Set("X-Audit-Resource", id)
 			if h.recordResourceCreator("release", id, email) {
@@ -1510,7 +1361,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC
 func (h *Handler) pathToResourceAction(path, method string) (string, string) {
-	res, act, ok := routes.Match(method, path)
+	res, act, ok := routematch.Match(method, path)
 	if !ok {
 		return "", ""
 	}
@@ -1525,6 +1376,35 @@ func extractReleaseIDFromPath(path string) string {
 		}
 	}
 	return ""
+}
+
+func forbiddenMessage(resource, action string) string {
+	switch resource {
+	case "secrets":
+		switch action {
+		case "view":
+			return "You don't have permission to view secrets."
+		case "set", "unset":
+			return "You don't have permission to modify secrets."
+		}
+	case "env":
+		if action == "view" {
+			return "You don't have permission to view environment variables."
+		}
+	case "process":
+		switch action {
+		case "start", "run", "exec":
+			return "You don't have permission to run processes."
+		case "terminate", "stop":
+			return "You don't have permission to stop processes."
+		}
+	case "release":
+		switch action {
+		case "create", "promote":
+			return "You don't have permission to deploy releases."
+		}
+	}
+	return "permission denied"
 }
 
 // hasAPITokenPermission checks if an API token has the required permission

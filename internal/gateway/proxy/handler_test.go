@@ -15,7 +15,8 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/convox-gateway/internal/testutil/dbtest"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,39 +37,22 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACMana
 	return h, database, mgr
 }
 
-func TestPathToResourceAction_AppRoutes(t *testing.T) {
+func TestPathToResourceActionMatchesRouteSpecs(t *testing.T) {
 	h := &Handler{}
 
-	res, act := h.pathToResourceAction("/apps", "GET")
-	require.Equal(t, "app", res)
-	require.Equal(t, "list", act)
-
-	res, act = h.pathToResourceAction("/apps", "POST")
-	require.Equal(t, "app", res)
-	require.Equal(t, "create", act)
-
-	res, act = h.pathToResourceAction("/apps/myapp", "PUT")
-	require.Equal(t, "app", res)
-	require.Equal(t, "update", act)
-
-	res, act = h.pathToResourceAction("/apps/myapp/restart", "POST")
-	require.Equal(t, "app", res)
-	require.Equal(t, "restart", act)
-
-	res, act = h.pathToResourceAction("/apps/myapp/services", "GET")
-	require.Equal(t, "app", res)
-	require.Equal(t, "get", act)
-
-	res, act = h.pathToResourceAction("/apps/myapp", "DELETE")
-	require.Equal(t, "app", res)
-	require.Equal(t, "delete", act)
-
-	// Releases create mapping
-	res, act = h.pathToResourceAction("/apps/myapp/releases", "POST")
-	require.Equal(t, "release", res)
-	require.Equal(t, "create", act)
-
-	// No dedicated env mapping; env is read via releases
+	for _, spec := range routematch.Specs() {
+		if spec.Action == "*" {
+			continue
+		}
+		path := routematch.ExamplePath(spec)
+		method := spec.Method
+		if method == "SOCKET" {
+			method = http.MethodGet
+		}
+		res, act := h.pathToResourceAction(path, method)
+		require.Equalf(t, spec.Resource, res, "pattern %s %s", spec.Method, spec.Pattern)
+		require.Equalf(t, spec.Action, act, "pattern %s %s", spec.Method, spec.Pattern)
+	}
 }
 
 func TestAPITokenPermission_Check(t *testing.T) {

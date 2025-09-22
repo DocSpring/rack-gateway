@@ -633,36 +633,91 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	return logs, nil
 }
 
-// GetAuditLogsPaged retrieves audit logs with limit and offset for pagination
-func (d *Database) GetAuditLogsPaged(userEmail string, since time.Time, limit, offset int) ([]*AuditLog, error) {
-	if limit <= 0 {
-		limit = 1000
+// AuditLogFilters contains all possible filters for audit logs
+type AuditLogFilters struct {
+	UserEmail    string
+	Status       string
+	ActionType   string
+	ResourceType string
+	Search       string
+	Since        time.Time
+	Limit        int
+	Offset       int
+}
+
+// GetAuditLogsPaged retrieves audit logs with proper SQL filtering and pagination
+func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int, error) {
+	if filters.Limit <= 0 {
+		filters.Limit = 100
 	}
-	if offset < 0 {
-		offset = 0
+	if filters.Offset < 0 {
+		filters.Offset = 0
 	}
-	query := `
-        SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
-               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(resource_type, ''),
-               COALESCE(details, ''), COALESCE(ip_address, ''), COALESCE(user_agent, ''), status, COALESCE(rbac_decision, ''), COALESCE(http_status, 0), response_time_ms
-        FROM audit_logs
-        WHERE 1=1
-    `
+
+	// Build WHERE clause with proper SQL filtering
+	whereClause := "WHERE 1=1"
 	args := []interface{}{}
-	if userEmail != "" {
-		query += " AND user_email = ?"
-		args = append(args, userEmail)
+
+	if filters.UserEmail != "" {
+		whereClause += " AND user_email = ?"
+		args = append(args, filters.UserEmail)
 	}
-	if !since.IsZero() {
-		query += " AND timestamp >= ?"
-		args = append(args, since.UTC())
+	if filters.Status != "" && filters.Status != "all" {
+		whereClause += " AND status = ?"
+		args = append(args, filters.Status)
 	}
-	query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	if filters.ActionType != "" && filters.ActionType != "all" {
+		whereClause += " AND action_type = ?"
+		args = append(args, filters.ActionType)
+	}
+	if filters.ResourceType != "" && filters.ResourceType != "all" {
+		whereClause += " AND resource_type = ?"
+		args = append(args, filters.ResourceType)
+	}
+	if !filters.Since.IsZero() {
+		whereClause += " AND timestamp >= ?"
+		args = append(args, filters.Since.UTC())
+	}
+
+	// Full-text search across multiple columns
+	if filters.Search != "" {
+		whereClause += ` AND (
+			user_email ILIKE ? OR
+			user_name ILIKE ? OR
+			action ILIKE ? OR
+			resource ILIKE ? OR
+			details ILIKE ? OR
+			ip_address ILIKE ? OR
+			user_agent ILIKE ?
+		)`
+		searchPattern := "%" + filters.Search + "%"
+		for i := 0; i < 7; i++ {
+			args = append(args, searchPattern)
+		}
+	}
+
+	// Get total count for pagination - build query safely
+	countQuery := "SELECT COUNT(*) FROM audit_logs " + whereClause
+	var total int
+	if err := d.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count audit logs: %w", err)
+	}
+
+	// Get paginated results - build query safely
+	query := `
+		SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
+		       COALESCE(command, ''), COALESCE(resource, ''), COALESCE(resource_type, ''),
+		       COALESCE(details, ''), COALESCE(ip_address, ''), COALESCE(user_agent, ''),
+		       status, COALESCE(rbac_decision, ''), COALESCE(http_status, 0), response_time_ms
+		FROM audit_logs ` + whereClause + `
+		ORDER BY timestamp DESC
+		LIMIT ? OFFSET ?`
+
+	args = append(args, filters.Limit, filters.Offset)
 
 	rows, err := d.query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query audit logs: %w", err)
+		return nil, 0, fmt.Errorf("failed to query audit logs: %w", err)
 	}
 	defer rows.Close()
 
@@ -670,11 +725,11 @@ func (d *Database) GetAuditLogsPaged(userEmail string, since time.Time, limit, o
 	for rows.Next() {
 		var log AuditLog
 		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs); err != nil {
-			return nil, fmt.Errorf("failed to scan audit log: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan audit log: %w", err)
 		}
 		logs = append(logs, &log)
 	}
-	return logs, nil
+	return logs, total, nil
 }
 
 // CreateAPIToken creates a new API token

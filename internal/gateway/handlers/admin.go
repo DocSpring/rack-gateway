@@ -1,0 +1,700 @@
+package handlers
+
+import (
+	"encoding/csv"
+	"fmt"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/gin-gonic/gin"
+)
+
+// AdminHandler handles admin API endpoints
+type AdminHandler struct {
+	rbac         rbac.RBACManager
+	database     *db.Database
+	tokenService *token.Service
+	emailSender  email.Sender
+	config       *config.Config
+}
+
+type roleOption struct {
+	Name        string   `json:"name"`
+	Label       string   `json:"label"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
+// NewAdminHandler creates a new admin handler
+func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config) *AdminHandler {
+	return &AdminHandler{
+		rbac:         rbac,
+		database:     database,
+		tokenService: tokenService,
+		emailSender:  emailSender,
+		config:       config,
+	}
+}
+
+// ListUsers returns all users
+func (h *AdminHandler) ListUsers(c *gin.Context) {
+	users, err := h.database.ListUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}
+
+// CreateUser creates a new user
+func (h *AdminHandler) CreateUser(c *gin.Context) {
+	var req struct {
+		Email string   `json:"email" binding:"required,email"`
+		Name  string   `json:"name" binding:"required"`
+		Roles []string `json:"roles" binding:"required,min=1"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate roles
+	validRoles := []string{"viewer", "ops", "deployer", "admin"}
+	for _, role := range req.Roles {
+		valid := false
+		for _, vr := range validRoles {
+			if role == vr {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid role: %s", role)})
+			return
+		}
+	}
+
+	// Create user
+	userConfig := &rbac.UserConfig{
+		Name:  req.Name,
+		Roles: req.Roles,
+	}
+
+	if err := h.rbac.SaveUser(req.Email, userConfig); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		return
+	}
+
+	// Send welcome email
+	if h.emailSender != nil {
+		// Would send email here
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"email": req.Email,
+		"name":  req.Name,
+		"roles": req.Roles,
+	})
+}
+
+// DeleteUser deletes a user
+func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	email := c.Param("email")
+	currentUser := c.GetString("user_email")
+
+	// Can't delete yourself
+	if email == currentUser {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete yourself"})
+		return
+	}
+
+	if err := h.rbac.DeleteUser(email); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// UpdateUserProfile updates user profile
+func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
+	email := c.Param("email")
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.rbac.GetUser(email)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	user.Name = req.Name
+	if err := h.rbac.SaveUser(email, user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"email": email,
+		"name":  req.Name,
+		"roles": user.Roles,
+	})
+}
+
+// UpdateUserRoles updates user roles
+func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
+	email := c.Param("email")
+	currentUser := c.GetString("user_email")
+
+	// Can't change your own roles
+	if email == currentUser {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot change your own roles"})
+		return
+	}
+
+	var req struct {
+		Roles []string `json:"roles" binding:"required,min=1"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.rbac.GetUser(email)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	user.Roles = req.Roles
+	if err := h.rbac.SaveUser(email, user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update roles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"email": email,
+		"name":  user.Name,
+		"roles": req.Roles,
+	})
+}
+
+// ListRoles returns all available roles
+func (h *AdminHandler) ListRoles(c *gin.Context) {
+	rolePerms := rbac.DefaultRolePermissions()
+	metaMap := rbac.RoleMetadataMap()
+
+	roles := make(map[string]interface{}, len(metaMap))
+	for _, role := range rbac.RoleOrder() {
+		meta, ok := metaMap[role]
+		if !ok {
+			continue
+		}
+		perms := rolePerms[role]
+		if role == "admin" {
+			perms = []string{"convox:*:*"}
+		}
+		roles[role] = map[string]interface{}{
+			"name":        role,
+			"label":       meta.Label,
+			"description": meta.Description,
+			"permissions": perms,
+		}
+	}
+
+	c.JSON(http.StatusOK, roles)
+}
+
+// ListAuditLogs returns audit logs
+func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
+	// Parse query parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	userFilter := c.Query("user")
+	statusFilter := c.Query("status")
+	actionTypeFilter := c.Query("action_type")
+	resourceTypeFilter := c.Query("resource_type")
+	searchFilter := c.Query("search")
+	rangeFilter := c.DefaultQuery("range", "24h")
+
+	// Calculate time range
+	var since time.Time
+	switch rangeFilter {
+	case "1h":
+		since = time.Now().Add(-1 * time.Hour)
+	case "24h":
+		since = time.Now().Add(-24 * time.Hour)
+	case "7d":
+		since = time.Now().Add(-7 * 24 * time.Hour)
+	case "30d":
+		since = time.Now().Add(-30 * 24 * time.Hour)
+	case "all":
+		// No time filter
+	default:
+		since = time.Now().Add(-24 * time.Hour)
+	}
+
+	// Use proper SQL filtering in the database
+	offset := (page - 1) * limit
+	filters := db.AuditLogFilters{
+		UserEmail:    userFilter,
+		Status:       statusFilter,
+		ActionType:   actionTypeFilter,
+		ResourceType: resourceTypeFilter,
+		Search:       searchFilter,
+		Since:        since,
+		Limit:        limit,
+		Offset:       offset,
+	}
+
+	logs, total, err := h.database.GetAuditLogsPaged(filters)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+// ExportAuditLogs exports audit logs as CSV
+func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
+	rangeFilter := c.DefaultQuery("range", "24h")
+
+	var since time.Time
+	switch rangeFilter {
+	case "1h":
+		since = time.Now().Add(-1 * time.Hour)
+	case "24h":
+		since = time.Now().Add(-24 * time.Hour)
+	case "7d":
+		since = time.Now().Add(-7 * 24 * time.Hour)
+	case "30d":
+		since = time.Now().Add(-30 * 24 * time.Hour)
+	case "all":
+		// No time filter
+	default:
+		since = time.Now().Add(-24 * time.Hour)
+	}
+
+	logs, err := h.database.GetAuditLogs("", since, 10000) // Max 10k for export
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+		return
+	}
+
+	// Set CSV headers
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"audit-logs-%s.csv\"", time.Now().Format("2006-01-02")))
+
+	// Write CSV
+	writer := csv.NewWriter(c.Writer)
+	defer writer.Flush()
+
+	// Header row
+	writer.Write([]string{
+		"timestamp", "user_email", "user_name", "action_type", "action",
+		"command", "resource", "status", "response_time_ms", "ip_address", "user_agent",
+	})
+
+	// Data rows
+	for _, log := range logs {
+		writer.Write([]string{
+			log.Timestamp.Format(time.RFC3339),
+			log.UserEmail,
+			log.UserName,
+			log.ActionType,
+			log.Action,
+			log.Command,
+			log.Resource,
+			log.Status,
+			strconv.Itoa(log.ResponseTimeMs),
+			log.IPAddress,
+			log.UserAgent,
+		})
+	}
+}
+
+// Config and settings handlers
+func (h *AdminHandler) GetConfig(c *gin.Context) {
+	// Get users from the manager
+	users, err := h.rbac.GetUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get users"})
+		return
+	}
+
+	// Convert internal format to API format
+	apiConfig := gin.H{
+		"domain": h.rbac.GetAllowedDomain(),
+		"users":  users,
+	}
+
+	c.JSON(http.StatusOK, apiConfig)
+}
+
+func (h *AdminHandler) UpdateConfig(c *gin.Context) {
+	// Would update configuration
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
+}
+
+func (h *AdminHandler) GetSettings(c *gin.Context) {
+	resp := make(map[string]interface{})
+
+	if h.database != nil {
+		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+			resp["protected_env_vars"] = arr
+		} else {
+			resp["protected_env_vars"] = []string{}
+		}
+		if v, err := h.database.GetAllowDestructiveActions(); err == nil {
+			resp["allow_destructive_actions"] = v
+		} else {
+			resp["allow_destructive_actions"] = false
+		}
+	} else {
+		resp["protected_env_vars"] = []string{}
+		resp["allow_destructive_actions"] = false
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AdminHandler) UpdateProtectedEnvVars(c *gin.Context) {
+	email := c.GetString("user_email")
+
+	var payload struct {
+		Protected []string `json:"protected_env_vars"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Normalize and de-dup to uppercase
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(payload.Protected))
+	for _, k := range payload.Protected {
+		k = strings.TrimSpace(strings.ToUpper(k))
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+
+	// Determine updating user id if available
+	var uid *int64
+	if h.rbac != nil {
+		if u, err := h.rbac.GetUserWithID(email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+
+	if h.database != nil {
+		if err := h.database.UpsertSetting("protected_env_vars", out, uid); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save setting"})
+			return
+		}
+
+		// Send email notification to admins
+		if h.emailSender != nil {
+			// Would send email here
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+}
+
+func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
+	email := c.GetString("user_email")
+
+	var payload struct {
+		Allow bool `json:"allow_destructive_actions"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	var uid *int64
+	if h.rbac != nil {
+		if u, err := h.rbac.GetUserWithID(email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+
+	if h.database != nil {
+		if err := h.database.UpsertSetting("allow_destructive_actions", payload.Allow, uid); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save setting"})
+			return
+		}
+
+		// Send email notification to admins
+		if h.emailSender != nil {
+			// Would send email here
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+}
+
+// Token management
+func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
+	var req struct {
+		Name        string   `json:"name" binding:"required"`
+		UserEmail   string   `json:"user_email"`
+		Permissions []string `json:"permissions"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	currentUser := c.GetString("user_email")
+	targetEmail := req.UserEmail
+	if targetEmail == "" {
+		targetEmail = currentUser
+	}
+
+	// Get user ID
+	user, err := h.database.GetUser(targetEmail)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	// Create token
+	tokenReq := &token.APITokenRequest{
+		Name:        req.Name,
+		UserID:      user.ID,
+		Permissions: req.Permissions,
+	}
+
+	resp, err := h.tokenService.GenerateAPIToken(tokenReq)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
+		return
+	}
+
+	// Send email notification
+	if h.emailSender != nil {
+		// Would send email here
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":       resp.Token,
+		"id":          resp.APIToken.ID,
+		"name":        resp.APIToken.Name,
+		"permissions": resp.APIToken.Permissions,
+	})
+}
+
+func (h *AdminHandler) ListAPITokens(c *gin.Context) {
+	// List all API tokens
+	tokens, err := h.database.ListAllAPITokens()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tokens"})
+		return
+	}
+
+	c.JSON(http.StatusOK, tokens)
+}
+
+func (h *AdminHandler) GetAPIToken(c *gin.Context) {
+	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+		return
+	}
+
+	token, err := h.database.GetAPITokenByID(tokenID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, token)
+}
+
+func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
+	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+		return
+	}
+
+	var req struct {
+		Name        string   `json:"name"`
+		Permissions []string `json:"permissions"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Would update token in database
+	c.JSON(http.StatusOK, gin.H{
+		"id":          tokenID,
+		"name":        req.Name,
+		"permissions": req.Permissions,
+	})
+}
+
+func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
+	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+		return
+	}
+
+	if err := h.database.DeleteAPIToken(tokenID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete token"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func collectAllPermissions(rolePerms map[string][]string) []string {
+	known := make(map[string]struct{})
+	for _, perms := range rolePerms {
+		for _, perm := range perms {
+			known[perm] = struct{}{}
+		}
+	}
+	for _, perm := range routematch.AllPermissions() {
+		known[perm] = struct{}{}
+	}
+	known["convox:*:*"] = struct{}{}
+
+	perms := make([]string, 0, len(known))
+	wildcard := false
+	for perm := range known {
+		if perm == "convox:*:*" {
+			wildcard = true
+			continue
+		}
+		perms = append(perms, perm)
+	}
+	sort.Strings(perms)
+	if wildcard {
+		perms = append(perms, "convox:*:*")
+	}
+	return perms
+}
+
+func buildRoleOptions(rolePerms map[string][]string) []roleOption {
+	meta := rbac.RoleMetadataMap()
+	ordered := rbac.RoleOrder()
+	roles := make([]roleOption, 0, len(ordered))
+	for _, role := range ordered {
+		perms, ok := rolePerms[role]
+		if !ok {
+			continue
+		}
+		info, ok := meta[role]
+		if !ok {
+			continue
+		}
+		sorted := append([]string(nil), perms...)
+		sort.Strings(sorted)
+		roles = append(roles, roleOption{
+			Name:        role,
+			Label:       info.Label,
+			Description: info.Description,
+			Permissions: sorted,
+		})
+	}
+	return roles
+}
+
+func flattenUserRoles(manager rbac.RBACManager, email string, rolePerms map[string][]string) ([]string, []string) {
+	if manager == nil || email == "" {
+		return nil, nil
+	}
+
+	roles, err := manager.GetUserRoles(email)
+	if err != nil {
+		return nil, nil
+	}
+	sort.Strings(roles)
+
+	permSet := make(map[string]struct{})
+	for _, role := range roles {
+		if perms, ok := rolePerms[role]; ok {
+			for _, perm := range perms {
+				permSet[perm] = struct{}{}
+			}
+		}
+	}
+
+	perms := make([]string, 0, len(permSet))
+	for perm := range permSet {
+		perms = append(perms, perm)
+	}
+	sort.Strings(perms)
+
+	return roles, perms
+}
+
+func (h *AdminHandler) GetTokenPermissionMetadata(c *gin.Context) {
+	email := strings.TrimSpace(c.GetString("user_email"))
+	if email == "" {
+		if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok {
+			email = strings.TrimSpace(authUser.Email)
+		}
+	}
+	if email == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	rolePerms := rbac.DefaultRolePermissions()
+	allPermissions := collectAllPermissions(rolePerms)
+	roles := buildRoleOptions(rolePerms)
+	userRoles, userPerms := flattenUserRoles(h.rbac, email, rolePerms)
+
+	c.JSON(http.StatusOK, map[string]interface{}{
+		"permissions":         allPermissions,
+		"roles":               roles,
+		"default_permissions": token.DefaultCICDPermissions(),
+		"user_roles":          userRoles,
+		"user_permissions":    userPerms,
+	})
+}

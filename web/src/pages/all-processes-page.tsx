@@ -58,18 +58,17 @@ export function AllProcessesPage() {
       // Also include system processes
       let systemProcs: Proc[] = []
       try {
-        const sys =
-          await api.get<
-            {
-              id: string
-              service?: string
-              name?: string
-              status: string
-              release: string
-              app?: string
-              started?: string
-            }[]
-          >('/.gateway/api/convox/system/processes')
+        const sys = await api.get<
+          {
+            id: string
+            service?: string
+            name?: string
+            status: string
+            release: string
+            app?: string
+            started?: string
+          }[]
+        >('/.gateway/api/convox/system/processes')
         systemProcs = (sys || []).map((p) => ({
           ...p,
           app: p.app || 'system',
