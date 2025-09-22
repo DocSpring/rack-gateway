@@ -4,7 +4,9 @@
     "includes": [
       "**/*.{js,ts,jsx,tsx}",
       "*.{js,ts,jsx,tsx}",
-      "!src/lib/generated/**/*.ts"
+      "!src/lib/generated/**/*.ts",
+      "!test-results",
+      "!playwright-report"
     ]
   },
   "formatter": {
