@@ -39,6 +39,19 @@ func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.
 	}
 }
 
+func (h *APIHandler) primaryRack() (config.RackConfig, bool) {
+	if h == nil || h.config == nil {
+		return config.RackConfig{}, false
+	}
+	if rc, ok := h.config.Racks["default"]; ok && rc.Enabled {
+		return rc, true
+	}
+	if rc, ok := h.config.Racks["local"]; ok && rc.Enabled {
+		return rc, true
+	}
+	return config.RackConfig{}, false
+}
+
 // GetMe returns the current user's information
 func (h *APIHandler) GetMe(c *gin.Context) {
 	email := c.GetString("user_email")
@@ -51,12 +64,30 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"email":       email,
 		"name":        name,
 		"roles":       roles,
 		"permissions": user.Roles, // Would expand to actual permissions
-	})
+	}
+
+	if rc, ok := h.primaryRack(); ok {
+		alias := strings.TrimSpace(rc.Alias)
+		if alias == "" {
+			alias = strings.TrimSpace(rc.Name)
+			if alias == "" {
+				alias = "default"
+			}
+		}
+		host := strings.TrimSpace(rc.URL)
+		response["rack"] = gin.H{
+			"name":  rc.Name,
+			"alias": alias,
+			"host":  host,
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetCreatedBy returns creator information for resources

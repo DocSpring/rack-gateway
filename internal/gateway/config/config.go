@@ -32,6 +32,7 @@ type Config struct {
 
 type RackConfig struct {
 	Name     string
+	Alias    string
 	URL      string
 	Username string // Username for Basic Auth (default: "convox")
 	APIKey   string // Password for Basic Auth
@@ -119,9 +120,19 @@ func (c *Config) loadRacksFromEnv() {
 			rackHost = "http://" + rackHost
 		}
 
+		rackName := strings.TrimSpace(os.Getenv("RACK"))
+		if rackName == "" {
+			rackName = "default"
+		}
+		rackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
+		if rackAlias == "" {
+			rackAlias = rackName
+		}
+
 		// The gateway protects a single rack
 		c.Racks["default"] = RackConfig{
-			Name:     "default",
+			Name:     rackName,
+			Alias:    rackAlias,
 			URL:      rackHost,
 			Username: rackUsername,
 			APIKey:   rackToken,
@@ -136,6 +147,7 @@ func (c *Config) loadRacksFromEnv() {
 func (c *Config) setupDevRacks() {
 	c.Racks["local"] = RackConfig{
 		Name:     "local",
+		Alias:    "local",
 		URL:      "http://localhost:5443",
 		Username: "convox",
 		APIKey:   "dev-token",

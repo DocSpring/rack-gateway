@@ -39,7 +39,7 @@ export function Layout() {
   }, [location.pathname])
   const [showCliDialog, setShowCliDialog] = useState(false)
 
-  const rackName = user?.rack?.name || 'your-rack'
+  const rackAlias = user?.rack?.alias ?? user?.rack?.name ?? 'default'
   const gatewayOrigin = useMemo(() => {
     try {
       // Prefer current origin (handles http/https and host)
@@ -134,7 +134,7 @@ export function Layout() {
           {user?.rack && (
             <div className="mb-3 text-muted-foreground text-xs">
               <div className="group relative inline-flex items-center">
-                <span>Rack: {user.rack.name || 'Unknown'}</span>
+                <span>Rack: {user.rack.alias || user.rack.name || 'Unknown'}</span>
                 <div
                   className="pointer-events-none absolute top-full left-0 z-50 mt-1 hidden w-max max-w-[260px] rounded-md border border-border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md group-hover:block"
                   role="tooltip"
@@ -181,7 +181,7 @@ export function Layout() {
             <p className="pt-1">Authenticate the CLI against this gateway:</p>
             <div className="rounded-md border bg-muted p-3 font-mono text-xs">
               <div>
-                $ convox-gateway login {rackName} {gatewayOrigin}
+                $ convox-gateway login {rackAlias} {gatewayOrigin}
               </div>
             </div>
             <p className="text-muted-foreground">

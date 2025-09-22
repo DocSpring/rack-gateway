@@ -8,7 +8,7 @@ export type User = {
   email: string
   name: string
   roles: string[]
-  rack?: { name: string; host: string }
+  rack?: { name: string; alias?: string; host: string }
 }
 
 export type AuthState = {
