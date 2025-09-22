@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,25 +20,6 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		isDev = true
 	}
 
-	var allowedHosts []string
-	var baseHost string
-	if cfg != nil {
-		baseHost = canonicalHost(cfg.Domain)
-	}
-	if !isDev && baseHost != "" {
-		allowedHosts = append(allowedHosts, baseHost)
-		port := strings.TrimSpace(cfg.Port)
-		if port != "" && port != "80" && port != "443" {
-			allowedHosts = append(allowedHosts, fmt.Sprintf("%s:%s", baseHost, port))
-		}
-		if baseHost == "localhost" {
-			allowedHosts = append(allowedHosts, "127.0.0.1")
-			if port != "" && port != "80" && port != "443" {
-				allowedHosts = append(allowedHosts, fmt.Sprintf("127.0.0.1:%s", port))
-			}
-		}
-	}
-
 	connectSrc := "connect-src 'self' ws: wss:"
 	if isDev {
 		connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
@@ -47,7 +27,7 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 	csp := "default-src 'self'; " + connectSrc + "; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
 
 	secCfg := securemw.Config{
-		AllowedHosts: allowedHosts,
+		AllowedHosts: nil,
 		SSLRedirect:  false,
 		STSSeconds: func() int64 {
 			if isDev {
@@ -70,6 +50,56 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 	}
 
 	return securemw.New(secCfg)
+}
+
+// HostValidator enforces that requests are sent to the configured domain while
+// permitting internal health probes and localhost access.
+func HostValidator(cfg *config.Config) gin.HandlerFunc {
+	isDev := gin.Mode() == gin.DebugMode
+	if cfg != nil && cfg.DevMode {
+		isDev = true
+	}
+
+	allowedHost := ""
+	if cfg != nil {
+		allowedHost = canonicalHost(cfg.Domain)
+	}
+
+	return func(c *gin.Context) {
+		ua := strings.ToLower(strings.TrimSpace(c.GetHeader("User-Agent")))
+		if strings.Contains(ua, "kube-probe") {
+			c.Next()
+			return
+		}
+
+		host := canonicalHost(c.Request.Host)
+		if host == "" && c.Request.URL != nil {
+			host = canonicalHost(c.Request.URL.Host)
+		}
+
+		if host == "localhost" || host == "127.0.0.1" || host == "" {
+			c.Next()
+			return
+		}
+
+		if allowedHost == "" {
+			c.Next()
+			return
+		}
+
+		if strings.EqualFold(host, allowedHost) {
+			c.Next()
+			return
+		}
+
+		if isDev && isLocalHost(host) {
+			c.Next()
+			return
+		}
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
+		c.Abort()
+	}
 }
 
 // OriginValidator validates the Origin header for cross-origin requests.

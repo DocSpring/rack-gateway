@@ -13,6 +13,7 @@ func TestHostValidatorAllowsExactDomain(t *testing.T) {
 	router := gin.New()
 	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
 	router.Use(SecurityHeaders(cfg))
+	router.Use(HostValidator(cfg))
 	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
@@ -36,6 +37,7 @@ func TestHostValidatorRejectsSubstringDomain(t *testing.T) {
 	router := gin.New()
 	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
 	router.Use(SecurityHeaders(cfg))
+	router.Use(HostValidator(cfg))
 	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
@@ -59,6 +61,7 @@ func TestHostValidatorRejectsMismatchedOrigin(t *testing.T) {
 	router := gin.New()
 	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
 	router.Use(SecurityHeaders(cfg))
+	router.Use(HostValidator(cfg))
 	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
@@ -84,6 +87,7 @@ func TestHostValidatorAllowsDevLocalhost(t *testing.T) {
 	router := gin.New()
 	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true}
 	router.Use(SecurityHeaders(cfg))
+	router.Use(HostValidator(cfg))
 	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
@@ -99,5 +103,28 @@ func TestHostValidatorAllowsDevLocalhost(t *testing.T) {
 
 	if resp.Code != 200 {
 		t.Fatalf("expected 200 in dev mode, got %d", resp.Code)
+	}
+}
+
+func TestHostValidatorAllowsKubeProbe(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
+	router.Use(SecurityHeaders(cfg))
+	router.Use(HostValidator(cfg))
+	router.Use(OriginValidator(cfg))
+	router.GET("/", func(c *gin.Context) {
+		c.String(200, "ok")
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "internal-service"
+	req.Header.Set("User-Agent", "kube-probe/1.28")
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != 200 {
+		t.Fatalf("expected 200, got %d", resp.Code)
 	}
 }

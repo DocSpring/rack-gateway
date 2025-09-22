@@ -36,6 +36,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	// Global middleware
 	router.Use(requestid.New())
 	router.Use(middleware.SecurityHeaders(cfg.Config))
+	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
 	router.Use(gin.Recovery())
 	router.Use(middleware.FilteredLogger()) // Suppress health check logs
