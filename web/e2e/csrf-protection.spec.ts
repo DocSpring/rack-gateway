@@ -52,7 +52,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
 
     // Get the token from the cookie (in real scenario, CLI would have this from login)
     const cookies = await page.context().cookies()
-    const tokenCookie = cookies.find((c) => c.name === 'gateway_token')
+    const tokenCookie = cookies.find((c) => c.name === 'session_token')
     expect(tokenCookie).toBeTruthy()
     const token = tokenCookie!.value
 

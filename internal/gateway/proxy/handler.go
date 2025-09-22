@@ -823,6 +823,7 @@ func escapeJSONString(s string) string {
 }
 
 func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path, userEmail string) (int, error) {
+	original := path
 	// Build clean target URL without double slashes
 	base := strings.TrimRight(rack.URL, "/")
 	p := "/" + strings.TrimLeft(path, "/")
@@ -886,7 +887,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	// Decide whether we need to buffer the response (only for JSON we mutate or inspect)
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	isJSON := strings.Contains(ct, "application/json")
-	pth := path
+	pth := original
 	filterRelease := isJSON && (routematch.KeyMatch3(pth, "/apps/{app}/releases") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
 	shouldCapture := false
 	if isJSON {

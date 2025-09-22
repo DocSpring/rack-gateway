@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Download, Eye, RefreshCw, Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TablePane } from '../components/table-pane'
 import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
@@ -130,23 +130,209 @@ const STATUS_TYPES = {
   blocked: 'Blocked',
 }
 
+const VALID_DATE_RANGES = new Set(['15m', '1h', '24h', '7d', '30d', 'all', 'custom'])
+const DEFAULT_DATE_RANGE = '7d'
+
+type AuditQueryParamsOptions = {
+  actionType: string
+  status: string
+  resourceType: string
+  range: string
+  customStart?: string
+  customEnd?: string
+  search?: string
+  userId?: string
+  page?: number
+  limit?: number
+  includeDefaultRange?: boolean
+  includeDefaultPagination?: boolean
+}
+
+function createAuditQueryParams(options: AuditQueryParamsOptions): URLSearchParams {
+  const params = new URLSearchParams()
+  const {
+    actionType,
+    status,
+    resourceType,
+    range,
+    customStart,
+    customEnd,
+    search,
+    userId,
+    page,
+    limit,
+    includeDefaultRange = false,
+    includeDefaultPagination = false,
+  } = options
+
+  appendSimpleFilters(params, [
+    ['action_type', actionType, 'all'],
+    ['status', status, 'all'],
+    ['resource_type', resourceType, 'all'],
+  ])
+
+  appendRangeFilters(params, {
+    range,
+    customStart,
+    customEnd,
+    includeDefaultRange,
+  })
+
+  if (search) {
+    params.set('search', search)
+  }
+
+  if (userId) {
+    params.set('user_id', userId)
+  }
+
+  appendPagination(params, {
+    page,
+    limit,
+    includeDefaultPagination,
+  })
+
+  return params
+}
+
+function appendSimpleFilters(
+  params: URLSearchParams,
+  entries: [string, string | undefined, string][]
+) {
+  for (const [key, value, skip] of entries) {
+    if (value && value !== skip) {
+      params.set(key, value)
+    }
+  }
+}
+
+function appendRangeFilters(
+  params: URLSearchParams,
+  options: {
+    range: string
+    customStart?: string
+    customEnd?: string
+    includeDefaultRange: boolean
+  }
+) {
+  const { range, customStart, customEnd, includeDefaultRange } = options
+  if (!range) {
+    return
+  }
+
+  if (includeDefaultRange || range !== DEFAULT_DATE_RANGE) {
+    params.set('range', range)
+  }
+
+  if (range === 'custom') {
+    if (customStart) {
+      params.set('start', customStart)
+    }
+    if (customEnd) {
+      params.set('end', customEnd)
+    }
+  }
+}
+
+function appendPagination(
+  params: URLSearchParams,
+  options: {
+    page?: number
+    limit?: number
+    includeDefaultPagination: boolean
+  }
+) {
+  const { page, limit, includeDefaultPagination } = options
+
+  const shouldIncludePage =
+    typeof page === 'number' && page > 0 && (includeDefaultPagination || page > 1)
+  if (shouldIncludePage) {
+    params.set('page', String(page))
+  }
+
+  const shouldIncludeLimit =
+    typeof limit === 'number' &&
+    limit > 0 &&
+    (includeDefaultPagination || limit !== DEFAULT_PER_PAGE)
+  if (shouldIncludeLimit) {
+    params.set('limit', String(limit))
+  }
+}
+
+function toDateTimeLocalInput(value?: string | null): string {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value.length >= 16 ? value.slice(0, 16) : ''
+  }
+
+  const offsetMinutes = date.getTimezoneOffset()
+  const local = new Date(date.getTime() - offsetMinutes * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
+function toISOStringParam(value?: string | null): string | undefined {
+  if (!value) {
+    return
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return
+  }
+  return date.toISOString()
+}
+
+const ensureFilterValue = (value: string | null, options: Record<string, string>) =>
+  value && value in options ? value : 'all'
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: acceptable complexity for this page component
 export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: string } = {}) {
+  const initialSearchParams =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined
+  const initialRangeParam = initialSearchParams?.get('range')
+
   const [selected, setSelected] = useState<AuditLog | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [actionTypeFilter, setActionTypeFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [resourceTypeFilter, setResourceTypeFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState(() => initialSearchParams?.get('search') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm)
+  const [actionTypeFilter, setActionTypeFilter] = useState(() =>
+    ensureFilterValue(initialSearchParams?.get('action_type'), ACTION_TYPES)
+  )
+  const [statusFilter, setStatusFilter] = useState(() =>
+    ensureFilterValue(initialSearchParams?.get('status'), STATUS_TYPES)
+  )
+  const [resourceTypeFilter, setResourceTypeFilter] = useState(() =>
+    ensureFilterValue(initialSearchParams?.get('resource_type'), RESOURCE_TYPES)
+  )
   const [dateRange, setDateRange] = useState(() => {
-    try {
-      return localStorage.getItem('audit_date_range') || '7d'
-    } catch {
-      return '7d'
+    const param = initialRangeParam
+    if (param && (VALID_DATE_RANGES.has(param) || param === 'custom')) {
+      return param
     }
+    if (initialSearchParams?.has('start') || initialSearchParams?.has('end')) {
+      return 'custom'
+    }
+    try {
+      const stored = localStorage.getItem('audit_date_range')
+      if (stored && (VALID_DATE_RANGES.has(stored) || stored === 'custom')) {
+        return stored
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_DATE_RANGE
   })
-  const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState<number>(() => {
+    const param = initialSearchParams?.get('limit')
+    if (param) {
+      const parsed = Number.parseInt(param, 10)
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed
+      }
+    }
     try {
       const v = localStorage.getItem('audit_per_page')
       return v ? Math.max(1, Number.parseInt(v, 10)) : DEFAULT_PER_PAGE
@@ -154,6 +340,73 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       return DEFAULT_PER_PAGE
     }
   })
+  const [page, setPage] = useState(() => {
+    const param = initialSearchParams?.get('page')
+    if (param) {
+      const parsed = Number.parseInt(param, 10)
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed
+      }
+    }
+    return 1
+  })
+  const [queryUserId] = useState(() => initialSearchParams?.get('user_id') ?? '')
+  const effectiveUserId = userId ?? (queryUserId || undefined)
+  const searchInitializedRef = useRef(false)
+  const [customStart, setCustomStart] = useState(() => {
+    const fromQuery = initialSearchParams?.get('start')
+    if (fromQuery) {
+      return toDateTimeLocalInput(fromQuery)
+    }
+    if (
+      typeof window !== 'undefined' &&
+      (initialRangeParam === 'custom' || dateRange === 'custom')
+    ) {
+      try {
+        const stored = localStorage.getItem('audit_custom_start')
+        if (stored) {
+          return stored
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return ''
+  })
+  const [customEnd, setCustomEnd] = useState(() => {
+    const fromQuery = initialSearchParams?.get('end')
+    if (fromQuery) {
+      return toDateTimeLocalInput(fromQuery)
+    }
+    if (
+      typeof window !== 'undefined' &&
+      (initialRangeParam === 'custom' || dateRange === 'custom')
+    ) {
+      try {
+        const stored = localStorage.getItem('audit_custom_end')
+        if (stored) {
+          return stored
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return ''
+  })
+
+  const customStartISO = useMemo(() => {
+    if (dateRange !== 'custom') {
+      return
+    }
+    return toISOStringParam(customStart)
+  }, [customStart, dateRange])
+
+  const customEndISO = useMemo(() => {
+    if (dateRange !== 'custom') {
+      return
+    }
+    return toISOStringParam(customEnd)
+  }, [customEnd, dateRange])
 
   // Persist selected date range and per-page to localStorage
   useEffect(() => {
@@ -171,20 +424,122 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
     }
   }, [perPage])
 
+  useEffect(() => {
+    if (dateRange !== 'custom') {
+      return
+    }
+    try {
+      if (customStart) {
+        localStorage.setItem('audit_custom_start', customStart)
+      } else {
+        localStorage.removeItem('audit_custom_start')
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+  }, [customStart, dateRange])
+
+  useEffect(() => {
+    if (dateRange !== 'custom') {
+      return
+    }
+    try {
+      if (customEnd) {
+        localStorage.setItem('audit_custom_end', customEnd)
+      } else {
+        localStorage.removeItem('audit_custom_end')
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+  }, [customEnd, dateRange])
+
+  useEffect(() => {
+    if (dateRange !== 'custom') {
+      return
+    }
+    if (customStart || customEnd) {
+      return
+    }
+    try {
+      const storedStart = localStorage.getItem('audit_custom_start')
+      const storedEnd = localStorage.getItem('audit_custom_end')
+      if (storedStart) {
+        setCustomStart(storedStart)
+      }
+      if (storedEnd) {
+        setCustomEnd(storedEnd)
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+  }, [customStart, customEnd, dateRange])
+
   // Debounce search to prevent refetch on every keystroke
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300)
-    return () => clearTimeout(t)
+    if (!searchInitializedRef.current) {
+      searchInitializedRef.current = true
+      setDebouncedSearch(searchTerm)
+      return
+    }
+
+    setPage(1)
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
+    return () => clearTimeout(timer)
   }, [searchTerm])
 
+  const routingQuery = useMemo(
+    () =>
+      createAuditQueryParams({
+        actionType: actionTypeFilter,
+        status: statusFilter,
+        resourceType: resourceTypeFilter,
+        range: dateRange,
+        customStart: customStartISO,
+        customEnd: customEndISO,
+        search: searchTerm,
+        userId: effectiveUserId,
+        page,
+        limit: perPage,
+      }).toString(),
+    [
+      actionTypeFilter,
+      customEndISO,
+      customStartISO,
+      dateRange,
+      effectiveUserId,
+      page,
+      perPage,
+      resourceTypeFilter,
+      searchTerm,
+      statusFilter,
+    ]
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const currentQuery = window.location.search.startsWith('?')
+      ? window.location.search.slice(1)
+      : window.location.search
+
+    if (currentQuery === routingQuery) {
+      return
+    }
+
+    const newUrl = `${window.location.pathname}${routingQuery ? `?${routingQuery}` : ''}${
+      window.location.hash
+    }`
+    window.history.replaceState(null, '', newUrl)
+  }, [routingQuery])
+
   // Fetch audit logs
-  const {
-    data: logs = [],
-    error,
-    isError,
-    isLoading,
-    refetch,
-  } = useQuery<AuditLog[], Error>({
+  const { data, error, isError, isLoading, refetch } = useQuery<
+    { logs: AuditLog[]; total: number; page: number; limit: number },
+    Error
+  >({
     queryKey: [
       'audit-logs',
       actionTypeFilter,
@@ -192,31 +547,34 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       resourceTypeFilter,
       dateRange,
       debouncedSearch,
-      userId || '',
+      effectiveUserId || '',
+      page,
+      perPage,
+      customStartISO || '',
+      customEndISO || '',
     ],
-    queryFn: async () => {
-      const params = new URLSearchParams()
-      if (actionTypeFilter !== 'all') {
-        params.append('action_type', actionTypeFilter)
-      }
-      if (statusFilter !== 'all') {
-        params.append('status', statusFilter)
-      }
-      if (resourceTypeFilter !== 'all') {
-        params.append('resource_type', resourceTypeFilter)
-      }
-      if (dateRange) {
-        params.append('range', dateRange)
-      }
-      if (debouncedSearch) {
-        params.append('search', debouncedSearch)
-      }
-      if (userId) {
-        params.append('user_id', userId)
-      }
+    queryFn: () => {
+      const params = createAuditQueryParams({
+        actionType: actionTypeFilter,
+        status: statusFilter,
+        resourceType: resourceTypeFilter,
+        range: dateRange,
+        customStart: customStartISO,
+        customEnd: customEndISO,
+        search: debouncedSearch,
+        userId: effectiveUserId,
+        page,
+        limit: perPage,
+        includeDefaultRange: true,
+        includeDefaultPagination: true,
+      })
 
-      const response = await api.get<AuditLog[]>(`/.gateway/api/admin/audit?${params}`)
-      return response
+      return api.get<{
+        logs: AuditLog[]
+        total: number
+        page: number
+        limit: number
+      }>(`/.gateway/api/admin/audit?${params}`)
     },
     placeholderData: keepPreviousData,
     refetchOnMount: 'always',
@@ -224,23 +582,32 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
     staleTime: 0,
   })
 
+  const logs = data?.logs ?? []
+  const totalCount = data?.total ?? logs.length
+
+  useEffect(() => {
+    if (!data) {
+      return
+    }
+
+    const maxPage = Math.max(1, Math.ceil(Math.max(totalCount, 0) / perPage))
+    if (page > maxPage) {
+      setPage(maxPage)
+    }
+  }, [data, page, perPage, totalCount])
+
   const handleExport = () => {
-    const params = new URLSearchParams()
-    if (actionTypeFilter !== 'all') {
-      params.append('action_type', actionTypeFilter)
-    }
-    if (statusFilter !== 'all') {
-      params.append('status', statusFilter)
-    }
-    if (resourceTypeFilter !== 'all') {
-      params.append('resource_type', resourceTypeFilter)
-    }
-    if (dateRange) {
-      params.append('range', dateRange)
-    }
-    if (searchTerm) {
-      params.append('search', searchTerm)
-    }
+    const params = createAuditQueryParams({
+      actionType: actionTypeFilter,
+      status: statusFilter,
+      resourceType: resourceTypeFilter,
+      range: dateRange,
+      customStart: customStartISO,
+      customEnd: customEndISO,
+      search: searchTerm,
+      userId: effectiveUserId,
+      includeDefaultRange: true,
+    })
     params.append('format', 'csv')
 
     // Create download link
@@ -372,7 +739,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
   // Do not unmount the page on loading/error; render inline status instead to preserve input focus
 
   // Calculate statistics
-  const stats = {
+  const pageStats = {
     total: logs.length,
     success: logs.filter((l: AuditLog) => l.status === 'success').length,
     failed: logs.filter((l: AuditLog) => l.status === 'failed').length,
@@ -385,12 +752,11 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         : 0,
   }
 
-  // Client-side pagination
-  const totalPages = Math.max(1, Math.ceil(stats.total / perPage))
+  const totalPages = Math.max(1, Math.ceil(Math.max(totalCount, 1) / perPage))
   const currentPage = Math.min(page, totalPages)
-  const startIdx = (currentPage - 1) * perPage
-  const endIdx = Math.min(startIdx + perPage, stats.total)
-  const pageItems = logs.slice(startIdx, endIdx)
+  const pageItems = logs
+  const firstRowIndex = totalCount === 0 ? 0 : (currentPage - 1) * perPage + 1
+  const lastRowIndex = totalCount === 0 ? 0 : firstRowIndex + logs.length - 1
 
   const title = userId && userEmail ? `Audit Logs: ${userEmail}` : 'Audit Logs'
 
@@ -410,7 +776,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
             <CardTitle className="font-medium text-muted-foreground text-sm">Total Logs</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{stats.total}</div>
+            <div className="font-bold text-2xl">{totalCount}</div>
           </CardContent>
         </Card>
         <Card>
@@ -421,7 +787,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
           </CardHeader>
           <CardContent>
             <div className="font-bold text-2xl text-green-600">
-              {stats.total > 0 ? Math.round((stats.success / stats.total) * 100) : 0}%
+              {pageStats.total > 0 ? Math.round((pageStats.success / pageStats.total) * 100) : 0}%
             </div>
           </CardContent>
         </Card>
@@ -432,7 +798,9 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl text-red-600">{stats.failed + stats.denied}</div>
+            <div className="font-bold text-2xl text-red-600">
+              {pageStats.failed + pageStats.denied}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -442,7 +810,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-2xl">{stats.avgResponseTime}ms</div>
+            <div className="font-bold text-2xl">{pageStats.avgResponseTime}ms</div>
           </CardContent>
         </Card>
       </div>
@@ -470,7 +838,13 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="action-type">Action Type</Label>
-              <Select onValueChange={setActionTypeFilter} value={actionTypeFilter}>
+              <Select
+                onValueChange={(value) => {
+                  setActionTypeFilter(value)
+                  setPage(1)
+                }}
+                value={actionTypeFilter}
+              >
                 <SelectTrigger className="min-w-[200px]" id="action-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -486,7 +860,13 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="resource-type">Resource Type</Label>
-              <Select onValueChange={setResourceTypeFilter} value={resourceTypeFilter}>
+              <Select
+                onValueChange={(value) => {
+                  setResourceTypeFilter(value)
+                  setPage(1)
+                }}
+                value={resourceTypeFilter}
+              >
                 <SelectTrigger className="min-w-[180px]" id="resource-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -502,7 +882,13 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select onValueChange={setStatusFilter} value={statusFilter}>
+              <Select
+                onValueChange={(value) => {
+                  setStatusFilter(value)
+                  setPage(1)
+                }}
+                value={statusFilter}
+              >
                 <SelectTrigger className="min-w-[180px]" id="status">
                   <SelectValue />
                 </SelectTrigger>
@@ -518,7 +904,13 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="date-range">Date Range</Label>
-              <Select onValueChange={setDateRange} value={dateRange}>
+              <Select
+                onValueChange={(value) => {
+                  setDateRange(value)
+                  setPage(1)
+                }}
+                value={dateRange}
+              >
                 <SelectTrigger className="min-w-[180px]" id="date-range">
                   <SelectValue />
                 </SelectTrigger>
@@ -529,9 +921,41 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
                   <SelectItem value="7d">Last 7 Days</SelectItem>
                   <SelectItem value="30d">Last 30 Days</SelectItem>
                   <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="custom">Custom…</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {dateRange === 'custom' && (
+              <>
+                <div className="mx-4 flex flex-col space-y-2">
+                  <Label htmlFor="custom-start">Start</Label>
+                  <Input
+                    id="custom-start"
+                    max={customEnd || undefined}
+                    onChange={(e) => {
+                      setCustomStart(e.target.value)
+                      setPage(1)
+                    }}
+                    type="datetime-local"
+                    value={customStart}
+                  />
+                </div>
+                <div className="mx-4 flex flex-col space-y-2">
+                  <Label htmlFor="custom-end">End</Label>
+                  <Input
+                    id="custom-end"
+                    min={customStart || undefined}
+                    onChange={(e) => {
+                      setCustomEnd(e.target.value)
+                      setPage(1)
+                    }}
+                    type="datetime-local"
+                    value={customEnd}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="mx-6 mr-0 flex flex-col space-y-2">
               <Label htmlFor="per-page">Per Page</Label>
@@ -570,8 +994,8 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
 
       {/* Logs Table */}
       <TablePane
-        description={`Showing ${stats.total} logs · Page ${currentPage} of ${totalPages}`}
-        empty={stats.total === 0 && !isError}
+        description={`Showing ${logs.length} of ${totalCount} logs · Page ${currentPage} of ${totalPages}`}
+        empty={logs.length === 0 && !isError}
         emptyMessage="No audit logs found"
         error={
           isError
@@ -718,10 +1142,10 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
           </TableBody>
         </Table>
 
-        {stats.total > 0 && (
+        {totalCount > 0 && (
           <div className="mt-4 flex items-center justify-between">
             <div className="text-muted-foreground text-sm">
-              Showing {startIdx + 1}–{endIdx} of {stats.total} logs
+              Showing {firstRowIndex === 0 ? 0 : firstRowIndex}–{lastRowIndex} of {totalCount} logs
             </div>
             <div className="flex gap-2">
               <Button

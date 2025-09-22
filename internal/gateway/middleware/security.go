@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -99,19 +98,9 @@ func CSRF() gin.HandlerFunc {
 
 // FilteredLogger creates a logger that suppresses health check logs
 func FilteredLogger() gin.HandlerFunc {
-	return gin.LoggerWithConfig(gin.LoggerConfig{
-		SkipPaths: []string{"/.gateway/api/health"},
-		Formatter: func(params gin.LogFormatterParams) string {
-			// Custom log format
-			return fmt.Sprintf("%s %s %d %s %s\n",
-				params.Method,
-				params.Path,
-				params.StatusCode,
-				params.Latency,
-				params.ClientIP,
-			)
-		},
-	})
+	return func(c *gin.Context) {
+		c.Next()
+	}
 }
 
 // RateLimit creates rate limiting middleware

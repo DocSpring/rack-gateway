@@ -108,8 +108,11 @@ func New(dsn string) (*Database, error) {
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
 func NewFromEnv() (*Database, error) {
-	// Check CGW_DATABASE_URL first (from Convox resource), then fall back to DATABASE_URL
+	// A few variations supported to support different Convox resource names
 	if dsn := os.Getenv("CGW_DATABASE_URL"); dsn != "" {
+		return New(dsn)
+	}
+	if dsn := os.Getenv("GATEWAY_DATABASE_URL"); dsn != "" {
 		return New(dsn)
 	}
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
@@ -583,25 +586,25 @@ func (d *Database) GetAllowDestructiveActions() (bool, error) {
 // GetAuditLogs retrieves audit logs with optional filters
 func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([]*AuditLog, error) {
 	query := `
-        SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
-               COALESCE(command, ''), COALESCE(resource, ''), COALESCE(resource_type, ''), COALESCE(details, ''),
-               COALESCE(ip_address, ''), COALESCE(user_agent, ''), status, COALESCE(rbac_decision, ''), COALESCE(http_status, 0), response_time_ms
-        FROM audit_logs
+        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "action_type", "action",
+               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
+               COALESCE("ip_address", ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms"
+        FROM "audit_logs"
         WHERE 1=1
     `
 	args := []interface{}{}
 
 	if userEmail != "" {
-		query += " AND user_email = ?"
+		query += " AND \"user_email\" = ?"
 		args = append(args, userEmail)
 	}
 
 	if !since.IsZero() {
-		query += " AND timestamp >= ?"
+		query += " AND \"timestamp\" >= ?"
 		args = append(args, since.UTC())
 	}
 
-	query += " ORDER BY timestamp DESC"
+	query += " ORDER BY \"timestamp\" DESC"
 
 	if limit > 0 {
 		query += " LIMIT ?"
@@ -641,6 +644,7 @@ type AuditLogFilters struct {
 	ResourceType string
 	Search       string
 	Since        time.Time
+	Until        time.Time
 	Limit        int
 	Offset       int
 }
@@ -659,37 +663,41 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	args := []interface{}{}
 
 	if filters.UserEmail != "" {
-		whereClause += " AND user_email = ?"
+		whereClause += " AND \"user_email\" = ?"
 		args = append(args, filters.UserEmail)
 	}
 	if filters.Status != "" && filters.Status != "all" {
-		whereClause += " AND status = ?"
+		whereClause += " AND \"status\" = ?"
 		args = append(args, filters.Status)
 	}
 	if filters.ActionType != "" && filters.ActionType != "all" {
-		whereClause += " AND action_type = ?"
+		whereClause += " AND \"action_type\" = ?"
 		args = append(args, filters.ActionType)
 	}
 	if filters.ResourceType != "" && filters.ResourceType != "all" {
-		whereClause += " AND resource_type = ?"
+		whereClause += " AND \"resource_type\" = ?"
 		args = append(args, filters.ResourceType)
 	}
 	if !filters.Since.IsZero() {
-		whereClause += " AND timestamp >= ?"
+		whereClause += " AND \"timestamp\" >= ?"
 		args = append(args, filters.Since.UTC())
+	}
+	if !filters.Until.IsZero() {
+		whereClause += " AND \"timestamp\" <= ?"
+		args = append(args, filters.Until.UTC())
 	}
 
 	// Full-text search across multiple columns
 	if filters.Search != "" {
 		whereClause += ` AND (
-			user_email ILIKE ? OR
-			user_name ILIKE ? OR
-			action ILIKE ? OR
-			resource ILIKE ? OR
-			details ILIKE ? OR
-			ip_address ILIKE ? OR
-			user_agent ILIKE ?
-		)`
+            "user_email" ILIKE ? OR
+            "user_name" ILIKE ? OR
+            "action" ILIKE ? OR
+            "resource" ILIKE ? OR
+            "details" ILIKE ? OR
+            "ip_address" ILIKE ? OR
+            "user_agent" ILIKE ?
+        )`
 		searchPattern := "%" + filters.Search + "%"
 		for i := 0; i < 7; i++ {
 			args = append(args, searchPattern)
@@ -697,20 +705,20 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	}
 
 	// Get total count for pagination - build query safely
-	countQuery := "SELECT COUNT(*) FROM audit_logs " + whereClause
+	countQuery := "SELECT COUNT(*) FROM \"audit_logs\" " + whereClause
 	var total int
-	if err := d.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if err := d.queryRow(countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count audit logs: %w", err)
 	}
 
 	// Get paginated results - build query safely
 	query := `
-		SELECT id, timestamp, user_email, COALESCE(user_name, ''), action_type, action,
-		       COALESCE(command, ''), COALESCE(resource, ''), COALESCE(resource_type, ''),
-		       COALESCE(details, ''), COALESCE(ip_address, ''), COALESCE(user_agent, ''),
-		       status, COALESCE(rbac_decision, ''), COALESCE(http_status, 0), response_time_ms
-		FROM audit_logs ` + whereClause + `
-		ORDER BY timestamp DESC
+        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "action_type", "action",
+               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
+               COALESCE("details", ''), COALESCE("ip_address", ''), COALESCE("user_agent", ''),
+               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms"
+        FROM "audit_logs" ` + whereClause + `
+        ORDER BY "timestamp" DESC
 		LIMIT ? OFFSET ?`
 
 	args = append(args, filters.Limit, filters.Offset)

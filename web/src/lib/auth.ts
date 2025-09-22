@@ -88,7 +88,7 @@ class AuthService {
 
   // Get stored token
   getToken(): string | null {
-    return Cookies.get('gateway_token') || null
+    return Cookies.get('session_token') || null
   }
 }
 

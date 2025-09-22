@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -34,6 +35,12 @@ type roleOption struct {
 	Description string   `json:"description"`
 	Permissions []string `json:"permissions"`
 }
+
+var (
+	errInvalidStartTime = errors.New("invalid start time")
+	errInvalidEndTime   = errors.New("invalid end time")
+	errInvalidTimeRange = errors.New("end time must be after start time")
+)
 
 // NewAdminHandler creates a new admin handler
 func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config) *AdminHandler {
@@ -231,44 +238,19 @@ func (h *AdminHandler) ListRoles(c *gin.Context) {
 
 // ListAuditLogs returns audit logs
 func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
-	// Parse query parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "100"))
-	userFilter := c.Query("user")
-	statusFilter := c.Query("status")
-	actionTypeFilter := c.Query("action_type")
-	resourceTypeFilter := c.Query("resource_type")
-	searchFilter := c.Query("search")
-	rangeFilter := c.DefaultQuery("range", "24h")
-
-	// Calculate time range
-	var since time.Time
-	switch rangeFilter {
-	case "1h":
-		since = time.Now().Add(-1 * time.Hour)
-	case "24h":
-		since = time.Now().Add(-24 * time.Hour)
-	case "7d":
-		since = time.Now().Add(-7 * 24 * time.Hour)
-	case "30d":
-		since = time.Now().Add(-30 * 24 * time.Hour)
-	case "all":
-		// No time filter
-	default:
-		since = time.Now().Add(-24 * time.Hour)
-	}
-
-	// Use proper SQL filtering in the database
-	offset := (page - 1) * limit
-	filters := db.AuditLogFilters{
-		UserEmail:    userFilter,
-		Status:       statusFilter,
-		ActionType:   actionTypeFilter,
-		ResourceType: resourceTypeFilter,
-		Search:       searchFilter,
-		Since:        since,
-		Limit:        limit,
-		Offset:       offset,
+	filters, page, limit, err := h.auditFiltersFromRequest(c)
+	if err != nil {
+		switch {
+		case errors.Is(err, errInvalidStartTime):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start time"})
+		case errors.Is(err, errInvalidEndTime):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end time"})
+		case errors.Is(err, errInvalidTimeRange):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "end time must be after start time"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit logs"})
+		}
+		return
 	}
 
 	logs, total, err := h.database.GetAuditLogsPaged(filters)
@@ -287,25 +269,27 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 
 // ExportAuditLogs exports audit logs as CSV
 func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
-	rangeFilter := c.DefaultQuery("range", "24h")
-
-	var since time.Time
-	switch rangeFilter {
-	case "1h":
-		since = time.Now().Add(-1 * time.Hour)
-	case "24h":
-		since = time.Now().Add(-24 * time.Hour)
-	case "7d":
-		since = time.Now().Add(-7 * 24 * time.Hour)
-	case "30d":
-		since = time.Now().Add(-30 * 24 * time.Hour)
-	case "all":
-		// No time filter
-	default:
-		since = time.Now().Add(-24 * time.Hour)
+	filters, _, _, err := h.auditFiltersFromRequest(c)
+	if err != nil {
+		switch {
+		case errors.Is(err, errInvalidStartTime):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start time"})
+		case errors.Is(err, errInvalidEndTime):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end time"})
+		case errors.Is(err, errInvalidTimeRange):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "end time must be after start time"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+		}
+		return
 	}
 
-	logs, err := h.database.GetAuditLogs("", since, 10000) // Max 10k for export
+	if filters.Limit <= 0 || filters.Limit > 10000 {
+		filters.Limit = 10000
+	}
+	filters.Offset = 0
+
+	logs, _, err := h.database.GetAuditLogsPaged(filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
 		return
@@ -697,4 +681,167 @@ func (h *AdminHandler) GetTokenPermissionMetadata(c *gin.Context) {
 		"user_roles":          userRoles,
 		"user_permissions":    userPerms,
 	})
+}
+
+func parseAuditTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+	}
+
+	var lastErr error
+	for _, layout := range layouts {
+		if layout == "2006-01-02T15:04" || layout == "2006-01-02T15:04:05" {
+			if t, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+				return t.UTC(), nil
+			} else {
+				lastErr = err
+			}
+			continue
+		}
+		if t, err := time.Parse(layout, value); err == nil {
+			return t.UTC(), nil
+		} else {
+			lastErr = err
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("unable to parse time %q", value)
+	}
+	return time.Time{}, lastErr
+}
+
+func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilters, int, int, error) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+
+	userFilter := c.Query("user")
+	if userFilter == "" {
+		if userIDParam := c.Query("user_id"); userIDParam != "" {
+			if userID, convErr := strconv.ParseInt(userIDParam, 10, 64); convErr == nil {
+				user, lookupErr := h.database.GetUserByID(userID)
+				if lookupErr != nil {
+					return db.AuditLogFilters{}, 0, 0, lookupErr
+				}
+				if user != nil {
+					userFilter = user.Email
+				}
+			}
+		}
+	}
+
+	statusFilter := c.Query("status")
+	actionTypeFilter := c.Query("action_type")
+	resourceTypeFilter := c.Query("resource_type")
+	searchFilter := c.Query("search")
+	rangeFilter := strings.TrimSpace(c.DefaultQuery("range", "24h"))
+	startParam := c.Query("start")
+	endParam := c.Query("end")
+
+	var (
+		since      time.Time
+		until      time.Time
+		hasStart   bool
+		hasEnd     bool
+		startError error
+		endError   error
+	)
+
+	if strings.TrimSpace(startParam) != "" {
+		parsed, parseErr := parseAuditTime(startParam)
+		if parseErr != nil {
+			startError = parseErr
+		} else {
+			since = parsed
+			hasStart = true
+		}
+	}
+	if strings.TrimSpace(endParam) != "" {
+		parsed, parseErr := parseAuditTime(endParam)
+		if parseErr != nil {
+			endError = parseErr
+		} else {
+			until = parsed
+			hasEnd = true
+		}
+	}
+
+	if startError != nil {
+		return db.AuditLogFilters{}, 0, 0, errInvalidStartTime
+	}
+	if endError != nil {
+		return db.AuditLogFilters{}, 0, 0, errInvalidEndTime
+	}
+	if hasStart && hasEnd && until.Before(since) {
+		return db.AuditLogFilters{}, 0, 0, errInvalidTimeRange
+	}
+
+	if !hasStart {
+		now := time.Now()
+		switch rangeFilter {
+		case "15m":
+			since = now.Add(-15 * time.Minute)
+			hasStart = true
+		case "1h":
+			since = now.Add(-1 * time.Hour)
+			hasStart = true
+		case "24h":
+			since = now.Add(-24 * time.Hour)
+			hasStart = true
+		case "7d":
+			since = now.Add(-7 * 24 * time.Hour)
+			hasStart = true
+		case "30d":
+			since = now.Add(-30 * 24 * time.Hour)
+			hasStart = true
+		case "all":
+			// no lower bound
+		case "custom":
+			// rely on explicit start/end parameters
+		default:
+			// fallback to 24h if range is unknown (legacy behaviour)
+			since = now.Add(-24 * time.Hour)
+			hasStart = true
+		}
+	} else {
+		// Ensure "custom" is reflected for URL sync if explicit start is provided without range
+		if rangeFilter == "" {
+			rangeFilter = "custom"
+		}
+	}
+
+	filters := db.AuditLogFilters{
+		UserEmail:    userFilter,
+		Status:       statusFilter,
+		ActionType:   actionTypeFilter,
+		ResourceType: resourceTypeFilter,
+		Search:       searchFilter,
+		Limit:        limit,
+		Offset:       (page - 1) * limit,
+	}
+	if filters.Offset < 0 {
+		filters.Offset = 0
+	}
+	if hasStart {
+		filters.Since = since
+	}
+	if hasEnd {
+		filters.Until = until
+	}
+
+	return filters, page, limit, nil
 }

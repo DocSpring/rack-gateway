@@ -45,7 +45,7 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 		originalAuth := r.Header.Get("Authorization")
 		authHeader := originalAuth
 		if authHeader == "" {
-			if c, err := r.Cookie("gateway_token"); err == nil && c.Value != "" {
+			if c, err := r.Cookie("session_token"); err == nil && c.Value != "" {
 				authHeader = "Bearer " + c.Value
 				r.Header.Set("X-Auth-Source", "cookie")
 			}

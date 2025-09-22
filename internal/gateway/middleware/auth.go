@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -23,7 +24,7 @@ func JWTAuth(jwtManager *auth.JWTManager, rbacManager rbac.RBACManager) gin.Hand
 			}
 		} else {
 			// Try cookie for web sessions
-			if cookie, err := c.Cookie("convox-gateway-token"); err == nil {
+			if cookie, err := c.Cookie("session_token"); err == nil && cookie != "" {
 				token = cookie
 			}
 		}
@@ -50,10 +51,19 @@ func JWTAuth(jwtManager *auth.JWTManager, rbacManager rbac.RBACManager) gin.Hand
 			return
 		}
 
-		// Store user in context
+		// Store user in both gin context and request context for downstream handlers
 		c.Set("user_email", claims.Email)
 		c.Set("user_name", user.Name)
 		c.Set("user_roles", user.Roles)
+
+		authUser := &auth.AuthUser{
+			Email:      claims.Email,
+			Name:       user.Name,
+			Roles:      user.Roles,
+			IsAPIToken: false,
+		}
+		reqWithUser := c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
+		c.Request = reqWithUser
 
 		c.Next()
 	}

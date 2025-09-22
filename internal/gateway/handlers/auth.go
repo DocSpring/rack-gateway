@@ -4,25 +4,37 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
 
+// OAuthProvider captures the behaviour needed from the OAuth handler.
+type OAuthProvider interface {
+	StartLogin() (*auth.LoginStartResponse, error)
+	StartWebLogin() string
+	CompleteLogin(code, state, codeVerifier string) (*auth.LoginResponse, error)
+}
+
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	oauth    *auth.OAuthHandler
+	oauth    OAuthProvider
 	database *db.Database
+	config   *config.Config
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(oauth *auth.OAuthHandler, database *db.Database) *AuthHandler {
+func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{
 		oauth:    oauth,
 		database: database,
+		config:   cfg,
 	}
 }
 
@@ -118,16 +130,18 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		return
 	}
 
-	// Set JWT cookie for web sessions
+	secure := h.cookieSecure()
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
-		"gateway_token",
+		"session_token",
 		resp.Token,
 		30*24*60*60, // 30 days
 		"/",
 		"",
-		true, // secure in production
-		true, // httpOnly
+		secure,
+		true,
 	)
+	c.SetSameSite(http.SameSiteDefaultMode)
 
 	// Audit successful login
 	if h.database != nil {
@@ -147,16 +161,18 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 // WebLogout handles logout for web sessions
 func (h *AuthHandler) WebLogout(c *gin.Context) {
-	// Clear the auth cookie
+	secure := h.cookieSecure()
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
-		"convox-gateway-token",
+		"session_token",
 		"",
 		-1,
 		"/",
 		"",
-		true,
+		secure,
 		true,
 	)
+	c.SetSameSite(http.SameSiteDefaultMode)
 
 	// Audit logout
 	if h.database != nil {
@@ -189,6 +205,22 @@ func (h *AuthHandler) GetCSRFToken(c *gin.Context) {
 	)
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func (h *AuthHandler) cookieSecure() bool {
+	secure := true
+	if h != nil && h.config != nil && h.config.DevMode {
+		secure = false
+	}
+	if v := strings.TrimSpace(os.Getenv("COOKIE_SECURE")); v != "" {
+		lower := strings.ToLower(v)
+		if lower == "false" || lower == "0" {
+			secure = false
+		} else if lower == "true" || lower == "1" {
+			secure = true
+		}
+	}
+	return secure
 }
 
 // Helper to audit login attempts

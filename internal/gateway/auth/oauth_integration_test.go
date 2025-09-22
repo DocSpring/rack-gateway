@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 )
 
 func TestOAuthEndpoint_UsesCustomBaseURL(t *testing.T) {
@@ -27,16 +27,16 @@ func TestOAuthEndpoint_UsesCustomBaseURL(t *testing.T) {
 		jwtManager,
 	)
 
-	// Set up HTTP handler
-	r := chi.NewRouter()
-	r.Post("/login/start", func(w http.ResponseWriter, r *http.Request) {
+	// Set up HTTP handler using Gin to match new router implementation
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/login/start", func(c *gin.Context) {
 		resp, err := handler.StartLogin()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		c.JSON(http.StatusOK, resp)
 	})
 
 	// Create test server

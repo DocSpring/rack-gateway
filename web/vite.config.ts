@@ -2,12 +2,26 @@ import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
   // Serve UI consistently under /.gateway/web/ in all envs
   base: '/.gateway/web/',
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    viteCompression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      filter: (file) => !(file.endsWith('.gz') || file.endsWith('.br')),
+    }),
+    viteCompression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      filter: (file) => !(file.endsWith('.gz') || file.endsWith('.br')),
+    }),
+  ],
   build:
     process.env.VITE_FAST_BUILD === 'true'
       ? {

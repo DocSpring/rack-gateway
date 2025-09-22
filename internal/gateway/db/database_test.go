@@ -163,6 +163,119 @@ func TestDatabase(t *testing.T) {
 	})
 }
 
+func TestGetAuditLogsPaged(t *testing.T) {
+	db := dbtest.NewDatabase(t)
+	defer db.Close()
+	dbtest.Reset(t, db)
+
+	logs := []*gwdb.AuditLog{
+		{
+			UserEmail:      "admin@example.com",
+			UserName:       "Admin User",
+			ActionType:     "convox",
+			Action:         "app.list",
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     200,
+			ResponseTimeMs: 10,
+		},
+		{
+			UserEmail:      "viewer@example.com",
+			UserName:       "Viewer User",
+			ActionType:     "tokens",
+			Action:         "api_token.create",
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     201,
+			Resource:       "token123",
+			Details:        `{"name":"Example"}`,
+			ResponseTimeMs: 20,
+		},
+		{
+			UserEmail:      "viewer@example.com",
+			UserName:       "Viewer User",
+			ActionType:     "tokens",
+			Action:         "api_token.delete",
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     200,
+			Resource:       "token123",
+			Details:        `{"name":"Example"}`,
+			ResponseTimeMs: 15,
+		},
+	}
+
+	for _, log := range logs {
+		require.NoError(t, db.CreateAuditLog(log))
+	}
+
+	base := time.Now().UTC()
+	updates := []struct {
+		action string
+		ts     time.Time
+	}{
+		{"app.list", base.Add(-48 * time.Hour)},
+		{"api_token.create", base.Add(-2 * time.Hour)},
+		{"api_token.delete", base.Add(-1 * time.Hour)},
+	}
+	for _, upd := range updates {
+		_, err := db.DB().Exec(`UPDATE audit_logs SET timestamp = $1 WHERE action = $2`, upd.ts, upd.action)
+		require.NoError(t, err)
+	}
+
+	filters := gwdb.AuditLogFilters{
+		Status:     "success",
+		ActionType: "tokens",
+		Since:      base.Add(-3 * time.Hour),
+		Limit:      50,
+	}
+	paged, total, err := db.GetAuditLogsPaged(filters)
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+	assert.Len(t, paged, 2)
+
+	filters.Search = "Example"
+	paged, total, err = db.GetAuditLogsPaged(filters)
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+
+	filters.Search = "Nonexistent"
+	paged, total, err = db.GetAuditLogsPaged(filters)
+	require.NoError(t, err)
+	assert.Equal(t, 0, total)
+	assert.Len(t, paged, 0)
+
+	timeFiltered, timeTotal, err := db.GetAuditLogsPaged(gwdb.AuditLogFilters{
+		Since: base.Add(-3 * time.Hour),
+		Until: base.Add(-90 * time.Minute),
+		Limit: 50,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, timeTotal)
+	require.Len(t, timeFiltered, 1)
+	assert.Equal(t, "api_token.create", timeFiltered[0].Action)
+}
+
+func TestAuditLogIndexes(t *testing.T) {
+	db := dbtest.NewDatabase(t)
+	defer db.Close()
+	dbtest.Reset(t, db)
+
+	indexes := []string{
+		"idx_audit_logs_status",
+		"idx_audit_logs_resource_type",
+		"idx_audit_logs_user_timestamp",
+		"idx_audit_logs_status_action_resource_ts",
+	}
+
+	for _, idx := range indexes {
+		var exists bool
+		err := db.DB().QueryRow(`SELECT to_regclass($1) IS NOT NULL`, idx).Scan(&exists)
+		require.NoError(t, err)
+		assert.True(t, exists, "expected index %s to exist", idx)
+	}
+}
+
 func TestDatabaseInitialization(t *testing.T) {
 	t.Run("ReinitializesCorrectly", func(t *testing.T) {
 		db1, err := gwdb.NewFromEnv()

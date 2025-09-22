@@ -6,6 +6,8 @@ import { AuditPage } from './audit-page'
 
 // Hoisted regex for Biome performance rule
 const FAILED_LOAD_REGEX = /Failed to load audit logs/i
+const PAGE_FIVE_REGEX = /page=5/
+const PAGE_THREE_REGEX = /page=3/
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -90,14 +92,26 @@ const createWrapper = () => {
   )
 }
 
+const makeResponse = (
+  logs: typeof mockLogs,
+  options?: Partial<{ total: number; page: number; limit: number }>
+) => ({
+  logs,
+  total: options?.total ?? logs.length,
+  page: options?.page ?? 1,
+  limit: options?.limit ?? 100,
+})
+
 describe('AuditPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    window.history.replaceState(null, '', '/')
   })
 
   describe('Audit Log Display', () => {
     it('renders audit logs table', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -115,7 +129,7 @@ describe('AuditPage', () => {
     })
 
     it('displays status badges correctly', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -130,7 +144,7 @@ describe('AuditPage', () => {
     })
 
     it('shows empty state when no logs', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce([])
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse([]))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -143,7 +157,7 @@ describe('AuditPage', () => {
 
   describe('Statistics', () => {
     it('calculates and displays statistics correctly', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -169,8 +183,8 @@ describe('AuditPage', () => {
     it('filters by action type', async () => {
       // Mock initial load and filtered load
       vi.mocked(api.get)
-        .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter((l) => l.action_type === 'auth'))
+        .mockResolvedValueOnce(makeResponse(mockLogs))
+        .mockResolvedValueOnce(makeResponse(mockLogs.filter((l) => l.action_type === 'auth')))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -198,8 +212,8 @@ describe('AuditPage', () => {
     it('filters by resource type', async () => {
       // Mock initial load and filtered load
       vi.mocked(api.get)
-        .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter((l) => l.resource_type === 'user'))
+        .mockResolvedValueOnce(makeResponse(mockLogs))
+        .mockResolvedValueOnce(makeResponse(mockLogs.filter((l) => l.resource_type === 'user')))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -227,8 +241,8 @@ describe('AuditPage', () => {
     it('filters by status', async () => {
       // Mock initial load and filtered load
       vi.mocked(api.get)
-        .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter((l) => l.status === 'failed'))
+        .mockResolvedValueOnce(makeResponse(mockLogs))
+        .mockResolvedValueOnce(makeResponse(mockLogs.filter((l) => l.status === 'failed')))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -255,7 +269,9 @@ describe('AuditPage', () => {
 
     it('filters by date range', async () => {
       // Mock initial load and filtered load
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(makeResponse(mockLogs))
+        .mockResolvedValueOnce(makeResponse(mockLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -283,8 +299,8 @@ describe('AuditPage', () => {
     it('searches by text', async () => {
       // Mock initial load and search results
       vi.mocked(api.get)
-        .mockResolvedValueOnce(mockLogs)
-        .mockResolvedValueOnce(mockLogs.filter((l) => l.user_email.includes('admin')))
+        .mockResolvedValueOnce(makeResponse(mockLogs))
+        .mockResolvedValueOnce(makeResponse(mockLogs.filter((l) => l.user_email.includes('admin'))))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -307,9 +323,145 @@ describe('AuditPage', () => {
     })
   })
 
+  describe('URL synchronization', () => {
+    it('respects the page query param on initial load', async () => {
+      window.history.replaceState(null, '', '/?page=3')
+      vi.mocked(api.get).mockResolvedValueOnce(
+        makeResponse(mockLogs, { total: 350, page: 3, limit: 25 })
+      )
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('page=3'))
+      })
+
+      await waitFor(() => {
+        expect(window.location.search).toBe('?page=3')
+      })
+    })
+
+    it('clamps the page to the available total when the response has fewer pages', async () => {
+      window.history.replaceState(null, '', '/?page=5')
+      vi.mocked(api.get)
+        .mockResolvedValueOnce(makeResponse(mockLogs, { total: 60, page: 5, limit: 25 }))
+        .mockResolvedValueOnce(makeResponse(mockLogs, { total: 60, page: 3, limit: 25 }))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_FIVE_REGEX))
+      })
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_THREE_REGEX))
+      })
+
+      await waitFor(() => {
+        expect(window.location.search).toBe('?page=3')
+      })
+    })
+
+    it('syncs filters into the URL search params', async () => {
+      vi.mocked(api.get).mockImplementation(async () => makeResponse(mockLogs))
+      const replaceSpy = vi.spyOn(window.history, 'replaceState')
+      const Wrapper = createWrapper()
+      try {
+        render(<AuditPage />, { wrapper: Wrapper })
+
+        await waitFor(() => {
+          expect(api.get).toHaveBeenCalled()
+        })
+
+        const actionTypeSelect = document.getElementById('action-type')
+        if (!actionTypeSelect) {
+          throw new Error('Action type select not found')
+        }
+        fireEvent.click(actionTypeSelect)
+        fireEvent.click(screen.getByText('Authentication'))
+
+        await waitFor(() => {
+          expect(window.location.search).toBe('?action_type=auth')
+        })
+      } finally {
+        replaceSpy.mockRestore()
+      }
+    })
+  })
+
+  describe('Custom range', () => {
+    it('applies custom bounds to API requests and URL params', async () => {
+      vi.mocked(api.get).mockResolvedValue(makeResponse(mockLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledTimes(1)
+      })
+
+      const dateRangeSelect = document.getElementById('date-range')
+      if (!dateRangeSelect) {
+        throw new Error('Date range select not found')
+      }
+      fireEvent.click(dateRangeSelect)
+      fireEvent.click(screen.getByText('Custom…'))
+
+      const startInput = screen.getByLabelText('Start') as HTMLInputElement
+      const endInput = screen.getByLabelText('End') as HTMLInputElement
+
+      fireEvent.change(startInput, { target: { value: '2025-01-15T09:30' } })
+      fireEvent.change(endInput, { target: { value: '2025-01-16T11:15' } })
+
+      await waitFor(() => {
+        const lastCall = vi.mocked(api.get).mock.calls.at(-1)?.[0]
+        expect(lastCall).toBeDefined()
+        const decoded = decodeURIComponent(String(lastCall))
+        expect(decoded).toContain('range=custom')
+        expect(decoded).toContain('start=')
+        expect(decoded).toContain('end=')
+      })
+
+      expect(window.location.search).toContain('range=custom')
+      expect(window.location.search).toContain('start=')
+      expect(window.location.search).toContain('end=')
+    })
+
+    it('hydrates inputs from custom range query params', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        '/?range=custom&start=2025-01-10T12:00&end=2025-01-11T08:45'
+      )
+      vi.mocked(api.get).mockResolvedValue(makeResponse(mockLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalled()
+      })
+
+      const startInput = screen.getByLabelText('Start') as HTMLInputElement
+      const endInput = screen.getByLabelText('End') as HTMLInputElement
+
+      expect(startInput.value).toBe('2025-01-10T12:00')
+      expect(endInput.value).toBe('2025-01-11T08:45')
+
+      const lastCall = vi.mocked(api.get).mock.calls.at(-1)?.[0]
+      expect(lastCall).toBeDefined()
+      const decoded = decodeURIComponent(String(lastCall))
+      expect(decoded).toContain('range=custom')
+      expect(decoded).toContain('start=')
+      expect(decoded).toContain('end=')
+    })
+  })
+
   describe('Actions', () => {
     it('refreshes data when clicking refresh button', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -320,7 +472,7 @@ describe('AuditPage', () => {
 
       // Clear mock to track new calls
       vi.mocked(api.get).mockClear()
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       // Click refresh
       fireEvent.click(screen.getByText('Refresh'))
@@ -331,7 +483,7 @@ describe('AuditPage', () => {
     })
 
     it('exports CSV when clicking export button', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       // Mock document methods for download
       const createElementSpy = vi.spyOn(document, 'createElement')
@@ -376,7 +528,7 @@ describe('AuditPage', () => {
 
   describe('IP Addresses', () => {
     it('displays IP addresses', async () => {
-      vi.mocked(api.get).mockResolvedValueOnce(mockLogs)
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })

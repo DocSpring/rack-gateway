@@ -378,3 +378,5 @@ The integration tests create backups of the real Convox CLI configuration to pre
 ## Important Instructions
 
 Don't leave old code lying around. When you see it, tidy it.
+
+- We never maintain backwards-compatibility shims or legacy fallbacks. Replace the old path outright.

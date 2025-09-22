@@ -59,11 +59,11 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database)
+	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config)
 	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config)
 	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
-	staticHandler := handlers.NewStaticHandler()
+	staticHandler := handlers.NewStaticHandler(cfg.Config)
 	healthHandler := handlers.NewHealthHandler()
 
 	// Root redirect
