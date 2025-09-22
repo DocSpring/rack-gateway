@@ -11,8 +11,9 @@ import (
 func TestHostValidatorAllowsExactDomain(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(SecurityHeaders(&config.Config{Domain: "gateway.example.com", Port: "8447"}))
-	router.Use(HostValidator("gateway.example.com"))
+	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
+	router.Use(SecurityHeaders(cfg))
+	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
 	})
@@ -32,8 +33,9 @@ func TestHostValidatorAllowsExactDomain(t *testing.T) {
 func TestHostValidatorRejectsSubstringDomain(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(SecurityHeaders(&config.Config{Domain: "gateway.example.com", Port: "8447"}))
-	router.Use(HostValidator("gateway.example.com"))
+	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
+	router.Use(SecurityHeaders(cfg))
+	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
 	})
@@ -53,8 +55,9 @@ func TestHostValidatorRejectsSubstringDomain(t *testing.T) {
 func TestHostValidatorRejectsMismatchedOrigin(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(SecurityHeaders(&config.Config{Domain: "gateway.example.com", Port: "8447"}))
-	router.Use(HostValidator("gateway.example.com"))
+	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
+	router.Use(SecurityHeaders(cfg))
+	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
 	})
@@ -76,8 +79,9 @@ func TestHostValidatorAllowsDevLocalhost(t *testing.T) {
 	defer gin.SetMode(gin.ReleaseMode)
 
 	router := gin.New()
-	router.Use(SecurityHeaders(&config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true}))
-	router.Use(HostValidator("gateway.example.com"))
+	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true}
+	router.Use(SecurityHeaders(cfg))
+	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
 	})

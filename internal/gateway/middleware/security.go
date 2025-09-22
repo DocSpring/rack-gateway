@@ -22,14 +22,15 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 	}
 
 	var allowedHosts []string
+	var baseHost string
 	if cfg != nil {
-		host := canonicalHost(cfg.Domain)
-		if host != "" {
-			allowedHosts = append(allowedHosts, host)
-			port := strings.TrimSpace(cfg.Port)
-			if port != "" && port != "80" && port != "443" {
-				allowedHosts = append(allowedHosts, fmt.Sprintf("%s:%s", host, port))
-			}
+		baseHost = canonicalHost(cfg.Domain)
+	}
+	if !isDev && baseHost != "" {
+		allowedHosts = append(allowedHosts, baseHost)
+		port := strings.TrimSpace(cfg.Port)
+		if port != "" && port != "80" && port != "443" {
+			allowedHosts = append(allowedHosts, fmt.Sprintf("%s:%s", baseHost, port))
 		}
 	}
 
@@ -56,49 +57,55 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
 		IsDevelopment:         isDev,
+		BadHostHandler: func(c *gin.Context) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
+			c.Abort()
+		},
 	}
 
 	return securemw.New(secCfg)
 }
 
-// HostValidator validates Host and Origin headers
-func HostValidator(allowedDomain string) gin.HandlerFunc {
-	allowedHost := canonicalHost(allowedDomain)
+// OriginValidator validates the Origin header for cross-origin requests.
+func OriginValidator(cfg *config.Config) gin.HandlerFunc {
+	isDev := gin.Mode() == gin.DebugMode
+	if cfg != nil && cfg.DevMode {
+		isDev = true
+	}
+
+	allowedHost := ""
+	if cfg != nil {
+		allowedHost = canonicalHost(cfg.Domain)
+	}
 
 	return func(c *gin.Context) {
-		reqHost := canonicalHost(c.Request.Host)
-		if gin.Mode() == gin.DebugMode && isLocalHost(reqHost) {
+		if allowedHost == "" {
 			c.Next()
 			return
 		}
 
-		if allowedHost != "" {
-			if reqHost == "" || !strings.EqualFold(reqHost, allowedHost) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
-				c.Abort()
-				return
-			}
+		origin := c.GetHeader("Origin")
+		if origin == "" {
+			c.Next()
+			return
 		}
 
-		origin := c.GetHeader("Origin")
-		if origin != "" && allowedHost != "" {
-			originURL, err := url.Parse(origin)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
-				c.Abort()
-				return
-			}
+		originURL, err := url.Parse(origin)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
+			c.Abort()
+			return
+		}
 
-			originHost := canonicalHost(originURL.Host)
-			if gin.Mode() == gin.DebugMode && isLocalHost(originHost) {
-				c.Next()
-				return
-			}
-			if originHost == "" || !strings.EqualFold(originHost, allowedHost) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
-				c.Abort()
-				return
-			}
+		originHost := canonicalHost(originURL.Host)
+		if isDev && isLocalHost(originHost) {
+			c.Next()
+			return
+		}
+		if originHost == "" || !strings.EqualFold(originHost, allowedHost) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
+			c.Abort()
+			return
 		}
 
 		c.Next()
