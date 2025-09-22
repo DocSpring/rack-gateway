@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
@@ -27,6 +28,7 @@ type AdminHandler struct {
 	tokenService *token.Service
 	emailSender  email.Sender
 	config       *config.Config
+	rackCertMgr  *rackcert.Manager
 }
 
 type roleOption struct {
@@ -43,13 +45,14 @@ var (
 )
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config) *AdminHandler {
+func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager) *AdminHandler {
 	return &AdminHandler{
 		rbac:         rbac,
 		database:     database,
 		tokenService: tokenService,
 		emailSender:  emailSender,
 		config:       config,
+		rackCertMgr:  rackCertMgr,
 	}
 }
 
@@ -380,6 +383,17 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		resp["allow_destructive_actions"] = false
 	}
 
+	resp["rack_tls_cert"] = nil
+	if h.rackCertMgr != nil {
+		if cert, ok, err := h.rackCertMgr.CurrentCertificate(c.Request.Context()); err == nil && ok {
+			resp["rack_tls_cert"] = gin.H{
+				"pem":         cert.PEM,
+				"fingerprint": cert.Fingerprint,
+				"fetched_at":  cert.FetchedAt,
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -465,6 +479,34 @@ func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+}
+
+// RefreshRackTLSCert forces a refresh of the pinned rack TLS certificate.
+func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
+	if h.rackCertMgr == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "rack certificate manager not configured"})
+		return
+	}
+
+	var uid *int64
+	email := strings.TrimSpace(c.GetString("user_email"))
+	if email != "" && h.rbac != nil {
+		if u, err := h.rbac.GetUserWithID(email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+
+	cert, err := h.rackCertMgr.Refresh(c.Request.Context(), uid)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"pem":         cert.PEM,
+		"fingerprint": cert.Fingerprint,
+		"fetched_at":  cert.FetchedAt,
+	})
 }
 
 // Token management

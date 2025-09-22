@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -14,23 +16,26 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 )
 
 // APIHandler handles regular API endpoints
 type APIHandler struct {
-	rbac     rbac.RBACManager
-	database *db.Database
-	config   *config.Config
+	rbac            rbac.RBACManager
+	database        *db.Database
+	config          *config.Config
+	rackCertManager *rackcert.Manager
 }
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config) *APIHandler {
+func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager) *APIHandler {
 	return &APIHandler{
-		rbac:     rbac,
-		database: database,
-		config:   config,
+		rbac:            rbac,
+		database:        database,
+		config:          config,
+		rackCertManager: rackCertManager,
 	}
 }
 
@@ -137,11 +142,26 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	authz := base64.StdEncoding.EncodeToString([]byte(user + ":" + rackConfig.APIKey))
 	req.Header.Set("Authorization", "Basic "+authz)
 
-	// Make the request to the actual rack using the shared client with insecure TLS
-	client := httpclient.NewRackClient(10 * time.Second)
+	var tlsCfg *tls.Config
+	if h.rackCertManager != nil {
+		cfg, err := h.rackCertManager.TLSConfig(c.Request.Context())
+		if err != nil {
+			log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack TLS"})
+			return
+		}
+		tlsCfg = cfg
+	}
+
+	client := httpclient.NewRackClient(10*time.Second, tlsCfg)
 	resp, err := client.Do(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch rack info"})
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"rack_info","expected_fingerprint":"%s","actual_fingerprint":"%s"}`, fpErr.Expected, fpErr.Actual)
+			c.JSON(http.StatusBadGateway, gin.H{"error": "rack certificate verification failed"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch rack info"})
 		return
 	}
 	defer resp.Body.Close()
@@ -226,8 +246,24 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		return
 	}
 
-	envMap, err := envutil.FetchLatestEnvMap(rackConfig, app)
+	var tlsCfg *tls.Config
+	if h.rackCertManager != nil {
+		cfg, err := h.rackCertManager.TLSConfig(c.Request.Context())
+		if err != nil {
+			log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack TLS"})
+			return
+		}
+		tlsCfg = cfg
+	}
+
+	envMap, err := envutil.FetchLatestEnvMap(rackConfig, app, tlsCfg)
 	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"env_fetch","expected_fingerprint":"%s","actual_fingerprint":"%s","app":"%s"}`, fpErr.Expected, fpErr.Actual, app)
+			c.JSON(http.StatusBadGateway, gin.H{"error": "rack certificate verification failed"})
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch env"})
 		return
 	}

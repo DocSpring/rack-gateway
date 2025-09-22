@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
@@ -118,6 +120,12 @@ func (a *App) initializeServices() error {
 	// Initialize audit logger
 	auditLogger := audit.NewLogger(a.Database)
 
+	// Rack TLS certificate manager
+	a.RackCertManager = rackcert.NewManager(a.Config, a.Database)
+	if _, err := a.RackCertManager.TLSConfig(context.Background()); err != nil {
+		log.Printf("Warning: failed to initialize rack TLS certificate: %v", err)
+	}
+
 	// Seed protected env vars from DB_SEED_PROTECTED_ENV_VARS if provided
 	if seed := strings.TrimSpace(os.Getenv("DB_SEED_PROTECTED_ENV_VARS")); seed != "" {
 		if raw, ok, _ := a.Database.GetSettingRaw("protected_env_vars"); !ok || len(raw) == 0 {
@@ -168,7 +176,7 @@ func (a *App) initializeServices() error {
 	}
 
 	// Initialize proxy handler
-	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias)
+	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, a.RackCertManager)
 
 	return nil
 }
@@ -196,6 +204,7 @@ func (a *App) setupRouter() {
 		TokenService: a.TokenService,
 		EmailSender:  a.EmailSender,
 		ProxyHandler: a.ProxyHandler,
+		RackCertMgr:  a.RackCertManager,
 	})
 
 	a.router = router

@@ -8,6 +8,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/convox-gateway/internal/gateway/middleware"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/gin-contrib/cors"
@@ -27,6 +28,7 @@ type Config struct {
 	TokenService *token.Service
 	EmailSender  email.Sender
 	ProxyHandler *proxy.Handler
+	RackCertMgr  *rackcert.Manager
 }
 
 // Setup configures all routes for the application
@@ -61,8 +63,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config)
-	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config)
+	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr)
+	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
 	staticHandler := handlers.NewStaticHandler(cfg.Config)
 	healthHandler := handlers.NewHealthHandler()
@@ -130,6 +132,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.GET("/settings", adminHandler.GetSettings)
 				admin.PUT("/settings/protected_env_vars", adminHandler.UpdateProtectedEnvVars)
 				admin.PUT("/settings/allow_destructive_actions", adminHandler.UpdateAllowDestructiveActions)
+				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 
 				// Users and roles
 				admin.GET("/roles", adminHandler.ListRoles)

@@ -49,6 +49,13 @@ type APIToken struct {
 	LastUsedAt      *time.Time `json:"last_used_at" ts_type:"string | null"`
 }
 
+// RackTLSCert stores the pinned rack TLS certificate information.
+type RackTLSCert struct {
+	PEM         string    `json:"pem"`
+	Fingerprint string    `json:"fingerprint"`
+	FetchedAt   time.Time `json:"fetched_at" ts_type:"string"`
+}
+
 // AuditLog represents an audit log entry
 type AuditLog struct {
 	ID             int64     `json:"id"`
@@ -613,6 +620,27 @@ func (d *Database) GetAllowDestructiveActions() (bool, error) {
 		return false, fmt.Errorf("invalid allow_destructive_actions setting: %w", err)
 	}
 	return v, nil
+}
+
+// GetRackTLSCert returns the pinned rack TLS certificate if it exists.
+func (d *Database) GetRackTLSCert() (*RackTLSCert, bool, error) {
+	raw, ok, err := d.GetSettingRaw("rack_tls_cert")
+	if err != nil || !ok {
+		return nil, ok, err
+	}
+	var cert RackTLSCert
+	if err := json.Unmarshal(raw, &cert); err != nil {
+		return nil, false, fmt.Errorf("invalid rack_tls_cert setting: %w", err)
+	}
+	return &cert, true, nil
+}
+
+// UpsertRackTLSCert persists the pinned rack TLS certificate.
+func (d *Database) UpsertRackTLSCert(cert *RackTLSCert, updatedByUserID *int64) error {
+	if cert == nil {
+		return fmt.Errorf("rack TLS certificate cannot be nil")
+	}
+	return d.UpsertSetting("rack_tls_cert", cert, updatedByUserID)
 }
 
 // GetAuditLogs retrieves audit logs with optional filters

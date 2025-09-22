@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -10,11 +11,39 @@ import { Separator } from '../components/ui/separator'
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 
+type RackTLSCert = {
+  pem: string
+  fingerprint: string
+  fetched_at: string
+}
+
+type SettingsErrorPayload = {
+  error?: string
+}
+
 type SettingsResponse = {
   protected_env_vars: string[]
   allow_destructive_actions: boolean
+  rack_tls_cert?: RackTLSCert | null
 }
 
+function extractErrorMessage(error: unknown): string | undefined {
+  if (isAxiosError<SettingsErrorPayload>(error)) {
+    const payload = error.response?.data
+    if (typeof payload === 'string') {
+      return payload
+    }
+    if (payload && typeof payload.error === 'string') {
+      return payload.error
+    }
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI glue code is easier to follow inline.
 export function SettingsPage() {
   const qc = useQueryClient()
   const { user } = useAuth()
@@ -31,6 +60,8 @@ export function SettingsPage() {
   const [newVar, setNewVar] = useState('')
   const envVars = data?.protected_env_vars ?? []
   const allowDestructive = data?.allow_destructive_actions ?? false
+  const cert = data?.rack_tls_cert ?? null
+  const certFetchedAt = cert?.fetched_at ? new Date(cert.fetched_at).toLocaleString() : null
 
   const saveEnvMutation = useMutation({
     mutationFn: async (vars: string[]) =>
@@ -72,6 +103,22 @@ export function SettingsPage() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+
+  const refreshCertMutation = useMutation({
+    mutationFn: async () =>
+      api.post<RackTLSCert>('/.gateway/api/admin/settings/rack_tls_cert/refresh'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      toast.success('Rack certificate refreshed')
+    },
+    onError: (err: unknown) => {
+      const message = extractErrorMessage(err)
+      toast.error(
+        'Failed to refresh rack certificate',
+        message ? { description: message } : undefined
+      )
     },
   })
 
@@ -194,6 +241,41 @@ export function SettingsPage() {
             </label>
           </CardContent>
         </Card>
+
+        <Card className="md:col-span-1">
+          <CardHeader>
+            <CardTitle>Rack TLS Certificate</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-muted-foreground text-sm">
+              The pinned rack certificate is used to verify all proxied connections. Refresh after
+              rotating rack TLS.
+            </p>
+            <textarea
+              className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
+              readOnly
+              rows={cert ? 10 : 4}
+              value={cert?.pem ?? 'No certificate pinned yet.'}
+            />
+            <div className="flex flex-col gap-1 text-muted-foreground text-xs">
+              <span>
+                <strong>Fingerprint:</strong> {cert?.fingerprint ?? '—'}
+              </span>
+              <span>
+                <strong>Fetched:</strong> {certFetchedAt ?? '—'}
+              </span>
+            </div>
+            <div>
+              <Button
+                disabled={!isAdmin || refreshCertMutation.isPending}
+                onClick={() => refreshCertMutation.mutate()}
+              >
+                {refreshCertMutation.isPending ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="hidden md:block" />
       </div>
     </div>
   )

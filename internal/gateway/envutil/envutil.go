@@ -1,6 +1,7 @@
 package envutil
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -32,10 +33,10 @@ func IsSecretKey(key string, explicit []string) bool {
 }
 
 // FetchLatestEnvMap pulls the latest release then returns its env as a map.
-func FetchLatestEnvMap(rack config.RackConfig, app string) (map[string]string, error) {
+func FetchLatestEnvMap(rack config.RackConfig, app string, tlsConfig *tls.Config) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
 	// Disable TLS verification for Convox API (internal/self-signed certs)
-	client := httpclient.NewRackClient(10 * time.Second)
+	client := httpclient.NewRackClient(10*time.Second, tlsConfig)
 	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))
 	// List releases
 	req1, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/apps/%s/releases?limit=1", base, app), nil)

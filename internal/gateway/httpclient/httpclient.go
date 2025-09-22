@@ -20,23 +20,33 @@ func NewRackTLSConfig() *tls.Config {
 }
 
 // NewRackTransport constructs a transport suitable for talking to Convox racks.
-func NewRackTransport() *http.Transport {
-	return &http.Transport{
+func NewRackTransportWithTLS(tlsConfig *tls.Config) *http.Transport {
+	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		TLSClientConfig:       NewRackTLSConfig(),
 		ForceAttemptHTTP2:     false,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+	if tlsConfig != nil {
+		tr.TLSClientConfig = tlsConfig
+	} else {
+		tr.TLSClientConfig = NewRackTLSConfig()
+	}
+	return tr
+}
+
+// NewRackTransport constructs a transport suitable for talking to Convox racks.
+func NewRackTransport() *http.Transport {
+	return NewRackTransportWithTLS(nil)
 }
 
 // NewRackClient returns an HTTP client preconfigured for Convox rack requests.
-func NewRackClient(timeout time.Duration) *http.Client {
+func NewRackClient(timeout time.Duration, tlsConfig *tls.Config) *http.Client {
 	return &http.Client{
 		Timeout:       timeout,
-		Transport:     NewRackTransport(),
+		Transport:     NewRackTransportWithTLS(tlsConfig),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
 	}
 }

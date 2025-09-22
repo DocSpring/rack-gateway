@@ -2,10 +2,13 @@ package proxy
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -21,6 +24,7 @@ import (
 	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
@@ -38,6 +42,7 @@ type Handler struct {
 	emailer          email.Sender
 	rackName         string
 	rackAlias        string
+	rackCertManager  *rackcert.Manager
 }
 
 const maskedSecret = envutil.MaskedSecret
@@ -80,7 +85,7 @@ func (l *logAccumulator) Bytes() []byte {
 	return out
 }
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
@@ -92,6 +97,7 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 		emailer:          mailer,
 		rackName:         rackName,
 		rackAlias:        strings.TrimSpace(rackAlias),
+		rackCertManager:  rackCertManager,
 	}
 	// Load additional secret env var names from env (comma-separated)
 	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
@@ -114,6 +120,28 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 		}
 	}
 	return h
+}
+
+func (h *Handler) rackTLSConfig(ctx context.Context) (*tls.Config, error) {
+	if h.rackCertManager == nil {
+		return nil, nil
+	}
+	return h.rackCertManager.TLSConfig(ctx)
+}
+
+func (h *Handler) httpClient(ctx context.Context, timeout time.Duration) (*http.Client, error) {
+	tlsCfg, err := h.rackTLSConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return httpclient.NewRackClient(timeout, tlsCfg), nil
+}
+
+func logRackTLSMismatch(scope string, err *rackcert.FingerprintMismatchError) {
+	if err == nil {
+		return
+	}
+	log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s"}`, scope, err.Expected, err.Actual)
 }
 
 func (h *Handler) rackDisplay() string {
@@ -224,6 +252,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
 		ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, authUser.Email)
 		if err != nil {
+			if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+				logRackTLSMismatch("env_fetch", fpErr)
+				h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
+				return
+			}
 			h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
 			return
 		}
@@ -262,7 +295,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	var beforeParams map[string]string
 	isRackParamsUpdate := (r.Method == http.MethodPut && routematch.KeyMatch3(path, "/system"))
 	if isRackParamsUpdate {
-		if params, err := h.fetchSystemParams(rackConfig); err == nil {
+		if params, err := h.fetchSystemParams(r.Context(), rackConfig); err == nil {
 			beforeParams = params
 		}
 	}
@@ -270,6 +303,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Forward the request to the rack
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
 	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			logRackTLSMismatch("proxy_forward", fpErr)
+			h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
+			return
+		}
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, rackConfig.Name, start)
 		return
 	}
@@ -311,7 +349,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		h.logEnvDiffs(r, authUser.Email, rackConfig.Name, envDiffs)
 		// If this was a rack params update, compute diff and notify admins + audit
 		if isRackParamsUpdate {
-			if afterParams, err := h.fetchSystemParams(rackConfig); err == nil {
+			if afterParams, err := h.fetchSystemParams(r.Context(), rackConfig); err == nil {
 				changes := diffParams(beforeParams, afterParams)
 				if len(changes) > 0 {
 					h.notifyRackParamsChanged(r, authUser.Email, changes)
@@ -324,7 +362,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 }
 
 // fetchSystemParams retrieves /system and returns its Parameters map.
-func (h *Handler) fetchSystemParams(rack config.RackConfig) (map[string]string, error) {
+func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
 	targetURL := base + "/system"
 	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
@@ -332,11 +370,16 @@ func (h *Handler) fetchSystemParams(rack config.RackConfig) (map[string]string, 
 		return nil, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
-	client := httpclient.NewRackClient(15 * time.Second)
-	// Do not follow redirects for rack system fetches
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
+	client, err := h.httpClient(ctx, 15*time.Second)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := client.Do(req)
 	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			logRackTLSMismatch("fetch_system_params", fpErr)
+			return nil, fpErr
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -628,8 +671,16 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	}
 
 	// Fetch latest env map from rack (needed to fill back masked values and compute diffs)
-	baseEnv, err := envutil.FetchLatestEnvMap(rack, app)
+	tlsCfg, err := h.rackTLSConfig(r.Context())
 	if err != nil {
+		return false, nil, fmt.Errorf("failed to prepare rack TLS: %w", err)
+	}
+	baseEnv, err := envutil.FetchLatestEnvMap(rack, app, tlsCfg)
+	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			logRackTLSMismatch("env_fetch", fpErr)
+			return false, nil, fpErr
+		}
 		// If fetch fails, fall back to submitted body without rewrite
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
 		return false, nil, fmt.Errorf("failed to fetch latest env: %w", err)
@@ -868,17 +919,17 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	proxyReq.Header.Set("X-User-Email", userEmail)
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
 
-	// HTTP client for upstream with optional TLS overrides
-	transport := httpclient.NewRackTransport()
-	client := &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: transport,
-		// Never follow redirects so we can observe upstream responses and preserve methods
-		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	client, err := h.httpClient(r.Context(), 30*time.Second)
+	if err != nil {
+		log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
+		return 0, fmt.Errorf("failed to prepare rack TLS: %w", err)
 	}
 
 	resp, err := client.Do(proxyReq)
 	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			return 0, fpErr
+		}
 		return 0, fmt.Errorf("failed to forward request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -1255,8 +1306,17 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	}
 	d := *websocket.DefaultDialer
 	d.HandshakeTimeout = 10 * time.Second
-	// Force HTTP/1.1 for WebSocket handshake over TLS; HTTP/2 does not support 101 Upgrade
-	d.TLSClientConfig = httpclient.NewRackTLSConfig()
+	if strings.HasPrefix(strings.ToLower(rack.URL), "https://") {
+		cfg, err := h.rackTLSConfig(r.Context())
+		if err != nil {
+			return 0, fmt.Errorf("failed to prepare rack TLS: %w", err)
+		}
+		if cfg != nil {
+			d.TLSClientConfig = cfg
+		} else {
+			d.TLSClientConfig = httpclient.NewRackTLSConfig()
+		}
+	}
 
 	// Follow up to 3 redirects for WS dial (some servers redirect mounting paths)
 	var upstreamConn *websocket.Conn
@@ -1284,6 +1344,10 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 		break
 	}
 	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			logRackTLSMismatch("websocket_dial", fpErr)
+			return 0, fpErr
+		}
 		if resp != nil {
 			// If upstream returned a non-101 status (e.g., 404), pass it through to the client
 			body, _ := io.ReadAll(resp.Body)
