@@ -169,7 +169,7 @@ describe('AuditPage', () => {
         // Success rate: 2 success out of 4 = 50%
         expect(screen.getByText('50%')).toBeInTheDocument()
 
-        // Failed/Denied: 1 failed + 1 blocked(legacy) = 2
+        // Failed/Denied: 1 failed + 1 blocked = 2
         expect(screen.getByText('2')).toBeInTheDocument()
 
         // Average response time: (150 + 75 + 200 + 5) / 4 = 107.5 ≈ 108ms

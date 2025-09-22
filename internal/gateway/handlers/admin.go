@@ -860,7 +860,7 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 		case "custom":
 			// rely on explicit start/end parameters
 		default:
-			// fallback to 24h if range is unknown (legacy behaviour)
+			// fallback to 24h
 			since = now.Add(-24 * time.Hour)
 			hasStart = true
 		}

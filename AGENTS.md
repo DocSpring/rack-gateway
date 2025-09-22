@@ -233,72 +233,74 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 **CRITICAL: Always use `task` commands instead of raw commands. Never use grep, pipes, or manual command construction.**
 
 **IMPORTANT: All task commands automatically handle their dependencies. You NEVER need to manually rebuild or restart services before running tests. For example:**
+
 - `task web:e2e:dev` automatically rebuilds the gateway, restarts docker containers, and runs tests
 - `task go:test` automatically downloads dependencies and runs tests
 - `task docker:up` automatically builds all images before starting containers
 
 ### 🎯 Primary Commands
 
-| Command | Description | When to Use |
-|---------|------------|------------|
-| `task all` | Run ALL linters, tests, and builds | **ALWAYS before marking any task complete** |
-| `task dev` | Start dev stack and follow logs | Starting development environment |
-| `task test` | Run all tests | Quick test run during development |
-| `task lint` | Run all linters and typecheck | Before committing code |
-| `task lint:fix` | Auto-fix linting issues | When linters report fixable issues |
-| `task build` | Build all binaries | Creating release artifacts |
+| Command         | Description                        | When to Use                                 |
+| --------------- | ---------------------------------- | ------------------------------------------- |
+| `task all`      | Run ALL linters, tests, and builds | **ALWAYS before marking any task complete** |
+| `task dev`      | Start dev stack and follow logs    | Starting development environment            |
+| `task test`     | Run all tests                      | Quick test run during development           |
+| `task lint`     | Run all linters and typecheck      | Before committing code                      |
+| `task lint:fix` | Auto-fix linting issues            | When linters report fixable issues          |
+| `task build`    | Build all binaries                 | Creating release artifacts                  |
 
 ### 🐳 Docker Development
 
-| Command | Description |
-|---------|------------|
-| `task docker:up` | Start full dev stack |
-| `task docker:down` | Stop and remove containers |
+| Command             | Description                   |
+| ------------------- | ----------------------------- |
+| `task docker:up`    | Start full dev stack          |
+| `task docker:down`  | Stop and remove containers    |
 | `task docker:reset` | Reset dev stack (recreate DB) |
-| `task docker:logs` | Tail logs for dev stack |
-| `task docker:wait` | Wait for stack readiness |
+| `task docker:logs`  | Tail logs for dev stack       |
+| `task docker:wait`  | Wait for stack readiness      |
 
 ### 🔧 Go Development
 
-| Command | Description |
-|---------|------------|
-| `task go:build` | Build all Go binaries |
-| `task go:lint` | Run Go linters (vet/fmt/staticcheck) |
-| `task go:test` | Run Go unit/integration tests (uses test DB) |
-| `task go:e2e` | Run CLI E2E tests |
+| Command         | Description                                  |
+| --------------- | -------------------------------------------- |
+| `task go:build` | Build all Go binaries                        |
+| `task go:lint`  | Run Go linters (vet/fmt/staticcheck)         |
+| `task go:test`  | Run Go unit/integration tests (uses test DB) |
+| `task go:e2e`   | Run CLI E2E tests                            |
 
 ### 🌐 Web Development
 
-| Command | Description |
-|---------|------------|
-| `task web:build` | Build web SPA |
-| `task web:lint` | Run TypeScript/Biome checks |
-| `task web:lint:fix` | Auto-fix web linting issues |
-| `task web:test` | Run Vitest unit tests |
-| `task web:e2e` | Run Playwright E2E tests |
+| Command                   | Description                   |
+| ------------------------- | ----------------------------- |
+| `task web:build`          | Build web SPA                 |
+| `task web:lint`           | Run TypeScript/Biome checks   |
+| `task web:lint:fix`       | Auto-fix web linting issues   |
+| `task web:test`           | Run Vitest unit tests         |
+| `task web:e2e`            | Run Playwright E2E tests      |
 | `task web:lint:typecheck` | TypeScript type checking only |
 
 ### 🧪 E2E Testing
 
-| Command | Description |
-|---------|------------|
-| `task e2e` | Run ALL E2E tests |
-| `task web:e2e:dev` | Web E2E against dev (Vite) |
+| Command                | Description                        |
+| ---------------------- | ---------------------------------- |
+| `task e2e`             | Run ALL E2E tests                  |
+| `task web:e2e:dev`     | Web E2E against dev (Vite)         |
 | `task web:e2e:preview` | Web E2E against preview (compiled) |
-| `task go:e2e:dev` | CLI E2E against dev |
-| `task go:e2e:preview` | CLI E2E against preview |
+| `task go:e2e:dev`      | CLI E2E against dev                |
+| `task go:e2e:preview`  | CLI E2E against preview            |
 
 ### 🎭 Mock Services
 
-| Command | Description |
-|---------|------------|
-| `task mock-oauth:dev` | Run mock OAuth server |
-| `task mock-oauth:lint` | Lint mock OAuth code |
+| Command                 | Description             |
+| ----------------------- | ----------------------- |
+| `task mock-oauth:dev`   | Run mock OAuth server   |
+| `task mock-oauth:lint`  | Lint mock OAuth code    |
 | `task mock-oauth:build` | Build mock OAuth server |
 
 ### ⚠️ Common Mistakes to Avoid
 
 **NEVER DO THIS:**
+
 ```bash
 # ❌ WRONG - Never use raw commands
 go test ./...
@@ -312,6 +314,7 @@ task go:test | head -20
 ```
 
 **ALWAYS DO THIS:**
+
 ```bash
 # ✅ CORRECT - Use task commands
 task go:test
@@ -329,6 +332,7 @@ task all
 ```
 
 This runs:
+
 - Web Biome lint via `pnpm lint`
 - Go vet/fmt/staticcheck
 - Go unit and integration tests (uses isolated test databases)
@@ -379,4 +383,4 @@ The integration tests create backups of the real Convox CLI configuration to pre
 
 Don't leave old code lying around. When you see it, tidy it.
 
-- We never maintain backwards-compatibility shims or legacy fallbacks. Replace the old path outright.
+- We never maintain backwards-compatibility shims or legacy fallbacks.

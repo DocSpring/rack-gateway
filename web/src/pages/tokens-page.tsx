@@ -1,5 +1,3 @@
-/* biome-ignore format: keep legacy formatting for now */
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'

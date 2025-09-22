@@ -1,64 +1,104 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
+	securemw "github.com/gin-contrib/secure"
 	"github.com/gin-gonic/gin"
 )
 
-// SecurityHeaders adds security headers to responses
-func SecurityHeaders() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("X-Frame-Options", "DENY")
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-
-		// CSP allows connections to localhost in dev
-		isDev := gin.Mode() == gin.DebugMode
-		connectSrc := "connect-src 'self' ws: wss:"
-		if isDev {
-			connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
-		}
-
-		csp := "default-src 'self'; " + connectSrc + "; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
-		c.Header("Content-Security-Policy", csp)
-
-		c.Next()
+// SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
+func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
+	isDev := gin.Mode() == gin.DebugMode
+	if cfg != nil && cfg.DevMode {
+		isDev = true
 	}
+
+	var allowedHosts []string
+	if cfg != nil {
+		host := canonicalHost(cfg.Domain)
+		if host != "" {
+			allowedHosts = append(allowedHosts, host)
+			port := strings.TrimSpace(cfg.Port)
+			if port != "" && port != "80" && port != "443" {
+				allowedHosts = append(allowedHosts, fmt.Sprintf("%s:%s", host, port))
+			}
+		}
+	}
+
+	connectSrc := "connect-src 'self' ws: wss:"
+	if isDev {
+		connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
+	}
+	csp := "default-src 'self'; " + connectSrc + "; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+
+	secCfg := securemw.Config{
+		AllowedHosts: allowedHosts,
+		SSLRedirect:  false,
+		STSSeconds: func() int64 {
+			if isDev {
+				return 0
+			}
+			return 63072000
+		}(),
+		STSIncludeSubdomains:  false,
+		FrameDeny:             true,
+		ContentTypeNosniff:    true,
+		BrowserXssFilter:      true,
+		ContentSecurityPolicy: csp,
+		ReferrerPolicy:        "strict-origin-when-cross-origin",
+		SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
+		IsDevelopment:         isDev,
+	}
+
+	return securemw.New(secCfg)
 }
 
 // HostValidator validates Host and Origin headers
 func HostValidator(allowedDomain string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		host := c.Request.Host
-		origin := c.GetHeader("Origin")
+	allowedHost := canonicalHost(allowedDomain)
 
-		// In development, allow localhost
-		if gin.Mode() == gin.DebugMode {
-			if strings.Contains(host, "localhost") || strings.Contains(host, "127.0.0.1") {
-				c.Next()
+	return func(c *gin.Context) {
+		reqHost := canonicalHost(c.Request.Host)
+		if gin.Mode() == gin.DebugMode && isLocalHost(reqHost) {
+			c.Next()
+			return
+		}
+
+		if allowedHost != "" {
+			if reqHost == "" || !strings.EqualFold(reqHost, allowedHost) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
+				c.Abort()
 				return
 			}
 		}
 
-		// Validate host if configured
-		if allowedDomain != "" && !strings.Contains(host, allowedDomain) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
-			c.Abort()
-			return
-		}
+		origin := c.GetHeader("Origin")
+		if origin != "" && allowedHost != "" {
+			originURL, err := url.Parse(origin)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
+				c.Abort()
+				return
+			}
 
-		// Validate origin if present
-		if origin != "" && allowedDomain != "" && !strings.Contains(origin, allowedDomain) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
-			c.Abort()
-			return
+			originHost := canonicalHost(originURL.Host)
+			if gin.Mode() == gin.DebugMode && isLocalHost(originHost) {
+				c.Next()
+				return
+			}
+			if originHost == "" || !strings.EqualFold(originHost, allowedHost) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid origin"})
+				c.Abort()
+				return
+			}
 		}
 
 		c.Next()
@@ -151,4 +191,27 @@ type responseWriter struct {
 func (w *responseWriter) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+func canonicalHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimSuffix(raw, ".")
+	raw = strings.ToLower(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "[") {
+		if end := strings.Index(raw, "]"); end != -1 {
+			inner := raw[1:end]
+			return strings.TrimSpace(inner)
+		}
+	}
+	if idx := strings.LastIndex(raw, ":"); idx != -1 && !strings.Contains(raw[idx+1:], ":") {
+		raw = raw[:idx]
+	}
+	return raw
+}
+
+func isLocalHost(host string) bool {
+	return host == "localhost" || host == "127.0.0.1"
 }

@@ -362,7 +362,7 @@ aws logs put-metric-filter \
 
 ## Testing
 
-Run unit tests:
+Run all tests:
 
 ```bash
 task test
@@ -372,18 +372,6 @@ Run linters:
 
 ```bash
 task lint
-```
-
-Run integration test:
-
-```bash
-./scripts/integration_test.sh
-```
-
-Run end-to-end test (deprecated):
-
-```bash
-./scripts/e2e_test.sh
 ```
 
 ## Troubleshooting

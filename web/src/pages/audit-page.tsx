@@ -50,8 +50,6 @@ type AuditLog = {
   response_time_ms: number
 }
 
-// Extract trailing "(id: N)" from legacy resource strings
-const RESOURCE_ID_TAIL_RE = /\s*\(id:\s*\d+\)\s*$/
 const MAX_LABEL_LEN = 23
 
 function safeParseDetails(details: string): Record<string, unknown> {
@@ -71,7 +69,7 @@ function resourceLabelForLog(log: AuditLog): string {
     label = (d.name as string) || ''
   }
   if (!label) {
-    label = (log.resource || '').replace(RESOURCE_ID_TAIL_RE, '').trim() || '-'
+    label = (log.resource || '').trim() || '-'
   }
   return label
 }
@@ -101,8 +99,6 @@ function LabelBadge({ label }: { label: string }) {
     </TooltipProvider>
   )
 }
-
-// Regex helpers for legacy resource strings like "Name (id: 12)"
 
 const RESOURCE_TYPES = {
   all: 'All Resources',
