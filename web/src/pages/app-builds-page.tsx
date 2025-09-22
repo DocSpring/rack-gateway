@@ -35,7 +35,7 @@ export function AppBuildsPage() {
   } = useQuery({
     queryKey: ['app-builds', app],
     queryFn: async () => {
-      const items = await api.get<Build[]>(`/apps/${app}/builds`)
+      const items = await api.get<Build[]>(`/.gateway/api/convox/apps/${app}/builds`)
       try {
         const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
         if (ids) {

@@ -31,7 +31,7 @@ export function AppReleasesPage() {
   } = useQuery({
     queryKey: ['app-releases', app],
     queryFn: async () => {
-      const items = await api.get<Release[]>(`/apps/${app}/releases`)
+      const items = await api.get<Release[]>(`/.gateway/api/convox/apps/${app}/releases`)
       try {
         const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
         if (ids) {

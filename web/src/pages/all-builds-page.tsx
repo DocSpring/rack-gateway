@@ -37,10 +37,10 @@ export function AllBuildsPage() {
   } = useQuery({
     queryKey: ['all-builds'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/apps')
+      const apps = await api.get<App[]>('/.gateway/api/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const bs = await api.get<Build[]>(`/apps/${a.name}/builds`)
+          const bs = await api.get<Build[]>(`/.gateway/api/convox/apps/${a.name}/builds`)
           return bs.map((b) => ({ ...b, app: a.name }))
         })
       )

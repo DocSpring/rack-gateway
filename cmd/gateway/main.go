@@ -261,6 +261,26 @@ func main() {
 	r.Use(filteredLogger())
 	r.Use(middleware.Recoverer)
 
+	// Root redirect for browsers - send them to the web UI
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		// Check if this looks like a browser request (not CLI)
+		userAgent := r.Header.Get("User-Agent")
+		accept := r.Header.Get("Accept")
+
+		// CLI tools typically don't send Accept headers with text/html
+		// Browsers will accept HTML
+		if strings.Contains(accept, "text/html") || strings.Contains(userAgent, "Mozilla") {
+			// Redirect browsers to the web UI
+			http.Redirect(w, r, "/.gateway/web/", http.StatusTemporaryRedirect)
+			return
+		}
+
+		// For CLI/API clients, return a simple JSON response
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"service":"convox-gateway","version":"1.0.0"}`))
+	})
+
 	// Auth + UI
 	// Quiet common browser noise to avoid console 404s
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
@@ -312,6 +332,32 @@ func main() {
 			// Env view API (safe masking by default, request secrets via ?secrets=true)
 			r.Get("/env", uiHandler.GetEnvValues)
 
+			// Convox API proxy endpoints for web UI - READ-ONLY endpoints only!
+			// These endpoints proxy directly to Convox API but with our auth middleware
+			// Uses standard Middleware (cookie auth allowed) instead of CLIOnlyMiddleware
+			// ONLY safe GET endpoints are exposed to prevent CSRF attacks
+			r.Route("/convox", func(r chi.Router) {
+				// Create a wrapper that strips the /convox prefix before proxying
+				proxyWrapper := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					// Strip /convox prefix from the path
+					originalPath := req.URL.Path
+					if strings.HasPrefix(originalPath, "/.gateway/api/convox") {
+						req.URL.Path = strings.TrimPrefix(originalPath, "/.gateway/api/convox")
+					} else if strings.HasPrefix(originalPath, "/convox") {
+						req.URL.Path = strings.TrimPrefix(originalPath, "/convox")
+					}
+					// Call the proxy handler with the cleaned path
+					proxyHandler.ProxyToRack(w, req)
+				})
+
+				// Explicitly allowlist only safe read endpoints
+				r.Get("/apps", proxyWrapper)
+				r.Get("/apps/*", proxyWrapper) // Handles /apps/{app}/processes, /apps/{app}/builds, etc.
+				r.Get("/instances", proxyWrapper)
+				r.Get("/system/processes", proxyWrapper)
+				// Any other Convox API endpoints must go through CLI with Authorization header
+			})
+
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(csrfMiddleware())
 				r.Get("/config", uiHandler.GetConfig)
@@ -348,8 +394,9 @@ func main() {
 
 	// Catch-all: proxy everything else to the Convox rack
 	// This MUST come last to avoid catching gateway routes
+	// IMPORTANT: Uses CLIOnlyMiddleware to prevent CSRF attacks from browsers
 	r.Group(func(r chi.Router) {
-		r.Use(authService.Middleware)
+		r.Use(authService.CLIOnlyMiddleware)
 		r.HandleFunc("/*", proxyHandler.ProxyToRack)
 	})
 
@@ -713,14 +760,8 @@ func handleWebLogout(database *db.Database) http.HandlerFunc {
 			})
 		}
 
-		// Redirect back to login or frontend base
-		frontend := os.Getenv("FRONTEND_BASE_URL")
-		if frontend == "" {
-			frontend = "/login"
-		} else if !strings.HasSuffix(frontend, "/login") {
-			// Best-effort send to login
-			frontend = frontend + "/login"
-		}
-		http.Redirect(w, r, frontend, http.StatusTemporaryRedirect)
+		// Always redirect to the gateway's web UI login page
+		// This avoids CORS issues when the frontend is on a different port
+		http.Redirect(w, r, "/.gateway/web/login", http.StatusTemporaryRedirect)
 	}
 }

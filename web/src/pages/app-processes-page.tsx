@@ -46,7 +46,7 @@ export function AppProcessesPage() {
           command?: string
           started?: string
         }[]
-      >(`/apps/${app}/processes`)
+      >(`/.gateway/api/convox/apps/${app}/processes`)
       return ps.map((p) => ({
         ...p,
         service: p.service ?? p.name ?? '',

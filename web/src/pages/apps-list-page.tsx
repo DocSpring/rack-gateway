@@ -30,7 +30,7 @@ export function AppsListPage() {
   } = useQuery({
     queryKey: ['apps-list'],
     queryFn: async () => {
-      const items = await api.get<App[]>('/apps')
+      const items = await api.get<App[]>('/.gateway/api/convox/apps')
       try {
         const ids = Array.from(new Set(items.map((a) => a.name))).join(',')
         if (ids) {

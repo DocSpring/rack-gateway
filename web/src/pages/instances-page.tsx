@@ -36,7 +36,7 @@ export function InstancesPage() {
     error,
   } = useQuery({
     queryKey: ['instances'],
-    queryFn: async () => api.get<Instance[]>('/instances'),
+    queryFn: async () => api.get<Instance[]>('/.gateway/api/convox/instances'),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,

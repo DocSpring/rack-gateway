@@ -125,6 +125,13 @@ func getCSP() string {
 		styleSrc = "style-src 'self' 'unsafe-inline'" // Vite HMR needs inline styles
 	}
 
+	// Connect source depends on environment
+	connectSrc := "connect-src 'self' ws: wss:"
+	if isDev {
+		// In dev mode, allow connections to localhost ports for Vite dev server
+		connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
+	}
+
 	// Base CSP directives
 	csp := []string{
 		"default-src 'self'",
@@ -132,7 +139,7 @@ func getCSP() string {
 		styleSrc,
 		"img-src 'self' data: https:",
 		"font-src 'self' data:",
-		"connect-src 'self' ws: wss:",
+		connectSrc,
 		"frame-ancestors 'none'",
 		"base-uri 'self'",
 		"form-action 'self'",

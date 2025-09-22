@@ -34,10 +34,10 @@ export function AllReleasesPage() {
   } = useQuery({
     queryKey: ['all-releases'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/apps')
+      const apps = await api.get<App[]>('/.gateway/api/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const rs = await api.get<Release[]>(`/apps/${a.name}/releases`)
+          const rs = await api.get<Release[]>(`/.gateway/api/convox/apps/${a.name}/releases`)
           return rs.map((r) => ({ ...r, app: a.name }))
         })
       )

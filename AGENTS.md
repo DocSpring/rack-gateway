@@ -228,10 +228,120 @@ internal/
 
 When in doubt, choose the straightforward, well‑named, maintainable structure — even if it means removing or renaming existing files. Don’t defer obvious organization or code quality improvements.
 
+## 📋 Task Commands - ALWAYS USE THESE, NEVER RAW COMMANDS
+
+**CRITICAL: Always use `task` commands instead of raw commands. Never use grep, pipes, or manual command construction.**
+
+**IMPORTANT: All task commands automatically handle their dependencies. You NEVER need to manually rebuild or restart services before running tests. For example:**
+- `task web:e2e:dev` automatically rebuilds the gateway, restarts docker containers, and runs tests
+- `task go:test` automatically downloads dependencies and runs tests
+- `task docker:up` automatically builds all images before starting containers
+
+### 🎯 Primary Commands
+
+| Command | Description | When to Use |
+|---------|------------|------------|
+| `task all` | Run ALL linters, tests, and builds | **ALWAYS before marking any task complete** |
+| `task dev` | Start dev stack and follow logs | Starting development environment |
+| `task test` | Run all tests | Quick test run during development |
+| `task lint` | Run all linters and typecheck | Before committing code |
+| `task lint:fix` | Auto-fix linting issues | When linters report fixable issues |
+| `task build` | Build all binaries | Creating release artifacts |
+
+### 🐳 Docker Development
+
+| Command | Description |
+|---------|------------|
+| `task docker:up` | Start full dev stack |
+| `task docker:down` | Stop and remove containers |
+| `task docker:reset` | Reset dev stack (recreate DB) |
+| `task docker:logs` | Tail logs for dev stack |
+| `task docker:wait` | Wait for stack readiness |
+
+### 🔧 Go Development
+
+| Command | Description |
+|---------|------------|
+| `task go:build` | Build all Go binaries |
+| `task go:lint` | Run Go linters (vet/fmt/staticcheck) |
+| `task go:test` | Run Go unit/integration tests (uses test DB) |
+| `task go:e2e` | Run CLI E2E tests |
+
+### 🌐 Web Development
+
+| Command | Description |
+|---------|------------|
+| `task web:build` | Build web SPA |
+| `task web:lint` | Run TypeScript/Biome checks |
+| `task web:lint:fix` | Auto-fix web linting issues |
+| `task web:test` | Run Vitest unit tests |
+| `task web:e2e` | Run Playwright E2E tests |
+| `task web:lint:typecheck` | TypeScript type checking only |
+
+### 🧪 E2E Testing
+
+| Command | Description |
+|---------|------------|
+| `task e2e` | Run ALL E2E tests |
+| `task web:e2e:dev` | Web E2E against dev (Vite) |
+| `task web:e2e:preview` | Web E2E against preview (compiled) |
+| `task go:e2e:dev` | CLI E2E against dev |
+| `task go:e2e:preview` | CLI E2E against preview |
+
+### 🎭 Mock Services
+
+| Command | Description |
+|---------|------------|
+| `task mock-oauth:dev` | Run mock OAuth server |
+| `task mock-oauth:lint` | Lint mock OAuth code |
+| `task mock-oauth:build` | Build mock OAuth server |
+
+### ⚠️ Common Mistakes to Avoid
+
+**NEVER DO THIS:**
+```bash
+# ❌ WRONG - Never use raw commands
+go test ./...
+go build ./cmd/gateway
+cd web && pnpm test
+grep "PASS" test_output.txt
+
+# ❌ WRONG - Never pipe or filter test output
+task test | grep -v "SKIP"
+task go:test | head -20
+```
+
+**ALWAYS DO THIS:**
+```bash
+# ✅ CORRECT - Use task commands
+task go:test
+task build
+task web:test
+task all  # Run everything, see full output
+```
+
+## Pre-Push Checks
+
+**Before ANY push or marking tasks complete:**
+
+```bash
+task all
+```
+
+This runs:
+- Web Biome lint via `pnpm lint`
+- Go vet/fmt/staticcheck
+- Go unit and integration tests (uses isolated test databases)
+- Web unit tests (Vitest)
+- Web and CLI E2E tests (Playwright + scripts)
+- Full builds of all components
+
+**If `task all` doesn't pass completely, the task is NOT done.**
+
 ## Useful Commands for Development
 
 ```bash
-# Run with hot reload
+# Run with hot reload (use task dev instead)
 air
 
 # Check for security issues
@@ -247,27 +357,6 @@ go tool pprof http://localhost:8080/debug/pprof/heap
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
-
-## Pre-Push Checks
-
-- `task all` runs ALL linters and ALL tests:
-  - Web Biome lint via `pnpm lint`
-  - Go vet/fmt/staticcheck
-  - Go unit and integration tests (through the safe wrapper)
-  - Web unit tests (Vitest)
-  - Web and CLI E2E tests (Playwright + scripts)
-
-Use this before pushing any changes:
-
-```bash
-task all
-```
-
-Standard target prefixes:
-
-- go:\*: `go:lint`, `go:test`
-- web:\*: `web:lint`, `web:test`, `web:build`, `web:typecheck`
-- e2e:\*: `e2e:web:dev`, `e2e:web:release`, `e2e:cli`
 
 ## Related Documentation
 

@@ -14,6 +14,12 @@ export const test = base.extend({
         if (status === 401 && url.includes('/.gateway/api/me') && !debugAuth) {
           return
         }
+
+        // Suppress expected 401s from CLI-only proxy endpoints
+        if (status === 401 && !url.includes('/.gateway/')) {
+          return
+        }
+
         let body = ''
         try {
           body = await resp.text()
