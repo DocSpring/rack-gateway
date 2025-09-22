@@ -22,6 +22,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/security"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ui"
 	"github.com/go-chi/chi/v5"
@@ -235,6 +236,8 @@ func main() {
 
 	r := chi.NewRouter()
 
+	// Apply security headers first (before any response is written)
+	r.Use(security.SecurityHeaders)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(filteredLogger())
