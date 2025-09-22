@@ -108,15 +108,26 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	if h.database != nil && h.rbac != nil {
+		if creatorEmail := strings.TrimSpace(c.GetString("user_email")); creatorEmail != "" {
+			if creator, err := h.rbac.GetUserWithID(creatorEmail); err == nil && creator != nil {
+				if newUser, err := h.database.GetUser(req.Email); err == nil && newUser != nil {
+					_, _ = h.database.CreateUserResource(creator.ID, "user", newUser.Email)
+				}
+			}
+		}
+	}
+
 	// Send welcome email
 	if h.emailSender != nil {
 		// Would send email here
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"email": req.Email,
-		"name":  req.Name,
-		"roles": req.Roles,
+		"email":            req.Email,
+		"name":             req.Name,
+		"roles":            req.Roles,
+		"created_by_email": strings.TrimSpace(c.GetString("user_email")),
 	})
 }
 
@@ -488,6 +499,12 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		UserID:      user.ID,
 		Permissions: req.Permissions,
 	}
+	if creatorEmail := strings.TrimSpace(c.GetString("user_email")); creatorEmail != "" && h.rbac != nil {
+		if creator, err := h.rbac.GetUserWithID(creatorEmail); err == nil && creator != nil {
+			id := creator.ID
+			tokenReq.CreatedByUserID = &id
+		}
+	}
 
 	resp, err := h.tokenService.GenerateAPIToken(tokenReq)
 	if err != nil {
@@ -552,12 +569,41 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 		return
 	}
 
-	// Would update token in database
-	c.JSON(http.StatusOK, gin.H{
-		"id":          tokenID,
-		"name":        req.Name,
-		"permissions": req.Permissions,
-	})
+	existing, err := h.database.GetAPITokenByID(tokenID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load token"})
+		return
+	}
+	if existing == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
+		return
+	}
+
+	if name := strings.TrimSpace(req.Name); name != "" && name != existing.Name {
+		if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token name"})
+			return
+		}
+	}
+
+	if req.Permissions != nil {
+		if err := h.tokenService.UpdateTokenPermissions(tokenID, req.Permissions); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token permissions"})
+			return
+		}
+	}
+
+	updated, err := h.database.GetAPITokenByID(tokenID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load token"})
+		return
+	}
+	if updated == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "token disappeared"})
+		return
+	}
+
+	c.JSON(http.StatusOK, updated)
 }
 
 func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
@@ -751,6 +797,7 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 	rangeFilter := strings.TrimSpace(c.DefaultQuery("range", "24h"))
 	startParam := c.Query("start")
 	endParam := c.Query("end")
+	missingUserForID := false
 
 	var (
 		since      time.Time
@@ -824,8 +871,13 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 		}
 	}
 
+	resolvedUserEmail := userFilter
+	if userFilter == "" && c.Query("user_id") != "" {
+		missingUserForID = true
+	}
+
 	filters := db.AuditLogFilters{
-		UserEmail:    userFilter,
+		UserEmail:    resolvedUserEmail,
 		Status:       statusFilter,
 		ActionType:   actionTypeFilter,
 		ResourceType: resourceTypeFilter,
@@ -841,6 +893,9 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 	}
 	if hasEnd {
 		filters.Until = until
+	}
+	if missingUserForID {
+		filters.UserEmail = fmt.Sprintf("__missing_user_%s__", strings.TrimSpace(c.Query("user_id")))
 	}
 
 	return filters, page, limit, nil

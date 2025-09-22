@@ -16,7 +16,7 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-func TestStaticHandlerRedirectsToRack(t *testing.T) {
+func TestStaticHandlerRedirectsToUsers(t *testing.T) {
 	handler := NewStaticHandler(&config.Config{})
 
 	rec := httptest.NewRecorder()
@@ -30,8 +30,8 @@ func TestStaticHandlerRedirectsToRack(t *testing.T) {
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("expected 307 redirect, got %d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/.gateway/web/rack" {
-		t.Fatalf("expected redirect to /rack, got %s", loc)
+	if loc := rec.Header().Get("Location"); loc != "/.gateway/web/users" {
+		t.Fatalf("expected redirect to /users, got %s", loc)
 	}
 }
 

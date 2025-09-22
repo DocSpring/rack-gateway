@@ -256,6 +256,34 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	assert.Equal(t, "api_token.create", timeFiltered[0].Action)
 }
 
+func TestListUsersIncludesCreatorMetadata(t *testing.T) {
+	db := dbtest.NewDatabase(t)
+	defer db.Close()
+	dbtest.Reset(t, db)
+
+	creator, err := db.CreateUser("admin@example.com", "Admin", []string{"admin"})
+	require.NoError(t, err)
+	user, err := db.CreateUser("viewer@example.com", "Viewer", []string{"viewer"})
+	require.NoError(t, err)
+	created, err := db.CreateUserResource(creator.ID, "user", user.Email)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	users, err := db.ListUsers()
+	require.NoError(t, err)
+	var found *gwdb.User
+	for _, u := range users {
+		if u.Email == user.Email {
+			found = u
+			break
+		}
+	}
+	require.NotNil(t, found)
+	assert.NotNil(t, found.CreatedByUserID)
+	assert.Equal(t, creator.Email, found.CreatedByEmail)
+	assert.Equal(t, creator.Name, found.CreatedByName)
+}
+
 func TestAuditLogIndexes(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close()

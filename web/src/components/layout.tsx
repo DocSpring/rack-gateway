@@ -60,7 +60,7 @@ export function Layout() {
 
   // Declarative redirect: when at layout root, go to Rack
   if (pathname === '/') {
-    return <Navigate replace to="/rack" />
+    return <Navigate replace to="/users" />
   }
 
   return (

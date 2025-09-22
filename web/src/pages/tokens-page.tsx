@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { TimeAgo } from '@/components/time-ago'
@@ -436,21 +436,22 @@ function TokensPageInner() {
     }
   }
 
+  const resetCreateState = useCallback(() => {
+    setNewTokenName('')
+    setCreatedToken(null)
+    setSelectedPermissions([])
+    setActiveRole(null)
+  }, [])
+
   // Close create dialog without resetting content to avoid flash during fade-out
   const closeCreateModal = () => {
     setIsCreateOpen(false)
-    setSelectedPermissions([])
-    setActiveRole(null)
-    setCreatedToken(null)
   }
 
   // Close and reset create dialog state (used by Cancel)
   const closeCreateModalAndReset = () => {
     setIsCreateOpen(false)
-    setNewTokenName('')
-    setCreatedToken(null)
-    setSelectedPermissions([])
-    setActiveRole(null)
+    resetCreateState()
   }
 
   const openDeleteDialog = (t: APIToken) => {
@@ -517,6 +518,15 @@ function TokensPageInner() {
       return next
     })
   }
+
+  useEffect(() => {
+    if (!isCreateOpen) {
+      const timer = window.setTimeout(() => {
+        resetCreateState()
+      }, 180)
+      return () => window.clearTimeout(timer)
+    }
+  }, [isCreateOpen, resetCreateState])
 
   const handleUpdateToken = () => {
     if (!editToken) {

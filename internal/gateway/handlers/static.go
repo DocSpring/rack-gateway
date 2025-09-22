@@ -44,7 +44,7 @@ func Robots(c *gin.Context) {
 
 // WebRedirect redirects to default web page
 func WebRedirect(c *gin.Context) {
-	c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/rack")
+	c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/users")
 }
 
 // StaticHandler serves the UI either via the Vite dev proxy or the compiled dist assets.
@@ -85,8 +85,8 @@ func (h *StaticHandler) configureAssets() {
 
 // ServeStatic serves static files from the web dist directory, or proxies to the dev server.
 func (h *StaticHandler) ServeStatic(c *gin.Context) {
-	if shouldRedirectToRack(c.Request) {
-		c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/rack")
+	if shouldRedirectToDefault(c.Request) {
+		c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/users")
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "index.html", info.ModTime(), file)
 }
 
-func shouldRedirectToRack(r *http.Request) bool {
+func shouldRedirectToDefault(r *http.Request) bool {
 	if r == nil {
 		return false
 	}

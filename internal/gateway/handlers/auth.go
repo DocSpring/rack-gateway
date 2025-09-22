@@ -156,7 +156,7 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	}
 
 	// Redirect to web UI
-	c.Redirect(http.StatusFound, "/.gateway/web/rack")
+	c.Redirect(http.StatusFound, "/.gateway/web/users")
 }
 
 // WebLogout handles logout for web sessions
