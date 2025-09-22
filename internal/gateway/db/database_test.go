@@ -235,7 +235,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	assert.Len(t, paged, 2)
 
 	filters.Search = "Example"
-	paged, total, err = db.GetAuditLogsPaged(filters)
+	_, total, err = db.GetAuditLogsPaged(filters)
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 

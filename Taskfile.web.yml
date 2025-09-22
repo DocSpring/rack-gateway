@@ -23,6 +23,10 @@ tasks:
     desc: Run TypeScript typecheck and Biome lint
     deps: [lint:typecheck, lint:biome]
 
+  lint:fix:
+    desc: Run TypeScript typecheck and auto-fix Biome issues (safe)
+    deps: [lint:typecheck, lint:biome:fix]
+
   lint:typecheck:
     dir: web
     desc: Run TypeScript type checking
@@ -37,9 +41,9 @@ tasks:
     cmds:
       - pnpm lint
 
-  lint:fix:
+  lint:biome:fix:
     dir: web
-    desc: Auto-fix Biome issues (safe)
+    desc: Run Biome lint
     deps: [deps]
     cmds:
       - pnpm lint:fix

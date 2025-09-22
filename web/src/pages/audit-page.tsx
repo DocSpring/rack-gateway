@@ -286,7 +286,7 @@ function toISOStringParam(value?: string | null): string | undefined {
   return date.toISOString()
 }
 
-const ensureFilterValue = (value: string | null, options: Record<string, string>) =>
+const ensureFilterValue = (value: string | null | undefined, options: Record<string, string>) =>
   value && value in options ? value : 'all'
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: acceptable complexity for this page component
