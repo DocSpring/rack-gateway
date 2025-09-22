@@ -69,24 +69,41 @@ func (hv *HostValidator) isAllowedHost(host string) bool {
 		return false
 	}
 
-	// Strip port if present
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-
-	// In dev mode, allow localhost
+	// In dev mode, check full host (with port) first for dev servers
 	if hv.devMode {
-		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-			return true
-		}
-
-		// Allow configured dev server
+		// Allow configured dev server with port
 		if webDevURL := os.Getenv("WEB_DEV_SERVER_URL"); webDevURL != "" {
 			if devURL, err := url.Parse(webDevURL); err == nil {
-				if host == devURL.Hostname() {
+				if host == devURL.Host {
 					return true
 				}
 			}
+		}
+
+		// Allow web dev port explicitly (for E2E tests where Vite proxies to gateway)
+		if webPort := os.Getenv("WEB_PORT"); webPort != "" {
+			if host == "localhost:"+webPort || host == "127.0.0.1:"+webPort {
+				return true
+			}
+		}
+
+		// Allow the gateway's own port on any hostname (for Docker internal networking)
+		// This handles cases where proxies use internal hostnames like gateway-api-dev:8447
+		if port := os.Getenv("PORT"); port != "" && strings.HasSuffix(host, ":"+port) {
+			return true
+		}
+	}
+
+	// Strip port if present for domain matching
+	hostWithoutPort := host
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		hostWithoutPort = host[:idx]
+	}
+
+	// In dev mode, allow localhost (any port)
+	if hv.devMode {
+		if hostWithoutPort == "localhost" || hostWithoutPort == "127.0.0.1" || hostWithoutPort == "::1" {
+			return true
 		}
 	}
 
@@ -95,8 +112,8 @@ func (hv *HostValidator) isAllowedHost(host string) bool {
 		return false
 	}
 
-	// Check allowed domains
-	hostLower := strings.ToLower(host)
+	// Check allowed domains (use host without port for domain matching)
+	hostLower := strings.ToLower(hostWithoutPort)
 	for _, allowed := range hv.allowedDomains {
 		allowedHost := strings.ToLower(allowed)
 

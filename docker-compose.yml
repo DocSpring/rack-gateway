@@ -166,6 +166,9 @@ services:
       FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-5223}
       DEV_MODE: "true"
       WEB_DEV_SERVER_URL: http://web-dev:5173
+      WEB_PORT: ${WEB_PORT:-5223}
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
     depends_on:

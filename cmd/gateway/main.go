@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -230,9 +231,21 @@ func main() {
 	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackAlias, rackCfg, devProxyURL, publicBase)
 
 	// Initialize rate limiter for auth endpoints
-	// 10 requests per second with burst of 20 - very generous for auth
-	// This allows for normal OAuth flow and some retries without blocking legitimate users
-	rateLimiter := ratelimit.NewRateLimiter(10, 20)
+	// Default: 10 req/s with burst of 20 for production
+	// Can be overridden via RATE_LIMIT_RPS and RATE_LIMIT_BURST for testing
+	rps := 10.0
+	burst := 20
+	if rpsEnv := os.Getenv("RATE_LIMIT_RPS"); rpsEnv != "" {
+		if parsed, err := strconv.ParseFloat(rpsEnv, 64); err == nil {
+			rps = parsed
+		}
+	}
+	if burstEnv := os.Getenv("RATE_LIMIT_BURST"); burstEnv != "" {
+		if parsed, err := strconv.Atoi(burstEnv); err == nil {
+			burst = parsed
+		}
+	}
+	rateLimiter := ratelimit.NewRateLimiter(rps, burst)
 
 	// Initialize host validator - validates Host header and Origin when present
 	hostValidator := security.NewHostValidator(cfg.Domain)
