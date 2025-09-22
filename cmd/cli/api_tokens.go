@@ -30,8 +30,8 @@ type apiToken struct {
 }
 
 type apiTokenResponse struct {
-	Token    string   `json:"token"`
-	APIToken apiToken `json:"api_token"`
+	Token    string    `json:"token"`
+	APIToken *apiToken `json:"api_token"`
 }
 
 type tokenPermissionMetadata struct {
@@ -210,6 +210,16 @@ func newAPITokenCreateCommand() *cobra.Command {
 				return err
 			}
 
+			if resp == nil || resp.APIToken == nil {
+				return errors.New("gateway returned an incomplete API token payload")
+			}
+			if resp.APIToken.ID == 0 {
+				return fmt.Errorf("gateway returned invalid API token id: %d", resp.APIToken.ID)
+			}
+			if strings.TrimSpace(resp.APIToken.Name) == "" {
+				return errors.New("gateway returned API token without a name")
+			}
+
 			switch strings.ToLower(output) {
 			case "json":
 				return printJSON(cmd, resp)
@@ -295,6 +305,9 @@ func createAPIToken(rack, name, userEmail string, permissions []string, expiresA
 	var resp apiTokenResponse
 	if err := gatewayRequest(rack, http.MethodPost, "/admin/tokens", payload, &resp); err != nil {
 		return nil, err
+	}
+	if resp.APIToken == nil {
+		return nil, fmt.Errorf("gateway returned missing api_token metadata")
 	}
 	return &resp, nil
 }

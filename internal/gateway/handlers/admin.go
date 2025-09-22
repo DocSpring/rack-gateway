@@ -734,6 +734,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		"id":          resp.APIToken.ID,
 		"name":        resp.APIToken.Name,
 		"permissions": resp.APIToken.Permissions,
+		"api_token":   resp.APIToken,
 	}
 	details := map[string]interface{}{
 		"name":        resp.APIToken.Name,

@@ -163,10 +163,11 @@ function logout_cli() {
 # --------------------------------------------
 echo "Running CLI tests..."
 
-if [ -z "$SKIP_ADMIN_TESTS" ]; then
-  # Admin login
+if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   login_cli_as "admin@example.com" "e2e"
+fi
 
+if [ -z "$SKIP_ADMIN_TESTS" ]; then
   verify_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
   verify_command "convox rack" "mock-rack" "mock-rack.example.com"
   verify_command "convox apps" "convox-gateway" "RAPI123456"
@@ -239,8 +240,11 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   if [[ -z "$API_TOKEN" || -z "$API_TOKEN_ID" ]]; then
     echo -e "${RED}Failed to parse API token response${NC}" >&2
+    echo -e "${RED}API Token JSON: $API_TOKEN_JSON${NC}"
     exit 1
   fi
+
+  echo -e "${GREEN}API Token ID: $API_TOKEN_ID${NC}, Token: $API_TOKEN${NC}"
 
   logout_cli
 
