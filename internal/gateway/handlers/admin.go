@@ -383,8 +383,9 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		resp["allow_destructive_actions"] = false
 	}
 
-	resp["rack_tls_cert"] = nil
-	if h.rackCertMgr != nil {
+	pinningEnabled := h.config != nil && h.config.RackTLSPinningEnabled
+	resp["rack_tls_pinning_enabled"] = pinningEnabled
+	if pinningEnabled && h.rackCertMgr != nil {
 		if cert, ok, err := h.rackCertMgr.CurrentCertificate(c.Request.Context()); err == nil && ok {
 			resp["rack_tls_cert"] = gin.H{
 				"pem":         cert.PEM,
@@ -483,7 +484,7 @@ func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 
 // RefreshRackTLSCert forces a refresh of the pinned rack TLS certificate.
 func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
-	if h.rackCertMgr == nil {
+	if h.config == nil || !h.config.RackTLSPinningEnabled || h.rackCertMgr == nil {
 		c.JSON(http.StatusNotImplemented, gin.H{"error": "rack certificate manager not configured"})
 		return
 	}

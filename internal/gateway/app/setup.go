@@ -121,9 +121,11 @@ func (a *App) initializeServices() error {
 	auditLogger := audit.NewLogger(a.Database)
 
 	// Rack TLS certificate manager
-	a.RackCertManager = rackcert.NewManager(a.Config, a.Database)
-	if _, err := a.RackCertManager.TLSConfig(context.Background()); err != nil {
-		log.Printf("Warning: failed to initialize rack TLS certificate: %v", err)
+	if a.Config.RackTLSPinningEnabled {
+		a.RackCertManager = rackcert.NewManager(a.Config, a.Database)
+		if _, err := a.RackCertManager.TLSConfig(context.Background()); err != nil {
+			log.Printf("Warning: failed to initialize rack TLS certificate: %v", err)
+		}
 	}
 
 	// Seed protected env vars from DB_SEED_PROTECTED_ENV_VARS if provided
@@ -176,7 +178,12 @@ func (a *App) initializeServices() error {
 	}
 
 	// Initialize proxy handler
-	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, a.RackCertManager)
+	pinnedMgr := a.RackCertManager
+	if !a.Config.RackTLSPinningEnabled {
+		pinnedMgr = nil
+	}
+
+	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, pinnedMgr)
 
 	return nil
 }

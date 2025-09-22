@@ -24,6 +24,7 @@ type SettingsErrorPayload = {
 type SettingsResponse = {
   protected_env_vars: string[]
   allow_destructive_actions: boolean
+  rack_tls_pinning_enabled?: boolean
   rack_tls_cert?: RackTLSCert | null
 }
 
@@ -62,6 +63,7 @@ export function SettingsPage() {
   const allowDestructive = data?.allow_destructive_actions ?? false
   const cert = data?.rack_tls_cert ?? null
   const certFetchedAt = cert?.fetched_at ? new Date(cert.fetched_at).toLocaleString() : null
+  const pinningEnabled = !!data?.rack_tls_pinning_enabled
 
   const saveEnvMutation = useMutation({
     mutationFn: async (vars: string[]) =>
@@ -242,40 +244,44 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Rack TLS Certificate</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-muted-foreground text-sm">
-              The pinned rack certificate is used to verify all proxied connections. Refresh after
-              rotating rack TLS.
-            </p>
-            <textarea
-              className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
-              readOnly
-              rows={cert ? 10 : 4}
-              value={cert?.pem ?? 'No certificate pinned yet.'}
-            />
-            <div className="flex flex-col gap-1 text-muted-foreground text-xs">
-              <span>
-                <strong>Fingerprint:</strong> {cert?.fingerprint ?? '—'}
-              </span>
-              <span>
-                <strong>Fetched:</strong> {certFetchedAt ?? '—'}
-              </span>
-            </div>
-            <div>
-              <Button
-                disabled={!isAdmin || refreshCertMutation.isPending}
-                onClick={() => refreshCertMutation.mutate()}
-              >
-                {refreshCertMutation.isPending ? 'Refreshing…' : 'Refresh'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        <div className="hidden md:block" />
+        {pinningEnabled ? (
+          <>
+            <Card className="md:col-span-1">
+              <CardHeader>
+                <CardTitle>Rack TLS Certificate</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-muted-foreground text-sm">
+                  The pinned rack certificate is used to verify all proxied connections. Refresh
+                  after rotating rack TLS.
+                </p>
+                <textarea
+                  className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
+                  readOnly
+                  rows={cert ? 10 : 4}
+                  value={cert?.pem ?? 'No certificate pinned yet.'}
+                />
+                <div className="flex flex-col gap-1 text-muted-foreground text-xs">
+                  <span>
+                    <strong>Fingerprint:</strong> {cert?.fingerprint ?? '—'}
+                  </span>
+                  <span>
+                    <strong>Fetched:</strong> {certFetchedAt ?? '—'}
+                  </span>
+                </div>
+                <div>
+                  <Button
+                    disabled={!isAdmin || refreshCertMutation.isPending}
+                    onClick={() => refreshCertMutation.mutate()}
+                  >
+                    {refreshCertMutation.isPending ? 'Refreshing…' : 'Refresh'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="hidden md:block" />
+          </>
+        ) : null}
       </div>
     </div>
   )

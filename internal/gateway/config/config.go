@@ -11,22 +11,23 @@ import (
 )
 
 type Config struct {
-	Port                string
-	Domain              string
-	JWTSecret           string
-	JWTExpiry           time.Duration
-	GoogleClientID      string
-	GoogleClientSecret  string
-	GoogleAllowedDomain string
-	GoogleOAuthBaseURL  string
-	AdminUsers          []string
-	ViewerUsers         []string
-	DeployerUsers       []string
-	OperationsUsers     []string
-	DevMode             bool
-	Racks               map[string]RackConfig
-	LogResponseBodies   bool
-	LogResponseMaxBytes int
+	Port                  string
+	Domain                string
+	JWTSecret             string
+	JWTExpiry             time.Duration
+	GoogleClientID        string
+	GoogleClientSecret    string
+	GoogleAllowedDomain   string
+	GoogleOAuthBaseURL    string
+	AdminUsers            []string
+	ViewerUsers           []string
+	DeployerUsers         []string
+	OperationsUsers       []string
+	DevMode               bool
+	Racks                 map[string]RackConfig
+	LogResponseBodies     bool
+	LogResponseMaxBytes   int
+	RackTLSPinningEnabled bool
 }
 
 type RackConfig struct {
@@ -51,6 +52,11 @@ func Load() (*Config, error) {
 		Racks:               make(map[string]RackConfig),
 		LogResponseBodies:   getEnv("LOG_RESPONSE_BODIES", "false") == "true",
 		LogResponseMaxBytes: 16384,
+		// Disabled by default because the Convox rack API currently generates a fresh self-signed
+		// certificate on every restart (see stdapi.Server.Listen). Pinning that dynamic cert would
+		// break after each deploy. If Convox supports providing a stable internal certificate in the
+		// future, operators can enable this flag to re-activate TOFU pinning.
+		RackTLSPinningEnabled: getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
 	}
 	if mb := getEnv("LOG_RESPONSE_MAX_BYTES", "65536"); mb != "" {
 		if v, err := strconv.Atoi(mb); err == nil && v > 0 {
