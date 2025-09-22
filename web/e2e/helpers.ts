@@ -33,7 +33,10 @@ export async function login(page: Page, options: LoginOptions = {}) {
     await userCard.first().click()
   }
 
-  await page.waitForResponse((r) => r.url().includes('/.gateway/api/me') && r.status() === 200, {
-    timeout: 20_000,
-  })
+  await expect
+    .poll(async () => {
+      const cookies = await page.context().cookies()
+      return cookies.some((cookie) => cookie.name === 'session_token')
+    })
+    .toBeTruthy()
 }

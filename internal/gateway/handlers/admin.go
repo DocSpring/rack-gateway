@@ -310,7 +310,7 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 		"name":  req.Name,
 		"roles": user.Roles,
 	}
-	details := map[string]interface{}{"name": req.Name}
+	details := map[string]interface{}{"name": req.Name}
 	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update", strings.TrimSpace(email), start, details)
 }
 

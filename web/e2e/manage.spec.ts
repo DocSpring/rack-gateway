@@ -169,8 +169,12 @@ test('audit logs: view and filter', async ({ page }) => {
   // Search for the created token name
   await page.getByLabel('Search').fill(tokenName)
 
-  const filteredCell = page.locator('table tbody td', { hasText: tokenName }).first()
-  await expect(filteredCell).toBeVisible()
+  const filteredActionCell = page.locator('table tbody td', { hasText: 'api_token.create' }).first()
+  await expect(filteredActionCell).toBeVisible()
+
+  // name is truncated to fit in the cell
+  const filteredResourceCell = page.locator('table tbody td', { hasText: 'E2E Web API' }).first()
+  await expect(filteredResourceCell).toBeVisible()
 
   // Clean up token to avoid test fixture buildup
   await page.goto('/.gateway/web/api_tokens')
