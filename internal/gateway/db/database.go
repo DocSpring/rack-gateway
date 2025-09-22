@@ -80,10 +80,14 @@ func New(dsn string) (*Database, error) {
 	// Use provided DSN if it looks like Postgres, else use env var
 	source := strings.TrimSpace(dsn)
 	if source == "" || !(strings.HasPrefix(strings.ToLower(source), "postgres://") || strings.HasPrefix(strings.ToLower(source), "postgresql://")) {
-		source = os.Getenv("DATABASE_URL")
+		// Check CGW_DATABASE_URL first (new Convox automatic env var), then fall back to DATABASE_URL
+		source = os.Getenv("CGW_DATABASE_URL")
+		if source == "" {
+			source = os.Getenv("DATABASE_URL")
+		}
 	}
 	if source == "" {
-		return nil, fmt.Errorf("DATABASE_URL is required")
+		return nil, fmt.Errorf("CGW_DATABASE_URL or DATABASE_URL is required")
 	}
 
 	// Ensure appropriate sslmode: require in non-dev unless explicitly set
@@ -104,6 +108,10 @@ func New(dsn string) (*Database, error) {
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
 func NewFromEnv() (*Database, error) {
+	// Check CGW_DATABASE_URL first (from Convox resource), then fall back to DATABASE_URL
+	if dsn := os.Getenv("CGW_DATABASE_URL"); dsn != "" {
+		return New(dsn)
+	}
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
 		return New(dsn)
 	}
