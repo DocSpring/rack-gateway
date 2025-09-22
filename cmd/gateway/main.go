@@ -20,6 +20,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/logging"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
+	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ui"
@@ -227,6 +228,11 @@ func main() {
 
 	uiHandler := ui.NewHandler(rbacManager, "", tokenService, database, sender, rackName, rackAlias, rackCfg, devProxyURL, publicBase)
 
+	// Initialize rate limiter for auth endpoints
+	// 10 requests per second with burst of 20 - very generous for auth
+	// This allows for normal OAuth flow and some retries without blocking legitimate users
+	rateLimiter := ratelimit.NewRateLimiter(10, 20)
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -251,21 +257,29 @@ func main() {
 	// Expose API only under /.gateway/api/* (apply timeout here, not on WS proxy routes)
 	r.Route("/.gateway/api", func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))
-		// Auth (scoped under /auth)
-		r.Post("/auth/cli/start", handleCLILoginStart(oauthHandler, database))
-		r.Get("/auth/cli/callback", handleCLILoginRedirectCallback(database))
-		r.Post("/auth/cli/complete", handleCLILoginComplete(oauthHandler, database))
-		// Health (no auth required)
-		r.Get("/health", uiHandler.Health)
-		// CSRF for web under /auth/web (no auth required)
-		r.Get("/auth/web/csrf", uiHandler.GetCSRFToken)
 
-		// OAuth (web) endpoints
-		// Accept both GET and HEAD for login to support headless browser probes
-		r.Get("/auth/web/login", handleWebLoginStart(oauthHandler, database))
-		r.Head("/auth/web/login", handleWebLoginStart(oauthHandler, database))
-		r.Get("/auth/web/callback", handleWebLoginCallback(oauthHandler, database))
-		r.Get("/auth/web/logout", handleWebLogout(database))
+		// Apply rate limiting to auth endpoints
+		r.Group(func(r chi.Router) {
+			r.Use(rateLimiter.Middleware)
+
+			// Auth (scoped under /auth) - rate limited
+			r.Post("/auth/cli/start", handleCLILoginStart(oauthHandler, database))
+			r.Get("/auth/cli/callback", handleCLILoginRedirectCallback(database))
+			r.Post("/auth/cli/complete", handleCLILoginComplete(oauthHandler, database))
+
+			// OAuth (web) endpoints - rate limited
+			// Accept both GET and HEAD for login to support headless browser probes
+			r.Get("/auth/web/login", handleWebLoginStart(oauthHandler, database))
+			r.Head("/auth/web/login", handleWebLoginStart(oauthHandler, database))
+			r.Get("/auth/web/callback", handleWebLoginCallback(oauthHandler, database))
+			r.Get("/auth/web/logout", handleWebLogout(database))
+
+			// CSRF for web under /auth/web (rate limited as it's auth-related)
+			r.Get("/auth/web/csrf", uiHandler.GetCSRFToken)
+		})
+
+		// Health (no auth or rate limiting required)
+		r.Get("/health", uiHandler.Health)
 
 		// Authenticated endpoints
 		r.Group(func(r chi.Router) {
@@ -295,7 +309,13 @@ func main() {
 				r.Delete("/users/{email}", uiHandler.DeleteUser)
 				r.Put("/users/{email}", uiHandler.UpdateUserProfile)
 				r.Put("/users/{email}/roles", uiHandler.UpdateUserRoles)
-				r.Post("/tokens", uiHandler.CreateAPIToken)
+
+				// Apply rate limiting to token creation (auth-related)
+				r.Group(func(r chi.Router) {
+					r.Use(rateLimiter.Middleware)
+					r.Post("/tokens", uiHandler.CreateAPIToken)
+				})
+
 				r.Get("/tokens", uiHandler.ListAPITokens)
 				r.Get("/tokens/{tokenID}", uiHandler.GetAPIToken)
 				r.Get("/tokens/permissions", uiHandler.GetTokenPermissionMetadata)
