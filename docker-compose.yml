@@ -79,6 +79,9 @@ services:
       # Internal service URL for OIDC discovery/token endpoints
       GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
       FRONTEND_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}/.gateway/web/
+      DEV_MODE: "true"
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
     ports:
       - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
     volumes: []
