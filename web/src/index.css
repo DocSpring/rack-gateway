@@ -127,3 +127,14 @@
     color: #fff;
   }
 }
+#root :where(.rdp-root),
+.rdp-root {
+  --rdp-accent-color: oklch(0.98 0 0);
+  --rdp-accent-background-color: color-mix(
+    in oklch,
+    var(--rdp-accent-color) 20%,
+    transparent
+  );
+  --rdp-selected-border: 2px solid var(--rdp-accent-color);
+  --rdp-today-color: var(--rdp-accent-color);
+}

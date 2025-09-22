@@ -409,11 +409,15 @@ describe('AuditPage', () => {
       fireEvent.click(dateRangeSelect)
       fireEvent.click(screen.getByText('Custom…'))
 
-      const startInput = screen.getByLabelText('Start') as HTMLInputElement
-      const endInput = screen.getByLabelText('End') as HTMLInputElement
+      const startDateInput = screen.getByLabelText('Start') as HTMLInputElement
+      const startTimeInput = screen.getByLabelText('Start time') as HTMLInputElement
+      const endDateInput = screen.getByLabelText('End') as HTMLInputElement
+      const endTimeInput = screen.getByLabelText('End time') as HTMLInputElement
 
-      fireEvent.change(startInput, { target: { value: '2025-01-15T09:30' } })
-      fireEvent.change(endInput, { target: { value: '2025-01-16T11:15' } })
+      fireEvent.change(startDateInput, { target: { value: '2025-01-15' } })
+      fireEvent.change(startTimeInput, { target: { value: '09:30' } })
+      fireEvent.change(endDateInput, { target: { value: '2025-01-16' } })
+      fireEvent.change(endTimeInput, { target: { value: '11:15' } })
 
       await waitFor(() => {
         const lastCall = vi.mocked(api.get).mock.calls.at(-1)?.[0]
@@ -444,11 +448,15 @@ describe('AuditPage', () => {
         expect(api.get).toHaveBeenCalled()
       })
 
-      const startInput = screen.getByLabelText('Start') as HTMLInputElement
-      const endInput = screen.getByLabelText('End') as HTMLInputElement
+      const startDateInput = screen.getByLabelText('Start') as HTMLInputElement
+      const startTimeInput = screen.getByLabelText('Start time') as HTMLInputElement
+      const endDateInput = screen.getByLabelText('End') as HTMLInputElement
+      const endTimeInput = screen.getByLabelText('End time') as HTMLInputElement
 
-      expect(startInput.value).toBe('2025-01-10T12:00')
-      expect(endInput.value).toBe('2025-01-11T08:45')
+      expect(startDateInput.value).toBe('2025-01-10')
+      expect(startTimeInput.value).toBe('12:00')
+      expect(endDateInput.value).toBe('2025-01-11')
+      expect(endTimeInput.value).toBe('08:45')
 
       const lastCall = vi.mocked(api.get).mock.calls.at(-1)?.[0]
       expect(lastCall).toBeDefined()

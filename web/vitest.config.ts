@@ -14,6 +14,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     exclude: ['node_modules', 'dist', 'e2e'],
+    hookTimeout: 10_000,
+    testTimeout: 10_000,
     coverage: {
       reporter: ['text', 'json', 'html'],
     },

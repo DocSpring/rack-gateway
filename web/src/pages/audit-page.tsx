@@ -1,7 +1,9 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Download, Eye, RefreshCw, Search } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Calendar as CalendarIcon, Download, Eye, RefreshCw, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TablePane } from '../components/table-pane'
 import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
@@ -259,6 +261,10 @@ function appendPagination(
   }
 }
 
+const DATE_ONLY_FORMAT = 'yyyy-MM-dd'
+const DATE_SPLIT_PATTERN = /[T\s]/
+const TIME_PATTERN = /^[0-9]{2}:[0-9]{2}$/
+
 function toDateTimeLocalInput(value?: string | null): string {
   if (!value) {
     return ''
@@ -274,16 +280,77 @@ function toDateTimeLocalInput(value?: string | null): string {
   return local.toISOString().slice(0, 16)
 }
 
+function parseLocalDateTime(value: string | undefined) {
+  if (!value) {
+    return null
+  }
+
+  const { datePart, timePart } = splitDateTime(value)
+  if (!datePart) {
+    return null
+  }
+
+  const [year, month, day] = datePart.split('-').map(Number)
+  if ([year, month, day].some(Number.isNaN)) {
+    return null
+  }
+
+  const safeTime = TIME_PATTERN.test(timePart) ? timePart : '00:00'
+  const [hour, minute] = safeTime.split(':').map(Number)
+  if ([hour, minute].some(Number.isNaN)) {
+    return null
+  }
+
+  const local = new Date(year, month - 1, day, hour, minute, 0, 0)
+  if (Number.isNaN(local.getTime())) {
+    return null
+  }
+
+  return local
+}
+
 function toISOStringParam(value?: string | null): string | undefined {
   if (!value) {
     return
   }
 
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return
+  const parsed = parseLocalDateTime(value)
+  return parsed?.toISOString()
+}
+
+function splitDateTime(value: string | undefined) {
+  if (!value) {
+    return { datePart: '', timePart: '' }
   }
-  return date.toISOString()
+
+  const trimmed = value.trim()
+  const [rawDate = '', rawTime = ''] = trimmed.split('T')
+  const datePart = rawDate.split(' ')[0] || ''
+  const timeCandidate = rawTime || trimmed.split(' ')[1] || ''
+  const truncatedTime = timeCandidate.slice(0, 5)
+
+  return {
+    datePart,
+    timePart: TIME_PATTERN.test(truncatedTime) ? truncatedTime : '',
+  }
+}
+
+function combineDateTime(datePart: string, timePart: string) {
+  const normalizedDate = datePart.trim().split(DATE_SPLIT_PATTERN)[0] || ''
+  if (!normalizedDate) {
+    return ''
+  }
+  const normalizedTime = timePart.trim().slice(0, 5)
+  const safeTime = TIME_PATTERN.test(normalizedTime) ? normalizedTime : '00:00'
+  return `${normalizedDate}T${safeTime}`
+}
+
+function parseDateTime(value: string | undefined) {
+  return parseLocalDateTime(value)
+}
+
+function isValidDateTime(value: string | undefined) {
+  return parseDateTime(value) !== null
 }
 
 const ensureFilterValue = (value: string | null | undefined, options: Record<string, string>) =>
@@ -407,6 +474,38 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
     }
     return toISOStringParam(customEnd)
   }, [customEnd, dateRange])
+
+  const handleCustomStartChange = useCallback((next: string) => {
+    setCustomStart(next)
+    setPage(1)
+    if (!isValidDateTime(next)) {
+      return
+    }
+    setCustomEnd((prev) => {
+      if (!(prev && isValidDateTime(prev))) {
+        return next
+      }
+      const prevTime = new Date(prev).getTime()
+      const nextTime = new Date(next).getTime()
+      return prevTime < nextTime ? next : prev
+    })
+  }, [])
+
+  const handleCustomEndChange = useCallback((next: string) => {
+    setCustomEnd(next)
+    setPage(1)
+    if (!isValidDateTime(next)) {
+      return
+    }
+    setCustomStart((prev) => {
+      if (!(prev && isValidDateTime(prev))) {
+        return next
+      }
+      const prevTime = new Date(prev).getTime()
+      const nextTime = new Date(next).getTime()
+      return prevTime > nextTime ? next : prev
+    })
+  }, [])
 
   // Persist selected date range and per-page to localStorage
   useEffect(() => {
@@ -926,37 +1025,6 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
               </Select>
             </div>
 
-            {dateRange === 'custom' && (
-              <>
-                <div className="mx-4 flex flex-col space-y-2">
-                  <Label htmlFor="custom-start">Start</Label>
-                  <Input
-                    id="custom-start"
-                    max={customEnd || undefined}
-                    onChange={(e) => {
-                      setCustomStart(e.target.value)
-                      setPage(1)
-                    }}
-                    type="datetime-local"
-                    value={customStart}
-                  />
-                </div>
-                <div className="mx-4 flex flex-col space-y-2">
-                  <Label htmlFor="custom-end">End</Label>
-                  <Input
-                    id="custom-end"
-                    min={customStart || undefined}
-                    onChange={(e) => {
-                      setCustomEnd(e.target.value)
-                      setPage(1)
-                    }}
-                    type="datetime-local"
-                    value={customEnd}
-                  />
-                </div>
-              </>
-            )}
-
             <div className="mx-6 mr-0 flex flex-col space-y-2">
               <Label htmlFor="per-page">Per Page</Label>
               <Select
@@ -979,7 +1047,28 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
             </div>
           </div>
 
-          <div className="mt-4 flex gap-2">
+          {dateRange === 'custom' && (
+            <div className="mt-8 flex w-full flex-col gap-12 sm:flex-row">
+              <DateTimePickerField
+                label="Start"
+                maxValue={customEnd}
+                onChange={(next) => {
+                  handleCustomStartChange(next)
+                }}
+                value={customStart}
+              />
+              <DateTimePickerField
+                label="End"
+                minValue={customStart}
+                onChange={(next) => {
+                  handleCustomEndChange(next)
+                }}
+                value={customEnd}
+              />
+            </div>
+          )}
+
+          <div className="mt-8 flex gap-2">
             <Button onClick={() => refetch()} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
@@ -1260,6 +1349,130 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+type DateTimePickerFieldProps = {
+  label: string
+  value: string
+  onChange: (next: string) => void
+  minValue?: string
+  maxValue?: string
+}
+
+function DateTimePickerField({
+  label,
+  value,
+  onChange,
+  minValue,
+  maxValue,
+}: DateTimePickerFieldProps) {
+  const { datePart, timePart } = useMemo(() => splitDateTime(value), [value])
+  const [open, setOpen] = useState(false)
+  const selectedDate = useMemo(() => parseDateTime(value), [value])
+  const [month, setMonth] = useState<Date>(selectedDate ?? new Date())
+
+  useEffect(() => {
+    if (!selectedDate) {
+      return
+    }
+    setMonth((current) => {
+      if (current && selectedDate.getTime() === current.getTime()) {
+        return current
+      }
+      return selectedDate
+    })
+  }, [selectedDate])
+  const minParts = useMemo(() => splitDateTime(minValue), [minValue])
+  const maxParts = useMemo(() => splitDateTime(maxValue), [maxValue])
+  const timeMin = minValue && minParts.datePart === datePart ? minParts.timePart : undefined
+  const timeMax = maxValue && maxParts.datePart === datePart ? maxParts.timePart : undefined
+
+  const safeLabel = label.toLowerCase().replace(/\s+/g, '-')
+  const dateInputId = `${safeLabel}-date`
+  const timeInputId = `${safeLabel}-time`
+
+  return (
+    <div className="flex w-full flex-col space-y-2 sm:w-auto sm:min-w-[220px]">
+      <Label htmlFor={dateInputId}>{label}</Label>
+      <div className="relative">
+        <Input
+          className="pr-10 font-mono text-sm sm:w-[250px]"
+          id={dateInputId}
+          onChange={(event) => {
+            const nextDate = event.target.value.trim()
+            const combined = combineDateTime(nextDate, timePart)
+            onChange(combined)
+            const parsed = parseDateTime(combined)
+            if (parsed) {
+              setMonth(parsed)
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              setOpen(true)
+            }
+          }}
+          placeholder="YYYY-MM-DD"
+          value={datePart}
+        />
+        <Popover onOpenChange={setOpen} open={open}>
+          <PopoverTrigger asChild>
+            <Button
+              className="-translate-y-1/2 absolute top-1/2 right-2 h-8 w-8 p-0 text-muted-foreground hover:bg-transparent focus-visible:ring-1 dark:text-muted-foreground"
+              variant="ghost"
+            >
+              <CalendarIcon className="h-4 w-4" />
+              <span className="sr-only">Open calendar for {label}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            alignOffset={-4}
+            className="w-auto overflow-hidden p-0"
+            sideOffset={8}
+          >
+            <Calendar
+              initialFocus
+              mode="single"
+              month={month}
+              onMonthChange={setMonth}
+              onSelect={(selectedDateValue: Date | undefined) => {
+                if (!selectedDateValue) {
+                  return
+                }
+                const isoDate = format(selectedDateValue, DATE_ONLY_FORMAT)
+                const combined = combineDateTime(isoDate, timePart)
+                onChange(combined)
+                setOpen(false)
+              }}
+              selected={selectedDate ?? undefined}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div className="flex items-center gap-2 sm:max-w-[250px]">
+        <Label className="sr-only" htmlFor={timeInputId}>
+          {label} time
+        </Label>
+        <Input
+          className="bg-background font-mono text-sm sm:w-[120px] dark:bg-background [&::-webkit-calendar-picker-indicator]:hidden dark:[&::-webkit-calendar-picker-indicator]:invert"
+          id={timeInputId}
+          max={timeMax || undefined}
+          min={timeMin || undefined}
+          onChange={(event) => {
+            const nextTime = event.target.value
+            const combined = combineDateTime(datePart, nextTime)
+            onChange(combined)
+          }}
+          step="60"
+          type="time"
+          value={timePart}
+        />
+        <span className="text-muted-foreground text-xs">HH:MM</span>
+      </div>
     </div>
   )
 }
