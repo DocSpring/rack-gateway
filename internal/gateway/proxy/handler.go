@@ -1456,7 +1456,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 
 	// Upgrade client connection
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+		CheckOrigin: h.checkWebSocketOrigin,
 		// Advertise only the upstream-selected subprotocol (pass-through) if present
 		Subprotocols: func() []string {
 			if selectedSP != "" {
@@ -1542,6 +1542,66 @@ func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource, actio
 		}
 	}
 
+	return false
+}
+
+// checkWebSocketOrigin validates the origin header for WebSocket connections
+func (h *Handler) checkWebSocketOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// No origin header - allow for non-browser clients (CLI tools)
+		return true
+	}
+
+	originURL, err := url.Parse(origin)
+	if err != nil {
+		// Invalid origin URL - reject
+		return false
+	}
+
+	// Allow same-origin requests
+	if r.Host == originURL.Host {
+		return true
+	}
+
+	// In development mode, be more permissive
+	if os.Getenv("DEV_MODE") == "true" {
+		// Allow localhost origins in dev
+		if strings.HasPrefix(originURL.Host, "localhost:") || originURL.Host == "localhost" {
+			return true
+		}
+		// Allow the configured web dev server
+		if webDevURL := os.Getenv("WEB_DEV_SERVER_URL"); webDevURL != "" {
+			if devURL, err := url.Parse(webDevURL); err == nil {
+				if originURL.Host == devURL.Host {
+					return true
+				}
+			}
+		}
+	}
+
+	// Allow configured domain
+	if h.config.Domain != "" {
+		// Check if origin matches the configured domain
+		allowedHost := h.config.Domain
+		if !strings.Contains(allowedHost, ":") && originURL.Scheme == "https" {
+			allowedHost = h.config.Domain + ":443"
+		} else if !strings.Contains(allowedHost, ":") && originURL.Scheme == "http" {
+			allowedHost = h.config.Domain + ":80"
+		}
+
+		// Compare without default ports
+		originHost := originURL.Host
+		if (originURL.Scheme == "https" && strings.HasSuffix(originHost, ":443")) ||
+			(originURL.Scheme == "http" && strings.HasSuffix(originHost, ":80")) {
+			originHost = strings.Split(originHost, ":")[0]
+		}
+		if (h.config.Domain == originHost) || (allowedHost == originURL.Host) {
+			return true
+		}
+	}
+
+	// Reject all other origins
 	return false
 }
 

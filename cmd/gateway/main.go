@@ -234,10 +234,15 @@ func main() {
 	// This allows for normal OAuth flow and some retries without blocking legitimate users
 	rateLimiter := ratelimit.NewRateLimiter(10, 20)
 
+	// Initialize host validator - validates Host header and Origin when present
+	hostValidator := security.NewHostValidator(cfg.Domain)
+
 	r := chi.NewRouter()
 
 	// Apply security headers first (before any response is written)
 	r.Use(security.SecurityHeaders)
+	// Validate Host and Origin headers for security
+	r.Use(hostValidator.Middleware)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(filteredLogger())
