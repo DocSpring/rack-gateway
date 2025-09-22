@@ -32,6 +32,12 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		if port != "" && port != "80" && port != "443" {
 			allowedHosts = append(allowedHosts, fmt.Sprintf("%s:%s", baseHost, port))
 		}
+		if baseHost == "localhost" {
+			allowedHosts = append(allowedHosts, "127.0.0.1")
+			if port != "" && port != "80" && port != "443" {
+				allowedHosts = append(allowedHosts, fmt.Sprintf("127.0.0.1:%s", port))
+			}
+		}
 	}
 
 	connectSrc := "connect-src 'self' ws: wss:"
@@ -79,7 +85,9 @@ func OriginValidator(cfg *config.Config) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		if allowedHost == "" {
+		// Only enforce for browser-originated requests. Probes and internal clients usually
+		// omit typical browser headers, so skip origin validation for them.
+		if allowedHost == "" || (c.GetHeader("User-Agent") == "" && c.GetHeader("Sec-Fetch-Site") == "") {
 			c.Next()
 			return
 		}

@@ -21,6 +21,7 @@ func TestHostValidatorAllowsExactDomain(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "gateway.example.com:8447"
 	req.Header.Set("Origin", "https://gateway.example.com")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
@@ -43,6 +44,7 @@ func TestHostValidatorRejectsSubstringDomain(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "gateway-example.com"
 	req.Header.Set("Origin", "https://gateway.example.com")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
@@ -65,6 +67,7 @@ func TestHostValidatorRejectsMismatchedOrigin(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "gateway.example.com"
 	req.Header.Set("Origin", "https://evil.example.com")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
@@ -89,6 +92,7 @@ func TestHostValidatorAllowsDevLocalhost(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "localhost:8447"
 	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
