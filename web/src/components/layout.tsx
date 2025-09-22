@@ -181,7 +181,7 @@ export function Layout() {
             <p className="pt-1">Authenticate the CLI against this gateway:</p>
             <div className="rounded-md border bg-muted p-3 font-mono text-xs">
               <div>
-                $ convox-gateway login {rackAlias} {gatewayOrigin}
+                convox-gateway login {rackAlias} {gatewayOrigin}
               </div>
             </div>
             <p className="text-muted-foreground">
