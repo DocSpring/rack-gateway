@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
@@ -29,6 +31,17 @@ type AdminHandler struct {
 	emailSender  email.Sender
 	config       *config.Config
 	rackCertMgr  *rackcert.Manager
+}
+
+func cloneDetails(details map[string]interface{}) map[string]interface{} {
+	if len(details) == 0 {
+		return nil
+	}
+	copy := make(map[string]interface{}, len(details))
+	for k, v := range details {
+		copy[k] = v
+	}
+	return copy
 }
 
 type roleOption struct {
@@ -56,6 +69,108 @@ func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService 
 	}
 }
 
+func (h *AdminHandler) auditAdminAction(c *gin.Context, action, resource, status string, httpStatus int, details map[string]interface{}, start time.Time) {
+	if h == nil || h.database == nil {
+		return
+	}
+
+	if action == "audit.list" {
+		return
+	}
+
+	trimmedResource := strings.TrimSpace(resource)
+	detailsCopy := cloneDetails(details)
+	var detailsJSON string
+	if len(detailsCopy) > 0 {
+		if payload, err := json.Marshal(detailsCopy); err == nil {
+			detailsJSON = string(payload)
+		}
+	}
+
+	email := strings.TrimSpace(c.GetString("user_email"))
+	name := strings.TrimSpace(c.GetString("user_name"))
+	if au, ok := auth.GetAuthUser(c.Request.Context()); ok && au != nil {
+		if e := strings.TrimSpace(au.Email); e != "" {
+			email = e
+		}
+		if n := strings.TrimSpace(au.Name); n != "" {
+			name = n
+		}
+	}
+
+	actionType := "admin"
+	switch {
+	case strings.HasPrefix(action, "api_token."):
+		actionType = "tokens"
+	case strings.HasPrefix(action, "user."):
+		actionType = "users"
+	case strings.HasPrefix(action, "audit."):
+		actionType = "admin"
+	}
+
+	resourceType := "admin"
+	switch {
+	case strings.HasPrefix(action, "api_token."):
+		resourceType = "api_token"
+	case strings.HasPrefix(action, "user."):
+		resourceType = "user"
+	case strings.HasPrefix(action, "audit."):
+		resourceType = "admin"
+	}
+
+	entry := &db.AuditLog{
+		UserEmail:      email,
+		UserName:       name,
+		ActionType:     actionType,
+		Action:         action,
+		Resource:       trimmedResource,
+		ResourceType:   resourceType,
+		Details:        detailsJSON,
+		IPAddress:      c.ClientIP(),
+		UserAgent:      c.GetHeader("User-Agent"),
+		Status:         status,
+		HTTPStatus:     httpStatus,
+		ResponseTimeMs: int(time.Since(start).Milliseconds()),
+	}
+
+	switch status {
+	case "denied":
+		entry.RBACDecision = "deny"
+	case "success":
+		entry.RBACDecision = "allow"
+	}
+
+	_ = audit.LogDB(h.database, entry)
+}
+
+func (h *AdminHandler) respondAudit(c *gin.Context, statusCode int, payload interface{}, action, resource, auditStatus string, start time.Time, details map[string]interface{}) {
+	if payload == nil {
+		c.Status(statusCode)
+	} else {
+		c.JSON(statusCode, payload)
+	}
+	h.auditAdminAction(c, action, resource, auditStatus, statusCode, details, start)
+}
+
+func (h *AdminHandler) respondAuditSuccess(c *gin.Context, statusCode int, payload interface{}, action, resource string, start time.Time, details map[string]interface{}) {
+	h.respondAudit(c, statusCode, payload, action, resource, "success", start, details)
+}
+
+func (h *AdminHandler) respondAuditError(c *gin.Context, statusCode int, action, resource, message string, start time.Time, details map[string]interface{}) {
+	det := cloneDetails(details)
+	if det == nil {
+		det = make(map[string]interface{})
+	}
+	if message != "" {
+		det["error"] = message
+	}
+	auditStatus := "error"
+	if statusCode == http.StatusForbidden || statusCode == http.StatusUnauthorized {
+		auditStatus = "denied"
+	}
+	h.respondAudit(c, statusCode, gin.H{"error": message}, action, resource, auditStatus, start, det)
+}
+
 // ListUsers returns all users
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	users, err := h.database.ListUsers()
@@ -69,6 +184,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 // CreateUser creates a new user
 func (h *AdminHandler) CreateUser(c *gin.Context) {
+	start := time.Now()
 	var req struct {
 		Email string   `json:"email" binding:"required,email"`
 		Name  string   `json:"name" binding:"required"`
@@ -76,27 +192,25 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.respondAuditError(c, http.StatusBadRequest, "user.create", strings.TrimSpace(req.Email), err.Error(), start, nil)
 		return
 	}
 
-	// Validate roles
 	validRoles := []string{"viewer", "ops", "deployer", "admin"}
 	for _, role := range req.Roles {
-		valid := false
+		matched := false
 		for _, vr := range validRoles {
 			if role == vr {
-				valid = true
+				matched = true
 				break
 			}
 		}
-		if !valid {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid role: %s", role)})
+		if !matched {
+			h.respondAuditError(c, http.StatusBadRequest, "user.create", strings.TrimSpace(req.Email), fmt.Sprintf("invalid role: %s", role), start, nil)
 			return
 		}
 	}
 
-	// Create user
 	userConfig := &rbac.UserConfig{
 		Name:  req.Name,
 		Roles: req.Roles,
@@ -104,10 +218,10 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	if err := h.rbac.SaveUser(req.Email, userConfig); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
+			h.respondAuditError(c, http.StatusConflict, "user.create", strings.TrimSpace(req.Email), "user already exists", start, nil)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		h.respondAuditError(c, http.StatusInternalServerError, "user.create", strings.TrimSpace(req.Email), "failed to create user", start, nil)
 		return
 	}
 
@@ -121,40 +235,53 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		}
 	}
 
-	// Send welcome email
-	if h.emailSender != nil {
-		// Would send email here
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
+	payload := gin.H{
 		"email":            req.Email,
 		"name":             req.Name,
 		"roles":            req.Roles,
 		"created_by_email": strings.TrimSpace(c.GetString("user_email")),
-	})
+	}
+
+	resource := strings.TrimSpace(req.Email)
+	if userWithID, err := h.rbac.GetUserWithID(req.Email); err == nil && userWithID != nil && userWithID.ID > 0 {
+		resource = fmt.Sprintf("%d", userWithID.ID)
+	}
+
+	details := map[string]interface{}{"email": req.Email, "roles": req.Roles}
+	if strings.TrimSpace(req.Name) != "" {
+		details["name"] = req.Name
+	}
+
+	h.respondAuditSuccess(c, http.StatusCreated, payload, "user.create", resource, start, details)
+
+	if h.emailSender != nil {
+		// Would send email here
+	}
 }
 
 // DeleteUser deletes a user
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	start := time.Now()
 	email := c.Param("email")
 	currentUser := c.GetString("user_email")
 
 	// Can't delete yourself
 	if email == currentUser {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete yourself"})
+		h.respondAuditError(c, http.StatusBadRequest, "user.delete", strings.TrimSpace(email), "cannot delete yourself", start, nil)
 		return
 	}
 
 	if err := h.rbac.DeleteUser(email); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		h.respondAuditError(c, http.StatusInternalServerError, "user.delete", strings.TrimSpace(email), "failed to delete user", start, nil)
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	h.respondAuditSuccess(c, http.StatusNoContent, nil, "user.delete", strings.TrimSpace(email), start, nil)
 }
 
 // UpdateUserProfile updates user profile
 func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
+	start := time.Now()
 	email := c.Param("email")
 
 	var req struct {
@@ -162,37 +289,40 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.respondAuditError(c, http.StatusBadRequest, "user.update", strings.TrimSpace(email), err.Error(), start, nil)
 		return
 	}
 
 	user, err := h.rbac.GetUser(email)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		h.respondAuditError(c, http.StatusNotFound, "user.update", strings.TrimSpace(email), "user not found", start, nil)
 		return
 	}
 
 	user.Name = req.Name
 	if err := h.rbac.SaveUser(email, user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		h.respondAuditError(c, http.StatusInternalServerError, "user.update", strings.TrimSpace(email), "failed to update user", start, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"email": email,
 		"name":  req.Name,
 		"roles": user.Roles,
-	})
+	}
+	details := map[string]interface{}{"name": req.Name}
+	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update", strings.TrimSpace(email), start, details)
 }
 
 // UpdateUserRoles updates user roles
 func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
+	start := time.Now()
 	email := c.Param("email")
 	currentUser := c.GetString("user_email")
 
 	// Can't change your own roles
 	if email == currentUser {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot change your own roles"})
+		h.respondAuditError(c, http.StatusBadRequest, "user.update_roles", strings.TrimSpace(email), "cannot change your own roles", start, nil)
 		return
 	}
 
@@ -201,27 +331,29 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.respondAuditError(c, http.StatusBadRequest, "user.update_roles", strings.TrimSpace(email), err.Error(), start, nil)
 		return
 	}
 
 	user, err := h.rbac.GetUser(email)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		h.respondAuditError(c, http.StatusNotFound, "user.update_roles", strings.TrimSpace(email), "user not found", start, nil)
 		return
 	}
 
 	user.Roles = req.Roles
 	if err := h.rbac.SaveUser(email, user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update roles"})
+		h.respondAuditError(c, http.StatusInternalServerError, "user.update_roles", strings.TrimSpace(email), "failed to update roles", start, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"email": email,
 		"name":  user.Name,
 		"roles": req.Roles,
-	})
+	}
+	details := map[string]interface{}{"roles": req.Roles}
+	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update_roles", strings.TrimSpace(email), start, details)
 }
 
 // ListRoles returns all available roles
@@ -252,48 +384,68 @@ func (h *AdminHandler) ListRoles(c *gin.Context) {
 
 // ListAuditLogs returns audit logs
 func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
+	start := time.Now()
 	filters, page, limit, err := h.auditFiltersFromRequest(c)
 	if err != nil {
 		switch {
 		case errors.Is(err, errInvalidStartTime):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start time"})
+			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "invalid start time", start, nil)
 		case errors.Is(err, errInvalidEndTime):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end time"})
+			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "invalid end time", start, nil)
 		case errors.Is(err, errInvalidTimeRange):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "end time must be after start time"})
+			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "end time must be after start time", start, nil)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit logs"})
+			h.respondAuditError(c, http.StatusInternalServerError, "audit.list", "", "failed to fetch audit logs", start, nil)
 		}
 		return
 	}
 
 	logs, total, err := h.database.GetAuditLogsPaged(filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit logs"})
+		h.respondAuditError(c, http.StatusInternalServerError, "audit.list", "", err.Error(), start, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"logs":  logs,
 		"total": total,
 		"page":  page,
 		"limit": limit,
-	})
+	}
+
+	details := map[string]interface{}{
+		"total":         total,
+		"page":          page,
+		"limit":         limit,
+		"action_type":   filters.ActionType,
+		"status_filter": filters.Status,
+		"resource_type": filters.ResourceType,
+		"search":        filters.Search,
+	}
+	if !filters.Since.IsZero() {
+		details["since"] = filters.Since.UTC().Format(time.RFC3339)
+	}
+	if !filters.Until.IsZero() {
+		details["until"] = filters.Until.UTC().Format(time.RFC3339)
+	}
+
+	h.respondAuditSuccess(c, http.StatusOK, payload, "audit.list", "", start, details)
 }
 
 // ExportAuditLogs exports audit logs as CSV
 func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
+	start := time.Now()
 	filters, _, _, err := h.auditFiltersFromRequest(c)
 	if err != nil {
 		switch {
 		case errors.Is(err, errInvalidStartTime):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start time"})
+			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "invalid start time", start, nil)
 		case errors.Is(err, errInvalidEndTime):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end time"})
+			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "invalid end time", start, nil)
 		case errors.Is(err, errInvalidTimeRange):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "end time must be after start time"})
+			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "end time must be after start time", start, nil)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+			h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to fetch logs", start, nil)
 		}
 		return
 	}
@@ -305,7 +457,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 
 	logs, _, err := h.database.GetAuditLogsPaged(filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch logs"})
+		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", err.Error(), start, nil)
 		return
 	}
 
@@ -339,6 +491,22 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 			log.UserAgent,
 		})
 	}
+
+	details := map[string]interface{}{
+		"count":         len(logs),
+		"action_type":   filters.ActionType,
+		"status_filter": filters.Status,
+		"resource_type": filters.ResourceType,
+		"search":        filters.Search,
+	}
+	if !filters.Since.IsZero() {
+		details["since"] = filters.Since.UTC().Format(time.RFC3339)
+	}
+	if !filters.Until.IsZero() {
+		details["until"] = filters.Until.UTC().Format(time.RFC3339)
+	}
+
+	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, details, start)
 }
 
 // Config and settings handlers
@@ -512,6 +680,7 @@ func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
 
 // Token management
 func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
+	start := time.Now()
 	var req struct {
 		Name        string   `json:"name" binding:"required"`
 		UserEmail   string   `json:"user_email"`
@@ -519,7 +688,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.respondAuditError(c, http.StatusBadRequest, "api_token.create", strings.TrimSpace(req.UserEmail), err.Error(), start, nil)
 		return
 	}
 
@@ -532,7 +701,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	// Get user ID
 	user, err := h.database.GetUser(targetEmail)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		h.respondAuditError(c, http.StatusNotFound, "api_token.create", targetEmail, "user not found", start, nil)
 		return
 	}
 
@@ -551,7 +720,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 
 	resp, err := h.tokenService.GenerateAPIToken(tokenReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
+		h.respondAuditError(c, http.StatusInternalServerError, "api_token.create", targetEmail, "failed to create token", start, map[string]interface{}{"name": req.Name})
 		return
 	}
 
@@ -560,12 +729,19 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		// Would send email here
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	payload := gin.H{
 		"token":       resp.Token,
 		"id":          resp.APIToken.ID,
 		"name":        resp.APIToken.Name,
 		"permissions": resp.APIToken.Permissions,
-	})
+	}
+	details := map[string]interface{}{
+		"name":        resp.APIToken.Name,
+		"permissions": resp.APIToken.Permissions,
+		"user_email":  targetEmail,
+	}
+	resource := fmt.Sprintf("%d", resp.APIToken.ID)
+	h.respondAuditSuccess(c, http.StatusOK, payload, "api_token.create", resource, start, details)
 }
 
 func (h *AdminHandler) ListAPITokens(c *gin.Context) {
@@ -596,9 +772,11 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 }
 
 func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
-	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
+	start := time.Now()
+	tokenIDStr := c.Param("tokenID")
+	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+		h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "invalid token ID", start, nil)
 		return
 	}
 
@@ -608,60 +786,86 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, err.Error(), start, nil)
 		return
 	}
 
 	existing, err := h.database.GetAPITokenByID(tokenID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load token"})
+		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to load token", start, nil)
 		return
 	}
 	if existing == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
+		h.respondAuditError(c, http.StatusNotFound, "api_token.update", tokenIDStr, "token not found", start, nil)
 		return
 	}
 
+	details := make(map[string]interface{})
+
 	if name := strings.TrimSpace(req.Name); name != "" && name != existing.Name {
 		if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token name"})
+			h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to update token name", start, nil)
 			return
 		}
+		details["name"] = name
 	}
 
 	if req.Permissions != nil {
 		if err := h.tokenService.UpdateTokenPermissions(tokenID, req.Permissions); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token permissions"})
+			h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to update token permissions", start, nil)
 			return
 		}
+		details["permissions"] = req.Permissions
 	}
 
 	updated, err := h.database.GetAPITokenByID(tokenID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load token"})
+		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to load token", start, nil)
 		return
 	}
 	if updated == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token disappeared"})
+		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "token disappeared", start, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, updated)
+	if len(details) == 0 {
+		details["unchanged"] = true
+	}
+	details["current_name"] = updated.Name
+	details["current_permissions"] = updated.Permissions
+
+	h.respondAuditSuccess(c, http.StatusOK, updated, "api_token.update", tokenIDStr, start, details)
 }
 
 func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
-	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
+	start := time.Now()
+	tokenIDStr := c.Param("tokenID")
+	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
+		h.respondAuditError(c, http.StatusBadRequest, "api_token.delete", tokenIDStr, "invalid token ID", start, nil)
+		return
+	}
+
+	existing, err := h.database.GetAPITokenByID(tokenID)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "api_token.delete", tokenIDStr, "failed to load token", start, nil)
+		return
+	}
+	if existing == nil {
+		h.respondAuditError(c, http.StatusNotFound, "api_token.delete", tokenIDStr, "token not found", start, nil)
 		return
 	}
 
 	if err := h.database.DeleteAPIToken(tokenID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete token"})
+		h.respondAuditError(c, http.StatusInternalServerError, "api_token.delete", tokenIDStr, "failed to delete token", start, nil)
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	details := map[string]interface{}{}
+	if strings.TrimSpace(existing.Name) != "" {
+		details["name"] = existing.Name
+	}
+	h.respondAuditSuccess(c, http.StatusNoContent, nil, "api_token.delete", tokenIDStr, start, details)
 }
 
 func collectAllPermissions(rolePerms map[string][]string) []string {

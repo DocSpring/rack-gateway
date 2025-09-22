@@ -144,7 +144,11 @@ test('audit logs: view and filter', async ({ page }) => {
   await page.getByRole('button', { name: /Create Token/i }).click()
   await page.getByLabel('Token Name').fill(tokenName)
   await page.getByRole('button', { name: /Create Token/i }).click()
+  await expect(page.getByText('API token created successfully', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /Done/i }).click()
+
+  const tokenCell = page.locator('table tbody td', { hasText: tokenName })
+  await expect(tokenCell).toBeVisible()
 
   // Navigate to Audit Logs
   await page.goto('/.gateway/web/audit_logs')
@@ -165,8 +169,8 @@ test('audit logs: view and filter', async ({ page }) => {
   // Search for the created token name
   await page.getByLabel('Search').fill(tokenName)
 
-  // Verify at least one data row remains
-  await expect(page.locator('table tbody tr').first()).toBeVisible()
+  const filteredCell = page.locator('table tbody td', { hasText: tokenName }).first()
+  await expect(filteredCell).toBeVisible()
 
   // Clean up token to avoid test fixture buildup
   await page.goto('/.gateway/web/api_tokens')
