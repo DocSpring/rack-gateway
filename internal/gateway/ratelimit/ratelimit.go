@@ -17,6 +17,7 @@ type RateLimiter struct {
 	rate     rate.Limit // requests per second
 	burst    int        // max burst size
 	cleanup  time.Duration
+	stop     chan struct{} // channel to stop cleanup goroutine
 }
 
 type visitor struct {
@@ -39,6 +40,7 @@ func NewRateLimiter(requestsPerSecond float64, burst int) *RateLimiter {
 		rate:     rate.Limit(requestsPerSecond),
 		burst:    burst,
 		cleanup:  5 * time.Minute,
+		stop:     make(chan struct{}),
 	}
 
 	// Start cleanup goroutine to remove old visitors
@@ -71,15 +73,25 @@ func (rl *RateLimiter) cleanupVisitors() {
 	ticker := time.NewTicker(rl.cleanup)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rl.mu.Lock()
-		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > rl.cleanup {
-				delete(rl.visitors, ip)
+	for {
+		select {
+		case <-ticker.C:
+			rl.mu.Lock()
+			for ip, v := range rl.visitors {
+				if time.Since(v.lastSeen) > rl.cleanup {
+					delete(rl.visitors, ip)
+				}
 			}
+			rl.mu.Unlock()
+		case <-rl.stop:
+			return
 		}
-		rl.mu.Unlock()
 	}
+}
+
+// Stop stops the cleanup goroutine
+func (rl *RateLimiter) Stop() {
+	close(rl.stop)
 }
 
 // getClientIP extracts the client IP from the request

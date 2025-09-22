@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 func TestRateLimiter(t *testing.T) {
@@ -133,7 +135,7 @@ func TestGetClientIP(t *testing.T) {
 }
 
 func TestAuthEndpointsOnly(t *testing.T) {
-	rl := NewRateLimiter(1, 2) // Very restrictive for testing
+	rl := NewRateLimiter(100, 2) // High rate limit but small burst for faster testing
 
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,11 +163,14 @@ func TestAuthEndpointsOnly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s %s", tt.method, tt.path), func(t *testing.T) {
+			// Use unique IP per test to avoid interference
+			testIP := fmt.Sprintf("10.0.%d.%d:1234", len(tt.path), len(tt.method))
+
 			// Make 3 requests (burst is 2)
 			var lastCode int
 			for i := 0; i < 3; i++ {
 				req := httptest.NewRequest(tt.method, tt.path, nil)
-				req.RemoteAddr = fmt.Sprintf("10.0.0.%d:1234", t.Name()[0]) // Unique IP per test
+				req.RemoteAddr = testIP
 				rr := httptest.NewRecorder()
 
 				handler.ServeHTTP(rr, req)
@@ -182,8 +187,7 @@ func TestAuthEndpointsOnly(t *testing.T) {
 				}
 			}
 		})
-		// Sleep between tests to reset rate limiter
-		time.Sleep(time.Second)
+		// No sleep needed since we use unique IPs
 	}
 }
 
@@ -288,8 +292,18 @@ func TestRateLimiterHeaders(t *testing.T) {
 }
 
 func TestVisitorCleanup(t *testing.T) {
-	rl := NewRateLimiter(5, 10)
-	rl.cleanup = 100 * time.Millisecond // Speed up cleanup for testing
+	// Create a custom rate limiter with very short cleanup interval for fast testing
+	rl := &RateLimiter{
+		visitors: make(map[string]*visitor),
+		rate:     rate.Limit(5),
+		burst:    10,
+		cleanup:  50 * time.Millisecond, // Very short cleanup for fast testing
+		stop:     make(chan struct{}),
+	}
+	defer rl.Stop() // Ensure cleanup goroutine stops
+
+	// Start cleanup goroutine
+	go rl.cleanupVisitors()
 
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -310,8 +324,8 @@ func TestVisitorCleanup(t *testing.T) {
 	}
 	rl.mu.RUnlock()
 
-	// Wait for cleanup
-	time.Sleep(200 * time.Millisecond)
+	// Wait for cleanup (2x cleanup interval to ensure it runs)
+	time.Sleep(110 * time.Millisecond)
 
 	// Verify visitor was cleaned up
 	rl.mu.RLock()
