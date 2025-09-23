@@ -47,7 +47,7 @@ var roleMetadata = map[string]RoleMetadata{
 	},
 	"cicd": {
 		Label:       "CI/CD",
-		Description: "Recommended scope for automation tokens",
+		Description: "Recommended scope for automation tokens (not assignable to human users)",
 	},
 	"admin": {
 		Label:       "Admin",

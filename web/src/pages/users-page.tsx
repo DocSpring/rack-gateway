@@ -41,6 +41,7 @@ type User = {
   created_by_name?: string
 }
 
+// CI/CD role is intentionally omitted here; it is reserved for automation tokens only.
 const AVAILABLE_ROLES = {
   viewer: {
     label: 'Viewer',

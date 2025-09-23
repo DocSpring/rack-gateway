@@ -18,7 +18,8 @@ export type GatewayConfig = {
   users: Record<string, UserConfig>
 }
 
-// Hardcoded roles - these are defined in the Go binary
+// Hardcoded roles - these are defined in the Go binary.
+// The cicd automation role is intentionally omitted; it is exposed only for API tokens.
 export const AVAILABLE_ROLES = {
   viewer: {
     name: 'viewer',

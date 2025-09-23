@@ -196,6 +196,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	// Note: the cicd role is automation-only and intentionally excluded here.
 	validRoles := []string{"viewer", "ops", "deployer", "admin"}
 	for _, role := range req.Roles {
 		matched := false
