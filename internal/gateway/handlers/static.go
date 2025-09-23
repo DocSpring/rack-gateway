@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rickb777/servefiles/v3/gin_adapter"
 )
@@ -129,9 +132,26 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	content := data
+	if nonce := middleware.StyleNonceFromContext(r.Context()); nonce != "" {
+		const placeholder = "CGW_STYLE_NONCE"
+		placeholderBytes := []byte(placeholder)
+		if bytes.Contains(content, placeholderBytes) {
+			content = bytes.ReplaceAll(content, placeholderBytes, []byte(nonce))
+		}
+	}
+
+	reader := bytes.NewReader(content)
+
 	// index.html should always be revalidated so new deployments propagate quickly
 	w.Header().Set("Cache-Control", "no-store")
-	http.ServeContent(w, r, "index.html", info.ModTime(), file)
+	http.ServeContent(w, r, "index.html", info.ModTime(), reader)
 }
 
 func shouldRedirectToDefault(r *http.Request) bool {

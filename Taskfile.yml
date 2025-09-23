@@ -50,3 +50,7 @@ tasks:
   logs:
     desc: Tail logs for the dev stack
     deps: [docker:logs:dev]
+
+  preview:
+    desc: Start preview stack and follow logs
+    deps: [docker:start:preview]

@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,51 +18,89 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type ctxKey string
+
+const StyleNonceContextKey ctxKey = "cgw-style-nonce"
+
 // SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
+
 func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
-	isProdLike := true
-	if cfg != nil && cfg.DevMode {
-		if os.Getenv("FORCE_CSP_IN_DEV") != "true" {
-			isProdLike = false
+	return func(c *gin.Context) {
+		isProdLike := true
+		if cfg != nil && cfg.DevMode {
+			if os.Getenv("FORCE_CSP_IN_DEV") != "true" {
+				isProdLike = false
+			}
+		}
+
+		nonce := generateNonce()
+		if nonce != "" {
+			c.Set(string(StyleNonceContextKey), nonce)
+			ctx := context.WithValue(c.Request.Context(), StyleNonceContextKey, nonce)
+			c.Request = c.Request.WithContext(ctx)
+		}
+
+		connectSrc := "connect-src 'self' ws: wss:"
+		if !isProdLike {
+			connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
+		}
+		scriptSrc := "script-src 'self'"
+		styleSrc := "style-src 'self'"
+		if nonce != "" {
+			styleSrc = fmt.Sprintf("style-src 'self' 'nonce-%s'", nonce)
+		}
+		if !isProdLike {
+			scriptSrc += " 'unsafe-inline'"
+			styleSrc += " 'unsafe-inline'"
+		}
+		csp := fmt.Sprintf("default-src 'self'; %s; %s; %s", connectSrc, scriptSrc, styleSrc)
+
+		secCfg := securemw.Config{
+			AllowedHosts: nil,
+			SSLRedirect:  false,
+			STSSeconds: func() int64 {
+				if !isProdLike {
+					return 0
+				}
+				return 63072000
+			}(),
+			STSIncludeSubdomains:  false,
+			FrameDeny:             true,
+			ContentTypeNosniff:    true,
+			BrowserXssFilter:      true,
+			ContentSecurityPolicy: csp,
+			ReferrerPolicy:        "strict-origin-when-cross-origin",
+			SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
+			IsDevelopment:         !isProdLike,
+			BadHostHandler: func(c *gin.Context) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
+				c.Abort()
+			},
+		}
+
+		securemw.New(secCfg)(c)
+	}
+}
+
+// StyleNonceFromContext extracts the per-request style nonce from a context if present.
+func StyleNonceFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if value := ctx.Value(StyleNonceContextKey); value != nil {
+		if nonce, ok := value.(string); ok {
+			return nonce
 		}
 	}
+	return ""
+}
 
-	connectSrc := "connect-src 'self' ws: wss:"
-	if !isProdLike {
-		connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
+func generateNonce() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return ""
 	}
-	scriptSrc := "script-src 'self'"
-	styleSrc := "style-src 'self'"
-	if !isProdLike {
-		scriptSrc += " 'unsafe-inline'"
-		styleSrc += " 'unsafe-inline'"
-	}
-	csp := fmt.Sprintf("default-src 'self'; %s; %s; %s", connectSrc, scriptSrc, styleSrc)
-
-	secCfg := securemw.Config{
-		AllowedHosts: nil,
-		SSLRedirect:  false,
-		STSSeconds: func() int64 {
-			if !isProdLike {
-				return 0
-			}
-			return 63072000
-		}(),
-		STSIncludeSubdomains:  false,
-		FrameDeny:             true,
-		ContentTypeNosniff:    true,
-		BrowserXssFilter:      true,
-		ContentSecurityPolicy: csp,
-		ReferrerPolicy:        "strict-origin-when-cross-origin",
-		SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
-		IsDevelopment:         !isProdLike,
-		BadHostHandler: func(c *gin.Context) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
-			c.Abort()
-		},
-	}
-
-	return securemw.New(secCfg)
+	return base64.RawStdEncoding.EncodeToString(buf)
 }
 
 // HostValidator enforces that requests are sent to the configured domain while
