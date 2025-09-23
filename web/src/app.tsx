@@ -7,7 +7,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { Layout } from './components/layout'
-import { Toaster } from './components/ui/sonner'
+import { Toaster } from './components/ui/toaster'
 import { AuthProvider } from './contexts/auth-context'
 import { AllBuildsPage } from './pages/all-builds-page'
 import { AllProcessesPage } from './pages/all-processes-page'
@@ -213,7 +213,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RouterProvider router={router} />
-        <Toaster position="top-right" />
+        <Toaster />
       </AuthProvider>
     </QueryClientProvider>
   )

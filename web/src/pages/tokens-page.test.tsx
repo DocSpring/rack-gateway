@@ -25,11 +25,13 @@ vi.mock('../lib/api', async () => {
   }
 })
 
-// Mock sonner
-vi.mock('sonner', () => ({
+// Mock toast controller
+vi.mock('@/components/ui/use-toast', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
   },
 }))
 

@@ -91,6 +91,8 @@ Email events:
   - Selects the rack for `convox-gateway convox …` when not using `--rack` or the stored current rack in config.json.
 - `GATEWAY_CLI_CONFIG_DIR` (dev/testing)
   - Override the CLI config directory (defaults to `~/.config/convox-gateway`).
+- `FORCE_CSP_IN_DEV` (dev/testing)
+  - When set to `true` alongside `DEV_MODE=true`, emit production CSP headers for local testing.
 
 ## Notes
 

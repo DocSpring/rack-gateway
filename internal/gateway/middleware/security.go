@@ -17,18 +17,20 @@ import (
 
 // SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
 func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
-	isDev := gin.Mode() == gin.DebugMode
+	isProdLike := true
 	if cfg != nil && cfg.DevMode {
-		isDev = true
+		if os.Getenv("FORCE_CSP_IN_DEV") != "true" {
+			isProdLike = false
+		}
 	}
 
 	connectSrc := "connect-src 'self' ws: wss:"
-	if isDev {
+	if !isProdLike {
 		connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
 	}
 	scriptSrc := "script-src 'self'"
 	styleSrc := "style-src 'self'"
-	if isDev {
+	if !isProdLike {
 		scriptSrc += " 'unsafe-inline'"
 		styleSrc += " 'unsafe-inline'"
 	}
@@ -38,7 +40,7 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		AllowedHosts: nil,
 		SSLRedirect:  false,
 		STSSeconds: func() int64 {
-			if isDev {
+			if !isProdLike {
 				return 0
 			}
 			return 63072000
@@ -50,7 +52,7 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		ContentSecurityPolicy: csp,
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
 		SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
-		IsDevelopment:         isDev,
+		IsDevelopment:         !isProdLike,
 		BadHostHandler: func(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
 			c.Abort()

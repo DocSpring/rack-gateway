@@ -1,6 +1,6 @@
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/use-toast'
 import { authService } from './auth'
 import { ensureCsrfToken, getCsrfToken } from './csrf'
 

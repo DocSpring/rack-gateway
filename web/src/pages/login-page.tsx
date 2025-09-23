@@ -1,10 +1,10 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
 import { GoogleIcon } from '@/components/google-icon'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 
 export function LoginPage() {
