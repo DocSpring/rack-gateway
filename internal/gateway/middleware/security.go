@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
 	securemw "github.com/gin-contrib/secure"
@@ -202,7 +203,7 @@ func OriginValidator(cfg *config.Config) gin.HandlerFunc {
 }
 
 // CSRF validates CSRF tokens for state-changing requests
-func CSRF() gin.HandlerFunc {
+func CSRF(sessionManager *auth.SessionManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip if has Authorization header (API token)
 		if c.GetHeader("Authorization") != "" {
@@ -219,10 +220,34 @@ func CSRF() gin.HandlerFunc {
 		}
 
 		// Check CSRF token
-		headerToken := c.GetHeader("X-CSRF-Token")
-		cookieToken, err := c.Cookie("csrf_token")
+		headerToken := strings.TrimSpace(c.GetHeader("X-CSRF-Token"))
+		if headerToken == "" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
+			c.Abort()
+			return
+		}
 
-		if err != nil || headerToken == "" || cookieToken == "" || headerToken != cookieToken {
+		sessionToken, err := c.Cookie("session_token")
+		if err != nil || strings.TrimSpace(sessionToken) == "" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
+			c.Abort()
+			return
+		}
+
+		if sessionManager == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "CSRF validation unavailable"})
+			c.Abort()
+			return
+		}
+
+		trimmedSession := strings.TrimSpace(sessionToken)
+		if _, err := sessionManager.ValidateSession(trimmedSession, clientIPFromRequest(c.Request), c.GetHeader("User-Agent")); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
+			c.Abort()
+			return
+		}
+
+		if !sessionManager.ValidateCSRFToken(trimmedSession, headerToken) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
 			c.Abort()
 			return
@@ -230,6 +255,29 @@ func CSRF() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func clientIPFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			candidate := strings.TrimSpace(parts[0])
+			if candidate != "" {
+				return candidate
+			}
+		}
+	}
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+		return xrip
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 // FilteredLogger creates a logger that suppresses health check logs

@@ -18,12 +18,22 @@ func TestAuthServiceAllowsCookieJWT(t *testing.T) {
 	}
 
 	manager := NewJWTManager("test-secret", time.Hour)
-	token, _, err := manager.GenerateToken("user@example.com", "User")
+	sessionManager := NewSessionManager(database, "test-secret", time.Hour)
+
+	user, err := database.GetUser("user@example.com")
 	if err != nil {
-		t.Fatalf("generate token: %v", err)
+		t.Fatalf("get user: %v", err)
+	}
+	if user == nil {
+		t.Fatalf("expected user to exist")
 	}
 
-	svc := NewAuthService(manager, nil, database)
+	sessionToken, _, err := sessionManager.CreateSession(user, SessionMetadata{})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	svc := NewAuthService(manager, nil, database, sessionManager)
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +48,7 @@ func TestAuthServiceAllowsCookieJWT(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/.gateway/api/me", nil)
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rw := httptest.NewRecorder()
 
 	svc.Middleware(next).ServeHTTP(rw, req)

@@ -31,6 +31,7 @@ type AdminHandler struct {
 	emailSender  email.Sender
 	config       *config.Config
 	rackCertMgr  *rackcert.Manager
+	sessions     *auth.SessionManager
 }
 
 func cloneDetails(details map[string]interface{}) map[string]interface{} {
@@ -58,7 +59,7 @@ var (
 )
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager) *AdminHandler {
+func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager, sessions *auth.SessionManager) *AdminHandler {
 	return &AdminHandler{
 		rbac:         rbac,
 		database:     database,
@@ -66,6 +67,7 @@ func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService 
 		emailSender:  emailSender,
 		config:       config,
 		rackCertMgr:  rackCertMgr,
+		sessions:     sessions,
 	}
 }
 
@@ -182,6 +184,27 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
+// GetUser returns a specific user by email.
+func (h *AdminHandler) GetUser(c *gin.Context) {
+	email := strings.TrimSpace(c.Param("email"))
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+		return
+	}
+
+	user, err := h.database.GetUser(email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+	if user == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
 // CreateUser creates a new user
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	start := time.Now()
@@ -283,36 +306,78 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 // UpdateUserProfile updates user profile
 func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	start := time.Now()
-	email := c.Param("email")
+	originalEmail := strings.TrimSpace(c.Param("email"))
+	currentEmail := originalEmail
 
 	var req struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "user.update", strings.TrimSpace(email), err.Error(), start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, "user.update", originalEmail, err.Error(), start, nil)
 		return
 	}
 
-	user, err := h.rbac.GetUser(email)
+	userConfig, err := h.rbac.GetUser(originalEmail)
+	if err != nil || userConfig == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.update", originalEmail, "user not found", start, nil)
+		return
+	}
+
+	dbUser, err := h.database.GetUser(originalEmail)
 	if err != nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.update", strings.TrimSpace(email), "user not found", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, "user.update", originalEmail, "failed to load user", start, nil)
+		return
+	}
+	if dbUser == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.update", originalEmail, "user not found", start, nil)
 		return
 	}
 
-	user.Name = req.Name
-	if err := h.rbac.SaveUser(email, user); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.update", strings.TrimSpace(email), "failed to update user", start, nil)
+	updatedEmail := strings.TrimSpace(req.Email)
+	if updatedEmail == "" {
+		updatedEmail = currentEmail
+	}
+
+	emailChanged := !strings.EqualFold(updatedEmail, currentEmail)
+	if emailChanged {
+		if existing, err := h.database.GetUser(updatedEmail); err != nil {
+			h.respondAuditError(c, http.StatusInternalServerError, "user.update", originalEmail, "failed to check email availability", start, nil)
+			return
+		} else if existing != nil {
+			h.respondAuditError(c, http.StatusConflict, "user.update", originalEmail, "email already in use", start, map[string]interface{}{"email": updatedEmail})
+			return
+		}
+		if err := h.database.UpdateUserEmail(originalEmail, updatedEmail); err != nil {
+			h.respondAuditError(c, http.StatusInternalServerError, "user.update", originalEmail, "failed to update email", start, map[string]interface{}{"email": updatedEmail})
+			return
+		}
+		currentEmail = updatedEmail
+	}
+
+	updatedName := strings.TrimSpace(req.Name)
+	if updatedName == "" {
+		updatedName = userConfig.Name
+	}
+	userConfig.Name = updatedName
+
+	if err := h.rbac.SaveUser(currentEmail, userConfig); err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.update", currentEmail, "failed to update user", start, map[string]interface{}{"email": currentEmail})
 		return
 	}
 
 	payload := gin.H{
-		"email": email,
-		"name":  req.Name,
-		"roles": user.Roles,
+		"email": currentEmail,
+		"name":  updatedName,
+		"roles": userConfig.Roles,
 	}
-	details := map[string]interface{}{"name": req.Name}
-	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update", strings.TrimSpace(email), start, details)
+	details := map[string]interface{}{"name": updatedName}
+	if emailChanged {
+		details["email"] = currentEmail
+	}
+
+	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update", currentEmail, start, details)
 }
 
 // UpdateUserRoles updates user roles
@@ -355,6 +420,167 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 	}
 	details := map[string]interface{}{"roles": req.Roles}
 	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update_roles", strings.TrimSpace(email), start, details)
+}
+
+// ListUserSessions returns the active sessions for a given user.
+func (h *AdminHandler) ListUserSessions(c *gin.Context) {
+	start := time.Now()
+	email := strings.TrimSpace(c.Param("email"))
+	if email == "" {
+		h.respondAuditError(c, http.StatusBadRequest, "user.sessions.list", email, "email is required", start, nil)
+		return
+	}
+	if h.sessions == nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.list", email, "session management unavailable", start, nil)
+		return
+	}
+
+	user, err := h.database.GetUser(email)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.list", email, "failed to load user", start, nil)
+		return
+	}
+	if user == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.sessions.list", email, "user not found", start, nil)
+		return
+	}
+
+	sessions, err := h.database.ListActiveSessionsByUser(user.ID)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.list", email, "failed to list sessions", start, nil)
+		return
+	}
+
+	result := make([]gin.H, 0, len(sessions))
+	for _, sess := range sessions {
+		entry := gin.H{
+			"id":           sess.ID,
+			"created_at":   sess.CreatedAt.UTC().Format(time.RFC3339),
+			"last_seen_at": sess.LastSeenAt.UTC().Format(time.RFC3339),
+			"expires_at":   sess.ExpiresAt.UTC().Format(time.RFC3339),
+		}
+		if sess.IPAddress != "" {
+			entry["ip_address"] = sess.IPAddress
+		}
+		if sess.UserAgent != "" {
+			entry["user_agent"] = sess.UserAgent
+		}
+		if len(sess.Metadata) > 0 {
+			var meta interface{}
+			if err := json.Unmarshal(sess.Metadata, &meta); err == nil {
+				entry["metadata"] = meta
+			} else {
+				entry["metadata"] = json.RawMessage(sess.Metadata)
+			}
+		}
+		result = append(result, entry)
+	}
+
+	details := map[string]interface{}{"session_count": len(result)}
+	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.list", email, start, details)
+}
+
+// RevokeUserSession revokes a specific session for a user.
+func (h *AdminHandler) RevokeUserSession(c *gin.Context) {
+	start := time.Now()
+	email := strings.TrimSpace(c.Param("email"))
+	if email == "" {
+		h.respondAuditError(c, http.StatusBadRequest, "user.sessions.revoke", email, "email is required", start, nil)
+		return
+	}
+	if h.sessions == nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "session management unavailable", start, nil)
+		return
+	}
+
+	sessionIDStr := strings.TrimSpace(c.Param("sessionID"))
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	if err != nil || sessionID <= 0 {
+		h.respondAuditError(c, http.StatusBadRequest, "user.sessions.revoke", email, "invalid session id", start, map[string]interface{}{"session_id": sessionIDStr})
+		return
+	}
+
+	user, err := h.database.GetUser(email)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "failed to load user", start, nil)
+		return
+	}
+	if user == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.sessions.revoke", email, "user not found", start, map[string]interface{}{"session_id": sessionID})
+		return
+	}
+
+	session, err := h.database.GetUserSessionByID(sessionID)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "failed to load session", start, map[string]interface{}{"session_id": sessionID})
+		return
+	}
+	if session == nil || session.UserID != user.ID {
+		h.respondAuditError(c, http.StatusNotFound, "user.sessions.revoke", email, "session not found", start, map[string]interface{}{"session_id": sessionID})
+		return
+	}
+
+	actorID := h.sessionActorID(c)
+	revoked, err := h.sessions.RevokeByID(sessionID, actorID)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "failed to revoke session", start, map[string]interface{}{"session_id": sessionID})
+		return
+	}
+
+	result := gin.H{"revoked": revoked}
+	details := map[string]interface{}{"session_id": sessionID, "revoked": revoked}
+	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.revoke", email, start, details)
+}
+
+// RevokeAllUserSessions revokes all active sessions for a user.
+func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
+	start := time.Now()
+	email := strings.TrimSpace(c.Param("email"))
+	if email == "" {
+		h.respondAuditError(c, http.StatusBadRequest, "user.sessions.revoke_all", email, "email is required", start, nil)
+		return
+	}
+	if h.sessions == nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke_all", email, "session management unavailable", start, nil)
+		return
+	}
+
+	user, err := h.database.GetUser(email)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke_all", email, "failed to load user", start, nil)
+		return
+	}
+	if user == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.sessions.revoke_all", email, "user not found", start, nil)
+		return
+	}
+
+	actorID := h.sessionActorID(c)
+	revokedCount, err := h.sessions.RevokeAllForUser(user.ID, actorID)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke_all", email, "failed to revoke sessions", start, nil)
+		return
+	}
+
+	result := gin.H{"revoked_count": revokedCount}
+	details := map[string]interface{}{"revoked_count": revokedCount}
+	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.revoke_all", email, start, details)
+}
+
+func (h *AdminHandler) sessionActorID(c *gin.Context) *int64 {
+	if h == nil || h.database == nil {
+		return nil
+	}
+	actorEmail := strings.TrimSpace(c.GetString("user_email"))
+	if actorEmail == "" {
+		return nil
+	}
+	actor, err := h.database.GetUser(actorEmail)
+	if err != nil || actor == nil {
+		return nil
+	}
+	id := actor.ID
+	return &id
 }
 
 // ListRoles returns all available roles

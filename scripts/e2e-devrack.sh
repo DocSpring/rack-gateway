@@ -36,7 +36,7 @@ convox apps | grep -q "^$APP_NAME\b" || convox apps create "$APP_NAME"
 
 # Pass common env; adjust as needed
 convox env set \
-  APP_JWT_KEY=${APP_JWT_KEY:-dev-e2e-key} \
+  APP_SECRET_KEY=${APP_SECRET_KEY:-dev-e2e-key} \
   GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-mock-client-id} \
   GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-mock-client-secret} \
   -a "$APP_NAME"

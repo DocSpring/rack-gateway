@@ -52,7 +52,7 @@ The gateway server (run by admins) needs:
    - `RACK_TOKEN_STAGING=actual-convox-rack-token`
    - `GOOGLE_CLIENT_ID=oauth-client-id`
    - `GOOGLE_CLIENT_SECRET=oauth-client-secret`
-   - `APP_JWT_KEY=jwt-signing-key`
+   - `APP_SECRET_KEY=jwt-signing-key`
 
 2. **No config/racks.yaml**: Racks are discovered from environment variables
 

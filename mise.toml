@@ -19,7 +19,7 @@ GOOGLE_ALLOWED_DOMAIN = "example.com"
 GOOGLE_OAUTH_BASE_URL = "http://localhost:3345"
 
 # JWT configuration
-APP_JWT_KEY = "development-jwt-secret-key"
+APP_SECRET_KEY = "development-jwt-secret-key"
 
 # Mock Convox rack (for development)
 RACK_HOST = "http://localhost:5443"  # References MOCK_CONVOX_PORT

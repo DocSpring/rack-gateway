@@ -3,67 +3,56 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 )
 
-// JWTAuth creates JWT authentication middleware
-func JWTAuth(jwtManager *auth.JWTManager, rbacManager rbac.RBACManager) gin.HandlerFunc {
+// Authenticated enforces authentication for browser/admin API requests, supporting both JWT and session cookies.
+func Authenticated(authService *auth.AuthService, rbacManager rbac.RBACManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check Authorization header first
-		authHeader := c.GetHeader("Authorization")
-		var token string
-
-		if authHeader != "" {
-			// Bearer token from header
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				token = strings.TrimPrefix(authHeader, "Bearer ")
-			}
-		} else {
-			// Try cookie for web sessions
-			if cookie, err := c.Cookie("session_token"); err == nil && cookie != "" {
-				token = cookie
-			}
+		if authService == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "authentication unavailable"})
+			c.Abort()
+			return
 		}
 
-		if token == "" {
+		authUser, source, err := authService.AuthenticateHTTPRequest(c.Request)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+		if authUser == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authentication"})
 			c.Abort()
 			return
 		}
 
-		// Validate JWT
-		claims, err := jwtManager.ValidateToken(token)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			c.Abort()
-			return
+		if !authUser.IsAPIToken {
+			dbUser, err := rbacManager.GetUser(authUser.Email)
+			if err != nil || dbUser == nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "user not authorized"})
+				c.Abort()
+				return
+			}
+			authUser.Roles = dbUser.Roles
+			c.Set("user_roles", dbUser.Roles)
+			c.Set("user_name", dbUser.Name)
+		} else {
+			c.Set("user_roles", []string{})
+			c.Set("user_name", authUser.Name)
 		}
+		c.Set("user_email", authUser.Email)
 
-		// Check if user exists in RBAC
-		user, err := rbacManager.GetUser(claims.Email)
-		if err != nil || user == nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "user not authorized"})
-			c.Abort()
-			return
-		}
-
-		// Store user in both gin context and request context for downstream handlers
-		c.Set("user_email", claims.Email)
-		c.Set("user_name", user.Name)
-		c.Set("user_roles", user.Roles)
-
-		authUser := &auth.AuthUser{
-			Email:      claims.Email,
-			Name:       user.Name,
-			Roles:      user.Roles,
-			IsAPIToken: false,
-		}
 		reqWithUser := c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 		c.Request = reqWithUser
+		c.Request.Header.Set("X-User-Email", authUser.Email)
+		c.Request.Header.Set("X-User-Name", authUser.Name)
+		if source != "" {
+			c.Request.Header.Set("X-Auth-Source", source)
+		}
 
 		c.Next()
 	}

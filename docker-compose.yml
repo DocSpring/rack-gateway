@@ -1,6 +1,6 @@
 x-gateway-env: &gateway_common_env
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  APP_JWT_KEY: dev-jwt-secret-key-change-in-production
+  APP_SECRET_KEY: dev-jwt-secret-key-change-in-production
   GOOGLE_CLIENT_ID: mock-client-id
   GOOGLE_CLIENT_SECRET: mock-client-secret
   GOOGLE_ALLOWED_DOMAIN: ${GOOGLE_ALLOWED_DOMAIN:-example.com}

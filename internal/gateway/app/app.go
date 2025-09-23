@@ -18,6 +18,7 @@ type App struct {
 	Database        *db.Database
 	RBACManager     rbac.RBACManager
 	JWTManager      *auth.JWTManager
+	SessionManager  *auth.SessionManager
 	OAuthHandler    *auth.OAuthHandler
 	AuthService     *auth.AuthService
 	TokenService    *token.Service

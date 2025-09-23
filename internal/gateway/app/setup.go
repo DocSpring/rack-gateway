@@ -32,6 +32,8 @@ func (a *App) initializeServices() error {
 
 	// Initialize JWT manager
 	a.JWTManager = auth.NewJWTManager(a.Config.JWTSecret, a.Config.JWTExpiry)
+	// Session manager uses the same secret + expiry window for opaque sessions
+	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.JWTSecret, a.Config.JWTExpiry)
 
 	// Initialize RBAC manager
 	allowedDomain := a.Config.GoogleAllowedDomain
@@ -45,7 +47,7 @@ func (a *App) initializeServices() error {
 	a.TokenService = token.NewService(a.Database)
 
 	// Create combined auth service
-	a.AuthService = auth.NewAuthService(a.JWTManager, a.TokenService, a.Database)
+	a.AuthService = auth.NewAuthService(a.JWTManager, a.TokenService, a.Database, a.SessionManager)
 
 	// Debug: Log OAuth configuration (matching original)
 	log.Printf("Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), a.Config.Port)
@@ -158,16 +160,17 @@ func (a *App) setupRouter() {
 
 	// Set up routes with all dependencies
 	routes.Setup(router, &routes.Config{
-		Config:       a.Config,
-		Database:     a.Database,
-		RBACManager:  a.RBACManager,
-		JWTManager:   a.JWTManager,
-		OAuthHandler: a.OAuthHandler,
-		AuthService:  a.AuthService,
-		TokenService: a.TokenService,
-		EmailSender:  a.EmailSender,
-		ProxyHandler: a.ProxyHandler,
-		RackCertMgr:  a.RackCertManager,
+		Config:         a.Config,
+		Database:       a.Database,
+		RBACManager:    a.RBACManager,
+		JWTManager:     a.JWTManager,
+		SessionManager: a.SessionManager,
+		OAuthHandler:   a.OAuthHandler,
+		AuthService:    a.AuthService,
+		TokenService:   a.TokenService,
+		EmailSender:    a.EmailSender,
+		ProxyHandler:   a.ProxyHandler,
+		RackCertMgr:    a.RackCertManager,
 	})
 
 	a.router = router

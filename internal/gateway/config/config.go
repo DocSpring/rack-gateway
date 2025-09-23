@@ -66,13 +66,13 @@ func Load() (*Config, error) {
 		}
 	}
 
-	jwtKey := getEnv("APP_JWT_KEY", "")
+	jwtKey := getEnv("APP_SECRET_KEY", "")
 	if jwtKey == "" {
 		if cfg.DevMode {
 			jwtKey = generateDevKey()
 			fmt.Printf("Generated dev JWT key: %s\n", jwtKey)
 		} else {
-			return nil, fmt.Errorf("APP_JWT_KEY is required in production")
+			return nil, fmt.Errorf("APP_SECRET_KEY is required in production")
 		}
 	}
 	cfg.JWTSecret = jwtKey

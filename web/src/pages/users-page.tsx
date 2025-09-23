@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Edit2, Plus, Trash2 } from 'lucide-react'
+import { Edit2, Eye, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { TablePane } from '../components/table-pane'
@@ -231,9 +231,9 @@ export function UsersPage() {
       })
 
   const changeEmailFlow = (originalEmail: string) =>
-    createUserMutation
-      .mutateAsync({ email: formData.email, name: formData.name, roles: [selectedRole] })
-      .then(() => deleteUserMutation.mutateAsync(originalEmail))
+    updateProfileMutation
+      .mutateAsync({ originalEmail, email: formData.email, name: formData.name })
+      .then(() => updateRolesMutation.mutateAsync({ email: formData.email, roles: [selectedRole] }))
       .then(finalizeUpdate)
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : ''
@@ -355,17 +355,13 @@ export function UsersPage() {
                 <TableCell>
                   <div>
                     <div className="font-medium">
-                      {user.id ? (
-                        <Link
-                          className="underline hover:no-underline"
-                          params={{ id: String(user.id) }}
-                          to="/users/$id/audit_logs"
-                        >
-                          {user.name}
-                        </Link>
-                      ) : (
-                        user.name
-                      )}
+                      <Link
+                        className="underline hover:no-underline"
+                        params={{ email: user.email }}
+                        to="/users/$email"
+                      >
+                        {user.name}
+                      </Link>
                       {user.email === currentUser?.email && (
                         <Badge className="ml-2" variant="outline">
                           You
@@ -373,17 +369,13 @@ export function UsersPage() {
                       )}
                     </div>
                     <div className="text-muted-foreground text-sm">
-                      {user.id ? (
-                        <Link
-                          className="underline hover:no-underline"
-                          params={{ id: String(user.id) }}
-                          to="/users/$id/audit_logs"
-                        >
-                          {user.email}
-                        </Link>
-                      ) : (
-                        user.email
-                      )}
+                      <Link
+                        className="underline hover:no-underline"
+                        params={{ email: user.email }}
+                        to="/users/$email"
+                      >
+                        {user.email}
+                      </Link>
                     </div>
                   </div>
                 </TableCell>
@@ -411,6 +403,11 @@ export function UsersPage() {
                 {isAdmin && (
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link params={{ email: user.email }} to="/users/$email">
+                          <Eye className="mr-1 h-4 w-4" /> View
+                        </Link>
+                      </Button>
                       <Button
                         aria-label={`Edit User ${user.email}`}
                         onClick={() => handleEditUser(user)}

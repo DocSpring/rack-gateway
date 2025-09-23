@@ -78,12 +78,26 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 	jwtSecret := "test-secret"
 	jwtManager := NewJWTManager(jwtSecret, 24*time.Hour)
 	tokenService := token.NewService(database)
-	authService := NewAuthService(jwtManager, tokenService, database)
+	sessionManager := NewSessionManager(database, jwtSecret, 24*time.Hour)
+	authService := NewAuthService(jwtManager, tokenService, database, sessionManager)
 
 	// Generate a valid JWT token
 	validToken, _, err := jwtManager.GenerateToken("test@example.com", "Test User")
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
+	}
+
+	userRecord, err := database.GetUser("test@example.com")
+	if err != nil {
+		t.Fatalf("failed to get user: %v", err)
+	}
+	if userRecord == nil {
+		t.Fatalf("expected user record")
+	}
+
+	sessionToken, _, err := sessionManager.CreateSession(userRecord, SessionMetadata{})
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
 	}
 
 	// Create a test handler that just returns 200 OK
@@ -119,14 +133,14 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 		{
 			name:           "Cookie only - blocked",
 			authHeader:     "",
-			cookie:         &http.Cookie{Name: "session_token", Value: validToken},
+			cookie:         &http.Cookie{Name: "session_token", Value: sessionToken},
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "CLI authentication required - no browser access allowed",
 		},
 		{
 			name:           "Both cookie and header - allowed (header takes precedence)",
 			authHeader:     "Bearer " + validToken,
-			cookie:         &http.Cookie{Name: "session_token", Value: validToken},
+			cookie:         &http.Cookie{Name: "session_token", Value: sessionToken},
 			expectedStatus: http.StatusOK,
 			expectedBody:   "OK",
 		},
@@ -220,7 +234,7 @@ func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	apiToken := tokenResp.APIToken
 
 	jwtManager := NewJWTManager("test-secret", 24*time.Hour)
-	authService := NewAuthService(jwtManager, tokenService, database)
+	authService := NewAuthService(jwtManager, tokenService, database, nil)
 
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -285,12 +299,20 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 
 	jwtManager := NewJWTManager("test-secret", 24*time.Hour)
 	tokenService := token.NewService(database)
-	authService := NewAuthService(jwtManager, tokenService, database)
+	sessionManager := NewSessionManager(database, "test-secret", 24*time.Hour)
+	authService := NewAuthService(jwtManager, tokenService, database, sessionManager)
 
-	// Generate a valid JWT token (as would be set in a cookie after login)
-	validToken, _, err := jwtManager.GenerateToken("test@example.com", "Test User")
+	userRecord, err := database.GetUser("test@example.com")
 	if err != nil {
-		t.Fatalf("Failed to generate token: %v", err)
+		t.Fatalf("failed to get user: %v", err)
+	}
+	if userRecord == nil {
+		t.Fatalf("expected user record")
+	}
+
+	sessionToken, _, err := sessionManager.CreateSession(userRecord, SessionMetadata{})
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
 	}
 
 	// Create a handler that simulates a dangerous operation
@@ -315,28 +337,28 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 			name:   "POST to deploy endpoint",
 			method: "POST",
 			path:   "/apps/production-app/builds",
-			cookie: &http.Cookie{Name: "session_token", Value: validToken},
+			cookie: &http.Cookie{Name: "session_token", Value: sessionToken},
 			origin: "https://evil.com",
 		},
 		{
 			name:   "DELETE to destroy resources",
 			method: "DELETE",
 			path:   "/apps/production-app",
-			cookie: &http.Cookie{Name: "session_token", Value: validToken},
+			cookie: &http.Cookie{Name: "session_token", Value: sessionToken},
 			origin: "https://attacker.com",
 		},
 		{
 			name:   "PUT to scale up expensive resources",
 			method: "PUT",
 			path:   "/apps/production-app/processes/web",
-			cookie: &http.Cookie{Name: "session_token", Value: validToken},
+			cookie: &http.Cookie{Name: "session_token", Value: sessionToken},
 			origin: "https://malicious.site",
 		},
 		{
 			name:   "POST to execute commands",
 			method: "POST",
 			path:   "/apps/production-app/processes/web/run",
-			cookie: &http.Cookie{Name: "session_token", Value: validToken},
+			cookie: &http.Cookie{Name: "session_token", Value: sessionToken},
 			origin: "",
 		},
 	}

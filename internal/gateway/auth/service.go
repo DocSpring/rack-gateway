@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -18,73 +19,36 @@ type AuthService struct {
 	jwtManager   *JWTManager
 	tokenService *token.Service
 	database     *db.Database
+	sessions     *SessionManager
 }
 
 // AuthUser represents an authenticated user from either JWT or API token
 type AuthUser struct {
-	Email       string   `json:"email"`
-	Name        string   `json:"name"`
-	Roles       []string `json:"roles,omitempty"`       // For JWT users
-	Permissions []string `json:"permissions,omitempty"` // For API token users
-	IsAPIToken  bool     `json:"is_api_token"`
-	TokenID     *int64   `json:"token_id,omitempty"` // For API tokens
+	Email       string          `json:"email"`
+	Name        string          `json:"name"`
+	Roles       []string        `json:"roles,omitempty"`       // For JWT users
+	Permissions []string        `json:"permissions,omitempty"` // For API token users
+	IsAPIToken  bool            `json:"is_api_token"`
+	TokenID     *int64          `json:"token_id,omitempty"` // For API tokens
+	Session     *db.UserSession `json:"-"`
 }
 
 // NewAuthService creates a new authentication service
-func NewAuthService(jwtManager *JWTManager, tokenService *token.Service, database *db.Database) *AuthService {
+func NewAuthService(jwtManager *JWTManager, tokenService *token.Service, database *db.Database, sessions *SessionManager) *AuthService {
 	return &AuthService{
 		jwtManager:   jwtManager,
 		tokenService: tokenService,
 		database:     database,
+		sessions:     sessions,
 	}
 }
 
 // Middleware handles both JWT and API token authentication
 func (a *AuthService) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		originalAuth := r.Header.Get("Authorization")
-		authHeader := originalAuth
-		if authHeader == "" {
-			if c, err := r.Cookie("session_token"); err == nil && c.Value != "" {
-				authHeader = "Bearer " + c.Value
-				r.Header.Set("X-Auth-Source", "cookie")
-			}
-		}
-		if authHeader == "" {
-			a.writeUnauthorized(w, r, "missing authorization")
-			return
-		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 {
-			a.writeUnauthorized(w, r, "invalid authorization header format")
-			return
-		}
-
-		authType := parts[0]
-		credentials := parts[1]
-
-		var user *AuthUser
-		var err error
-
-		switch authType {
-		case "Bearer":
-			// Check if it's an API token (starts with cgw_) or JWT
-			if strings.HasPrefix(credentials, "cgw_") {
-				user, err = a.validateAPIToken(credentials)
-			} else {
-				user, err = a.validateJWT(credentials)
-			}
-		case "Basic":
-			// Convox CLI uses Basic auth - decode and check password field
-			user, err = a.validateBasicAuth(credentials)
-		default:
-			a.writeUnauthorized(w, r, "unsupported authorization type")
-			return
-		}
-
+		user, source, err := a.AuthenticateHTTPRequest(r)
 		if err != nil {
-			a.writeUnauthorized(w, r, fmt.Sprintf("authentication failed: %v", err))
+			a.writeUnauthorized(w, r, err.Error())
 			return
 		}
 
@@ -95,6 +59,7 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 		// Set headers for audit logging
 		r.Header.Set("X-User-Name", user.Name)
 		r.Header.Set("X-User-Email", user.Email)
+		r.Header.Set("X-Auth-Source", source)
 
 		// Note: admin API accepts cookie auth in this environment; endpoints are internal and behind VPN.
 
@@ -113,6 +78,80 @@ func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, 
 	}
 	logging.Debugf("[auth:401] %s %s src=%s reason=%s", r.Method, r.URL.Path, src, reason)
 	http.Error(w, reason, http.StatusUnauthorized)
+}
+
+// AuthenticateHTTPRequest attempts to authenticate the provided request, returning the user and auth source label.
+func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, string, error) {
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 {
+			return nil, "header", fmt.Errorf("invalid authorization header format")
+		}
+		authType := parts[0]
+		credentials := parts[1]
+		var (
+			user *AuthUser
+			err  error
+		)
+		switch authType {
+		case "Bearer":
+			if strings.HasPrefix(credentials, "cgw_") {
+				user, err = a.validateAPIToken(credentials)
+			} else {
+				user, err = a.validateJWT(credentials)
+			}
+		case "Basic":
+			user, err = a.validateBasicAuth(credentials)
+		default:
+			return nil, "header", fmt.Errorf("unsupported authorization type")
+		}
+		if err != nil {
+			return nil, "header", fmt.Errorf("authentication failed: %v", err)
+		}
+		return user, "header", nil
+	}
+
+	if a.sessions != nil {
+		if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
+			result, err := a.sessions.ValidateSession(cookie.Value, clientIPFromRequest(r), r.UserAgent())
+			if err != nil {
+				return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
+			}
+			return &AuthUser{
+				Email:      result.User.Email,
+				Name:       result.User.Name,
+				Roles:      result.User.Roles,
+				IsAPIToken: false,
+				Session:    result.Session,
+			}, "cookie", nil
+		}
+	}
+
+	return nil, "none", fmt.Errorf("missing authorization")
+}
+
+func clientIPFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			candidate := strings.TrimSpace(parts[0])
+			if candidate != "" {
+				return candidate
+			}
+		}
+	}
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+		return xrip
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func (a *AuthService) validateJWT(tokenString string) (*AuthUser, error) {

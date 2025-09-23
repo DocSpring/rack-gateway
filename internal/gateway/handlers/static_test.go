@@ -17,7 +17,7 @@ func init() {
 }
 
 func TestStaticHandlerRedirectsToUsers(t *testing.T) {
-	handler := NewStaticHandler(&config.Config{})
+	handler := NewStaticHandler(&config.Config{}, nil)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -43,7 +43,7 @@ func TestStaticHandlerProxiesInDev(t *testing.T) {
 		_, _ = w.Write([]byte("proxy"))
 	})
 
-	handler := NewStaticHandler(&config.Config{DevMode: true})
+	handler := NewStaticHandler(&config.Config{DevMode: true}, nil)
 	handler.devProxy = stub
 
 	rec := httptest.NewRecorder()
@@ -68,7 +68,7 @@ func TestStaticHandlerProxiesInDev(t *testing.T) {
 }
 
 func TestStaticHandlerServesDist(t *testing.T) {
-	handler := NewStaticHandler(&config.Config{})
+	handler := NewStaticHandler(&config.Config{}, nil)
 
 	tmp := t.TempDir()
 	indexPath := filepath.Join(tmp, "index.html")

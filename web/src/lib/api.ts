@@ -18,6 +18,45 @@ export type GatewayConfig = {
   users: Record<string, UserConfig>
 }
 
+export type GatewayUser = {
+  id: number
+  email: string
+  name: string
+  roles: string[]
+  created_at: string
+  updated_at: string
+  suspended: boolean
+  created_by_email?: string
+  created_by_name?: string
+}
+
+export type UserSessionSummary = {
+  id: number
+  created_at: string
+  last_seen_at: string
+  expires_at: string
+  ip_address?: string
+  user_agent?: string
+  metadata?: Record<string, unknown>
+}
+
+export type AuditLogEntry = {
+  id: number
+  timestamp: string
+  user_email: string
+  user_name: string
+  action_type: string
+  action: string
+  resource: string
+  resource_type?: string
+  status: string
+  details?: string
+  ip_address?: string
+  user_agent?: string
+  http_status?: number
+  response_time_ms: number
+}
+
 // Hardcoded roles - these are defined in the Go binary.
 // The cicd automation role is intentionally omitted; it is exposed only for API tokens.
 export const AVAILABLE_ROLES = {
@@ -55,10 +94,6 @@ class ApiService {
 
     // Add auth interceptor
     this.client.interceptors.request.use(async (config) => {
-      const token = authService.getToken()
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
       // Attach CSRF token for unsafe admin requests
       try {
         const method = (config.method || 'get').toUpperCase()
@@ -106,8 +141,7 @@ class ApiService {
           const url: string = err.config?.url || ''
           const method: string = (err.config?.method || 'get').toUpperCase()
           if (method !== 'GET' && url.startsWith('/.gateway/api/admin')) {
-            // refresh token
-            fetch('/.gateway/api/auth/web/csrf', { credentials: 'include' }).catch(() => {
+            ensureCsrfToken().catch(() => {
               /* ignore */
             })
           }
@@ -143,6 +177,40 @@ class ApiService {
     const config = await this.getConfig()
     delete config.users[email]
     await this.updateConfig(config)
+  }
+
+  async getUser(email: string): Promise<GatewayUser> {
+    const response = await this.client.get(`/.gateway/api/admin/users/${encodeURIComponent(email)}`)
+    return response.data
+  }
+
+  async getUserSessions(email: string): Promise<UserSessionSummary[]> {
+    const response = await this.client.get(
+      `/.gateway/api/admin/users/${encodeURIComponent(email)}/sessions`
+    )
+    return response.data
+  }
+
+  async revokeUserSession(email: string, sessionId: number): Promise<{ revoked: boolean }> {
+    const response = await this.client.post(
+      `/.gateway/api/admin/users/${encodeURIComponent(email)}/sessions/${sessionId}/revoke`
+    )
+    return response.data
+  }
+
+  async revokeAllUserSessions(email: string): Promise<{ revoked_count: number }> {
+    const response = await this.client.post(
+      `/.gateway/api/admin/users/${encodeURIComponent(email)}/sessions/revoke_all`
+    )
+    return response.data
+  }
+
+  async getUserAuditLogs(email: string, limit = 10): Promise<AuditLogEntry[]> {
+    const response = await this.client.get('/.gateway/api/admin/audit', {
+      params: { user: email, limit, page: 1, range: '7d' },
+    })
+    const data = response.data as { logs?: AuditLogEntry[] }
+    return data.logs ?? []
   }
 
   // Generic HTTP methods for direct API access

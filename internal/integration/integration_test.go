@@ -160,7 +160,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"PORT="+gatewayPort,
 		"DEV_MODE=true",
 		"DOMAIN=localhost",
-		"APP_JWT_KEY=test-secret-key-for-integration-testing",
+		"APP_SECRET_KEY=test-secret-key-for-integration-testing",
 		"GOOGLE_CLIENT_ID=test-client-id",
 		"GOOGLE_CLIENT_SECRET=test-client-secret",
 		"GOOGLE_ALLOWED_DOMAIN=example.com",

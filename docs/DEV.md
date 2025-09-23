@@ -136,7 +136,7 @@ GOOGLE_CLIENT_SECRET = "your-client-secret"
 GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 
 # Override JWT key for local development if needed
-# APP_JWT_KEY = "your-local-jwt-secret"
+# APP_SECRET_KEY = "your-local-jwt-secret"
 ```
 
 ### 2. Database Configuration

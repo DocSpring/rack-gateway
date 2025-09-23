@@ -14,7 +14,7 @@ GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 # GOOGLE_OAUTH_BASE_URL = ""
 
 # Override JWT key for local development if needed
-# APP_JWT_KEY = "your-local-jwt-secret"
+# APP_SECRET_KEY = "your-local-jwt-secret"
 
 # Override rack configuration for testing with real Convox
 # RACK_HOST = "https://your-rack.convox.cloud"

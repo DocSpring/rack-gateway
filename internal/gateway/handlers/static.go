@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/middleware"
 	"github.com/gin-gonic/gin"
@@ -55,13 +57,14 @@ type StaticHandler struct {
 	devProxy http.Handler
 	distRoot string
 	assets   *gin_adapter.GinAssets
+	sessions *auth.SessionManager
 }
 
 const defaultDistDir = "web/dist"
 
 // NewStaticHandler creates a new static handler
-func NewStaticHandler(cfg *config.Config) *StaticHandler {
-	sh := &StaticHandler{distRoot: defaultDistDir}
+func NewStaticHandler(cfg *config.Config, sessions *auth.SessionManager) *StaticHandler {
+	sh := &StaticHandler{distRoot: defaultDistDir, sessions: sessions}
 
 	if cfg != nil && cfg.DevMode {
 		if raw := os.Getenv("WEB_DEV_SERVER_URL"); raw != "" {
@@ -147,6 +150,23 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if sessionCookie, err := r.Cookie("session_token"); err == nil {
+		if h.sessions != nil {
+			sessionToken := strings.TrimSpace(sessionCookie.Value)
+			if sessionToken != "" {
+				if _, err := h.sessions.ValidateSession(sessionToken, clientIPFromRequest(r), r.UserAgent()); err == nil {
+					if csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken); err == nil && csrfToken != "" {
+						const csrfPlaceholder = "CGW_CSRF_TOKEN"
+						placeholderBytes := []byte(csrfPlaceholder)
+						if bytes.Contains(content, placeholderBytes) {
+							content = bytes.ReplaceAll(content, placeholderBytes, []byte(csrfToken))
+						}
+					}
+				}
+			}
+		}
+	}
+
 	reader := bytes.NewReader(content)
 
 	// index.html should always be revalidated so new deployments propagate quickly
@@ -170,4 +190,27 @@ func shouldRedirectToDefault(r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func clientIPFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			candidate := strings.TrimSpace(parts[0])
+			if candidate != "" {
+				return candidate
+			}
+		}
+	}
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+		return xrip
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(r.RemoteAddr)
 }

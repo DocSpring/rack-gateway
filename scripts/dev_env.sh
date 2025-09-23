@@ -47,8 +47,8 @@ if [ -z "$RACK_HOST" ]; then
 fi
 
 # Generate JWT key if not set (for development only)
-if [ -z "$APP_JWT_KEY" ] && [ "$DEV_MODE" = "true" ]; then
-    export APP_JWT_KEY="dev-jwt-secret-$(date +%s)"
+if [ -z "$APP_SECRET_KEY" ] && [ "$DEV_MODE" = "true" ]; then
+    export APP_SECRET_KEY="dev-jwt-secret-$(date +%s)"
     echo -e "${GREEN}Generated development JWT key${NC}"
 fi
 

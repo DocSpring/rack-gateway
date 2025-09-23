@@ -1,6 +1,5 @@
 import type { AxiosError } from 'axios'
 import axios from 'axios'
-import Cookies from 'js-cookie'
 
 const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
@@ -46,7 +45,7 @@ class AuthService {
 
     return {
       user,
-      token: this.getToken(),
+      token: null,
       isAuthenticated: true,
     }
   }
@@ -84,11 +83,6 @@ class AuthService {
         // Use assign to ease testing under jsdom and avoid Location href setter issues
         window.location.assign(`${base}login`)
       })
-  }
-
-  // Get stored token
-  getToken(): string | null {
-    return Cookies.get('session_token') || null
   }
 }
 

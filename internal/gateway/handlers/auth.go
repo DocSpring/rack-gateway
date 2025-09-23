@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"net/http"
 	"os"
 	"strings"
@@ -31,14 +29,16 @@ type AuthHandler struct {
 	oauth    OAuthProvider
 	database *db.Database
 	config   *config.Config
+	sessions *auth.SessionManager
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config) *AuthHandler {
+func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager) *AuthHandler {
 	return &AuthHandler{
 		oauth:    oauth,
 		database: database,
 		config:   cfg,
+		sessions: sessions,
 	}
 }
 
@@ -146,18 +146,27 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		return
 	}
 
-	secure := h.cookieSecure()
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(
-		"session_token",
-		resp.Token,
-		30*24*60*60, // 30 days
-		"/",
-		"",
-		secure,
-		true,
-	)
-	c.SetSameSite(http.SameSiteDefaultMode)
+	if h.sessions == nil {
+		c.String(http.StatusInternalServerError, "Session manager not available")
+		return
+	}
+
+	userRecord, err := h.database.GetUser(resp.Email)
+	if err != nil || userRecord == nil {
+		c.String(http.StatusUnauthorized, "User not authorized")
+		return
+	}
+
+	sessionToken, _, err := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
+		IPAddress: c.ClientIP(),
+		UserAgent: c.GetHeader("User-Agent"),
+	})
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to create session")
+		return
+	}
+
+	h.setSessionCookie(c, sessionToken)
 
 	// Audit successful login
 	if h.database != nil {
@@ -178,6 +187,10 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 // WebLogout handles logout for web sessions
 func (h *AuthHandler) WebLogout(c *gin.Context) {
 	h.clearWebOAuthStateCookie(c)
+	sessionToken := extractSessionToken(c)
+	if sessionToken != "" && h.sessions != nil {
+		_, _ = h.sessions.RevokeByToken(sessionToken, nil)
+	}
 	secure := h.cookieSecure()
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
@@ -207,21 +220,73 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 
 // GetCSRFToken returns a CSRF token for web sessions
 func (h *AuthHandler) GetCSRFToken(c *gin.Context) {
-	// Generate or retrieve CSRF token from session
-	token := generateCSRFToken()
+	sessionToken := strings.TrimSpace(extractSessionToken(c))
+	if sessionToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing session"})
+		return
+	}
+	if h.sessions == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "session manager unavailable"})
+		return
+	}
 
-	// Set CSRF cookie
-	c.SetCookie(
-		"csrf_token",
-		token,
-		60*60, // 1 hour
-		"/",
-		"",
-		true,
-		false, // not httpOnly - JS needs to read it
-	)
+	if _, err := h.sessions.ValidateSession(sessionToken, c.ClientIP(), c.GetHeader("User-Agent")); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+		return
+	}
+
+	token, err := h.sessions.DeriveCSRFToken(sessionToken)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to derive CSRF token"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func extractSessionToken(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	if cookie, err := c.Cookie("session_token"); err == nil {
+		if trimmed := strings.TrimSpace(cookie); trimmed != "" {
+			return trimmed
+		}
+	}
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	if authHeader != "" {
+		const bearerPrefix = "Bearer "
+		if len(authHeader) >= len(bearerPrefix) && strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+			return strings.TrimSpace(authHeader[len(bearerPrefix):])
+		}
+	}
+	return ""
+}
+
+func (h *AuthHandler) setSessionCookie(c *gin.Context, value string) {
+	secure := h.cookieSecure()
+	maxAge := int(h.sessionsTTL().Seconds())
+	if maxAge <= 0 {
+		maxAge = int((30 * 24 * time.Hour).Seconds())
+	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(
+		"session_token",
+		value,
+		maxAge,
+		"/",
+		"",
+		secure,
+		true,
+	)
+	c.SetSameSite(http.SameSiteDefaultMode)
+}
+
+func (h *AuthHandler) sessionsTTL() time.Duration {
+	if h.sessions == nil {
+		return 30 * 24 * time.Hour
+	}
+	return h.sessions.TTL()
 }
 
 func (h *AuthHandler) setWebOAuthStateCookie(c *gin.Context, value string) {
@@ -270,14 +335,4 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.GetHeader("User-Agent"),
 	})
-}
-
-// generateCSRFToken generates a new CSRF token
-func generateCSRFToken() string {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based token
-		return base64.URLEncoding.EncodeToString([]byte(time.Now().String()))
-	}
-	return base64.URLEncoding.EncodeToString(b)
 }

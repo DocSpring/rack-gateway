@@ -152,7 +152,7 @@ Example `mise.local.toml`:
 
 ```toml
 [env]
-APP_JWT_KEY = "your-local-jwt-key"
+APP_SECRET_KEY = "your-local-jwt-key"
 GOOGLE_CLIENT_ID = "your-oauth-client-id"
 GOOGLE_CLIENT_SECRET = "your-oauth-secret"
 GOOGLE_ALLOWED_DOMAIN = "yourexample.com"

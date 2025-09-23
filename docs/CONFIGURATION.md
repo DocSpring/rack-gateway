@@ -20,7 +20,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
 - `PORT` (default: `8080`)
   - TCP port the API listens on.
-- `APP_JWT_KEY` (required in production)
+- `APP_SECRET_KEY` (required in production)
   - Secret used to sign JWTs for web sessions. Auto-generated in dev if missing.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (required)
   - OAuth client credentials for Google Workspace (or your OIDC provider).

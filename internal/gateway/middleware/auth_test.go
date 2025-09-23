@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestJWTAuthSetsRequestContext(t *testing.T) {
+func TestAuthenticatedSetsRequestContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	database := setupTestDatabase(t)
@@ -27,13 +27,16 @@ func TestJWTAuthSetsRequestContext(t *testing.T) {
 	}
 
 	jwtManager := auth.NewJWTManager("test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	service := auth.NewAuthService(jwtManager, nil, database, sessionManager)
+
 	token, _, err := jwtManager.GenerateToken("user@example.com", "User")
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
 
 	router := gin.New()
-	router.Use(JWTAuth(jwtManager, mgr))
+	router.Use(Authenticated(service, mgr))
 	var sawHandler bool
 	router.GET("/me", func(c *gin.Context) {
 		sawHandler = true

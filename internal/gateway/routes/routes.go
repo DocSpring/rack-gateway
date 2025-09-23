@@ -18,17 +18,18 @@ import (
 
 // Config holds dependencies needed for route setup
 type Config struct {
-	App          interface{} // Reference to app for handlers that need it
-	Config       *config.Config
-	Database     *db.Database
-	RBACManager  rbac.RBACManager
-	JWTManager   *auth.JWTManager
-	OAuthHandler *auth.OAuthHandler
-	AuthService  *auth.AuthService
-	TokenService *token.Service
-	EmailSender  email.Sender
-	ProxyHandler *proxy.Handler
-	RackCertMgr  *rackcert.Manager
+	App            interface{} // Reference to app for handlers that need it
+	Config         *config.Config
+	Database       *db.Database
+	RBACManager    rbac.RBACManager
+	JWTManager     *auth.JWTManager
+	SessionManager *auth.SessionManager
+	OAuthHandler   *auth.OAuthHandler
+	AuthService    *auth.AuthService
+	TokenService   *token.Service
+	EmailSender    email.Sender
+	ProxyHandler   *proxy.Handler
+	RackCertMgr    *rackcert.Manager
 }
 
 // Setup configures all routes for the application
@@ -63,11 +64,11 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config)
+	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager)
 	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr)
-	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr)
+	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
-	staticHandler := handlers.NewStaticHandler(cfg.Config)
+	staticHandler := handlers.NewStaticHandler(cfg.Config, cfg.SessionManager)
 	healthHandler := handlers.NewHealthHandler()
 
 	// Root redirect
@@ -106,7 +107,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 		// Authenticated endpoints
 		authenticated := api.Group("")
-		authenticated.Use(middleware.JWTAuth(cfg.JWTManager, cfg.RBACManager))
+		authenticated.Use(middleware.Authenticated(cfg.AuthService, cfg.RBACManager))
 		{
 			// User API
 			authenticated.GET("/me", apiHandler.GetMe)
@@ -125,7 +126,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 			// Admin endpoints (with CSRF protection)
 			admin := authenticated.Group("/admin")
-			admin.Use(middleware.CSRF())
+			admin.Use(middleware.CSRF(cfg.SessionManager))
 			{
 				// Config and settings
 				admin.GET("/config", adminHandler.GetConfig)
@@ -138,10 +139,14 @@ func Setup(router *gin.Engine, cfg *Config) {
 				// Users and roles
 				admin.GET("/roles", adminHandler.ListRoles)
 				admin.GET("/users", adminHandler.ListUsers)
+				admin.GET("/users/:email", adminHandler.GetUser)
 				admin.POST("/users", adminHandler.CreateUser)
 				admin.DELETE("/users/:email", adminHandler.DeleteUser)
 				admin.PUT("/users/:email", adminHandler.UpdateUserProfile)
 				admin.PUT("/users/:email/roles", adminHandler.UpdateUserRoles)
+				admin.GET("/users/:email/sessions", adminHandler.ListUserSessions)
+				admin.POST("/users/:email/sessions/:sessionID/revoke", adminHandler.RevokeUserSession)
+				admin.POST("/users/:email/sessions/revoke_all", adminHandler.RevokeAllUserSessions)
 
 				// Audit logs
 				admin.GET("/audit", adminHandler.ListAuditLogs)
