@@ -42,7 +42,11 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.spec.{ts,tsx,js,jsx}", "e2e/**/*.ts"],
+      "includes": [
+        "**/*.spec.{ts,tsx,js,jsx}",
+        "**/*.test.{ts,tsx,js,jsx}",
+        "e2e/**/*.ts"
+      ],
       "linter": {
         "rules": {
           "performance": {

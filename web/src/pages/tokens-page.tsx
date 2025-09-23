@@ -3,6 +3,7 @@ import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { toast } from '@/components/ui/use-toast'
+import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -248,7 +249,6 @@ function TokensPageInner() {
   const [editActiveRole, setEditActiveRole] = useState<string | null>(null)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [tokenToDelete, setTokenToDelete] = useState<APIToken | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState('')
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
   const [activeRole, setActiveRole] = useState<string | null>(null)
   const [createErrors, setCreateErrors] = useState<
@@ -400,9 +400,7 @@ function TokensPageInner() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('Token deleted successfully')
-      setIsDeleteOpen(false)
-      setTokenToDelete(null)
-      setDeleteConfirm('')
+      handleDeleteDialogOpenChange(false)
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
@@ -493,8 +491,14 @@ function TokensPageInner() {
 
   const openDeleteDialog = (t: APIToken) => {
     setTokenToDelete(t)
-    setDeleteConfirm('')
     setIsDeleteOpen(true)
+  }
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    setIsDeleteOpen(open)
+    if (!open) {
+      setTokenToDelete(null)
+    }
   }
 
   const confirmDeleteToken = () => {
@@ -797,44 +801,18 @@ function TokensPageInner() {
       </Dialog>
 
       {/* Delete Token Confirmation Dialog */}
-      <Dialog onOpenChange={setIsDeleteOpen} open={isDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete API Token</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. Type DELETE to confirm removal of the token "
-              {tokenToDelete?.name}".
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Label htmlFor="confirm-delete">Confirmation</Label>
-            <Input
-              autoCapitalize="none"
-              autoComplete="off"
-              autoCorrect="off"
-              data-1p-ignore
-              data-bwignore="true"
-              data-lpignore="true"
-              id="confirm-delete"
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="Type DELETE to confirm"
-              value={deleteConfirm}
-            />
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setIsDeleteOpen(false)} variant="outline">
-              Cancel
-            </Button>
-            <Button
-              disabled={deleteTokenMutation.isPending || deleteConfirm !== 'DELETE'}
-              onClick={confirmDeleteToken}
-              variant="destructive"
-            >
-              {deleteTokenMutation.isPending ? 'Deleting...' : 'Delete Token'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDeleteDialog
+        busy={deleteTokenMutation.isPending}
+        confirmButtonText="Delete Token"
+        description={
+          <>This action cannot be undone. Type DELETE to remove "{tokenToDelete?.name}".</>
+        }
+        inputId="confirm-delete-token"
+        onConfirm={confirmDeleteToken}
+        onOpenChange={handleDeleteDialogOpenChange}
+        open={isDeleteOpen}
+        title="Delete API Token"
+      />
     </div>
   )
 }

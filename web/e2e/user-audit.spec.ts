@@ -7,25 +7,25 @@ function escapeRegex(value: string) {
 }
 
 test.describe('User Audit Logs', () => {
-  test('navigating from Users to user audit logs filters by that user', async ({ page }) => {
+  test('user detail view shows audit logs filtered by that user', async ({ page }) => {
     await login(page)
     await page.goto(WebRoute('users'))
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
 
-    const targetEmail = 'ops@example.com'
+    const timestamp = Date.now()
+    const targetEmail = `e2e-user-audit-${timestamp}@example.com`
+    const targetName = `E2E Audit User ${timestamp}`
+
+    await page.getByRole('button', { name: /Add User/i }).click()
+    await page.getByLabel('Email').fill(targetEmail)
+    await page.getByLabel('Name').fill(targetName)
+    await page.getByRole('button', { name: /Add User/i }).click()
+    await expect(page.locator('text=User created successfully').first()).toBeVisible()
 
     const userRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
     await expect(userRow).toBeVisible()
 
-    // Click the user-specific audit link and capture its metadata
-    const auditLink = userRow.locator('a[href*="/users/"]').first()
-    await expect(auditLink).toBeVisible()
-
-    const href = (await auditLink.getAttribute('href')) ?? ''
-    const match = href.match(/\/users\/([^/?#]+)\/?$/)
-    expect(match, 'user view link should include encoded email').not.toBeNull()
-    const encodedEmail = match ? match[1] : ''
-    const decodedEmailFromLink = decodeURIComponent(encodedEmail)
+    const encodedEmail = encodeURIComponent(targetEmail)
 
     const auditRequestPromise = page.waitForRequest((req) => {
       if (!req.url().includes(APIRoute('admin/audit')) || req.method() !== 'GET') {
@@ -33,39 +33,45 @@ test.describe('User Audit Logs', () => {
       }
       try {
         const url = new URL(req.url())
-        return url.searchParams.get('user') === decodedEmailFromLink
+        return url.searchParams.get('user') === targetEmail
       } catch {
         return false
       }
     })
 
-    const [auditRequest] = await Promise.all([
+    const userLink = userRow.locator('a').first()
+
+    await Promise.all([
       auditRequestPromise,
       page.waitForURL(new RegExp(`/users/${escapeRegex(encodedEmail)}(?:/)?$`)),
-      auditLink.click(),
+      userLink.click(),
     ])
 
-    const auditResponse = await auditRequest.response()
-    if (auditResponse) {
-      const status = auditResponse.status()
-      if (status !== 200) {
-        const body = await auditResponse.text().catch(() => '<unavailable>')
-        throw new Error(
-          `GET ${auditResponse.url()} expected 200, received ${status}. Response body:\n${body}`
-        )
-      }
+    const auditRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
+    const emptyState = page.locator('text=No audit logs for this user').first()
+    if ((await auditRow.count()) > 0) {
+      await expect(auditRow).toBeVisible()
+      await expect(auditRow).toContainText(targetEmail)
+    } else {
+      await expect(emptyState).toBeVisible()
     }
 
-    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Audit Logs' })).toBeVisible()
-    const firstRow = page.locator('table tbody tr').first()
-    await expect(firstRow).toBeVisible()
-    await expect(firstRow).toContainText(decodedEmailFromLink)
+    // Clean up the test user to keep fixture tidy
+    await page.goto(WebRoute('users'))
+    const cleanupRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
+    await expect(cleanupRow).toBeVisible()
+    await cleanupRow.getByRole('button', { name: /Delete User/i }).click()
+    const deleteDialog = page.getByRole('dialog')
+    await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
+    await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+    await expect(cleanupRow).toHaveCount(0)
   })
 
-  test('invalid user id shows 404 error state', async ({ page }) => {
+  test('invalid user email shows error state', async ({ page }) => {
     await login(page)
-    await page.goto(WebRoute('users/999999999/audit_logs'))
-    await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
-    await expect(page.getByText(/No audit logs found/i)).toBeVisible()
+    const missingEmail = encodeURIComponent('missing-user@example.com')
+    await page.goto(WebRoute(`users/${missingEmail}`))
+    await expect(page.getByRole('heading', { name: 'User' })).toBeVisible()
+    await expect(page.getByText(/Unable to load user/i)).toBeVisible()
   })
 })

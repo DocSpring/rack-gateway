@@ -33,8 +33,11 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
     timeout: 20_000,
   })
 
-  // Land on the protected area (Users page)
-  await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible({ timeout: 10_000 })
+  // Land on the protected area (Rack page)
+  await expect(page.getByRole('heading', { name: /Rack/i })).toBeVisible({ timeout: 10_000 })
+
+  // Navigate to Users and ensure it renders without crashing
+  await page.getByRole('link', { name: /Users/i }).click()
 
   // The protected Users page should render for an authenticated admin
   await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible()
@@ -43,6 +46,7 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   // Navigate to API Tokens and ensure it renders without crashing
   await page.getByRole('link', { name: /API Tokens/i }).click()
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
+
   // Either empty state or a table is present
   const empty = page.getByText('No API tokens created yet')
   const table = page.getByRole('table')

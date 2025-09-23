@@ -8,14 +8,15 @@ import { ensureCsrfToken, getCsrfToken } from './csrf'
 // In dev, keep empty to let Vite proxy handle '/.gateway/api/*'.
 const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
-export type UserConfig = {
+export type CreateUserRequest = {
+  email: string
   name: string
   roles: string[]
 }
 
-export type GatewayConfig = {
-  domain: string
-  users: Record<string, UserConfig>
+export type UpdateUserProfileRequest = {
+  email: string
+  name: string
 }
 
 export type GatewayUser = {

@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Edit2, Eye, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
+import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
@@ -64,6 +65,8 @@ export function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<UserEditDialogMode>('create')
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
 
   // Check if current user is admin
   const isAdmin = !!currentUser?.roles?.includes('admin')
@@ -147,6 +150,7 @@ export function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
       toast.success('User deleted successfully')
+      handleDeleteDialogOpenChange(false)
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
@@ -242,14 +246,31 @@ export function UsersPage() {
     await updateExistingUser(editingUser, values)
   }
 
-  const handleDeleteUser = (email: string) => {
-    if (email === currentUser?.email) {
+  const handleRequestDeleteUser = (user: User) => {
+    if (user.email === currentUser?.email) {
       toast.error("You can't delete your own account")
       return
     }
 
-    if (confirm(`Are you sure you want to delete ${email}?`)) {
-      deleteUserMutation.mutate(email)
+    setUserToDelete(user)
+    setIsDeleteOpen(true)
+  }
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    setIsDeleteOpen(open)
+    if (!open) {
+      setUserToDelete(null)
+    }
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) {
+      return
+    }
+    try {
+      await deleteUserMutation.mutateAsync(userToDelete.email)
+    } catch (_err) {
+      // Errors are surfaced via mutation onError toast; keep dialog open for retry.
     }
   }
 
@@ -375,7 +396,7 @@ export function UsersPage() {
                       <Button
                         aria-label={`Delete User ${user.email}`}
                         disabled={user.email === currentUser?.email}
-                        onClick={() => handleDeleteUser(user.email)}
+                        onClick={() => handleRequestDeleteUser(user)}
                         size="sm"
                         variant="ghost"
                       >
@@ -422,6 +443,19 @@ export function UsersPage() {
         onOpenChange={handleDialogOpenChange}
         onSubmit={handleDialogSubmit}
         open={isDialogOpen}
+      />
+
+      <ConfirmDeleteDialog
+        busy={deleteUserMutation.isPending}
+        confirmButtonText="Delete User"
+        description={
+          <>This action cannot be undone. Type DELETE to remove "{userToDelete?.email}".</>
+        }
+        inputId="confirm-delete-user"
+        onConfirm={confirmDeleteUser}
+        onOpenChange={handleDeleteDialogOpenChange}
+        open={isDeleteOpen}
+        title="Delete User"
       />
     </div>
   )

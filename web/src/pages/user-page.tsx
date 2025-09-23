@@ -1,9 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { Edit2, RefreshCw } from 'lucide-react'
+import { Edit2, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { type AuditLogRecord, AuditLogsPane } from '../components/audit-logs-pane'
+import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -18,6 +19,7 @@ import {
 } from '../components/ui/table'
 import type { UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
+import { useAuth } from '../contexts/auth-context'
 import type { GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
 import { AVAILABLE_ROLES, api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
@@ -118,8 +120,10 @@ export function UserPage() {
   const decodedEmail = useMemo(() => decodeURIComponent(email), [email])
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user: currentUser } = useAuth()
   const [pendingSessionId, setPendingSessionId] = useState<number | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
 
   const {
     data: user,
@@ -384,6 +388,48 @@ export function UserPage() {
     },
   })
 
+  const deleteUserMutation = useMutation({
+    mutationFn: () => api.delete(`/.gateway/api/admin/users/${encodeURIComponent(decodedEmail)}`),
+    onSuccess: () => {
+      toast.success('User deleted successfully')
+      setIsDeleteOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.removeQueries({ queryKey: ['user', decodedEmail] })
+      queryClient.removeQueries({ queryKey: ['userSessions', decodedEmail] })
+      queryClient.removeQueries({ queryKey: ['userAuditLogs', decodedEmail] })
+      navigate({ to: '/users', replace: true })
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete user')
+    },
+  })
+
+  const handleRequestDelete = () => {
+    if (currentUser?.email === decodedEmail) {
+      toast.error("You can't delete your own account")
+      return
+    }
+    if (!user) {
+      toast.error('User is not loaded yet')
+      return
+    }
+    setIsDeleteOpen(true)
+  }
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    if (deleteUserMutation.isPending) {
+      return
+    }
+    setIsDeleteOpen(open)
+  }
+
+  const confirmDeleteUser = () => {
+    if (!user || deleteUserMutation.isPending) {
+      return
+    }
+    deleteUserMutation.mutate()
+  }
+
   if (userError) {
     return (
       <div className="space-y-4">
@@ -424,6 +470,18 @@ export function UserPage() {
           >
             {revokeAllMutation.isPending && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
             Sign Out Everywhere
+          </Button>
+          <Button
+            disabled={userLoading || !user || deleteUserMutation.isPending}
+            onClick={handleRequestDelete}
+            variant="destructive"
+          >
+            {deleteUserMutation.isPending ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Delete User
           </Button>
         </div>
       </div>
@@ -472,6 +530,17 @@ export function UserPage() {
         onOpenChange={setIsEditOpen}
         onSubmit={handleEditSubmit}
         open={isEditOpen}
+      />
+
+      <ConfirmDeleteDialog
+        busy={deleteUserMutation.isPending}
+        confirmButtonText="Delete User"
+        description={<>This action cannot be undone. Type DELETE to remove {decodedEmail}.</>}
+        inputId="confirm-delete-user"
+        onConfirm={confirmDeleteUser}
+        onOpenChange={handleDeleteDialogOpenChange}
+        open={isDeleteOpen}
+        title="Delete User"
       />
     </div>
   )

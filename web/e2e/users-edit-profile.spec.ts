@@ -48,7 +48,10 @@ test('users: edit name and email', async ({ page }) => {
   await expect(row).toContainText(name2)
 
   // Cleanup: delete the user
-  page.once('dialog', (d) => d.accept())
   await row.getByRole('button', { name: /Delete User/i }).click()
+  const deleteDialog = page.getByRole('dialog')
+  await expect(deleteDialog).toBeVisible()
+  await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
+  await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
   await expect(row).toHaveCount(0)
 })

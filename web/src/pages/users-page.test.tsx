@@ -227,9 +227,6 @@ describe('UsersPage', () => {
       mockedGet.mockResolvedValue(mockUsers)
       vi.mocked(api.delete).mockResolvedValueOnce({})
 
-      // Mock window.confirm
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
-
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
 
@@ -252,7 +249,12 @@ describe('UsersPage', () => {
       }
       fireEvent.click(deleteButton)
 
-      expect(confirmSpy).toHaveBeenCalledWith('Are you sure you want to delete viewer@example.com?')
+      const dialog = await screen.findByRole('dialog')
+      const confirmationInput = within(dialog).getByLabelText(/confirmation/i)
+      fireEvent.change(confirmationInput, { target: { value: 'DELETE' } })
+
+      const confirmDeleteButton = within(dialog).getByRole('button', { name: /Delete User/i })
+      fireEvent.click(confirmDeleteButton)
 
       await waitFor(() => {
         expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/users/viewer@example.com')
