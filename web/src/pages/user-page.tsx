@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useParams } from '@tanstack/react-router'
 import { Edit2, RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
+import { type AuditLogRecord, AuditLogsPane } from '../components/audit-logs-pane'
 import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -17,17 +18,9 @@ import {
 } from '../components/ui/table'
 import type { UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
-import type { AuditLogEntry, GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
+import type { GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
 import { AVAILABLE_ROLES, api } from '../lib/api'
 import { pickPrimaryRole } from '../lib/user-roles'
-
-const STATUS_COLORS: Record<string, string> = {
-  success: 'bg-green-600 text-white',
-  error: 'bg-destructive text-destructive-foreground',
-  failed: 'bg-destructive text-destructive-foreground',
-  denied: 'bg-yellow-600 text-white',
-  blocked: 'bg-zinc-700 text-white',
-}
 
 function roleBadges(roles: string[]) {
   return roles.map((role) => {
@@ -118,62 +111,7 @@ function SessionTable({
   )
 }
 
-function RecentActivity({
-  logs,
-  loading,
-  error,
-  email,
-}: {
-  logs: AuditLogEntry[]
-  loading: boolean
-  error?: string | null
-  email: string
-}) {
-  if (loading) {
-    return <p className="text-muted-foreground text-sm">Loading activity…</p>
-  }
-  if (error) {
-    return <p className="text-destructive text-sm">{error}</p>
-  }
-  if (logs.length === 0) {
-    return <p className="text-muted-foreground text-sm">No recent activity.</p>
-  }
-  return (
-    <div className="space-y-3">
-      <ul className="space-y-3">
-        {logs.map((log) => {
-          const statusKey = (log.status || '').toLowerCase()
-          return (
-            <li className="rounded border border-border p-3" key={log.id}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <TimeAgo date={log.timestamp} />
-                  <Badge
-                    className={STATUS_COLORS[statusKey] ?? 'bg-muted text-muted-foreground'}
-                    variant="outline"
-                  >
-                    {log.status}
-                  </Badge>
-                </div>
-                <span className="font-mono text-muted-foreground text-xs">{log.action_type}</span>
-              </div>
-              <div className="mt-2 font-medium text-sm">{log.action}</div>
-              {log.resource && (
-                <div className="text-muted-foreground text-xs">Resource: {log.resource}</div>
-              )}
-            </li>
-          )
-        })}
-      </ul>
-      <Button asChild size="sm" variant="outline">
-        <Link params={{ email }} to="/users/$email/audit_logs">
-          View All Audit Logs
-        </Link>
-      </Button>
-    </div>
-  )
-}
-
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: User management screen orchestrates multiple flows
 export function UserPage() {
   const { email } = useParams({ from: '/users/$email' }) as { email: string }
   const decodedEmail = useMemo(() => decodeURIComponent(email), [email])
@@ -205,16 +143,66 @@ export function UserPage() {
     refetchOnWindowFocus: true,
   })
 
+  const AUDIT_PAGE_SIZE = 25
+  const [auditPageIndex, setAuditPageIndex] = useState(1)
+
   const {
-    data: auditLogs = [],
-    isLoading: auditLoading,
-    error: auditError,
-  } = useQuery<AuditLogEntry[], Error>({
-    queryKey: ['userAuditPreview', decodedEmail],
-    queryFn: () => api.getUserAuditLogs(decodedEmail, 10),
+    data: auditTableData,
+    isLoading: auditTableLoading,
+    error: auditTableError,
+  } = useQuery<{ logs: AuditLogRecord[]; total: number; page: number; limit: number }, Error>({
+    queryKey: ['userAuditLogs', decodedEmail, auditPageIndex, AUDIT_PAGE_SIZE],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        user: decodedEmail,
+        page: String(auditPageIndex),
+        limit: String(AUDIT_PAGE_SIZE),
+        range: '30d',
+      })
+
+      return api.get<{
+        logs: AuditLogRecord[]
+        total: number
+        page: number
+        limit: number
+      }>(`/.gateway/api/admin/audit?${params}`)
+    },
     enabled: !!user,
-    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   })
+
+  const auditLogs: AuditLogRecord[] = auditTableData?.logs ?? []
+  const auditTotal = auditTableData?.total ?? 0
+  const auditLimit = auditTableData?.limit ?? AUDIT_PAGE_SIZE
+  const currentAuditPage = auditTableData?.page ?? auditPageIndex
+  const auditTotalPages = Math.max(1, Math.ceil(Math.max(auditTotal, 0) / auditLimit))
+  const auditFirstRowIndex = auditTotal === 0 ? 0 : (currentAuditPage - 1) * auditLimit + 1
+  const auditLastRowIndex = auditTotal === 0 ? 0 : auditFirstRowIndex + auditLogs.length - 1
+  const auditLoading = auditTableLoading && auditLogs.length === 0
+  const auditError = auditTableError ? auditTableError.message : null
+
+  useEffect(() => {
+    if (!auditTableData) {
+      return
+    }
+    if (auditPageIndex !== currentAuditPage) {
+      setAuditPageIndex(currentAuditPage)
+      return
+    }
+    if (currentAuditPage > auditTotalPages) {
+      setAuditPageIndex(auditTotalPages)
+    }
+  }, [auditTableData, auditPageIndex, currentAuditPage, auditTotalPages])
+
+  const handleAuditPrevPage = () => {
+    setAuditPageIndex((prev) => Math.max(1, prev - 1))
+  }
+
+  const handleAuditNextPage = () => {
+    setAuditPageIndex((prev) => Math.min(auditTotalPages, prev + 1))
+  }
 
   const updateProfileMutation = useMutation({
     mutationFn: async ({
@@ -281,7 +269,7 @@ export function UserPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['user', targetEmail] }),
       queryClient.invalidateQueries({ queryKey: ['userSessions', targetEmail] }),
-      queryClient.invalidateQueries({ queryKey: ['userAuditPreview', targetEmail] }),
+      queryClient.invalidateQueries({ queryKey: ['userAuditLogs', targetEmail] }),
     ])
   }
 
@@ -429,11 +417,6 @@ export function UserPage() {
           >
             <Edit2 className="mr-2 h-4 w-4" /> Edit
           </Button>
-          <Button asChild variant="secondary">
-            <Link params={{ email }} to="/users/$email/audit_logs">
-              View Audit Logs
-            </Link>
-          </Button>
           <Button
             disabled={revokeAllMutation.isPending || userLoading || sessions.length === 0}
             onClick={() => revokeAllMutation.mutate()}
@@ -461,19 +444,22 @@ export function UserPage() {
             />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RecentActivity
-              email={email}
-              error={auditError ? 'Failed to load activity' : null}
-              loading={auditLoading || userLoading}
-              logs={auditLogs}
-            />
-          </CardContent>
-        </Card>
+        <AuditLogsPane
+          currentPage={currentAuditPage}
+          disableNext={currentAuditPage >= auditTotalPages}
+          disablePrevious={currentAuditPage <= 1}
+          emptyMessage="No audit logs for this user"
+          error={auditError}
+          firstRowIndex={auditFirstRowIndex}
+          lastRowIndex={auditLastRowIndex}
+          loading={auditLoading}
+          logs={auditLogs}
+          onNextPage={handleAuditNextPage}
+          onPreviousPage={handleAuditPrevPage}
+          title="Audit Logs"
+          totalCount={auditTotal}
+          totalPages={auditTotalPages}
+        />
       </div>
 
       <UserEditDialog
