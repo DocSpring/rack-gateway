@@ -117,6 +117,11 @@
   body {
     @apply bg-background text-foreground;
   }
+  .toaster {
+    --normal-bg: var(--popover);
+    --normal-text: var(--popover-foreground);
+    --normal-border: var(--border);
+  }
   /* Global text selection colors across themes */
   ::selection {
     background-color: var(--primary);
