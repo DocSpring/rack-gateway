@@ -12,6 +12,33 @@ type AuthContextType = {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const SANITIZE_PATH_REGEX = /\/+/g
+const SANITIZE_PATH_TRAILING_REGEX = /\/+$/
+
+const normalizePathname = (value: string) => {
+  if (!value) {
+    return '/'
+  }
+  const sanitized = value
+    .replace(SANITIZE_PATH_REGEX, '/')
+    .replace(SANITIZE_PATH_TRAILING_REGEX, '')
+  return sanitized === '' ? '/' : sanitized
+}
+
+const isLoginRoute = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  try {
+    const base = import.meta.env.BASE_URL ?? '/'
+    const normalizedBase = base.endsWith('/') ? base : `${base}/`
+    const loginPath = normalizePathname(`${normalizedBase}login`)
+    const current = normalizePathname(window.location.pathname)
+    return current === loginPath
+  } catch (_error) {
+    return false
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -19,8 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Check if user is already logged in
+    const suppressAuthError = isLoginRoute()
     authService
-      .getCurrentUser()
+      .getCurrentUser({ suppressAuthError })
       .then((currentUser) => {
         setUser(currentUser)
       })

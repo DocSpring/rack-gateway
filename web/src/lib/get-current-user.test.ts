@@ -23,4 +23,17 @@ describe('getCurrentUser', () => {
     const user = await authService.getCurrentUser()
     expect(user).toBeNull()
   })
+
+  it('suppresses 401 auth error storage when requested', async () => {
+    const setItem = vi.spyOn(window.sessionStorage, 'setItem')
+    vi.mocked(axios.get).mockRejectedValueOnce({
+      response: { status: 401 },
+    } as never)
+
+    const user = await authService.getCurrentUser({ suppressAuthError: true })
+
+    expect(user).toBeNull()
+    expect(setItem).not.toHaveBeenCalled()
+    setItem.mockRestore()
+  })
 })

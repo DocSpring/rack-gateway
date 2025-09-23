@@ -51,7 +51,7 @@ class AuthService {
   }
 
   // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUser(options: { suppressAuthError?: boolean } = {}): Promise<User | null> {
     try {
       const response = await axios.get(`${API_BASE}/.gateway/api/me`, {
         withCredentials: true,
@@ -61,7 +61,7 @@ class AuthService {
       // Mark for UI to show an error after redirect to login
       const status = (err as AxiosError)?.response?.status
       try {
-        if (status === 401) {
+        if (status === 401 && !options.suppressAuthError) {
           sessionStorage.setItem('auth_error', 'Unauthorized. Please sign in to continue.')
         }
       } catch (_e) {
