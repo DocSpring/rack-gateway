@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
-import { RefreshCw } from 'lucide-react'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { Edit2, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { TimeAgo } from '../components/time-ago'
@@ -15,8 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
-import type { AuditLogEntry, GatewayUser, UserSessionSummary } from '../lib/api'
+import type { UserEditDialogValues } from '../components/user-edit-dialog'
+import { UserEditDialog } from '../components/user-edit-dialog'
+import type { AuditLogEntry, GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
 import { AVAILABLE_ROLES, api } from '../lib/api'
+import { pickPrimaryRole } from '../lib/user-roles'
 
 const STATUS_COLORS: Record<string, string> = {
   success: 'bg-green-600 text-white',
@@ -98,7 +101,7 @@ function SessionTable({
                   disabled={disableActions || pendingSessionId === session.id}
                   onClick={() => onRevoke(session.id)}
                   size="sm"
-                  variant="outline"
+                  variant="destructive"
                 >
                   {pendingSessionId === session.id ? (
                     <RefreshCw className="h-4 w-4 animate-spin" />
@@ -164,7 +167,7 @@ function RecentActivity({
       </ul>
       <Button asChild size="sm" variant="outline">
         <Link params={{ email }} to="/users/$email/audit_logs">
-          View Full Audit Log
+          View All Audit Logs
         </Link>
       </Button>
     </div>
@@ -174,8 +177,10 @@ function RecentActivity({
 export function UserPage() {
   const { email } = useParams({ from: '/users/$email' }) as { email: string }
   const decodedEmail = useMemo(() => decodeURIComponent(email), [email])
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [pendingSessionId, setPendingSessionId] = useState<number | null>(null)
+  const [isEditOpen, setIsEditOpen] = useState(false)
 
   const {
     data: user,
@@ -186,6 +191,8 @@ export function UserPage() {
     queryFn: () => api.getUser(decodedEmail),
     retry: 1,
   })
+
+  const currentPrimaryRole = useMemo(() => pickPrimaryRole(user?.roles ?? []), [user?.roles])
 
   const {
     data: sessions = [],
@@ -208,6 +215,158 @@ export function UserPage() {
     enabled: !!user,
     staleTime: 30_000,
   })
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async ({
+      originalEmail,
+      email: nextEmail,
+      name,
+    }: {
+      originalEmail: string
+      email: string
+      name: string
+    }) => {
+      await api.put(`/.gateway/api/admin/users/${encodeURIComponent(originalEmail)}`, {
+        email: nextEmail,
+        name,
+      })
+    },
+  })
+
+  const updateRolesMutation = useMutation({
+    mutationFn: async ({ email: targetEmail, roles }: { email: string; roles: string[] }) => {
+      await api.put(`/.gateway/api/admin/users/${encodeURIComponent(targetEmail)}/roles`, {
+        roles,
+      })
+    },
+  })
+
+  const isEditBusy = updateProfileMutation.isPending || updateRolesMutation.isPending
+
+  type EditPlan = {
+    originalEmail: string
+    routeEmail: string
+    trimmedEmail: string
+    trimmedName: string
+    desiredRoles: RoleName[]
+    emailChanged: boolean
+    profileChanged: boolean
+    shouldUpdateRoles: boolean
+  }
+
+  const applyProfileUpdate = async (
+    shouldUpdate: boolean,
+    originalEmail: string,
+    nextEmail: string,
+    nextName: string
+  ) => {
+    if (!shouldUpdate) {
+      return
+    }
+    await updateProfileMutation.mutateAsync({
+      originalEmail,
+      email: nextEmail,
+      name: nextName,
+    })
+  }
+
+  const applyRoleUpdate = async (shouldUpdate: boolean, targetEmail: string, roles: RoleName[]) => {
+    if (!shouldUpdate) {
+      return
+    }
+    await updateRolesMutation.mutateAsync({ email: targetEmail, roles })
+  }
+
+  const invalidateUserData = async (targetEmail: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['user', targetEmail] }),
+      queryClient.invalidateQueries({ queryKey: ['userSessions', targetEmail] }),
+      queryClient.invalidateQueries({ queryKey: ['userAuditPreview', targetEmail] }),
+    ])
+  }
+
+  const handleOpenEdit = () => {
+    setIsEditOpen(true)
+  }
+
+  const buildEditPlan = (
+    existingUser: GatewayUser,
+    values: UserEditDialogValues
+  ): { error: string } | { plan: EditPlan } => {
+    const trimmedEmail = values.email.trim()
+    const trimmedName = values.name.trim()
+
+    if (!(trimmedEmail && trimmedName)) {
+      return { error: 'Email and name are required' }
+    }
+
+    const desiredRoles: RoleName[] = [values.role]
+    const emailChanged = trimmedEmail !== existingUser.email
+    const profileChanged = emailChanged || trimmedName !== existingUser.name
+    const rolesChanged =
+      existingUser.roles.length !== desiredRoles.length ||
+      desiredRoles.some((role) => !existingUser.roles.includes(role))
+
+    return {
+      plan: {
+        originalEmail: existingUser.email,
+        routeEmail: decodedEmail,
+        trimmedEmail,
+        trimmedName,
+        desiredRoles,
+        emailChanged,
+        profileChanged,
+        shouldUpdateRoles: rolesChanged || emailChanged,
+      },
+    }
+  }
+
+  const executeEditPlan = async (plan: EditPlan) => {
+    await applyProfileUpdate(
+      plan.profileChanged,
+      plan.originalEmail,
+      plan.trimmedEmail,
+      plan.trimmedName
+    )
+    await applyRoleUpdate(plan.shouldUpdateRoles, plan.trimmedEmail, plan.desiredRoles)
+
+    const invalidations: Promise<unknown>[] = [
+      queryClient.invalidateQueries({ queryKey: ['users'] }),
+      invalidateUserData(plan.routeEmail),
+    ]
+    if (plan.emailChanged) {
+      invalidations.push(invalidateUserData(plan.trimmedEmail))
+    }
+    await Promise.all(invalidations)
+
+    if (plan.emailChanged) {
+      await navigate({ to: '/users/$email', params: { email: plan.trimmedEmail }, replace: true })
+    }
+  }
+
+  const handleEditSubmit = async ({
+    email: nextEmail,
+    name: nextName,
+    role,
+  }: UserEditDialogValues) => {
+    if (!user) {
+      return
+    }
+
+    const planResult = buildEditPlan(user, { email: nextEmail, name: nextName, role })
+    if ('error' in planResult) {
+      toast.error(planResult.error)
+      throw new Error(planResult.error)
+    }
+
+    try {
+      await executeEditPlan(planResult.plan)
+      toast.success('User updated successfully')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update user')
+      throw error
+    }
+  }
 
   const revokeSessionMutation = useMutation({
     mutationFn: (sessionId: number) => api.revokeUserSession(decodedEmail, sessionId),
@@ -246,9 +405,13 @@ export function UserPage() {
     )
   }
 
+  const dialogInitialEmail = user?.email ?? decodedEmail
+  const dialogInitialName = user?.name ?? decodedEmail
+  const dialogInitialRole = user ? currentPrimaryRole : 'viewer'
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="space-y-8 p-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="font-semibold text-3xl">
             {userLoading ? 'Loading…' : user?.name || decodedEmail}
@@ -258,8 +421,15 @@ export function UserPage() {
             <div className="mt-2 flex flex-wrap gap-2">{roleBadges(user.roles)}</div>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
+          <Button
+            disabled={userLoading || !user || isEditBusy}
+            onClick={handleOpenEdit}
+            variant="secondary"
+          >
+            <Edit2 className="mr-2 h-4 w-4" /> Edit
+          </Button>
+          <Button asChild variant="secondary">
             <Link params={{ email }} to="/users/$email/audit_logs">
               View Audit Logs
             </Link>
@@ -275,7 +445,7 @@ export function UserPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Active Sessions</CardTitle>
@@ -305,6 +475,17 @@ export function UserPage() {
           </CardContent>
         </Card>
       </div>
+
+      <UserEditDialog
+        busy={isEditBusy}
+        initialEmail={dialogInitialEmail}
+        initialName={dialogInitialName}
+        initialRole={dialogInitialRole}
+        mode="edit"
+        onOpenChange={setIsEditOpen}
+        onSubmit={handleEditSubmit}
+        open={isEditOpen}
+      />
     </div>
   )
 }

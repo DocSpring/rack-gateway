@@ -8,16 +8,6 @@ import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import {
   Table,
   TableBody,
   TableCell,
@@ -25,9 +15,12 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
+import type { UserEditDialogMode, UserEditDialogValues } from '../components/user-edit-dialog'
+import { UserEditDialog } from '../components/user-edit-dialog'
 import { useAuth } from '../contexts/auth-context'
-import { api } from '../lib/api'
+import { api, type RoleName } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
+import { pickPrimaryRole } from '../lib/user-roles'
 
 type User = {
   id?: number
@@ -69,22 +62,8 @@ export function UsersPage() {
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [dialogMode, setDialogMode] = useState<UserEditDialogMode>('create')
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [formData, setFormData] = useState({
-    email: '',
-    name: '',
-  })
-  const [selectedRole, setSelectedRole] = useState<string>('viewer')
-
-  const rolePrecedence = ['admin', 'deployer', 'ops', 'viewer'] as const
-  const pickHighestRole = (roles: string[] = []) => {
-    for (const r of rolePrecedence) {
-      if (roles.includes(r)) {
-        return r
-      }
-    }
-    return 'viewer'
-  }
 
   // Check if current user is admin
   const isAdmin = !!currentUser?.roles?.includes('admin')
@@ -177,85 +156,37 @@ export function UsersPage() {
 
   const handleAddUser = () => {
     setEditingUser(null)
-    setFormData({ email: '', name: '' })
-    setSelectedRole('viewer')
+    setDialogMode('create')
     setIsDialogOpen(true)
   }
 
   const handleEditUser = (user: User) => {
     setEditingUser(user)
-    setFormData({
-      email: user.email,
-      name: user.name,
-    })
-    setSelectedRole(pickHighestRole(user.roles))
+    setDialogMode('edit')
     setIsDialogOpen(true)
   }
 
-  const handleCloseDialog = () => {
-    setIsDialogOpen(false)
-    setEditingUser(null)
-    setFormData({ email: '', name: '' })
-    setSelectedRole('viewer')
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open)
+    if (!open) {
+      setEditingUser(null)
+      setDialogMode('create')
+    }
   }
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    handleSaveUser()
-  }
-
-  // Smaller helpers to keep complexity down
-  const finalizeUpdate = () => {
-    queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
-    toast.success('User updated successfully')
-    handleCloseDialog()
-  }
-
-  const updateRolesOnly = () =>
-    updateRolesMutation
-      .mutateAsync({ email: formData.email, roles: [selectedRole] })
-      .then(finalizeUpdate)
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : ''
-        toast.error(message || 'Failed to update user')
-      })
-
-  const updateNameThenRoles = (originalEmail: string) =>
-    updateProfileMutation
-      .mutateAsync({ originalEmail, email: formData.email, name: formData.name })
-      .then(() => updateRolesMutation.mutateAsync({ email: formData.email, roles: [selectedRole] }))
-      .then(finalizeUpdate)
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : ''
-        toast.error(message || 'Failed to update user')
-      })
-
-  const changeEmailFlow = (originalEmail: string) =>
-    updateProfileMutation
-      .mutateAsync({ originalEmail, email: formData.email, name: formData.name })
-      .then(() => updateRolesMutation.mutateAsync({ email: formData.email, roles: [selectedRole] }))
-      .then(finalizeUpdate)
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : ''
-        toast.error(message || 'Failed to update user email')
-      })
-
-  const createUserFlow = async () => {
+  const createUserFlow = async ({ email, name, role }: UserEditDialogValues) => {
     try {
       await createUserMutation.mutateAsync({
-        email: formData.email,
-        name: formData.name,
-        roles: [selectedRole],
+        email,
+        name,
+        roles: [role],
       })
-      // Close dialog early to avoid overlay hiding the table
-      handleCloseDialog()
-      // Optimistically add to cache for immediate visibility
       queryClient.setQueryData<User[] | undefined>(['users'], (prev) => {
         const arr = Array.isArray(prev) ? prev.slice() : []
         arr.push({
-          email: formData.email,
-          name: formData.name,
-          roles: [selectedRole],
+          email,
+          name,
+          roles: [role],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           suspended: false,
@@ -270,33 +201,45 @@ export function UsersPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
       toast.error(message || 'Failed to create user')
+      throw err
     }
   }
 
-  const handleSaveUser = async () => {
-    if (!(formData.email && formData.name && selectedRole)) {
-      toast.error('Please fill in all fields')
+  const updateExistingUser = async (original: User, values: UserEditDialogValues) => {
+    const { email, name, role } = values
+    const originalEmail = original.email
+    const changedEmail = email !== originalEmail
+    const changedName = name !== original.name
+    const desiredRoles: RoleName[] = [role]
+    const rolesChanged =
+      original.roles.length !== desiredRoles.length ||
+      desiredRoles.some((r) => !original.roles.includes(r))
+
+    try {
+      if (changedEmail || changedName) {
+        await updateProfileMutation.mutateAsync({ originalEmail, email, name })
+      }
+      if (rolesChanged || changedEmail) {
+        await updateRolesMutation.mutateAsync({ email, roles: desiredRoles })
+      }
+      await queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
+      toast.success('User updated successfully')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to update user')
+      throw err
+    }
+  }
+
+  const handleDialogSubmit = async (values: UserEditDialogValues) => {
+    if (dialogMode === 'create') {
+      await createUserFlow(values)
       return
     }
-
     if (!editingUser) {
-      await createUserFlow()
       return
     }
-
-    const originalEmail = editingUser.email
-    const changedEmail = formData.email !== originalEmail
-    const changedName = formData.name !== editingUser.name
-
-    if (changedEmail) {
-      await changeEmailFlow(originalEmail)
-      return
-    }
-    if (changedName) {
-      await updateNameThenRoles(originalEmail)
-      return
-    }
-    await updateRolesOnly()
+    await updateExistingUser(editingUser, values)
   }
 
   const handleDeleteUser = (email: string) => {
@@ -310,7 +253,16 @@ export function UsersPage() {
     }
   }
 
-  // Single role only; radios control selectedRole
+  const isEditingExistingUser = dialogMode === 'edit' && editingUser !== null
+  const dialogInitialEmail = isEditingExistingUser && editingUser ? editingUser.email : ''
+  const dialogInitialName = isEditingExistingUser && editingUser ? editingUser.name : ''
+  const dialogInitialRole: RoleName =
+    isEditingExistingUser && editingUser ? pickPrimaryRole(editingUser.roles) : 'viewer'
+
+  const dialogBusy =
+    dialogMode === 'create'
+      ? createUserMutation.isPending
+      : updateProfileMutation.isPending || updateRolesMutation.isPending
 
   // All authenticated users can view this page; actions are gated by role.
 
@@ -457,115 +409,16 @@ export function UsersPage() {
         )}
       </TablePane>
 
-      {/* User Dialog */}
-      <Dialog onOpenChange={setIsDialogOpen} open={isDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingUser ? 'Edit User' : 'Add User'}</DialogTitle>
-            <DialogDescription>
-              {editingUser ? 'Update user roles and permissions' : 'Add a new user to the gateway'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form className="space-y-4" noValidate={false} onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect="off"
-                data-1p-ignore
-                data-bwignore="true"
-                data-lpignore="true"
-                disabled={!isAdmin}
-                id="email"
-                inputMode="email"
-                name="email"
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="user@example.com"
-                required
-                spellCheck={false}
-                type="email"
-                value={formData.email}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                autoCapitalize="none"
-                autoComplete="off"
-                autoCorrect="off"
-                data-1p-ignore
-                data-bwignore="true"
-                data-lpignore="true"
-                disabled={!isAdmin}
-                id="name"
-                inputMode="text"
-                name="user_name"
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="John Doe"
-                required
-                spellCheck={false}
-                value={formData.name}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <div className="space-y-2">
-                {Object.entries(AVAILABLE_ROLES).map(([role, config]) => (
-                  <label
-                    className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${
-                      selectedRole === role ? 'border-primary bg-primary/10' : 'hover:bg-accent'
-                    }`}
-                    key={role}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        checked={selectedRole === role}
-                        className="mt-1 h-4 w-4"
-                        name="user_role"
-                        onChange={() => setSelectedRole(role)}
-                        type="radio"
-                        value={role}
-                      />
-                      <div>
-                        <div className="font-medium">{config.label}</div>
-                        <div className="text-muted-foreground text-sm">{config.description}</div>
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCloseDialog} type="button" variant="outline">
-                Cancel
-              </Button>
-              <Button
-                disabled={
-                  createUserMutation.isPending ||
-                  updateRolesMutation.isPending ||
-                  updateProfileMutation.isPending
-                }
-                type="submit"
-              >
-                {(() => {
-                  if (
-                    createUserMutation.isPending ||
-                    updateRolesMutation.isPending ||
-                    updateProfileMutation.isPending
-                  ) {
-                    return 'Saving...'
-                  }
-                  return editingUser ? 'Update User' : 'Add User'
-                })()}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <UserEditDialog
+        busy={dialogBusy}
+        initialEmail={dialogInitialEmail}
+        initialName={dialogInitialName}
+        initialRole={dialogInitialRole}
+        mode={dialogMode}
+        onOpenChange={handleDialogOpenChange}
+        onSubmit={handleDialogSubmit}
+        open={isDialogOpen}
+      />
     </div>
   )
 }

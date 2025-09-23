@@ -265,9 +265,11 @@ func extractSessionToken(c *gin.Context) string {
 
 func (h *AuthHandler) setSessionCookie(c *gin.Context, value string) {
 	secure := h.cookieSecure()
-	maxAge := int(h.sessionsTTL().Seconds())
-	if maxAge <= 0 {
-		maxAge = int((30 * 24 * time.Hour).Seconds())
+	maxAge := 0
+	if ttl := h.sessionsTTL(); ttl > 0 {
+		// Keep the cookie as a session cookie to avoid forcing logouts while active.
+		// Sliding expiration is enforced server-side via the session manager.
+		maxAge = 0
 	}
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(

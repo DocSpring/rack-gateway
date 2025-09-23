@@ -146,6 +146,7 @@ type AuditQueryParamsOptions = {
   customEnd?: string
   search?: string
   userId?: string
+  userEmail?: string
   page?: number
   limit?: number
   includeDefaultRange?: boolean
@@ -163,6 +164,7 @@ function createAuditQueryParams(options: AuditQueryParamsOptions): URLSearchPara
     customEnd,
     search,
     userId,
+    userEmail,
     page,
     limit,
     includeDefaultRange = false,
@@ -184,6 +186,10 @@ function createAuditQueryParams(options: AuditQueryParamsOptions): URLSearchPara
 
   if (search) {
     params.set('search', search)
+  }
+
+  if (userEmail) {
+    params.set('user', userEmail)
   }
 
   if (userId) {
@@ -363,9 +369,13 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
   const initialSearchParams =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined
   const initialRangeParam = initialSearchParams?.get('range')
+  const queryUserEmail = initialSearchParams?.get('user')?.trim() ?? ''
+  const resolvedUserEmail = userEmail?.trim() || queryUserEmail
 
   const [selected, setSelected] = useState<AuditLog | null>(null)
-  const [searchTerm, setSearchTerm] = useState(() => initialSearchParams?.get('search') ?? '')
+  const [searchTerm, setSearchTerm] = useState(
+    () => initialSearchParams?.get('search') ?? resolvedUserEmail
+  )
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm)
   const [actionTypeFilter, setActionTypeFilter] = useState(() =>
     ensureFilterValue(initialSearchParams?.get('action_type'), ACTION_TYPES)
@@ -600,6 +610,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         customEnd: customEndISO,
         search: searchTerm,
         userId: effectiveUserId,
+        userEmail: resolvedUserEmail,
         page,
         limit: perPage,
       }).toString(),
@@ -609,6 +620,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       customStartISO,
       dateRange,
       effectiveUserId,
+      resolvedUserEmail,
       page,
       perPage,
       resourceTypeFilter,
@@ -649,6 +661,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       dateRange,
       debouncedSearch,
       effectiveUserId || '',
+      resolvedUserEmail,
       page,
       perPage,
       customStartISO || '',
@@ -664,6 +677,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         customEnd: customEndISO,
         search: debouncedSearch,
         userId: effectiveUserId,
+        userEmail: resolvedUserEmail,
         page,
         limit: perPage,
         includeDefaultRange: true,
@@ -707,6 +721,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
       customEnd: customEndISO,
       search: searchTerm,
       userId: effectiveUserId,
+      userEmail: resolvedUserEmail,
       includeDefaultRange: true,
     })
     params.append('format', 'csv')
@@ -859,7 +874,8 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
   const firstRowIndex = totalCount === 0 ? 0 : (currentPage - 1) * perPage + 1
   const lastRowIndex = totalCount === 0 ? 0 : firstRowIndex + logs.length - 1
 
-  const title = userId && userEmail ? `Audit Logs: ${userEmail}` : 'Audit Logs'
+  const titleEmail = resolvedUserEmail || userEmail
+  const title = titleEmail ? `Audit Logs: ${titleEmail}` : 'Audit Logs'
 
   return (
     <div className="p-8">

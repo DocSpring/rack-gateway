@@ -15,6 +15,7 @@ type Config struct {
 	Domain                string
 	JWTSecret             string
 	JWTExpiry             time.Duration
+	SessionIdleTimeout    time.Duration
 	GoogleClientID        string
 	GoogleClientSecret    string
 	GoogleAllowedDomain   string
@@ -76,6 +77,14 @@ func Load() (*Config, error) {
 		}
 	}
 	cfg.JWTSecret = jwtKey
+
+	// Session idle timeout defaults to 5 minutes to enforce rapid re-auth on inactivity.
+	cfg.SessionIdleTimeout = 5 * time.Minute
+	if raw := strings.TrimSpace(getEnv("SESSION_IDLE_TIMEOUT", "")); raw != "" {
+		if dur, err := time.ParseDuration(raw); err == nil && dur > 0 {
+			cfg.SessionIdleTimeout = dur
+		}
+	}
 
 	adminUsers := getEnv("ADMIN_USERS", "")
 	if adminUsers != "" {

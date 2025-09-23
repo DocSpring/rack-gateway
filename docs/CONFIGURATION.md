@@ -22,6 +22,8 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - TCP port the API listens on.
 - `APP_SECRET_KEY` (required in production)
   - Secret used to sign JWTs for web sessions. Auto-generated in dev if missing.
+- `SESSION_IDLE_TIMEOUT` (default: `5m`)
+  - Sliding inactivity window for browser sessions. Accepts Go duration strings (e.g., `5m`, `15m`).
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (required)
   - OAuth client credentials for Google Workspace (or your OIDC provider).
 - `GOOGLE_ALLOWED_DOMAIN` (required)

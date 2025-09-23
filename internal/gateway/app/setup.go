@@ -32,8 +32,8 @@ func (a *App) initializeServices() error {
 
 	// Initialize JWT manager
 	a.JWTManager = auth.NewJWTManager(a.Config.JWTSecret, a.Config.JWTExpiry)
-	// Session manager uses the same secret + expiry window for opaque sessions
-	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.JWTSecret, a.Config.JWTExpiry)
+	// Session manager enforces short-lived idle sessions for the web UI
+	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.JWTSecret, a.Config.SessionIdleTimeout)
 
 	// Initialize RBAC manager
 	allowedDomain := a.Config.GoogleAllowedDomain

@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	sessionTokenByteLength   = 32
-	sessionActivityUpdateTTL = 5 * time.Minute
+	sessionTokenByteLength    = 32
+	defaultSessionIdleTimeout = 5 * time.Minute
 )
 
 type SessionManager struct {
@@ -36,15 +36,15 @@ type SessionValidationResult struct {
 }
 
 func NewSessionManager(database *db.Database, secret string, ttl time.Duration) *SessionManager {
-	sm := &SessionManager{
+	timeout := ttl
+	if timeout <= 0 {
+		timeout = defaultSessionIdleTimeout
+	}
+	return &SessionManager{
 		db:     database,
 		secret: []byte(secret),
-		ttl:    ttl,
+		ttl:    timeout,
 	}
-	if sm.ttl <= 0 {
-		sm.ttl = 30 * 24 * time.Hour
-	}
-	return sm
 }
 
 func (m *SessionManager) TTL() time.Duration {
@@ -69,13 +69,16 @@ func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (str
 	sessionToken := base64.RawURLEncoding.EncodeToString(tokenBytes)
 	tokenHash := hashSessionToken(sessionToken)
 
-	expiresAt := time.Now().Add(m.ttl)
+	now := time.Now()
+	expiresAt := now.Add(m.ttl)
 
 	session, err := m.db.CreateUserSession(user.ID, tokenHash, expiresAt, meta.IPAddress, meta.UserAgent, meta.Extra)
 	if err != nil {
 		return "", nil, err
 	}
 
+	session.LastSeenAt = now
+	session.ExpiresAt = expiresAt
 	return sessionToken, session, nil
 }
 
@@ -99,7 +102,12 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 	if session.RevokedAt != nil {
 		return nil, fmt.Errorf("session revoked")
 	}
-	if time.Now().After(session.ExpiresAt) {
+	now := time.Now()
+	if session.ExpiresAt.Before(now) {
+		_, _ = m.db.RevokeUserSession(session.ID, nil)
+		return nil, fmt.Errorf("session expired")
+	}
+	if m.ttl > 0 && session.LastSeenAt.Add(m.ttl).Before(now) {
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
 		return nil, fmt.Errorf("session expired")
 	}
@@ -117,8 +125,16 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 		return nil, fmt.Errorf("user suspended")
 	}
 
-	if time.Since(session.LastSeenAt) > sessionActivityUpdateTTL {
-		_ = m.db.TouchUserSession(session.ID, ipAddress, userAgent, time.Now())
+	// Refresh idle timeout to enforce sliding expiration on activity.
+	if err := m.db.TouchUserSession(session.ID, ipAddress, userAgent, now, now.Add(m.ttl)); err == nil {
+		session.LastSeenAt = now
+		session.ExpiresAt = now.Add(m.ttl)
+		if trimmedIP := strings.TrimSpace(ipAddress); trimmedIP != "" {
+			session.IPAddress = trimmedIP
+		}
+		if trimmedUA := strings.TrimSpace(userAgent); trimmedUA != "" {
+			session.UserAgent = trimmedUA
+		}
 	}
 
 	return &SessionValidationResult{Session: session, User: user}, nil

@@ -111,11 +111,12 @@ func (d *Database) GetUserSessionByID(id int64) (*UserSession, error) {
 	return d.getUserSession("id = ?", id)
 }
 
-// TouchUserSession updates the last_seen_at timestamp for a session.
-func (d *Database) TouchUserSession(id int64, ipAddress, userAgent string, lastSeen time.Time) error {
+// TouchUserSession updates the last_seen_at timestamp and sliding expiration for a session.
+func (d *Database) TouchUserSession(id int64, ipAddress, userAgent string, lastSeen, expiresAt time.Time) error {
 	_, err := d.exec(
-		"UPDATE user_sessions SET last_seen_at = ?, updated_at = ?, ip_address = COALESCE(?, ip_address), user_agent = COALESCE(?, user_agent) WHERE id = ?",
+		"UPDATE user_sessions SET last_seen_at = ?, expires_at = ?, updated_at = ?, ip_address = COALESCE(?, ip_address), user_agent = COALESCE(?, user_agent) WHERE id = ?",
 		lastSeen,
+		expiresAt,
 		lastSeen,
 		nullableIP(ipAddress),
 		nullableString(sanitizeUserAgent(userAgent), 512),
