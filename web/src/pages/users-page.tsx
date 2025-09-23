@@ -355,9 +355,13 @@ export function UsersPage() {
                 {isAdmin && (
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link params={{ email: user.email }} to="/users/$email">
-                          <Eye className="mr-1 h-4 w-4" /> View
+                      <Button asChild size="sm" variant="ghost">
+                        <Link
+                          aria-label={`View details for ${user.email}`}
+                          params={{ email: user.email }}
+                          to="/users/$email"
+                        >
+                          <Eye className="h-4 w-4" />
                         </Link>
                       </Button>
                       <Button
