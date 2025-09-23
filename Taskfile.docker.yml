@@ -16,14 +16,13 @@ tasks:
     desc: Up full dev stack (infra + web + gateway)
     run: once
     aliases: [up]
-    deps: ["stop:preview:web", "stop:preview:gateway"]
+    deps: ["stop:preview:gateway"]
     cmds:
       - docker compose up -d --build postgres mock-oauth mock-convox web-dev gateway-api-dev
 
   up:dev:web:
     desc: Up dev web (Vite)
     run: once
-    deps: ["stop:preview:web"]
     cmds:
       - docker compose up -d --build web-dev
 
@@ -84,14 +83,7 @@ tasks:
     run: once
     deps: ["stop:dev:web", "stop:dev:gateway"]
     cmds:
-      - docker compose up -d --build postgres mock-oauth mock-convox web-preview gateway-api-preview
-
-  up:preview:web:
-    desc: Up preview web (compiled SPA)
-    run: once
-    deps: ["stop:dev:web"]
-    cmds:
-      - docker compose up -d --build web-preview
+      - docker compose up -d --build postgres mock-oauth mock-convox gateway-api-preview
 
   up:preview:gateway:
     desc: Up preview gateway (serves compiled SPA)
@@ -110,13 +102,7 @@ tasks:
     desc: Down full preview stack
     run: once
     cmds:
-      - docker compose down -v --remove-orphans postgres mock-oauth mock-convox web-preview gateway-api-preview
-
-  down:preview:web:
-    desc: Down preview web
-    run: once
-    cmds:
-      - docker compose down -v --remove-orphans web-preview
+      - docker compose down -v --remove-orphans postgres mock-oauth mock-convox gateway-api-preview
 
   down:preview:gateway:
     desc: Down preview gateway
@@ -127,13 +113,7 @@ tasks:
   stop:preview:
     desc: Stop preview stack
     run: once
-    deps: ["stop:preview:web", "stop:preview:gateway"]
-
-  stop:preview:web:
-    desc: Stop preview web
-    run: once
-    cmds:
-      - docker compose stop web-preview
+    deps: ["stop:preview:gateway"]
 
   stop:preview:gateway:
     desc: Stop preview gateway

@@ -138,26 +138,6 @@ services:
     networks:
       - gateway-net
 
-  # Optional: precompiled static preview for E2E (build + serve dist)
-  web-preview:
-    profiles: [preview]
-    build:
-      context: ./web
-      dockerfile: Dockerfile.dev
-      target: dev
-    environment:
-      # Build-time base URL for API calls in the compiled SPA
-      VITE_API_BASE_URL: http://localhost:${GATEWAY_PORT:-8447}
-      VITE_FAST_BUILD: "true"
-    ports:
-      - "${WEB_PORT:-5223}:5173"
-    volumes:
-      - ./web:/app
-      - /app/node_modules
-    command: sh -lc "pnpm build:fast && pnpm preview --host 0.0.0.0 --port 5173"
-    networks:
-      - gateway-net
-
   gateway-api-dev:
     profiles: [dev]
     build:
