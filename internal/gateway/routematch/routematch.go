@@ -68,8 +68,8 @@ var specs = []RouteSpec{
 	{"POST", "/apps/{app}/services/{service}/restart", "process", "start"},
 
 	// Instances
-	{"GET", "/instances", "rack", "read"},
-	{"GET", "/instances/{id}", "rack", "read"},
+	{"GET", "/instances", "instance", "list"},
+	{"GET", "/instances/{id}", "instance", "get"},
 
 	// System
 	{"GET", "/system", "rack", "read"},

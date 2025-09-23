@@ -322,6 +322,13 @@ func resourceInstance(path, resource, action string) string {
 			}
 		}
 	}
+	if resource == "instance" {
+		for i, seg := range parts {
+			if seg == "instances" && i+1 < len(parts) {
+				return parts[i+1]
+			}
+		}
+	}
 	// App-scoped routes: return app name if present
 	if len(parts) >= 2 && parts[0] == "apps" {
 		if parts[1] != "" {
