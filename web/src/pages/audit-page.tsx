@@ -9,7 +9,13 @@ import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import {
@@ -1257,6 +1263,9 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
           <DialogHeader>
             <DialogTitle>Audit Log</DialogTitle>
+            <DialogDescription>
+              Detailed information for the selected audit log entry:
+            </DialogDescription>
           </DialogHeader>
           {selected && (
             <div className="space-y-3 text-sm">

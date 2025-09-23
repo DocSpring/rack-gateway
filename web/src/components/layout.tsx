@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
 import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 
 const baseNavigation = [
@@ -169,6 +169,9 @@ export function Layout() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Configure CLI</DialogTitle>
+            <DialogDescription>
+              Follow these steps to install and authenticate the Convox gateway CLI.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 text-sm">
             <p>Clone the repository and install the CLI:</p>
