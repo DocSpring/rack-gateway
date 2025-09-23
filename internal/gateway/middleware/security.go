@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,7 +26,13 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 	if isDev {
 		connectSrc = "connect-src 'self' ws: wss: http://localhost:* https://localhost:*"
 	}
-	csp := "default-src 'self'; " + connectSrc + "; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+	scriptSrc := "script-src 'self'"
+	styleSrc := "style-src 'self'"
+	if isDev {
+		scriptSrc += " 'unsafe-inline'"
+		styleSrc += " 'unsafe-inline'"
+	}
+	csp := fmt.Sprintf("default-src 'self'; %s; %s; %s", connectSrc, scriptSrc, styleSrc)
 
 	secCfg := securemw.Config{
 		AllowedHosts: nil,
