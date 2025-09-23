@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -209,6 +210,19 @@ func RateLimit(cfg *config.Config) gin.HandlerFunc {
 	rateLimiter := ratelimit.NewRateLimiter(rps, burst)
 
 	return func(c *gin.Context) {
+		clientIP := strings.TrimSpace(c.ClientIP())
+		if clientIP == "" {
+			if host, _, err := net.SplitHostPort(c.Request.RemoteAddr); err == nil && host != "" {
+				clientIP = host
+			} else {
+				clientIP = strings.TrimSpace(c.Request.RemoteAddr)
+			}
+		}
+		if clientIP != "" {
+			c.Request.Header.Set("X-Forwarded-For", clientIP)
+			c.Request.Header.Set("X-Real-IP", clientIP)
+		}
+
 		// Create a wrapper handler that will continue or abort
 		handler := rateLimiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// If we get here, rate limit passed

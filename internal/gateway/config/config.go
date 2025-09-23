@@ -28,6 +28,7 @@ type Config struct {
 	LogResponseBodies     bool
 	LogResponseMaxBytes   int
 	RackTLSPinningEnabled bool
+	TrustedProxies        []string
 }
 
 type RackConfig struct {
@@ -91,6 +92,15 @@ func Load() (*Config, error) {
 	operationsUsers := getEnv("OPERATIONS_USERS", "")
 	if operationsUsers != "" {
 		cfg.OperationsUsers = strings.Split(operationsUsers, ",")
+	}
+
+	if proxies := strings.TrimSpace(getEnv("TRUSTED_PROXY_CIDRS", "")); proxies != "" {
+		for _, entry := range strings.Split(proxies, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry != "" {
+				cfg.TrustedProxies = append(cfg.TrustedProxies, entry)
+			}
+		}
 	}
 
 	cfg.loadRacksFromEnv()

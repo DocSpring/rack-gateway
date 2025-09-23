@@ -199,6 +199,9 @@ func (a *App) setupRouter() {
 
 	// Create router without default middleware (we'll add our own)
 	router := gin.New()
+	if err := router.SetTrustedProxies(a.Config.TrustedProxies); err != nil {
+		log.Fatalf("failed to configure trusted proxies: %v", err)
+	}
 
 	// Set up routes with all dependencies
 	routes.Setup(router, &routes.Config{
