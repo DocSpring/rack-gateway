@@ -1,5 +1,6 @@
 import type { AxiosError } from 'axios'
 import axios from 'axios'
+import { APIRoute } from './routes'
 
 const API_BASE: string = import.meta.env.PROD ? (import.meta.env.VITE_API_BASE_URL ?? '') : ''
 
@@ -24,7 +25,7 @@ class AuthService {
     // Store rack for callback
     sessionStorage.setItem('oauth_rack', rack)
     // Redirect directly to web login endpoint
-    window.location.href = `${API_BASE}/.gateway/api/auth/web/login`
+    window.location.href = `${API_BASE}${APIRoute('auth/web/login')}`
   }
 
   // Handle OAuth callback
@@ -53,7 +54,7 @@ class AuthService {
   // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)
   async getCurrentUser(options: { suppressAuthError?: boolean } = {}): Promise<User | null> {
     try {
-      const response = await axios.get(`${API_BASE}/.gateway/api/me`, {
+      const response = await axios.get(`${API_BASE}${APIRoute('me')}`, {
         withCredentials: true,
       })
       return response.data
@@ -74,7 +75,7 @@ class AuthService {
   // Logout
   logout(): void {
     // Request server-side logout to clear HttpOnly cookie, then go to login
-    fetch(`${API_BASE}/.gateway/api/auth/web/logout`, { credentials: 'include' })
+    fetch(`${API_BASE}${APIRoute('auth/web/logout')}`, { credentials: 'include' })
       .catch((_e) => {
         /* ignore network errors during logout */
       })

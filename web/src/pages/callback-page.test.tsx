@@ -21,10 +21,10 @@ vi.mock('../lib/auth', () => ({
 }))
 
 describe('CallbackPage', () => {
-  it('navigates to /users after successful callback', async () => {
+  it('navigates to /rack after successful callback', async () => {
     render(<CallbackPage />)
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/users', replace: true })
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/rack', replace: true })
     })
   })
 })

@@ -1,3 +1,4 @@
+import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
 import { login } from './helpers'
 
@@ -5,7 +6,7 @@ test('users: edit name and email', async ({ page }) => {
   await login(page)
 
   // Navigate to Users
-  await page.goto('/.gateway/web/users')
+  await page.goto(WebRoute('users'))
   await expect(page.getByRole('heading', { name: /Users/i })).toBeVisible()
 
   const email1 = `e2e-edit-${Date.now()}@example.com`

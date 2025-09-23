@@ -27,8 +27,8 @@ export function CallbackPage() {
 
       try {
         await authService.handleCallback(code, state)
-        // Redirect to Users page after successful login
-        navigate({ to: '/users', replace: true })
+        // Redirect to Rack page after successful login
+        navigate({ to: '/rack', replace: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Authentication failed')
       }

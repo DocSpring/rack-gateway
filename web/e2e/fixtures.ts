@@ -1,4 +1,5 @@
 import { test as base, expect as playwrightExpect } from '@playwright/test'
+import { APIRoute, WebRoute } from '@/lib/routes'
 
 export const test = base.extend({
   page: async ({ page }, use) => {
@@ -11,7 +12,7 @@ export const test = base.extend({
         const method = req.method()
         const url = resp.url()
         const debugAuth = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug'
-        if (status === 401 && url.includes('/.gateway/api/me') && !debugAuth) {
+        if (status === 401 && url.includes(APIRoute('me')) && !debugAuth) {
           return
         }
 
@@ -26,7 +27,7 @@ export const test = base.extend({
         } catch {}
         const snippet = body ? body.slice(0, 200).replace(/\s+/g, ' ').trim() : ''
 
-        if (status === 401 && url.includes('/.gateway/api/me')) return
+        if (status === 401 && url.includes(APIRoute('me'))) return
 
         console.log(`[resp ${status}] ${method} ${url}${snippet ? ` body="${snippet}"` : ''}`)
       }
@@ -52,7 +53,7 @@ export const test = base.extend({
         const is401 = /\b401\b/i.test(text) || /Unauthorized/i.test(text)
         if (is401) return
         const isDevModule502 =
-          /status of 502 \(Bad Gateway\)/i.test(text) && text.includes('/.gateway/web/')
+          /status of 502 \(Bad Gateway\)/i.test(text) && text.includes(WebRoute('/'))
         if (isDevModule502) return
         errors.push(`console.${msg.type()}: ${text}`)
       }

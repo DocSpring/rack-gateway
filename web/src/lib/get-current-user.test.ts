@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { authService } from './auth'
+import { APIRoute } from './routes'
 
 vi.mock('axios')
 
@@ -14,7 +15,7 @@ describe('getCurrentUser', () => {
     vi.mocked(axios.get).mockResolvedValueOnce(mockResp as unknown as never)
 
     const user = await authService.getCurrentUser()
-    expect(axios.get).toHaveBeenCalledWith('/.gateway/api/me', { withCredentials: true })
+    expect(axios.get).toHaveBeenCalledWith(APIRoute('me'), { withCredentials: true })
     expect(user?.email).toBe('admin@example.com')
   })
 

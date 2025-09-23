@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { authService } from './auth'
+import { APIRoute } from './routes'
 
 describe('authService', () => {
   beforeEach(() => {
@@ -15,7 +16,7 @@ describe('authService', () => {
         }) as unknown as Promise<Response>
     )
     authService.logout()
-    expect(fetchSpy).toHaveBeenCalledWith('/.gateway/api/auth/web/logout', {
+    expect(fetchSpy).toHaveBeenCalledWith(APIRoute('auth/web/logout'), {
       credentials: 'include',
     })
   })

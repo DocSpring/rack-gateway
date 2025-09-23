@@ -1,8 +1,9 @@
+import { APIRoute, WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
 
 test('full OAuth login flow succeeds and /me returns user', async ({ page }) => {
   // Hit login
-  await page.goto('/.gateway/web/login')
+  await page.goto(WebRoute('login'))
 
   const btn = page
     .getByTestId('login-cta')
@@ -28,7 +29,7 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   }
 
   // After authorize, wait for the app to fetch the current user successfully
-  await page.waitForResponse((r) => r.url().includes('/.gateway/api/me') && r.status() === 200, {
+  await page.waitForResponse((r) => r.url().includes(APIRoute('me')) && r.status() === 200, {
     timeout: 20_000,
   })
 
@@ -48,14 +49,15 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   await expect(empty.or(table)).toBeVisible()
 
   // Now the cookie should be set; /.gateway/api/me should return the current user
-  const me = await page.evaluate(async () => {
-    const r = await fetch('/.gateway/api/me', { credentials: 'include' })
+  const meEndpoint = APIRoute('me')
+  const me = await page.evaluate(async (endpoint) => {
+    const r = await fetch(endpoint, { credentials: 'include' })
     let data: Record<string, unknown> | null = null
     try {
       data = await r.json()
     } catch {}
     return { ok: r.ok, status: r.status, data }
-  })
+  }, meEndpoint)
   expect(me.ok).toBeTruthy()
   expect(me.status).toBe(200)
   expect(me.data?.email).toBeTruthy()

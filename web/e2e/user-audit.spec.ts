@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { APIRoute, WebRoute } from '@/lib/routes'
 import { login } from './helpers'
 
 function escapeRegex(value: string) {
@@ -8,7 +9,7 @@ function escapeRegex(value: string) {
 test.describe('User Audit Logs', () => {
   test('navigating from Users to user audit logs filters by that user', async ({ page }) => {
     await login(page)
-    await page.goto('/.gateway/web/users')
+    await page.goto(WebRoute('users'))
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
 
     const targetEmail = 'ops@example.com'
@@ -27,7 +28,7 @@ test.describe('User Audit Logs', () => {
     const decodedEmailFromLink = decodeURIComponent(encodedEmail)
 
     const auditRequestPromise = page.waitForRequest((req) => {
-      if (!req.url().includes('/.gateway/api/admin/audit') || req.method() !== 'GET') {
+      if (!req.url().includes(APIRoute('admin/audit')) || req.method() !== 'GET') {
         return false
       }
       try {
@@ -63,7 +64,7 @@ test.describe('User Audit Logs', () => {
 
   test('invalid user id shows 404 error state', async ({ page }) => {
     await login(page)
-    await page.goto('/.gateway/web/users/999999999/audit_logs')
+    await page.goto(WebRoute('users/999999999/audit_logs'))
     await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
     await expect(page.getByText(/No audit logs found/i)).toBeVisible()
   })

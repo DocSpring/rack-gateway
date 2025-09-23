@@ -28,7 +28,7 @@ func RootRedirect(c *gin.Context) {
 
 	// Redirect browsers to web UI
 	if strings.Contains(accept, "text/html") || strings.Contains(userAgent, "Mozilla") {
-		c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/")
+		c.Redirect(http.StatusTemporaryRedirect, WebRoute("/"))
 		return
 	}
 
@@ -51,7 +51,7 @@ func Robots(c *gin.Context) {
 
 // WebRedirect redirects to default web page
 func WebRedirect(c *gin.Context) {
-	c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/users")
+	c.Redirect(http.StatusTemporaryRedirect, DefaultWebRoute)
 }
 
 // StaticHandler serves the UI either via the Vite dev proxy or the compiled dist assets.
@@ -121,7 +121,7 @@ func (h *StaticHandler) configureAssets() {
 // ServeStatic serves static files from the web dist directory, or proxies to the dev server.
 func (h *StaticHandler) ServeStatic(c *gin.Context) {
 	if shouldRedirectToDefault(c.Request) {
-		c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/users")
+		c.Redirect(http.StatusTemporaryRedirect, DefaultWebRoute)
 		return
 	}
 
@@ -219,7 +219,7 @@ func shouldRedirectToDefault(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	if r.URL.Path != "/.gateway/web/" {
+	if r.URL.Path != WebRoute("/") {
 		return false
 	}
 	if r.URL.RawQuery != "" {

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { WebRoute } from '@/lib/routes'
 import { expect } from './fixtures'
 
 export type LoginOptions = {
@@ -12,7 +13,7 @@ export type LoginOptions = {
 export async function login(page: Page, options: LoginOptions = {}) {
   const { userCardText = 'Admin User' } = options
 
-  await page.goto('/.gateway/web/login')
+  await page.goto(WebRoute('login'))
   const btn = page
     .getByTestId('login-cta')
     .or(page.getByRole('button', { name: /Continue with/i }))

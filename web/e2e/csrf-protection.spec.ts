@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { APIRoute, WebRoute } from '@/lib/routes'
 import { login } from './helpers'
 
 test.describe('CSRF Protection for Proxy Routes', () => {
@@ -7,7 +8,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     await login(page)
 
     // Verify we're logged in by checking we can access gateway API endpoints
-    const meResponse = await page.request.get('/.gateway/api/me')
+    const meResponse = await page.request.get(APIRoute('me'))
     expect(meResponse.status()).toBe(200)
     const meData = await meResponse.json()
     expect(meData.email).toBeTruthy()
@@ -46,7 +47,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     await login(page)
 
     // Navigate to the SPA shell to read the injected CSRF meta tag (single source of truth)
-    await page.goto('/.gateway/web/', { waitUntil: 'networkidle' })
+    await page.goto(WebRoute('/'), { waitUntil: 'networkidle' })
     const csrfTokenHandle = await page.waitForFunction(
       () => {
         const value = document
@@ -68,7 +69,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     }
 
     const tokenName = `Playwright CLI Token ${Date.now()}`
-    const createResponse = await page.request.post('/.gateway/api/admin/tokens', {
+    const createResponse = await page.request.post(APIRoute('admin/tokens'), {
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-Token': csrfToken,
@@ -103,7 +104,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
 
     // Clean up the token to avoid polluting the test environment
     if (apiTokenMeta?.id) {
-      await page.request.delete(`/.gateway/api/admin/tokens/${apiTokenMeta.id}`, {
+      await page.request.delete(APIRoute(`admin/tokens/${apiTokenMeta.id}`), {
         headers: {
           'X-CSRF-Token': csrfToken,
         },
@@ -179,11 +180,11 @@ test.describe('CSRF Protection for Proxy Routes', () => {
 
     // These gateway-specific endpoints SHOULD work with cookies
     const allowedEndpoints = [
-      '/.gateway/api/me',
-      '/.gateway/api/admin/users',
-      '/.gateway/api/admin/roles',
-      '/.gateway/api/admin/audit',
-      '/.gateway/api/admin/tokens',
+      APIRoute('me'),
+      APIRoute('admin/users'),
+      APIRoute('admin/roles'),
+      APIRoute('admin/audit'),
+      APIRoute('admin/tokens'),
     ]
 
     for (const endpoint of allowedEndpoints) {
