@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
 	"os"
@@ -18,9 +19,12 @@ import (
 // OAuthProvider captures the behaviour needed from the OAuth handler.
 type OAuthProvider interface {
 	StartLogin() (*auth.LoginStartResponse, error)
-	StartWebLogin() string
+	StartWebLogin() (authURL string, state string)
 	CompleteLogin(code, state, codeVerifier string) (*auth.LoginResponse, error)
 }
+
+const webOAuthStateCookie = "cgw_oauth_state"
+const webOAuthStateTTL = 5 * time.Minute
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
@@ -110,7 +114,8 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 // WebLoginStart starts the web OAuth flow
 func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 	h.auditLogin(c, "web", "success")
-	authURL := h.oauth.StartWebLogin()
+	authURL, state := h.oauth.StartWebLogin()
+	h.setWebOAuthStateCookie(c, state)
 	c.Redirect(http.StatusFound, authURL)
 }
 
@@ -120,6 +125,17 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	state := c.Query("state")
 	if code == "" || state == "" {
 		c.String(http.StatusBadRequest, "Missing authorization code or state")
+		return
+	}
+
+	cookie, err := c.Request.Cookie(webOAuthStateCookie)
+	if err != nil || cookie == nil || cookie.Value == "" {
+		c.String(http.StatusBadRequest, "Invalid OAuth state")
+		return
+	}
+	defer h.clearWebOAuthStateCookie(c)
+	if subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) != 1 {
+		c.String(http.StatusBadRequest, "Invalid OAuth state")
 		return
 	}
 
@@ -161,6 +177,7 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 // WebLogout handles logout for web sessions
 func (h *AuthHandler) WebLogout(c *gin.Context) {
+	h.clearWebOAuthStateCookie(c)
 	secure := h.cookieSecure()
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
@@ -205,6 +222,21 @@ func (h *AuthHandler) GetCSRFToken(c *gin.Context) {
 	)
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func (h *AuthHandler) setWebOAuthStateCookie(c *gin.Context, value string) {
+	secure := h.cookieSecure()
+	c.SetSameSite(http.SameSiteLaxMode)
+	maxAge := int((webOAuthStateTTL) / time.Second)
+	c.SetCookie(webOAuthStateCookie, value, maxAge, "/", "", secure, true)
+	c.SetSameSite(http.SameSiteDefaultMode)
+}
+
+func (h *AuthHandler) clearWebOAuthStateCookie(c *gin.Context) {
+	secure := h.cookieSecure()
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(webOAuthStateCookie, "", -1, "/", "", secure, true)
+	c.SetSameSite(http.SameSiteDefaultMode)
 }
 
 func (h *AuthHandler) cookieSecure() bool {

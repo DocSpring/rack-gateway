@@ -15,17 +15,23 @@ type fakeOAuth struct {
 	resp        *auth.LoginResponse
 	completeErr error
 	startURL    string
+	startState  string
 }
 
 func (f *fakeOAuth) StartLogin() (*auth.LoginStartResponse, error) {
 	return &auth.LoginStartResponse{AuthURL: "http://example.com", State: "state", CodeVerifier: "verifier"}, nil
 }
 
-func (f *fakeOAuth) StartWebLogin() string {
-	if f.startURL != "" {
-		return f.startURL
+func (f *fakeOAuth) StartWebLogin() (string, string) {
+	url := f.startURL
+	if url == "" {
+		url = "http://example.com"
 	}
-	return "http://example.com"
+	state := f.startState
+	if state == "" {
+		state = "state"
+	}
+	return url, state
 }
 
 func (f *fakeOAuth) CompleteLogin(code, state, codeVerifier string) (*auth.LoginResponse, error) {
@@ -61,6 +67,7 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 	handler := NewAuthHandler(oauth, nil, &config.Config{DevMode: true})
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=state")
+	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
 	handler.WebLoginCallback(c)
 
 	res := w.Result()
@@ -91,6 +98,7 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 	handler := NewAuthHandler(oauth, nil, &config.Config{DevMode: false})
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=state")
+	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state", Secure: true})
 	handler.WebLoginCallback(c)
 
 	res := w.Result()
@@ -123,5 +131,45 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 	}
 	if cookie.MaxAge >= 0 && !cookie.Expires.Before(time.Now()) {
 		t.Fatalf("expected cookie to expire immediately")
+	}
+}
+
+func TestWebLoginStartSetsStateCookie(t *testing.T) {
+	oauth := &fakeOAuth{startURL: "http://idp.example.com/login", startState: "abc123"}
+	handler := NewAuthHandler(oauth, nil, &config.Config{DevMode: false})
+
+	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/login")
+	handler.WebLoginStart(c)
+
+	res := w.Result()
+	if res.StatusCode != http.StatusFound {
+		t.Fatalf("expected redirect status, got %d", res.StatusCode)
+	}
+	cookie := findCookie(res, webOAuthStateCookie)
+	if cookie == nil {
+		t.Fatalf("expected %s cookie to be set", webOAuthStateCookie)
+	}
+	if cookie.Value != "abc123" {
+		t.Fatalf("expected cookie value abc123, got %s", cookie.Value)
+	}
+	if !cookie.HttpOnly {
+		t.Fatalf("expected HttpOnly cookie")
+	}
+	if !cookie.Secure {
+		t.Fatalf("expected secure cookie when not in dev mode")
+	}
+}
+
+func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
+	oauth := &fakeOAuth{}
+	handler := NewAuthHandler(oauth, nil, &config.Config{DevMode: true})
+
+	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=other")
+	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
+	handler.WebLoginCallback(c)
+
+	res := w.Result()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 status, got %d", res.StatusCode)
 	}
 }

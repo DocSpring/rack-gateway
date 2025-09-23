@@ -117,17 +117,19 @@ func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
 	}, nil
 }
 
-// StartWebLogin initiates OAuth flow for web browser - no PKCE needed
-func (h *OAuthHandler) StartWebLogin() string {
-	state := generateSecureRandomString(32)
+// StartWebLogin initiates OAuth flow for web browser - no PKCE needed.
+// Returns the auth URL along with the opaque state value so callers can
+// persist it for later validation during the callback.
+func (h *OAuthHandler) StartWebLogin() (authURL string, state string) {
+	state = generateSecureRandomString(32)
 
 	// Generate auth URL without PKCE for web flow
-	authURL := h.oauth2ConfigWeb.AuthCodeURL(state,
+	authURL = h.oauth2ConfigWeb.AuthCodeURL(state,
 		oauth2.AccessTypeOnline,
 		oauth2.SetAuthURLParam("prompt", "select_account"),
 	)
 
-	return authURL
+	return authURL, state
 }
 
 // CompleteLogin handles OAuth callback - validates code and returns JWT
