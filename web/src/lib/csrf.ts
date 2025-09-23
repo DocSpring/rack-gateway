@@ -51,23 +51,17 @@ export function getCsrfToken(): string | null {
   return csrfCache
 }
 
-export async function ensureCsrfToken(): Promise<string | null> {
+export function ensureCsrfToken(): Promise<string | null> {
   const existing = getCsrfToken()
   if (existing) {
-    return existing
+    return Promise.resolve(existing)
   }
-  try {
-    const response = await fetch('/.gateway/api/auth/web/csrf', { credentials: 'include' })
-    const payload = await response.json().catch(() => null)
-    const token = typeof payload?.token === 'string' ? payload.token.trim() : ''
-    if (token) {
-      setCsrfToken(token)
-      return token
-    }
-  } catch (_error) {
-    // ignore fetch errors; caller will retry later
+  const metaToken = readTokenFromMeta()
+  if (metaToken) {
+    setCsrfToken(metaToken)
+    return Promise.resolve(metaToken)
   }
-  return getCsrfToken()
+  return Promise.resolve(null)
 }
 
 const initialToken = readTokenFromMeta()

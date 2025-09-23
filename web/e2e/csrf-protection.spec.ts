@@ -43,35 +43,72 @@ test.describe('CSRF Protection for Proxy Routes', () => {
   })
 
   test('CLI with Authorization header can access proxy routes', async ({ page }) => {
-    // This test simulates what the CLI does - using Authorization header instead of cookies
-
-    // First, get a valid token via the CLI login flow
-    // In a real test, we'd use the actual CLI login endpoint
-    // For this test, we'll login via UI and extract the token
     await login(page)
 
-    // Get the token from the cookie (in real scenario, CLI would have this from login)
-    const cookies = await page.context().cookies()
-    const tokenCookie = cookies.find((c) => c.name === 'session_token')
-    expect(tokenCookie).toBeTruthy()
-    const token = tokenCookie!.value
+    // Navigate to the SPA shell to read the injected CSRF meta tag (single source of truth)
+    await page.goto('/.gateway/web/', { waitUntil: 'networkidle' })
+    const csrfTokenHandle = await page.waitForFunction(
+      () => {
+        const value = document
+          .querySelector('meta[name="cgw-csrf-token"]')
+          ?.getAttribute('content')
+          ?.trim()
+        if (!value || value === 'CGW_CSRF_TOKEN') {
+          return null
+        }
+        return value
+      },
+      undefined,
+      { timeout: 5000 }
+    )
+    const csrfToken = (await csrfTokenHandle.jsonValue()) as string | null
+    expect(csrfToken, 'expected CSRF meta tag to be present').toBeTruthy()
+    if (!csrfToken) {
+      throw new Error('CSRF token not found in meta tag')
+    }
 
-    // Now make requests with Authorization header (like CLI does)
-    const response = await page.request.get('/system', {
+    const tokenName = `Playwright CLI Token ${Date.now()}`
+    const createResponse = await page.request.post('/.gateway/api/admin/tokens', {
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      data: {
+        name: tokenName,
+        role: 'cicd',
       },
       failOnStatusCode: false,
     })
 
-    // This should work (assuming valid token and proper permissions)
-    // It will either succeed or fail with permission error, not auth error
+    expect(createResponse.status()).toBe(200)
+    const { token: apiToken, api_token: apiTokenMeta } = (await createResponse.json()) as {
+      token: string
+      api_token: { id: number }
+    }
+    expect(apiToken).toMatch(/^cgw_/)
+
+    const response = await page.request.get('/system', {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+      },
+      failOnStatusCode: false,
+    })
+
     expect(response.status()).not.toBe(401)
 
-    // If it's 403, it's a permission issue, not an auth issue
     if (response.status() === 403) {
       const body = await response.text()
       expect(body).not.toContain('CLI authentication required')
+    }
+
+    // Clean up the token to avoid polluting the test environment
+    if (apiTokenMeta?.id) {
+      await page.request.delete(`/.gateway/api/admin/tokens/${apiTokenMeta.id}`, {
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
+        failOnStatusCode: false,
+      })
     }
   })
 

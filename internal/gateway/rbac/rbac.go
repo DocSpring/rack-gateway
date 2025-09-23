@@ -91,7 +91,6 @@ var roleConfigs = map[string]roleConfig{
 			"convox:release:promote",
 			"convox:env:view",
 			"convox:env:set",
-			"convox:app:create",
 			"convox:app:update",
 		},
 		Parents: []string{"ops"},

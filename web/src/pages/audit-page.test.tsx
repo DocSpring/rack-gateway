@@ -2,19 +2,25 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { AuditPage } from './audit-page'
 
 // Hoisted regex for Biome performance rule
 const FAILED_LOAD_REGEX = /Failed to load audit logs/i
 const PAGE_FIVE_REGEX = /page=5/
-const PAGE_THREE_REGEX = /page=3/
+const PAGE_TWO_REGEX = /page=2/
 
 // Mock the API
-vi.mock('../lib/api', () => ({
-  api: {
-    get: vi.fn(),
-  },
-}))
+vi.mock('../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      get: vi.fn(),
+    },
+  }
+})
 
 const mockLogs = [
   {
@@ -99,7 +105,7 @@ const makeResponse = (
   logs,
   total: options?.total ?? logs.length,
   page: options?.page ?? 1,
-  limit: options?.limit ?? 100,
+  limit: options?.limit ?? DEFAULT_PER_PAGE,
 })
 
 describe('AuditPage', () => {
@@ -327,7 +333,7 @@ describe('AuditPage', () => {
     it('respects the page query param on initial load', async () => {
       window.history.replaceState(null, '', '/?page=3')
       vi.mocked(api.get).mockResolvedValueOnce(
-        makeResponse(mockLogs, { total: 350, page: 3, limit: 25 })
+        makeResponse(mockLogs, { total: 350, page: 3, limit: DEFAULT_PER_PAGE })
       )
 
       const Wrapper = createWrapper()
@@ -345,8 +351,8 @@ describe('AuditPage', () => {
     it('clamps the page to the available total when the response has fewer pages', async () => {
       window.history.replaceState(null, '', '/?page=5')
       vi.mocked(api.get)
-        .mockResolvedValueOnce(makeResponse(mockLogs, { total: 60, page: 5, limit: 25 }))
-        .mockResolvedValueOnce(makeResponse(mockLogs, { total: 60, page: 3, limit: 25 }))
+        .mockResolvedValueOnce(makeResponse(mockLogs, { total: 20, page: 5 }))
+        .mockResolvedValueOnce(makeResponse(mockLogs, { total: 20, page: 2 }))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
@@ -356,11 +362,11 @@ describe('AuditPage', () => {
       })
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_THREE_REGEX))
+        expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_TWO_REGEX))
       })
 
       await waitFor(() => {
-        expect(window.location.search).toBe('?page=3')
+        expect(window.location.search).toBe('?page=2')
       })
     })
 

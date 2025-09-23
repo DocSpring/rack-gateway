@@ -34,10 +34,9 @@ test('users: add, edit role, delete', async ({ page }) => {
 
   // Edit role to admin
   await row.getByRole('button', { name: /Edit User/i }).click()
-  // Choose Administrator within the open dialog to avoid strict matches
   const dialog = page.getByRole('dialog')
-  await dialog.getByText('Administrator').click()
-  await page.getByRole('button', { name: /Update User/i }).click()
+  await dialog.getByRole('radio', { name: /^Admin\b/i }).check()
+  await dialog.getByRole('button', { name: /Save Changes/i }).click()
   // Role badge should show Administrator
   await expect(row.getByText('Administrator')).toBeVisible()
 

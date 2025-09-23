@@ -1,23 +1,37 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { UsersPage } from './users-page'
 
-const ADMIN_LABEL_RE = /Administrator/i
+const ADMIN_LABEL_RE = /^Admin\b/i
 
 const ADD_USER_RE = /Add User/i
-const UPDATE_USER_RE = /Update User/i
+const UPDATE_USER_RE = /Save Changes/i
 
 // Mock the API
-vi.mock('../lib/api', () => ({
-  api: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
+vi.mock('../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  }
+})
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children, ...props }: { to?: unknown; children?: ReactNode }) => (
+    <a href={typeof to === 'string' ? to : '#'} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 // Mock toast controller

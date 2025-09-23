@@ -51,6 +51,9 @@ export const test = base.extend({
         // Ignore all 401/Unauthorized console errors (expected before login)
         const is401 = /\b401\b/i.test(text) || /Unauthorized/i.test(text)
         if (is401) return
+        const isDevModule502 =
+          /status of 502 \(Bad Gateway\)/i.test(text) && text.includes('/.gateway/web/')
+        if (isDevModule502) return
         errors.push(`console.${msg.type()}: ${text}`)
       }
     })

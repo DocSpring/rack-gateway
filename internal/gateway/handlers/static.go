@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,7 +71,34 @@ func NewStaticHandler(cfg *config.Config, sessions *auth.SessionManager) *Static
 	if cfg != nil && cfg.DevMode {
 		if raw := os.Getenv("WEB_DEV_SERVER_URL"); raw != "" {
 			if target, err := url.Parse(raw); err == nil {
-				sh.devProxy = httputil.NewSingleHostReverseProxy(target)
+				proxy := httputil.NewSingleHostReverseProxy(target)
+				proxy.ModifyResponse = func(resp *http.Response) error {
+					if resp == nil || resp.Request == nil {
+						return nil
+					}
+					ct := resp.Header.Get("Content-Type")
+					if !strings.Contains(ct, "text/html") {
+						return nil
+					}
+					body, err := io.ReadAll(resp.Body)
+					if err != nil {
+						return err
+					}
+					_ = resp.Body.Close()
+
+					updated := sh.injectRuntimeTokens(body, resp.Request)
+					resp.Body = io.NopCloser(bytes.NewReader(updated))
+					resp.Header.Set("Cache-Control", "no-store")
+					resp.Header.Del("Content-Length")
+					resp.Header.Set("Content-Length", strconv.Itoa(len(updated)))
+					return nil
+				}
+				proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+					if err != nil {
+						http.Error(w, fmt.Sprintf("dev proxy error: %v", err), http.StatusBadGateway)
+					}
+				}
+				sh.devProxy = proxy
 			}
 		}
 	}
@@ -142,24 +171,40 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	content := data
+	content = h.injectRuntimeTokens(content, r)
+
+	reader := bytes.NewReader(content)
+
+	// index.html should always be revalidated so new deployments propagate quickly
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeContent(w, r, "index.html", info.ModTime(), reader)
+}
+
+func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []byte {
+	if len(content) == 0 || r == nil {
+		return content
+	}
+
+	result := content
+
 	if nonce := middleware.StyleNonceFromContext(r.Context()); nonce != "" {
 		const placeholder = "CGW_STYLE_NONCE"
 		placeholderBytes := []byte(placeholder)
-		if bytes.Contains(content, placeholderBytes) {
-			content = bytes.ReplaceAll(content, placeholderBytes, []byte(nonce))
+		if bytes.Contains(result, placeholderBytes) {
+			result = bytes.ReplaceAll(result, placeholderBytes, []byte(nonce))
 		}
 	}
 
-	if sessionCookie, err := r.Cookie("session_token"); err == nil {
-		if h.sessions != nil {
+	if h.sessions != nil {
+		if sessionCookie, err := r.Cookie("session_token"); err == nil {
 			sessionToken := strings.TrimSpace(sessionCookie.Value)
 			if sessionToken != "" {
 				if _, err := h.sessions.ValidateSession(sessionToken, clientIPFromRequest(r), r.UserAgent()); err == nil {
 					if csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken); err == nil && csrfToken != "" {
 						const csrfPlaceholder = "CGW_CSRF_TOKEN"
 						placeholderBytes := []byte(csrfPlaceholder)
-						if bytes.Contains(content, placeholderBytes) {
-							content = bytes.ReplaceAll(content, placeholderBytes, []byte(csrfToken))
+						if bytes.Contains(result, placeholderBytes) {
+							result = bytes.ReplaceAll(result, placeholderBytes, []byte(csrfToken))
 						}
 					}
 				}
@@ -167,11 +212,7 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reader := bytes.NewReader(content)
-
-	// index.html should always be revalidated so new deployments propagate quickly
-	w.Header().Set("Cache-Control", "no-store")
-	http.ServeContent(w, r, "index.html", info.ModTime(), reader)
+	return result
 }
 
 func shouldRedirectToDefault(r *http.Request) bool {

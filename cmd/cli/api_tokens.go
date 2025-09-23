@@ -344,17 +344,6 @@ func gatewayRequest(rack, method, path string, body interface{}, out interface{}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	if requiresCSRF(method) {
-		token, cookies, err := fetchCSRFToken(client, gatewayURL, bearer)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("X-CSRF-Token", token)
-		for _, c := range cookies {
-			req.AddCookie(c)
-		}
-	}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -372,46 +361,6 @@ func gatewayRequest(rack, method, path string, body interface{}, out interface{}
 		}
 	}
 	return nil
-}
-
-func requiresCSRF(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead:
-		return false
-	default:
-		return true
-	}
-}
-
-func fetchCSRFToken(client *http.Client, gatewayURL, bearer string) (string, []*http.Cookie, error) {
-	req, err := http.NewRequest(http.MethodGet, gatewayURL+"/.gateway/api/auth/web/csrf", nil)
-	if err != nil {
-		return "", nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", nil, fmt.Errorf("csrf fetch failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(b)))
-	}
-
-	var payload struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", nil, err
-	}
-	if payload.Token == "" {
-		return "", nil, fmt.Errorf("csrf token missing in response")
-	}
-
-	return payload.Token, resp.Cookies(), nil
 }
 
 func gatewayAuthInfo(rack string) (string, string, error) {

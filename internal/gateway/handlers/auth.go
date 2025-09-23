@@ -218,32 +218,6 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/.gateway/web/login")
 }
 
-// GetCSRFToken returns a CSRF token for web sessions
-func (h *AuthHandler) GetCSRFToken(c *gin.Context) {
-	sessionToken := strings.TrimSpace(extractSessionToken(c))
-	if sessionToken == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing session"})
-		return
-	}
-	if h.sessions == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "session manager unavailable"})
-		return
-	}
-
-	if _, err := h.sessions.ValidateSession(sessionToken, c.ClientIP(), c.GetHeader("User-Agent")); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
-		return
-	}
-
-	token, err := h.sessions.DeriveCSRFToken(sessionToken)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to derive CSRF token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"token": token})
-}
-
 func extractSessionToken(c *gin.Context) string {
 	if c == nil {
 		return ""

@@ -34,7 +34,7 @@ func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
 	}
 
 	cases := []tc{
-		{"apps create allowed for deployer", "app", "create", true, true},
+		{"apps create denied for deployer", "app", "create", false, true},
 		{"apps update allowed for deployer", "app", "update", true, true},
 		{"apps delete denied for deployer", "app", "delete", false, true},
 		{"apps restart allowed for deployer", "app", "restart", true, true},

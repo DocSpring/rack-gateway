@@ -33,7 +33,7 @@ test('users: edit name and email', async ({ page }) => {
   await dialog.getByLabel('Name').fill(name2)
 
   // Save
-  await dialog.getByRole('button', { name: /Update User/i }).click()
+  await dialog.getByRole('button', { name: /Save Changes/i }).click()
 
   // Verify row updated to new email and name
   row = page.locator('tr', { hasText: email2 })

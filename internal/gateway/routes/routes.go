@@ -99,7 +99,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 			authGroup.HEAD("/auth/web/login", authHandler.WebLoginStart)
 			authGroup.GET("/auth/web/callback", authHandler.WebLoginCallback)
 			authGroup.GET("/auth/web/logout", authHandler.WebLogout)
-			authGroup.GET("/auth/web/csrf", authHandler.GetCSRFToken)
 		}
 
 		// Health check (no auth)

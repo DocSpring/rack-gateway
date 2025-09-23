@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestEnforceDeployerPermissions verifies deployer can create/update apps but cannot delete apps.
+// TestEnforceDeployerPermissions verifies deployer can update but not create/delete apps.
 func TestEnforceDeployerPermissions(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
@@ -21,10 +21,10 @@ func TestEnforceDeployerPermissions(t *testing.T) {
 	mgr, err := NewDBManager(database, "example.com")
 	require.NoError(t, err)
 
-	// Deployer: allowed create/update, denied delete
+	// Deployer: denied create, allowed update, denied delete
 	ok, err := mgr.Enforce("deployer@test.com", "app", "create")
 	require.NoError(t, err)
-	require.True(t, ok, "deployer should be allowed to create apps")
+	require.False(t, ok, "deployer should NOT be allowed to create apps")
 
 	ok, err = mgr.Enforce("deployer@test.com", "app", "update")
 	require.NoError(t, err)
