@@ -209,7 +209,7 @@ func (d *Database) migrateAll() error {
 	if _, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
 		return err
 	}
-	// Base schema is defined in 0001_init.sql; apply migrations in order.
+	// Base schema is defined in the timestamped init SQL; apply migrations in order.
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return err
@@ -296,6 +296,97 @@ func (d *Database) query(q string, args ...interface{}) (*sql.Rows, error) {
 
 func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
 	return d.db.QueryRow(d.rebind(q), args...)
+}
+
+func nullableIP(ip string) interface{} {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return nil
+	}
+	return ip
+}
+
+// CurrentEnvironment returns the environment string stored in the metadata table, if present.
+func (d *Database) CurrentEnvironment() (string, error) {
+	row := d.queryRow(`SELECT environment FROM cgw_internal_metadata WHERE id = TRUE`)
+	var env sql.NullString
+	if err := row.Scan(&env); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+	if !env.Valid {
+		return "", nil
+	}
+	return env.String, nil
+}
+
+// SetEnvironment upserts the current environment marker (development/production).
+func (d *Database) SetEnvironment(isDev bool) error {
+	env := "production"
+	if isDev {
+		env = "development"
+	}
+	_, err := d.exec(`
+		INSERT INTO cgw_internal_metadata (id, environment, updated_at)
+		VALUES (TRUE, ?, NOW())
+		ON CONFLICT (id)
+		DO UPDATE SET environment = EXCLUDED.environment, updated_at = NOW()
+	`, env)
+	return err
+}
+
+// EnsureEnvironment sets the environment marker only if it has not been initialized yet.
+func (d *Database) EnsureEnvironment(isDev bool) error {
+	current, err := d.CurrentEnvironment()
+	if err != nil {
+		return err
+	}
+	if current == "" {
+		return d.SetEnvironment(isDev)
+	}
+	return nil
+}
+
+// ResetDatabase drops all gateway tables and re-applies migrations.
+// Only allowed when the recorded environment (or supplied flag) indicates development.
+func (d *Database) ResetDatabase(isDev bool) error {
+	currentEnv, err := d.CurrentEnvironment()
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to determine database environment: %w", err)
+	}
+	if currentEnv == "" && !isDev {
+		return fmt.Errorf("refusing to reset database with unknown environment")
+	}
+	if currentEnv != "" && currentEnv != "development" && !isDev {
+		return fmt.Errorf("refusing to reset %s database", currentEnv)
+	}
+
+	// Drop dependent tables first to satisfy foreign keys.
+	for _, table := range []string{
+		"user_resources",
+		"api_tokens",
+		"audit_logs",
+		"cli_login_states",
+		"settings",
+		"users",
+		"cgw_internal_metadata",
+	} {
+		if _, err := d.exec("DROP TABLE IF EXISTS " + table + " CASCADE"); err != nil {
+			return fmt.Errorf("failed to drop %s: %w", table, err)
+		}
+	}
+
+	if _, err := d.exec("DELETE FROM schema_migrations"); err != nil {
+		return fmt.Errorf("failed to reset schema_migrations: %w", err)
+	}
+
+	if err := d.migrateAll(); err != nil {
+		return fmt.Errorf("failed to re-run migrations: %w", err)
+	}
+
+	return d.SetEnvironment(isDev)
 }
 
 // SaveCLILoginCode stores an authorization code for a given state
@@ -539,7 +630,7 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
             details, ip_address, user_agent, status, rbac_decision, http_status, response_time_ms
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Command, log.Resource, log.ResourceType,
-		log.Details, log.IPAddress, log.UserAgent, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs,
+		log.Details, nullableIP(log.IPAddress), log.UserAgent, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create audit log: %w", err)
@@ -648,7 +739,7 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	query := `
         SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
-               COALESCE("ip_address", ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms"
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms"
         FROM "audit_logs"
         WHERE 1=1
     `
@@ -755,7 +846,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
             "action" ILIKE ? OR
             "resource" ILIKE ? OR
             "details" ILIKE ? OR
-            "ip_address" ILIKE ? OR
+            host("ip_address"::inet) ILIKE ? OR
             "user_agent" ILIKE ?
         )`
 		searchPattern := "%" + filters.Search + "%"
@@ -775,7 +866,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	query := `
         SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
-               COALESCE("details", ''), COALESCE("ip_address", ''), COALESCE("user_agent", ''),
+               COALESCE("details", ''), COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
                "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms"
         FROM "audit_logs" ` + whereClause + `
         ORDER BY "timestamp" DESC

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"net"
 	"net/url"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
@@ -46,6 +47,14 @@ type Handler struct {
 }
 
 const maskedSecret = envutil.MaskedSecret
+
+func clientIPFromRequest(r *http.Request) string {
+	ip := strings.TrimSpace(r.RemoteAddr)
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		return host
+	}
+	return ip
+}
 
 type logAccumulator struct {
 	buf       bytes.Buffer
@@ -341,7 +350,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 					RBACDecision:   "allow",
 					HTTPStatus:     status,
 					ResponseTimeMs: int(time.Since(start).Milliseconds()),
-					IPAddress:      r.RemoteAddr,
+					IPAddress:      clientIPFromRequest(r),
 					UserAgent:      r.UserAgent(),
 				})
 			}
@@ -473,7 +482,7 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes 
 		ResourceType: "rack",
 		Resource:     h.rackName,
 		Details:      string(b),
-		IPAddress:    r.RemoteAddr,
+		IPAddress:    clientIPFromRequest(r),
 		UserAgent:    r.UserAgent(),
 		Status:       "success",
 		RBACDecision: "allow",
@@ -635,7 +644,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 					ResourceType:   "secret",
 					Resource:       fmt.Sprintf("%s/%s", app, key),
 					Details:        "{}",
-					IPAddress:      r.RemoteAddr,
+					IPAddress:      clientIPFromRequest(r),
 					UserAgent:      r.UserAgent(),
 					Status:         "denied",
 					RBACDecision:   "deny",
@@ -659,7 +668,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, k),
 				Details:        "{\"error\":\"protected key change denied\"}",
-				IPAddress:      r.RemoteAddr,
+				IPAddress:      clientIPFromRequest(r),
 				UserAgent:      r.UserAgent(),
 				Status:         "denied",
 				RBACDecision:   "deny",
@@ -701,7 +710,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, key),
 				Details:        "{}",
-				IPAddress:      r.RemoteAddr,
+				IPAddress:      clientIPFromRequest(r),
 				UserAgent:      r.UserAgent(),
 				Status:         "denied",
 				RBACDecision:   "deny",
@@ -762,7 +771,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, d.Key),
 				Details:        "{\"error\":\"protected key change denied\"}",
-				IPAddress:      r.RemoteAddr,
+				IPAddress:      clientIPFromRequest(r),
 				UserAgent:      r.UserAgent(),
 				Status:         "denied",
 				RBACDecision:   "deny",
@@ -855,7 +864,7 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []EnvDi
 			ResourceType:   rtype,
 			Resource:       fmt.Sprintf("%s/%s", app, d.Key),
 			Details:        details,
-			IPAddress:      r.RemoteAddr,
+			IPAddress:      clientIPFromRequest(r),
 			UserAgent:      r.UserAgent(),
 			Status:         "success",
 			RBACDecision:   "allow",

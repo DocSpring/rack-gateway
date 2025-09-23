@@ -40,6 +40,10 @@ func New() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := database.EnsureEnvironment(cfg.DevMode); err != nil {
+		database.Close()
+		return nil, err
+	}
 
 	// Initialize dependencies
 	app := &App{
