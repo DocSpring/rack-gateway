@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { UserConfig } from '../lib/api'
 import { AVAILABLE_ROLES } from '../lib/api'
+import { toFieldErrorMap, userFormSchema } from '../lib/validation'
 
 type UserEditModalProps = {
   email: string
@@ -10,8 +11,17 @@ type UserEditModalProps = {
   onClose: () => void
 }
 
-// Move regex to top level as per ultracite rules
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const USER_FORM_FIELDS = ['email', 'name', 'roles'] as const
+
+type UserFormField = (typeof USER_FORM_FIELDS)[number]
+
+type UserFormErrors = Record<UserFormField, string | undefined>
+
+const EMPTY_ERRORS: UserFormErrors = {
+  email: undefined,
+  name: undefined,
+  roles: undefined,
+}
 
 export function UserEditModal({
   email: initialEmail,
@@ -23,46 +33,47 @@ export function UserEditModal({
   const [email, setEmail] = useState(initialEmail)
   const [name, setName] = useState(user.name)
   const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles)
-  const [errors, setErrors] = useState<{ email?: string; name?: string; roles?: string }>({})
+  const [errors, setErrors] = useState<UserFormErrors>(EMPTY_ERRORS)
 
   useEffect(() => {
     setEmail(initialEmail)
     setName(user.name)
     setSelectedRoles(user.roles)
+    setErrors(EMPTY_ERRORS)
   }, [initialEmail, user])
 
-  const validateForm = () => {
-    const newErrors: typeof errors = {}
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const validation = userFormSchema.safeParse({ email, name, roles: selectedRoles })
 
-    if (!email.trim()) {
-      newErrors.email = 'Email is required'
-    } else if (!EMAIL_REGEX.test(email)) {
-      newErrors.email = 'Invalid email format'
+    if (!validation.success) {
+      setErrors((prev) => ({ ...prev, ...toFieldErrorMap(validation.error, USER_FORM_FIELDS) }))
+      return
     }
 
-    if (!name.trim()) {
-      newErrors.name = 'Name is required'
-    }
+    const parsed = validation.data
 
-    if (selectedRoles.length === 0) {
-      newErrors.roles = 'At least one role is required'
-    }
+    setErrors(EMPTY_ERRORS)
+    setEmail(parsed.email)
+    setName(parsed.name)
+    setSelectedRoles(parsed.roles)
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (validateForm()) {
-      onSave(email, { name, roles: selectedRoles })
-    }
+    onSave(parsed.email, { name: parsed.name, roles: parsed.roles })
   }
 
   const toggleRole = (role: string) => {
     setSelectedRoles((previous) =>
-      previous.includes(role) ? previous.filter((r) => r !== role) : [...previous, role]
+      previous.includes(role) ? previous.filter((value) => value !== role) : [...previous, role]
     )
+    if (errors.roles) {
+      setErrors((prev) => ({ ...prev, roles: undefined }))
+    }
+  }
+
+  const clearError = (field: UserFormField) => {
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }))
+    }
   }
 
   return (
@@ -81,7 +92,10 @@ export function UserEditModal({
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-100 sm:text-sm"
               disabled={!isNew}
               id="email"
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                clearError('email')
+              }}
               placeholder="user@example.com"
               type="email"
               value={email}
@@ -96,7 +110,10 @@ export function UserEditModal({
             <input
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
               id="name"
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => {
+                setName(event.target.value)
+                clearError('name')
+              }}
               placeholder="John Doe"
               type="text"
               value={name}

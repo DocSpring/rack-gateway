@@ -30,6 +30,7 @@ import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import type { APIToken as APITokenModel, APITokenResponse } from '../lib/generated/gateway-types'
+import { toFieldErrorMap, tokenFormSchema } from '../lib/validation'
 
 export type APIToken = APITokenModel
 
@@ -63,6 +64,7 @@ type PermissionGroup = {
 }
 
 const WORD_DELIMITER_REGEX = /[-_\s]+/
+const TOKEN_FORM_FIELDS = ['name', 'permissions'] as const
 
 function normalizePermissions(perms: string[]): string[] {
   if (!perms || perms.length === 0) {
@@ -250,6 +252,33 @@ function TokensPageInner() {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
   const [activeRole, setActiveRole] = useState<string | null>(null)
+  const [createErrors, setCreateErrors] = useState<
+    Record<'name' | 'permissions', string | undefined>
+  >({
+    name: undefined,
+    permissions: undefined,
+  })
+  const [editErrors, setEditErrors] = useState<Record<'name' | 'permissions', string | undefined>>({
+    name: undefined,
+    permissions: undefined,
+  })
+
+  const clearCreateError = (field: keyof typeof createErrors) => {
+    if (createErrors[field]) {
+      setCreateErrors((prev) => ({ ...prev, [field]: undefined }))
+    }
+  }
+
+  const clearEditError = (field: keyof typeof editErrors) => {
+    if (editErrors[field]) {
+      setEditErrors((prev) => ({ ...prev, [field]: undefined }))
+    }
+  }
+
+  const handleCreateNameChange = (value: string) => {
+    setNewTokenName(value)
+    clearCreateError('name')
+  }
 
   const { data: permissionMetadata, isLoading: isPermissionLoading } = useQuery({
     queryKey: ['token-permissions'],
@@ -356,6 +385,7 @@ function TokensPageInner() {
       setCreatedToken(data.token || '')
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('API token created successfully')
+      setCreateErrors({ name: undefined, permissions: undefined })
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
@@ -405,6 +435,7 @@ function TokensPageInner() {
       setEditName('')
       setEditPermissions([])
       setEditActiveRole(null)
+      setEditErrors({ name: undefined, permissions: undefined })
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
@@ -413,18 +444,26 @@ function TokensPageInner() {
   })
 
   const handleCreateToken = () => {
-    if (!newTokenName.trim()) {
-      toast.error('Please enter a token name')
-      return
-    }
-    if (selectedPermissions.length === 0) {
-      toast.error('Select at least one permission')
-      return
-    }
-    createTokenMutation.mutate({
-      name: newTokenName.trim(),
+    const parsed = tokenFormSchema.safeParse({
+      name: newTokenName,
       permissions: selectedPermissions,
     })
+
+    if (!parsed.success) {
+      setCreateErrors((prev) => ({
+        ...prev,
+        ...toFieldErrorMap(parsed.error, TOKEN_FORM_FIELDS),
+      }))
+      return
+    }
+
+    const payload = parsed.data
+
+    setCreateErrors({ name: undefined, permissions: undefined })
+    setNewTokenName(payload.name)
+    setSelectedPermissions(payload.permissions)
+
+    createTokenMutation.mutate(payload)
   }
 
   const handleCopyToken = () => {
@@ -439,6 +478,7 @@ function TokensPageInner() {
     setCreatedToken(null)
     setSelectedPermissions([])
     setActiveRole(null)
+    setCreateErrors({ name: undefined, permissions: undefined })
   }, [])
 
   // Close create dialog without resetting content to avoid flash during fade-out
@@ -472,12 +512,14 @@ function TokensPageInner() {
     }
     setSelectedPermissions(normalized)
     setActiveRole(role.name)
+    clearCreateError('permissions')
   }
 
   const handlePermissionToggle = (permission: string) => {
     if (!canAssignPermission(permission)) {
       return
     }
+    clearCreateError('permissions')
     setSelectedPermissions((prev) => {
       const nextSet = new Set(prev)
       if (nextSet.has(permission)) {
@@ -498,12 +540,14 @@ function TokensPageInner() {
     }
     setEditPermissions(normalized)
     setEditActiveRole(role.name)
+    clearEditError('permissions')
   }
 
   const handleEditPermissionToggle = (permission: string) => {
     if (!canAssignPermission(permission)) {
       return
     }
+    clearEditError('permissions')
     setEditPermissions((prev) => {
       const nextSet = new Set(prev)
       if (nextSet.has(permission)) {
@@ -530,18 +574,29 @@ function TokensPageInner() {
     if (!editToken) {
       return
     }
-    if (!editName.trim()) {
-      toast.error('Please enter a token name')
+    const parsed = tokenFormSchema.safeParse({
+      name: editName,
+      permissions: editPermissions,
+    })
+
+    if (!parsed.success) {
+      setEditErrors((prev) => ({
+        ...prev,
+        ...toFieldErrorMap(parsed.error, TOKEN_FORM_FIELDS),
+      }))
       return
     }
-    if (editPermissions.length === 0) {
-      toast.error('Select at least one permission')
-      return
-    }
+
+    const payload = parsed.data
+
+    setEditErrors({ name: undefined, permissions: undefined })
+    setEditName(payload.name)
+    setEditPermissions(payload.permissions)
+
     updateTokenMutation.mutate({
       id: editToken.id,
-      name: editName.trim(),
-      permissions: editPermissions,
+      name: payload.name,
+      permissions: payload.permissions,
     })
   }
 
@@ -567,6 +622,7 @@ function TokensPageInner() {
                 setCreatedToken(null)
                 setSelectedPermissions([])
                 setActiveRole(null)
+                setCreateErrors({ name: undefined, permissions: undefined })
                 setIsCreateOpen(true)
               }}
             >
@@ -615,6 +671,7 @@ function TokensPageInner() {
                     const normalized = normalizePermissions(token.permissions ?? [])
                     setEditPermissions(normalized)
                     setEditActiveRole(findMatchingRole(normalized, roleShortcuts))
+                    setEditErrors({ name: undefined, permissions: undefined })
                     setIsEditOpen(true)
                   }}
                   token={token}
@@ -654,6 +711,7 @@ function TokensPageInner() {
         availablePermissions={availablePermissions}
         canAssignPermission={canAssignPermission}
         createdToken={createdToken}
+        errors={createErrors}
         isCreating={createTokenMutation.isPending}
         isOpen={isCreateOpen}
         isPermissionLoading={isPermissionLoading}
@@ -664,7 +722,7 @@ function TokensPageInner() {
         onPermissionToggle={handlePermissionToggle}
         onRoleSelect={handleRoleShortcut}
         onSubmit={handleCreateToken}
-        onTokenNameChange={setNewTokenName}
+        onTokenNameChange={handleCreateNameChange}
         roleShortcuts={roleShortcuts}
         selectedPermissions={selectedPermissions}
         selectedPermissionsSet={selectedPermissionsSet}
@@ -680,6 +738,7 @@ function TokensPageInner() {
             setEditName('')
             setEditPermissions([])
             setEditActiveRole(null)
+            setEditErrors({ name: undefined, permissions: undefined })
           }
         }}
         open={isEditOpen}
@@ -695,7 +754,10 @@ function TokensPageInner() {
                 <Label htmlFor="edit-name">Token Name</Label>
                 <Input
                   id="edit-name"
-                  onChange={(e) => setEditName(e.target.value)}
+                  onChange={(e) => {
+                    setEditName(e.target.value)
+                    clearEditError('name')
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleUpdateToken()
@@ -703,11 +765,15 @@ function TokensPageInner() {
                   }}
                   value={editName}
                 />
+                {editErrors.name ? (
+                  <p className="text-destructive text-sm">{editErrors.name}</p>
+                ) : null}
               </div>
               <TokenPermissionsEditor
                 activeRole={editActiveRole}
                 availablePermissions={availablePermissions}
                 canAssignPermission={canAssignPermission}
+                error={editErrors.permissions}
                 isPermissionLoading={isPermissionLoading}
                 onPermissionToggle={handleEditPermissionToggle}
                 onRoleSelect={handleEditRoleShortcut}
@@ -721,12 +787,7 @@ function TokensPageInner() {
                 Cancel
               </Button>
               <Button
-                disabled={
-                  updateTokenMutation.isPending ||
-                  !editToken ||
-                  !editName.trim() ||
-                  editPermissions.length === 0
-                }
+                disabled={updateTokenMutation.isPending || isPermissionLoading || !editToken}
                 onClick={handleUpdateToken}
               >
                 {updateTokenMutation.isPending ? 'Saving...' : 'Save'}
@@ -956,6 +1017,7 @@ function TokenPermissionsEditor({
   onPermissionToggle,
   canAssignPermission,
   isPermissionLoading,
+  error,
 }: {
   availablePermissions: string[]
   roleShortcuts: TokenRoleInfo[]
@@ -966,6 +1028,7 @@ function TokenPermissionsEditor({
   onPermissionToggle: (permission: string) => void
   canAssignPermission: (permission: string) => boolean
   isPermissionLoading: boolean
+  error?: string
 }) {
   return (
     <div className="space-y-4">
@@ -983,6 +1046,7 @@ function TokenPermissionsEditor({
         onPermissionToggle={onPermissionToggle}
         selectedPermissionsSet={selectedPermissionsSet}
       />
+      {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </div>
   )
 }
@@ -991,6 +1055,7 @@ type CreateTokenDialogProps = {
   activeRole: string | null
   availablePermissions: string[]
   canAssignPermission: (permission: string) => boolean
+  errors: { name?: string; permissions?: string }
   createdToken: string | null
   isCreating: boolean
   isOpen: boolean
@@ -1013,6 +1078,7 @@ function CreateTokenDialog({
   activeRole,
   availablePermissions,
   canAssignPermission,
+  errors,
   createdToken,
   isCreating,
   isOpen,
@@ -1073,11 +1139,13 @@ function CreateTokenDialog({
                   spellCheck={false}
                   value={tokenName}
                 />
+                {errors.name ? <p className="text-destructive text-sm">{errors.name}</p> : null}
               </div>
               <TokenPermissionsEditor
                 activeRole={activeRole}
                 availablePermissions={availablePermissions}
                 canAssignPermission={canAssignPermission}
+                error={errors.permissions}
                 isPermissionLoading={isPermissionLoading}
                 onPermissionToggle={onPermissionToggle}
                 onRoleSelect={onRoleSelect}

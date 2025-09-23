@@ -11,15 +11,19 @@ const CREATE_TOKEN_RE = /Create Token/i
 const COPY_TOKEN_NOW_RE = /Copy this token now/i
 const DELETE_TOKEN_RE = /Delete Token/i
 
-// Mock the API
-vi.mock('../lib/api', () => ({
-  api: {
-    get: vi.fn(),
-    post: vi.fn(),
-    delete: vi.fn(),
-    put: vi.fn(),
-  },
-}))
+// Mock the API while preserving exported constants such as AVAILABLE_ROLES
+vi.mock('../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return {
+    ...actual,
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      delete: vi.fn(),
+      put: vi.fn(),
+    },
+  }
+})
 
 // Mock sonner
 vi.mock('sonner', () => ({

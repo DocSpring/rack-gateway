@@ -133,6 +133,25 @@ test('tokens: create, rename, delete', async ({ page }) => {
   await expect(row2).toHaveCount(0)
 })
 
+test('tokens: name length validation', async ({ page }) => {
+  await login(page)
+
+  await page.goto('/.gateway/web/api_tokens')
+  await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
+
+  await page.getByRole('button', { name: /Create Token/i }).click()
+
+  const longName = 'X'.repeat(151)
+  await page.getByLabel('Token Name').fill(longName)
+  await page.getByRole('button', { name: /Create Token/i }).click()
+
+  await expect(
+    page.getByText('Token name must be 150 characters or less', { exact: true })
+  ).toBeVisible()
+
+  await page.getByRole('button', { name: /Cancel/i }).click()
+})
+
 test('audit logs: view and filter', async ({ page }) => {
   await login(page)
 

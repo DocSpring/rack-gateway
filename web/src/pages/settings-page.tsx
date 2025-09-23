@@ -10,6 +10,7 @@ import { Label } from '../components/ui/label'
 import { Separator } from '../components/ui/separator'
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
+import { protectedEnvVarSchema } from '../lib/validation'
 
 type RackTLSCert = {
   pem: string
@@ -125,16 +126,20 @@ export function SettingsPage() {
   })
 
   const addEnvVar = () => {
-    const raw = newVar.trim()
-    if (!raw) {
+    const parsed = protectedEnvVarSchema.safeParse(newVar)
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid environment variable name'
+      toast.error(message)
       return
     }
-    const val = raw.toUpperCase()
-    if (envVars.includes(val)) {
+
+    const value = parsed.data
+    if (envVars.includes(value)) {
       setNewVar('')
       return
     }
-    saveEnvMutation.mutate([...envVars, val])
+
+    saveEnvMutation.mutate([...envVars, value])
     setNewVar('')
   }
 
