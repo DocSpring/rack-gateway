@@ -38,6 +38,8 @@ const ROLE_ENTRIES = ROLE_PRIORITY.map((role) => [role, AVAILABLE_ROLES[role]]) 
   (typeof AVAILABLE_ROLES)[RoleName],
 ][]
 
+const formatRoleName = (value: string) => value.replace(/\b\w/g, (char) => char.toUpperCase())
+
 export function UserEditDialog({
   open,
   mode,
@@ -163,7 +165,7 @@ export function UserEditDialog({
                       value={roleKey}
                     />
                     <div>
-                      <div className="font-medium">{meta.name}</div>
+                      <div className="font-medium">{formatRoleName(meta.name)}</div>
                       <div className="text-muted-foreground text-sm">{meta.description}</div>
                     </div>
                   </div>

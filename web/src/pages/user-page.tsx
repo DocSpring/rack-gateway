@@ -20,6 +20,7 @@ import type { UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
 import type { GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
 import { AVAILABLE_ROLES, api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { pickPrimaryRole } from '../lib/user-roles'
 
 function roleBadges(roles: string[]) {
@@ -143,7 +144,6 @@ export function UserPage() {
     refetchOnWindowFocus: true,
   })
 
-  const AUDIT_PAGE_SIZE = 25
   const [auditPageIndex, setAuditPageIndex] = useState(1)
 
   const {
@@ -151,12 +151,12 @@ export function UserPage() {
     isLoading: auditTableLoading,
     error: auditTableError,
   } = useQuery<{ logs: AuditLogRecord[]; total: number; page: number; limit: number }, Error>({
-    queryKey: ['userAuditLogs', decodedEmail, auditPageIndex, AUDIT_PAGE_SIZE],
+    queryKey: ['userAuditLogs', decodedEmail, auditPageIndex, DEFAULT_PER_PAGE],
     queryFn: () => {
       const params = new URLSearchParams({
         user: decodedEmail,
         page: String(auditPageIndex),
-        limit: String(AUDIT_PAGE_SIZE),
+        limit: String(DEFAULT_PER_PAGE),
         range: '30d',
       })
 
@@ -175,7 +175,7 @@ export function UserPage() {
 
   const auditLogs: AuditLogRecord[] = auditTableData?.logs ?? []
   const auditTotal = auditTableData?.total ?? 0
-  const auditLimit = auditTableData?.limit ?? AUDIT_PAGE_SIZE
+  const auditLimit = auditTableData?.limit ?? DEFAULT_PER_PAGE
   const currentAuditPage = auditTableData?.page ?? auditPageIndex
   const auditTotalPages = Math.max(1, Math.ceil(Math.max(auditTotal, 0) / auditLimit))
   const auditFirstRowIndex = auditTotal === 0 ? 0 : (currentAuditPage - 1) * auditLimit + 1
@@ -444,6 +444,7 @@ export function UserPage() {
             />
           </CardContent>
         </Card>
+
         <AuditLogsPane
           currentPage={currentAuditPage}
           disableNext={currentAuditPage >= auditTotalPages}

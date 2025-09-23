@@ -227,9 +227,11 @@ export function AuditLogsPane({
   const [selected, setSelected] = useState<AuditLogRecord | null>(null)
 
   const description = useMemo(() => {
-    const displayed = logs.length
-    return `Showing ${displayed} of ${totalCount} logs · Page ${currentPage} of ${totalPages}`
-  }, [logs.length, totalCount, currentPage, totalPages])
+    if (logs.length === 0) {
+      return 'No audit logs'
+    }
+    return `Showing ${firstRowIndex === 0 ? 0 : firstRowIndex}–${lastRowIndex} of ${totalCount} logs`
+  }, [firstRowIndex, lastRowIndex, logs.length, totalCount])
 
   const handleRowClick = (log: AuditLogRecord) => {
     setSelected(log)
@@ -342,7 +344,7 @@ export function AuditLogsPane({
         {totalCount > 0 && (
           <div className="mt-4 flex items-center justify-between">
             <div className="text-muted-foreground text-sm">
-              Showing {firstRowIndex === 0 ? 0 : firstRowIndex}–{lastRowIndex} of {totalCount} logs
+              Page {currentPage} of {totalPages}
             </div>
             <div className="flex gap-2">
               <Button disabled={disablePrevious} onClick={onPreviousPage} variant="outline">
