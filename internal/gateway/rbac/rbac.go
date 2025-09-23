@@ -3,6 +3,7 @@ package rbac
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
@@ -382,12 +383,19 @@ func (m *DBManager) SaveUser(email string, user *UserConfig) error {
 
 	if existing != nil {
 		// Update existing user
+		trimmedName := strings.TrimSpace(user.Name)
+		if trimmedName != "" && trimmedName != existing.Name {
+			if err := m.db.UpdateUserName(email, trimmedName); err != nil {
+				return fmt.Errorf("failed to update user name: %w", err)
+			}
+		}
 		if err := m.db.UpdateUserRoles(email, user.Roles); err != nil {
 			return fmt.Errorf("failed to update user: %w", err)
 		}
 	} else {
 		// Create new user
-		if _, err := m.db.CreateUser(email, user.Name, user.Roles); err != nil {
+		name := strings.TrimSpace(user.Name)
+		if _, err := m.db.CreateUser(email, name, user.Roles); err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 	}

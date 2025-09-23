@@ -39,3 +39,28 @@ func TestEnforceDeployerPermissions(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok, "admin should be allowed to delete apps")
 }
+
+func TestSaveUserUpdatesDisplayName(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	_, err := database.CreateUser("user@example.com", "Old Name", []string{"viewer"})
+	require.NoError(t, err)
+
+	mgr, err := NewDBManager(database, "example.com")
+	require.NoError(t, err)
+
+	err = mgr.SaveUser("user@example.com", &UserConfig{Name: "New Name", Roles: []string{"viewer"}})
+	require.NoError(t, err)
+
+	updated, err := database.GetUser("user@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	require.Equal(t, "New Name", updated.Name)
+
+	err = mgr.SaveUser("user@example.com", &UserConfig{Name: "   ", Roles: []string{"viewer"}})
+	require.NoError(t, err)
+
+	unchanged, err := database.GetUser("user@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, unchanged)
+	require.Equal(t, "New Name", unchanged.Name)
+}
