@@ -19,8 +19,8 @@ bin/
 go.work
 
 # Config files with secrets
-config/gateway/config.yml
 config/cli/
+config/cli-e2e/
 data
 docker-compose.override.yml
 
@@ -35,9 +35,6 @@ mise.local.toml
 
 # Logs
 *.log
-
-# CLI config
-~/.config/convox-gateway/
 
 # Build artifacts
 dist/

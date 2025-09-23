@@ -121,10 +121,10 @@ GATEWAY_PORT="${GATEWAY_PORT:-}"
 WEB_P="${WEB_PORT:-}"
 OAUTH_P="${MOCK_OAUTH_PORT:-}"
 RACK_P="${MOCK_CONVOX_PORT:-}"
-CLI_DIR="${CONVOX_GATEWAY_CLI_CONFIG_DIR:-}"
+CLI_DIR="${GATEWAY_CLI_CONFIG_DIR:-}"
 
 [[ -z "$GATEWAY_PORT" ]]   && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
-[[ -z "$CLI_DIR" ]]   && CLI_DIR="$(toml_get CONVOX_GATEWAY_CLI_CONFIG_DIR "$MiseFile" || echo "$HOME/.config/convox-gateway")"
+[[ -z "$CLI_DIR" ]]   && CLI_DIR="$(toml_get GATEWAY_CLI_CONFIG_DIR "$MiseFile" || echo "$HOME/.config/convox-gateway")"
 
 echo
 echo "Authenticate with the gateway:"
@@ -141,7 +141,7 @@ echo "  convox-gateway convox apps         # Run convox through the gateway"
 echo "  convox-gateway switch <rack>       # Switch racks later"
 echo
 echo "Config location:"
-echo "  ${CLI_DIR}   # override with CONVOX_GATEWAY_CLI_CONFIG_DIR"
+echo "  ${CLI_DIR}   # override with GATEWAY_CLI_CONFIG_DIR"
 
 echo
 echo "Use CLI against dev gateway:"

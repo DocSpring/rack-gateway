@@ -13,6 +13,10 @@ cd "$ROOT_DIR"
 
 E2E_TS="$(date +%s%3N)"
 
+# Ensure we use a specific test config dir for e2e tests
+mkdir -p config/cli-e2e
+export GATEWAY_CLI_CONFIG_DIR="config/cli-e2e"
+
 # Run a subset of tests and skip the slow ones
 STAGES="ADMIN API_TOKEN DEPLOYER VIEWER"
 
@@ -82,10 +86,9 @@ login_cli_as() {
   wait $CLI_PID
 }
 
-# verify_command <command> <expected1> <expected2> ...
 function verify_command_status_and_output() {
-  local command="$1" expected_status="$2" expected_output=("${@:3}")
-  local shell_cmd="./bin/convox-gateway $command"
+  command="$1" expected_status="$2" expected_output=("${@:3}")
+  local shell_cmd="${WRAPPER_CMD:-./bin/convox-gateway} $command"
 
   echo -e "${BLUE}Running: $shell_cmd...${NC}"
   set +e
@@ -116,46 +119,17 @@ function verify_command_status_and_output() {
   fi
 }
 
-function verify_command() {
+function verify_cgw_command() {
   verify_command_status_and_output "$1" "0" "${@:2}"
 }
 
-function verify_command_failure() {
+function verify_cgw_command_failure() {
   verify_command_status_and_output "$1" "1" "${@:2}"
-}
-
-# verify_raw_command_status_and_output <raw_shell_command> <expected_status> <expected1> <expected2> ...
-# Runs the command exactly as given (used for timeout-wrapped flows)
-function verify_raw_command_status_and_output() {
-  local shell_cmd="$1" expected_status="$2" expected_output=("${@:3}")
-  echo -e "${BLUE}Running: $shell_cmd...${NC}"
-  set +e
-  local output
-  output=$(bash -lc "$shell_cmd" 2>&1)
-  local exit_status=$?
-  set -e
-  if [[ "$exit_status" == "$expected_status" ]]; then
-    echo -e "${GREEN}$output${NC}"
-  else
-    echo -e "${RED}Expected status $expected_status, but got $exit_status" >&2
-    echo -e "${RED}$output${NC}" >&2
-    exit 1
-  fi
-  local missing=()
-  for exp in "${expected_output[@]}"; do
-    if ! echo "$output" | grep -q -F "$exp"; then
-      missing+=("$exp")
-    fi
-  done
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    echo -e "${RED}$shell_cmd did not show expected strings: ${missing[*]}${NC}" >&2
-    exit 1
-  fi
 }
 
 function logout_cli() {
   echo -e "${YELLOW}Logging out...${NC}"
-  verify_command "logout" "Removed rack: e2e"
+  verify_cgw_command "logout" "Removed rack: e2e"
 }
 
 
@@ -168,21 +142,21 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 fi
 
 if [ -z "$SKIP_ADMIN_TESTS" ]; then
-  verify_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
-  verify_command "convox rack" "mock-rack" "mock-rack.example.com"
-  verify_command "convox apps" "convox-gateway" "RAPI123456"
-  verify_command "convox apps info" \
+  verify_cgw_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
+  verify_cgw_command "convox rack" "mock-rack" "mock-rack.example.com"
+  verify_cgw_command "convox apps" "convox-gateway" "RAPI123456"
+  verify_cgw_command "convox apps info" \
     "Name        convox-gateway" "Status      running"
-  verify_command "convox ps" "p-web-1" "p-worker-1"
+  verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
 
-  verify_command "convox run web 'echo hello'" \
+  verify_cgw_command "convox run web 'echo hello'" \
     'Connected to mock exec for app=convox-gateway pid=proc-123456' \
     "$ 'echo hello'" \
     'hello' \
     'Exit code: 0' \
     'Session closed.'
 
-  verify_command "convox exec p-worker-1 'echo hello'" \
+  verify_cgw_command "convox exec p-worker-1 'echo hello'" \
     'Connected to mock exec for app=convox-gateway pid=p-worker-1' \
     "$ 'echo hello'" \
     'hello' \
@@ -190,24 +164,24 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     'Session closed.'
 
   # List environment for a known app
-  verify_command "convox env" \
+  verify_cgw_command "convox env" \
     "DATABASE_URL=********************" \
     "NODE_ENV=production" \
     "PORT=3000"
 
   # Fetch secret with --secrets flag
-  verify_command "env get DATABASE_URL --secrets" \
+  verify_cgw_command "env get DATABASE_URL --secrets" \
     "postgres://user:pass@localhost/db"
 
-  verify_command "env set FOO=bar" \
+  verify_cgw_command "env set FOO=bar" \
     "Setting FOO..." "Release:"
 
-  verify_command "convox restart" \
+  verify_cgw_command "convox restart" \
     "Restarting web... OK" \
     "Restarting worker... OK"
 
   # Test full build + release flow
-  verify_command "convox deploy" \
+  verify_cgw_command "convox deploy" \
     "Packaging source..." "Uploading source..." "Starting build..." \
     "Building app..." \
     "Step 1/1: mock build step" \
@@ -216,7 +190,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     "OK"
 
   # Check logs via websockets (this stream is long-lived; kill after 3s)
-  verify_raw_command_status_and_output "timeout 3s ./bin/convox-gateway convox logs" \
+  WRAPPER_CMD="timeout 3s ./bin/convox-gateway" verify_command_status_and_output "convox logs" \
     "124" \
     "Promoting release" \
     "Release promoted successfully."
@@ -254,16 +228,14 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
 
   # Show rack info via API token
-  verify_raw_command_status_and_output \
-    "./bin/convox-gateway convox rack" \
-    "0" \
+  verify_cgw_command \
+    "convox rack" \
     "Name" \
     "Status"
 
   # Show processes via API token
-  verify_raw_command_status_and_output \
-    "./bin/convox-gateway convox ps --app convox-gateway" \
-    "0" \
+  verify_cgw_command \
+    "convox ps --app convox-gateway" \
     "p-web-1"
 
   # Create build and capture release identifier
@@ -283,15 +255,13 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   fi
 
   # Run mock migration command on the new release
-  verify_raw_command_status_and_output \
-    "./bin/convox-gateway convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
-    "0" \
+  verify_cgw_command \
+    "convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
     "migrate"
 
   # Promote the release
-  verify_raw_command_status_and_output \
-    "./bin/convox-gateway convox releases promote $RELEASE_ID --app convox-gateway" \
-    "0" \
+  verify_cgw_command \
+    "convox releases promote $RELEASE_ID --app convox-gateway" \
     "OK"
 
   # Clean up the API token now that the pipeline simulation is complete
@@ -300,7 +270,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # Delete via admin login to validate token deletion flow
   login_cli_as "admin@example.com" "e2e"
-  verify_command "api-token delete $API_TOKEN_ID" "Deleted token $API_TOKEN_ID"
+  verify_cgw_command "api-token delete $API_TOKEN_ID" "Deleted token $API_TOKEN_ID"
   logout_cli
 fi
 
@@ -310,20 +280,20 @@ if [ -z "$SKIP_DEPLOYER_TESTS" ]; then
   login_cli_as "deployer@example.com" "e2e"
 
   # Can list processes
-  verify_command "convox ps" "p-web-1" "p-worker-1"
+  verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
 
   # List environment for a known app
-  verify_command "convox env" \
+  verify_cgw_command "convox env" \
     "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
 
   # Cannot fetch secret
-  verify_command_failure "env get DATABASE_URL --secrets" \
+  verify_cgw_command_failure "env get DATABASE_URL --secrets" \
     "Error: failed to fetch env: You don't have permission to view secrets."
 
   # (env set tests removed for deployer; protected env policy preservation)
 
   # Should not be able to delete apps
-  verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
+  verify_cgw_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
 
   logout_cli
 fi
@@ -334,19 +304,19 @@ if [ -z "$SKIP_VIEWER_TESTS" ]; then
   login_cli_as "viewer@example.com" "e2e"
 
   # Viewer can list processes
-  verify_command "convox ps" "p-web-1" "p-worker-1"
+  verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
 
   # Cannot fetch env
-  verify_command_failure "convox env" \
+  verify_cgw_command_failure "convox env" \
     "ERROR: permission denied"
 
   # Cannot fetch secret
-  verify_command_failure "env get DATABASE_URL --secrets" \
+  verify_cgw_command_failure "env get DATABASE_URL --secrets" \
     "Error: failed to fetch env: You don't have permission to view environment variables."
 
   # Viewer should not be able to set env or delete apps
-  verify_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
-  verify_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
+  verify_cgw_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
+  verify_cgw_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
 fi
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"
