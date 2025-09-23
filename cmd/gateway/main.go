@@ -27,22 +27,18 @@ func main() {
 			fmt.Println("Database migrations applied")
 			return
 		case "reset-db":
-			if os.Getenv("RESET_CONVOX_GATEWAY_DATABASE") != "DELETE_ALL_DATA" {
-				log.Fatalf("Refusing to reset database: set RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA to proceed")
-			}
-			isDev := os.Getenv("DEV_MODE") == "true"
 			database, err := db.NewFromEnv()
 			if err != nil {
 				log.Fatalf("Failed to open database: %v", err)
 			}
 			defer database.Close()
-			if err := database.ResetDatabase(isDev); err != nil {
+			if err := database.ResetDatabase(); err != nil {
 				log.Fatalf("Database reset failed: %v", err)
 			}
 			fmt.Println("Database reset complete")
 			return
 		case "help", "--help", "-h":
-			fmt.Println("convox-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (development only)")
+			fmt.Println("convox-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (requires env guards)")
 			return
 		}
 	}

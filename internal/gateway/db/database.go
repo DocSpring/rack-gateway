@@ -20,6 +20,16 @@ type Database struct {
 	driver string // always "pgx"
 }
 
+// SeedConfig carries optional user/email lists to bootstrap the database. Any nil
+// slice falls back to environment variables when seeding.
+type SeedConfig struct {
+	AdminUsers       []string
+	ViewerUsers      []string
+	DeployerUsers    []string
+	OperationsUsers  []string
+	ProtectedEnvVars []string
+}
+
 // User represents a user in the system
 type User struct {
 	ID              int64     `json:"id"`
@@ -349,18 +359,32 @@ func (d *Database) EnsureEnvironment(isDev bool) error {
 	return nil
 }
 
-// ResetDatabase drops all gateway tables and re-applies migrations.
-// Only allowed when the recorded environment (or supplied flag) indicates development.
-func (d *Database) ResetDatabase(isDev bool) error {
+// ResetDatabase drops all gateway tables and re-applies migrations. It reads
+// environment guards from process environment variables so callers do not need
+// to pass context explicitly.
+func (d *Database) ResetDatabase() error {
+	if os.Getenv("RESET_CONVOX_GATEWAY_DATABASE") != "DELETE_ALL_DATA" {
+		return fmt.Errorf("refusing to reset database: set RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA to proceed")
+	}
+	devMode := os.Getenv("DEV_MODE") == "true"
+	disableEnvCheck := strings.TrimSpace(os.Getenv("DISABLE_DATABASE_ENVIRONMENT_CHECK")) != ""
+
 	currentEnv, err := d.CurrentEnvironment()
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil {
 		return fmt.Errorf("failed to determine database environment: %w", err)
 	}
-	if currentEnv == "" && !isDev {
-		return fmt.Errorf("refusing to reset database with unknown environment")
-	}
-	if currentEnv != "" && currentEnv != "development" && !isDev {
-		return fmt.Errorf("refusing to reset %s database", currentEnv)
+
+	switch currentEnv {
+	case "":
+		if !devMode && !disableEnvCheck {
+			return fmt.Errorf("refusing to reset database with unknown environment (set DEV_MODE=true for development or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)")
+		}
+	case "development":
+		// always allowed
+	default:
+		if !disableEnvCheck {
+			return fmt.Errorf("refusing to reset %s database without DISABLE_DATABASE_ENVIRONMENT_CHECK", currentEnv)
+		}
 	}
 
 	// Drop dependent tables first to satisfy foreign keys.
@@ -386,7 +410,219 @@ func (d *Database) ResetDatabase(isDev bool) error {
 		return fmt.Errorf("failed to re-run migrations: %w", err)
 	}
 
-	return d.SetEnvironment(isDev)
+	if err := d.SetEnvironment(devMode); err != nil {
+		return err
+	}
+
+	if err := d.SeedDatabase(nil); err != nil {
+		return fmt.Errorf("failed to seed database: %w", err)
+	}
+
+	return nil
+}
+
+// SeedDatabase ensures the gateway database contains the expected bootstrap
+// data (admin users, seeded role users, protected env vars). When cfg is nil or
+// any slice within is nil, the method falls back to reading the equivalent
+// environment variable (e.g., ADMIN_USERS).
+func (d *Database) SeedDatabase(cfg *SeedConfig) error {
+	seed := buildSeedInputs(cfg)
+
+	if len(seed.adminUsers) > 0 {
+		if err := d.InitializeAdmin(seed.adminUsers[0], "Admin User"); err != nil {
+			return fmt.Errorf("failed to initialize admin user: %w", err)
+		}
+	}
+
+	roleSeeds := []struct {
+		emails      []string
+		defaultName string
+		roles       []string
+	}{
+		{seed.adminUsers, "Admin User", []string{"admin"}},
+		{seed.viewerUsers, "Viewer User", []string{"viewer"}},
+		{seed.deployerUsers, "Deployer User", []string{"deployer"}},
+		{seed.operationsUsers, "Ops User", []string{"ops"}},
+	}
+
+	for _, rs := range roleSeeds {
+		for _, email := range rs.emails {
+			if err := d.ensureUserWithRoles(email, rs.defaultName, rs.roles); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(seed.protectedEnvVars) > 0 {
+		raw, ok, err := d.GetSettingRaw("protected_env_vars")
+		if err != nil {
+			return fmt.Errorf("failed to read protected_env_vars setting: %w", err)
+		}
+		if !ok || len(raw) == 0 {
+			if err := d.UpsertSetting("protected_env_vars", seed.protectedEnvVars, nil); err != nil {
+				return fmt.Errorf("failed to seed protected_env_vars: %w", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+type seedInputs struct {
+	adminUsers       []string
+	viewerUsers      []string
+	deployerUsers    []string
+	operationsUsers  []string
+	protectedEnvVars []string
+}
+
+func buildSeedInputs(cfg *SeedConfig) seedInputs {
+	inputs := seedInputs{}
+
+	if cfg != nil && cfg.AdminUsers != nil {
+		inputs.adminUsers = normalizeEmailList(cfg.AdminUsers)
+	} else {
+		inputs.adminUsers = normalizeEmailList(parseCSVEnv(os.Getenv("ADMIN_USERS")))
+	}
+	if cfg != nil && cfg.ViewerUsers != nil {
+		inputs.viewerUsers = normalizeEmailList(cfg.ViewerUsers)
+	} else {
+		inputs.viewerUsers = normalizeEmailList(parseCSVEnv(os.Getenv("VIEWER_USERS")))
+	}
+	if cfg != nil && cfg.DeployerUsers != nil {
+		inputs.deployerUsers = normalizeEmailList(cfg.DeployerUsers)
+	} else {
+		inputs.deployerUsers = normalizeEmailList(parseCSVEnv(os.Getenv("DEPLOYER_USERS")))
+	}
+	if cfg != nil && cfg.OperationsUsers != nil {
+		inputs.operationsUsers = normalizeEmailList(cfg.OperationsUsers)
+	} else {
+		inputs.operationsUsers = normalizeEmailList(parseCSVEnv(os.Getenv("OPERATIONS_USERS")))
+	}
+
+	if cfg != nil && cfg.ProtectedEnvVars != nil {
+		inputs.protectedEnvVars = normalizeProtectedEnvVars(cfg.ProtectedEnvVars)
+	} else {
+		inputs.protectedEnvVars = normalizeProtectedEnvVars(parseCSVEnv(os.Getenv("DB_SEED_PROTECTED_ENV_VARS")))
+	}
+
+	return inputs
+}
+
+func parseCSVEnv(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
+}
+
+func normalizeEmailList(in []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		email := strings.TrimSpace(strings.ToLower(raw))
+		if email == "" {
+			continue
+		}
+		if _, ok := seen[email]; ok {
+			continue
+		}
+		seen[email] = struct{}{}
+		out = append(out, email)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func normalizeProtectedEnvVars(in []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		key := strings.TrimSpace(strings.ToUpper(raw))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func normalizeRoles(roles []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(roles))
+	for _, r := range roles {
+		role := strings.TrimSpace(strings.ToLower(r))
+		if role == "" {
+			continue
+		}
+		if _, ok := seen[role]; ok {
+			continue
+		}
+		seen[role] = struct{}{}
+		out = append(out, role)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (d *Database) ensureUserWithRoles(email, defaultName string, roles []string) error {
+	if email == "" {
+		return nil
+	}
+
+	roles = normalizeRoles(roles)
+	existing, err := d.GetUser(email)
+	if err != nil {
+		return fmt.Errorf("failed to load user %s: %w", email, err)
+	}
+
+	name := strings.TrimSpace(defaultName)
+	if name == "" {
+		name = email
+	}
+
+	if existing == nil {
+		if _, err := d.CreateUser(email, name, roles); err != nil {
+			return fmt.Errorf("failed to create user %s: %w", email, err)
+		}
+		return nil
+	}
+
+	currentRoles := normalizeRoles(existing.Roles)
+	if !equalStringSlices(currentRoles, roles) {
+		if err := d.UpdateUserRoles(email, roles); err != nil {
+			return fmt.Errorf("failed to update roles for %s: %w", email, err)
+		}
+	}
+
+	if name != "" && name != existing.Name {
+		if err := d.UpdateUserName(email, name); err != nil {
+			return fmt.Errorf("failed to update name for %s: %w", email, err)
+		}
+	}
+
+	return nil
 }
 
 // SaveCLILoginCode stores an authorization code for a given state

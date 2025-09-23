@@ -150,6 +150,24 @@ tasks:
       - task: up:dev
 
   # ------------------------------
+  # Database maintenance (dev)
+  # ------------------------------
+  db:migrate:
+    desc: Apply database migrations inside the dev gateway container
+    deps: [up:dev:gateway]
+    cmds:
+      - docker compose exec -T gateway-api-dev ./convox-gateway-api migrate
+
+  db:reset:
+    desc: Drop and recreate the dev database (DELETES ALL DATA)
+    deps: [up:dev:gateway]
+    vars:
+      db_reset_env: >-
+        RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA{{with .DISABLE_DATABASE_ENVIRONMENT_CHECK}} DISABLE_DATABASE_ENVIRONMENT_CHECK={{.}}{{end}}
+    cmds:
+      - docker compose exec -T gateway-api-dev env {{.db_reset_env}} ./convox-gateway-api reset-db
+
+  # ------------------------------
   # Misc
   # ------------------------------
   logs:dev:

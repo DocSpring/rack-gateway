@@ -362,6 +362,14 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
+## Database Maintenance
+
+- `convox-gateway migrate` applies pending migrations without starting the API server; DSNs are sourced from standard env vars.
+- `task docker:db:migrate` mirrors the above inside the dev Docker stack (runs against the `gateway-api-dev` container).
+- `convox-gateway reset-db` drops and recreates all tables; requires `RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA` and either `DEV_MODE=true` **or** `DISABLE_DATABASE_ENVIRONMENT_CHECK=1` for non-development resets.
+- `task docker:db:reset` wraps the destructive reset for the dev Docker stack; export `DISABLE_DATABASE_ENVIRONMENT_CHECK=1` beforehand if you need to bypass the prod guard.
+- Full details and examples live in `docs/DATABASE_MAINTENANCE.md`; keep that document updated if new maintenance commands are added.
+
 ## Related Documentation
 
 - [Convox Rack API](https://docs.convox.com/reference/rack-api) (if it exists)

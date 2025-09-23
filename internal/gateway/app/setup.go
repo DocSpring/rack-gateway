@@ -9,6 +9,7 @@ import (
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
@@ -20,18 +21,13 @@ import (
 
 // initializeServices sets up all application services (matching original main.go exactly)
 func (a *App) initializeServices() error {
-	// Initialize admin users if configured
-	if len(a.Config.AdminUsers) > 0 {
-		for _, raw := range a.Config.AdminUsers {
-			email := strings.TrimSpace(raw)
-			if email == "" {
-				continue
-			}
-			if err := a.Database.InitializeAdmin(email, "Admin User"); err != nil {
-				log.Printf("Warning: Failed to initialize admin %s: %v", email, err)
-			}
-			break
-		}
+	if err := a.Database.SeedDatabase(&db.SeedConfig{
+		AdminUsers:      a.Config.AdminUsers,
+		ViewerUsers:     a.Config.ViewerUsers,
+		DeployerUsers:   a.Config.DeployerUsers,
+		OperationsUsers: a.Config.OperationsUsers,
+	}); err != nil {
+		return fmt.Errorf("failed to seed database: %w", err)
 	}
 
 	// Initialize JWT manager
@@ -44,33 +40,6 @@ func (a *App) initializeServices() error {
 		return fmt.Errorf("failed to initialize RBAC: %w", err)
 	}
 	a.RBACManager = rbacManager
-
-	// Seed users from environment (matching original)
-	seedUsers := func(role string, emails []string, defaultName string) {
-		for _, e := range emails {
-			email := strings.TrimSpace(e)
-			if email == "" {
-				continue
-			}
-			uc := &rbac.UserConfig{Name: defaultName, Roles: []string{role}}
-			if err := rbacManager.SaveUser(email, uc); err != nil {
-				log.Printf("Warning: failed to seed %s user %s: %v", role, email, err)
-			}
-		}
-	}
-
-	if len(a.Config.AdminUsers) > 0 {
-		seedUsers("admin", a.Config.AdminUsers, "Admin User")
-	}
-	if len(a.Config.ViewerUsers) > 0 {
-		seedUsers("viewer", a.Config.ViewerUsers, "Viewer User")
-	}
-	if len(a.Config.DeployerUsers) > 0 {
-		seedUsers("deployer", a.Config.DeployerUsers, "Deployer User")
-	}
-	if len(a.Config.OperationsUsers) > 0 {
-		seedUsers("ops", a.Config.OperationsUsers, "Ops User")
-	}
 
 	// Initialize token service
 	a.TokenService = token.NewService(a.Database)
@@ -125,22 +94,6 @@ func (a *App) initializeServices() error {
 		a.RackCertManager = rackcert.NewManager(a.Config, a.Database)
 		if _, err := a.RackCertManager.TLSConfig(context.Background()); err != nil {
 			log.Printf("Warning: failed to initialize rack TLS certificate: %v", err)
-		}
-	}
-
-	// Seed protected env vars from DB_SEED_PROTECTED_ENV_VARS if provided
-	if seed := strings.TrimSpace(os.Getenv("DB_SEED_PROTECTED_ENV_VARS")); seed != "" {
-		if raw, ok, _ := a.Database.GetSettingRaw("protected_env_vars"); !ok || len(raw) == 0 {
-			keys := []string{}
-			for _, k := range strings.Split(seed, ",") {
-				k = strings.TrimSpace(k)
-				if k != "" {
-					keys = append(keys, k)
-				}
-			}
-			if len(keys) > 0 {
-				_ = a.Database.UpsertSetting("protected_env_vars", keys, nil)
-			}
 		}
 	}
 
