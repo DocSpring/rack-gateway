@@ -18,6 +18,7 @@ import (
 )
 
 type Config struct {
+	Current  string                   `json:"current,omitempty"`
 	Gateways map[string]GatewayConfig `json:"gateways"`
 	Tokens   map[string]Token         `json:"tokens"`
 }
@@ -30,6 +31,57 @@ type Token struct {
 	Token     string    `json:"token"`
 	Email     string    `json:"email"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func configFile() string {
+	return filepath.Join(configPath, "config.json")
+}
+
+func loadConfig() (*Config, bool, error) {
+	cfg := &Config{}
+	path := configFile()
+	data, err := os.ReadFile(path)
+	exists := true
+	if err != nil {
+		if os.IsNotExist(err) {
+			exists = false
+		} else {
+			return nil, false, err
+		}
+	} else {
+		if err := json.Unmarshal(data, cfg); err != nil {
+			return nil, false, err
+		}
+	}
+	if cfg.Gateways == nil {
+		cfg.Gateways = make(map[string]GatewayConfig)
+	}
+	if cfg.Tokens == nil {
+		cfg.Tokens = make(map[string]Token)
+	}
+	return cfg, exists, nil
+}
+
+func saveConfig(cfg *Config) error {
+	if err := os.MkdirAll(configPath, 0700); err != nil {
+		return err
+	}
+	if cfg.Gateways == nil {
+		cfg.Gateways = make(map[string]GatewayConfig)
+	}
+	if cfg.Tokens == nil {
+		cfg.Tokens = make(map[string]Token)
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(configFile(), data, 0600); err != nil {
+		return err
+	}
+	// Remove standalone current file if it exists so config.json remains the source of truth.
+	_ = os.Remove(filepath.Join(configPath, "current"))
+	return nil
 }
 
 type rackStatus struct {
@@ -260,18 +312,15 @@ Rack management:
 		Short: "List all configured racks",
 		Args:  cobra.NoArgs,
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			configFile := filepath.Join(configPath, "config.json")
-			data, err := os.ReadFile(configFile)
+			config, exists, err := loadConfig()
 			if err != nil {
+				return err
+			}
+			if !exists {
 				return fmt.Errorf("no configuration found. Run: convox-gateway login <rack> <gateway-url>")
 			}
 
-			var config Config
-			if err := json.Unmarshal(data, &config); err != nil {
-				return err
-			}
-
-			currentRack, _ := getCurrentRack()
+			current := strings.TrimSpace(config.Current)
 
 			if len(config.Gateways) == 0 {
 				fmt.Println("No racks configured")
@@ -281,7 +330,7 @@ Rack management:
 			fmt.Println("Configured racks:")
 			for name, gateway := range config.Gateways {
 				marker := "  "
-				if name == currentRack {
+				if name == current {
 					marker = "* "
 				}
 				fmt.Printf("%s%s - %s\n", marker, name, gateway.URL)
@@ -754,57 +803,28 @@ func renderGatewayError(body []byte) string {
 }
 
 func saveToken(rack string, loginResp *LoginResponse) error {
-	if err := os.MkdirAll(configPath, 0700); err != nil {
+	cfg, _, err := loadConfig()
+	if err != nil {
 		return err
 	}
-
-	configFile := filepath.Join(configPath, "config.json")
-
-	config := &Config{
-		Gateways: make(map[string]GatewayConfig),
-		Tokens:   make(map[string]Token),
-	}
-
-	if data, err := os.ReadFile(configFile); err == nil {
-		json.Unmarshal(data, config)
-	}
-
-	if config.Gateways == nil {
-		config.Gateways = make(map[string]GatewayConfig)
-	}
-	if config.Tokens == nil {
-		config.Tokens = make(map[string]Token)
-	}
-
-	config.Tokens[rack] = Token{
+	cfg.Tokens[rack] = Token{
 		Token:     loginResp.Token,
 		Email:     loginResp.Email,
 		ExpiresAt: loginResp.ExpiresAt,
 	}
-
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(configFile, data, 0600)
+	return saveConfig(cfg)
 }
 
 func loadToken(rack string) (*Token, error) {
-	configFile := filepath.Join(configPath, "config.json")
-
-	data, err := os.ReadFile(configFile)
+	cfg, exists, err := loadConfig()
 	if err != nil {
 		return nil, err
 	}
-
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-
-	token, exists := config.Tokens[rack]
 	if !exists {
+		return nil, fmt.Errorf("no configuration found")
+	}
+	token, ok := cfg.Tokens[rack]
+	if !ok {
 		return nil, fmt.Errorf("no token found for rack: %s", rack)
 	}
 
@@ -816,55 +836,24 @@ func loadToken(rack string) (*Token, error) {
 }
 
 func saveGatewayConfig(rack, gatewayURL string) error {
-	if err := os.MkdirAll(configPath, 0700); err != nil {
-		return err
-	}
-
-	configFile := filepath.Join(configPath, "config.json")
-
-	config := &Config{
-		Gateways: make(map[string]GatewayConfig),
-		Tokens:   make(map[string]Token),
-	}
-
-	if data, err := os.ReadFile(configFile); err == nil {
-		json.Unmarshal(data, config)
-	}
-
-	if config.Gateways == nil {
-		config.Gateways = make(map[string]GatewayConfig)
-	}
-	if config.Tokens == nil {
-		config.Tokens = make(map[string]Token)
-	}
-
-	config.Gateways[rack] = GatewayConfig{
-		URL: gatewayURL,
-	}
-
-	data, err := json.MarshalIndent(config, "", "  ")
+	cfg, _, err := loadConfig()
 	if err != nil {
 		return err
 	}
-
-	return os.WriteFile(configFile, data, 0600)
+	cfg.Gateways[rack] = GatewayConfig{URL: gatewayURL}
+	return saveConfig(cfg)
 }
 
 func loadGatewayURL(rack string) (string, error) {
-	configFile := filepath.Join(configPath, "config.json")
-
-	data, err := os.ReadFile(configFile)
+	cfg, exists, err := loadConfig()
 	if err != nil {
 		return "", err
 	}
-
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		return "", err
-	}
-
-	gateway, exists := config.Gateways[rack]
 	if !exists {
+		return "", fmt.Errorf("no configuration found")
+	}
+	gateway, ok := cfg.Gateways[rack]
+	if !ok {
 		return "", fmt.Errorf("no gateway configured for rack: %s", rack)
 	}
 
@@ -872,37 +861,39 @@ func loadGatewayURL(rack string) (string, error) {
 }
 
 func resolveRackStatus(now time.Time) (*rackStatus, error) {
-	if rack, err := getCurrentRack(); err == nil && strings.TrimSpace(rack) != "" {
-		gatewayURL, err := loadGatewayURL(rack)
-		if err != nil {
-			return nil, fmt.Errorf("rack %s not configured", rack)
-		}
-
-		status := &rackStatus{
-			Rack:       rack,
-			GatewayURL: gatewayURL,
-		}
-
-		token, err := loadToken(rack)
-		if err != nil {
-			if strings.Contains(strings.ToLower(err.Error()), "expired") {
-				status.StatusLines = append(status.StatusLines, "Status: Token expired")
-			} else {
-				status.StatusLines = append(status.StatusLines, "Status: Not logged in")
+	cfg, exists, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		rack := strings.TrimSpace(cfg.Current)
+		if rack != "" {
+			gateway, ok := cfg.Gateways[rack]
+			if !ok {
+				return nil, fmt.Errorf("rack %s not configured", rack)
 			}
+
+			status := &rackStatus{
+				Rack:       rack,
+				GatewayURL: gateway.URL,
+			}
+
+			token, ok := cfg.Tokens[rack]
+			if !ok {
+				status.StatusLines = append(status.StatusLines, "Status: Not logged in")
+				return status, nil
+			}
+			if now.After(token.ExpiresAt) {
+				status.StatusLines = append(status.StatusLines, "Status: Token expired")
+				return status, nil
+			}
+
+			status.StatusLines = append(status.StatusLines,
+				fmt.Sprintf("Status: Logged in as %s", token.Email))
+			status.StatusLines = append(status.StatusLines,
+				fmt.Sprintf("Token expires: %s", token.ExpiresAt.Format(time.RFC3339)))
 			return status, nil
 		}
-
-		if now.After(token.ExpiresAt) {
-			status.StatusLines = append(status.StatusLines, "Status: Token expired")
-			return status, nil
-		}
-
-		status.StatusLines = append(status.StatusLines,
-			fmt.Sprintf("Status: Logged in as %s", token.Email))
-		status.StatusLines = append(status.StatusLines,
-			fmt.Sprintf("Token expires: %s", token.ExpiresAt.Format(time.RFC3339)))
-		return status, nil
 	}
 
 	envURL := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_URL"))
@@ -969,32 +960,14 @@ func normalizeGatewayURL(raw string) (string, error) {
 // removeRack deletes both the gateway config and token for a rack.
 // Returns true if the rack existed in either map, false if nothing changed.
 func removeRack(rack string) (bool, error) {
-	if err := os.MkdirAll(configPath, 0700); err != nil {
-		return false, err
-	}
-
-	configFile := filepath.Join(configPath, "config.json")
-	data, err := os.ReadFile(configFile)
+	cfg, exists, err := loadConfig()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
 		return false, err
 	}
-
-	cfg := &Config{}
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return false, err
+	if !exists {
+		return false, nil
 	}
-
 	changed := false
-	if cfg.Gateways == nil {
-		cfg.Gateways = make(map[string]GatewayConfig)
-	}
-	if cfg.Tokens == nil {
-		cfg.Tokens = make(map[string]Token)
-	}
-
 	if _, ok := cfg.Gateways[rack]; ok {
 		delete(cfg.Gateways, rack)
 		changed = true
@@ -1003,16 +976,14 @@ func removeRack(rack string) (bool, error) {
 		delete(cfg.Tokens, rack)
 		changed = true
 	}
-
+	if cfg.Current == rack {
+		cfg.Current = ""
+		changed = true
+	}
 	if !changed {
 		return false, nil
 	}
-
-	out, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(configFile, out, 0600); err != nil {
+	if err := saveConfig(cfg); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -1057,35 +1028,36 @@ func getEnv(key, defaultVal string) string {
 }
 
 func getCurrentRack() (string, error) {
-	currentFile := filepath.Join(configPath, "current")
-
-	data, err := os.ReadFile(currentFile)
+	cfg, exists, err := loadConfig()
 	if err != nil {
 		return "", err
 	}
-
-	return strings.TrimSpace(string(data)), nil
+	if !exists || strings.TrimSpace(cfg.Current) == "" {
+		return "", fmt.Errorf("no current rack configured")
+	}
+	return strings.TrimSpace(cfg.Current), nil
 }
 
 func setCurrentRack(rack string) error {
-	if err := os.MkdirAll(configPath, 0700); err != nil {
+	cfg, _, err := loadConfig()
+	if err != nil {
 		return err
 	}
-
-	currentFile := filepath.Join(configPath, "current")
-	return os.WriteFile(currentFile, []byte(rack), 0600)
+	cfg.Current = rack
+	return saveConfig(cfg)
 }
 
 // unsetCurrentRack removes the current rack selection by deleting the file.
 func unsetCurrentRack() error {
-	currentFile := filepath.Join(configPath, "current")
-	if err := os.Remove(currentFile); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
+	cfg, exists, err := loadConfig()
+	if err != nil {
 		return err
 	}
-	return nil
+	if !exists || strings.TrimSpace(cfg.Current) == "" {
+		return nil
+	}
+	cfg.Current = ""
+	return saveConfig(cfg)
 }
 
 // resolveApp determines the Convox app name using a similar precedence to the Convox CLI:

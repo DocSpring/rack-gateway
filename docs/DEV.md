@@ -313,8 +313,7 @@ LOG_LEVEL = "debug"
 ```
 config/
 └── cli/                 # CLI development config (auto-created)
-    ├── config.json      # JWT tokens and gateway URLs
-    └── current          # Current rack selection
+    └── config.json      # Current rack, JWT tokens, and gateway URLs
 
 internal/
 ├── gateway/

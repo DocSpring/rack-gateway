@@ -21,19 +21,19 @@ func TestSetCurrentRack(t *testing.T) {
 	err := setCurrentRack("staging")
 	require.NoError(t, err)
 
-	// Verify the file was created with correct content
-	currentFile := filepath.Join(tmpDir, "current")
-	data, err := os.ReadFile(currentFile)
+	cfg, exists, err := loadConfig()
 	require.NoError(t, err)
-	assert.Equal(t, "staging", string(data))
+	assert.True(t, exists)
+	assert.Equal(t, "staging", cfg.Current)
 
 	// Test overwriting current rack
 	err = setCurrentRack("production")
 	require.NoError(t, err)
 
-	data, err = os.ReadFile(currentFile)
+	cfg, exists, err = loadConfig()
 	require.NoError(t, err)
-	assert.Equal(t, "production", string(data))
+	assert.True(t, exists)
+	assert.Equal(t, "production", cfg.Current)
 }
 
 func TestGetCurrentRack(t *testing.T) {
@@ -41,14 +41,12 @@ func TestGetCurrentRack(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath = tmpDir
 
-	// Test when no current file exists
+	// Test when no current rack configured
 	_, err := getCurrentRack()
 	assert.Error(t, err)
 
-	// Create a current file
-	currentFile := filepath.Join(tmpDir, "current")
-	err = os.WriteFile(currentFile, []byte("us-east"), 0600)
-	require.NoError(t, err)
+	// Write config with current rack
+	require.NoError(t, saveConfig(&Config{Current: "us-east"}))
 
 	// Test reading current rack
 	rack, err := getCurrentRack()
@@ -56,8 +54,7 @@ func TestGetCurrentRack(t *testing.T) {
 	assert.Equal(t, "us-east", rack)
 
 	// Test with whitespace (should be trimmed)
-	err = os.WriteFile(currentFile, []byte("  eu-west  \n"), 0600)
-	require.NoError(t, err)
+	require.NoError(t, saveConfig(&Config{Current: "  eu-west  \n"}))
 
 	rack, err = getCurrentRack()
 	require.NoError(t, err)
@@ -197,10 +194,10 @@ func TestGetCurrentRackWithNoConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath = tmpDir
 
-	// Test when no current file exists
+	// Test when no current rack is configured
 	_, err := getCurrentRack()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no such file or directory")
+	assert.Contains(t, err.Error(), "no current rack")
 }
 
 func TestSetCurrentRackCreatesDirectory(t *testing.T) {
@@ -212,13 +209,12 @@ func TestSetCurrentRackCreatesDirectory(t *testing.T) {
 	err := setCurrentRack("staging")
 	require.NoError(t, err)
 
-	// Verify the directory was created and file exists
-	currentFile := filepath.Join(configPath, "current")
-	assert.FileExists(t, currentFile)
-
-	data, err := os.ReadFile(currentFile)
+	configFile := filepath.Join(configPath, "config.json")
+	assert.FileExists(t, configFile)
+	cfg, exists, err := loadConfig()
 	require.NoError(t, err)
-	assert.Equal(t, "staging", string(data))
+	assert.True(t, exists)
+	assert.Equal(t, "staging", cfg.Current)
 }
 
 func TestResolveRackStatusPrefersConfig(t *testing.T) {
@@ -229,7 +225,8 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 		os.Unsetenv("CONVOX_GATEWAY_API_TOKEN")
 	}()
 
-	config := Config{
+	require.NoError(t, saveConfig(&Config{
+		Current: "staging",
 		Gateways: map[string]GatewayConfig{
 			"staging": {URL: "https://gateway-staging.example.com"},
 		},
@@ -240,12 +237,7 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 				ExpiresAt: time.Now().Add(24 * time.Hour).UTC(),
 			},
 		},
-	}
-
-	data, err := json.MarshalIndent(config, "", "  ")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "config.json"), data, 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "current"), []byte("staging"), 0600))
+	}))
 
 	status, err := resolveRackStatus(time.Now())
 	require.NoError(t, err)

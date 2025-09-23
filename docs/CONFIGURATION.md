@@ -88,7 +88,7 @@ Email events:
 ## CLI Wrapper
 
 - `GATEWAY_RACK` (optional)
-  - Selects the rack for `convox-gateway convox …` when not using `--rack` or a current rack file.
+  - Selects the rack for `convox-gateway convox …` when not using `--rack` or the stored current rack in config.json.
 - `GATEWAY_CLI_CONFIG_DIR` (dev/testing)
   - Override the CLI config directory (defaults to `~/.config/convox-gateway`).
 

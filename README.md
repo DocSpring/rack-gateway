@@ -228,7 +228,7 @@ The CLI determines which rack to use in this order:
 
 1. `--rack` flag: `convox-gateway --rack production convox apps`
 2. Environment variable: `CONVOX_GATEWAY_RACK=production cx apps`
-3. Current rack from `~/.config/convox-gateway/current`
+3. Current rack stored in `~/.config/convox-gateway/config.json`
 
 ### Generate shell completions:
 

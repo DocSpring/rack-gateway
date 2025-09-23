@@ -423,6 +423,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 
 	// Create config with gateway URL and token
 	config := map[string]interface{}{
+		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
 				"url": "http://localhost:" + gatewayPort,
@@ -440,10 +441,6 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
-
-	// Set current rack
-	currentFile := filepath.Join(configDir, "current")
-	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
 	// Test version command shows gateway version
 	t.Run("version", func(t *testing.T) {
@@ -504,6 +501,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	tokenFile := fmt.Sprintf("%s/config.json", configDir)
 
 	config := map[string]interface{}{
+		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
 				"url": "http://localhost:" + gatewayPort,
@@ -521,10 +519,6 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(tokenFile, configData, 0600))
-
-	// Set current rack
-	currentFile := filepath.Join(configDir, "current")
-	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
 	// Try to run a command with invalid token
 	cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
@@ -549,6 +543,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	validJWT := createTestJWT(t, "test@example.com", 24*time.Hour)
 
 	config := map[string]interface{}{
+		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
 				"url": "http://localhost:" + gatewayPort,
@@ -566,10 +561,6 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
-
-	// Set current rack
-	currentFile := filepath.Join(configDir, "current")
-	require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
 	// Test 1: convox ps (lists processes)
 	t.Run("convox_ps", func(t *testing.T) {
@@ -646,6 +637,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		require.NoError(t, err)
 
 		config := map[string]interface{}{
+			"current": "staging",
 			"gateways": map[string]interface{}{
 				"staging": map[string]interface{}{
 					"url": "http://localhost:" + gatewayPort,
@@ -663,10 +655,6 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		configData, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(configFile, configData, 0600))
-
-		// Set current rack
-		currentFile := filepath.Join(configDir, "current")
-		require.NoError(t, os.WriteFile(currentFile, []byte("staging"), 0600))
 
 		return configDir
 	}
