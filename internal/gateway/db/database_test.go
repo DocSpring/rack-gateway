@@ -144,6 +144,7 @@ func TestDatabase(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, userLogs, 1)
 		assert.Equal(t, "env.get", userLogs[0].Action)
+		assert.Equal(t, "192.168.1.1", userLogs[0].IPAddress)
 
 		// Filter by time (use a time well before we created the logs, in UTC)
 		startTime := time.Now().UTC().Add(-5 * time.Minute)
@@ -254,6 +255,38 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	assert.Equal(t, 1, timeTotal)
 	require.Len(t, timeFiltered, 1)
 	assert.Equal(t, "api_token.create", timeFiltered[0].Action)
+}
+
+func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
+	db := dbtest.NewDatabase(t)
+	defer db.Close()
+	dbtest.Reset(t, db)
+
+	initial := &gwdb.AuditLog{
+		UserEmail:      "sequence@example.com",
+		ActionType:     "auth",
+		Action:         "login.start",
+		Status:         "success",
+		ResponseTimeMs: 1,
+		IPAddress:      "",
+	}
+	require.NoError(t, db.CreateAuditLog(initial))
+
+	withIP := &gwdb.AuditLog{
+		UserEmail:      "sequence@example.com",
+		ActionType:     "auth",
+		Action:         "login.complete",
+		Status:         "success",
+		ResponseTimeMs: 2,
+		IPAddress:      "203.0.113.10",
+	}
+
+	err := db.CreateAuditLog(withIP)
+	require.NoError(t, err, "expected postgres inet column to accept value after NULL initialization")
+
+	var stored string
+	require.NoError(t, db.DB().QueryRow(`SELECT host(ip_address) FROM audit_logs WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`).Scan(&stored))
+	assert.Equal(t, "203.0.113.10", stored)
 }
 
 func TestListUsersIncludesCreatorMetadata(t *testing.T) {

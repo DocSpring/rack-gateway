@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"sort"
@@ -313,7 +314,11 @@ func nullableIP(ip string) interface{} {
 	if ip == "" {
 		return nil
 	}
-	return ip
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return nil
+	}
+	return addr.String()
 }
 
 // CurrentEnvironment returns the environment string stored in the metadata table, if present.
@@ -864,7 +869,7 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 		`INSERT INTO audit_logs (
             user_email, user_name, action_type, action, command, resource, resource_type,
             details, ip_address, user_agent, status, rbac_decision, http_status, response_time_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::inet, ?, ?, ?, ?, ?)`,
 		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Command, log.Resource, log.ResourceType,
 		log.Details, nullableIP(log.IPAddress), log.UserAgent, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs,
 	)
