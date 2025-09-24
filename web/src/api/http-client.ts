@@ -14,20 +14,6 @@ import { APIRoute } from '@/lib/routes'
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
-const rawApiBaseUrl =
-  typeof import.meta.env.VITE_API_BASE_URL === 'string'
-    ? import.meta.env.VITE_API_BASE_URL.trim()
-    : ''
-
-const normalizedOrigin = rawApiBaseUrl.replace(/\/+$/, '')
-
-let apiBaseUrl = APIRoute()
-if (normalizedOrigin) {
-  apiBaseUrl = normalizedOrigin.endsWith(APIRoute())
-    ? normalizedOrigin
-    : `${normalizedOrigin}${APIRoute()}`
-}
-
 const toAxiosHeaders = (value?: AxiosRequestConfig['headers']): AxiosHeaders => {
   if (value instanceof AxiosHeaders) {
     return value
@@ -44,7 +30,7 @@ const toAxiosHeaders = (value?: AxiosRequestConfig['headers']): AxiosHeaders => 
 }
 
 export const gatewayAxios = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: APIRoute(),
   withCredentials: true,
   headers: {
     Accept: 'application/json',

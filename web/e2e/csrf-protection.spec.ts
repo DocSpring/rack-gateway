@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, request, test } from '@playwright/test'
 import { APIRoute, WebRoute } from '@/lib/routes'
 import { login } from './helpers'
 
@@ -35,7 +35,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
       expect(response.status()).toBe(401)
 
       const body = await response.text()
-      expect(body).toContain('CLI authentication required')
+      expect(body).toContain('browser session cookies are not permitted for CLI routes')
 
       // Verify the error header is set
       const errorReason = response.headers()['x-error-reason']
@@ -88,18 +88,29 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     }
     expect(apiToken).toMatch(/^cgw_/)
 
-    const response = await page.request.get('/system', {
+    const cliContext = await request.newContext({
+      baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8447',
+    })
+
+    const response = await cliContext.get('/system', {
       headers: {
         Authorization: `Bearer ${apiToken}`,
       },
       failOnStatusCode: false,
     })
 
-    expect(response.status()).not.toBe(401)
+    const status = response.status()
+    let body: string | null = null
+    if (status === 403) {
+      body = await response.text()
+    }
 
-    if (response.status() === 403) {
-      const body = await response.text()
-      expect(body).not.toContain('CLI authentication required')
+    await cliContext.dispose()
+
+    expect(status).not.toBe(401)
+
+    if (status === 403 && body) {
+      expect(body).not.toContain('browser session cookies are not permitted for CLI routes')
     }
 
     // Clean up the token to avoid polluting the test environment
@@ -170,7 +181,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     // Should be rejected with 401
     expect(result).toHaveProperty('status', 401)
     if (result.text) {
-      expect(result.text).toContain('CLI authentication required')
+      expect(result.text).toContain('browser session cookies are not permitted for CLI routes')
     }
   })
 
