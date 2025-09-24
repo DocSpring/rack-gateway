@@ -1,3 +1,9 @@
+**Disclaimer:** Convox is a registered trademark of Convox, Inc.
+This project is not affiliated with, endorsed by, or sponsored by Convox, Inc.
+It’s an independent, open source, community-maintained tool that works with Convox racks.
+
+---
+
 # Convox Gateway
 
 API proxy for Convox racks with SSO, RBAC, and audit logging. SOC2 compliant.
@@ -18,10 +24,6 @@ Convox Gateway can be thought of as a "community edition" for the hosted Convox 
 It is an open source, self-hosted interface for managing your rack with OAuth login, RBAC,
 audit logs, and secret redaction in env vars. We provide everything you need
 for SOC2 compliance on your own self-hosted infrastructure.
-
-**Trademark notice:** Convox is a registered trademark of Convox, Inc.
-This project is an independent, community-maintained tool and is not affiliated with,
-endorsed by, or sponsored by Convox, Inc.
 
 **Convox Gateway is provided without any warranty or support. Use at your own risk.**
 
