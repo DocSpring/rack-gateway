@@ -138,21 +138,21 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 			authHeader:     "",
 			cookie:         &http.Cookie{Name: "session_token", Value: sessionToken},
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "CLI authentication required - no browser access allowed",
+			expectedBody:   "browser session cookies are not permitted for CLI routes",
 		},
 		{
-			name:           "Both cookie and header - allowed (header takes precedence)",
+			name:           "Both cookie and header - blocked (cookie indicates browser)",
 			authHeader:     "Bearer " + validToken,
 			cookie:         &http.Cookie{Name: "session_token", Value: sessionToken},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "OK",
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   "browser session cookies are not permitted for CLI routes",
 		},
 		{
 			name:           "No auth at all - blocked",
 			authHeader:     "",
 			cookie:         nil,
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "CLI authentication required - no browser access allowed",
+			expectedBody:   "CLI authentication required - provide Authorization header",
 		},
 		{
 			name:           "Invalid auth type - blocked",
@@ -393,8 +393,8 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 
 			// Verify the error message
 			body := rr.Body.String()
-			if !contains(body, "CLI authentication required") {
-				t.Errorf("Expected CLI-only error message, got: %s", body)
+			if !contains(body, "browser session cookies are not permitted") {
+				t.Errorf("Expected browser-session block message, got: %s", body)
 			}
 		})
 	}

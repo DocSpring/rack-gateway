@@ -10,12 +10,15 @@ import (
 // not by browsers (with cookies), preventing CSRF attacks on the Convox API.
 func (a *AuthService) CLIOnlyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
+			a.writeUnauthorized(w, r, "browser session cookies are not permitted for CLI routes")
+			return
+		}
+
 		// Check if request has Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			// No Authorization header - reject even if cookie exists
-			// This prevents CSRF attacks from browsers
-			a.writeUnauthorized(w, r, "CLI authentication required - no browser access allowed")
+			a.writeUnauthorized(w, r, "CLI authentication required - provide Authorization header")
 			return
 		}
 
