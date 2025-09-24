@@ -35,6 +35,10 @@ pre-commit:
       glob: "**/*.go"
       run: ./scripts/safe-test.sh -short ./...
 
+    golangci-lint:
+      glob: "**/*.go"
+      run: golangci-lint run ./...
+
     biome-format:
       root: "web/"
       # Run across the web project every commit to avoid misses

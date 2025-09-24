@@ -38,6 +38,12 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
 
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --modules-download-mode=readonly
+
       - name: Install Convox CLI
         run: |
           set -euo pipefail
