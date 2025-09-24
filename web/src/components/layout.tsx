@@ -73,7 +73,7 @@ export function Layout() {
           <img
             alt=""
             aria-hidden
-            className="mr-2 h-8 w-8"
+            className="mr-3 size-7"
             height={32}
             src="/.gateway/web/logo.svg"
             width={32}
