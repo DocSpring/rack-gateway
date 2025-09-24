@@ -36,7 +36,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Failed to open database: %v", err)
 			}
-			defer database.Close()
+			defer database.Close() //nolint:errcheck // maintenance cleanup
 			fmt.Println("Database migrations applied")
 			return
 		case "reset-db":
@@ -44,7 +44,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Failed to open database: %v", err)
 			}
-			defer database.Close()
+			defer database.Close() //nolint:errcheck // maintenance cleanup
 			if err := database.ResetDatabase(); err != nil {
 				log.Fatalf("Database reset failed: %v", err)
 			}

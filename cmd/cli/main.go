@@ -150,9 +150,9 @@ Rack management:
   convox-gateway racks               # List all racks
   convox-gateway switch <rack>       # Switch to a different rack
   convox-gateway login <rack> <url>  # Login to a new rack`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			// If no subcommand is specified, show help
-			cmd.Help()
+			return cmd.Help()
 		},
 	}
 
@@ -468,16 +468,19 @@ PowerShell:
 		DisableFlagsInUseLine: true,
 		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := cmd.Root()
 			switch args[0] {
 			case "bash":
-				cmd.Root().GenBashCompletion(os.Stdout)
+				return root.GenBashCompletion(os.Stdout)
 			case "zsh":
-				cmd.Root().GenZshCompletion(os.Stdout)
+				return root.GenZshCompletion(os.Stdout)
 			case "fish":
-				cmd.Root().GenFishCompletion(os.Stdout, true)
+				return root.GenFishCompletion(os.Stdout, true)
 			case "powershell":
-				cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
+				return root.GenPowerShellCompletionWithDesc(os.Stdout)
+			default:
+				return fmt.Errorf("unsupported shell %q", args[0])
 			}
 		},
 	}
@@ -690,7 +693,7 @@ func startLogin(gatewayURL string) (*LoginStartResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response cleanup
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -729,7 +732,7 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response cleanup
 
 	if resp.StatusCode == http.StatusAccepted {
 		return nil, fmt.Errorf("pending")
@@ -769,7 +772,7 @@ func fetchEnvViaAPI(gatewayURL, bearerToken, app, key string, showSecrets bool) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response cleanup
 	if resp.StatusCode != 200 {
 		b, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to fetch env: %s", renderGatewayError(b))

@@ -3,7 +3,6 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
@@ -136,24 +135,8 @@ func TestRateLimitIgnoresSpoofedForwardedFor(t *testing.T) {
 	gin.SetMode(gin.ReleaseMode)
 	defer gin.SetMode(origMode)
 
-	origRPS := os.Getenv("RATE_LIMIT_RPS")
-	origBurst := os.Getenv("RATE_LIMIT_BURST")
-	os.Setenv("RATE_LIMIT_RPS", "1")
-	os.Setenv("RATE_LIMIT_BURST", "1")
-	defer func() {
-		if origRPS == "" {
-			os.Unsetenv("RATE_LIMIT_RPS")
-		} else {
-			t := origRPS
-			os.Setenv("RATE_LIMIT_RPS", t)
-		}
-		if origBurst == "" {
-			os.Unsetenv("RATE_LIMIT_BURST")
-		} else {
-			t := origBurst
-			os.Setenv("RATE_LIMIT_BURST", t)
-		}
-	}()
+	t.Setenv("RATE_LIMIT_RPS", "1")
+	t.Setenv("RATE_LIMIT_BURST", "1")
 
 	router := gin.New()
 	if err := router.SetTrustedProxies(nil); err != nil {

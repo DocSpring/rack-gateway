@@ -29,12 +29,16 @@ func (d *Database) migrateAll() error {
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
-			rows.Close()
+			if err := rows.Close(); err != nil {
+				return err
+			}
 			return err
 		}
 		applied[v] = true
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() {

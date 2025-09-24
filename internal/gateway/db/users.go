@@ -148,7 +148,7 @@ func (d *Database) ListUsers() ([]*User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort cleanup
 
 	var users []*User
 	for rows.Next() {

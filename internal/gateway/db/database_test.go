@@ -13,7 +13,7 @@ import (
 func TestDatabase(t *testing.T) {
 	db, err := gwdb.NewFromEnv()
 	require.NoError(t, err)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
 	t.Run("InitializeAdmin", func(t *testing.T) {
@@ -166,7 +166,7 @@ func TestDatabase(t *testing.T) {
 
 func TestGetAuditLogsPaged(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
 	logs := []*gwdb.AuditLog{
@@ -259,7 +259,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 
 func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
 	initial := &gwdb.AuditLog{
@@ -291,7 +291,7 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 
 func TestListUsersIncludesCreatorMetadata(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
 	creator, err := db.CreateUser("admin@example.com", "Admin", []string{"admin"})
@@ -319,7 +319,7 @@ func TestListUsersIncludesCreatorMetadata(t *testing.T) {
 
 func TestAuditLogIndexes(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close()
+	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
 	indexes := []string{
@@ -347,11 +347,13 @@ func TestDatabaseInitialization(t *testing.T) {
 		require.NoError(t, err)
 		_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
 		require.NoError(t, err)
+		// Close the first connection before creating another instance (connection pool reuse)
+		//nolint:errcheck // closing during cleanup; failure handled in subsequent operations
 		db1.Close()
 
 		db2, err := gwdb.NewFromEnv()
 		require.NoError(t, err)
-		defer db2.Close()
+		defer db2.Close() //nolint:errcheck // test cleanup
 		users, err := db2.ListUsers()
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(users), 2)

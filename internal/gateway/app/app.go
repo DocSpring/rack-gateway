@@ -42,7 +42,7 @@ func New() (*App, error) {
 		return nil, err
 	}
 	if err := database.EnsureEnvironment(cfg.DevMode); err != nil {
-		database.Close()
+		database.Close() //nolint:errcheck // cleanup on init failure
 		return nil, err
 	}
 
@@ -54,7 +54,7 @@ func New() (*App, error) {
 
 	// Initialize services
 	if err := app.initializeServices(); err != nil {
-		database.Close()
+		database.Close() //nolint:errcheck // cleanup on init failure
 		return nil, err
 	}
 
@@ -72,6 +72,6 @@ func (a *App) Router() *gin.Engine {
 // Cleanup cleans up resources
 func (a *App) Cleanup() {
 	if a.Database != nil {
-		a.Database.Close()
+		a.Database.Close() //nolint:errcheck // application shutdown
 	}
 }

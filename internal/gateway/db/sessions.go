@@ -205,7 +205,7 @@ func (d *Database) ListActiveSessionsByUser(userID int64) ([]*UserSession, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to list user sessions: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort cleanup
 
 	sessions := []*UserSession{}
 	for rows.Next() {

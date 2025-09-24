@@ -279,8 +279,9 @@ func (m *DBManager) syncUsersFromDB() error {
 			continue // Skip suspended users
 		}
 		for _, role := range user.Roles {
-			// AddGroupingPolicy returns false if already exists, but no error
-			m.enforcer.AddGroupingPolicy(user.Email, role)
+			if _, err := m.enforcer.AddGroupingPolicy(user.Email, role); err != nil {
+				return fmt.Errorf("failed to assign role %s to %s: %w", role, user.Email, err)
+			}
 		}
 	}
 
@@ -479,11 +480,15 @@ func (a *memoryAdapter) LoadPolicy(model model.Model) error {
 		ptype := key
 
 		if sec == "p" {
-			model.AddPolicy(sec, ptype, p[1:])
+			if err := model.AddPolicy(sec, ptype, p[1:]); err != nil {
+				return fmt.Errorf("failed to add policy %v: %w", p, err)
+			}
 		} else if sec == "g" {
 			// For grouping policies (role inheritance), we still use AddPolicy
 			// but the section is "g" not "p"
-			model.AddPolicy(sec, ptype, p[1:])
+			if err := model.AddPolicy(sec, ptype, p[1:]); err != nil {
+				return fmt.Errorf("failed to add grouping policy %v: %w", p, err)
+			}
 		}
 	}
 	return nil

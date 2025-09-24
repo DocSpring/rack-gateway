@@ -45,7 +45,7 @@ func FetchLatestEnvMap(rack config.RackConfig, app string, tlsConfig *tls.Config
 	if err != nil {
 		return nil, err
 	}
-	defer resp1.Body.Close()
+	defer resp1.Body.Close() //nolint:errcheck // response cleanup
 	var list []map[string]interface{}
 	if err := json.NewDecoder(resp1.Body).Decode(&list); err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func FetchLatestEnvMap(rack config.RackConfig, app string, tlsConfig *tls.Config
 	if err != nil {
 		return nil, err
 	}
-	defer resp2.Body.Close()
+	defer resp2.Body.Close() //nolint:errcheck // response cleanup
 	var rel map[string]interface{}
 	if err := json.NewDecoder(resp2.Body).Decode(&rel); err != nil {
 		return nil, err

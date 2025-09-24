@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/subtle"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -202,14 +203,16 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 	// Audit successful login
 	if h.database != nil {
-		audit.LogDB(h.database, &db.AuditLog{
+		if err := audit.LogDB(h.database, &db.AuditLog{
 			UserEmail:    resp.Email,
 			ActionType:   "auth",
 			Action:       "login.complete",
 			ResourceType: "auth",
 			Resource:     "web",
 			Status:       "success",
-		})
+		}); err != nil {
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":"login.complete","error":%q}`, err)
+		}
 	}
 
 	// Redirect to web UI
@@ -243,13 +246,15 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 
 	// Audit logout
 	if h.database != nil {
-		audit.LogDB(h.database, &db.AuditLog{
+		if err := audit.LogDB(h.database, &db.AuditLog{
 			ActionType:   "auth",
 			Action:       "logout",
 			ResourceType: "auth",
 			Resource:     "web",
 			Status:       "success",
-		})
+		}); err != nil {
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":"logout","error":%q}`, err)
+		}
 	}
 
 	c.Redirect(http.StatusFound, "/.gateway/web/login")
@@ -339,7 +344,7 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		return
 	}
 
-	audit.LogDB(h.database, &db.AuditLog{
+	if err := audit.LogDB(h.database, &db.AuditLog{
 		ActionType:   "auth",
 		Action:       "login.start",
 		ResourceType: "auth",
@@ -347,5 +352,7 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		Status:       status,
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.GetHeader("User-Agent"),
-	})
+	}); err != nil {
+		log.Printf(`{"level":"error","event":"audit_log_failed","action":"login.start","error":%q}`, err)
+	}
 }

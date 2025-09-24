@@ -47,6 +47,16 @@ type roleOption struct {
 	Permissions []string `json:"permissions"`
 }
 
+func writeLine(out io.Writer, args ...any) error {
+	_, err := fmt.Fprintln(out, args...)
+	return err
+}
+
+func writef(out io.Writer, format string, args ...any) error {
+	_, err := fmt.Fprintf(out, format, args...)
+	return err
+}
+
 func newAPITokenCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api-token",
@@ -82,11 +92,12 @@ func newAPITokenListCommand() *cobra.Command {
 			}
 
 			if len(tokens) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No API tokens found")
-				return nil
+				return writeLine(cmd.OutOrStdout(), "No API tokens found")
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "%-5s %-25s %-25s %-19s %-19s\n", "ID", "NAME", "OWNER", "CREATED", "LAST USED")
+			if err := writef(cmd.OutOrStdout(), "%-5s %-25s %-25s %-19s %-19s\n", "ID", "NAME", "OWNER", "CREATED", "LAST USED"); err != nil {
+				return err
+			}
 			for _, t := range tokens {
 				owner := t.CreatedByEmail
 				if owner == "" {
@@ -97,7 +108,9 @@ func newAPITokenListCommand() *cobra.Command {
 				if t.LastUsedAt != nil {
 					lastUsed = t.LastUsedAt.Format(time.RFC3339)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%-5d %-25s %-25s %-19s %-19s\n", t.ID, t.Name, owner, created, lastUsed)
+				if err := writef(cmd.OutOrStdout(), "%-5d %-25s %-25s %-19s %-19s\n", t.ID, t.Name, owner, created, lastUsed); err != nil {
+					return err
+				}
 			}
 			return nil
 		}),
@@ -127,23 +140,41 @@ func newAPITokenGetCommand() *cobra.Command {
 				return printJSON(cmd, token)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "ID: %d\n", token.ID)
-			fmt.Fprintf(cmd.OutOrStdout(), "Name: %s\n", token.Name)
-			fmt.Fprintf(cmd.OutOrStdout(), "Owner User ID: %d\n", token.UserID)
-			if token.CreatedByEmail != "" {
-				fmt.Fprintf(cmd.OutOrStdout(), "Created By: %s (%s)\n", token.CreatedByName, token.CreatedByEmail)
+			if err := writef(cmd.OutOrStdout(), "ID: %d\n", token.ID); err != nil {
+				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Created At: %s\n", token.CreatedAt.Format(time.RFC3339))
+			if err := writef(cmd.OutOrStdout(), "Name: %s\n", token.Name); err != nil {
+				return err
+			}
+			if err := writef(cmd.OutOrStdout(), "Owner User ID: %d\n", token.UserID); err != nil {
+				return err
+			}
+			if token.CreatedByEmail != "" {
+				if err := writef(cmd.OutOrStdout(), "Created By: %s (%s)\n", token.CreatedByName, token.CreatedByEmail); err != nil {
+					return err
+				}
+			}
+			if err := writef(cmd.OutOrStdout(), "Created At: %s\n", token.CreatedAt.Format(time.RFC3339)); err != nil {
+				return err
+			}
 			if token.ExpiresAt != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "Expires At: %s\n", token.ExpiresAt.Format(time.RFC3339))
+				if err := writef(cmd.OutOrStdout(), "Expires At: %s\n", token.ExpiresAt.Format(time.RFC3339)); err != nil {
+					return err
+				}
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "Expires At: never\n")
+				if err := writef(cmd.OutOrStdout(), "Expires At: never\n"); err != nil {
+					return err
+				}
 			}
 			if token.LastUsedAt != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "Last Used: %s\n", token.LastUsedAt.Format(time.RFC3339))
+				if err := writef(cmd.OutOrStdout(), "Last Used: %s\n", token.LastUsedAt.Format(time.RFC3339)); err != nil {
+					return err
+				}
 			}
 			sort.Strings(token.Permissions)
-			fmt.Fprintf(cmd.OutOrStdout(), "Permissions:%s\n", formatList(token.Permissions))
+			if err := writef(cmd.OutOrStdout(), "Permissions:%s\n", formatList(token.Permissions)); err != nil {
+				return err
+			}
 			return nil
 		}),
 	}
@@ -224,12 +255,12 @@ func newAPITokenCreateCommand() *cobra.Command {
 			case "json":
 				return printJSON(cmd, resp)
 			case "token":
-				fmt.Fprintln(cmd.OutOrStdout(), resp.Token)
-				return nil
+				return writeLine(cmd.OutOrStdout(), resp.Token)
 			case "text", "", "table":
-				fmt.Fprintf(cmd.OutOrStdout(), "Created token %q (id %d)\n", resp.APIToken.Name, resp.APIToken.ID)
-				fmt.Fprintf(cmd.OutOrStdout(), "Token: %s\n", resp.Token)
-				return nil
+				if err := writef(cmd.OutOrStdout(), "Created token %q (id %d)\n", resp.APIToken.Name, resp.APIToken.ID); err != nil {
+					return err
+				}
+				return writef(cmd.OutOrStdout(), "Token: %s\n", resp.Token)
 			default:
 				return fmt.Errorf("unknown --output value %q", output)
 			}
@@ -259,8 +290,7 @@ func newAPITokenDeleteCommand() *cobra.Command {
 			if err := deleteAPIToken(rack, args[0]); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted token %s\n", args[0])
-			return nil
+			return writef(cmd.OutOrStdout(), "Deleted token %s\n", args[0])
 		}),
 	}
 	return cmd
@@ -348,7 +378,7 @@ func gatewayRequest(rack, method, path string, body interface{}, out interface{}
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response cleanup
 
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(resp.Body)
@@ -437,6 +467,5 @@ func printJSON(cmd *cobra.Command, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), string(data))
-	return nil
+	return writeLine(cmd.OutOrStdout(), string(data))
 }

@@ -82,7 +82,7 @@ func (p *PostmarkSender) Send(to, subject, textBody, htmlBody string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // ignore close error
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}
@@ -130,7 +130,7 @@ func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody strin
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // ignore close error
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}

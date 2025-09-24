@@ -830,14 +830,18 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	defer writer.Flush()
 
 	// Header row
-	writer.Write([]string{
+	header := []string{
 		"timestamp", "user_email", "user_name", "action_type", "action",
 		"command", "resource", "status", "response_time_ms", "ip_address", "user_agent",
-	})
+	}
+	if err := writer.Write(header); err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to write CSV header", start, nil)
+		return
+	}
 
 	// Data rows
 	for _, log := range logs {
-		writer.Write([]string{
+		row := []string{
 			log.Timestamp.Format(time.RFC3339),
 			log.UserEmail,
 			log.UserName,
@@ -849,7 +853,16 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 			strconv.Itoa(log.ResponseTimeMs),
 			log.IPAddress,
 			log.UserAgent,
-		})
+		}
+		if err := writer.Write(row); err != nil {
+			h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to write CSV row", start, nil)
+			return
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to flush CSV", start, nil)
+		return
 	}
 
 	details := map[string]interface{}{
@@ -1614,6 +1627,7 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 		ActionType:   actionTypeFilter,
 		ResourceType: resourceTypeFilter,
 		Search:       searchFilter,
+		Range:        rangeFilter,
 		Limit:        limit,
 		Offset:       (page - 1) * limit,
 	}

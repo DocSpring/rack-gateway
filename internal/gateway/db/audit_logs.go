@@ -53,7 +53,7 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit logs: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort close
 
 	var logs []*AuditLog
 	for rows.Next() {
@@ -81,6 +81,7 @@ type AuditLogFilters struct {
 	ActionType   string
 	ResourceType string
 	Search       string
+	Range        string
 	Since        time.Time
 	Until        time.Time
 	Limit        int
@@ -165,7 +166,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query audit logs: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort close
 
 	var logs []*AuditLog
 	for rows.Next() {

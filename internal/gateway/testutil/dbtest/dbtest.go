@@ -53,7 +53,11 @@ func NewDatabase(t *testing.T) *db.Database {
 	if err != nil {
 		t.Fatalf("open admin: %v", err)
 	}
-	t.Cleanup(func() { _ = admin.Close() })
+	t.Cleanup(func() {
+		if err := admin.Close(); err != nil {
+			t.Fatalf("close admin connection: %v", err)
+		}
+	})
 	name := fmt.Sprintf("cg_test_%d", time.Now().UnixNano())
 	if _, err := admin.Exec("CREATE DATABASE " + pqQuoteIdent(name)); err != nil {
 		t.Fatalf("create database: %v", err)
@@ -66,10 +70,14 @@ func NewDatabase(t *testing.T) *db.Database {
 		testConn, err := sql.Open("pgx", dsn)
 		if err == nil {
 			if err = testConn.Ping(); err == nil {
-				_ = testConn.Close()
+				if cerr := testConn.Close(); cerr != nil {
+					t.Fatalf("close test connection: %v", cerr)
+				}
 				break
 			}
-			_ = testConn.Close()
+			if cerr := testConn.Close(); cerr != nil {
+				t.Fatalf("close test connection: %v", cerr)
+			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -78,7 +86,14 @@ func NewDatabase(t *testing.T) *db.Database {
 	if err != nil {
 		t.Fatalf("open app db: %v", err)
 	}
-	t.Cleanup(func() { _ = app.Close(); _, _ = admin.Exec("DROP DATABASE IF EXISTS " + pqQuoteIdent(name)) })
+	t.Cleanup(func() {
+		if err := app.Close(); err != nil {
+			t.Fatalf("close app database: %v", err)
+		}
+		if _, err := admin.Exec("DROP DATABASE IF EXISTS " + pqQuoteIdent(name)); err != nil {
+			t.Fatalf("drop database %s: %v", name, err)
+		}
+	})
 	return app
 }
 

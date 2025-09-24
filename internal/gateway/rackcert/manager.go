@@ -236,10 +236,12 @@ func fetchRackCertificate(ctx context.Context, rck config.RackConfig) (*db.RackT
 	}
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
-		conn.Close()
+		if cerr := conn.Close(); cerr != nil {
+			return nil, fmt.Errorf("rack TLS manager: expected TLS connection and failed close: %w", cerr)
+		}
 		return nil, fmt.Errorf("rack TLS manager: expected TLS connection, got %T", conn)
 	}
-	defer tlsConn.Close()
+	defer tlsConn.Close() //nolint:errcheck // best-effort TLS close
 	state := tlsConn.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
 		return nil, fmt.Errorf("rack TLS manager: rack presented no certificate")

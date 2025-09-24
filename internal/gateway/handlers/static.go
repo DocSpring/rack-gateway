@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -84,7 +85,9 @@ func NewStaticHandler(cfg *config.Config, sessions *auth.SessionManager) *Static
 					if err != nil {
 						return err
 					}
-					_ = resp.Body.Close()
+					if err := resp.Body.Close(); err != nil {
+						return err
+					}
 
 					updated := sh.injectRuntimeTokens(body, resp.Request)
 					resp.Body = io.NopCloser(bytes.NewReader(updated))
@@ -156,7 +159,11 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("static: failed to close %s: %v", indexPath, err)
+		}
+	}()
 
 	info, err := file.Stat()
 	if err != nil {

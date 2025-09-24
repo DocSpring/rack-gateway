@@ -133,7 +133,7 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API tokens: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort close
 
 	var tokens []*APIToken
 	for rows.Next() {
@@ -187,7 +187,7 @@ func (d *Database) ListAllAPITokens() ([]*APIToken, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API tokens: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort close
 
 	var tokens []*APIToken
 	for rows.Next() {

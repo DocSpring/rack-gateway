@@ -177,7 +177,9 @@ func (c *Config) setupDevRacks() {
 
 func generateDevKey() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("failed to generate dev key: %v", err))
+	}
 	return base64.StdEncoding.EncodeToString(b)
 }
 

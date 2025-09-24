@@ -62,6 +62,22 @@ const (
 	mockPassword = "mock-rack-token-12345"
 )
 
+func writeJSON(w http.ResponseWriter, payload interface{}) {
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("mock-convox: failed to encode JSON response: %v", err)
+	}
+}
+
+func decodeRequest(body io.ReadCloser, dest interface{}) error {
+	defer func() {
+		_ = body.Close()
+	}()
+	return json.NewDecoder(body).Decode(dest)
+}
+
 type App struct {
 	Name       string    `json:"name"`
 	Status     string    `json:"status"`
@@ -220,7 +236,7 @@ func main() {
 
 	// Health check (no auth required)
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "server": "mock-convox"})
+		writeJSON(w, map[string]string{"status": "healthy", "server": "mock-convox"})
 	}).Methods("GET")
 
 	// Log 404s explicitly so unexpected routes are visible in logs
@@ -297,18 +313,24 @@ func requestLogger(next http.Handler) http.Handler {
 		// Log request body for write methods unless it's an object upload (huge tarball)
 		if getBoolEnv("MOCK_CONVOX_LOG_REQUEST_BODY", false) && r.Body != nil && !isObjectUploadPath(r.URL.Path) && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
 			// Read and restore body
-			buf, _ := io.ReadAll(r.Body)
-			r.Body.Close()
-			r.Body = io.NopCloser(strings.NewReader(string(buf)))
-			max := 4096
-			preview := string(buf)
-			if len(preview) > max {
-				preview = preview[:max] + "…(truncated)"
-			}
-			if preview != "" {
-				log.Printf("[Request Body] %d bytes: %s", len(buf), preview)
+			buf, err := io.ReadAll(r.Body)
+			if err != nil {
+				log.Printf("mock-convox: failed to read request body: %v", err)
 			} else {
-				log.Printf("[Request Body] 0 bytes")
+				if err := r.Body.Close(); err != nil {
+					log.Printf("mock-convox: failed to close request body: %v", err)
+				}
+				r.Body = io.NopCloser(strings.NewReader(string(buf)))
+				max := 4096
+				preview := string(buf)
+				if len(preview) > max {
+					preview = preview[:max] + "…(truncated)"
+				}
+				if preview != "" {
+					log.Printf("[Request Body] %d bytes: %s", len(buf), preview)
+				} else {
+					log.Printf("[Request Body] 0 bytes")
+				}
 			}
 		}
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
@@ -447,7 +469,7 @@ func getApps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apps)
+	writeJSON(w, apps)
 }
 
 func getApp(w http.ResponseWriter, r *http.Request) {
@@ -466,7 +488,7 @@ func getApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(app)
+	writeJSON(w, app)
 }
 
 func serviceProcesses(w http.ResponseWriter, r *http.Request) {
@@ -486,7 +508,7 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 	// Stub: return 202 Accepted with a fake process id; echo method
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, map[string]interface{}{
 		"status":  "started",
 		"method":  r.Method,
 		"app":     app,
@@ -511,7 +533,7 @@ func listServices(w http.ResponseWriter, r *http.Request) {
 			"status":  "running",
 		},
 	}
-	json.NewEncoder(w).Encode(services)
+	writeJSON(w, services)
 }
 
 func restartService(w http.ResponseWriter, r *http.Request) {
@@ -519,14 +541,14 @@ func restartService(w http.ResponseWriter, r *http.Request) {
 	app := vars["app"]
 	service := vars["service"]
 	log.Printf("SERVICE restart app=%s service=%s", app, service)
-	json.NewEncoder(w).Encode(map[string]string{"status": "restarting"})
+	writeJSON(w, map[string]string{"status": "restarting"})
 }
 
 func restartApp(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	log.Printf("APP restart app=%s", app)
-	json.NewEncoder(w).Encode(map[string]string{"status": "restarting"})
+	writeJSON(w, map[string]string{"status": "restarting"})
 }
 
 // execProcess upgrades to a WebSocket and streams a short mock session, then closes
@@ -547,7 +569,9 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upgrade failed", http.StatusBadRequest)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	// Send a tiny session transcript
 	_ = conn.WriteMessage(websocket.TextMessage, []byte("Connected to mock exec for app="+app+" pid="+id+"\n"))
@@ -586,7 +610,10 @@ func parseSubprotocols(h string) []string {
 
 func createApp(w http.ResponseWriter, r *http.Request) {
 	var req map[string]string
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := decodeRequest(r.Body, &req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
 
 	app := App{
 		Name:       req["name"],
@@ -599,7 +626,7 @@ func createApp(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(app)
+	writeJSON(w, app)
 }
 
 func deleteApp(w http.ResponseWriter, r *http.Request) {
@@ -642,7 +669,7 @@ func getProcesses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(processes)
+	writeJSON(w, processes)
 }
 
 func getProcess(w http.ResponseWriter, r *http.Request) {
@@ -664,13 +691,13 @@ func getProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(process)
+	writeJSON(w, process)
 }
 
 func stopProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, map[string]string{
 		"id":     vars["id"],
 		"status": "stopping",
 	})
@@ -703,7 +730,7 @@ func getBuilds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(builds)
+	writeJSON(w, builds)
 }
 
 func getBuild(w http.ResponseWriter, r *http.Request) {
@@ -722,7 +749,7 @@ func getBuild(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(build)
+	writeJSON(w, build)
 }
 
 // createBuild simulates POST /apps/{app}/builds and returns a new Build
@@ -749,7 +776,7 @@ func createBuild(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// Real API often returns 201 Created
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(build)
+	writeJSON(w, build)
 }
 
 // createBuild simulates creating a new build for an app
@@ -773,7 +800,7 @@ func handleReleases(w http.ResponseWriter, r *http.Request) {
 		// Prepend so newest release is first
 		releasesByApp[app] = append([]Release{rel}, releasesByApp[app]...)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(rel)
+		writeJSON(w, rel)
 		return
 	}
 	// GET: list releases (support limit=1)
@@ -786,7 +813,7 @@ func handleReleases(w http.ResponseWriter, r *http.Request) {
 		list = []Release{list[0]}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(list)
+	writeJSON(w, list)
 }
 
 func getRelease(w http.ResponseWriter, r *http.Request) {
@@ -809,7 +836,7 @@ func getRelease(w http.ResponseWriter, r *http.Request) {
 		rel.Env = envString()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(rel)
+	writeJSON(w, rel)
 }
 
 func promoteRelease(w http.ResponseWriter, r *http.Request) {
@@ -818,14 +845,16 @@ func promoteRelease(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	currentReleaseByApp[app] = id
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": id, "status": "promoting"})
+	writeJSON(w, map[string]string{"id": id, "status": "promoting"})
 }
 
 // listRacks returns an empty list to satisfy CLI calls
 func listRacks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[]"))
+	if _, err := w.Write([]byte("[]")); err != nil {
+		log.Printf("mock-convox: failed to write racks response: %v", err)
+	}
 }
 
 // appLogs upgrades to WebSocket and streams a few log lines, then closes
@@ -836,7 +865,9 @@ func appLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upgrade failed", http.StatusBadRequest)
 		return
 	}
-	defer c.Close()
+	defer func() {
+		_ = c.Close()
+	}()
 
 	// Emit a couple of lines immediately like a real deploy/log stream
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Promoting release...\n"))
@@ -877,7 +908,9 @@ func buildLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upgrade failed", http.StatusBadRequest)
 		return
 	}
-	defer c.Close()
+	defer func() {
+		_ = c.Close()
+	}()
 
 	_ = c.WriteMessage(websocket.TextMessage, []byte("Building app...\n"))
 	time.Sleep(100 * time.Millisecond)
@@ -891,12 +924,15 @@ func getEnvironment(w http.ResponseWriter, r *http.Request) {
 	env := defaultEnvMap()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(env)
+	writeJSON(w, env)
 }
 
 func setEnvironment(w http.ResponseWriter, r *http.Request) {
 	var env map[string]string
-	json.NewDecoder(r.Body).Decode(&env)
+	if err := decodeRequest(r.Body, &env); err != nil {
+		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
 	if env == nil {
 		env = map[string]string{}
 	}
@@ -906,18 +942,22 @@ func setEnvironment(w http.ResponseWriter, r *http.Request) {
 		merged[k] = v
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(merged)
+	writeJSON(w, merged)
 }
 
 // uploadObject accepts a tarball upload for deploy and returns 200 OK
 func uploadObject(w http.ResponseWriter, r *http.Request) {
 	// Drain body to simulate upload and avoid connection reuse issues
-	_, _ = io.Copy(io.Discard, r.Body)
-	r.Body.Close()
+	if _, err := io.Copy(io.Discard, r.Body); err != nil {
+		log.Printf("mock-convox: failed to drain upload body: %v", err)
+	}
+	if err := r.Body.Close(); err != nil {
+		log.Printf("mock-convox: failed to close upload body: %v", err)
+	}
 	// Return a minimal JSON response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "uploaded"})
+	writeJSON(w, map[string]string{"status": "uploaded"})
 }
 
 // Helpers
@@ -963,7 +1003,7 @@ func getInstances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(instances)
+	writeJSON(w, instances)
 }
 
 func getInstance(w http.ResponseWriter, r *http.Request) {
@@ -978,7 +1018,7 @@ func getInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(instance)
+	writeJSON(w, instance)
 }
 
 func getSystem(w http.ResponseWriter, r *http.Request) {
@@ -1001,7 +1041,7 @@ func getSystem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(system)
+	writeJSON(w, system)
 }
 
 // putSystem accepts parameter updates similar to `convox rack params set`.
@@ -1011,9 +1051,14 @@ func putSystem(w http.ResponseWriter, r *http.Request) {
 	// Read full body (it can be small)
 	var body []byte
 	if r.Body != nil {
-		b, _ := io.ReadAll(r.Body)
-		r.Body.Close()
-		body = b
+		if b, err := io.ReadAll(r.Body); err == nil {
+			body = b
+		} else {
+			log.Printf("mock-convox: failed to read system body: %v", err)
+		}
+		if err := r.Body.Close(); err != nil {
+			log.Printf("mock-convox: failed to close system body: %v", err)
+		}
 	}
 
 	updated := 0
@@ -1208,7 +1253,7 @@ func getSystemProcesses(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(procs)
+	writeJSON(w, procs)
 }
 
 // parameters are embedded in GET /system in the mock
@@ -1226,5 +1271,5 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL.Path)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, response)
 }

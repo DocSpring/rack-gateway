@@ -391,7 +391,7 @@ func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig)
 		}
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response cleanup
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("upstream status %d", resp.StatusCode)
 	}
@@ -579,7 +579,9 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to read request body: %w", err)
 		}
-		r.Body.Close()
+		if err := r.Body.Close(); err != nil {
+			return false, nil, fmt.Errorf("failed to close request body: %w", err)
+		}
 	}
 	// Parse form
 	vals, err := url.ParseQuery(string(bodyBuf))
@@ -904,7 +906,9 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		if err != nil {
 			return 0, fmt.Errorf("failed to read request body: %w", err)
 		}
-		r.Body.Close()
+		if err := r.Body.Close(); err != nil {
+			return 0, fmt.Errorf("failed to close request body: %w", err)
+		}
 	}
 
 	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(bodyBytes))
@@ -941,7 +945,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 		return 0, fmt.Errorf("failed to forward request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // response cleanup
 
 	// Read full response body (so we can optionally log it and/or filter) then send to client
 	// Decide whether we need to buffer the response (only for JSON we mutate or inspect)
@@ -1371,7 +1375,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 		}
 		return 0, fmt.Errorf("failed to dial upstream websocket: %w", err)
 	}
-	defer upstreamConn.Close()
+	defer upstreamConn.Close() //nolint:errcheck // websocket cleanup
 
 	// Determine upstream-selected subprotocol (if any)
 	selectedSP := ""
@@ -1394,7 +1398,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	if err != nil {
 		return 0, fmt.Errorf("failed to upgrade client connection: %w", err)
 	}
-	defer clientConn.Close()
+	defer clientConn.Close() //nolint:errcheck // websocket cleanup
 
 	// Bridge messages in both directions
 	errc := make(chan error, 2)
@@ -1570,5 +1574,7 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message st
 	errorResponse := map[string]string{"error": message}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(errorResponse)
+	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
+		log.Printf("proxy: failed to encode error response: %v", err)
+	}
 }

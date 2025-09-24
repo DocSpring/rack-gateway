@@ -42,7 +42,7 @@ tmp/
 web/dist/
 web/node_modules/
 web/.vite/
-mock-convox
+/mock-convox
 
 # Test artifacts
 web/test-results/

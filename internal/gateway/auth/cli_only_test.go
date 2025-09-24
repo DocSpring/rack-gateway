@@ -66,7 +66,7 @@ func basicAuthHeader(username, password string) string {
 func TestCLIOnlyMiddleware(t *testing.T) {
 	// Setup
 	database := setupTestDatabase(t)
-	defer database.Close()
+	defer database.Close() //nolint:errcheck // test cleanup
 
 	// Create a test user
 	_, err := database.CreateUser("test@example.com", "Test User", []string{"admin"})
@@ -101,9 +101,12 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 	}
 
 	// Create a test handler that just returns 200 OK
+	tt := t
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			tt.Fatalf("failed to write response: %v", err)
+		}
 	})
 
 	// Wrap with CLIOnlyMiddleware
@@ -209,7 +212,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	// Setup
 	database := setupTestDatabase(t)
-	defer database.Close()
+	defer database.Close() //nolint:errcheck // test cleanup
 
 	// Create a test user
 	testUser, err := database.CreateUser("test@example.com", "Test User", []string{"admin"})
@@ -237,9 +240,12 @@ func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	authService := NewAuthService(jwtManager, tokenService, database, nil)
 
 	// Create a test handler
+	tt := t
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			tt.Fatalf("failed to write response: %v", err)
+		}
 	})
 
 	handler := authService.CLIOnlyMiddleware(testHandler)
@@ -289,7 +295,7 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 	// cannot be performed from a browser context (CSRF protection)
 
 	database := setupTestDatabase(t)
-	defer database.Close()
+	defer database.Close() //nolint:errcheck // test cleanup
 
 	// Create a test user
 	_, err := database.CreateUser("test@example.com", "Test User", []string{"deployer"})
@@ -316,11 +322,14 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 	}
 
 	// Create a handler that simulates a dangerous operation
+	ttDanger := t
 	dangerousHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This should never be reached from a browser
-		t.Error("Dangerous operation was allowed with cookie auth!")
+		ttDanger.Error("Dangerous operation was allowed with cookie auth!")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("DANGER: Operation performed"))
+		if _, err := w.Write([]byte("DANGER: Operation performed")); err != nil {
+			ttDanger.Fatalf("failed to write response: %v", err)
+		}
 	})
 
 	handler := authService.CLIOnlyMiddleware(dangerousHandler)

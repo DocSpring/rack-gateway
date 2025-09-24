@@ -134,7 +134,9 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(time.Second).Unix()))
 
 			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"error":"rate limit exceeded","message":"too many authentication attempts, please try again later"}`))
+			if _, err := w.Write([]byte(`{"error":"rate limit exceeded","message":"too many authentication attempts, please try again later"}`)); err != nil {
+				return
+			}
 			return
 		}
 
@@ -159,7 +161,9 @@ func (rl *RateLimiter) AuthEndpointsOnly(next http.Handler) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(1/float64(rl.rate))))
 				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte(`{"error":"rate limit exceeded","message":"too many authentication attempts, please try again later"}`))
+				if _, err := w.Write([]byte(`{"error":"rate limit exceeded","message":"too many authentication attempts, please try again later"}`)); err != nil {
+					return
+				}
 				return
 			}
 		}

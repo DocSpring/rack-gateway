@@ -63,7 +63,7 @@ func (d *Database) GetResourceCreators(resourceType string, ids []string) (map[s
 	if err != nil {
 		return nil, fmt.Errorf("failed to query creators: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // best-effort cleanup
 	for rows.Next() {
 		var rid string
 		var uid int64
