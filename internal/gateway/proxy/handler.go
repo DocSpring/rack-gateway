@@ -955,9 +955,10 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	filterRelease := isJSON && (routematch.KeyMatch3(pth, "/apps/{app}/releases") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
 	shouldCapture := false
 	if isJSON {
-		if r.Method == http.MethodPost {
+		switch r.Method {
+		case http.MethodPost:
 			shouldCapture = true
-		} else if r.Method == http.MethodGet {
+		case http.MethodGet:
 			if routematch.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 				shouldCapture = true
 			}

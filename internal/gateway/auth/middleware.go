@@ -26,10 +26,11 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if parts[0] == "Bearer" {
+		switch parts[0] {
+		case "Bearer":
 			// Standard Bearer token
 			token = parts[1]
-		} else if parts[0] == "Basic" {
+		case "Basic":
 			// Convox CLI sends Basic auth where username is "convox" and password is JWT
 			decoded, err := base64.StdEncoding.DecodeString(parts[1])
 			if err != nil {
@@ -46,7 +47,7 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 
 			// Extract JWT from password field (username should be "convox")
 			token = credentials[colonIndex+1:]
-		} else {
+		default:
 			http.Error(w, "unsupported authorization type", http.StatusUnauthorized)
 			return
 		}

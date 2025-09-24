@@ -479,15 +479,10 @@ func (a *memoryAdapter) LoadPolicy(model model.Model) error {
 		sec := key[:1]
 		ptype := key
 
-		if sec == "p" {
+		switch sec {
+		case "p", "g":
 			if err := model.AddPolicy(sec, ptype, p[1:]); err != nil {
 				return fmt.Errorf("failed to add policy %v: %w", p, err)
-			}
-		} else if sec == "g" {
-			// For grouping policies (role inheritance), we still use AddPolicy
-			// but the section is "g" not "p"
-			if err := model.AddPolicy(sec, ptype, p[1:]); err != nil {
-				return fmt.Errorf("failed to add grouping policy %v: %w", p, err)
 			}
 		}
 	}

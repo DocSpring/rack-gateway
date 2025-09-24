@@ -14,7 +14,8 @@ import (
 func New(dsn string) (*Database, error) {
 	// Use provided DSN if it looks like Postgres, else use env var
 	source := strings.TrimSpace(dsn)
-	if source == "" || !(strings.HasPrefix(strings.ToLower(source), "postgres://") || strings.HasPrefix(strings.ToLower(source), "postgresql://")) {
+	lower := strings.ToLower(source)
+	if source == "" || (!strings.HasPrefix(lower, "postgres://") && !strings.HasPrefix(lower, "postgresql://")) {
 		// Check CGW_DATABASE_URL first (new Convox automatic env var), then fall back to DATABASE_URL
 		source = os.Getenv("CGW_DATABASE_URL")
 		if source == "" {
