@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -323,19 +324,14 @@ func (h *AuthHandler) clearWebOAuthStateCookie(c *gin.Context) {
 }
 
 func (h *AuthHandler) cookieSecure() bool {
-	secure := true
-	if h != nil && h.config != nil && h.config.DevMode {
-		secure = false
-	}
+	defaultSecure := h == nil || h.config == nil || !h.config.DevMode
 	if v := strings.TrimSpace(os.Getenv("COOKIE_SECURE")); v != "" {
-		lower := strings.ToLower(v)
-		if lower == "false" || lower == "0" {
-			secure = false
-		} else if lower == "true" || lower == "1" {
-			secure = true
+		b, err := strconv.ParseBool(v)
+		if err == nil {
+			return b
 		}
 	}
-	return secure
+	return defaultSecure
 }
 
 // Helper to audit login attempts

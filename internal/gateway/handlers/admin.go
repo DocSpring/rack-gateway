@@ -16,6 +16,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
@@ -43,6 +44,130 @@ func cloneDetails(details map[string]interface{}) map[string]interface{} {
 		copy[k] = v
 	}
 	return copy
+}
+
+func (h *AdminHandler) rackDisplay() string {
+	if h == nil || h.config == nil {
+		return "Convox Rack"
+	}
+	preferred := []string{"default", "local"}
+	for _, key := range preferred {
+		if rc, ok := h.config.Racks[key]; ok && rc.Enabled {
+			if alias := strings.TrimSpace(rc.Alias); alias != "" {
+				return alias
+			}
+			if name := strings.TrimSpace(rc.Name); name != "" {
+				return name
+			}
+		}
+	}
+	for _, rc := range h.config.Racks {
+		if !rc.Enabled {
+			continue
+		}
+		if alias := strings.TrimSpace(rc.Alias); alias != "" {
+			return alias
+		}
+		if name := strings.TrimSpace(rc.Name); name != "" {
+			return name
+		}
+	}
+	return "Convox Rack"
+}
+
+func (h *AdminHandler) publicBaseURL(c *gin.Context) string {
+	if h != nil && h.config != nil {
+		if raw := strings.TrimSpace(h.config.Domain); raw != "" {
+			if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+				return raw
+			}
+			if strings.Contains(raw, "localhost") || strings.Contains(raw, ":") {
+				return "http://" + raw
+			}
+			return "https://" + raw
+		}
+	}
+	if c != nil && c.Request != nil {
+		scheme := "https"
+		if proto := strings.TrimSpace(c.Request.Header.Get("X-Forwarded-Proto")); proto != "" {
+			scheme = proto
+		} else if c.Request.TLS == nil {
+			scheme = "http"
+		}
+		host := strings.TrimSpace(c.Request.Host)
+		if host != "" {
+			return fmt.Sprintf("%s://%s", scheme, host)
+		}
+	}
+	return ""
+}
+
+func (h *AdminHandler) currentAuthUser(c *gin.Context) *auth.AuthUser {
+	if c == nil || c.Request == nil {
+		return nil
+	}
+	if user, ok := auth.GetAuthUser(c.Request.Context()); ok && user != nil {
+		return user
+	}
+	email := strings.TrimSpace(c.GetString("user_email"))
+	name := strings.TrimSpace(c.GetString("user_name"))
+	if email == "" {
+		return nil
+	}
+	return &auth.AuthUser{Email: email, Name: name}
+}
+
+func (h *AdminHandler) getAdminEmails() []string {
+	if h == nil || h.rbac == nil {
+		return nil
+	}
+	users, err := h.rbac.GetUsers()
+	if err != nil {
+		return nil
+	}
+	emails := make([]string, 0)
+	for email, user := range users {
+		email = strings.TrimSpace(email)
+		if email == "" {
+			continue
+		}
+		for _, role := range user.Roles {
+			if role == "admin" {
+				emails = append(emails, email)
+				break
+			}
+		}
+	}
+	if len(emails) == 0 {
+		return nil
+	}
+	sort.Strings(emails)
+	return emails
+}
+
+func prioritiseInviterFirst(admins []string, inviterEmail string) []string {
+	if inviterEmail == "" || len(admins) == 0 {
+		return admins
+	}
+	idx := -1
+	for i, addr := range admins {
+		if strings.EqualFold(addr, inviterEmail) {
+			idx = i
+			break
+		}
+	}
+	if idx <= 0 {
+		return admins
+	}
+	reordered := make([]string, 0, len(admins))
+	reordered = append(reordered, admins[idx])
+	for i, addr := range admins {
+		if i == idx {
+			continue
+		}
+		reordered = append(reordered, addr)
+	}
+	return reordered
 }
 
 var (
@@ -299,9 +424,91 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	h.respondAuditSuccess(c, http.StatusCreated, payload, "user.create", resource, start, details)
 
-	if h.emailSender != nil {
-		// Would send email here
+	h.notifyUserCreated(c, req)
+}
+
+func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) {
+	if h == nil || h.emailSender == nil {
+		return
 	}
+	inviter := h.currentAuthUser(c)
+	inviterEmail := ""
+	if inviter != nil {
+		inviterEmail = strings.TrimSpace(inviter.Email)
+	}
+	if inviterEmail == "" {
+		inviterEmail = strings.TrimSpace(c.GetString("user_email"))
+	}
+	rack := h.rackDisplay()
+	base := h.publicBaseURL(c)
+	recipient := strings.TrimSpace(req.Email)
+	if recipient != "" {
+		subjectUser := fmt.Sprintf("Convox Gateway (%s): You've been granted access", rack)
+		textUser, htmlUser, err := emailtemplates.RenderWelcome(rack, recipient, inviterEmail, base, base)
+		if err != nil || (textUser == "" && htmlUser == "") {
+			roles := strings.Join(req.Roles, ", ")
+			textUser = fmt.Sprintf("You've been granted access to the Convox Gateway (%s) with roles: %s.", rack, roles)
+		}
+		_ = h.emailSender.Send(recipient, subjectUser, textUser, htmlUser)
+	}
+
+	admins := h.getAdminEmails()
+	if len(admins) == 0 {
+		return
+	}
+	filtered := make([]string, 0, len(admins))
+	for _, addr := range admins {
+		if strings.EqualFold(addr, req.Email) {
+			continue
+		}
+		filtered = append(filtered, addr)
+	}
+	if len(filtered) == 0 {
+		return
+	}
+	sort.Strings(filtered)
+	recipients := prioritiseInviterFirst(filtered, inviterEmail)
+	creator := inviterEmail
+	if creator == "" {
+		creator = "an administrator"
+	}
+	subjectAdmin := fmt.Sprintf("Convox Gateway (%s): %s added %s (%s)", rack, creator, req.Email, req.Name)
+	textAdmin, htmlAdmin, err := emailtemplates.RenderUserAddedAdmin(rack, creator, req.Email, req.Name, req.Roles)
+	if err != nil || (textAdmin == "" && htmlAdmin == "") {
+		textAdmin = fmt.Sprintf("%s added new user %s (%s) with roles: %s.", creator, req.Email, req.Name, strings.Join(req.Roles, ", "))
+	}
+	_ = h.emailSender.SendMany(recipients, subjectAdmin, textAdmin, htmlAdmin)
+}
+
+func (h *AdminHandler) notifySettingsChanged(c *gin.Context, key, value string) {
+	if h == nil || h.emailSender == nil {
+		return
+	}
+	admins := h.getAdminEmails()
+	if len(admins) == 0 {
+		return
+	}
+	inviter := h.currentAuthUser(c)
+	actorEmail := ""
+	if inviter != nil {
+		actorEmail = strings.TrimSpace(inviter.Email)
+	}
+	if actorEmail == "" {
+		actorEmail = strings.TrimSpace(c.GetString("user_email"))
+	}
+	actorLabel := actorEmail
+	if actorLabel == "" {
+		actorLabel = "an administrator"
+	}
+	sort.Strings(admins)
+	recipients := prioritiseInviterFirst(admins, actorEmail)
+	rack := h.rackDisplay()
+	subject := fmt.Sprintf("Convox Gateway (%s): %s changed the %s setting", rack, actorLabel, key)
+	text, html, err := emailtemplates.RenderSettingsChanged(rack, actorLabel, key, value)
+	if err != nil || (text == "" && html == "") {
+		text = fmt.Sprintf("%s changed %s to %s.", actorLabel, key, value)
+	}
+	_ = h.emailSender.SendMany(recipients, subject, text, html)
 }
 
 // DeleteUser godoc
@@ -1019,10 +1226,7 @@ func (h *AdminHandler) UpdateProtectedEnvVars(c *gin.Context) {
 			return
 		}
 
-		// Send email notification to admins
-		if h.emailSender != nil {
-			// Would send email here
-		}
+		h.notifySettingsChanged(c, "protected_env_vars", strings.Join(out, ", "))
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
@@ -1064,10 +1268,7 @@ func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 			return
 		}
 
-		// Send email notification to admins
-		if h.emailSender != nil {
-			// Would send email here
-		}
+		h.notifySettingsChanged(c, "allow_destructive_actions", strconv.FormatBool(payload.AllowDestructiveActions))
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
@@ -1164,10 +1365,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		return
 	}
 
-	// Send email notification
-	if h.emailSender != nil {
-		// Would send email here
-	}
+	h.notifyAPITokenCreated(c, targetEmail, req.Name)
 
 	apiToken := *resp.APIToken
 	payload := CreateAPITokenResponse{
@@ -1184,6 +1382,58 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	}
 	resource := fmt.Sprintf("%d", resp.APIToken.ID)
 	h.respondAuditSuccess(c, http.StatusOK, payload, "api_token.create", resource, start, details)
+}
+
+func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenName string) {
+	if h == nil || h.emailSender == nil {
+		return
+	}
+	ownerEmail = strings.TrimSpace(ownerEmail)
+	if ownerEmail == "" {
+		return
+	}
+	inviter := h.currentAuthUser(c)
+	creatorEmail := ""
+	if inviter != nil {
+		creatorEmail = strings.TrimSpace(inviter.Email)
+	}
+	if creatorEmail == "" {
+		creatorEmail = strings.TrimSpace(c.GetString("user_email"))
+	}
+	rack := h.rackDisplay()
+	creatorLabel := creatorEmail
+	if creatorLabel == "" {
+		creatorLabel = "an administrator"
+	}
+	subjectOwner := fmt.Sprintf("Convox Gateway (%s): New API token created", rack)
+	textOwner, htmlOwner, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
+	if err != nil || (textOwner == "" && htmlOwner == "") {
+		textOwner = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
+	}
+	_ = h.emailSender.Send(ownerEmail, subjectOwner, textOwner, htmlOwner)
+
+	admins := h.getAdminEmails()
+	if len(admins) == 0 {
+		return
+	}
+	filtered := make([]string, 0, len(admins))
+	for _, addr := range admins {
+		if strings.EqualFold(addr, ownerEmail) {
+			continue
+		}
+		filtered = append(filtered, addr)
+	}
+	if len(filtered) == 0 {
+		return
+	}
+	sort.Strings(filtered)
+	recipients := prioritiseInviterFirst(filtered, creatorEmail)
+	subjectAdmin := fmt.Sprintf("Convox Gateway (%s): API token created for %s", rack, ownerEmail)
+	textAdmin, htmlAdmin, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
+	if err != nil || (textAdmin == "" && htmlAdmin == "") {
+		textAdmin = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)
+	}
+	_ = h.emailSender.SendMany(recipients, subjectAdmin, textAdmin, htmlAdmin)
 }
 
 // ListAPITokens godoc
