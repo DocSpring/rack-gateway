@@ -1,5 +1,6 @@
 import { Eye } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import type { AuditLogEntry } from '../lib/api'
 import { TablePane } from './table-pane'
 import { TimeAgo } from './time-ago'
 import { Badge } from './ui/badge'
@@ -8,24 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 
-export type AuditLogRecord = {
-  id: number
-  timestamp: string
-  user_email: string
-  user_name?: string
-  action_type: string
-  action: string
-  command?: string
-  resource?: string
-  resource_type?: string
-  status: string
-  details?: string
-  ip_address?: string
-  user_agent?: string
-  http_status?: number
-  response_time_ms: number
-  rbac_decision?: string
-}
+export type AuditLogRecord = AuditLogEntry
 
 export type AuditLogsPaneProps = {
   title: string
@@ -46,7 +30,7 @@ export type AuditLogsPaneProps = {
 
 const MAX_LABEL_LEN = 23
 
-function safeParseDetails(details: string | undefined): Record<string, unknown> {
+function safeParseDetails(details: string | undefined | null): Record<string, unknown> {
   if (!details) {
     return {}
   }
@@ -60,9 +44,11 @@ function safeParseDetails(details: string | undefined): Record<string, unknown> 
 function resourceLabelForLog(log: AuditLogRecord): string {
   const details = safeParseDetails(log.details)
   let label = ''
-  if (log.action_type === 'users' || log.action.startsWith('user.')) {
+  const actionType = log.action_type ?? ''
+  const actionName = log.action ?? ''
+  if (actionType === 'users' || actionName.startsWith('user.')) {
     label = (details.email as string) || ''
-  } else if (log.action_type === 'tokens' || log.action.startsWith('api_token.')) {
+  } else if (actionType === 'tokens' || actionName.startsWith('api_token.')) {
     label = (details.name as string) || ''
   }
   if (!label) {
@@ -97,7 +83,7 @@ function LabelBadge({ label }: { label: string }) {
   )
 }
 
-function getStatusBadgeAppearance(status: string): {
+function getStatusBadgeAppearance(status?: string): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline'
   className?: string
 } {
@@ -114,7 +100,7 @@ function getStatusBadgeAppearance(status: string): {
   }
 }
 
-function getActionTypeBadgeAppearance(type: string): {
+function getActionTypeBadgeAppearance(type?: string): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline'
   className?: string
 } {
@@ -135,7 +121,7 @@ function getActionTypeBadgeAppearance(type: string): {
   }
 }
 
-function getResourceTypeBadgeAppearance(type: string): {
+function getResourceTypeBadgeAppearance(type?: string): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline'
   className?: string
 } {
@@ -162,10 +148,10 @@ function getResourceTypeBadgeAppearance(type: string): {
 function extractExecCommand(log: AuditLogRecord): string {
   const raw = (() => {
     try {
-      const parsed = JSON.parse(log.details || '{}') as { command?: string }
-      return (log.command || parsed.command || '').trim()
+      const parsed = JSON.parse(log.details ?? '{}') as { command?: string }
+      return (log.command ?? parsed.command ?? '').trim()
     } catch {
-      return (log.command || '').trim()
+      return (log.command ?? '').trim()
     }
   })()
   if ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"'))) {
@@ -203,7 +189,7 @@ function renderActionCell(log: AuditLogRecord) {
       className="border border-border bg-muted font-mono text-muted-foreground"
       variant="outline"
     >
-      {log.action}
+      {log.action ?? '-'}
     </Badge>
   )
 }
@@ -262,82 +248,84 @@ export function AuditLogsPane({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {logs.map((log) => (
-              <TableRow
-                className="cursor-pointer hover:bg-accent/50"
-                key={log.id}
-                onClick={() => handleRowClick(log)}
-              >
-                <TableCell>
-                  <div>
-                    <div className="font-medium">{log.user_email}</div>
-                    {log.user_name && (
-                      <div className="text-muted-foreground text-xs">{log.user_name}</div>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {(() => {
-                    const appearance = getActionTypeBadgeAppearance(log.action_type)
-                    return (
-                      <Badge className={appearance.className} variant={appearance.variant}>
-                        {log.action_type.replace('_', ' ')}
-                      </Badge>
-                    )
-                  })()}
-                </TableCell>
-                <TableCell className="text-sm">{renderActionCell(log)}</TableCell>
-                <TableCell>
-                  {(() => {
-                    const resourceType =
-                      log.resource_type || log.action_type?.split('.')[0] || 'unknown'
-                    const appearance = getResourceTypeBadgeAppearance(resourceType)
-                    return (
-                      <Badge className={appearance.className} variant={appearance.variant}>
-                        {resourceType}
-                      </Badge>
-                    )
-                  })()}
-                </TableCell>
-                <TableCell>
-                  <LabelBadge label={resourceLabelForLog(log)} />
-                </TableCell>
-                <TableCell>
-                  {(() => {
-                    const appearance = getStatusBadgeAppearance(log.status)
-                    const statusLabel = (() => {
-                      if (log.status === 'denied') {
-                        return 'denied (RBAC)'
-                      }
-                      if ((log.status === 'failed' || log.status === 'error') && log.http_status) {
-                        return `${log.status} (${log.http_status})`
-                      }
-                      return log.status
-                    })()
-                    return (
-                      <Badge className={appearance.className} variant={appearance.variant}>
-                        {statusLabel}
-                      </Badge>
-                    )
-                  })()}
-                </TableCell>
-                <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
-                <TableCell className="font-mono text-sm">
-                  <TimeAgo date={log.timestamp} />
-                </TableCell>
-                <TableCell
-                  className="text-right"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleRowClick(log)
-                  }}
+            {logs.map((log, index) => {
+              const actionType = log.action_type ?? 'unknown'
+              const resourceType = log.resource_type ?? actionType.split('.')[0] ?? 'unknown'
+              const appearance = getActionTypeBadgeAppearance(actionType)
+              const resourceAppearance = getResourceTypeBadgeAppearance(resourceType)
+              const statusAppearance = getStatusBadgeAppearance(log.status)
+              const rowKey = log.id ?? `${log.timestamp ?? 'audit'}-${index}`
+
+              const statusLabel = (() => {
+                if (log.status === 'denied') {
+                  return 'denied (RBAC)'
+                }
+                if (
+                  (log.status === 'failed' || log.status === 'error') &&
+                  typeof log.http_status === 'number'
+                ) {
+                  return `${log.status} (${log.http_status})`
+                }
+                return log.status ?? '-'
+              })()
+
+              return (
+                <TableRow
+                  className="cursor-pointer hover:bg-accent/50"
+                  key={rowKey}
+                  onClick={() => handleRowClick(log)}
                 >
-                  <Button size="sm" variant="ghost">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{log.user_email ?? '-'}</div>
+                      {log.user_name && (
+                        <div className="text-muted-foreground text-xs">{log.user_name}</div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={appearance.className} variant={appearance.variant}>
+                      {actionType.replace('_', ' ')}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">{renderActionCell(log)}</TableCell>
+                  <TableCell>
+                    <Badge
+                      className={resourceAppearance.className}
+                      variant={resourceAppearance.variant}
+                    >
+                      {resourceType}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <LabelBadge label={resourceLabelForLog(log)} />
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={statusAppearance.className}
+                      variant={statusAppearance.variant}
+                    >
+                      {statusLabel}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    <TimeAgo date={log.timestamp ?? null} />
+                  </TableCell>
+                  <TableCell
+                    className="text-right"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleRowClick(log)
+                    }}
+                  >
+                    <Button size="sm" variant="ghost">
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
 
@@ -370,7 +358,7 @@ export function AuditLogsPane({
             <div className="space-y-3 text-sm">
               <div>
                 <span className="text-muted-foreground">Timestamp:</span>{' '}
-                {new Date(selected.timestamp).toISOString()}
+                {selected.timestamp ? new Date(selected.timestamp).toISOString() : '-'}
               </div>
               <div>
                 <span className="text-muted-foreground">User:</span> {selected.user_email}{' '}
@@ -415,7 +403,9 @@ export function AuditLogsPane({
               )}
               <div>
                 <span className="text-muted-foreground">Response Time:</span>{' '}
-                {selected.response_time_ms} ms
+                {typeof selected.response_time_ms === 'number'
+                  ? `${selected.response_time_ms} ms`
+                  : '-'}
               </div>
               <div>
                 <span className="text-muted-foreground">IP:</span> {selected.ip_address || '-'}
@@ -437,9 +427,9 @@ export function AuditLogsPane({
                 <pre className="mt-2 max-h-64 overflow-auto rounded bg-muted p-2 text-xs">
                   {(() => {
                     try {
-                      return JSON.stringify(JSON.parse(selected.details || '{}'), null, 2)
+                      return JSON.stringify(JSON.parse(selected.details ?? '{}'), null, 2)
                     } catch {
-                      return selected.details || '-'
+                      return selected.details ?? '-'
                     }
                   })()}
                 </pre>

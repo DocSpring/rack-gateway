@@ -45,13 +45,6 @@ func cloneDetails(details map[string]interface{}) map[string]interface{} {
 	return copy
 }
 
-type roleOption struct {
-	Name        string   `json:"name"`
-	Label       string   `json:"label"`
-	Description string   `json:"description"`
-	Permissions []string `json:"permissions"`
-}
-
 var (
 	errInvalidStartTime = errors.New("invalid start time")
 	errInvalidEndTime   = errors.New("invalid end time")
@@ -173,7 +166,15 @@ func (h *AdminHandler) respondAuditError(c *gin.Context, statusCode int, action,
 	h.respondAudit(c, statusCode, gin.H{"error": message}, action, resource, auditStatus, start, det)
 }
 
-// ListUsers returns all users
+// ListUsers godoc
+// @Summary List all gateway users
+// @Description Returns every user configured in the gateway along with role assignments.
+// @Tags Users
+// @Produce json
+// @Success 200 {array} db.User
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/users [get]
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	users, err := h.database.ListUsers()
 	if err != nil {
@@ -184,7 +185,18 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
-// GetUser returns a specific user by email.
+// GetUser godoc
+// @Summary Get a user
+// @Description Returns details for a single gateway user.
+// @Tags Users
+// @Produce json
+// @Param email path string true "User email"
+// @Success 200 {object} db.User
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/users/{email} [get]
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	email := strings.TrimSpace(c.Param("email"))
 	if email == "" {
@@ -205,14 +217,23 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-// CreateUser creates a new user
+// CreateUser godoc
+// @Summary Create a user
+// @Description Creates a new gateway user with the provided roles.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body CreateUserRequest true "User payload"
+// @Success 201 {object} UserSummary
+// @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users [post]
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	start := time.Now()
-	var req struct {
-		Email string   `json:"email" binding:"required,email"`
-		Name  string   `json:"name" binding:"required"`
-		Roles []string `json:"roles" binding:"required,min=1"`
-	}
+	var req CreateUserRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondAuditError(c, http.StatusBadRequest, "user.create", strings.TrimSpace(req.Email), err.Error(), start, nil)
@@ -259,11 +280,11 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		}
 	}
 
-	payload := gin.H{
-		"email":            req.Email,
-		"name":             req.Name,
-		"roles":            req.Roles,
-		"created_by_email": strings.TrimSpace(c.GetString("user_email")),
+	payload := UserSummary{
+		Email:          req.Email,
+		Name:           req.Name,
+		Roles:          req.Roles,
+		CreatedByEmail: strings.TrimSpace(c.GetString("user_email")),
 	}
 
 	resource := strings.TrimSpace(req.Email)
@@ -283,7 +304,17 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 }
 
-// DeleteUser deletes a user
+// DeleteUser godoc
+// @Summary Delete a user
+// @Description Removes a gateway user and revokes all sessions they own.
+// @Tags Users
+// @Param email path string true "User email"
+// @Success 204 {string} string "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email} [delete]
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	start := time.Now()
 	email := c.Param("email")
@@ -303,16 +334,28 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusNoContent, nil, "user.delete", strings.TrimSpace(email), start, nil)
 }
 
-// UpdateUserProfile updates user profile
+// UpdateUserProfile godoc
+// @Summary Update user profile
+// @Description Updates a user's display name and/or email.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param email path string true "Current email"
+// @Param request body UpdateUserProfileRequest true "User profile"
+// @Success 200 {object} UserSummary
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email} [put]
 func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	start := time.Now()
 	originalEmail := strings.TrimSpace(c.Param("email"))
 	currentEmail := originalEmail
 
-	var req struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
+	var req UpdateUserProfileRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondAuditError(c, http.StatusBadRequest, "user.update", originalEmail, err.Error(), start, nil)
@@ -367,10 +410,10 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 		return
 	}
 
-	payload := gin.H{
-		"email": currentEmail,
-		"name":  updatedName,
-		"roles": userConfig.Roles,
+	payload := UserSummary{
+		Email: currentEmail,
+		Name:  updatedName,
+		Roles: userConfig.Roles,
 	}
 	details := map[string]interface{}{"name": updatedName}
 	if emailChanged {
@@ -380,7 +423,21 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update", currentEmail, start, details)
 }
 
-// UpdateUserRoles updates user roles
+// UpdateUserRoles godoc
+// @Summary Update user roles
+// @Description Replaces the role assignments for a user.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param email path string true "User email"
+// @Param request body UpdateUserRolesRequest true "Role payload"
+// @Success 200 {object} UserSummary
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email}/roles [put]
 func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 	start := time.Now()
 	email := c.Param("email")
@@ -392,9 +449,7 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Roles []string `json:"roles" binding:"required,min=1"`
-	}
+	var req UpdateUserRolesRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondAuditError(c, http.StatusBadRequest, "user.update_roles", strings.TrimSpace(email), err.Error(), start, nil)
@@ -413,16 +468,27 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 		return
 	}
 
-	payload := gin.H{
-		"email": email,
-		"name":  user.Name,
-		"roles": req.Roles,
+	payload := UserSummary{
+		Email: email,
+		Name:  user.Name,
+		Roles: req.Roles,
 	}
 	details := map[string]interface{}{"roles": req.Roles}
 	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update_roles", strings.TrimSpace(email), start, details)
 }
 
-// ListUserSessions returns the active sessions for a given user.
+// ListUserSessions godoc
+// @Summary List active sessions for a user
+// @Description Returns the active (non-revoked) web sessions for the specified user.
+// @Tags Users
+// @Produce json
+// @Param email path string true "User email"
+// @Success 200 {array} UserSessionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/users/{email}/sessions [get]
 func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
@@ -451,26 +517,26 @@ func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 		return
 	}
 
-	result := make([]gin.H, 0, len(sessions))
+	result := make([]UserSessionResponse, 0, len(sessions))
 	for _, sess := range sessions {
-		entry := gin.H{
-			"id":           sess.ID,
-			"created_at":   sess.CreatedAt.UTC().Format(time.RFC3339),
-			"last_seen_at": sess.LastSeenAt.UTC().Format(time.RFC3339),
-			"expires_at":   sess.ExpiresAt.UTC().Format(time.RFC3339),
+		entry := UserSessionResponse{
+			ID:        sess.ID,
+			CreatedAt: sess.CreatedAt.UTC().Format(time.RFC3339),
+			LastSeen:  sess.LastSeenAt.UTC().Format(time.RFC3339),
+			ExpiresAt: sess.ExpiresAt.UTC().Format(time.RFC3339),
 		}
 		if sess.IPAddress != "" {
-			entry["ip_address"] = sess.IPAddress
+			entry.IPAddress = sess.IPAddress
 		}
 		if sess.UserAgent != "" {
-			entry["user_agent"] = sess.UserAgent
+			entry.UserAgent = sess.UserAgent
 		}
 		if len(sess.Metadata) > 0 {
 			var meta interface{}
 			if err := json.Unmarshal(sess.Metadata, &meta); err == nil {
-				entry["metadata"] = meta
+				entry.Metadata = meta
 			} else {
-				entry["metadata"] = json.RawMessage(sess.Metadata)
+				entry.Metadata = json.RawMessage(sess.Metadata)
 			}
 		}
 		result = append(result, entry)
@@ -480,7 +546,20 @@ func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.list", email, start, details)
 }
 
-// RevokeUserSession revokes a specific session for a user.
+// RevokeUserSession godoc
+// @Summary Revoke a user session
+// @Description Revokes a single session for the specified user.
+// @Tags Users
+// @Produce json
+// @Param email path string true "User email"
+// @Param sessionID path int true "Session ID"
+// @Success 200 {object} RevokeSessionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email}/sessions/{sessionID}/revoke [post]
 func (h *AdminHandler) RevokeUserSession(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
@@ -527,12 +606,24 @@ func (h *AdminHandler) RevokeUserSession(c *gin.Context) {
 		return
 	}
 
-	result := gin.H{"revoked": revoked}
+	result := RevokeSessionResponse{Revoked: revoked}
 	details := map[string]interface{}{"session_id": sessionID, "revoked": revoked}
 	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.revoke", email, start, details)
 }
 
-// RevokeAllUserSessions revokes all active sessions for a user.
+// RevokeAllUserSessions godoc
+// @Summary Revoke all sessions for a user
+// @Description Revokes every active session belonging to the specified user.
+// @Tags Users
+// @Produce json
+// @Param email path string true "User email"
+// @Success 200 {object} RevokeAllSessionsResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email}/sessions/revoke_all [post]
 func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
@@ -562,7 +653,7 @@ func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 		return
 	}
 
-	result := gin.H{"revoked_count": revokedCount}
+	result := RevokeAllSessionsResponse{RevokedCount: revokedCount}
 	details := map[string]interface{}{"revoked_count": revokedCount}
 	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.revoke_all", email, start, details)
 }
@@ -583,12 +674,19 @@ func (h *AdminHandler) sessionActorID(c *gin.Context) *int64 {
 	return &id
 }
 
-// ListRoles returns all available roles
+// ListRoles godoc
+// @Summary List RBAC roles
+// @Description Returns metadata and permissions for each gateway RBAC role.
+// @Tags Roles
+// @Produce json
+// @Success 200 {object} map[string]RoleDescriptor
+// @Security SessionCookie
+// @Router /admin/roles [get]
 func (h *AdminHandler) ListRoles(c *gin.Context) {
 	rolePerms := rbac.DefaultRolePermissions()
 	metaMap := rbac.RoleMetadataMap()
 
-	roles := make(map[string]interface{}, len(metaMap))
+	roles := make(map[string]RoleDescriptor, len(metaMap))
 	for _, role := range rbac.RoleOrder() {
 		meta, ok := metaMap[role]
 		if !ok {
@@ -598,18 +696,38 @@ func (h *AdminHandler) ListRoles(c *gin.Context) {
 		if role == "admin" {
 			perms = []string{"convox:*:*"}
 		}
-		roles[role] = map[string]interface{}{
-			"name":        role,
-			"label":       meta.Label,
-			"description": meta.Description,
-			"permissions": perms,
+		roles[role] = RoleDescriptor{
+			Name:        role,
+			Label:       meta.Label,
+			Description: meta.Description,
+			Permissions: perms,
 		}
 	}
 
 	c.JSON(http.StatusOK, roles)
 }
 
-// ListAuditLogs returns audit logs
+// ListAuditLogs godoc
+// @Summary List audit logs
+// @Description Returns paginated audit logs filtered by optional query parameters.
+// @Tags Audit
+// @Produce json
+// @Param search query string false "Text search"
+// @Param action_type query string false "Action type filter"
+// @Param resource_type query string false "Resource type filter"
+// @Param status query string false "Status filter"
+// @Param page query int false "Page number"
+// @Param limit query int false "Page size"
+// @Param start query string false "ISO8601 start time"
+// @Param end query string false "ISO8601 end time"
+// @Param range query string false "Relative range (e.g. 24h, 7d, custom)"
+// @Param user query string false "Filter by user email"
+// @Param user_id query string false "Filter by user ID"
+// @Success 200 {object} AuditLogsResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/audit [get]
 func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 	start := time.Now()
 	filters, page, limit, err := h.auditFiltersFromRequest(c)
@@ -633,11 +751,11 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 		return
 	}
 
-	payload := gin.H{
-		"logs":  logs,
-		"total": total,
-		"page":  page,
-		"limit": limit,
+	payload := AuditLogsResponse{
+		Logs:  logs,
+		Total: total,
+		Page:  page,
+		Limit: limit,
 	}
 
 	details := map[string]interface{}{
@@ -659,7 +777,22 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, payload, "audit.list", "", start, details)
 }
 
-// ExportAuditLogs exports audit logs as CSV
+// ExportAuditLogs godoc
+// @Summary Export audit logs as CSV
+// @Description Streams the filtered audit log dataset as CSV.
+// @Tags Audit
+// @Produce text/csv
+// @Param search query string false "Text search"
+// @Param action_type query string false "Action type filter"
+// @Param resource_type query string false "Resource type filter"
+// @Param status query string false "Status filter"
+// @Param since query string false "ISO8601 start time"
+// @Param until query string false "ISO8601 end time"
+// @Success 200 {file} binary
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/audit/export [get]
 func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	start := time.Now()
 	filters, _, _, err := h.auditFiltersFromRequest(c)
@@ -737,6 +870,16 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 }
 
 // Config and settings handlers
+
+// GetConfig godoc
+// @Summary Get legacy configuration
+// @Description Returns the legacy user/domain configuration payload (deprecated).
+// @Tags Config
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/config [get]
 func (h *AdminHandler) GetConfig(c *gin.Context) {
 	// Get users from the manager
 	users, err := h.rbac.GetUsers()
@@ -754,11 +897,29 @@ func (h *AdminHandler) GetConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, apiConfig)
 }
 
+// UpdateConfig godoc
+// @Summary Update legacy configuration
+// @Description Placeholder endpoint retained for backwards compatibility. Always returns 501.
+// @Tags Config
+// @Accept json
+// @Produce json
+// @Failure 501 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/config [put]
 func (h *AdminHandler) UpdateConfig(c *gin.Context) {
 	// Would update configuration
 	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
 }
 
+// GetSettings godoc
+// @Summary Get gateway admin settings
+// @Description Returns administrative settings including protected env vars and rack TLS state.
+// @Tags Settings
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Security SessionCookie
+// @Router /admin/settings [get]
 func (h *AdminHandler) GetSettings(c *gin.Context) {
 	resp := make(map[string]interface{})
 
@@ -793,12 +954,23 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// UpdateProtectedEnvVars godoc
+// @Summary Update protected environment variables
+// @Description Replaces the list of protected environment variable keys.
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param request body UpdateProtectedEnvVarsRequest true "Protected env vars"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/settings/protected_env_vars [put]
 func (h *AdminHandler) UpdateProtectedEnvVars(c *gin.Context) {
 	email := c.GetString("user_email")
 
-	var payload struct {
-		Protected []string `json:"protected_env_vars"`
-	}
+	var payload UpdateProtectedEnvVarsRequest
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -807,8 +979,8 @@ func (h *AdminHandler) UpdateProtectedEnvVars(c *gin.Context) {
 
 	// Normalize and de-dup to uppercase
 	seen := map[string]struct{}{}
-	out := make([]string, 0, len(payload.Protected))
-	for _, k := range payload.Protected {
+	out := make([]string, 0, len(payload.ProtectedEnvVars))
+	for _, k := range payload.ProtectedEnvVars {
 		k = strings.TrimSpace(strings.ToUpper(k))
 		if k == "" {
 			continue
@@ -840,15 +1012,26 @@ func (h *AdminHandler) UpdateProtectedEnvVars(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }
 
+// UpdateAllowDestructiveActions godoc
+// @Summary Toggle destructive action protections
+// @Description Enables or disables destructive actions such as rack resets.
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param request body UpdateAllowDestructiveActionsRequest true "Toggle payload"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/settings/allow_destructive_actions [put]
 func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 	email := c.GetString("user_email")
 
-	var payload struct {
-		Allow bool `json:"allow_destructive_actions"`
-	}
+	var payload UpdateAllowDestructiveActionsRequest
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -863,7 +1046,7 @@ func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 	}
 
 	if h.database != nil {
-		if err := h.database.UpsertSetting("allow_destructive_actions", payload.Allow, uid); err != nil {
+		if err := h.database.UpsertSetting("allow_destructive_actions", payload.AllowDestructiveActions, uid); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save setting"})
 			return
 		}
@@ -874,10 +1057,20 @@ func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "updated"})
+	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }
 
-// RefreshRackTLSCert forces a refresh of the pinned rack TLS certificate.
+// RefreshRackTLSCert godoc
+// @Summary Refresh rack TLS certificate
+// @Description Fetches and stores the latest TLS certificate for the configured Convox rack.
+// @Tags Settings
+// @Produce json
+// @Success 200 {object} db.RackTLSCert
+// @Failure 501 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/settings/rack_tls_cert/refresh [post]
 func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
 	if h.config == nil || !h.config.RackTLSPinningEnabled || h.rackCertMgr == nil {
 		c.JSON(http.StatusNotImplemented, gin.H{"error": "rack certificate manager not configured"})
@@ -898,21 +1091,28 @@ func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"pem":         cert.PEM,
-		"fingerprint": cert.Fingerprint,
-		"fetched_at":  cert.FetchedAt,
-	})
+	c.JSON(http.StatusOK, cert)
 }
 
 // Token management
+
+// CreateAPIToken godoc
+// @Summary Create an API token
+// @Description Generates a new API token for automation or CI/CD use.
+// @Tags API Tokens
+// @Accept json
+// @Produce json
+// @Param request body CreateAPITokenRequest true "Token payload"
+// @Success 200 {object} CreateAPITokenResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/tokens [post]
 func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	start := time.Now()
-	var req struct {
-		Name        string   `json:"name" binding:"required"`
-		UserEmail   string   `json:"user_email"`
-		Permissions []string `json:"permissions"`
-	}
+	var req CreateAPITokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondAuditError(c, http.StatusBadRequest, "api_token.create", strings.TrimSpace(req.UserEmail), err.Error(), start, nil)
@@ -956,12 +1156,13 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		// Would send email here
 	}
 
-	payload := gin.H{
-		"token":       resp.Token,
-		"id":          resp.APIToken.ID,
-		"name":        resp.APIToken.Name,
-		"permissions": resp.APIToken.Permissions,
-		"api_token":   resp.APIToken,
+	apiToken := *resp.APIToken
+	payload := CreateAPITokenResponse{
+		Token:       resp.Token,
+		ID:          apiToken.ID,
+		Name:        apiToken.Name,
+		Permissions: apiToken.Permissions,
+		APIToken:    apiToken,
 	}
 	details := map[string]interface{}{
 		"name":        resp.APIToken.Name,
@@ -972,6 +1173,15 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, payload, "api_token.create", resource, start, details)
 }
 
+// ListAPITokens godoc
+// @Summary List API tokens
+// @Description Returns all API tokens configured in the system.
+// @Tags API Tokens
+// @Produce json
+// @Success 200 {array} db.APIToken
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/tokens [get]
 func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 	// List all API tokens
 	tokens, err := h.database.ListAllAPITokens()
@@ -983,6 +1193,18 @@ func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 	c.JSON(http.StatusOK, tokens)
 }
 
+// GetAPIToken godoc
+// @Summary Get API token
+// @Description Returns metadata for a specific API token.
+// @Tags API Tokens
+// @Produce json
+// @Param tokenID path int true "Token ID"
+// @Success 200 {object} db.APIToken
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/tokens/{tokenID} [get]
 func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
 	if err != nil {
@@ -999,6 +1221,21 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 	c.JSON(http.StatusOK, token)
 }
 
+// UpdateAPIToken godoc
+// @Summary Update an API token
+// @Description Updates token metadata such as name and permissions.
+// @Tags API Tokens
+// @Accept json
+// @Produce json
+// @Param tokenID path int true "Token ID"
+// @Param request body UpdateAPITokenRequest true "Token update"
+// @Success 200 {object} db.APIToken
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/tokens/{tokenID} [put]
 func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := c.Param("tokenID")
@@ -1008,10 +1245,7 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Name        string   `json:"name"`
-		Permissions []string `json:"permissions"`
-	}
+	var req UpdateAPITokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, err.Error(), start, nil)
@@ -1065,6 +1299,18 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, updated, "api_token.update", tokenIDStr, start, details)
 }
 
+// DeleteAPIToken godoc
+// @Summary Delete an API token
+// @Description Permanently removes an API token.
+// @Tags API Tokens
+// @Param tokenID path int true "Token ID"
+// @Success 204 {string} string "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/tokens/{tokenID} [delete]
 func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := c.Param("tokenID")
@@ -1124,10 +1370,10 @@ func collectAllPermissions(rolePerms map[string][]string) []string {
 	return perms
 }
 
-func buildRoleOptions(rolePerms map[string][]string) []roleOption {
+func buildRoleOptions(rolePerms map[string][]string) []RoleDescriptor {
 	meta := rbac.RoleMetadataMap()
 	ordered := rbac.RoleOrder()
-	roles := make([]roleOption, 0, len(ordered))
+	roles := make([]RoleDescriptor, 0, len(ordered))
 	for _, role := range ordered {
 		perms, ok := rolePerms[role]
 		if !ok {
@@ -1139,7 +1385,7 @@ func buildRoleOptions(rolePerms map[string][]string) []roleOption {
 		}
 		sorted := append([]string(nil), perms...)
 		sort.Strings(sorted)
-		roles = append(roles, roleOption{
+		roles = append(roles, RoleDescriptor{
 			Name:        role,
 			Label:       info.Label,
 			Description: info.Description,
@@ -1178,6 +1424,15 @@ func flattenUserRoles(manager rbac.RBACManager, email string, rolePerms map[stri
 	return roles, perms
 }
 
+// GetTokenPermissionMetadata godoc
+// @Summary Get token permission metadata
+// @Description Returns the permission catalog and metadata used to build API token forms.
+// @Tags API Tokens
+// @Produce json
+// @Success 200 {object} TokenPermissionMetadata
+// @Failure 401 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/tokens/permissions [get]
 func (h *AdminHandler) GetTokenPermissionMetadata(c *gin.Context) {
 	email := strings.TrimSpace(c.GetString("user_email"))
 	if email == "" {
@@ -1195,13 +1450,15 @@ func (h *AdminHandler) GetTokenPermissionMetadata(c *gin.Context) {
 	roles := buildRoleOptions(rolePerms)
 	userRoles, userPerms := flattenUserRoles(h.rbac, email, rolePerms)
 
-	c.JSON(http.StatusOK, map[string]interface{}{
-		"permissions":         allPermissions,
-		"roles":               roles,
-		"default_permissions": token.DefaultCICDPermissions(),
-		"user_roles":          userRoles,
-		"user_permissions":    userPerms,
-	})
+	payload := TokenPermissionMetadata{
+		Permissions:        allPermissions,
+		Roles:              roles,
+		DefaultPermissions: token.DefaultCICDPermissions(),
+		UserRoles:          userRoles,
+		UserPermissions:    userPerms,
+	}
+
+	c.JSON(http.StatusOK, payload)
 }
 
 func parseAuditTime(value string) (time.Time, error) {

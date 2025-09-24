@@ -14,10 +14,16 @@ func NewHealthHandler() *HealthHandler {
 	return &HealthHandler{}
 }
 
-// Health returns the health status
+// Health godoc
+// @Summary Health check
+// @Description Returns service health information.
+// @Tags Health
+// @Produce json
+// @Success 200 {object} HealthResponse
+// @Router /health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"service": "convox-gateway",
+	c.JSON(http.StatusOK, HealthResponse{
+		Status:  "ok",
+		Service: "convox-gateway",
 	})
 }

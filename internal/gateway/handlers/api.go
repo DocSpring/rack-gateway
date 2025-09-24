@@ -52,11 +52,20 @@ func (h *APIHandler) primaryRack() (config.RackConfig, bool) {
 	return config.RackConfig{}, false
 }
 
-// GetMe returns the current user's information
+// GetMe godoc
+// @Summary Get current user profile
+// @Description Returns the authenticated user's profile, roles, and default rack summary.
+// @Tags Me
+// @Produce json
+// @Success 200 {object} CurrentUserResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /me [get]
 func (h *APIHandler) GetMe(c *gin.Context) {
 	email := c.GetString("user_email")
 	name := c.GetString("user_name")
-	roles, _ := c.Get("user_roles")
+	rolesVal, _ := c.Get("user_roles")
+	roles := normalizeStringSlice(rolesVal)
 
 	user, err := h.rbac.GetUser(email)
 	if err != nil {
@@ -64,11 +73,11 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 		return
 	}
 
-	response := gin.H{
-		"email":       email,
-		"name":        name,
-		"roles":       roles,
-		"permissions": user.Roles, // Would expand to actual permissions
+	response := CurrentUserResponse{
+		Email:       email,
+		Name:        name,
+		Roles:       roles,
+		Permissions: user.Roles,
 	}
 
 	if rc, ok := h.primaryRack(); ok {
@@ -80,17 +89,28 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 			}
 		}
 		host := strings.TrimSpace(rc.URL)
-		response["rack"] = gin.H{
-			"name":  rc.Name,
-			"alias": alias,
-			"host":  host,
+		response.Rack = &RackSummary{
+			Name:  rc.Name,
+			Alias: alias,
+			Host:  host,
 		}
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// GetCreatedBy returns creator information for resources
+// GetCreatedBy godoc
+// @Summary Get resource creator metadata
+// @Description Returns creator information for the supplied resource identifiers.
+// @Tags Metadata
+// @Produce json
+// @Param type query string true "Resource type" Enums(app,build,release)
+// @Param ids query string false "Comma-separated resource IDs"
+// @Success 200 {object} map[string]db.CreatorInfo
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /created-by [get]
 func (h *APIHandler) GetCreatedBy(c *gin.Context) {
 	typ := strings.TrimSpace(c.Query("type"))
 	if typ == "" {
@@ -143,7 +163,33 @@ func (h *APIHandler) GetCreatedBy(c *gin.Context) {
 	c.JSON(http.StatusOK, creators)
 }
 
-// GetRackInfo returns information about the current rack
+func normalizeStringSlice(value interface{}) []string {
+	switch v := value.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+// GetRackInfo godoc
+// @Summary Get rack system information
+// @Description Proxies the rack /system endpoint returning the rack's metadata.
+// @Tags Rack
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 502 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /rack [get]
 func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	// Get the default rack config
 	rackConfig, exists := h.config.Racks["default"]
@@ -207,7 +253,21 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, rackInfo)
 }
 
-// GetEnvValues returns environment variables for an app
+// GetEnvValues godoc
+// @Summary Get environment variables
+// @Description Returns environment variables for a Convox app, masking secrets unless authorized.
+// @Tags Environment
+// @Produce json
+// @Param app query string true "App name"
+// @Param key query string false "Specific key to fetch"
+// @Param secrets query bool false "Include secret values"
+// @Success 200 {object} EnvValuesResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /env [get]
 func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	app := strings.TrimSpace(c.Query("app"))
 	if app == "" {
@@ -354,5 +414,5 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		ResponseTimeMs: int(time.Since(start).Milliseconds()),
 	})
 
-	c.JSON(http.StatusOK, gin.H{"env": envMap})
+	c.JSON(http.StatusOK, EnvValuesResponse{Env: envMap})
 }

@@ -47,6 +47,7 @@ test('users: add, edit role, delete', async ({ page }) => {
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
   await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+  await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
   await expect(row).toHaveCount(0)
 })
 
@@ -97,6 +98,7 @@ test('users: add shows all fields and persists after refresh', async ({ page }) 
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
   await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+  await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
   await expect(row).toHaveCount(0)
 })
 

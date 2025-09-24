@@ -20,7 +20,7 @@ import {
 import type { UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
 import { useAuth } from '../contexts/auth-context'
-import type { GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
+import type { AuditLogsResponse, GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
 import { AVAILABLE_ROLES, api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { pickPrimaryRole } from '../lib/user-roles'
@@ -36,6 +36,8 @@ function roleBadges(roles: string[]) {
   })
 }
 
+type SessionId = NonNullable<UserSessionSummary['id']>
+
 function SessionTable({
   sessions,
   onRevoke,
@@ -45,8 +47,8 @@ function SessionTable({
   disableActions,
 }: {
   sessions: UserSessionSummary[]
-  onRevoke: (sessionId: number) => void
-  pendingSessionId: number | null
+  onRevoke: (sessionId: SessionId) => void
+  pendingSessionId: SessionId | null
   loading: boolean
   error?: string | null
   disableActions: boolean
@@ -77,37 +79,47 @@ function SessionTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sessions.map((session) => (
-            <TableRow key={session.id}>
-              <TableCell className="text-sm">
-                <TimeAgo date={session.created_at} />
-              </TableCell>
-              <TableCell className="text-sm">
-                <TimeAgo date={session.last_seen_at} />
-              </TableCell>
-              <TableCell className="text-sm">
-                <TimeAgo date={session.expires_at} />
-              </TableCell>
-              <TableCell className="font-mono text-sm">{session.ip_address || '—'}</TableCell>
-              <TableCell className="max-w-[220px] truncate text-sm" title={session.user_agent}>
-                {session.user_agent || '—'}
-              </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  disabled={disableActions || pendingSessionId === session.id}
-                  onClick={() => onRevoke(session.id)}
-                  size="sm"
-                  variant="destructive"
-                >
-                  {pendingSessionId === session.id ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    'Sign Out'
-                  )}
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
+          {sessions.map((session, index) => {
+            const sessionId = session.id
+            const rowKey = sessionId ?? `session-${index}`
+            return (
+              <TableRow key={rowKey}>
+                <TableCell className="text-sm">
+                  <TimeAgo date={session.created_at ?? null} />
+                </TableCell>
+                <TableCell className="text-sm">
+                  <TimeAgo date={session.last_seen_at ?? null} />
+                </TableCell>
+                <TableCell className="text-sm">
+                  <TimeAgo date={session.expires_at ?? null} />
+                </TableCell>
+                <TableCell className="font-mono text-sm">{session.ip_address || '—'}</TableCell>
+                <TableCell className="max-w-[220px] truncate text-sm" title={session.user_agent}>
+                  {session.user_agent || '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    disabled={
+                      disableActions || (sessionId !== undefined && pendingSessionId === sessionId)
+                    }
+                    onClick={() => {
+                      if (sessionId !== undefined) {
+                        onRevoke(sessionId)
+                      }
+                    }}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    {sessionId !== undefined && pendingSessionId === sessionId ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      'Sign Out'
+                    )}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
@@ -121,7 +133,7 @@ export function UserPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
-  const [pendingSessionId, setPendingSessionId] = useState<number | null>(null)
+  const [pendingSessionId, setPendingSessionId] = useState<SessionId | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
 
@@ -143,7 +155,7 @@ export function UserPage() {
     error: sessionsError,
   } = useQuery<UserSessionSummary[], Error>({
     queryKey: ['userSessions', decodedEmail],
-    queryFn: () => api.getUserSessions(decodedEmail),
+    queryFn: () => api.listUserSessions(decodedEmail),
     enabled: !!user,
     refetchOnWindowFocus: true,
   })
@@ -154,30 +166,22 @@ export function UserPage() {
     data: auditTableData,
     isLoading: auditTableLoading,
     error: auditTableError,
-  } = useQuery<{ logs: AuditLogRecord[]; total: number; page: number; limit: number }, Error>({
+  } = useQuery<AuditLogsResponse, Error>({
     queryKey: ['userAuditLogs', decodedEmail, auditPageIndex, DEFAULT_PER_PAGE],
-    queryFn: () => {
-      const params = new URLSearchParams({
+    queryFn: () =>
+      api.listAuditLogs({
         user: decodedEmail,
-        page: String(auditPageIndex),
-        limit: String(DEFAULT_PER_PAGE),
+        page: auditPageIndex,
+        limit: DEFAULT_PER_PAGE,
         range: '30d',
-      })
-
-      return api.get<{
-        logs: AuditLogRecord[]
-        total: number
-        page: number
-        limit: number
-      }>(`/.gateway/api/admin/audit?${params}`)
-    },
+      }),
     enabled: !!user,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: true,
     staleTime: 0,
   })
 
-  const auditLogs: AuditLogRecord[] = auditTableData?.logs ?? []
+  const auditLogs = (auditTableData?.logs ?? []) as AuditLogRecord[]
   const auditTotal = auditTableData?.total ?? 0
   const auditLimit = auditTableData?.limit ?? DEFAULT_PER_PAGE
   const currentAuditPage = auditTableData?.page ?? auditPageIndex
@@ -293,15 +297,18 @@ export function UserPage() {
     }
 
     const desiredRoles: RoleName[] = [values.role]
-    const emailChanged = trimmedEmail !== existingUser.email
-    const profileChanged = emailChanged || trimmedName !== existingUser.name
+    const existingRoles = existingUser.roles ?? []
+    const currentEmail = existingUser.email ?? ''
+    const currentName = existingUser.name ?? ''
+    const emailChanged = trimmedEmail !== currentEmail
+    const profileChanged = emailChanged || trimmedName !== currentName
     const rolesChanged =
-      existingUser.roles.length !== desiredRoles.length ||
-      desiredRoles.some((role) => !existingUser.roles.includes(role))
+      existingRoles.length !== desiredRoles.length ||
+      desiredRoles.some((role) => !existingRoles.includes(role))
 
     return {
       plan: {
-        originalEmail: existingUser.email,
+        originalEmail: currentEmail,
         routeEmail: decodedEmail,
         trimmedEmail,
         trimmedName,
@@ -361,7 +368,7 @@ export function UserPage() {
   }
 
   const revokeSessionMutation = useMutation({
-    mutationFn: (sessionId: number) => api.revokeUserSession(decodedEmail, sessionId),
+    mutationFn: (sessionId: SessionId) => api.revokeUserSession(decodedEmail, sessionId),
     onMutate: (sessionId) => {
       setPendingSessionId(sessionId)
     },
@@ -451,8 +458,8 @@ export function UserPage() {
             {userLoading ? 'Loading…' : user?.name || decodedEmail}
           </h1>
           <p className="text-muted-foreground">{decodedEmail}</p>
-          {user && user.roles.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">{roleBadges(user.roles)}</div>
+          {user?.roles && user.roles.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">{roleBadges(user.roles ?? [])}</div>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 md:justify-end">

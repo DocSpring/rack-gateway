@@ -5,6 +5,10 @@
       "**/*.{js,ts,jsx,tsx}",
       "*.{js,ts,jsx,tsx}",
       "!src/lib/generated/**/*.ts",
+      "!src/api/generated.ts",
+      "!src/api/types.generated.ts",
+      "!src/api/schemas/**/*.ts",
+      "!src/api/openapi.json",
       "!test-results",
       "!playwright-report"
     ]

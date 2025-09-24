@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { APIRoute, WebRoute } from '@/lib/routes'
+import { WebRoute } from '@/lib/routes'
 import { login } from './helpers'
 
 function escapeRegex(value: string) {
@@ -19,7 +19,23 @@ test.describe('User Audit Logs', () => {
     await page.getByRole('button', { name: /Add User/i }).click()
     await page.getByLabel('Email').fill(targetEmail)
     await page.getByLabel('Name').fill(targetName)
-    await page.getByRole('button', { name: /Add User/i }).click()
+    const waitForCreate = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes('/.gateway/api/admin/users') &&
+        (response.status() === 201 || response.status() === 200)
+    )
+    const waitForUsersRefresh = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().includes('/.gateway/api/admin/users') &&
+        response.status() === 200
+    )
+    await Promise.all([
+      waitForCreate,
+      waitForUsersRefresh,
+      page.getByRole('button', { name: /Add User/i }).click(),
+    ])
     await expect(page.locator('text=User created successfully').first()).toBeVisible()
 
     const userRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
@@ -27,29 +43,17 @@ test.describe('User Audit Logs', () => {
 
     const encodedEmail = encodeURIComponent(targetEmail)
 
-    const auditRequestPromise = page.waitForRequest((req) => {
-      if (!req.url().includes(APIRoute('admin/audit')) || req.method() !== 'GET') {
-        return false
-      }
-      try {
-        const url = new URL(req.url())
-        return url.searchParams.get('user') === targetEmail
-      } catch {
-        return false
-      }
-    })
-
     const userLink = userRow.locator('a').first()
 
     await Promise.all([
-      auditRequestPromise,
       page.waitForURL(new RegExp(`/users/${escapeRegex(encodedEmail)}(?:/)?$`)),
       userLink.click(),
     ])
 
     const auditRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
     const emptyState = page.locator('text=No audit logs for this user').first()
-    if ((await auditRow.count()) > 0) {
+
+    if (await auditRow.count()) {
       await expect(auditRow).toBeVisible()
       await expect(auditRow).toContainText(targetEmail)
     } else {
@@ -63,7 +67,24 @@ test.describe('User Audit Logs', () => {
     await cleanupRow.getByRole('button', { name: /Delete User/i }).click()
     const deleteDialog = page.getByRole('dialog')
     await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
-    await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+    const waitForDelete = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        response.url().includes('/.gateway/api/admin/users/') &&
+        (response.status() === 204 || response.status() === 200)
+    )
+    const waitForUsersReload = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().includes('/.gateway/api/admin/users') &&
+        response.status() === 200
+    )
+    await Promise.all([
+      waitForDelete,
+      waitForUsersReload,
+      deleteDialog.getByRole('button', { name: /Delete User/i }).click(),
+    ])
+    await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
     await expect(cleanupRow).toHaveCount(0)
   })
 

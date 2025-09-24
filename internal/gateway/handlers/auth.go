@@ -42,7 +42,14 @@ func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Conf
 	}
 }
 
-// CLILoginStart starts the CLI OAuth flow
+// CLILoginStart godoc
+// @Summary Start CLI OAuth login
+// @Description Initiates the CLI OAuth flow and returns PKCE parameters.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} auth.LoginStartResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/cli/start [post]
 func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 	resp, err := h.oauth.StartLogin()
 	if err != nil {
@@ -55,7 +62,15 @@ func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// CLILoginCallback handles the OAuth redirect callback for CLI
+// CLILoginCallback godoc
+// @Summary Complete CLI OAuth redirect
+// @Description Stores the OAuth authorization code for the CLI to finish login.
+// @Tags Auth
+// @Param code query string true "Authorization code"
+// @Param state query string true "State"
+// @Success 307 {string} string "Temporary Redirect"
+// @Failure 400 {string} string "Missing parameters"
+// @Router /auth/cli/callback [get]
 func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state")
@@ -74,12 +89,19 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/cli-auth-success.html")
 }
 
-// CLILoginComplete completes the CLI OAuth flow
+// CLILoginComplete godoc
+// @Summary Finalize CLI OAuth login
+// @Description Exchanges the stored authorization code and PKCE verifier for a session token.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body CLILoginCompleteRequest true "CLI login payload"
+// @Success 200 {object} auth.LoginResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/cli/complete [post]
 func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
-	var req struct {
-		State        string `json:"state" binding:"required"`
-		CodeVerifier string `json:"code_verifier" binding:"required"`
-	}
+	var req CLILoginCompleteRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -103,15 +125,15 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 	// Clear the stored code
 	_ = h.database.DeleteCLILoginCode(req.State)
 
-	c.JSON(http.StatusOK, gin.H{
-		"token":      resp.Token,
-		"email":      resp.Email,
-		"name":       resp.Name,
-		"expires_at": resp.ExpiresAt,
-	})
+	c.JSON(http.StatusOK, resp)
 }
 
-// WebLoginStart starts the web OAuth flow
+// WebLoginStart godoc
+// @Summary Start web OAuth login
+// @Description Redirects the browser to the identity provider for login.
+// @Tags Auth
+// @Success 302 {string} string "Redirect to identity provider"
+// @Router /auth/web/login [get]
 func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 	h.auditLogin(c, "web", "success")
 	authURL, state := h.oauth.StartWebLogin()
@@ -119,7 +141,17 @@ func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 	c.Redirect(http.StatusFound, authURL)
 }
 
-// WebLoginCallback handles the OAuth callback for web
+// WebLoginCallback godoc
+// @Summary Complete web OAuth login
+// @Description Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
+// @Tags Auth
+// @Param code query string true "Authorization code"
+// @Param state query string true "State"
+// @Success 302 {string} string "Redirect to web UI"
+// @Failure 400 {string} string "Invalid state"
+// @Failure 401 {string} string "User not authorized"
+// @Failure 500 {string} string "Authentication failure"
+// @Router /auth/web/callback [get]
 func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state")
@@ -184,7 +216,12 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	c.Redirect(http.StatusFound, DefaultWebRoute)
 }
 
-// WebLogout handles logout for web sessions
+// WebLogout godoc
+// @Summary Log out current session
+// @Description Revokes the active session, clears the cookie, and redirects to the login screen.
+// @Tags Auth
+// @Success 302 {string} string "Redirect to login"
+// @Router /auth/web/logout [get]
 func (h *AuthHandler) WebLogout(c *gin.Context) {
 	h.clearWebOAuthStateCookie(c)
 	sessionToken := extractSessionToken(c)

@@ -52,6 +52,23 @@ test('users: edit name and email', async ({ page }) => {
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
-  await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+  const waitForDelete = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' &&
+      response.url().includes('/.gateway/api/admin/users/') &&
+      response.status() === 204
+  )
+  const waitForUsersReload = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/.gateway/api/admin/users') &&
+      response.status() === 200
+  )
+  await Promise.all([
+    waitForDelete,
+    waitForUsersReload,
+    deleteDialog.getByRole('button', { name: /Delete User/i }).click(),
+  ])
+  await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
   await expect(row).toHaveCount(0)
 })

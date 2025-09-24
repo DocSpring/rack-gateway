@@ -58,6 +58,18 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 
 **If ANY of these fail, the task is NOT complete. Fix all issues before marking done.**
 
+> ⚠️ **Task Runner Caveat**
+> `task all` streams a *lot* of output and the CLI truncates earlier sections once buffers fill. If the command exits non-zero, assume something failed even if the tail end looks successful. Scroll back (or re-run with logging to a file) to find the first error—don’t treat a noisy, partially hidden failure as a pass.
+
+When the aggregated output is overwhelming, break the workflow into focused passes before re-running `task all`:
+- `task lint:fix`
+- `task go:test`
+- `task web:test`
+- `task go:e2e`
+- `task web:e2e`
+
+Only after every step above is green should you run `task all` again as the final confirmation. If it still fails, rinse and repeat.
+
 ## Project Overview
 
 This is an authentication and authorization proxy for self-hosted Convox racks. It sits between users and the Convox API, adding:

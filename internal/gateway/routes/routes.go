@@ -7,6 +7,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/convox-gateway/internal/gateway/middleware"
+	"github.com/DocSpring/convox-gateway/internal/gateway/openapi"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
@@ -81,6 +82,9 @@ func Setup(router *gin.Engine, cfg *Config) {
 	// Web UI static files
 	router.GET("/.gateway/web", handlers.WebRedirect)
 	router.GET("/.gateway/web/*filepath", staticHandler.ServeStatic)
+
+	// API documentation
+	openapi.Register(router)
 
 	// API routes
 	api := router.Group("/.gateway/api")

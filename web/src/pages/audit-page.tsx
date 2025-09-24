@@ -658,7 +658,13 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
     denied: logs.filter((l) => l.status === 'denied' || l.status === 'blocked').length,
     avgResponseTime:
       logs.length > 0
-        ? Math.round(logs.reduce((acc: number, l) => acc + l.response_time_ms, 0) / logs.length)
+        ? Math.round(
+            logs.reduce(
+              (acc: number, l) =>
+                acc + (typeof l.response_time_ms === 'number' ? l.response_time_ms : 0),
+              0
+            ) / logs.length
+          )
         : 0,
   }
 
