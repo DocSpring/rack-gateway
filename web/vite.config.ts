@@ -21,12 +21,12 @@ export default defineConfig(() => {
       viteCompression({
         algorithm: 'gzip',
         ext: '.gz',
-        filter: (file) => !(file.endsWith('.gz') || file.endsWith('.br')),
+        filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
       }),
       viteCompression({
         algorithm: 'brotliCompress',
         ext: '.br',
-        filter: (file) => !(file.endsWith('.gz') || file.endsWith('.br')),
+        filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
       }),
     ],
     build: {
