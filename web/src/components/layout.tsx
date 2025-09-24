@@ -58,6 +58,13 @@ export function Layout() {
     return nav
   }, [user?.roles])
 
+  const currentUserHref = useMemo(() => {
+    if (!user?.email) {
+      return null
+    }
+    return `/users/${encodeURIComponent(user.email)}`
+  }, [user?.email])
+
   // Declarative redirect: when at layout root, go to Rack
   if (pathname === '/') {
     return <Navigate replace to="/rack" />
@@ -124,11 +131,25 @@ export function Layout() {
 
         {/* User section */}
         <div className="p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium text-sm">{user?.name || 'User'}</p>
-              <p className="truncate text-muted-foreground text-xs">{user?.email}</p>
-            </div>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            {currentUserHref ? (
+              <Link
+                className="group block min-w-0 flex-1 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                to={currentUserHref}
+              >
+                <p className="truncate font-medium text-sm group-hover:underline">
+                  {user?.name || 'User'}
+                </p>
+                <p className="truncate text-muted-foreground text-xs group-hover:underline">
+                  {user?.email}
+                </p>
+              </Link>
+            ) : (
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-sm">{user?.name || 'User'}</p>
+                <p className="truncate text-muted-foreground text-xs">{user?.email}</p>
+              </div>
+            )}
             <ThemeToggle />
           </div>
           {user?.rack && (

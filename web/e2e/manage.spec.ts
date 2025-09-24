@@ -51,6 +51,47 @@ test('users: add, edit role, delete', async ({ page }) => {
   await expect(row).toHaveCount(0)
 })
 
+test('current user footer link opens profile page', async ({ page }) => {
+  await login(page)
+
+  // Ensure layout loaded before interacting with footer link
+  await page.goto(WebRoute('rack'))
+  await expect(page.getByRole('heading', { name: /Rack/i })).toBeVisible()
+
+  const footerLink = page.getByRole('link', { name: /Admin User\s+admin@example.com/i })
+  await expect(footerLink).toBeVisible()
+
+  const navigation = page.waitForURL(/\/users\/admin%40example\.com$/)
+  await footerLink.click()
+  await navigation
+
+  await expect(page).toHaveURL(/\/users\/admin%40example\.com$/)
+  await expect(page.getByTestId('user-email')).toHaveText('admin@example.com')
+  await expect(page.getByRole('button', { name: /Delete User/i })).toBeVisible()
+})
+
+test('user detail view shows sessions and audit logs', async ({ page }) => {
+  await login(page)
+
+  await page.goto(WebRoute('users/admin%40example.com'))
+
+  await expect(page.getByRole('heading', { name: /^Admin User$/ })).toBeVisible()
+  await expect(page.getByTestId('user-email')).toHaveText('admin@example.com')
+  await expect(page.getByText(/Unable to load user/i)).not.toBeVisible()
+
+  const sessionsCard = page.getByTestId('user-sessions-card')
+  await expect(sessionsCard).toBeVisible()
+  const sessionsTable = sessionsCard.locator('table').first()
+  await expect(sessionsTable).toBeVisible()
+  await expect(sessionsTable.locator('tbody tr').first()).toBeVisible()
+
+  const auditLogsCard = page.getByTestId('user-audit-logs')
+  await expect(auditLogsCard).toBeVisible()
+  const auditLogsTable = auditLogsCard.locator('table').first()
+  await expect(auditLogsTable).toBeVisible()
+  await expect(auditLogsTable.locator('tbody tr').first()).toBeVisible()
+})
+
 test('users: add shows all fields and persists after refresh', async ({ page }) => {
   await login(page)
 

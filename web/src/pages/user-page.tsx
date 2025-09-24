@@ -457,7 +457,9 @@ export function UserPage() {
           <h1 className="font-semibold text-3xl">
             {userLoading ? 'Loading…' : user?.name || decodedEmail}
           </h1>
-          <p className="text-muted-foreground">{decodedEmail}</p>
+          <p className="text-muted-foreground" data-testid="user-email">
+            {decodedEmail}
+          </p>
           {user?.roles && user.roles.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">{roleBadges(user.roles ?? [])}</div>
           )}
@@ -494,7 +496,7 @@ export function UserPage() {
       </div>
 
       <div className="space-y-6">
-        <Card>
+        <Card data-testid="user-sessions-card">
           <CardHeader>
             <CardTitle>Active Sessions</CardTitle>
           </CardHeader>
@@ -510,22 +512,24 @@ export function UserPage() {
           </CardContent>
         </Card>
 
-        <AuditLogsPane
-          currentPage={currentAuditPage}
-          disableNext={currentAuditPage >= auditTotalPages}
-          disablePrevious={currentAuditPage <= 1}
-          emptyMessage="No audit logs for this user"
-          error={auditError}
-          firstRowIndex={auditFirstRowIndex}
-          lastRowIndex={auditLastRowIndex}
-          loading={auditLoading}
-          logs={auditLogs}
-          onNextPage={handleAuditNextPage}
-          onPreviousPage={handleAuditPrevPage}
-          title="Audit Logs"
-          totalCount={auditTotal}
-          totalPages={auditTotalPages}
-        />
+        <div data-testid="user-audit-logs">
+          <AuditLogsPane
+            currentPage={currentAuditPage}
+            disableNext={currentAuditPage >= auditTotalPages}
+            disablePrevious={currentAuditPage <= 1}
+            emptyMessage="No audit logs for this user"
+            error={auditError}
+            firstRowIndex={auditFirstRowIndex}
+            lastRowIndex={auditLastRowIndex}
+            loading={auditLoading}
+            logs={auditLogs}
+            onNextPage={handleAuditNextPage}
+            onPreviousPage={handleAuditPrevPage}
+            title="Audit Logs"
+            totalCount={auditTotal}
+            totalPages={auditTotalPages}
+          />
+        </div>
       </div>
 
       <UserEditDialog

@@ -85,10 +85,14 @@ export function createGatewayClient<T>(
     ...options,
   }
 
-  const baseHeaders = AxiosHeaders.from(toAxiosHeaders(config.headers).toJSON())
-  toAxiosHeaders(options?.headers).forEach((value: AxiosHeaderValue, key: string) => {
-    baseHeaders.set(key, value)
-  })
+  const baseHeaders = toAxiosHeaders(config.headers)
+  const overrideHeaders = toAxiosHeaders(options?.headers)
+  const overrideEntries = Object.entries(overrideHeaders.toJSON()) as [string, AxiosHeaderValue][]
+  for (const [key, value] of overrideEntries) {
+    if (typeof value !== 'undefined') {
+      baseHeaders.set(key, value)
+    }
+  }
   mergedConfig.headers = baseHeaders
 
   return gatewayAxios.request<T>(mergedConfig)
