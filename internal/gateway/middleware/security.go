@@ -25,6 +25,12 @@ type ctxKey string
 
 const StyleNonceContextKey ctxKey = "cgw-style-nonce"
 
+// Some inline styles injected by various components
+var defaultStyleHashes = []string{
+	"'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='",
+	"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
+}
+
 // SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
 
 func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
@@ -71,14 +77,16 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		imgSrc := "img-src " + strings.Join(imageDirectives, " ")
 
 		scriptSrc := "script-src 'self'"
-		styleSrc := "style-src 'self'"
+		styleDirectives := []string{"'self'"}
 		if nonce != "" {
-			styleSrc = fmt.Sprintf("style-src 'self' 'nonce-%s'", nonce)
+			styleDirectives = append(styleDirectives, fmt.Sprintf("'nonce-%s'", nonce))
 		}
+		styleDirectives = append(styleDirectives, defaultStyleHashes...)
 		if !isProdLike {
 			scriptSrc += " 'unsafe-inline'"
-			styleSrc += " 'unsafe-inline'"
+			styleDirectives = append(styleDirectives, "'unsafe-inline'")
 		}
+		styleSrc := "style-src " + strings.Join(styleDirectives, " ")
 
 		cspParts := []string{
 			"default-src 'self'",
