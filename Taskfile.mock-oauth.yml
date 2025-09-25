@@ -12,6 +12,15 @@ tasks:
     dir: mock-oauth
     desc: Build the TypeScript mock OAuth server
     deps: [deps]
+    sources:
+      - mock-oauth/package.json
+      - mock-oauth/pnpm-lock.yaml
+      - mock-oauth/tsconfig.json
+      - mock-oauth/**/*.ts
+      - exclude: mock-oauth/node_modules/**
+      - exclude: mock-oauth/dist/**
+    generates:
+      - mock-oauth/dist/**/*
     cmds:
       - pnpm build
 

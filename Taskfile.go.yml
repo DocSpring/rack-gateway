@@ -4,6 +4,9 @@ run: once
 tasks:
   deps:
     desc: Install Go module dependencies
+    sources:
+      - go.*
+      - Taskfile.go.yml
     cmds:
       - go mod download
       - go mod tidy
@@ -22,14 +25,32 @@ tasks:
   generate:types:
     desc: Generate TypeScript models from Go structs
     deps: [deps]
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - internal/tools/typescriptify/**/*.go
+      - internal/gateway/db/**/*.go
+      - internal/gateway/token/**/*.go
+    generates:
+      - web/src/lib/generated/gateway-types.ts
     cmds:
       - go run ./internal/tools/typescriptify
+      - echo >> web/src/lib/generated/gateway-types.ts
 
   generate:swagger:
     desc: Generate OpenAPI swagger v2.0 schema from Gin annotations
     deps: [deps]
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - cmd/gateway/**/*.go
+      - internal/**/*.go
+      - internal/gateway/openapi/doc.go
+    generates:
+      - internal/gateway/openapi/generated/swagger.json
     cmds:
       - go generate ./internal/gateway/openapi
+      - echo >> internal/gateway/openapi/generated/swagger.json
 
   build:
     desc: Build Go binaries (gateway, cli, mock)
@@ -38,18 +59,39 @@ tasks:
   build:gateway:
     desc: Build gateway API server -> bin/convox-gateway-api
     deps: [deps]
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - cmd/gateway/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/convox-gateway-api
     cmds:
       - go build -o bin/convox-gateway-api ./cmd/gateway/
 
   build:cli:
     desc: Build gateway CLI -> bin/convox-gateway
     deps: [deps]
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - cmd/cli/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/convox-gateway
     cmds:
       - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/convox-gateway ./cmd/cli/
 
   build:mock:
     desc: Build mock Convox server -> bin/mock-convox
     deps: [deps]
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - cmd/mock-convox/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/mock-convox
     cmds:
       - go build -o bin/mock-convox ./cmd/mock-convox/
 

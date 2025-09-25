@@ -48,3 +48,7 @@ web/.vite/
 web/test-results/
 web/coverage/
 web/playwright-report/
+
+
+# Task cache
+.task/

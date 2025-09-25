@@ -11,34 +11,66 @@ tasks:
     run: once
     cmds:
       - pnpm install --frozen-lockfile
+    sources:
+      - package.json
+      - pnpm-lock.yaml
+      - Taskfile.web.yml
 
   generate:
     dir: web
     desc: Generate code
-    deps: [generate:openapi, generate:types, generate:client]
+    deps: [":go:generate", generate:openapi, generate:types, generate:client]
 
   generate:openapi:
     dir: web
     desc: Convert swagger.json to OpenAPI client + TS types
-    deps: [deps]
+    deps: [deps, ":go:generate"]
+    sources:
+      - Taskfile.web.yml
+      - internal/gateway/openapi/generated/swagger.json
+    generates:
+      - web/src/api/openapi.json
     cmds: [pnpm generate:openapi]
 
   generate:types:
     dir: web
     desc: Generate TypeScript types from OpenAPI schema
     deps: [generate:openapi]
+    sources:
+      - Taskfile.web.yml
+      - web/src/api/openapi.json
+    generates:
+      - web/src/api/types.generated.ts
     cmds: [pnpm generate:types]
 
   generate:client:
     dir: web
     desc: Generate OpenAPI client from OpenAPI schema
     deps: [generate:openapi]
+    sources:
+      - Taskfile.web.yml
+      - internal/gateway/openapi/generated/swagger.json
+      - web/orval.config.ts
+      - web/src/api/http-client.ts
+    generates:
+      - web/src/api/generated.ts
+      - web/src/api/schemas/**/*.ts
     cmds: [pnpm generate:client]
 
   build:
     dir: web
     desc: Build the web SPA with Vite
-    deps: [deps]
+    deps: [deps, ":go:generate"]
+    sources:
+      - Taskfile.web.yml
+      - web/package.json
+      - web/pnpm-lock.yaml
+      - web/tsconfig*.json
+      - web/vite.config.ts
+      - web/src/**/*
+      - web/public/**/*
+    generates:
+      - web/dist/**/*
     cmds:
       - pnpm build
 
@@ -53,7 +85,7 @@ tasks:
   lint:typecheck:
     dir: web
     desc: Run TypeScript type checking
-    deps: [deps]
+    deps: [deps, ":go:generate"]
     cmds:
       - pnpm typecheck
 
@@ -81,7 +113,7 @@ tasks:
   test:
     dir: web
     desc: Run web unit tests (Vitest)
-    deps: [deps]
+    deps: [deps, ":go:generate"]
     cmds:
       - pnpm test --run
 
@@ -97,14 +129,14 @@ tasks:
     dir: web
     aliases: [e2e]
     desc: Run Web E2E against dev stack (Vite/HMR)
-    deps: [":docker:up:dev", "e2e:deps"]
+    deps: [":docker:up:dev", "e2e:deps", ":go:generate"]
     cmds:
       - env WEB_PORT={{.WEB_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 
   e2e:preview:
     dir: web
     desc: Run Web E2E against preview stack (compiled SPA)
-    deps: [":docker:up:preview", "e2e:deps"]
+    deps: [":docker:up:preview", "e2e:deps", ":go:generate"]
     cmds:
       - env GATEWAY_PORT={{.GATEWAY_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 
