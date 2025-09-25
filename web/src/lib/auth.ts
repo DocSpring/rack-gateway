@@ -2,6 +2,8 @@ import type { AxiosError } from 'axios'
 import axios from 'axios'
 import { APIRoute } from './routes'
 
+export const SESSION_EXPIRED_MESSAGE = 'Session expired. Please sign in again.'
+
 export type User = {
   email: string
   name: string
@@ -61,7 +63,7 @@ class AuthService {
       const status = (err as AxiosError)?.response?.status
       try {
         if (status === 401 && !options.suppressAuthError) {
-          sessionStorage.setItem('auth_error', 'Unauthorized. Please sign in to continue.')
+          sessionStorage.setItem('auth_error', SESSION_EXPIRED_MESSAGE)
         }
       } catch (_e) {
         /* ignore */

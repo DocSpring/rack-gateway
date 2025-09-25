@@ -7,7 +7,7 @@ import axios, {
 } from 'axios'
 
 import { toast } from '@/components/ui/use-toast'
-import { authService } from '@/lib/auth'
+import { SESSION_EXPIRED_MESSAGE, authService } from '@/lib/auth'
 
 import { getCsrfToken } from '@/lib/csrf'
 import { APIRoute } from '@/lib/routes'
@@ -60,13 +60,13 @@ gatewayAxios.interceptors.response.use(
       const hasWindow = typeof window !== 'undefined'
       if (hasWindow) {
         try {
-          window.sessionStorage.setItem('auth_error', 'Unauthorized. Please sign in to continue.')
+          window.sessionStorage.setItem('auth_error', SESSION_EXPIRED_MESSAGE)
         } catch (_err) {
           /* ignore */
         }
       }
       try {
-        toast.error('Unauthorized. Please sign in to continue.')
+        toast.error(SESSION_EXPIRED_MESSAGE)
       } catch (_err) {
         /* ignore */
       }
