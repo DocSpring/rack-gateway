@@ -30,4 +30,4 @@ RACK_USERNAME = "convox"
 DATABASE_URL = "postgres://localhost:5432/postgres?sslmode=disable"
 
 # Config directory for CLI (stores config.json with tokens and rack settings)
-GATEWAY_CLI_CONFIG_DIR = "./config/cli"
+# GATEWAY_CLI_CONFIG_DIR = "./config/cli"
