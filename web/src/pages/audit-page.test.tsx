@@ -136,8 +136,8 @@ describe('AuditPage', () => {
       expect(screen.getByText('user.create')).toBeInTheDocument()
       expect(screen.getByText('apps.list')).toBeInTheDocument()
       expect(screen.getByText('auth.login')).toBeInTheDocument()
-      expect(screen.getByText('(x4)')).toBeInTheDocument()
-      expect(screen.queryByText('(x1)')).not.toBeInTheDocument()
+      expect(screen.getByText('×4')).toBeInTheDocument()
+      expect(screen.queryByText('×1')).not.toBeInTheDocument()
     })
 
     it('shows event count in detail dialog', async () => {

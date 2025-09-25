@@ -165,10 +165,10 @@ function renderActionCell(log: AuditLogRecord) {
   const countBadge =
     eventCount > 1 ? (
       <Badge
-        className="w-fit border border-border bg-muted font-mono text-muted-foreground"
+        className="w-fit border border-gray-300 bg-transparent font-mono text-gray-300"
         variant="outline"
       >
-        {`(x${eventCount})`}
+        {`×${eventCount}`}
       </Badge>
     ) : null
 
@@ -390,6 +390,7 @@ export function AuditLogsPane({
               <div data-testid="audit-event-count">
                 <span className="text-muted-foreground">Event Count:</span>{' '}
                 {Math.max(1, selected.event_count ?? 1)}
+                {selected.event_count > 1 && <span className="text-muted-foreground"> (aggregated)</span>}
               </div>
               <div>
                 <span className="text-muted-foreground">Resource:</span> {selected.resource || '-'}

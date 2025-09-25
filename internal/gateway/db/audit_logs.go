@@ -44,7 +44,13 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 
 func shouldAggregateAudit(action string) bool {
 	action = strings.ToLower(strings.TrimSpace(action))
-	return strings.HasSuffix(action, ".read") || strings.HasSuffix(action, ".get") || strings.HasSuffix(action, ".view")
+	if strings.HasSuffix(action, ".read") {
+		return true
+	}
+	if strings.HasSuffix(action, ".list") {
+		return true
+	}
+	return false
 }
 
 type auditLogSnapshot struct {
