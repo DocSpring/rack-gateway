@@ -54,6 +54,10 @@ pre-commit:
         fi
         golangci-lint run "${targets[@]}"
 
+    golangci-config-verify:
+      glob: ".golangci.yml"
+      run: golangci-lint config verify
+
     biome-format:
       root: "web/"
       # Run across the web project every commit to avoid misses
