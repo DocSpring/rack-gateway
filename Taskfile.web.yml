@@ -12,6 +12,29 @@ tasks:
     cmds:
       - pnpm install --frozen-lockfile
 
+  generate:
+    dir: web
+    desc: Generate code
+    deps: [generate:openapi, generate:types, generate:client]
+
+  generate:openapi:
+    dir: web
+    desc: Convert swagger.json to OpenAPI client + TS types
+    deps: [deps]
+    cmds: [pnpm generate:openapi]
+
+  generate:types:
+    dir: web
+    desc: Generate TypeScript types from OpenAPI schema
+    deps: [generate:openapi]
+    cmds: [pnpm generate:types]
+
+  generate:client:
+    dir: web
+    desc: Generate OpenAPI client from OpenAPI schema
+    deps: [generate:openapi]
+    cmds: [pnpm generate:client]
+
   build:
     dir: web
     desc: Build the web SPA with Vite
@@ -84,3 +107,7 @@ tasks:
     deps: [":docker:up:preview", "e2e:deps"]
     cmds:
       - env GATEWAY_PORT={{.GATEWAY_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
+
+  test:all:
+    desc: Run all tests in parallel
+    deps: [test, e2e:dev]

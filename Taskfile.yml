@@ -1,4 +1,5 @@
 version: "3"
+run: once
 
 vars:
   WEB_PORT: "{{.WEB_PORT | default 5223}}"
@@ -13,8 +14,8 @@ includes:
 
 tasks:
   all:
-    desc: Run linters, tests, and build
-    deps: [lint, test, build]
+    desc: Run linters, code generation, tests, and build
+    deps: [lint, generate:test, build]
 
   lint:
     desc: Run web + Go linters and typecheck
@@ -24,13 +25,24 @@ tasks:
     desc: Run web + Go linters and typecheck
     deps: [web:lint:fix, go:lint:fix, mock-oauth:lint:fix]
 
+  generate:
+    desc: Regenerate swagger and types from Go, then web OpenAPI schema and client
+    cmds:
+      - task go:generate
+      - task web:generate
+
   test:
     desc: Run all tests
+    deps: [go:test, web:test]
     cmds:
-      - task: go:test
       - task: go:e2e:dev
-      - task: web:test
       - task: web:e2e:dev
+
+  generate:test:
+    desc: Run code generation and tests. Can run all the go tasks in parallel.
+    deps: [go:test, go:e2e:dev, go:generate, web:test]
+    cmds:
+      - task: e2e:dev
 
   e2e:
     desc: Run all E2E tests

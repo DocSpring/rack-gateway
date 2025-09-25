@@ -1,9 +1,9 @@
 version: "3"
+run: once
 
 tasks:
   deps:
     desc: Install Go module dependencies
-    run: once
     cmds:
       - go mod download
       - go mod tidy
@@ -15,11 +15,21 @@ tasks:
       - go install gotest.tools/gotestsum@latest
       - go install github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest
 
-  types:export:
+  generate:
+    desc: Generate code
+    deps: [generate:types, generate:swagger]
+
+  generate:types:
     desc: Generate TypeScript models from Go structs
     deps: [deps]
     cmds:
       - go run ./internal/tools/typescriptify
+
+  generate:swagger:
+    desc: Generate OpenAPI swagger v2.0 schema from Gin annotations
+    deps: [deps]
+    cmds:
+      - go generate ./internal/gateway/openapi
 
   build:
     desc: Build Go binaries (gateway, cli, mock)
@@ -87,3 +97,7 @@ tasks:
     desc: Run CLI E2E flow on preview stack
     deps: [":docker:up:preview"]
     cmds: [scripts/cli-e2e.sh]
+
+  test:all:
+    desc: Run all tests in parallel
+    deps: [test, e2e:dev]

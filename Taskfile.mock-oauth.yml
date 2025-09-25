@@ -1,10 +1,10 @@
 version: "3"
+run: once
 
 tasks:
   deps:
     dir: mock-oauth
     desc: Install dependencies for mock OAuth server
-    run: once
     cmds:
       - pnpm install
 

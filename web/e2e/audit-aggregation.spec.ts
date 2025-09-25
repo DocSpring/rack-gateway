@@ -17,9 +17,7 @@ test('aggregates repeated app list views into single audit entry', async ({ page
   const table = page.getByRole('table')
   await expect(table).toBeVisible()
 
-  const targetRow = table
-    .getByRole('row', { name: /app\.list/i })
-    .filter({ hasText: /×\d+/i })
+  const targetRow = table.getByRole('row', { name: /app\.list/i }).filter({ hasText: /×\d+/i })
 
   await expect(targetRow).toHaveCount(1)
 

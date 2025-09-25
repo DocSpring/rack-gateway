@@ -211,6 +211,7 @@ function renderActionCell(log: AuditLogRecord) {
   )
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI glue code is easier to follow inline.
 export function AuditLogsPane({
   title,
   logs,
@@ -390,7 +391,9 @@ export function AuditLogsPane({
               <div data-testid="audit-event-count">
                 <span className="text-muted-foreground">Event Count:</span>{' '}
                 {Math.max(1, selected.event_count ?? 1)}
-                {selected.event_count > 1 && <span className="text-muted-foreground"> (aggregated)</span>}
+                {(selected.event_count ?? 1) > 1 && (
+                  <span className="text-muted-foreground"> (aggregated)</span>
+                )}
               </div>
               <div>
                 <span className="text-muted-foreground">Resource:</span> {selected.resource || '-'}
