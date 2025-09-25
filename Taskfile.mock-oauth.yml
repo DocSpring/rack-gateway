@@ -5,6 +5,10 @@ tasks:
   deps:
     dir: mock-oauth
     desc: Install dependencies for mock OAuth server
+    sources:
+      - package.json
+      - pnpm-lock.yaml
+      - ../Taskfile.mock-oauth.yml
     cmds:
       - pnpm install
 
@@ -13,14 +17,13 @@ tasks:
     desc: Build the TypeScript mock OAuth server
     deps: [deps]
     sources:
-      - mock-oauth/package.json
-      - mock-oauth/pnpm-lock.yaml
-      - mock-oauth/tsconfig.json
-      - mock-oauth/**/*.ts
-      - exclude: mock-oauth/node_modules/**
-      - exclude: mock-oauth/dist/**
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.json
+      - ../Taskfile.mock-oauth.yml
+      - "*.ts"
     generates:
-      - mock-oauth/dist/**/*
+      - dist/**/*
     cmds:
       - pnpm build
 
@@ -32,6 +35,12 @@ tasks:
     dir: mock-oauth
     desc: Run TypeScript type checking
     deps: [deps]
+    sources:
+      - ../Taskfile.mock-oauth.yml
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.json
+      - "*.ts"
     cmds:
       - pnpm typecheck
 
@@ -39,6 +48,12 @@ tasks:
     dir: mock-oauth
     desc: Run Biome lint
     deps: [deps]
+    sources:
+      - ../Taskfile.mock-oauth.yml
+      - package.json
+      - pnpm-lock.yaml
+      - biome.json
+      - "*.ts"
     cmds:
       - pnpm exec biome check .
 
@@ -47,6 +62,12 @@ tasks:
     aliases: [lint:fix]
     desc: Lint mock OAuth server and apply safe fixes
     deps: [deps]
+    sources:
+      - ../Taskfile.mock-oauth.yml
+      - package.json
+      - pnpm-lock.yaml
+      - biome.json
+      - "*.ts"
     cmds:
       - pnpm exec biome check . --write
 

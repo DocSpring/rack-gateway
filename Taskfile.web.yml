@@ -14,7 +14,7 @@ tasks:
     sources:
       - package.json
       - pnpm-lock.yaml
-      - Taskfile.web.yml
+      - ../Taskfile.web.yml
 
   generate:
     dir: web
@@ -26,10 +26,10 @@ tasks:
     desc: Convert swagger.json to OpenAPI client + TS types
     deps: [deps, ":go:generate"]
     sources:
-      - Taskfile.web.yml
-      - internal/gateway/openapi/generated/swagger.json
+      - ../Taskfile.web.yml
+      - ../internal/gateway/openapi/generated/swagger.json
     generates:
-      - web/src/api/openapi.json
+      - src/api/openapi.json
     cmds: [pnpm generate:openapi]
 
   generate:types:
@@ -37,10 +37,10 @@ tasks:
     desc: Generate TypeScript types from OpenAPI schema
     deps: [generate:openapi]
     sources:
-      - Taskfile.web.yml
-      - web/src/api/openapi.json
+      - ../Taskfile.web.yml
+      - src/api/openapi.json
     generates:
-      - web/src/api/types.generated.ts
+      - src/api/types.generated.ts
     cmds: [pnpm generate:types]
 
   generate:client:
@@ -48,13 +48,13 @@ tasks:
     desc: Generate OpenAPI client from OpenAPI schema
     deps: [generate:openapi]
     sources:
-      - Taskfile.web.yml
-      - internal/gateway/openapi/generated/swagger.json
-      - web/orval.config.ts
-      - web/src/api/http-client.ts
+      - ../Taskfile.web.yml
+      - ../internal/gateway/openapi/generated/swagger.json
+      - orval.config.ts
+      - src/api/http-client.ts
     generates:
-      - web/src/api/generated.ts
-      - web/src/api/schemas/**/*.ts
+      - src/api/generated.ts
+      - src/api/schemas/**/*.ts
     cmds: [pnpm generate:client]
 
   build:
@@ -62,15 +62,15 @@ tasks:
     desc: Build the web SPA with Vite
     deps: [deps, ":go:generate"]
     sources:
-      - Taskfile.web.yml
-      - web/package.json
-      - web/pnpm-lock.yaml
-      - web/tsconfig*.json
-      - web/vite.config.ts
-      - web/src/**/*
-      - web/public/**/*
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig*.json
+      - vite.config.ts
+      - src/**/*
+      - public/**/*
     generates:
-      - web/dist/**/*
+      - dist/**/*
     cmds:
       - pnpm build
 
@@ -86,6 +86,18 @@ tasks:
     dir: web
     desc: Run TypeScript type checking
     deps: [deps, ":go:generate"]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig*.json
+      - vite.config.ts
+      - src/**/*
+      - scripts/**/*
+      - e2e/**/*
+      - public/**/*
+      - playwright.config.ts
+      - vitest.config.ts
     cmds:
       - pnpm typecheck
 
@@ -93,6 +105,17 @@ tasks:
     dir: web
     desc: Run Biome lint
     deps: [deps]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - biome.json
+      - src/**/*
+      - scripts/**/*
+      - e2e/**/*
+      - public/**/*
+      - playwright.config.ts
+      - vitest.config.ts
     cmds:
       - pnpm lint
 
@@ -100,6 +123,17 @@ tasks:
     dir: web
     desc: Run Biome lint
     deps: [deps]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - biome.json
+      - src/**/*
+      - scripts/**/*
+      - e2e/**/*
+      - public/**/*
+      - playwright.config.ts
+      - vitest.config.ts
     cmds:
       - pnpm lint:fix
 
@@ -107,6 +141,17 @@ tasks:
     dir: web
     desc: Auto-fix Biome issues (unsafe, may change code semantics)
     deps: [deps]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - biome.json
+      - src/**/*
+      - scripts/**/*
+      - e2e/**/*
+      - public/**/*
+      - playwright.config.ts
+      - vitest.config.ts
     cmds:
       - pnpm lint:unsafe
 
@@ -114,6 +159,18 @@ tasks:
     dir: web
     desc: Run web unit tests (Vitest)
     deps: [deps, ":go:generate"]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig*.json
+      - vite.config.ts
+      - vitest.config.ts
+      - src/**/*
+      - scripts/**/*
+      - e2e/**/*
+      - public/**/*
+      - playwright.config.ts
     cmds:
       - pnpm test --run
 
@@ -130,6 +187,16 @@ tasks:
     aliases: [e2e]
     desc: Run Web E2E against dev stack (Vite/HMR)
     deps: [":docker:up:dev", "e2e:deps", ":go:generate"]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.e2e.json
+      - playwright.config.ts
+      - e2e/**/*
+      - src/**/*
+      - scripts/**/*
+      - public/**/*
     cmds:
       - env WEB_PORT={{.WEB_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 
@@ -137,6 +204,16 @@ tasks:
     dir: web
     desc: Run Web E2E against preview stack (compiled SPA)
     deps: [":docker:up:preview", "e2e:deps", ":go:generate"]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.e2e.json
+      - playwright.config.ts
+      - e2e/**/*
+      - src/**/*
+      - scripts/**/*
+      - public/**/*
     cmds:
       - env GATEWAY_PORT={{.GATEWAY_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 
