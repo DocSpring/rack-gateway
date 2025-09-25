@@ -39,6 +39,19 @@ type EnvValuesResponse struct {
 	Env map[string]string `json:"env"`
 }
 
+// UpdateEnvValuesRequest defines the payload for updating environment variables.
+type UpdateEnvValuesRequest struct {
+	App    string            `json:"app" binding:"required"`
+	Set    map[string]string `json:"set"`
+	Remove []string          `json:"remove"`
+}
+
+// UpdateEnvValuesResponse is returned after successfully creating a new release with updated env vars.
+type UpdateEnvValuesResponse struct {
+	Env       map[string]string `json:"env"`
+	ReleaseID string            `json:"release_id,omitempty"`
+}
+
 // CLILoginCompleteRequest represents the payload used to finish the CLI OAuth flow.
 type CLILoginCompleteRequest struct {
 	State        string `json:"state" binding:"required"`

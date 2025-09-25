@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/require"
@@ -83,7 +84,7 @@ func TestAuditLogsForEnvChanges_MultipleRows(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/apps/app/releases", nil)
 	r.Header.Set("X-User-Name", "Admin User")
 	// Two diffs
-	diffs := []EnvDiff{
+	diffs := []envutil.EnvDiff{
 		{Key: "FOO", OldVal: "old", NewVal: "new", Secret: false},
 		{Key: "SECRET_KEY", OldVal: "[redacted]", NewVal: "[redacted]", Secret: true},
 	}

@@ -18,6 +18,7 @@ export function AppPage() {
     { key: 'processes', name: 'Processes', to: '/apps/$app/processes' as const },
     { key: 'builds', name: 'Builds', to: '/apps/$app/builds' as const },
     { key: 'releases', name: 'Releases', to: '/apps/$app/releases' as const },
+    { key: 'env', name: 'Environment', to: '/apps/$app/env' as const },
   ]
 
   return (

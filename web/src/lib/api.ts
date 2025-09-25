@@ -62,6 +62,16 @@ export type UpdateAPITokenRequest = HandlersUpdateAPITokenRequest
 export type RackInfo = GetRack200
 export type CurrentUserResponse = HandlersCurrentUserResponse
 export type HealthResponse = HandlersHealthResponse
+export type EnvValuesMap = Record<string, string>
+
+type EnvValuesResponseShape = {
+  env?: EnvValuesMap
+}
+
+type UpdateEnvResponseShape = {
+  env?: EnvValuesMap
+  release_id?: string
+}
 
 export const AVAILABLE_ROLES = {
   viewer: {
@@ -197,6 +207,45 @@ export const put = <T = unknown>(
 
 export const destroy = <T = unknown>(path: string, config?: AxiosRequestConfig): Promise<T> =>
   gatewayAxios.delete<T>(normalizePath(path), config).then((res) => res.data)
+
+export async function fetchAppEnv(app: string): Promise<EnvValuesMap> {
+  const response = await gatewayAxios.get<EnvValuesResponseShape>('env', {
+    params: { app },
+  })
+  return response.data.env ?? {}
+}
+
+export async function fetchAppEnvValue(
+  app: string,
+  key: string,
+  includeSecret = false
+): Promise<string | null> {
+  const response = await gatewayAxios.get<EnvValuesResponseShape>('env', {
+    params: {
+      app,
+      key,
+      secrets: includeSecret ? 'true' : undefined,
+    },
+  })
+  const env = response.data.env ?? {}
+  if (Object.hasOwn(env, key)) {
+    return env[key]
+  }
+  return null
+}
+
+export async function updateAppEnv(
+  app: string,
+  set: Record<string, string>,
+  remove: string[]
+): Promise<UpdateEnvResponseShape> {
+  const response = await gatewayAxios.put<UpdateEnvResponseShape>('env', {
+    app,
+    set,
+    remove,
+  })
+  return response.data
+}
 
 export const api = {
   listUsers,

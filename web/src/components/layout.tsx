@@ -22,6 +22,24 @@ const baseNavigation = [
 
 const USER_AUDIT_RE = /\/users\/[^/]+\/audit_logs/
 
+function isNavigationItemActive(item: { name: string; href: string }, pathname: string): boolean {
+  if (item.href === '/rack') {
+    return pathname === '/rack'
+  }
+  if (item.href === '/audit_logs') {
+    return pathname.startsWith('/audit_logs') || USER_AUDIT_RE.test(pathname)
+  }
+  if (item.href === '/users') {
+    return (
+      pathname === '/users' || (pathname.startsWith('/users/') && !USER_AUDIT_RE.test(pathname))
+    )
+  }
+  if (item.href === '/') {
+    return pathname === '/'
+  }
+  return pathname === item.href || pathname.startsWith(`${item.href}/`)
+}
+
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
@@ -51,7 +69,7 @@ export function Layout() {
 
   // Add Settings for admins
   const navigation = useMemo(() => {
-    const nav = [...baseNavigation]
+    const nav = baseNavigation.slice()
     if (user?.roles?.includes('admin')) {
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
     }
@@ -94,21 +112,7 @@ export function Layout() {
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
             const Icon = item.icon
-            // Custom active logic so nested routes can highlight desired parent
-            const p = pathname
-            let isActive = false
-            if (item.href === '/rack') {
-              isActive = p === '/rack'
-            } else if (item.href === '/audit_logs') {
-              // Highlight for global audit list and user-specific audit routes
-              isActive = p.startsWith('/audit_logs') || USER_AUDIT_RE.test(p)
-            } else if (item.href === '/users') {
-              isActive = p === '/users' || (p.startsWith('/users/') && !USER_AUDIT_RE.test(p))
-            } else if (item.href === '/') {
-              isActive = p === '/'
-            } else {
-              isActive = p === item.href || p.startsWith(`${item.href}/`)
-            }
+            const isActive = isNavigationItemActive(item, pathname)
             return (
               <Link
                 className={cn(

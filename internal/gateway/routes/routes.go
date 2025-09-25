@@ -117,6 +117,11 @@ func Setup(router *gin.Engine, cfg *Config) {
 			authenticated.GET("/created-by", apiHandler.GetCreatedBy)
 			authenticated.GET("/rack", apiHandler.GetRackInfo)
 			authenticated.GET("/env", apiHandler.GetEnvValues)
+			envMutations := authenticated.Group("")
+			if cfg.SessionManager != nil {
+				envMutations.Use(middleware.CSRF(cfg.SessionManager))
+			}
+			envMutations.PUT("/env", apiHandler.UpdateEnvValues)
 
 			// Convox proxy endpoints (safe GET only for web UI)
 			convox := authenticated.Group("/convox")

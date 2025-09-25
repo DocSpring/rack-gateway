@@ -13,6 +13,7 @@ import { AllBuildsPage } from './pages/all-builds-page'
 import { AllProcessesPage } from './pages/all-processes-page'
 import { AllReleasesPage } from './pages/all-releases-page'
 import { AppBuildsPage } from './pages/app-builds-page'
+import { AppEnvPage } from './pages/app-env-page'
 import { AppPage } from './pages/app-page'
 import { AppProcessesPage } from './pages/app-processes-page'
 import { AppReleasesPage } from './pages/app-releases-page'
@@ -150,6 +151,11 @@ function buildRouteTree() {
     path: 'releases',
     component: AppReleasesPage,
   })
+  const appEnvRoute = createRoute({
+    getParentRoute: () => appRoute,
+    path: 'env',
+    component: AppEnvPage,
+  })
 
   return rootRoute.addChildren([
     loginRoute,
@@ -161,7 +167,7 @@ function buildRouteTree() {
       allReleasesRoute,
       allProcessesRoute,
       appsListRoute,
-      appRoute.addChildren([appProcsRoute, appBuildsRoute, appReleasesRoute]),
+      appRoute.addChildren([appProcsRoute, appBuildsRoute, appReleasesRoute, appEnvRoute]),
       usersRoute,
       userRoute,
       userAuditRoute,

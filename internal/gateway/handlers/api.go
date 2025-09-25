@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,6 +31,11 @@ type APIHandler struct {
 	rackCertManager *rackcert.Manager
 }
 
+var (
+	errRackNotConfigured = errors.New("rack not configured")
+	errRackTLSConfig     = errors.New("rack tls configuration failed")
+)
+
 // NewAPIHandler creates a new API handler
 func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager) *APIHandler {
 	return &APIHandler{
@@ -50,6 +57,111 @@ func (h *APIHandler) primaryRack() (config.RackConfig, bool) {
 		return rc, true
 	}
 	return config.RackConfig{}, false
+}
+
+func (h *APIHandler) rackContext(ctx context.Context) (config.RackConfig, *tls.Config, error) {
+	rc, ok := h.primaryRack()
+	if !ok || strings.TrimSpace(rc.URL) == "" || strings.TrimSpace(rc.APIKey) == "" {
+		return config.RackConfig{}, nil, errRackNotConfigured
+	}
+
+	var tlsCfg *tls.Config
+	if h.rackCertManager != nil {
+		cfg, err := h.rackCertManager.TLSConfig(ctx)
+		if err != nil {
+			return config.RackConfig{}, nil, fmt.Errorf("%w: %v", errRackTLSConfig, err)
+		}
+		tlsCfg = cfg
+	}
+
+	return rc, tlsCfg, nil
+}
+
+func (h *APIHandler) secretAndProtectedKeys() ([]string, map[string]struct{}) {
+	extra := make([]string, 0)
+	seen := make(map[string]struct{})
+	if raw := os.Getenv("CONVOX_SECRET_ENV_VARS"); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			trim := strings.TrimSpace(part)
+			if trim == "" {
+				continue
+			}
+			upper := strings.ToUpper(trim)
+			if _, ok := seen[upper]; !ok {
+				extra = append(extra, trim)
+				seen[upper] = struct{}{}
+			}
+		}
+	}
+
+	protected := make(map[string]struct{})
+	if h.database != nil {
+		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+			for _, key := range arr {
+				trim := strings.TrimSpace(key)
+				if trim == "" {
+					continue
+				}
+				upper := strings.ToUpper(trim)
+				protected[upper] = struct{}{}
+				if _, ok := seen[upper]; !ok {
+					extra = append(extra, trim)
+					seen[upper] = struct{}{}
+				}
+			}
+		}
+	}
+
+	return extra, protected
+}
+
+func (h *APIHandler) logEnvUpdateDiffs(c *gin.Context, app, email, name string, diffs []envutil.EnvDiff, elapsed time.Duration) {
+	if h == nil || h.database == nil || len(diffs) == 0 {
+		return
+	}
+
+	ms := int(elapsed.Milliseconds())
+	ip := c.ClientIP()
+	ua := c.GetHeader("User-Agent")
+
+	for _, diff := range diffs {
+		oldVal := diff.OldVal
+		newVal := diff.NewVal
+		action := "env.set"
+		resourceType := "env"
+		if diff.Secret {
+			action = "secrets.set"
+			resourceType = "secret"
+			oldVal = "[REDACTED]"
+			newVal = "[REDACTED]"
+		}
+		if strings.TrimSpace(diff.NewVal) == "" {
+			if diff.Secret {
+				action = "secrets.unset"
+			} else {
+				action = "env.unset"
+			}
+		}
+
+		detailPayload := map[string]string{"old": oldVal, "new": newVal}
+		detailsJSON, _ := json.Marshal(detailPayload)
+
+		_ = audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:      email,
+			UserName:       name,
+			ActionType:     "convox",
+			Action:         action,
+			ResourceType:   resourceType,
+			Resource:       fmt.Sprintf("%s/%s", app, diff.Key),
+			Details:        string(detailsJSON),
+			IPAddress:      ip,
+			UserAgent:      ua,
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     http.StatusOK,
+			ResponseTimeMs: ms,
+		})
+	}
 }
 
 // GetMe godoc
@@ -322,30 +434,19 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		allowedSecrets = true
 	}
 
-	// Fetch latest env via rack API using configured rack
-	rackConfig, exists := h.config.Racks["default"]
-	if !exists {
-		rackConfig, exists = h.config.Racks["local"]
-		if !exists {
+	rackConfig, tlsCfg, err := h.rackContext(c.Request.Context())
+	if err != nil {
+		if errors.Is(err, errRackNotConfigured) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "rack not configured"})
 			return
 		}
-	}
-
-	if rackConfig.URL == "" || rackConfig.APIKey == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "rack not configured"})
-		return
-	}
-
-	var tlsCfg *tls.Config
-	if h.rackCertManager != nil {
-		cfg, err := h.rackCertManager.TLSConfig(c.Request.Context())
-		if err != nil {
+		if errors.Is(err, errRackTLSConfig) {
 			log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
 			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack TLS"})
 			return
 		}
-		tlsCfg = cfg
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack connection"})
+		return
 	}
 
 	envMap, err := envutil.FetchLatestEnvMap(rackConfig, app, tlsCfg)
@@ -360,15 +461,10 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	}
 
 	// Mask secrets unless explicit access was granted
+	extraSecrets, _ := h.secretAndProtectedKeys()
 	if !allowedSecrets {
-		extra := strings.Split(os.Getenv("CONVOX_SECRET_ENV_VARS"), ",")
-		if h.database != nil {
-			if arr, err := h.database.GetProtectedEnvVars(); err == nil {
-				extra = append(extra, arr...)
-			}
-		}
 		for k := range envMap {
-			if envutil.IsSecretKey(k, extra) {
+			if envutil.IsSecretKey(k, extraSecrets) {
 				envMap[k] = envutil.MaskedSecret
 			}
 		}
@@ -415,4 +511,138 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, EnvValuesResponse{Env: envMap})
+}
+
+// UpdateEnvValues godoc
+// @Summary Update environment variables
+// @Description Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+// @Tags Environment
+// @Accept json
+// @Produce json
+// @Param request body UpdateEnvValuesRequest true "Environment update payload"
+// @Success 200 {object} UpdateEnvValuesResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /env [put]
+func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
+	start := time.Now()
+
+	var req UpdateEnvValuesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	app := strings.TrimSpace(req.App)
+	if app == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+		return
+	}
+
+	email := c.GetString("user_email")
+	name := c.GetString("user_name")
+
+	if ok, _ := h.rbac.Enforce(email, "env", "set"); !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify environment variables."})
+		return
+	}
+
+	rackConfig, tlsCfg, err := h.rackContext(c.Request.Context())
+	if err != nil {
+		if errors.Is(err, errRackNotConfigured) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "rack not configured"})
+			return
+		}
+		if errors.Is(err, errRackTLSConfig) {
+			log.Printf(`{"level":"error","event":"rack_tls_config_error","message":%q}`, err.Error())
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack TLS"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to prepare rack connection"})
+		return
+	}
+
+	baseEnv, err := envutil.FetchLatestEnvMap(rackConfig, app, tlsCfg)
+	if err != nil {
+		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
+			log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"env_update","expected_fingerprint":"%s","actual_fingerprint":"%s","app":"%s"}`, fpErr.Expected, fpErr.Actual, app)
+			c.JSON(http.StatusBadGateway, gin.H{"error": "rack certificate verification failed"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch env"})
+		return
+	}
+	if baseEnv == nil {
+		baseEnv = map[string]string{}
+	}
+
+	extraSecrets, protectedSet := h.secretAndProtectedKeys()
+	allowSecrets, _ := h.rbac.Enforce(email, "secrets", "set")
+	canViewSecrets, _ := h.rbac.Enforce(email, "secrets", "view")
+
+	merged, diffs, mergeErr := envutil.MergeEnv(
+		baseEnv,
+		req.Set,
+		req.Remove,
+		envutil.MergeOptions{
+			AllowSecretUpdates: allowSecrets,
+			IsSecretKey: func(key string) bool {
+				return envutil.IsSecretKey(key, extraSecrets)
+			},
+			IsProtectedKey: func(key string) bool {
+				_, ok := protectedSet[strings.ToUpper(strings.TrimSpace(key))]
+				return ok
+			},
+		},
+	)
+	if mergeErr != nil {
+		switch {
+		case errors.Is(mergeErr, envutil.ErrSecretPermission):
+			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify secrets."})
+		case errors.Is(mergeErr, envutil.ErrProtectedEnvModification):
+			c.JSON(http.StatusForbidden, gin.H{"error": "This environment variable is protected and cannot be changed."})
+		case errors.Is(mergeErr, envutil.ErrMaskedSecretWithoutBase):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Masked secret value submitted without an existing secret."})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to apply changes"})
+		}
+		return
+	}
+
+	if len(diffs) == 0 {
+		responseEnv := make(map[string]string, len(merged))
+		for k, v := range merged {
+			value := v
+			if !canViewSecrets && envutil.IsSecretKey(k, extraSecrets) {
+				value = envutil.MaskedSecret
+			}
+			responseEnv[k] = value
+		}
+		c.JSON(http.StatusOK, UpdateEnvValuesResponse{Env: responseEnv})
+		return
+	}
+
+	envStr := envutil.BuildEnvString(merged)
+	releaseID, err := envutil.CreateReleaseWithEnv(c.Request.Context(), rackConfig, tlsCfg, app, envStr)
+	if err != nil {
+		log.Printf(`{"level":"error","event":"env_update_release_failed","app":%q,"error":%q}`, app, err.Error())
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to create release"})
+		return
+	}
+
+	h.logEnvUpdateDiffs(c, app, email, name, diffs, time.Since(start))
+
+	responseEnv := make(map[string]string, len(merged))
+	for k, v := range merged {
+		value := v
+		if !canViewSecrets && envutil.IsSecretKey(k, extraSecrets) {
+			value = envutil.MaskedSecret
+		}
+		responseEnv[k] = value
+	}
+
+	c.JSON(http.StatusOK, UpdateEnvValuesResponse{Env: responseEnv, ReleaseID: releaseID})
 }

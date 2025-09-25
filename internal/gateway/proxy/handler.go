@@ -257,7 +257,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Additional RBAC for release/environment set operations and body rewrite
-	var envDiffs []EnvDiff
+	var envDiffs []envutil.EnvDiff
 	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
 		ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, authUser.Email)
 		if err != nil {
@@ -559,18 +559,10 @@ func (h *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
 	return keys
 }
 
-// EnvDiff represents a single env var change
-type EnvDiff struct {
-	Key    string
-	OldVal string
-	NewVal string
-	Secret bool
-}
-
 // prepareReleaseCreate parses POST body env data, merges masked values from latest release,
 // enforces RBAC (environment:set and secrets:set), rewrites the request body with the merged env,
 // and returns a list of diffs for auditing.
-func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, email string) (bool, []EnvDiff, error) {
+func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, email string) (bool, []envutil.EnvDiff, error) {
 	// Read and buffer original body
 	var bodyBuf []byte
 	if r.Body != nil {
@@ -727,8 +719,8 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 
 	// Merge masked values and compute diffs
 	merged := make(map[string]string)
-	diffs := make([]EnvDiff, 0)
-	removed := make(map[string]EnvDiff)
+	diffs := make([]envutil.EnvDiff, 0)
+	removed := make(map[string]envutil.EnvDiff)
 	for _, key := range order {
 		val := posted[key]
 		base := baseEnv[key]
@@ -744,14 +736,14 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		}
 		merged[key] = val
 		if val != base {
-			diffs = append(diffs, EnvDiff{Key: key, OldVal: base, NewVal: val, Secret: isSecret})
+			diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: val, Secret: isSecret})
 		}
 	}
 	for key, base := range baseEnv {
 		if _, ok := posted[key]; ok {
 			continue
 		}
-		removed[key] = EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)}
+		removed[key] = envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)}
 	}
 	if len(removed) > 0 {
 		for _, diff := range removed {
@@ -830,7 +822,7 @@ func extractAppFromPath(p string) string {
 
 // (removed unused helpers fetchLatestEnvMap and parseEnvString)
 
-func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []EnvDiff) {
+func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []envutil.EnvDiff) {
 	if len(diffs) == 0 {
 		return
 	}

@@ -4,8 +4,8 @@ env:
   WEB_PORT: "{{.WEB_PORT | default 5223}}"
   GATEWAY_PORT: "{{.GATEWAY_PORT | default 8447}}"
   MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT | default 3345}}"
-  DOCKER_BUILDKIT: "1"
-  COMPOSE_DOCKER_CLI_BUILD: "1"
+  DOCKER_BUILDKIT: "{{.DOCKER_BUILDKIT | default 1}}"
+  COMPOSE_DOCKER_CLI_BUILD: "{{.COMPOSE_DOCKER_CLI_BUILD | default 1}}"
   BUILDKIT_PROGRESS: "plain"
 
 tasks:
@@ -18,20 +18,20 @@ tasks:
     aliases: [up]
     deps: ["stop:preview:gateway"]
     cmds:
-      - docker compose up -d --build postgres mock-oauth mock-convox web-dev gateway-api-dev
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} postgres mock-oauth mock-convox web-dev gateway-api-dev
 
   up:dev:web:
     desc: Up dev web (Vite)
     run: once
     cmds:
-      - docker compose up -d --build web-dev
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} web-dev
 
   up:dev:gateway:
     desc: Up dev gateway
     run: once
     deps: ["stop:preview:gateway"]
     cmds:
-      - docker compose up -d --build gateway-api-dev
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} gateway-api-dev
 
   wait:dev:
     desc: Wait for dev stack readiness (Vite web under WEB_PORT)
@@ -83,14 +83,14 @@ tasks:
     run: once
     deps: ["stop:dev:web", "stop:dev:gateway"]
     cmds:
-      - docker compose up -d --build postgres mock-oauth mock-convox gateway-api-preview
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} postgres mock-oauth mock-convox gateway-api-preview
 
   up:preview:gateway:
     desc: Up preview gateway (serves compiled SPA)
     run: once
     deps: ["stop:dev:gateway"]
     cmds:
-      - docker compose up -d --build gateway-api-preview
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} gateway-api-preview
 
   wait:preview:
     desc: Wait for preview stack readiness (gateway serves SPA under GATEWAY_PORT)

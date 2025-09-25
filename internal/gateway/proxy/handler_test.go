@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
+	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
@@ -200,7 +201,7 @@ func TestLogEnvDiffsLogsUnset(t *testing.T) {
 	req.Header.Set("X-User-Name", "Tester")
 	req.RemoteAddr = "127.0.0.1:1234"
 
-	h.logEnvDiffs(req, "user@example.com", "default", []EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}})
+	h.logEnvDiffs(req, "user@example.com", "default", []envutil.EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}})
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
 	require.NoError(t, err)
@@ -221,7 +222,7 @@ func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
 	req.Header.Set("X-User-Name", "Tester")
 	req.RemoteAddr = "127.0.0.1:1234"
 
-	h.logEnvDiffs(req, "user@example.com", "default", []EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}})
+	h.logEnvDiffs(req, "user@example.com", "default", []envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}})
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
 	require.NoError(t, err)
