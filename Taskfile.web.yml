@@ -122,6 +122,11 @@ tasks:
     desc: Ensure Playwright browsers and deps installed for E2E
     run: once
     deps: [deps]
+    sources:
+      - ../Taskfile.web.yml
+      - package.json
+      - pnpm-lock.yaml
+      - playwright.config.ts
     cmds:
       - pnpm exec playwright install --with-deps || pnpm exec playwright install
 
