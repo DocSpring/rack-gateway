@@ -25,6 +25,7 @@ type App struct {
 	EmailSender     email.Sender
 	ProxyHandler    *proxy.Handler
 	RackCertManager *rackcert.Manager
+	SentryEnabled   bool
 	router          *gin.Engine
 }
 
@@ -32,6 +33,12 @@ type App struct {
 func New() (*App, error) {
 	// Load configuration
 	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize observability before creating other resources so panics during init are captured
+	sentryEnabled, err := initializeSentry(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +55,9 @@ func New() (*App, error) {
 
 	// Initialize dependencies
 	app := &App{
-		Config:   cfg,
-		Database: database,
+		Config:        cfg,
+		Database:      database,
+		SentryEnabled: sentryEnabled,
 	}
 
 	// Initialize services

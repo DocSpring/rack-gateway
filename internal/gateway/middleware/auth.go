@@ -2,10 +2,15 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/getsentry/sentry-go"
+	"github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,6 +50,22 @@ func Authenticated(authService *auth.AuthService, rbacManager rbac.RBACManager) 
 			c.Set("user_name", authUser.Name)
 		}
 		c.Set("user_email", authUser.Email)
+
+		if hub := sentrygin.GetHubFromContext(c); hub != nil {
+			user := sentry.User{
+				Email:    authUser.Email,
+				Username: authUser.Name,
+			}
+			if authUser.IsAPIToken && authUser.TokenID != nil {
+				user.ID = fmt.Sprintf("token:%d", *authUser.TokenID)
+			}
+			hub.Scope().SetUser(user)
+			hub.Scope().SetTag("auth_source", source)
+			hub.Scope().SetTag("auth_is_api_token", strconv.FormatBool(authUser.IsAPIToken))
+			if len(authUser.Roles) > 0 {
+				hub.Scope().SetTag("auth_roles", strings.Join(authUser.Roles, ","))
+			}
+		}
 
 		reqWithUser := c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 		c.Request = reqWithUser

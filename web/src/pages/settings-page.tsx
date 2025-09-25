@@ -1,3 +1,4 @@
+import { captureException } from '@sentry/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { X } from 'lucide-react'
@@ -10,6 +11,7 @@ import { Label } from '../components/ui/label'
 import { Separator } from '../components/ui/separator'
 import { useAuth } from '../contexts/auth-context'
 import { api } from '../lib/api'
+import { isSentryEnabled } from '../lib/sentry'
 import { protectedEnvVarSchema } from '../lib/validation'
 
 type RackTLSCert = {
@@ -124,6 +126,46 @@ export function SettingsPage() {
       )
     },
   })
+
+  const sentryApiTestMutation = useMutation({
+    mutationFn: async () =>
+      api.post('/.gateway/api/admin/diagnostics/sentry', {
+        kind: 'api',
+      }),
+    onSuccess: () => {
+      toast.success('Requested API test event. Check Sentry for confirmation.')
+    },
+    onError: (err: unknown) => {
+      const message = extractErrorMessage(err)
+      toast.error(
+        'Failed to trigger API test event',
+        message ? { description: message } : undefined
+      )
+    },
+  })
+
+  const triggerJsTest = () => {
+    if (!isSentryEnabled()) {
+      toast.error('Sentry JavaScript SDK is not active in this session.')
+      return
+    }
+    captureException(new Error('Sentry JS test event triggered from settings page'))
+    toast.success('Submitted JS error to Sentry')
+  }
+
+  const triggerCspTest = () => {
+    if (!isSentryEnabled()) {
+      toast.error('Sentry JavaScript SDK is not active in this session.')
+      return
+    }
+    const script = document.createElement('script')
+    script.type = 'text/javascript'
+    script.textContent = 'window.__cgwSentryCspTest = true'
+    script.dataset.test = 'sentry-csp'
+    document.body.append(script)
+    script.remove()
+    toast.success('Attempted inline script to trigger CSP report')
+  }
 
   const addEnvVar = () => {
     const parsed = protectedEnvVarSchema.safeParse(newVar)
@@ -287,6 +329,35 @@ export function SettingsPage() {
             <div className="hidden md:block" />
           </>
         ) : null}
+      </div>
+
+      <div className="mt-8 max-w-sm">
+        <Card>
+          <CardHeader>
+            <CardTitle>Test Sentry Error Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground text-xs">
+              Send sample events to confirm Sentry ingestion from the gateway and browser.
+            </p>
+            <div className="flex flex-wrap gap-4 mt-6">
+              <Button
+                disabled={sentryApiTestMutation.isPending}
+                onClick={() => sentryApiTestMutation.mutate()}
+                size="sm"
+                variant="destructive"
+              >
+                {sentryApiTestMutation.isPending ? 'API…' : 'API'}
+              </Button>
+              <Button onClick={triggerJsTest} size="sm" variant="destructive">
+                JS
+              </Button>
+              <Button onClick={triggerCspTest} size="sm" variant="destructive">
+                CSP
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

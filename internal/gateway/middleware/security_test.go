@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
@@ -127,6 +128,53 @@ func TestHostValidatorAllowsKubeProbe(t *testing.T) {
 
 	if resp.Code != 200 {
 		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+}
+
+func TestSecurityHeadersAddsSentryReporting(t *testing.T) {
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	cfg := &config.Config{
+		SentryJSDsn:       "https://abc123@o75.ingest.us.sentry.io/9001",
+		SentryEnvironment: "prod",
+		SentryRelease:     "v5.4.3",
+	}
+	router.Use(SecurityHeaders(cfg))
+	router.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+
+	csp := resp.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "https://o75.ingest.us.sentry.io/api/9001/security/") {
+		t.Fatalf("expected Sentry report URI in CSP, got %q", csp)
+	}
+	if !strings.Contains(csp, "sentry_environment=prod") || !strings.Contains(csp, "sentry_release=v5.4.3") {
+		t.Fatalf("expected Sentry query parameters in CSP, got %q", csp)
+	}
+	if !strings.Contains(csp, "report-to cgw-sentry-csp") {
+		t.Fatalf("expected report-to directive in CSP, got %q", csp)
+	}
+	if !strings.Contains(csp, "https://o75.ingest.us.sentry.io") {
+		t.Fatalf("expected connect-src to include Sentry origin, got %q", csp)
+	}
+
+	reportTo := resp.Header().Get("Report-To")
+	if !strings.Contains(reportTo, "\"group\":\"cgw-sentry-csp\"") || !strings.Contains(reportTo, "https://o75.ingest.us.sentry.io/api/9001/security/") {
+		t.Fatalf("expected Report-To header to include Sentry endpoint, got %q", reportTo)
+	}
+
+	reportingEndpoints := resp.Header().Get("Reporting-Endpoints")
+	if !strings.Contains(reportingEndpoints, "cgw-sentry-csp=") {
+		t.Fatalf("expected Reporting-Endpoints header, got %q", reportingEndpoints)
 	}
 }
 

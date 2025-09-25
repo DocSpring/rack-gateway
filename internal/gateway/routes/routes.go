@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
@@ -12,6 +14,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
@@ -31,12 +34,30 @@ type Config struct {
 	EmailSender    email.Sender
 	ProxyHandler   *proxy.Handler
 	RackCertMgr    *rackcert.Manager
+	SentryEnabled  bool
 }
 
 // Setup configures all routes for the application
 func Setup(router *gin.Engine, cfg *Config) {
 	// Global middleware
-	router.Use(requestid.New())
+	if cfg.SentryEnabled {
+		options := sentrygin.Options{
+			Repanic:         true,
+			WaitForDelivery: false,
+			Timeout:         2 * time.Second,
+		}
+		router.Use(sentrygin.New(options))
+	}
+
+	requestIDMiddleware := requestid.New(requestid.WithHandler(func(c *gin.Context, rid string) {
+		if !cfg.SentryEnabled {
+			return
+		}
+		if hub := sentrygin.GetHubFromContext(c); hub != nil {
+			hub.Scope().SetTag("request_id", rid)
+		}
+	}))
+	router.Use(requestIDMiddleware)
 	router.Use(middleware.SecurityHeaders(cfg.Config))
 	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
@@ -143,6 +164,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.PUT("/settings/protected_env_vars", adminHandler.UpdateProtectedEnvVars)
 				admin.PUT("/settings/allow_destructive_actions", adminHandler.UpdateAllowDestructiveActions)
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
+				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
 
 				// Users and roles
 				admin.GET("/roles", adminHandler.ListRoles)

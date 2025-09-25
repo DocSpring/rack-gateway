@@ -122,3 +122,44 @@ func TestStaticHandlerServesDist(t *testing.T) {
 		t.Fatalf("expected Cache-Control with max-age, got %q", cache)
 	}
 }
+
+func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
+	cfg := &config.Config{
+		SentryJSDsn:        "https://abc123@o9.ingest.us.sentry.io/456",
+		SentryEnvironment:  "production",
+		SentryRelease:      "v1.2.3",
+		SentryJSTracesRate: "0.5",
+	}
+	handler := NewStaticHandler(cfg, nil)
+
+	tmp := t.TempDir()
+	indexPath := filepath.Join(tmp, "index.html")
+	content := `<!doctype html><meta name="cgw-sentry-dsn" content="CGW_SENTRY_DSN"><meta name="cgw-sentry-environment" content="CGW_SENTRY_ENVIRONMENT"><meta name="cgw-sentry-release" content="CGW_SENTRY_RELEASE"><meta name="cgw-sentry-traces-sample-rate" content="CGW_SENTRY_TRACES_SAMPLE_RATE">`
+	if err := os.WriteFile(indexPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write index: %v", err)
+	}
+
+	handler.distRoot = tmp
+	handler.configureAssets()
+
+	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/", nil)
+	rec := httptest.NewRecorder()
+	handler.serveIndex(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "CGW_SENTRY_DSN") {
+		t.Fatalf("expected DSN placeholder to be replaced, got %q", body)
+	}
+	if !strings.Contains(body, cfg.SentryJSDsn) {
+		t.Fatalf("expected DSN to be injected, body=%q", body)
+	}
+	if !strings.Contains(body, cfg.SentryEnvironment) {
+		t.Fatalf("expected environment to be injected")
+	}
+	if !strings.Contains(body, cfg.SentryRelease) {
+		t.Fatalf("expected release to be injected")
+	}
+	if !strings.Contains(body, cfg.SentryJSTracesRate) {
+		t.Fatalf("expected trace sample rate to be injected")
+	}
+}

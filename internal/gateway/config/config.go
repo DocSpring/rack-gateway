@@ -13,6 +13,11 @@ import (
 type Config struct {
 	Port                  string
 	Domain                string
+	SentryDSN             string
+	SentryEnvironment     string
+	SentryRelease         string
+	SentryJSDsn           string
+	SentryJSTracesRate    string
 	JWTSecret             string
 	JWTExpiry             time.Duration
 	SessionIdleTimeout    time.Duration
@@ -42,10 +47,39 @@ type RackConfig struct {
 	Enabled  bool
 }
 
+func normalizeSampleRate(raw string, fallback string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	if v, err := strconv.ParseFloat(raw, 64); err == nil {
+		if v < 0 {
+			v = 0
+		}
+		if v > 1 {
+			v = 1
+		}
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+	return fallback
+}
+
 func Load() (*Config, error) {
+	release := strings.TrimSpace(getEnv("SENTRY_RELEASE", ""))
+	if release == "" {
+		release = strings.TrimSpace(os.Getenv("RELEASE"))
+	}
+
+	jsTracesRate := normalizeSampleRate(getEnv("SENTRY_JS_TRACES_SAMPLE_RATE", ""), "0")
+
 	cfg := &Config{
 		Port:                getEnv("PORT", "8080"),
 		Domain:              getEnv("DOMAIN", ""),
+		SentryDSN:           strings.TrimSpace(getEnv("SENTRY_DSN", "")),
+		SentryEnvironment:   strings.TrimSpace(getEnv("SENTRY_ENVIRONMENT", "")),
+		SentryRelease:       release,
+		SentryJSDsn:         strings.TrimSpace(getEnv("SENTRY_JS_DSN", "")),
+		SentryJSTracesRate:  jsTracesRate,
 		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),

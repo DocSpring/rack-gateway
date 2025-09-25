@@ -61,13 +61,14 @@ type StaticHandler struct {
 	distRoot string
 	assets   *gin_adapter.GinAssets
 	sessions *auth.SessionManager
+	cfg      *config.Config
 }
 
 const defaultDistDir = "web/dist"
 
 // NewStaticHandler creates a new static handler
 func NewStaticHandler(cfg *config.Config, sessions *auth.SessionManager) *StaticHandler {
-	sh := &StaticHandler{distRoot: defaultDistDir, sessions: sessions}
+	sh := &StaticHandler{distRoot: defaultDistDir, sessions: sessions, cfg: cfg}
 
 	if cfg != nil && cfg.DevMode {
 		if raw := os.Getenv("WEB_DEV_SERVER_URL"); raw != "" {
@@ -195,11 +196,7 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 	result := content
 
 	if nonce := middleware.StyleNonceFromContext(r.Context()); nonce != "" {
-		const placeholder = "CGW_STYLE_NONCE"
-		placeholderBytes := []byte(placeholder)
-		if bytes.Contains(result, placeholderBytes) {
-			result = bytes.ReplaceAll(result, placeholderBytes, []byte(nonce))
-		}
+		result = replacePlaceholder(result, "CGW_STYLE_NONCE", nonce)
 	}
 
 	if h.sessions != nil {
@@ -208,18 +205,48 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 			if sessionToken != "" {
 				if _, err := h.sessions.ValidateSession(sessionToken, clientIPFromRequest(r), r.UserAgent()); err == nil {
 					if csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken); err == nil && csrfToken != "" {
-						const csrfPlaceholder = "CGW_CSRF_TOKEN"
-						placeholderBytes := []byte(csrfPlaceholder)
-						if bytes.Contains(result, placeholderBytes) {
-							result = bytes.ReplaceAll(result, placeholderBytes, []byte(csrfToken))
-						}
+						result = replacePlaceholder(result, "CGW_CSRF_TOKEN", csrfToken)
 					}
 				}
 			}
 		}
 	}
 
+	var (
+		dsn     string
+		env     string
+		release string
+		sample  string
+	)
+
+	if h.cfg != nil {
+		dsn = strings.TrimSpace(h.cfg.SentryJSDsn)
+		env = strings.TrimSpace(h.cfg.SentryEnvironment)
+		if env == "" {
+			if h.cfg.DevMode {
+				env = "development"
+			} else {
+				env = "production"
+			}
+		}
+		release = strings.TrimSpace(h.cfg.SentryRelease)
+		sample = strings.TrimSpace(h.cfg.SentryJSTracesRate)
+	}
+
+	result = replacePlaceholder(result, "CGW_SENTRY_DSN", dsn)
+	result = replacePlaceholder(result, "CGW_SENTRY_ENVIRONMENT", env)
+	result = replacePlaceholder(result, "CGW_SENTRY_RELEASE", release)
+	result = replacePlaceholder(result, "CGW_SENTRY_TRACES_SAMPLE_RATE", sample)
+
 	return result
+}
+
+func replacePlaceholder(result []byte, placeholder string, value string) []byte {
+	pl := []byte(placeholder)
+	if !bytes.Contains(result, pl) {
+		return result
+	}
+	return bytes.ReplaceAll(result, pl, []byte(value))
 }
 
 func shouldRedirectToDefault(r *http.Request) bool {

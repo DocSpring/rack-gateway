@@ -12,6 +12,7 @@ import (
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/app"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/getsentry/sentry-go"
 )
 
 // @title Convox Gateway API
@@ -94,6 +95,8 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
+
+	sentry.Flush(5 * time.Second)
 
 	log.Println("Server exited")
 }

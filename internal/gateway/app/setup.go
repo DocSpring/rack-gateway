@@ -171,6 +171,7 @@ func (a *App) setupRouter() {
 		EmailSender:    a.EmailSender,
 		ProxyHandler:   a.ProxyHandler,
 		RackCertMgr:    a.RackCertManager,
+		SentryEnabled:  a.SentryEnabled,
 	})
 
 	a.router = router

@@ -36,6 +36,23 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
     - CLI: `https://gateway.example.com/.gateway/api/auth/cli/callback`
 - `ADMIN_USERS` (optional)
   - Comma-separated emails to bootstrap admin access on first run.
+- `SENTRY_DSN` (optional)
+  - When set, enables Sentry reporting for the gateway API server.
+- `SENTRY_ENVIRONMENT` (optional)
+  - Overrides the Sentry environment tag. Defaults to `development` when `DEV_MODE=true`, otherwise `production`.
+- `SENTRY_RELEASE` (optional)
+  - Optional release identifier propagated to Sentry for backend events. Defaults to the rack-provided `RELEASE` env var when unset.
+- `SENTRY_JS_DSN` (optional)
+  - When set, embeds the Sentry DSN into the served web SPA for browser error reporting.
+- `SENTRY_JS_TRACES_SAMPLE_RATE` (optional)
+  - Floating point sample rate (0-1) for browser performance tracing. Defaults to `0`.
+
+### Web Frontend (runtime)
+
+- `SENTRY_JS_DSN` (optional)
+  - See Core Server section; injected into the SPA at render time.
+- `SENTRY_JS_TRACES_SAMPLE_RATE` (optional)
+  - See Core Server section for details.
 
 ## Rack Connectivity
 

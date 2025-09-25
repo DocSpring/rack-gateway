@@ -21,6 +21,8 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	sentry "github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -100,6 +102,44 @@ func (h *AdminHandler) publicBaseURL(c *gin.Context) string {
 		}
 	}
 	return ""
+}
+
+// TriggerSentryTest dispatches a synthetic event to validate Sentry plumbing.
+func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
+	var payload struct {
+		Kind string `json:"kind"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	kind := strings.TrimSpace(strings.ToLower(payload.Kind))
+	if kind == "" {
+		kind = "api"
+	}
+
+	switch kind {
+	case "api":
+		hub := sentrygin.GetHubFromContext(c)
+		if hub == nil {
+			hub = sentry.CurrentHub().Clone()
+		}
+		if hub != nil {
+			hub.WithScope(func(scope *sentry.Scope) {
+				scope.SetTag("trigger", "admin-api")
+				scope.SetTag("test", "sentry-api")
+				scope.SetExtra("triggered_at", time.Now().UTC().Format(time.RFC3339))
+				if user := h.currentAuthUser(c); user != nil {
+					scope.SetUser(sentry.User{Email: user.Email, Username: user.Name})
+				}
+				hub.CaptureMessage("Sentry API test event requested via settings page")
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "captured"})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported test kind"})
+	}
 }
 
 func (h *AdminHandler) currentAuthUser(c *gin.Context) *auth.AuthUser {
