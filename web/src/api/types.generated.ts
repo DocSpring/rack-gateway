@@ -1837,7 +1837,71 @@ export interface paths {
                 };
             };
         };
-        put?: never;
+        /**
+         * Update environment variables
+         * @description Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Environment update payload */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.UpdateEnvValuesRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.UpdateEnvValuesResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Bad Gateway */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -2019,13 +2083,14 @@ export interface components {
             user_id?: number;
         };
         "db.AuditLog": {
-            /** @description e.g., "env.get", "user.create", "auth.failed" */
+            /** @description e.g., "env.read", "user.create", "auth.failed" */
             action?: string;
             /** @description "convox", "users", "auth" */
             action_type?: string;
             command?: string;
             /** @description JSON string */
             details?: string;
+            event_count?: number;
             http_status?: number;
             id?: number;
             ip_address?: string;
@@ -2142,6 +2207,19 @@ export interface components {
         };
         "handlers.UpdateAllowDestructiveActionsRequest": {
             allow_destructive_actions?: boolean;
+        };
+        "handlers.UpdateEnvValuesRequest": {
+            app: string;
+            remove?: string[];
+            set?: {
+                [key: string]: string;
+            };
+        };
+        "handlers.UpdateEnvValuesResponse": {
+            env?: {
+                [key: string]: string;
+            };
+            release_id?: string;
         };
         "handlers.UpdateProtectedEnvVarsRequest": {
             protected_env_vars?: string[];

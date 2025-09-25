@@ -998,6 +998,15 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 		return
 	}
 
+	eventTotal := 0
+	for _, log := range logs {
+		if log.EventCount > 0 {
+			eventTotal += log.EventCount
+		} else {
+			eventTotal++
+		}
+	}
+
 	payload := AuditLogsResponse{
 		Logs:  logs,
 		Total: total,
@@ -1007,6 +1016,7 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 
 	details := map[string]interface{}{
 		"total":         total,
+		"event_total":   eventTotal,
 		"page":          page,
 		"limit":         limit,
 		"action_type":   filters.ActionType,
@@ -1079,7 +1089,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	// Header row
 	header := []string{
 		"timestamp", "user_email", "user_name", "action_type", "action",
-		"command", "resource", "status", "response_time_ms", "ip_address", "user_agent",
+		"command", "resource", "status", "event_count", "response_time_ms", "ip_address", "user_agent",
 	}
 	if err := writer.Write(header); err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to write CSV header", start, nil)
@@ -1087,7 +1097,13 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	}
 
 	// Data rows
+	totalEvents := 0
 	for _, log := range logs {
+		count := log.EventCount
+		if count <= 0 {
+			count = 1
+		}
+		totalEvents += count
 		row := []string{
 			log.Timestamp.Format(time.RFC3339),
 			log.UserEmail,
@@ -1097,6 +1113,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 			log.Command,
 			log.Resource,
 			log.Status,
+			strconv.Itoa(count),
 			strconv.Itoa(log.ResponseTimeMs),
 			log.IPAddress,
 			log.UserAgent,
@@ -1114,6 +1131,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 
 	details := map[string]interface{}{
 		"count":         len(logs),
+		"events":        totalEvents,
 		"action_type":   filters.ActionType,
 		"status_filter": filters.Status,
 		"resource_type": filters.ResourceType,

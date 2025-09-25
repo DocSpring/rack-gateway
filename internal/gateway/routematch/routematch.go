@@ -20,7 +20,7 @@ type RouteSpec struct {
 var specs = []RouteSpec{
 	// Processes
 	{"GET", "/apps/{app}/processes", "process", "list"},
-	{"GET", "/apps/{app}/processes/{pid}", "process", "get"},
+	{"GET", "/apps/{app}/processes/{pid}", "process", "read"},
 	{"DELETE", "/apps/{app}/processes/{pid}", "process", "terminate"},
 	{"SOCKET", "/apps/{app}/processes/{pid}/exec", "process", "exec"},
 	{"GET", "/apps/{app}/processes/{pid}/exec", "process", "exec"},
@@ -39,15 +39,15 @@ var specs = []RouteSpec{
 
 	// Builds
 	{"GET", "/apps/{app}/builds", "build", "list"},
-	{"GET", "/apps/{app}/builds/{id}", "build", "get"},
-	{"GET", "/apps/{app}/builds/{id}.tgz", "build", "get"},
+	{"GET", "/apps/{app}/builds/{id}", "build", "read"},
+	{"GET", "/apps/{app}/builds/{id}.tgz", "build", "read"},
 	{"POST", "/apps/{app}/builds", "build", "create"},
 	{"POST", "/apps/{app}/builds/import", "build", "create"},
 	{"PUT", "/apps/{app}/builds/{id}", "build", "update"},
 
 	// Releases
 	{"GET", "/apps/{app}/releases", "release", "list"},
-	{"GET", "/apps/{app}/releases/{id}", "release", "get"},
+	{"GET", "/apps/{app}/releases/{id}", "release", "read"},
 	{"POST", "/apps/{app}/releases", "release", "create"},
 	{"POST", "/apps/{app}/releases/{id}/promote", "release", "promote"},
 
@@ -56,7 +56,7 @@ var specs = []RouteSpec{
 
 	// Apps
 	{"GET", "/apps", "app", "list"},
-	{"GET", "/apps/{name}", "app", "get"},
+	{"GET", "/apps/{name}", "app", "read"},
 	{"POST", "/apps", "app", "create"},
 	{"PUT", "/apps/{name}", "app", "update"},
 	{"POST", "/apps/{app}/restart", "app", "restart"},
@@ -64,12 +64,12 @@ var specs = []RouteSpec{
 
 	// Services
 	{"PUT", "/apps/{app}/services/{name}", "app", "update"},
-	{"GET", "/apps/{app}/services", "app", "get"},
+	{"GET", "/apps/{app}/services", "app", "read"},
 	{"POST", "/apps/{app}/services/{service}/restart", "process", "start"},
 
 	// Instances
 	{"GET", "/instances", "instance", "list"},
-	{"GET", "/instances/{id}", "instance", "get"},
+	{"GET", "/instances/{id}", "instance", "read"},
 
 	// System
 	{"GET", "/system", "rack", "read"},

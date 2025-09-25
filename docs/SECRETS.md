@@ -5,7 +5,7 @@ This gateway enforces secret masking at the proxy layer for every client (web UI
 ## How masking works
 
 - The gateway masks values for variables commonly treated as secrets (e.g., keys, passwords, tokens). It also respects an allowlist of additional secret keys via `CONVOX_SECRET_ENV_VARS` (comma‑separated key names).
-- To see unmasked values, your account must have the `secrets:view` permission (assigned via RBAC), and you must pass `--secrets` to the CLI.
+- To see unmasked values, your account must have the `secrets:read` permission (assigned via RBAC), and you must pass `--secrets` to the CLI.
 
 ## Use `convox-gateway env` to request plaintext
 
@@ -33,7 +33,7 @@ convox-gateway env --secrets -a myapp
 # Masked by default
 convox-gateway env get DATABASE_URL -a myapp
 
-# Unmasked (requires secrets:view permission)
+# Unmasked (requires secrets:read permission)
 convox-gateway env get DATABASE_URL --secrets -a myapp
 ```
 

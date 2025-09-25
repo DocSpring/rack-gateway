@@ -1567,6 +1567,67 @@
                         }
                     }
                 }
+            },
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environment"
+                ],
+                "summary": "Update environment variables",
+                "parameters": [
+                    {
+                        "description": "Environment update payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateEnvValuesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateEnvValuesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/health": {
@@ -1733,7 +1794,7 @@
             "type": "object",
             "properties": {
                 "action": {
-                    "description": "e.g., \"env.get\", \"user.create\", \"auth.failed\"",
+                    "description": "e.g., \"env.read\", \"user.create\", \"auth.failed\"",
                     "type": "string"
                 },
                 "action_type": {
@@ -1746,6 +1807,9 @@
                 "details": {
                     "description": "JSON string",
                     "type": "string"
+                },
+                "event_count": {
+                    "type": "integer"
                 },
                 "http_status": {
                     "type": "integer"
@@ -2122,6 +2186,43 @@
             "properties": {
                 "allow_destructive_actions": {
                     "type": "boolean"
+                }
+            }
+        },
+        "handlers.UpdateEnvValuesRequest": {
+            "type": "object",
+            "required": [
+                "app"
+            ],
+            "properties": {
+                "app": {
+                    "type": "string"
+                },
+                "remove": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "set": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "handlers.UpdateEnvValuesResponse": {
+            "type": "object",
+            "properties": {
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "release_id": {
+                    "type": "string"
                 }
             }
         },

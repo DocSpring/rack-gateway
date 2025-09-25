@@ -76,6 +76,7 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "success", log.Status)
 		assert.Equal(t, 150, log.ResponseTimeMs)
 		assert.Equal(t, "192.168.1.1", log.IPAddress)
+		assert.Equal(t, 1, log.EventCount)
 		assert.Contains(t, log.Details, "GET")
 		assert.Contains(t, log.Details, "/apps/myapp/releases")
 	})
@@ -98,6 +99,7 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "denied", log.Status)
 		assert.Equal(t, "app.delete", log.Action)
 		assert.Equal(t, "myapp", log.Resource)
+		assert.Equal(t, 1, log.EventCount)
 	})
 
 }

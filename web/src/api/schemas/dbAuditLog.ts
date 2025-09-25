@@ -7,13 +7,14 @@
  */
 
 export interface DbAuditLog {
-  /** e.g., "env.get", "user.create", "auth.failed" */
+  /** e.g., "env.read", "user.create", "auth.failed" */
   action?: string;
   /** "convox", "users", "auth" */
   action_type?: string;
   command?: string;
   /** JSON string */
   details?: string;
+  event_count?: number;
   http_status?: number;
   id?: number;
   ip_address?: string;

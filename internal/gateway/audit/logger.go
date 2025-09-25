@@ -78,6 +78,10 @@ func (l *Logger) Log(entry *LogEntry) {
 // Use this helper anywhere an audit log would otherwise be written directly to the DB.
 func LogDB(database *db.Database, al *db.AuditLog) error {
 	// Mirror fields into a structured line suitable for CloudWatch ingestion
+	count := al.EventCount
+	if count <= 0 {
+		count = 1
+	}
 	payload := map[string]interface{}{
 		"ts":            time.Now().UTC().Format(time.RFC3339),
 		"user_email":    al.UserEmail,
@@ -93,6 +97,7 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 		"latency_ms":    al.ResponseTimeMs,
 		"ip_address":    al.IPAddress,
 		"user_agent":    al.UserAgent,
+		"event_count":   count,
 	}
 	// Omit verbose request details; method/path are already logged separately
 	if data, err := json.Marshal(payload); err == nil {
@@ -157,6 +162,7 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 		RBACDecision:   rbacDecision,
 		HTTPStatus:     status,
 		ResponseTimeMs: int(latency.Milliseconds()),
+		EventCount:     1,
 	}
 
 	// Enrich with command when executing
@@ -427,7 +433,7 @@ func (l *Logger) inferResourceType(path, action string) string {
 			return "system"
 		}
 	}
-	// Fallback to action prefix (e.g., env.get -> env)
+	// Fallback to action prefix (e.g., env.read -> env)
 	if i := strings.Index(action, "."); i > 0 {
 		return action[:i]
 	}

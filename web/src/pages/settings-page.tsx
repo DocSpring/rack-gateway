@@ -340,7 +340,7 @@ export function SettingsPage() {
             <p className="text-muted-foreground text-xs">
               Send sample events to confirm Sentry ingestion from the gateway and browser.
             </p>
-            <div className="flex flex-wrap gap-4 mt-6">
+            <div className="mt-6 flex flex-wrap gap-4">
               <Button
                 disabled={sentryApiTestMutation.isPending}
                 onClick={() => sentryApiTestMutation.mutate()}

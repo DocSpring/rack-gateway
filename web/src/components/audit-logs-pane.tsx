@@ -161,17 +161,31 @@ function extractExecCommand(log: AuditLogRecord): string {
 }
 
 function renderActionCell(log: AuditLogRecord) {
+  const eventCount = Math.max(1, log.event_count ?? 1)
+  const countBadge =
+    eventCount > 1 ? (
+      <Badge
+        className="w-fit border border-border bg-muted font-mono text-muted-foreground"
+        variant="outline"
+      >
+        {`(x${eventCount})`}
+      </Badge>
+    ) : null
+
   if (log.action_type === 'convox' && log.action === 'process.exec') {
     const command = extractExecCommand(log)
     const truncated = command.length > 64 ? `${command.slice(0, 64)}…` : command
     return (
       <div className="flex flex-col">
-        <Badge
-          className="w-fit border border-border bg-muted font-mono text-muted-foreground"
-          variant="outline"
-        >
-          {log.action}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge
+            className="w-fit border border-border bg-muted font-mono text-muted-foreground"
+            variant="outline"
+          >
+            {log.action}
+          </Badge>
+          {countBadge}
+        </div>
         {command && (
           <code
             className="mt-1 w-fit whitespace-nowrap rounded border border-border bg-secondary px-1 py-0.5 font-mono text-blue-600 shadow-sm dark:text-blue-300"
@@ -185,12 +199,15 @@ function renderActionCell(log: AuditLogRecord) {
   }
 
   return (
-    <Badge
-      className="border border-border bg-muted font-mono text-muted-foreground"
-      variant="outline"
-    >
-      {log.action ?? '-'}
-    </Badge>
+    <div className="flex items-center gap-2">
+      <Badge
+        className="border border-border bg-muted font-mono text-muted-foreground"
+        variant="outline"
+      >
+        {log.action ?? '-'}
+      </Badge>
+      {countBadge}
+    </div>
   )
 }
 
@@ -369,6 +386,10 @@ export function AuditLogsPane({
               </div>
               <div>
                 <span className="text-muted-foreground">Action:</span> {selected.action}
+              </div>
+              <div data-testid="audit-event-count">
+                <span className="text-muted-foreground">Event Count:</span>{' '}
+                {Math.max(1, selected.event_count ?? 1)}
               </div>
               <div>
                 <span className="text-muted-foreground">Resource:</span> {selected.resource || '-'}

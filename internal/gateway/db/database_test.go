@@ -81,7 +81,7 @@ func TestDatabase(t *testing.T) {
 			UserEmail:      "user1@example.com",
 			UserName:       "User One",
 			ActionType:     "convox",
-			Action:         "env.get",
+			Action:         "env.read",
 			Resource:       "myapp",
 			Details:        `{"key": "SECRET_TOKEN"}`,
 			IPAddress:      "192.168.1.1",
@@ -143,7 +143,7 @@ func TestDatabase(t *testing.T) {
 		userLogs, err := db.GetAuditLogs("user1@example.com", time.Time{}, 0)
 		require.NoError(t, err)
 		assert.Len(t, userLogs, 1)
-		assert.Equal(t, "env.get", userLogs[0].Action)
+		assert.Equal(t, "env.read", userLogs[0].Action)
 		assert.Equal(t, "192.168.1.1", userLogs[0].IPAddress)
 
 		// Filter by time (use a time well before we created the logs, in UTC)
@@ -161,6 +161,74 @@ func TestDatabase(t *testing.T) {
 		limitedLogs, err := db.GetAuditLogs("", time.Time{}, 2)
 		require.NoError(t, err)
 		assert.Len(t, limitedLogs, 2)
+	})
+
+	t.Run("AuditAggregation", func(t *testing.T) {
+		dbtest.Reset(t, db)
+
+		base := &gwdb.AuditLog{
+			UserEmail:      "poller@example.com",
+			UserName:       "Poller",
+			ActionType:     "convox",
+			Action:         "process.read",
+			Resource:       "app-123/process-abc",
+			ResourceType:   "process",
+			Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-001"}`,
+			IPAddress:      "10.0.0.1",
+			UserAgent:      "convox-cli/3.0",
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     200,
+			ResponseTimeMs: 95,
+		}
+		require.NoError(t, db.CreateAuditLog(base))
+
+		follow := &gwdb.AuditLog{
+			UserEmail:      base.UserEmail,
+			UserName:       base.UserName,
+			ActionType:     base.ActionType,
+			Action:         base.Action,
+			Resource:       base.Resource,
+			ResourceType:   base.ResourceType,
+			Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-002"}`,
+			IPAddress:      base.IPAddress,
+			UserAgent:      base.UserAgent,
+			Status:         base.Status,
+			RBACDecision:   base.RBACDecision,
+			HTTPStatus:     base.HTTPStatus,
+			ResponseTimeMs: 128,
+		}
+		require.NoError(t, db.CreateAuditLog(follow))
+
+		logs, err := db.GetAuditLogs(base.UserEmail, time.Time{}, 0)
+		require.NoError(t, err)
+		require.Len(t, logs, 1)
+		assert.Equal(t, 2, logs[0].EventCount)
+		assert.Equal(t, follow.ResponseTimeMs, logs[0].ResponseTimeMs)
+		assert.Contains(t, logs[0].Details, "req-002")
+
+		different := &gwdb.AuditLog{
+			UserEmail:      base.UserEmail,
+			UserName:       base.UserName,
+			ActionType:     base.ActionType,
+			Action:         base.Action,
+			Resource:       "app-123/process-def",
+			ResourceType:   base.ResourceType,
+			Details:        `{"path":"/apps/app-123/processes/process-def","request_id":"req-003"}`,
+			IPAddress:      base.IPAddress,
+			UserAgent:      base.UserAgent,
+			Status:         base.Status,
+			RBACDecision:   base.RBACDecision,
+			HTTPStatus:     base.HTTPStatus,
+			ResponseTimeMs: 143,
+		}
+		require.NoError(t, db.CreateAuditLog(different))
+
+		all, err := db.GetAuditLogs(base.UserEmail, time.Time{}, 0)
+		require.NoError(t, err)
+		require.Len(t, all, 2)
+		assert.Equal(t, 1, all[0].EventCount)
+		assert.Equal(t, 2, all[1].EventCount)
 	})
 }
 

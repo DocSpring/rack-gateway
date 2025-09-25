@@ -71,7 +71,7 @@ type AuditLog struct {
 	UserEmail      string    `json:"user_email"`
 	UserName       string    `json:"user_name,omitempty"`
 	ActionType     string    `json:"action_type"` // "convox", "users", "auth"
-	Action         string    `json:"action"`      // e.g., "env.get", "user.create", "auth.failed"
+	Action         string    `json:"action"`      // e.g., "env.read", "user.create", "auth.failed"
 	Command        string    `json:"command,omitempty"`
 	Resource       string    `json:"resource,omitempty"`
 	ResourceType   string    `json:"resource_type,omitempty"`
@@ -82,6 +82,7 @@ type AuditLog struct {
 	RBACDecision   string    `json:"rbac_decision,omitempty"` // "allow" or "deny"
 	HTTPStatus     int       `json:"http_status,omitempty"`
 	ResponseTimeMs int       `json:"response_time_ms"`
+	EventCount     int       `json:"event_count"`
 }
 
 // UserResource represents a creator->resource mapping

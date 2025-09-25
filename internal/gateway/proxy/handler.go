@@ -1141,8 +1141,8 @@ func extractJSONString(v interface{}) string {
 // filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.
 func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
 	// Determine permissions
-	canEnvView, _ := h.rbacManager.Enforce(email, "env", "view")
-	// Note: For native release responses, ALWAYS mask secrets regardless of secrets:view.
+	canEnvView, _ := h.rbacManager.Enforce(email, "env", "read")
+	// Note: For native release responses, ALWAYS mask secrets regardless of secrets:read.
 
 	// If no environment view, mask all env values (do not strip, to avoid accidental clears)
 	if !canEnvView {
@@ -1186,7 +1186,7 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 		}
 	}
 
-	// Env view allowed; redact secrets (always, regardless of secrets:view)
+	// Env read allowed; redact secrets (always, regardless of secrets:read)
 	var any interface{}
 	if err := json.Unmarshal(body, &any); err != nil {
 		return body

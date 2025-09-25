@@ -36,6 +36,8 @@ import type {
   HandlersTokenPermissionMetadata,
   HandlersUpdateAPITokenRequest,
   HandlersUpdateAllowDestructiveActionsRequest,
+  HandlersUpdateEnvValuesRequest,
+  HandlersUpdateEnvValuesResponse,
   HandlersUpdateProtectedEnvVarsRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
@@ -44,7 +46,7 @@ import type {
 } from './schemas';
 
 import { createGatewayClient } from './http-client';
-import type { AxiosRequestConfig } from 'axios';
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 export const getConvoxGatewayAPI = () => {
   /**
@@ -53,7 +55,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAdminAudit = (
     params?: GetAdminAuditParams,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersAuditLogsResponse>(
       { url: `/admin/audit`, method: 'GET', params },
@@ -67,7 +69,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAdminAuditExport = (
     params?: GetAdminAuditExportParams,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<Blob>(
       {
@@ -85,7 +87,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Get legacy configuration
    */
   const getAdminConfig = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<GetAdminConfig200>(
       { url: `/admin/config`, method: 'GET' },
@@ -98,7 +100,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Update legacy configuration
    */
   const putAdminConfig = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<unknown>(
       { url: `/admin/config`, method: 'PUT' },
@@ -111,7 +113,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary List RBAC roles
    */
   const getAdminRoles = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<GetAdminRoles200>(
       { url: `/admin/roles`, method: 'GET' },
@@ -124,7 +126,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Get gateway admin settings
    */
   const getAdminSettings = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<GetAdminSettings200>(
       { url: `/admin/settings`, method: 'GET' },
@@ -138,7 +140,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const putAdminSettingsAllowDestructiveActions = (
     handlersUpdateAllowDestructiveActionsRequest: HandlersUpdateAllowDestructiveActionsRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersStatusResponse>(
       {
@@ -157,7 +159,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const putAdminSettingsProtectedEnvVars = (
     handlersUpdateProtectedEnvVarsRequest: HandlersUpdateProtectedEnvVarsRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersStatusResponse>(
       {
@@ -175,7 +177,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Refresh rack TLS certificate
    */
   const postAdminSettingsRackTlsCertRefresh = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<DbRackTLSCert>(
       { url: `/admin/settings/rack_tls_cert/refresh`, method: 'POST' },
@@ -188,7 +190,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary List API tokens
    */
   const getAdminTokens = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<DbAPIToken[]>(
       { url: `/admin/tokens`, method: 'GET' },
@@ -202,7 +204,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const postAdminTokens = (
     handlersCreateAPITokenRequest: HandlersCreateAPITokenRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersCreateAPITokenResponse>(
       {
@@ -220,7 +222,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Get token permission metadata
    */
   const getAdminTokensPermissions = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersTokenPermissionMetadata>(
       { url: `/admin/tokens/permissions`, method: 'GET' },
@@ -234,7 +236,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAdminTokensTokenID = (
     tokenID: number,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<DbAPIToken>(
       { url: `/admin/tokens/${tokenID}`, method: 'GET' },
@@ -249,7 +251,7 @@ export const getConvoxGatewayAPI = () => {
   const putAdminTokensTokenID = (
     tokenID: number,
     handlersUpdateAPITokenRequest: HandlersUpdateAPITokenRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<DbAPIToken>(
       {
@@ -268,7 +270,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const deleteAdminTokensTokenID = (
     tokenID: number,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<string>(
       { url: `/admin/tokens/${tokenID}`, method: 'DELETE' },
@@ -281,7 +283,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary List all gateway users
    */
   const getAdminUsers = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<DbUser[]>(
       { url: `/admin/users`, method: 'GET' },
@@ -295,7 +297,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const postAdminUsers = (
     handlersCreateUserRequest: HandlersCreateUserRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersUserSummary>(
       {
@@ -314,7 +316,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAdminUsersEmail = (
     email: string,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<DbUser>(
       { url: `/admin/users/${email}`, method: 'GET' },
@@ -329,7 +331,7 @@ export const getConvoxGatewayAPI = () => {
   const putAdminUsersEmail = (
     email: string,
     handlersUpdateUserProfileRequest: HandlersUpdateUserProfileRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersUserSummary>(
       {
@@ -348,7 +350,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const deleteAdminUsersEmail = (
     email: string,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<string>(
       { url: `/admin/users/${email}`, method: 'DELETE' },
@@ -363,7 +365,7 @@ export const getConvoxGatewayAPI = () => {
   const putAdminUsersEmailRoles = (
     email: string,
     handlersUpdateUserRolesRequest: HandlersUpdateUserRolesRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersUserSummary>(
       {
@@ -382,7 +384,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAdminUsersEmailSessions = (
     email: string,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersUserSessionResponse[]>(
       { url: `/admin/users/${email}/sessions`, method: 'GET' },
@@ -396,7 +398,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const postAdminUsersEmailSessionsRevokeAll = (
     email: string,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersRevokeAllSessionsResponse>(
       { url: `/admin/users/${email}/sessions/revoke_all`, method: 'POST' },
@@ -411,7 +413,7 @@ export const getConvoxGatewayAPI = () => {
   const postAdminUsersEmailSessionsSessionIDRevoke = (
     email: string,
     sessionID: number,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersRevokeSessionResponse>(
       {
@@ -428,7 +430,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAuthCliCallback = (
     params: GetAuthCliCallbackParams,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<unknown>(
       { url: `/auth/cli/callback`, method: 'GET', params },
@@ -442,7 +444,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const postAuthCliComplete = (
     handlersCLILoginCompleteRequest: HandlersCLILoginCompleteRequest,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<AuthLoginResponse>(
       {
@@ -460,7 +462,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Start CLI OAuth login
    */
   const postAuthCliStart = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<AuthLoginStartResponse>(
       { url: `/auth/cli/start`, method: 'POST' },
@@ -474,7 +476,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getAuthWebCallback = (
     params: GetAuthWebCallbackParams,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<unknown>(
       { url: `/auth/web/callback`, method: 'GET', params },
@@ -487,7 +489,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Start web OAuth login
    */
   const getAuthWebLogin = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<unknown>(
       { url: `/auth/web/login`, method: 'GET' },
@@ -500,7 +502,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Log out current session
    */
   const getAuthWebLogout = (
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<unknown>(
       { url: `/auth/web/logout`, method: 'GET' },
@@ -514,7 +516,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getCreatedBy = (
     params: GetCreatedByParams,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<GetCreatedBy200>(
       { url: `/created-by`, method: 'GET', params },
@@ -528,7 +530,7 @@ export const getConvoxGatewayAPI = () => {
    */
   const getEnv = (
     params: GetEnvParams,
-    options?: AxiosRequestConfig,
+    options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersEnvValuesResponse>(
       { url: `/env`, method: 'GET', params },
@@ -537,10 +539,29 @@ export const getConvoxGatewayAPI = () => {
   };
 
   /**
+   * Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+   * @summary Update environment variables
+   */
+  const putEnv = (
+    handlersUpdateEnvValuesRequest: HandlersUpdateEnvValuesRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersUpdateEnvValuesResponse>(
+      {
+        url: `/env`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateEnvValuesRequest,
+      },
+      options,
+    );
+  };
+
+  /**
    * Returns service health information.
    * @summary Health check
    */
-  const getHealth = (options?: AxiosRequestConfig) => {
+  const getHealth = (options?: SecondParameter<typeof createGatewayClient>) => {
     return createGatewayClient<HandlersHealthResponse>(
       { url: `/health`, method: 'GET' },
       options,
@@ -551,7 +572,7 @@ export const getConvoxGatewayAPI = () => {
    * Returns the authenticated user's profile, roles, and default rack summary.
    * @summary Get current user profile
    */
-  const getMe = (options?: AxiosRequestConfig) => {
+  const getMe = (options?: SecondParameter<typeof createGatewayClient>) => {
     return createGatewayClient<HandlersCurrentUserResponse>(
       { url: `/me`, method: 'GET' },
       options,
@@ -562,7 +583,7 @@ export const getConvoxGatewayAPI = () => {
    * Proxies the rack /system endpoint returning the rack's metadata.
    * @summary Get rack system information
    */
-  const getRack = (options?: AxiosRequestConfig) => {
+  const getRack = (options?: SecondParameter<typeof createGatewayClient>) => {
     return createGatewayClient<GetRack200>(
       { url: `/rack`, method: 'GET' },
       options,
@@ -602,6 +623,7 @@ export const getConvoxGatewayAPI = () => {
     getAuthWebLogout,
     getCreatedBy,
     getEnv,
+    putEnv,
     getHealth,
     getMe,
     getRack,
@@ -770,6 +792,9 @@ export type GetCreatedByResult = NonNullable<
 >;
 export type GetEnvResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getEnv']>>
+>;
+export type PutEnvResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getConvoxGatewayAPI>['putEnv']>>
 >;
 export type GetHealthResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getHealth']>>

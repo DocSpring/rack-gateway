@@ -166,6 +166,9 @@ func TestSecurityHeadersAddsSentryReporting(t *testing.T) {
 	if !strings.Contains(csp, "https://o75.ingest.us.sentry.io") {
 		t.Fatalf("expected connect-src to include Sentry origin, got %q", csp)
 	}
+	if !strings.Contains(csp, "img-src 'self' data: https://o75.ingest.us.sentry.io") {
+		t.Fatalf("expected img-src to allow Sentry origin, got %q", csp)
+	}
 
 	reportTo := resp.Header().Get("Report-To")
 	if !strings.Contains(reportTo, "\"group\":\"cgw-sentry-csp\"") || !strings.Contains(reportTo, "https://o75.ingest.us.sentry.io/api/9001/security/") {

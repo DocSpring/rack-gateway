@@ -395,15 +395,15 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	email := c.GetString("user_email")
 	name := c.GetString("user_name")
 
-	// Enforce env:view
-	if ok, _ := h.rbac.Enforce(email, "env", "view"); !ok {
+	// Enforce env:read
+	if ok, _ := h.rbac.Enforce(email, "env", "read"); !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view environment variables."})
 		return
 	}
 
 	allowedSecrets := false
 	if wantSecrets {
-		if ok, _ := h.rbac.Enforce(email, "secrets", "view"); !ok {
+		if ok, _ := h.rbac.Enforce(email, "secrets", "read"); !ok {
 			res := app
 			if key != "" {
 				res = fmt.Sprintf("%s/%s", app, key)
@@ -417,7 +417,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 				UserEmail:      email,
 				UserName:       name,
 				ActionType:     "convox",
-				Action:         "secrets.view",
+				Action:         "secrets.read",
 				ResourceType:   "secret",
 				Resource:       res,
 				Details:        string(detailsJSON),
@@ -488,10 +488,10 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		details["secrets"] = true
 	}
 	detailsJSON, _ := json.Marshal(details)
-	action := "env.view"
+	action := "env.read"
 	resourceType := "env"
 	if allowedSecrets {
-		action = "secrets.view"
+		action = "secrets.read"
 		resourceType = "secret"
 	}
 	_ = audit.LogDB(h.database, &db.AuditLog{

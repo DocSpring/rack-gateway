@@ -61,6 +61,15 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		}
 		connectSrc := "connect-src " + strings.Join(connectDirectives, " ")
 
+		imageDirectives := []string{"'self'", "data:"}
+		if !isProdLike {
+			imageDirectives = append(imageDirectives, "http://localhost:*", "https://localhost:*")
+		}
+		if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
+			imageDirectives = append(imageDirectives, sentryCfg.ConnectOrigin)
+		}
+		imgSrc := "img-src " + strings.Join(imageDirectives, " ")
+
 		scriptSrc := "script-src 'self'"
 		styleSrc := "style-src 'self'"
 		if nonce != "" {
@@ -70,10 +79,21 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 			scriptSrc += " 'unsafe-inline'"
 			styleSrc += " 'unsafe-inline'"
 		}
-		csp := fmt.Sprintf("default-src 'self'; %s; %s; %s", connectSrc, scriptSrc, styleSrc)
-		if sentryCfg != nil {
-			csp = fmt.Sprintf("%s; report-uri %s; report-to %s", csp, sentryCfg.ReportURL, sentryCfg.ReportGroup)
+
+		cspParts := []string{
+			"default-src 'self'",
+			connectSrc,
+			scriptSrc,
+			styleSrc,
+			imgSrc,
 		}
+		if sentryCfg != nil {
+			cspParts = append(cspParts,
+				fmt.Sprintf("report-uri %s", sentryCfg.ReportURL),
+				fmt.Sprintf("report-to %s", sentryCfg.ReportGroup),
+			)
+		}
+		csp := strings.Join(cspParts, "; ")
 
 		secCfg := securemw.Config{
 			AllowedHosts: nil,

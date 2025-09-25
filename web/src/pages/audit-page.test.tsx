@@ -37,6 +37,7 @@ const mockLogs = [
     user_agent: 'Mozilla/5.0',
     status: 'success',
     response_time_ms: 150,
+    event_count: 1,
   },
   {
     id: 2,
@@ -52,6 +53,7 @@ const mockLogs = [
     user_agent: 'convox-cli/3.0',
     status: 'success',
     response_time_ms: 75,
+    event_count: 4,
   },
   {
     id: 3,
@@ -67,6 +69,7 @@ const mockLogs = [
     user_agent: 'Chrome/120',
     status: 'failed',
     response_time_ms: 200,
+    event_count: 1,
   },
   {
     id: 4,
@@ -82,6 +85,7 @@ const mockLogs = [
     user_agent: 'curl/7.68',
     status: 'blocked',
     response_time_ms: 5,
+    event_count: 1,
   },
 ]
 
@@ -132,6 +136,33 @@ describe('AuditPage', () => {
       expect(screen.getByText('user.create')).toBeInTheDocument()
       expect(screen.getByText('apps.list')).toBeInTheDocument()
       expect(screen.getByText('auth.login')).toBeInTheDocument()
+      expect(screen.getByText('(x4)')).toBeInTheDocument()
+      expect(screen.queryByText('(x1)')).not.toBeInTheDocument()
+    })
+
+    it('shows event count in detail dialog', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('apps.list')).toBeInTheDocument()
+      })
+
+      const actionBadge = screen.getByText('apps.list')
+      const row = actionBadge.closest('tr')
+      expect(row).not.toBeNull()
+      if (!row) {
+        throw new Error('expected table row for apps.list')
+      }
+      fireEvent.click(row)
+
+      await waitFor(() => {
+        expect(screen.getByText('Audit Log')).toBeInTheDocument()
+      })
+
+      expect(screen.getByTestId('audit-event-count')).toHaveTextContent('4')
     })
 
     it('displays status badges correctly', async () => {
@@ -169,18 +200,17 @@ describe('AuditPage', () => {
       render(<AuditPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        // Total events
+        // Total logs card (from API total)
         expect(screen.getByText('4')).toBeInTheDocument()
 
-        // Success rate: 2 success out of 4 = 50%
-        expect(screen.getByText('50%')).toBeInTheDocument()
+        // Success rate: (1 + 4 successful events) / 7 total events ≈ 71%
+        expect(screen.getByText('71%')).toBeInTheDocument()
 
-        // Failed/Denied: 1 failed + 1 blocked = 2
+        // Failed/Denied events (weighted by event_count)
         expect(screen.getByText('2')).toBeInTheDocument()
 
-        // Average response time: (150 + 75 + 200 + 5) / 4 = 107.5 ≈ 108ms
-        // There are multiple ms values in the table, just check one exists
-        expect(screen.getByText('108ms')).toBeInTheDocument()
+        // Weighted average response time: (150 + 300 + 200 + 5) / 7 ≈ 94ms
+        expect(screen.getByText('94ms')).toBeInTheDocument()
       })
     })
   })

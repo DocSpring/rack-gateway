@@ -651,21 +651,32 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
   // Do not unmount the page on loading/error; render inline status instead to preserve input focus
 
   // Calculate statistics
+  const countEvents = (predicate?: (log: AuditLogRecord) => boolean) =>
+    logs.reduce((acc, log) => {
+      const occurrences = Math.max(1, log.event_count ?? 1)
+      if (!predicate || predicate(log)) {
+        return acc + occurrences
+      }
+      return acc
+    }, 0)
+
+  const totalEvents = countEvents()
+  const successEvents = countEvents((l) => l.status === 'success')
+  const failedEvents = countEvents((l) => l.status === 'failed')
+  const deniedEvents = countEvents((l) => l.status === 'denied' || l.status === 'blocked')
+  const totalResponseTime = logs.reduce((acc, l) => {
+    if (typeof l.response_time_ms !== 'number') {
+      return acc
+    }
+    return acc + l.response_time_ms * Math.max(1, l.event_count ?? 1)
+  }, 0)
+
   const pageStats = {
-    total: logs.length,
-    success: logs.filter((l) => l.status === 'success').length,
-    failed: logs.filter((l) => l.status === 'failed').length,
-    denied: logs.filter((l) => l.status === 'denied' || l.status === 'blocked').length,
-    avgResponseTime:
-      logs.length > 0
-        ? Math.round(
-            logs.reduce(
-              (acc: number, l) =>
-                acc + (typeof l.response_time_ms === 'number' ? l.response_time_ms : 0),
-              0
-            ) / logs.length
-          )
-        : 0,
+    total: totalEvents,
+    success: successEvents,
+    failed: failedEvents,
+    denied: deniedEvents,
+    avgResponseTime: totalEvents > 0 ? Math.round(totalResponseTime / totalEvents) : 0,
   }
 
   const totalPages = Math.max(1, Math.ceil(Math.max(totalCount, 1) / perPage))
