@@ -86,18 +86,6 @@ tasks:
     dir: web
     desc: Run TypeScript type checking
     deps: [deps, ":go:generate"]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - tsconfig*.json
-      - vite.config.ts
-      - src/**/*
-      - scripts/**/*
-      - e2e/**/*
-      - public/**/*
-      - playwright.config.ts
-      - vitest.config.ts
     cmds:
       - pnpm typecheck
 
@@ -105,17 +93,6 @@ tasks:
     dir: web
     desc: Run Biome lint
     deps: [deps]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - biome.json
-      - src/**/*
-      - scripts/**/*
-      - e2e/**/*
-      - public/**/*
-      - playwright.config.ts
-      - vitest.config.ts
     cmds:
       - pnpm lint
 
@@ -123,17 +100,6 @@ tasks:
     dir: web
     desc: Run Biome lint
     deps: [deps]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - biome.json
-      - src/**/*
-      - scripts/**/*
-      - e2e/**/*
-      - public/**/*
-      - playwright.config.ts
-      - vitest.config.ts
     cmds:
       - pnpm lint:fix
 
@@ -141,17 +107,6 @@ tasks:
     dir: web
     desc: Auto-fix Biome issues (unsafe, may change code semantics)
     deps: [deps]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - biome.json
-      - src/**/*
-      - scripts/**/*
-      - e2e/**/*
-      - public/**/*
-      - playwright.config.ts
-      - vitest.config.ts
     cmds:
       - pnpm lint:unsafe
 
@@ -159,18 +114,6 @@ tasks:
     dir: web
     desc: Run web unit tests (Vitest)
     deps: [deps, ":go:generate"]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - tsconfig*.json
-      - vite.config.ts
-      - vitest.config.ts
-      - src/**/*
-      - scripts/**/*
-      - e2e/**/*
-      - public/**/*
-      - playwright.config.ts
     cmds:
       - pnpm test --run
 
@@ -187,16 +130,6 @@ tasks:
     aliases: [e2e]
     desc: Run Web E2E against dev stack (Vite/HMR)
     deps: [":docker:up:dev", "e2e:deps", ":go:generate"]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - tsconfig.e2e.json
-      - playwright.config.ts
-      - e2e/**/*
-      - src/**/*
-      - scripts/**/*
-      - public/**/*
     cmds:
       - env WEB_PORT={{.WEB_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 
@@ -204,16 +137,6 @@ tasks:
     dir: web
     desc: Run Web E2E against preview stack (compiled SPA)
     deps: [":docker:up:preview", "e2e:deps", ":go:generate"]
-    sources:
-      - ../Taskfile.web.yml
-      - package.json
-      - pnpm-lock.yaml
-      - tsconfig.e2e.json
-      - playwright.config.ts
-      - e2e/**/*
-      - src/**/*
-      - scripts/**/*
-      - public/**/*
     cmds:
       - env GATEWAY_PORT={{.GATEWAY_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 

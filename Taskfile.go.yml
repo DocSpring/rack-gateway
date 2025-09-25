@@ -124,67 +124,31 @@ tasks:
     aliases: [e2e]
     desc: Run CLI E2E flow on dev stack
     deps: [":docker:up:dev"]
-    sources:
-      - Taskfile.go.yml
-      - go.*
-      - cmd/**/*.go
-      - internal/**/*.go
-      - scripts/cli-e2e.sh
     cmds: [scripts/cli-e2e.sh]
 
   e2e:dev:admin:
     desc: Run CLI E2E flow on dev stack with only admin tests
     deps: [":docker:up:dev"]
-    sources:
-      - Taskfile.go.yml
-      - go.*
-      - cmd/**/*.go
-      - internal/**/*.go
-      - scripts/cli-e2e.sh
     cmds: [ONLY_ADMIN_TESTS=true bash scripts/cli-e2e.sh]
 
   e2e:dev:api-token:
     desc: Run CLI E2E flow on dev stack with only API token tests
     deps: [":docker:up:dev"]
-    sources:
-      - Taskfile.go.yml
-      - go.*
-      - cmd/**/*.go
-      - internal/**/*.go
-      - scripts/cli-e2e.sh
     cmds: [ONLY_API_TOKEN_TESTS=true bash scripts/cli-e2e.sh]
 
   e2e:dev:deployer:
     desc: Run CLI E2E flow on dev stack with only deployer tests
     deps: [":docker:up:dev"]
-    sources:
-      - Taskfile.go.yml
-      - go.*
-      - cmd/**/*.go
-      - internal/**/*.go
-      - scripts/cli-e2e.sh
     cmds: [ONLY_DEPLOYER_TESTS=true bash scripts/cli-e2e.sh]
 
   e2e:dev:viewer:
     desc: Run CLI E2E flow on dev stack with only viewer tests
     deps: [":docker:up:dev"]
-    sources:
-      - Taskfile.go.yml
-      - go.*
-      - cmd/**/*.go
-      - internal/**/*.go
-      - scripts/cli-e2e.sh
     cmds: [ONLY_VIEWER_TESTS=true bash scripts/cli-e2e.sh]
 
   e2e:preview:
     desc: Run CLI E2E flow on preview stack
     deps: [":docker:up:preview"]
-    sources:
-      - Taskfile.go.yml
-      - go.*
-      - cmd/**/*.go
-      - internal/**/*.go
-      - scripts/cli-e2e.sh
     cmds: [scripts/cli-e2e.sh]
 
   test:all:

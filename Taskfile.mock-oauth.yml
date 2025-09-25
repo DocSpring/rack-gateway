@@ -35,12 +35,6 @@ tasks:
     dir: mock-oauth
     desc: Run TypeScript type checking
     deps: [deps]
-    sources:
-      - ../Taskfile.mock-oauth.yml
-      - package.json
-      - pnpm-lock.yaml
-      - tsconfig.json
-      - "*.ts"
     cmds:
       - pnpm typecheck
 
@@ -48,12 +42,6 @@ tasks:
     dir: mock-oauth
     desc: Run Biome lint
     deps: [deps]
-    sources:
-      - ../Taskfile.mock-oauth.yml
-      - package.json
-      - pnpm-lock.yaml
-      - biome.json
-      - "*.ts"
     cmds:
       - pnpm exec biome check .
 
@@ -62,12 +50,6 @@ tasks:
     aliases: [lint:fix]
     desc: Lint mock OAuth server and apply safe fixes
     deps: [deps]
-    sources:
-      - ../Taskfile.mock-oauth.yml
-      - package.json
-      - pnpm-lock.yaml
-      - biome.json
-      - "*.ts"
     cmds:
       - pnpm exec biome check . --write
 

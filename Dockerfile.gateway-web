@@ -7,7 +7,7 @@ WORKDIR /app/web
 ENV PNPM_STORE_DIR=/pnpm-store
 
 # Copy web package and lockfile first to maximize cache hits
-COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+COPY web/package.json web/pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --frozen-lockfile
 
 # Copy web source and build

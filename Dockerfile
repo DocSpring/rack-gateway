@@ -6,7 +6,7 @@ WORKDIR /webapp
 RUN corepack enable
 
 # Install deps with maximum cache reuse: copy only lockfile + manifest first
-COPY web/pnpm-lock.yaml web/package.json web/pnpm-workspace.yaml ./
+COPY web/pnpm-lock.yaml web/package.json ./
 RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the web app and build
