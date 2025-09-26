@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import QRCode from 'qrcode'
 import { useEffect, useMemo, useState } from 'react'
+import { MFAInput } from '@/components/mfa-input'
 import { TimeAgo } from '@/components/time-ago'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import {
@@ -469,18 +469,11 @@ export function AccountSecurityPage() {
             </div>
             <div className="space-y-3">
               <Label htmlFor="verification-code">2. Enter the 6-digit code to confirm</Label>
-              <Input
-                autoCapitalize="none"
-                autoComplete="one-time-code"
-                autoCorrect="off"
+              <MFAInput
                 id="verification-code"
-                inputMode="numeric"
                 maxLength={6}
-                name="otp_entry"
                 onChange={(event) => setVerificationCode(event.target.value.trim())}
-                pattern="[0-9]*"
                 placeholder="123456"
-                type="text"
                 value={verificationCode}
               />
               <label className="flex items-center gap-2 py-5 text-sm">
@@ -662,19 +655,13 @@ export function AccountSecurityPage() {
           >
             <div className="space-y-2">
               <Label htmlFor="step-up-code">Verification code</Label>
-              <Input
-                autoCapitalize="none"
-                autoComplete="one-time-code"
-                autoCorrect="off"
+              <MFAInput
                 autoFocus
                 id="step-up-code"
-                inputMode="numeric"
                 maxLength={6}
-                name="otp_entry"
                 onChange={(event) => setStepUpCode(event.target.value.trim())}
                 placeholder="123456"
                 required
-                type="text"
                 value={stepUpCode}
               />
             </div>

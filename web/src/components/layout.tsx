@@ -7,7 +7,7 @@ import {
   type LucideIcon,
   Server,
   Settings,
-  ShieldCheck,
+  Shield,
   TerminalSquare,
   Users,
 } from 'lucide-react'
@@ -90,7 +90,7 @@ export function Layout() {
   const navigation = useMemo<NavigationItem[]>(() => {
     const nav = baseNavigation.slice()
 
-    nav.push({ name: 'Account Security', href: '/account/security', icon: ShieldCheck })
+    nav.push({ name: 'Account Security', href: '/account/security', icon: Shield })
 
     nav.push({
       name: 'Configure CLI',

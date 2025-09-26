@@ -3,10 +3,10 @@ import { isAxiosError } from 'axios'
 import { AlertCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
+import { MFAInput } from '@/components/mfa-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { verifyCliMfa } from '@/lib/api'
 import { WebRoute } from '@/lib/routes'
@@ -130,22 +130,15 @@ export function CLIAuthApprovePage() {
           ) : null}
           <div className="space-y-2">
             <Label htmlFor="mfa-code">Verification code</Label>
-            <Input
-              autoCapitalize="none"
-              autoComplete="one-time-code"
-              autoCorrect="off"
+            <MFAInput
               autoFocus
               id="mfa-code"
-              inputMode="numeric"
               maxLength={12}
-              name="otp_entry"
               onChange={(event) => {
                 setError(null)
                 setCode(event.target.value.replace(/\s+/g, ''))
               }}
-              pattern="[0-9]*"
               placeholder="123456"
-              type="text"
               value={code}
             />
           </div>
