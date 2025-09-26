@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm exec vite",
-    "build": "pnpm exec tsc -b tsconfig.build.json && pnpm exec vite build && pnpm exec vite build --ssr src/standalone/cli-auth-success/ssg-entry.tsx --outDir dist/ssr/cli-auth-success && pnpm exec tsx scripts/prerender-cli-auth-success.ts",
+    "build": "pnpm exec tsc -b tsconfig.build.json && pnpm exec vite build",
     "build:fast": "pnpm exec vite build --mode development",
     "typecheck": "pnpm exec tsc -b --noEmit --pretty false",
     "lint": "pnpm exec biome check .",
