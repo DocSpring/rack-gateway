@@ -65,7 +65,7 @@ export function ThemeToggle() {
 
   return (
     <button
-      className="p-2 text-foreground transition-colors hover:text-muted-foreground"
+      className="p-2 text-foreground transition-colors hover:text-muted-foreground cursor-pointer"
       onClick={toggleTheme}
       title={getTitle()}
       type="button"

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import QRCode from 'qrcode'
 import { useEffect, useMemo, useState } from 'react'
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { MFAInput } from '@/components/mfa-input'
 import { TimeAgo } from '@/components/time-ago'
 import { Badge } from '@/components/ui/badge'
@@ -75,6 +76,8 @@ export function AccountSecurityPage() {
   const [stepUpCode, setStepUpCode] = useState('')
   const [stepUpTrustDevice, setStepUpTrustDevice] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
+  const [disableDialogOpen, setDisableDialogOpen] = useState(false)
+  const [disableAllPending, setDisableAllPending] = useState(false)
 
   const {
     data: status,
@@ -259,6 +262,32 @@ export function AccountSecurityPage() {
     }
   }
 
+  const handleDisableAllMfa = () => {
+    if (methods.length === 0) {
+      setDisableDialogOpen(false)
+      return
+    }
+
+    const performDisable = async () => {
+      setDisableAllPending(true)
+      try {
+        for (const method of methods) {
+          if (!method.id) {
+            toast.error('Unable to determine method identifier')
+            continue
+          }
+          await deleteMethodMutation.mutateAsync(method.id as number)
+        }
+        toast.success('Multi-factor authentication disabled')
+      } finally {
+        setDisableAllPending(false)
+      }
+    }
+
+    setDisableDialogOpen(false)
+    runWithStepUp(performDisable)
+  }
+
   const isBusy =
     isLoading ||
     isFetching ||
@@ -307,27 +336,10 @@ export function AccountSecurityPage() {
           <CardFooter className="mt-auto flex flex-wrap gap-3">
             {status?.enrolled ? (
               <Button
-                disabled={methods.length === 0 || deleteMethodMutation.isPending}
-                onClick={() => {
-                  if (methods.length === 0) {
-                    return
-                  }
-                  if (
-                    !window.confirm(
-                      'Disable MFA for this account? All registered authenticators will be removed.'
-                    )
-                  ) {
-                    return
-                  }
-                  runWithStepUp(async () => {
-                    for (const method of methods) {
-                      if (!method.id) {
-                        continue
-                      }
-                      await deleteMethodMutation.mutateAsync(method.id)
-                    }
-                  })
-                }}
+                disabled={
+                  methods.length === 0 || deleteMethodMutation.isPending || disableAllPending
+                }
+                onClick={() => setDisableDialogOpen(true)}
                 variant="destructive"
               >
                 Disable MFA
@@ -625,6 +637,18 @@ export function AccountSecurityPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDeleteDialog
+        busy={disableAllPending || deleteMethodMutation.isPending}
+        confirmButtonText="Disable MFA"
+        confirmText="DISABLE"
+        description={<>Type DISABLE to remove all registered authenticators and turn off MFA for your account.</>}
+        inputId="confirm-disable-mfa"
+        onConfirm={handleDisableAllMfa}
+        onOpenChange={setDisableDialogOpen}
+        open={disableDialogOpen}
+        title="Disable MFA"
+      />
 
       <Dialog
         onOpenChange={(open) => {
