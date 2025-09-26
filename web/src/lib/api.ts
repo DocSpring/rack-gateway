@@ -9,19 +9,28 @@ import type {
   GetAdminRoles200,
   GetRack200,
   HandlersAuditLogsResponse,
+  HandlersBackupCodesResponse,
+  HandlersConfirmTOTPEnrollmentRequest,
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
   HandlersCreateUserRequest,
   HandlersCurrentUserResponse,
   HandlersHealthResponse,
+  HandlersMFAMethodResponse,
+  HandlersMFAStatusResponse,
   HandlersRevokeAllSessionsResponse,
   HandlersRevokeSessionResponse,
+  HandlersStartTOTPEnrollmentResponse,
+  HandlersStatusResponse,
   HandlersTokenPermissionMetadata,
+  HandlersTrustedDeviceResponse,
   HandlersUpdateAPITokenRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
   HandlersUserSessionResponse,
   HandlersUserSummary,
+  HandlersVerifyMFARequest,
+  HandlersVerifyMFAResponse,
 } from '@/api/schemas'
 
 const API_PREFIX = '/.gateway/api'
@@ -63,6 +72,15 @@ export type RackInfo = GetRack200
 export type CurrentUserResponse = HandlersCurrentUserResponse
 export type HealthResponse = HandlersHealthResponse
 export type EnvValuesMap = Record<string, string>
+export type StartTOTPEnrollmentResponse = HandlersStartTOTPEnrollmentResponse
+export type ConfirmTOTPEnrollmentRequest = HandlersConfirmTOTPEnrollmentRequest
+export type VerifyMFARequest = HandlersVerifyMFARequest
+export type VerifyMFAResponse = HandlersVerifyMFAResponse
+export type BackupCodesResponse = HandlersBackupCodesResponse
+export type MFAStatusResponse = HandlersMFAStatusResponse
+export type MFAMethod = HandlersMFAMethodResponse
+export type TrustedDevice = HandlersTrustedDeviceResponse
+export type StatusResponse = HandlersStatusResponse
 
 type EnvValuesResponseShape = {
   env?: EnvValuesMap
@@ -192,6 +210,27 @@ export const getConvoxApp = <T = unknown>(path: string): Promise<T> =>
 
 export const get = <T = unknown>(path: string, config?: AxiosRequestConfig): Promise<T> =>
   gatewayAxios.get<T>(normalizePath(path), config).then((res) => res.data)
+
+export const getMFAStatus = (): Promise<MFAStatusResponse> => unwrap(gateway.getAuthMfaStatus())
+
+export const deleteMFAMethod = (methodId: number): Promise<StatusResponse> =>
+  unwrap(gateway.deleteAuthMfaMethodsMethodID(methodId))
+
+export const revokeTrustedDevice = (deviceId: number): Promise<StatusResponse> =>
+  unwrap(gateway.deleteAuthMfaTrustedDevicesDeviceID(deviceId))
+
+export const startTOTPEnrollment = (): Promise<StartTOTPEnrollmentResponse> =>
+  post<StartTOTPEnrollmentResponse>('/auth/mfa/enroll/totp/start')
+
+export const confirmTOTPEnrollment = (
+  payload: ConfirmTOTPEnrollmentRequest
+): Promise<VerifyMFAResponse> => post<VerifyMFAResponse>('/auth/mfa/enroll/totp/confirm', payload)
+
+export const verifyMFA = (payload: VerifyMFARequest): Promise<VerifyMFAResponse> =>
+  post<VerifyMFAResponse>('/auth/mfa/verify', payload)
+
+export const regenerateBackupCodes = (): Promise<BackupCodesResponse> =>
+  post<BackupCodesResponse>('/auth/mfa/backup-codes/regenerate')
 
 export const post = <T = unknown>(
   path: string,

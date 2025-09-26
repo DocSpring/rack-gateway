@@ -17,12 +17,14 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/pquerna/otp v1.5.0
 	github.com/rickb777/servefiles/v3 v3.9.10
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.10.0
 	github.com/swaggo/swag v1.16.2
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
 	golang.org/x/oauth2 v0.31.0
+	golang.org/x/term v0.35.0
 	golang.org/x/time v0.13.0
 )
 
@@ -31,6 +33,7 @@ require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect

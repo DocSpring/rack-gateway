@@ -147,6 +147,10 @@ func (d *Database) exec(q string, args ...interface{}) (sql.Result, error) {
 	return d.db.Exec(d.rebind(q), args...)
 }
 
+func (d *Database) execTx(tx *sql.Tx, q string, args ...interface{}) (sql.Result, error) {
+	return tx.Exec(d.rebind(q), args...)
+}
+
 func (d *Database) query(q string, args ...interface{}) (*sql.Rows, error) {
 	return d.db.Query(d.rebind(q), args...)
 }

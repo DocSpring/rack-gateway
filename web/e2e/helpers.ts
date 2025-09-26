@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
+import { expireStepUpForAllSessions, resetMfaForUser } from './db'
 import { expect } from './fixtures'
 
 export type LoginOptions = {
@@ -40,4 +41,12 @@ export async function login(page: Page, options: LoginOptions = {}) {
       return cookies.some((cookie) => cookie.name === 'session_token')
     })
     .toBeTruthy()
+}
+
+export async function resetMfaFor(email: string) {
+  await resetMfaForUser(email)
+}
+
+export async function clearStepUpSessions() {
+  await expireStepUpForAllSessions()
 }

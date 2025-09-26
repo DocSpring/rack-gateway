@@ -95,7 +95,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 		t.Fatalf("expected user record")
 	}
 
-	sessionToken, _, err := sessionManager.CreateSession(userRecord, SessionMetadata{})
+	sessionToken, _, err := sessionManager.CreateSession(userRecord, SessionMetadata{Channel: "cli"})
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 		t.Fatalf("expected user record")
 	}
 
-	sessionToken, _, err := sessionManager.CreateSession(userRecord, SessionMetadata{})
+	sessionToken, _, err := sessionManager.CreateSession(userRecord, SessionMetadata{Channel: "cli"})
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}

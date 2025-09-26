@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,13 +16,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 type Config struct {
-	Current  string                   `json:"current,omitempty"`
-	Gateways map[string]GatewayConfig `json:"gateways"`
-	Tokens   map[string]Token         `json:"tokens"`
+	Current   string                   `json:"current,omitempty"`
+	Gateways  map[string]GatewayConfig `json:"gateways"`
+	Tokens    map[string]Token         `json:"tokens"`
+	MachineID string                   `json:"machine_id,omitempty"`
 }
 
 type GatewayConfig struct {
@@ -28,10 +33,17 @@ type GatewayConfig struct {
 }
 
 type Token struct {
-	Token     string    `json:"token"`
-	Email     string    `json:"email"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token       string    `json:"token"`
+	Email       string    `json:"email"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	SessionID   int64     `json:"session_id"`
+	Channel     string    `json:"channel"`
+	DeviceID    string    `json:"device_id,omitempty"`
+	DeviceName  string    `json:"device_name,omitempty"`
+	MFAVerified bool      `json:"mfa_verified,omitempty"`
 }
+
+var ErrLoginPending = errors.New("login pending")
 
 func configFile() string {
 	return filepath.Join(configPath, "config.json")
@@ -58,6 +70,16 @@ func loadConfig() (*Config, bool, error) {
 	}
 	if cfg.Tokens == nil {
 		cfg.Tokens = make(map[string]Token)
+	}
+	dirty := false
+	if strings.TrimSpace(cfg.MachineID) == "" {
+		cfg.MachineID = uuid.NewString()
+		dirty = true
+	}
+	if dirty {
+		if err := saveConfig(cfg); err != nil {
+			return nil, exists, err
+		}
 	}
 	return cfg, exists, nil
 }
@@ -103,10 +125,24 @@ type LoginCallbackRequest struct {
 }
 
 type LoginResponse struct {
-	Token     string    `json:"token"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token              string    `json:"token"`
+	Email              string    `json:"email"`
+	Name               string    `json:"name"`
+	ExpiresAt          time.Time `json:"expires_at"`
+	SessionID          int64     `json:"session_id"`
+	Channel            string    `json:"channel"`
+	DeviceID           string    `json:"device_id"`
+	DeviceName         string    `json:"device_name"`
+	MFAVerified        bool      `json:"mfa_verified"`
+	MFARequired        bool      `json:"mfa_required"`
+	EnrollmentRequired bool      `json:"enrollment_required"`
+}
+
+type DeviceInfo struct {
+	ID            string
+	Name          string
+	OS            string
+	ClientVersion string
 }
 
 var (
@@ -518,9 +554,13 @@ PowerShell:
 			if completeState == "" || completeCodeVerifier == "" {
 				return fmt.Errorf("--state and --code-verifier are required")
 			}
-			loginResp, err := completeLogin(gatewayURL, "", completeState, completeCodeVerifier)
+			deviceInfo := determineDeviceInfo()
+			loginResp, err := completeLogin(gatewayURL, completeState, completeCodeVerifier, deviceInfo)
 			if err != nil {
 				return fmt.Errorf("failed to complete login: %w", err)
+			}
+			if err := performMFAVerification(gatewayURL, loginResp); err != nil {
+				return err
 			}
 			if err := saveToken(rack, loginResp); err != nil {
 				return fmt.Errorf("failed to save token: %w", err)
@@ -583,19 +623,37 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 		}
 	}
 
+	deviceInfo := determineDeviceInfo()
 	// Poll the server for completion; it returns 202 while pending
 	var loginResp *LoginResponse
 	deadline := time.Now().Add(2 * time.Minute)
+	pendingNotified := false
+	var lastErr error
 	for {
-		resp, err := completeLogin(gatewayURL, "", startResp.State, startResp.CodeVerifier)
+		resp, err := completeLogin(gatewayURL, startResp.State, startResp.CodeVerifier, deviceInfo)
 		if err == nil {
 			loginResp = resp
 			break
 		}
+		if errors.Is(err, ErrLoginPending) {
+			if !pendingNotified {
+				fmt.Println("Waiting for multi-factor authentication to complete in your browser...")
+				pendingNotified = true
+			}
+		} else {
+			lastErr = err
+		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("login did not complete before timeout: %w", err)
+			if lastErr != nil {
+				return fmt.Errorf("login did not complete before timeout: %w", lastErr)
+			}
+			return fmt.Errorf("login did not complete before timeout")
 		}
 		time.Sleep(500 * time.Millisecond)
+	}
+
+	if err := performMFAVerification(gatewayURL, loginResp); err != nil {
+		return err
 	}
 
 	if err := saveToken(rack, loginResp); err != nil {
@@ -708,14 +766,21 @@ func startLogin(gatewayURL string) (*LoginStartResponse, error) {
 	return &result, nil
 }
 
-func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse, error) {
+func completeLogin(gatewayURL, state, codeVerifier string, device DeviceInfo) (*LoginResponse, error) {
 	parsedURL := gatewayURL
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
 	url := fmt.Sprintf("%s/.gateway/api/auth/cli/complete", strings.TrimSuffix(parsedURL, "/"))
 
-	payload := map[string]string{"state": state, "code_verifier": codeVerifier}
+	payload := map[string]string{
+		"state":          state,
+		"code_verifier":  codeVerifier,
+		"device_id":      device.ID,
+		"device_name":    device.Name,
+		"device_os":      device.OS,
+		"client_version": device.ClientVersion,
+	}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -735,7 +800,7 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	defer resp.Body.Close() //nolint:errcheck // response cleanup
 
 	if resp.StatusCode == http.StatusAccepted {
-		return nil, fmt.Errorf("pending")
+		return nil, ErrLoginPending
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -748,6 +813,101 @@ func completeLogin(gatewayURL, code, state, codeVerifier string) (*LoginResponse
 	}
 
 	return &result, nil
+}
+
+func performMFAVerification(gatewayURL string, resp *LoginResponse) error {
+	if resp == nil {
+		return fmt.Errorf("missing login response for MFA verification")
+	}
+	if resp.EnrollmentRequired {
+		normalized, err := normalizeGatewayURL(gatewayURL)
+		if err != nil {
+			normalized = gatewayURL
+		}
+		fmt.Fprintln(os.Stderr, "MFA enrollment is required before using this gateway.")
+		fmt.Fprintf(os.Stderr, "Visit %s/.gateway/web to finish setup, then rerun login.\n", normalized)
+		return fmt.Errorf("mfa enrollment required")
+	}
+	if !resp.MFARequired {
+		return nil
+	}
+	if !isInteractive() {
+		return fmt.Errorf("MFA verification required; run the login command from an interactive terminal")
+	}
+	normalized, err := normalizeGatewayURL(gatewayURL)
+	if err != nil {
+		return err
+	}
+	for attempts := 0; attempts < 5; attempts++ {
+		code, err := promptMFACode()
+		if err != nil {
+			return err
+		}
+		if code == "" {
+			fmt.Println("MFA code cannot be empty.")
+			continue
+		}
+		if err := submitMFAVerification(normalized, resp.Token, code); err != nil {
+			fmt.Printf("MFA verification failed: %v\n", err)
+			continue
+		}
+		fmt.Println("MFA verified successfully.")
+		resp.MFAVerified = true
+		resp.MFARequired = false
+		return nil
+	}
+	return fmt.Errorf("failed to verify MFA after multiple attempts")
+}
+
+func submitMFAVerification(baseURL, sessionToken, code string) error {
+	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/verify", strings.TrimSuffix(baseURL, "/"))
+	payload := map[string]any{
+		"code": code,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+sessionToken)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck // cleanup best-effort
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("gateway error: %s", renderGatewayError(bodyBytes))
+}
+
+func promptMFACode() (string, error) {
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		fmt.Print("Enter 6-digit MFA code: ")
+		codeBytes, err := term.ReadPassword(fd)
+		fmt.Println()
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(codeBytes)), nil
+	}
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter 6-digit MFA code: ")
+	code, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(code), nil
+}
+
+func isInteractive() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 // fetchEnvViaAPI calls the gateway env API to get masked/unmasked values
@@ -811,9 +971,14 @@ func saveToken(rack string, loginResp *LoginResponse) error {
 		return err
 	}
 	cfg.Tokens[rack] = Token{
-		Token:     loginResp.Token,
-		Email:     loginResp.Email,
-		ExpiresAt: loginResp.ExpiresAt,
+		Token:       loginResp.Token,
+		Email:       loginResp.Email,
+		ExpiresAt:   loginResp.ExpiresAt,
+		SessionID:   loginResp.SessionID,
+		Channel:     loginResp.Channel,
+		DeviceID:    loginResp.DeviceID,
+		DeviceName:  loginResp.DeviceName,
+		MFAVerified: loginResp.MFAVerified,
 	}
 	return saveConfig(cfg)
 }
@@ -895,6 +1060,9 @@ func resolveRackStatus(now time.Time) (*rackStatus, error) {
 				fmt.Sprintf("Status: Logged in as %s", token.Email))
 			status.StatusLines = append(status.StatusLines,
 				fmt.Sprintf("Token expires: %s", token.ExpiresAt.Format(time.RFC3339)))
+			if !token.MFAVerified {
+				status.StatusLines = append(status.StatusLines, "MFA: verification required (run an interactive login)")
+			}
 			return status, nil
 		}
 	}
@@ -1100,4 +1268,35 @@ func resolveApp(flagVal string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("missing app: use -a <app> or set CONVOX_APP or add .convox/app")
+}
+func determineDeviceInfo() DeviceInfo {
+	cfg, _, err := loadConfig()
+	deviceID := ""
+	if err == nil && cfg != nil {
+		deviceID = strings.TrimSpace(cfg.MachineID)
+	}
+	if deviceID == "" {
+		deviceID = uuid.NewString()
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown-device"
+	}
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		hostname = fmt.Sprintf("gateway-cli-%s", runtime.GOOS)
+	}
+
+	clientVersion := strings.TrimSpace(Version)
+	if clientVersion == "" {
+		clientVersion = "dev"
+	}
+
+	return DeviceInfo{
+		ID:            deviceID,
+		Name:          hostname,
+		OS:            runtime.GOOS,
+		ClientVersion: clientVersion,
+	}
 }

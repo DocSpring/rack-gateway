@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
@@ -31,6 +32,8 @@ type Config struct {
 	OAuthHandler   *auth.OAuthHandler
 	AuthService    *auth.AuthService
 	TokenService   *token.Service
+	MFAService     *mfa.Service
+	MFASettings    *db.MFASettings
 	EmailSender    email.Sender
 	ProxyHandler   *proxy.Handler
 	RackCertMgr    *rackcert.Manager
@@ -86,9 +89,9 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr)
-	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager)
+	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings)
+	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings)
+	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
 	staticHandler := handlers.NewStaticHandler(cfg.Config, cfg.SessionManager)
 	healthHandler := handlers.NewHealthHandler()
@@ -118,6 +121,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 			authGroup.POST("/auth/cli/start", authHandler.CLILoginStart)
 			authGroup.GET("/auth/cli/callback", authHandler.CLILoginCallback)
 			authGroup.POST("/auth/cli/complete", authHandler.CLILoginComplete)
+			authGroup.GET("/auth/cli/mfa", authHandler.CLILoginMFAForm)
+			authGroup.POST("/auth/cli/mfa", authHandler.CLILoginMFASubmit)
 
 			// Web auth flow
 			authGroup.GET("/auth/web/login", authHandler.WebLoginStart)
@@ -133,6 +138,22 @@ func Setup(router *gin.Engine, cfg *Config) {
 		authenticated := api.Group("")
 		authenticated.Use(middleware.Authenticated(cfg.AuthService, cfg.RBACManager))
 		{
+			mfaGroup := authenticated.Group("/auth/mfa")
+			mfaGroup.Use(middleware.RateLimit(cfg.Config))
+			if cfg.SessionManager != nil {
+				mfaGroup.Use(middleware.CSRF(cfg.SessionManager))
+			}
+			{
+				mfaGroup.GET("/status", authHandler.GetMFAStatus)
+				mfaGroup.POST("/enroll/totp/start", authHandler.StartTOTPEnrollment)
+				mfaGroup.POST("/enroll/totp/confirm", authHandler.ConfirmTOTPEnrollment)
+				mfaGroup.POST("/verify", authHandler.VerifyMFA)
+				mfaStepUp := mfaGroup.Group("")
+				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				mfaStepUp.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
+				mfaStepUp.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
+				mfaStepUp.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
+			}
 			// User API
 			authenticated.GET("/me", apiHandler.GetMe)
 			authenticated.GET("/created-by", apiHandler.GetCreatedBy)
@@ -163,6 +184,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.GET("/settings", adminHandler.GetSettings)
 				admin.PUT("/settings/protected_env_vars", adminHandler.UpdateProtectedEnvVars)
 				admin.PUT("/settings/allow_destructive_actions", adminHandler.UpdateAllowDestructiveActions)
+				admin.PUT("/settings/mfa", adminHandler.UpdateMFASettings)
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
 

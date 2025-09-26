@@ -7,7 +7,7 @@ import axios, {
 } from 'axios'
 
 import { toast } from '@/components/ui/use-toast'
-import { SESSION_EXPIRED_MESSAGE, authService } from '@/lib/auth'
+import { authService, SESSION_EXPIRED_MESSAGE } from '@/lib/auth'
 
 import { getCsrfToken } from '@/lib/csrf'
 import { APIRoute } from '@/lib/routes'
@@ -57,6 +57,11 @@ gatewayAxios.interceptors.response.use(
   (error) => {
     const status = error?.response?.status
     if (status === 401) {
+      const dataError = (error?.response?.data as { error?: string } | undefined)?.error
+      const mfaRequiredHeader = error?.response?.headers?.['x-mfa-required']
+      if (dataError === 'mfa_step_up_required' || mfaRequiredHeader === 'step-up') {
+        return Promise.reject(error)
+      }
       const hasWindow = typeof window !== 'undefined'
       if (hasWindow) {
         try {

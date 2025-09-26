@@ -14,16 +14,18 @@ type Database struct {
 
 // User represents a user in the system
 type User struct {
-	ID              int64     `json:"id"`
-	Email           string    `json:"email"`
-	Name            string    `json:"name"`
-	Roles           []string  `json:"roles"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Suspended       bool      `json:"suspended"`
-	CreatedByUserID *int64    `json:"created_by_user_id,omitempty"`
-	CreatedByEmail  string    `json:"created_by_email,omitempty"`
-	CreatedByName   string    `json:"created_by_name,omitempty"`
+	ID              int64      `json:"id"`
+	Email           string     `json:"email"`
+	Name            string     `json:"name"`
+	Roles           []string   `json:"roles"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	Suspended       bool       `json:"suspended"`
+	MFAEnrolled     bool       `json:"mfa_enrolled"`
+	MFAEnforcedAt   *time.Time `json:"mfa_enforced_at,omitempty"`
+	CreatedByUserID *int64     `json:"created_by_user_id,omitempty"`
+	CreatedByEmail  string     `json:"created_by_email,omitempty"`
+	CreatedByName   string     `json:"created_by_name,omitempty"`
 }
 
 // APIToken represents an API token for CI/CD
@@ -43,18 +45,25 @@ type APIToken struct {
 
 // UserSession represents an authenticated web session stored in the database.
 type UserSession struct {
-	ID            int64           `json:"id"`
-	UserID        int64           `json:"user_id"`
-	TokenHash     string          `json:"-"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
-	LastSeenAt    time.Time       `json:"last_seen_at"`
-	ExpiresAt     time.Time       `json:"expires_at"`
-	RevokedAt     *time.Time      `json:"revoked_at,omitempty"`
-	RevokedByUser *int64          `json:"revoked_by_user_id,omitempty"`
-	IPAddress     string          `json:"ip_address,omitempty"`
-	UserAgent     string          `json:"user_agent,omitempty"`
-	Metadata      json.RawMessage `json:"metadata,omitempty"`
+	ID              int64           `json:"id"`
+	UserID          int64           `json:"user_id"`
+	TokenHash       string          `json:"-"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	LastSeenAt      time.Time       `json:"last_seen_at"`
+	ExpiresAt       time.Time       `json:"expires_at"`
+	Channel         string          `json:"channel"`
+	DeviceID        string          `json:"device_id,omitempty"`
+	DeviceName      string          `json:"device_name,omitempty"`
+	MFAVerifiedAt   *time.Time      `json:"mfa_verified_at,omitempty"`
+	RecentStepUpAt  *time.Time      `json:"recent_step_up_at,omitempty"`
+	TrustedDeviceID *int64          `json:"trusted_device_id,omitempty"`
+	RevokedAt       *time.Time      `json:"revoked_at,omitempty"`
+	RevokedByUser   *int64          `json:"revoked_by_user_id,omitempty"`
+	IPAddress       string          `json:"ip_address,omitempty"`
+	UserAgent       string          `json:"user_agent,omitempty"`
+	Metadata        json.RawMessage `json:"metadata,omitempty"`
+	DeviceMetadata  json.RawMessage `json:"device_metadata,omitempty"`
 }
 
 // RackTLSCert stores the pinned rack TLS certificate information.
@@ -98,4 +107,47 @@ type CreatorInfo struct {
 	UserID int64  `json:"user_id"`
 	Email  string `json:"email"`
 	Name   string `json:"name"`
+}
+
+// MFAMethod represents a configured MFA factor for a user.
+type MFAMethod struct {
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	Type         string     `json:"type"`
+	Label        string     `json:"label,omitempty"`
+	Secret       string     `json:"-"`
+	CredentialID []byte     `json:"credential_id,omitempty"`
+	PublicKey    []byte     `json:"public_key,omitempty"`
+	Transports   []string   `json:"transports,omitempty"`
+	Metadata     []byte     `json:"metadata,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ConfirmedAt  *time.Time `json:"confirmed_at,omitempty"`
+	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
+}
+
+// MFABackupCode represents a single-use backup code for MFA.
+type MFABackupCode struct {
+	ID        int64      `json:"id"`
+	UserID    int64      `json:"user_id"`
+	CodeHash  string     `json:"-"`
+	CreatedAt time.Time  `json:"created_at"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+}
+
+// TrustedDevice tracks a trusted device token for MFA bypass.
+type TrustedDevice struct {
+	ID            int64           `json:"id"`
+	UserID        int64           `json:"user_id"`
+	DeviceID      string          `json:"device_id"`
+	TokenHash     string          `json:"-"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	ExpiresAt     time.Time       `json:"expires_at"`
+	LastUsedAt    time.Time       `json:"last_used_at"`
+	IPFirst       string          `json:"ip_first,omitempty"`
+	IPLast        string          `json:"ip_last,omitempty"`
+	UserAgentHash string          `json:"user_agent_hash,omitempty"`
+	RevokedAt     *time.Time      `json:"revoked_at,omitempty"`
+	RevokedReason string          `json:"revoked_reason,omitempty"`
+	Metadata      json.RawMessage `json:"metadata,omitempty"`
 }

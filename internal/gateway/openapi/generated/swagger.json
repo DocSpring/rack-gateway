@@ -361,6 +361,60 @@
                 }
             }
         },
+        "/admin/settings/mfa": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Configures whether MFA is required for all users.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update MFA enforcement defaults",
+                "parameters": [
+                    {
+                        "description": "MFA settings payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateMFASettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/settings/protected_env_vars": {
             "put": {
                 "security": [
@@ -1354,6 +1408,383 @@
                 }
             }
         },
+        "/auth/mfa/backup-codes/regenerate": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Generates a fresh set of backup codes. Existing codes are invalidated immediately.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Regenerate backup codes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BackupCodesResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/enroll/totp/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Confirms the TOTP secret using a verification code and optionally trusts the device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Confirm TOTP enrollment",
+                "parameters": [
+                    {
+                        "description": "Enrollment confirmation payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ConfirmTOTPEnrollmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.VerifyMFAResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/enroll/totp/start": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start TOTP enrollment",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StartTOTPEnrollmentResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/methods/{methodID}": {
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Removes an existing MFA method for the current user.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Delete an MFA method",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "MFA method ID",
+                        "name": "methodID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/status": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns enrollment state, configured methods, trusted devices, and backup code summary.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Get MFA status for current session",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MFAStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/trusted-devices/{deviceID}": {
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Revokes a trusted device token for the current user.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Revoke a trusted device",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Trusted device ID",
+                        "name": "deviceID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/verify": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Verifies a TOTP or backup code to satisfy the MFA step-up requirement.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Verify MFA step-up",
+                "parameters": [
+                    {
+                        "description": "Verification payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.VerifyMFARequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.VerifyMFAResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/web/callback": {
             "get": {
                 "description": "Validates the OAuth callback, issues a session cookie, and redirects to the SPA.",
@@ -1900,6 +2331,12 @@
                 "id": {
                     "type": "integer"
                 },
+                "mfa_enforced_at": {
+                    "type": "string"
+                },
+                "mfa_enrolled": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -1937,6 +2374,17 @@
                 }
             }
         },
+        "handlers.BackupCodesResponse": {
+            "type": "object",
+            "properties": {
+                "backup_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "handlers.CLILoginCompleteRequest": {
             "type": "object",
             "required": [
@@ -1944,11 +2392,41 @@
                 "state"
             ],
             "properties": {
+                "client_version": {
+                    "type": "string"
+                },
                 "code_verifier": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "device_name": {
+                    "type": "string"
+                },
+                "device_os": {
                     "type": "string"
                 },
                 "state": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.ConfirmTOTPEnrollmentRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "method_id"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "method_id": {
+                    "type": "integer"
+                },
+                "trust_device": {
+                    "type": "boolean"
                 }
             }
         },
@@ -2024,6 +2502,12 @@
                 "email": {
                     "type": "string"
                 },
+                "mfa_enrolled": {
+                    "type": "boolean"
+                },
+                "mfa_required": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -2035,6 +2519,9 @@
                 },
                 "rack": {
                     "$ref": "#/definitions/handlers.RackSummary"
+                },
+                "recent_step_up_expires_at": {
+                    "type": "string"
                 },
                 "roles": {
                     "type": "array",
@@ -2071,6 +2558,75 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.MFABackupCodesSummary": {
+            "type": "object",
+            "properties": {
+                "last_generated_at": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unused": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.MFAMethodResponse": {
+            "type": "object",
+            "properties": {
+                "confirmed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MFAStatusResponse": {
+            "type": "object",
+            "properties": {
+                "backup_codes": {
+                    "$ref": "#/definitions/handlers.MFABackupCodesSummary"
+                },
+                "enrolled": {
+                    "type": "boolean"
+                },
+                "methods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.MFAMethodResponse"
+                    }
+                },
+                "recent_step_up_expires_at": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "trusted_devices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TrustedDeviceResponse"
+                    }
                 }
             }
         },
@@ -2124,6 +2680,26 @@
                 }
             }
         },
+        "handlers.StartTOTPEnrollmentResponse": {
+            "type": "object",
+            "properties": {
+                "backup_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "method_id": {
+                    "type": "integer"
+                },
+                "secret": {
+                    "type": "string"
+                },
+                "uri": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.StatusResponse": {
             "type": "object",
             "properties": {
@@ -2164,6 +2740,38 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "handlers.TrustedDeviceResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "revoked_at": {
+                    "type": "string"
+                },
+                "revoked_reason": {
+                    "type": "string"
+                },
+                "user_agent": {
+                    "type": "string"
                 }
             }
         },
@@ -2223,6 +2831,14 @@
                 },
                 "release_id": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateMFASettingsRequest": {
+            "type": "object",
+            "properties": {
+                "require_all_users": {
+                    "type": "boolean"
                 }
             }
         },
@@ -2304,6 +2920,34 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "handlers.VerifyMFARequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "trust_device": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.VerifyMFAResponse": {
+            "type": "object",
+            "properties": {
+                "mfa_verified_at": {
+                    "type": "string"
+                },
+                "recent_step_up_expires_at": {
+                    "type": "string"
+                },
+                "trusted_device_cookie": {
+                    "type": "boolean"
                 }
             }
         }

@@ -28,7 +28,7 @@ func TestAuthServiceAllowsCookieJWT(t *testing.T) {
 		t.Fatalf("expected user to exist")
 	}
 
-	sessionToken, _, err := sessionManager.CreateSession(user, SessionMetadata{})
+	sessionToken, _, err := sessionManager.CreateSession(user, SessionMetadata{Channel: "web"})
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

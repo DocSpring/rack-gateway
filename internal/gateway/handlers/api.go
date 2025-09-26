@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
@@ -29,6 +30,7 @@ type APIHandler struct {
 	database        *db.Database
 	config          *config.Config
 	rackCertManager *rackcert.Manager
+	mfaSettings     *db.MFASettings
 }
 
 var (
@@ -37,12 +39,13 @@ var (
 )
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager) *APIHandler {
+func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager, mfaSettings *db.MFASettings) *APIHandler {
 	return &APIHandler{
 		rbac:            rbac,
 		database:        database,
 		config:          config,
 		rackCertManager: rackCertManager,
+		mfaSettings:     mfaSettings,
 	}
 }
 
@@ -57,6 +60,26 @@ func (h *APIHandler) primaryRack() (config.RackConfig, bool) {
 		return rc, true
 	}
 	return config.RackConfig{}, false
+}
+
+func (h *APIHandler) isMFARequired(user *db.User) bool {
+	if user == nil {
+		return false
+	}
+	if h.mfaSettings == nil {
+		return true
+	}
+	if h.mfaSettings.RequireAllUsers {
+		return true
+	}
+	return user.MFAEnforcedAt != nil
+}
+
+func (h *APIHandler) stepUpWindow() time.Duration {
+	if h.mfaSettings != nil && h.mfaSettings.StepUpWindowMinutes > 0 {
+		return time.Duration(h.mfaSettings.StepUpWindowMinutes) * time.Minute
+	}
+	return 10 * time.Minute
 }
 
 func (h *APIHandler) rackContext(ctx context.Context) (config.RackConfig, *tls.Config, error) {
@@ -184,12 +207,30 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
 		return
 	}
+	dbUser, err := h.database.GetUser(email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+		return
+	}
 
 	response := CurrentUserResponse{
 		Email:       email,
 		Name:        name,
 		Roles:       roles,
 		Permissions: user.Roles,
+	}
+	if dbUser != nil {
+		if strings.TrimSpace(response.Name) == "" {
+			response.Name = dbUser.Name
+		}
+		response.MFAEnrolled = dbUser.MFAEnrolled
+		response.MFARequired = h.isMFARequired(dbUser)
+	} else if h.mfaSettings != nil && h.mfaSettings.RequireAllUsers {
+		response.MFARequired = true
+	}
+	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && authUser.Session != nil && authUser.Session.RecentStepUpAt != nil {
+		expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
+		response.RecentStepUpExpiresAt = &expires
 	}
 
 	if rc, ok := h.primaryRack(); ok {

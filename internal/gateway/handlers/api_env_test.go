@@ -41,7 +41,7 @@ func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handle
 		},
 	}
 
-	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil)
+	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil)
 	return handler, rbacManager
 }
 

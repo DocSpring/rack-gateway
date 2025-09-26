@@ -9,6 +9,7 @@ import {
 import { Layout } from './components/layout'
 import { Toaster } from './components/ui/toaster'
 import { AuthProvider } from './contexts/auth-context'
+import { AccountSecurityPage } from './pages/account-security-page'
 import { AllBuildsPage } from './pages/all-builds-page'
 import { AllProcessesPage } from './pages/all-processes-page'
 import { AllReleasesPage } from './pages/all-releases-page'
@@ -84,6 +85,12 @@ function buildRouteTree() {
     getParentRoute: () => layoutRoute,
     path: 'api_tokens',
     component: TokensPage,
+  })
+
+  const accountSecurityRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'account/security',
+    component: AccountSecurityPage,
   })
 
   const auditRoute = createRoute({
@@ -174,6 +181,7 @@ function buildRouteTree() {
       tokensRoute,
       auditRoute,
       settingsRoute,
+      accountSecurityRoute,
     ]),
   ])
 }

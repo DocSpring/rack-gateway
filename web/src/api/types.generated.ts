@@ -371,6 +371,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/settings/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update MFA enforcement defaults
+         * @description Configures whether MFA is required for all users.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description MFA settings payload */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.UpdateMFASettingsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StatusResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/settings/protected_env_vars": {
         parameters: {
             query?: never;
@@ -1550,6 +1612,511 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/backup-codes/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate backup codes
+         * @description Generates a fresh set of backup codes. Existing codes are invalidated immediately.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.BackupCodesResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enroll/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm TOTP enrollment
+         * @description Confirms the TOTP secret using a verification code and optionally trusts the device.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Enrollment confirmation payload */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.ConfirmTOTPEnrollmentRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.VerifyMFAResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enroll/totp/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start TOTP enrollment
+         * @description Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StartTOTPEnrollmentResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/methods/{methodID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an MFA method
+         * @description Removes an existing MFA method for the current user.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description MFA method ID */
+                    methodID: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.StatusResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get MFA status for current session
+         * @description Returns enrollment state, configured methods, trusted devices, and backup code summary.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.MFAStatusResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/trusted-devices/{deviceID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a trusted device
+         * @description Revokes a trusted device token for the current user.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Trusted device ID */
+                    deviceID: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.StatusResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify MFA step-up
+         * @description Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Verification payload */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.VerifyMFARequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.VerifyMFAResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/web/callback": {
         parameters: {
             query?: never;
@@ -2123,6 +2690,8 @@ export interface components {
             created_by_user_id?: number;
             email?: string;
             id?: number;
+            mfa_enforced_at?: string;
+            mfa_enrolled?: boolean;
             name?: string;
             roles?: string[];
             suspended?: boolean;
@@ -2134,9 +2703,21 @@ export interface components {
             page?: number;
             total?: number;
         };
+        "handlers.BackupCodesResponse": {
+            backup_codes?: string[];
+        };
         "handlers.CLILoginCompleteRequest": {
+            client_version?: string;
             code_verifier: string;
+            device_id?: string;
+            device_name?: string;
+            device_os?: string;
             state: string;
+        };
+        "handlers.ConfirmTOTPEnrollmentRequest": {
+            code: string;
+            method_id: number;
+            trust_device?: boolean;
         };
         "handlers.CreateAPITokenRequest": {
             name: string;
@@ -2157,9 +2738,12 @@ export interface components {
         };
         "handlers.CurrentUserResponse": {
             email?: string;
+            mfa_enrolled?: boolean;
+            mfa_required?: boolean;
             name?: string;
             permissions?: string[];
             rack?: components["schemas"]["handlers.RackSummary"];
+            recent_step_up_expires_at?: string;
             roles?: string[];
         };
         "handlers.EnvValuesResponse": {
@@ -2173,6 +2757,28 @@ export interface components {
         "handlers.HealthResponse": {
             service?: string;
             status?: string;
+        };
+        "handlers.MFABackupCodesSummary": {
+            last_generated_at?: string;
+            last_used_at?: string;
+            total?: number;
+            unused?: number;
+        };
+        "handlers.MFAMethodResponse": {
+            confirmed_at?: string;
+            created_at?: string;
+            id?: number;
+            label?: string;
+            last_used_at?: string;
+            type?: string;
+        };
+        "handlers.MFAStatusResponse": {
+            backup_codes?: components["schemas"]["handlers.MFABackupCodesSummary"];
+            enrolled?: boolean;
+            methods?: components["schemas"]["handlers.MFAMethodResponse"][];
+            recent_step_up_expires_at?: string;
+            required?: boolean;
+            trusted_devices?: components["schemas"]["handlers.TrustedDeviceResponse"][];
         };
         "handlers.RackSummary": {
             alias?: string;
@@ -2191,6 +2797,12 @@ export interface components {
             name?: string;
             permissions?: string[];
         };
+        "handlers.StartTOTPEnrollmentResponse": {
+            backup_codes?: string[];
+            method_id?: number;
+            secret?: string;
+            uri?: string;
+        };
         "handlers.StatusResponse": {
             status?: string;
         };
@@ -2200,6 +2812,17 @@ export interface components {
             roles?: components["schemas"]["handlers.RoleDescriptor"][];
             user_permissions?: string[];
             user_roles?: string[];
+        };
+        "handlers.TrustedDeviceResponse": {
+            created_at?: string;
+            expires_at?: string;
+            id?: number;
+            ip_address?: string;
+            label?: string;
+            last_used_at?: string;
+            revoked_at?: string;
+            revoked_reason?: string;
+            user_agent?: string;
         };
         "handlers.UpdateAPITokenRequest": {
             name?: string;
@@ -2220,6 +2843,9 @@ export interface components {
                 [key: string]: string;
             };
             release_id?: string;
+        };
+        "handlers.UpdateMFASettingsRequest": {
+            require_all_users?: boolean;
         };
         "handlers.UpdateProtectedEnvVarsRequest": {
             protected_env_vars?: string[];
@@ -2245,6 +2871,15 @@ export interface components {
             email?: string;
             name?: string;
             roles?: string[];
+        };
+        "handlers.VerifyMFARequest": {
+            code: string;
+            trust_device?: boolean;
+        };
+        "handlers.VerifyMFAResponse": {
+            mfa_verified_at?: string;
+            recent_step_up_expires_at?: string;
+            trusted_device_cookie?: boolean;
         };
     };
     responses: never;

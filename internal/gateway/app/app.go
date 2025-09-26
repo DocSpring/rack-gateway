@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
@@ -22,6 +23,8 @@ type App struct {
 	OAuthHandler    *auth.OAuthHandler
 	AuthService     *auth.AuthService
 	TokenService    *token.Service
+	MFAService      *mfa.Service
+	MFASettings     *db.MFASettings
 	EmailSender     email.Sender
 	ProxyHandler    *proxy.Handler
 	RackCertManager *rackcert.Manager

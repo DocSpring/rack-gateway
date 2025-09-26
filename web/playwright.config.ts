@@ -11,6 +11,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   globalSetup: './e2e/e2e-global-setup.ts',
+  globalTeardown: './e2e/e2e-global-teardown.ts',
   use: {
     // Use localhost to match OAuth + cookie host set by the gateway
     baseURL: `http://localhost:${port}`,

@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/email"
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
@@ -34,6 +37,33 @@ func (a *App) initializeServices() error {
 	a.JWTManager = auth.NewJWTManager(a.Config.JWTSecret, a.Config.JWTExpiry)
 	// Session manager enforces short-lived idle sessions for the web UI
 	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.JWTSecret, a.Config.SessionIdleTimeout)
+
+	// Load MFA settings and initialize the MFA service for enrollment/verification flows
+	mfaSettings, err := a.Database.GetMFASettings()
+	if err != nil {
+		return fmt.Errorf("failed to load MFA settings: %w", err)
+	}
+	if envVal := strings.TrimSpace(os.Getenv("MFA_REQUIRE_ALL_USERS")); envVal != "" {
+		if parsed, err := strconv.ParseBool(envVal); err == nil && mfaSettings.RequireAllUsers != parsed {
+			mfaSettings.RequireAllUsers = parsed
+			if err := a.Database.UpsertMFASettings(mfaSettings, nil); err != nil {
+				return fmt.Errorf("failed to apply MFA_REQUIRE_ALL_USERS override: %w", err)
+			}
+		}
+	}
+	a.MFASettings = mfaSettings
+
+	issuer := strings.TrimSpace(a.Config.Domain)
+	if issuer == "" {
+		issuer = "Convox Gateway"
+	}
+	trustedDeviceTTL := time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
+	stepUpWindow := time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute
+	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret))
+	if err != nil {
+		return fmt.Errorf("failed to initialize MFA service: %w", err)
+	}
+	a.MFAService = mfaService
 
 	// Initialize RBAC manager
 	allowedDomain := a.Config.GoogleAllowedDomain
@@ -168,6 +198,8 @@ func (a *App) setupRouter() {
 		OAuthHandler:   a.OAuthHandler,
 		AuthService:    a.AuthService,
 		TokenService:   a.TokenService,
+		MFAService:     a.MFAService,
+		MFASettings:    a.MFASettings,
 		EmailSender:    a.EmailSender,
 		ProxyHandler:   a.ProxyHandler,
 		RackCertMgr:    a.RackCertManager,

@@ -13,9 +13,9 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 	var rolesJSON string
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended FROM users WHERE id = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -37,9 +37,9 @@ func (d *Database) GetUser(email string) (*User, error) {
 	var rolesJSON string
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended FROM users WHERE email = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at FROM users WHERE email = ?",
 		email,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil

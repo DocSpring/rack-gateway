@@ -24,11 +24,18 @@ type SettingsErrorPayload = {
   error?: string
 }
 
+type MFASettings = {
+  require_all_users: boolean
+  trusted_device_ttl_days?: number
+  step_up_window_minutes?: number
+}
+
 type SettingsResponse = {
   protected_env_vars: string[]
   allow_destructive_actions: boolean
   rack_tls_pinning_enabled?: boolean
   rack_tls_cert?: RackTLSCert | null
+  mfa?: MFASettings
 }
 
 function extractErrorMessage(error: unknown): string | undefined {
@@ -64,6 +71,7 @@ export function SettingsPage() {
   const [newVar, setNewVar] = useState('')
   const envVars = data?.protected_env_vars ?? []
   const allowDestructive = data?.allow_destructive_actions ?? false
+  const requireAllUsers = data?.mfa?.require_all_users ?? false
   const cert = data?.rack_tls_cert ?? null
   const certFetchedAt = cert?.fetched_at ? new Date(cert.fetched_at).toLocaleString() : null
   const pinningEnabled = !!data?.rack_tls_pinning_enabled
@@ -105,6 +113,34 @@ export function SettingsPage() {
     },
     onSuccess: () => {
       toast.success('Setting updated')
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+
+  const updateMfaMutation = useMutation({
+    mutationFn: async (require: boolean) =>
+      api.put('/.gateway/api/admin/settings/mfa', {
+        require_all_users: require,
+      }),
+    onMutate: async (require: boolean) => {
+      await qc.cancelQueries({ queryKey: ['settings'] })
+      const prev = qc.getQueryData<SettingsResponse>(['settings'])
+      qc.setQueryData<SettingsResponse | undefined>(['settings'], (current) =>
+        current ? { ...current, mfa: { ...current.mfa, require_all_users: require } } : current
+      )
+      return { prev }
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.prev) {
+        qc.setQueryData(['settings'], ctx.prev)
+      }
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to update MFA settings')
+    },
+    onSuccess: () => {
+      toast.success('MFA setting updated')
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -205,7 +241,7 @@ export function SettingsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Protected Environment Variables</CardTitle>
@@ -291,43 +327,61 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>MFA Enforcement</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-muted-foreground text-sm">
+              Require every user to enable multi-factor authentication before accessing sensitive
+              actions.
+            </p>
+            <label className="flex items-center gap-3">
+              <input
+                checked={requireAllUsers}
+                disabled={!isAdmin || isLoading || updateMfaMutation.isPending}
+                onChange={(event) => updateMfaMutation.mutate(event.target.checked)}
+                type="checkbox"
+              />
+              <span className="font-medium text-sm">Require MFA for all users</span>
+            </label>
+          </CardContent>
+        </Card>
+
         {pinningEnabled ? (
-          <>
-            <Card className="md:col-span-1">
-              <CardHeader>
-                <CardTitle>Rack TLS Certificate</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-muted-foreground text-sm">
-                  The pinned rack certificate is used to verify all proxied connections. Refresh
-                  after rotating rack TLS.
-                </p>
-                <textarea
-                  className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
-                  readOnly
-                  rows={cert ? 10 : 4}
-                  value={cert?.pem ?? 'No certificate pinned yet.'}
-                />
-                <div className="flex flex-col gap-1 text-muted-foreground text-xs">
-                  <span>
-                    <strong>Fingerprint:</strong> {cert?.fingerprint ?? '—'}
-                  </span>
-                  <span>
-                    <strong>Fetched:</strong> {certFetchedAt ?? '—'}
-                  </span>
-                </div>
-                <div>
-                  <Button
-                    disabled={!isAdmin || refreshCertMutation.isPending}
-                    onClick={() => refreshCertMutation.mutate()}
-                  >
-                    {refreshCertMutation.isPending ? 'Refreshing…' : 'Refresh'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            <div className="hidden md:block" />
-          </>
+          <Card className="md:col-span-3">
+            <CardHeader>
+              <CardTitle>Rack TLS Certificate</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-muted-foreground text-sm">
+                The pinned rack certificate is used to verify all proxied connections. Refresh after
+                rotating rack TLS.
+              </p>
+              <textarea
+                className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
+                readOnly
+                rows={cert ? 10 : 4}
+                value={cert?.pem ?? 'No certificate pinned yet.'}
+              />
+              <div className="flex flex-col gap-1 text-muted-foreground text-xs">
+                <span>
+                  <strong>Fingerprint:</strong> {cert?.fingerprint ?? '—'}
+                </span>
+                <span>
+                  <strong>Fetched:</strong> {certFetchedAt ?? '—'}
+                </span>
+              </div>
+              <div>
+                <Button
+                  disabled={!isAdmin || refreshCertMutation.isPending}
+                  onClick={() => refreshCertMutation.mutate()}
+                >
+                  {refreshCertMutation.isPending ? 'Refreshing…' : 'Refresh'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ) : null}
       </div>
 

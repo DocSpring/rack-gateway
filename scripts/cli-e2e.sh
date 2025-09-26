@@ -11,6 +11,88 @@ NC='\033[0m' # No Color
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+psql_exec() {
+  local sql="$1"
+  local output
+  set +e
+  output=$(docker exec -i convox-gateway-postgres-1 psql -U postgres -d gateway -At -F $'\t' -c "$sql" 2>&1)
+  local status=$?
+  set -e
+  if [[ $status -ne 0 ]]; then
+    echo "$output" >&2
+    exit $status
+  fi
+}
+
+declare -A MFA_TOTP_SECRETS=(
+  ["admin@example.com"]="JBSWY3DPEHPK3PXP"
+  ["deployer@example.com"]="KB6VQXGZLMN4Y3DC"
+  ["viewer@example.com"]="NB2WY5DPFVXHI6ZT"
+)
+
+setup_user_mfa() {
+  local email="$1"
+  local secret="$2"
+  local sql
+  sql=$(cat <<SQL
+DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = '${email}') AND type = 'totp';
+INSERT INTO mfa_methods (user_id, type, label, secret, created_at, confirmed_at, last_used_at)
+SELECT id, 'totp', 'CLI E2E', '${secret}', NOW(), NOW(), NOW() FROM users WHERE email = '${email}';
+UPDATE users SET mfa_enrolled = TRUE, mfa_enforced_at = COALESCE(mfa_enforced_at, NOW()) WHERE email = '${email}';
+SQL
+  )
+  psql_exec "$sql"
+}
+
+reset_user_mfa() {
+  local email="$1"
+  local sql
+  sql=$(cat <<SQL
+DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = '${email}');
+DELETE FROM mfa_backup_codes WHERE user_id = (SELECT id FROM users WHERE email = '${email}');
+DELETE FROM trusted_devices WHERE user_id = (SELECT id FROM users WHERE email = '${email}');
+UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL WHERE email = '${email}';
+SQL
+  )
+  psql_exec "$sql"
+}
+
+reset_all_mfa_state() {
+  if ! docker ps --format '{{.Names}}' | grep -q '^convox-gateway-postgres-1$'; then
+    return 0
+  fi
+
+  local sql
+  sql=$(cat <<'SQL'
+UPDATE user_sessions SET trusted_device_id = NULL, mfa_verified_at = NULL, recent_step_up_at = NULL;
+DELETE FROM trusted_devices;
+DELETE FROM mfa_backup_codes;
+DELETE FROM mfa_methods;
+UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL;
+SQL
+  )
+
+  psql_exec "$sql"
+}
+
+trap 'reset_all_mfa_state || true' EXIT
+
+generate_totp_code() {
+  local secret="$1"
+  SECRET="$secret" python3 <<'PY'
+import base64, hashlib, hmac, os, struct, time
+
+secret = os.environ["SECRET"].strip().replace(' ', '').upper()
+key = base64.b32decode(secret)
+counter = int(time.time() // 30)
+msg = struct.pack('>Q', counter)
+digest = hmac.new(key, msg, hashlib.sha1).digest()
+offset = digest[-1] & 0x0F
+code = (struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7FFFFFFF) % 1000000
+print(f"{code:06d}")
+PY
+}
+
 E2E_TS="$(date +%s%3N)"
 
 # Ensure we use a specific test config dir for e2e tests
@@ -61,29 +143,50 @@ task go:build:cli
 login_cli_as() {
   local user_email="$1"
   local rack_name="${2:-e2e}"
+  local secret="${MFA_TOTP_SECRETS[$user_email]:-}"
+
   echo -e "${YELLOW}Starting CLI login for ${user_email} on rack ${rack_name}...${NC}"
-  local AUTH_FILE
+  local AUTH_FILE COOKIE_FILE HTML_FILE
   AUTH_FILE="$(mktemp)"
+  COOKIE_FILE="$(mktemp)"
+  HTML_FILE="$(mktemp)"
+
   echo "  - Running CLI login (no-open) and writing auth params to $AUTH_FILE ..."
   set -m
-  ./bin/convox-gateway login "${rack_name}" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" &
+  ./bin/convox-gateway login "${rack_name}" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$HTML_FILE" 2>&1 &
   local CLI_PID=$!
-  # Wait for auth-file
   for _i in $(seq 1 50); do
     [[ -s "$AUTH_FILE" ]] && break
     sleep 0.1
   done
-  local AUTH_URL
+
+  local AUTH_URL STATE
   AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
-  if [[ -z "$AUTH_URL" ]]; then
-    echo -e "${RED}Auth URL not produced" >&2
+  STATE=$(sed -n 's/^STATE=//p' "$AUTH_FILE")
+  if [[ -z "$AUTH_URL" || -z "$STATE" ]]; then
+    echo -e "${RED}Auth URL or state not produced" >&2
     kill $CLI_PID || true
     exit 1
   fi
+
   echo "  - Driving OAuth authorization for ${user_email} (headless)..."
-  curl -s -L "$AUTH_URL&selected_user=${user_email}" -o /dev/null || true
+  curl -s -L -c "$COOKIE_FILE" -b "$COOKIE_FILE" -o /dev/null "${AUTH_URL}&selected_user=${user_email}" || true
+
+  if [[ -n "$secret" ]]; then
+    local totp_code
+    totp_code=$(generate_totp_code "$secret")
+    curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      --data "state=${STATE}&code=${totp_code}" \
+      "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/auth/cli/mfa" \
+      -o /dev/null || true
+  fi
+
+  rm -f "$COOKIE_FILE" "$AUTH_FILE" "$HTML_FILE"
+
   echo "  - Waiting for CLI to complete..."
   wait $CLI_PID
+  set +m
 }
 
 function verify_command_status_and_output() {
@@ -138,6 +241,46 @@ function logout_cli() {
 echo "Running CLI tests..."
 
 if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
+
+  rm -f "${GATEWAY_CLI_CONFIG_DIR:-config/cli-e2e}/config.json"
+
+  echo -e "${YELLOW}Enabling MFA enforcement...${NC}"
+  psql_exec "UPDATE settings SET value = jsonb_set(value, '{require_all_users}', 'true'::jsonb, true), updated_at = NOW() WHERE key = 'mfa';"
+
+  echo -e "${YELLOW}Restarting gateway-api-dev to apply MFA setting...${NC}"
+  docker compose restart gateway-api-dev >/dev/null
+  ./scripts/wait-services.sh
+
+  for user_email in "admin@example.com" "deployer@example.com" "viewer@example.com"; do
+    reset_user_mfa "$user_email"
+  done
+
+  echo -e "${YELLOW}Verifying MFA enforcement shows pending message...${NC}"
+  TMP_LOG="$(mktemp)"
+  set -m
+  ./bin/convox-gateway login "e2e" "http://127.0.0.1:${GATEWAY_PORT}" --no-open >"$TMP_LOG" 2>&1 &
+  CHECK_PID=$!
+  sleep 2
+  kill $CHECK_PID >/dev/null 2>&1 || true
+  wait $CHECK_PID 2>/dev/null || true
+  set +m
+  FIRST_OUTPUT=$(cat "$TMP_LOG")
+  rm -f "$TMP_LOG"
+
+  if ! echo "$FIRST_OUTPUT" | grep -Fq "Waiting for multi-factor authentication to complete in your browser"; then
+    echo -e "${RED}CLI did not prompt for MFA completion as expected.${NC}" >&2
+    echo "$FIRST_OUTPUT" >&2
+    exit 1
+  fi
+
+  # Clean up any pending login state from the aborted attempt
+  psql_exec "DELETE FROM cli_login_states"
+
+  # Provision deterministic MFA methods for automated verification
+  for user_email in "admin@example.com" "deployer@example.com" "viewer@example.com"; do
+    setup_user_mfa "$user_email" "${MFA_TOTP_SECRETS[$user_email]}"
+  done
+
   login_cli_as "admin@example.com" "e2e"
 fi
 

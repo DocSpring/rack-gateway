@@ -1,5 +1,15 @@
-import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
-import { Boxes, FileText, Key, LogOut, Server, Settings, TerminalSquare, Users } from 'lucide-react'
+import { Link, Navigate, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
+import {
+  Boxes,
+  FileText,
+  Key,
+  LogOut,
+  Server,
+  Settings,
+  ShieldCheck,
+  TerminalSquare,
+  Users,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
@@ -43,6 +53,7 @@ function isNavigationItemActive(item: { name: string; href: string }, pathname: 
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const pathname = useMemo(() => {
     const p = location.pathname || ''
     const base = '/.gateway/web'
@@ -169,6 +180,14 @@ export function Layout() {
               </div>
             </div>
           )}
+          <Button
+            className="mb-2 w-full"
+            onClick={() => navigate({ to: '/account/security' })}
+            size="sm"
+            variant="secondary"
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" /> Account Security
+          </Button>
           <Button
             className="mb-2 w-full"
             onClick={() => setShowCliDialog(true)}

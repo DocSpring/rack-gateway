@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 const (
 	sessionTokenByteLength    = 32
 	defaultSessionIdleTimeout = 5 * time.Minute
+	cliDefaultAbsoluteTTL     = 90 * 24 * time.Hour
 )
 
 type SessionManager struct {
@@ -25,9 +27,14 @@ type SessionManager struct {
 }
 
 type SessionMetadata struct {
-	IPAddress string
-	UserAgent string
-	Extra     map[string]interface{}
+	Channel        string
+	DeviceID       string
+	DeviceName     string
+	DeviceMetadata map[string]interface{}
+	IPAddress      string
+	UserAgent      string
+	Extra          map[string]interface{}
+	TTLOverride    time.Duration
 }
 
 type SessionValidationResult struct {
@@ -70,15 +77,44 @@ func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (str
 	tokenHash := hashSessionToken(sessionToken)
 
 	now := time.Now()
-	expiresAt := now.Add(m.ttl)
+	ttl := m.ttl
+	if meta.TTLOverride > 0 {
+		ttl = meta.TTLOverride
+	}
+	expiresAt := now.Add(ttl)
 
-	session, err := m.db.CreateUserSession(user.ID, tokenHash, expiresAt, meta.IPAddress, meta.UserAgent, meta.Extra)
+	chanVal := strings.TrimSpace(meta.Channel)
+	if chanVal == "" {
+		chanVal = "web"
+	}
+
+	extra := make(map[string]interface{})
+	for k, v := range meta.Extra {
+		extra[k] = v
+	}
+	extra["ttl_seconds"] = ttl.Seconds()
+
+	session, err := m.db.CreateUserSession(
+		user.ID,
+		tokenHash,
+		expiresAt,
+		chanVal,
+		meta.DeviceID,
+		meta.DeviceName,
+		meta.IPAddress,
+		meta.UserAgent,
+		extra,
+		meta.DeviceMetadata,
+	)
 	if err != nil {
 		return "", nil, err
 	}
 
 	session.LastSeenAt = now
 	session.ExpiresAt = expiresAt
+	session.Channel = chanVal
+	session.DeviceID = strings.TrimSpace(meta.DeviceID)
+	session.DeviceName = strings.TrimSpace(meta.DeviceName)
 	return sessionToken, session, nil
 }
 
@@ -107,7 +143,9 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
 		return nil, fmt.Errorf("session expired")
 	}
-	if m.ttl > 0 && session.LastSeenAt.Add(m.ttl).Before(now) {
+
+	ttl := m.sessionTTLFor(session)
+	if ttl > 0 && session.LastSeenAt.Add(ttl).Before(now) {
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
 		return nil, fmt.Errorf("session expired")
 	}
@@ -126,9 +164,9 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 	}
 
 	// Refresh idle timeout to enforce sliding expiration on activity.
-	if err := m.db.TouchUserSession(session.ID, ipAddress, userAgent, now, now.Add(m.ttl)); err == nil {
+	if err := m.db.TouchUserSession(session.ID, ipAddress, userAgent, now, now.Add(ttl)); err == nil {
 		session.LastSeenAt = now
-		session.ExpiresAt = now.Add(m.ttl)
+		session.ExpiresAt = now.Add(ttl)
 		if trimmedIP := strings.TrimSpace(ipAddress); trimmedIP != "" {
 			session.IPAddress = trimmedIP
 		}
@@ -181,6 +219,20 @@ func (m *SessionManager) ListActiveForUser(userID int64) ([]*db.UserSession, err
 	return m.db.ListActiveSessionsByUser(userID)
 }
 
+func (m *SessionManager) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Time, trustedDeviceID *int64) error {
+	if m == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	return m.db.UpdateSessionMFAVerified(sessionID, verifiedAt, trustedDeviceID)
+}
+
+func (m *SessionManager) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID int64) error {
+	if m == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	return m.db.AttachTrustedDeviceToSession(sessionID, trustedDeviceID)
+}
+
 func (m *SessionManager) DeriveCSRFToken(sessionToken string) (string, error) {
 	trimmed := strings.TrimSpace(sessionToken)
 	if trimmed == "" || len(m.secret) == 0 {
@@ -204,4 +256,38 @@ func (m *SessionManager) ValidateCSRFToken(sessionToken, csrfToken string) bool 
 func hashSessionToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+func (m *SessionManager) sessionTTLFor(session *db.UserSession) time.Duration {
+	ttl := m.ttl
+	if session == nil {
+		return ttl
+	}
+
+	if len(session.Metadata) > 0 {
+		var meta map[string]interface{}
+		if err := json.Unmarshal(session.Metadata, &meta); err == nil {
+			if raw, ok := meta["ttl_seconds"]; ok {
+				switch v := raw.(type) {
+				case float64:
+					if v > 0 {
+						ttl = time.Duration(v * float64(time.Second))
+					}
+				case int64:
+					if v > 0 {
+						ttl = time.Duration(v) * time.Second
+					}
+				case int:
+					if v > 0 {
+						ttl = time.Duration(v) * time.Second
+					}
+				}
+			}
+		}
+	}
+
+	if session.Channel == "cli" && ttl < cliDefaultAbsoluteTTL {
+		ttl = cliDefaultAbsoluteTTL
+	}
+
+	return ttl
 }

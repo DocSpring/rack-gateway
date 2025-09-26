@@ -23,26 +23,33 @@ import type {
   GetEnvParams,
   GetRack200,
   HandlersAuditLogsResponse,
+  HandlersBackupCodesResponse,
   HandlersCLILoginCompleteRequest,
+  HandlersConfirmTOTPEnrollmentRequest,
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
   HandlersCreateUserRequest,
   HandlersCurrentUserResponse,
   HandlersEnvValuesResponse,
   HandlersHealthResponse,
+  HandlersMFAStatusResponse,
   HandlersRevokeAllSessionsResponse,
   HandlersRevokeSessionResponse,
+  HandlersStartTOTPEnrollmentResponse,
   HandlersStatusResponse,
   HandlersTokenPermissionMetadata,
   HandlersUpdateAPITokenRequest,
   HandlersUpdateAllowDestructiveActionsRequest,
   HandlersUpdateEnvValuesRequest,
   HandlersUpdateEnvValuesResponse,
+  HandlersUpdateMFASettingsRequest,
   HandlersUpdateProtectedEnvVarsRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
   HandlersUserSessionResponse,
   HandlersUserSummary,
+  HandlersVerifyMFARequest,
+  HandlersVerifyMFAResponse,
 } from './schemas';
 
 import { createGatewayClient } from './http-client';
@@ -148,6 +155,25 @@ export const getConvoxGatewayAPI = () => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         data: handlersUpdateAllowDestructiveActionsRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Configures whether MFA is required for all users.
+   * @summary Update MFA enforcement defaults
+   */
+  const putAdminSettingsMfa = (
+    handlersUpdateMFASettingsRequest: HandlersUpdateMFASettingsRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/mfa`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateMFASettingsRequest,
       },
       options,
     );
@@ -471,6 +497,111 @@ export const getConvoxGatewayAPI = () => {
   };
 
   /**
+   * Generates a fresh set of backup codes. Existing codes are invalidated immediately.
+   * @summary Regenerate backup codes
+   */
+  const postAuthMfaBackupCodesRegenerate = (
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersBackupCodesResponse>(
+      { url: `/auth/mfa/backup-codes/regenerate`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Confirms the TOTP secret using a verification code and optionally trusts the device.
+   * @summary Confirm TOTP enrollment
+   */
+  const postAuthMfaEnrollTotpConfirm = (
+    handlersConfirmTOTPEnrollmentRequest: HandlersConfirmTOTPEnrollmentRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      {
+        url: `/auth/mfa/enroll/totp/confirm`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersConfirmTOTPEnrollmentRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
+   * @summary Start TOTP enrollment
+   */
+  const postAuthMfaEnrollTotpStart = (
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStartTOTPEnrollmentResponse>(
+      { url: `/auth/mfa/enroll/totp/start`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Removes an existing MFA method for the current user.
+   * @summary Delete an MFA method
+   */
+  const deleteAuthMfaMethodsMethodID = (
+    methodID: number,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/auth/mfa/methods/${methodID}`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+   * Returns enrollment state, configured methods, trusted devices, and backup code summary.
+   * @summary Get MFA status for current session
+   */
+  const getAuthMfaStatus = (
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersMFAStatusResponse>(
+      { url: `/auth/mfa/status`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Revokes a trusted device token for the current user.
+   * @summary Revoke a trusted device
+   */
+  const deleteAuthMfaTrustedDevicesDeviceID = (
+    deviceID: number,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/auth/mfa/trusted-devices/${deviceID}`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+   * Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
+   * @summary Verify MFA step-up
+   */
+  const postAuthMfaVerify = (
+    handlersVerifyMFARequest: HandlersVerifyMFARequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      {
+        url: `/auth/mfa/verify`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersVerifyMFARequest,
+      },
+      options,
+    );
+  };
+
+  /**
    * Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
    * @summary Complete web OAuth login
    */
@@ -598,6 +729,7 @@ export const getConvoxGatewayAPI = () => {
     getAdminRoles,
     getAdminSettings,
     putAdminSettingsAllowDestructiveActions,
+    putAdminSettingsMfa,
     putAdminSettingsProtectedEnvVars,
     postAdminSettingsRackTlsCertRefresh,
     getAdminTokens,
@@ -618,6 +750,13 @@ export const getConvoxGatewayAPI = () => {
     getAuthCliCallback,
     postAuthCliComplete,
     postAuthCliStart,
+    postAuthMfaBackupCodesRegenerate,
+    postAuthMfaEnrollTotpConfirm,
+    postAuthMfaEnrollTotpStart,
+    deleteAuthMfaMethodsMethodID,
+    getAuthMfaStatus,
+    deleteAuthMfaTrustedDevicesDeviceID,
+    postAuthMfaVerify,
     getAuthWebCallback,
     getAuthWebLogin,
     getAuthWebLogout,
@@ -658,6 +797,11 @@ export type PutAdminSettingsAllowDestructiveActionsResult = NonNullable<
         typeof getConvoxGatewayAPI
       >['putAdminSettingsAllowDestructiveActions']
     >
+  >
+>;
+export type PutAdminSettingsMfaResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['putAdminSettingsMfa']>
   >
 >;
 export type PutAdminSettingsProtectedEnvVarsResult = NonNullable<
@@ -772,6 +916,53 @@ export type PostAuthCliCompleteResult = NonNullable<
 export type PostAuthCliStartResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getConvoxGatewayAPI>['postAuthCliStart']>
+  >
+>;
+export type PostAuthMfaBackupCodesRegenerateResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaBackupCodesRegenerate']
+    >
+  >
+>;
+export type PostAuthMfaEnrollTotpConfirmResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollTotpConfirm']
+    >
+  >
+>;
+export type PostAuthMfaEnrollTotpStartResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollTotpStart']
+    >
+  >
+>;
+export type DeleteAuthMfaMethodsMethodIDResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['deleteAuthMfaMethodsMethodID']
+    >
+  >
+>;
+export type GetAuthMfaStatusResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getAuthMfaStatus']>
+  >
+>;
+export type DeleteAuthMfaTrustedDevicesDeviceIDResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getConvoxGatewayAPI
+      >['deleteAuthMfaTrustedDevicesDeviceID']
+    >
+  >
+>;
+export type PostAuthMfaVerifyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaVerify']>
   >
 >;
 export type GetAuthWebCallbackResult = NonNullable<

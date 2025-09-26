@@ -35,6 +35,7 @@ type AdminHandler struct {
 	config       *config.Config
 	rackCertMgr  *rackcert.Manager
 	sessions     *auth.SessionManager
+	mfaSettings  *db.MFASettings
 }
 
 func cloneDetails(details map[string]interface{}) map[string]interface{} {
@@ -217,7 +218,7 @@ var (
 )
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager, sessions *auth.SessionManager) *AdminHandler {
+func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager, sessions *auth.SessionManager, mfaSettings *db.MFASettings) *AdminHandler {
 	return &AdminHandler{
 		rbac:         rbac,
 		database:     database,
@@ -226,6 +227,7 @@ func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService 
 		config:       config,
 		rackCertMgr:  rackCertMgr,
 		sessions:     sessions,
+		mfaSettings:  mfaSettings,
 	}
 }
 
@@ -1212,9 +1214,20 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		} else {
 			resp["allow_destructive_actions"] = false
 		}
+		if settings, err := h.database.GetMFASettings(); err == nil && settings != nil {
+			h.mfaSettings = settings
+		}
 	} else {
 		resp["protected_env_vars"] = []string{}
 		resp["allow_destructive_actions"] = false
+	}
+
+	if h.mfaSettings != nil {
+		resp["mfa"] = gin.H{
+			"require_all_users":       h.mfaSettings.RequireAllUsers,
+			"trusted_device_ttl_days": h.mfaSettings.TrustedDeviceTTLDays,
+			"step_up_window_minutes":  h.mfaSettings.StepUpWindowMinutes,
+		}
 	}
 
 	pinningEnabled := h.config != nil && h.config.RackTLSPinningEnabled
@@ -1328,6 +1341,63 @@ func (h *AdminHandler) UpdateAllowDestructiveActions(c *gin.Context) {
 
 		h.notifySettingsChanged(c, "allow_destructive_actions", strconv.FormatBool(payload.AllowDestructiveActions))
 	}
+
+	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
+}
+
+// UpdateMFASettings godoc
+// @Summary Update MFA enforcement defaults
+// @Description Configures whether MFA is required for all users.
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param request body UpdateMFASettingsRequest true "MFA settings payload"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/settings/mfa [put]
+func (h *AdminHandler) UpdateMFASettings(c *gin.Context) {
+	email := c.GetString("user_email")
+
+	var payload UpdateMFASettingsRequest
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if h.database == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database unavailable"})
+		return
+	}
+
+	settings, err := h.database.GetMFASettings()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load mfa settings"})
+		return
+	}
+	settings.RequireAllUsers = payload.RequireAllUsers
+
+	var uid *int64
+	if h.rbac != nil {
+		if u, err := h.rbac.GetUserWithID(email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+
+	if err := h.database.UpsertMFASettings(settings, uid); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save mfa settings"})
+		return
+	}
+
+	if h.mfaSettings != nil {
+		*h.mfaSettings = *settings
+	} else {
+		h.mfaSettings = settings
+	}
+
+	h.notifySettingsChanged(c, "mfa.require_all_users", strconv.FormatBool(settings.RequireAllUsers))
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }

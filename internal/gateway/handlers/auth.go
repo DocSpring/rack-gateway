@@ -2,8 +2,12 @@ package handlers
 
 import (
 	"crypto/subtle"
+	"encoding/json"
+	"fmt"
+	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -11,9 +15,11 @@ import (
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // OAuthProvider captures the behaviour needed from the OAuth handler.
@@ -25,22 +31,27 @@ type OAuthProvider interface {
 
 const webOAuthStateCookie = "cgw_oauth_state"
 const webOAuthStateTTL = 5 * time.Minute
+const trustedDeviceCookie = "cgw_trusted_device"
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	oauth    OAuthProvider
-	database *db.Database
-	config   *config.Config
-	sessions *auth.SessionManager
+	oauth       OAuthProvider
+	database    *db.Database
+	config      *config.Config
+	sessions    *auth.SessionManager
+	mfaService  *mfa.Service
+	mfaSettings *db.MFASettings
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager) *AuthHandler {
+func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager, mfaService *mfa.Service, mfaSettings *db.MFASettings) *AuthHandler {
 	return &AuthHandler{
-		oauth:    oauth,
-		database: database,
-		config:   cfg,
-		sessions: sessions,
+		oauth:       oauth,
+		database:    database,
+		config:      cfg,
+		sessions:    sessions,
+		mfaService:  mfaService,
+		mfaSettings: mfaSettings,
 	}
 }
 
@@ -60,6 +71,13 @@ func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 		return
 	}
 
+	if h.database != nil {
+		if err := h.database.StoreCLILoginState(resp.State, resp.CodeVerifier); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize login state"})
+			return
+		}
+	}
+
 	h.auditLogin(c, "cli", "success")
 	c.JSON(http.StatusOK, resp)
 }
@@ -74,21 +92,137 @@ func (h *AuthHandler) CLILoginStart(c *gin.Context) {
 // @Failure 400 {string} string "Missing parameters"
 // @Router /auth/cli/callback [get]
 func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
-	code := c.Query("code")
-	state := c.Query("state")
+	code := strings.TrimSpace(c.Query("code"))
+	state := strings.TrimSpace(c.Query("state"))
 
 	if code == "" || state == "" {
 		c.String(http.StatusBadRequest, "Missing code or state")
 		return
 	}
 
-	// Store the auth code in database
+	// Store the auth code and optional inline TOTP in database
 	if h.database != nil {
-		_ = h.database.SaveCLILoginCode(state, code)
+		if err := h.database.UpdateCLILoginCode(state, code); err != nil {
+			c.String(http.StatusInternalServerError, "Failed to persist login state")
+			return
+		}
 	}
 
-	// Redirect to a nicer static success page served by the web bundle
-	c.Redirect(http.StatusTemporaryRedirect, "/.gateway/web/cli-auth-success.html")
+	redirect := fmt.Sprintf("/.gateway/api/auth/cli/mfa?state=%s", url.QueryEscape(state))
+	c.Redirect(http.StatusTemporaryRedirect, redirect)
+}
+
+func (h *AuthHandler) renderCLILoginPage(c *gin.Context, status int, body string) {
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Writer.WriteHeader(status)
+	_, _ = c.Writer.Write([]byte(body))
+}
+
+func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
+	state := strings.TrimSpace(c.Query("state"))
+	if state == "" {
+		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Missing login state.</p>")
+		return
+	}
+
+	if h.database == nil {
+		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Login state service unavailable.</p>")
+		return
+	}
+
+	record, err := h.database.GetCLILoginState(state)
+	if err != nil {
+		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Failed to load login state.</p>")
+		return
+	}
+	if record == nil {
+		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Login session not found or expired. Return to your terminal and start login again.</p>")
+		return
+	}
+
+	if record.MFAVerifiedAt.Valid {
+		email := ""
+		if record.LoginEmail.Valid {
+			email = record.LoginEmail.String
+		}
+		success := fmt.Sprintf(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>CLI Login Complete</title>
+		<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#1e293b;padding:32px;border-radius:12px;max-width:420px;box-shadow:0 20px 45px rgba(15,23,42,0.35);} h1{margin-top:0;font-size:22px;color:#38bdf8;} p{line-height:1.5;} a{color:#38bdf8;}</style>
+		</head><body><div class="card"><h1>Multi-factor verified</h1><p>The CLI session for <strong>%s</strong> is now approved.</p><p>Return to your terminal to finish the login.</p></div></body></html>`, template.HTMLEscapeString(email))
+		h.renderCLILoginPage(c, http.StatusOK, success)
+		return
+	}
+
+	form := fmt.Sprintf(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>CLI Multi-factor Verification</title>
+	<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#1e293b;padding:32px;border-radius:12px;max-width:420px;box-shadow:0 20px 45px rgba(15,23,42,0.35);} h1{margin-top:0;font-size:22px;color:#38bdf8;} label{display:block;font-size:14px;margin-bottom:8px;color:#cbd5f5;} input[type="text"]{width:100%%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:16px;} button{margin-top:16px;width:100%%;padding:12px;border:none;border-radius:8px;background:#38bdf8;color:#0f172a;font-size:16px;font-weight:600;cursor:pointer;} button:hover{background:#0ea5e9;} .help{margin-top:16px;font-size:14px;color:#94a3b8;line-height:1.5;}</style>
+	</head><body><div class="card"><h1>Approve CLI Login</h1><form method="POST" action="/.gateway/api/auth/cli/mfa"><input type="hidden" name="state" value="%s"><label for="code">Enter the 6-digit code from your authenticator</label><input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" autofocus required><button type="submit">Verify and Continue</button></form><p class="help">Keep this window open until your CLI shows "Successfully logged in". If you close it early, rerun the login command.</p></div></body></html>`, template.HTMLEscapeString(state))
+
+	h.renderCLILoginPage(c, http.StatusOK, form)
+}
+
+func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
+	if h.database == nil || h.mfaService == nil {
+		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Service unavailable.</p>")
+		return
+	}
+
+	state := strings.TrimSpace(c.PostForm("state"))
+	code := strings.TrimSpace(c.PostForm("code"))
+	if state == "" || code == "" {
+		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Both state and code are required.</p>")
+		return
+	}
+
+	record, err := h.database.GetCLILoginState(state)
+	if err != nil {
+		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Failed to load login state.</p>")
+		return
+	}
+	if record == nil {
+		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Login session not found or expired. Return to your terminal and start login again.</p>")
+		return
+	}
+	if record.MFAVerifiedAt.Valid {
+		h.CLILoginMFAForm(c)
+		return
+	}
+
+	if !record.Code.Valid || !record.CodeVerifier.Valid {
+		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Login session is incomplete. Return to your terminal and restart the login.</p>")
+		return
+	}
+
+	loginResp, err := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
+	if err != nil {
+		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Authentication exchange failed. Close this window and restart the login from your terminal.</p>")
+		return
+	}
+
+	userRecord, err := h.database.GetUser(loginResp.Email)
+	if err != nil || userRecord == nil {
+		h.renderCLILoginPage(c, http.StatusUnauthorized, "<p>You do not have access to this gateway.</p>")
+		return
+	}
+
+	verification, err := h.mfaService.VerifyTOTP(userRecord, code)
+	if err != nil {
+		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Invalid authentication code. Try again.</p>")
+		return
+	}
+
+	var methodID *int64
+	if verification != nil && verification.MethodID > 0 {
+		methodID = &verification.MethodID
+	}
+
+	if err := h.database.SaveCLILoginResult(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt, methodID); err != nil {
+		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Failed to persist login approval.</p>")
+		return
+	}
+
+	const successHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>CLI Login Approved</title>
+	<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#1e293b;padding:32px;border-radius:12px;max-width:420px;box-shadow:0 20px 45px rgba(15,23,42,0.35);} h1{margin-top:0;font-size:22px;color:#38bdf8;} p{line-height:1.5;} a{color:#38bdf8;}</style>
+	</head><body><div class="card"><h1>Authentication approved</h1><p>Multi-factor authentication succeeded. Return to your terminal to finish logging in.</p><p>You may close this window.</p></div></body></html>`
+	h.renderCLILoginPage(c, http.StatusOK, successHTML)
 }
 
 // CLILoginComplete godoc
@@ -109,25 +243,94 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-
-	// Retrieve auth code from database
-	code, exists, err := h.database.GetCLILoginCode(req.State)
-	if err != nil || !exists {
+	record, err := h.database.GetCLILoginState(req.State)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load login state"})
+		return
+	}
+	if record == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
 		return
 	}
-
-	// Complete OAuth flow with PKCE
-	resp, err := h.oauth.CompleteLogin(code, req.State, req.CodeVerifier)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if !record.LoginEmail.Valid || !record.MFAVerifiedAt.Valid {
+		c.JSON(http.StatusAccepted, gin.H{"status": "pending"})
 		return
 	}
 
-	// Clear the stored code
-	_ = h.database.DeleteCLILoginCode(req.State)
+	userRecord, err := h.database.GetUser(record.LoginEmail.String)
+	if err != nil || userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
 
-	c.JSON(http.StatusOK, resp)
+	if h.sessions == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "session manager not available"})
+		return
+	}
+
+	deviceID := strings.TrimSpace(req.DeviceID)
+	if deviceID == "" {
+		deviceID = uuid.NewString()
+	}
+
+	deviceName := strings.TrimSpace(req.DeviceName)
+	deviceMeta := map[string]interface{}{}
+	if trimmed := strings.TrimSpace(req.DeviceOS); trimmed != "" {
+		deviceMeta["os"] = trimmed
+	}
+	if trimmed := strings.TrimSpace(req.ClientVersion); trimmed != "" {
+		deviceMeta["client_version"] = trimmed
+	}
+
+	extra := map[string]interface{}{"login_flow": "cli"}
+	sessionTTL := 90 * 24 * time.Hour
+	sessionToken, session, err := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
+		Channel:        "cli",
+		DeviceID:       deviceID,
+		DeviceName:     deviceName,
+		DeviceMetadata: deviceMeta,
+		IPAddress:      c.ClientIP(),
+		UserAgent:      c.GetHeader("User-Agent"),
+		Extra:          extra,
+		TTLOverride:    sessionTTL,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+		return
+	}
+
+	if record.MFAVerifiedAt.Valid {
+		if err := h.sessions.UpdateSessionMFAVerified(session.ID, record.MFAVerifiedAt.Time, nil); err != nil {
+			log.Printf("failed to stamp session MFA verification: %v", err)
+		} else {
+			session.MFAVerifiedAt = &record.MFAVerifiedAt.Time
+		}
+	}
+
+	mfaRequired := h.isMFARequired(userRecord) && session.MFAVerifiedAt == nil
+	enrollmentRequired := h.isMFARequired(userRecord) && !userRecord.MFAEnrolled
+	name := userRecord.Name
+	if record.LoginName.Valid && strings.TrimSpace(record.LoginName.String) != "" {
+		name = record.LoginName.String
+	}
+
+	response := CLILoginResponse{
+		Token:              sessionToken,
+		Email:              record.LoginEmail.String,
+		Name:               name,
+		ExpiresAt:          session.ExpiresAt,
+		SessionID:          session.ID,
+		Channel:            session.Channel,
+		DeviceID:           session.DeviceID,
+		DeviceName:         session.DeviceName,
+		MFAVerified:        session.MFAVerifiedAt != nil,
+		MFARequired:        mfaRequired,
+		EnrollmentRequired: enrollmentRequired,
+	}
+
+	_ = h.database.DeleteCLILoginState(req.State)
+
+	c.JSON(http.StatusOK, response)
 }
 
 // WebLoginStart godoc
@@ -191,15 +394,24 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		return
 	}
 
-	sessionToken, _, err := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
-		IPAddress: c.ClientIP(),
-		UserAgent: c.GetHeader("User-Agent"),
+	extra := map[string]interface{}{"login_flow": "web"}
+	sessionToken, session, err := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
+		Channel:    "web",
+		IPAddress:  c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		Extra:      extra,
+		DeviceName: "browser",
 	})
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Failed to create session")
 		return
 	}
 
+	if err := h.handlePostLoginMFA(c, userRecord, session); err != nil {
+		log.Printf("post-login mfa (web) failed: user=%s session=%d err=%v", userRecord.Email, session.ID, err)
+		c.String(http.StatusInternalServerError, "Failed to finalize login")
+		return
+	}
 	h.setSessionCookie(c, sessionToken)
 
 	// Audit successful login
@@ -351,4 +563,687 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 	}); err != nil {
 		log.Printf(`{"level":"error","event":"audit_log_failed","action":"login.start","error":%q}`, err)
 	}
+}
+
+// StartTOTPEnrollment godoc
+// @Summary Start TOTP enrollment
+// @Description Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} StartTOTPEnrollmentResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/enroll/totp/start [post]
+func (h *AuthHandler) StartTOTPEnrollment(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil || userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+
+	result, err := h.mfaService.StartTOTPEnrollment(userRecord)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	response := StartTOTPEnrollmentResponse{
+		MethodID:    result.MethodID,
+		Secret:      result.Secret,
+		URI:         result.URI,
+		BackupCodes: result.BackupCodes,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// ConfirmTOTPEnrollment godoc
+// @Summary Confirm TOTP enrollment
+// @Description Confirms the TOTP secret using a verification code and optionally trusts the device.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body ConfirmTOTPEnrollmentRequest true "Enrollment confirmation payload"
+// @Success 200 {object} VerifyMFAResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/enroll/totp/confirm [post]
+func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+
+	var req ConfirmTOTPEnrollmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if req.MethodID == 0 || strings.TrimSpace(req.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "method_id and code are required"})
+		return
+	}
+
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil || userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+
+	if err := h.mfaService.ConfirmTOTP(userRecord, req.MethodID, strings.TrimSpace(req.Code)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	now := time.Now()
+	var trustedDeviceID *int64
+	trustedCookieSet := false
+	if req.TrustDevice {
+		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
+			return
+		}
+		h.setTrustedDeviceCookie(c, payload.Token)
+		trustedDeviceID = &payload.RecordID
+		trustedCookieSet = true
+	}
+
+	if authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+		return
+	}
+
+	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
+		log.Printf("failed updating session mfa state: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
+		return
+	}
+	if trustedDeviceID != nil {
+		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
+			log.Printf("failed attaching trusted device to session: %v", err)
+		}
+	}
+
+	response := VerifyMFAResponse{
+		MFAVerifiedAt:         now,
+		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
+		TrustedDeviceCookie:   trustedCookieSet,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// VerifyMFA godoc
+// @Summary Verify MFA step-up
+// @Description Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body VerifyMFARequest true "Verification payload"
+// @Success 200 {object} VerifyMFAResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/verify [post]
+func (h *AuthHandler) VerifyMFA(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+
+	var req VerifyMFARequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil || userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+
+	if _, err := h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	now := time.Now()
+	var trustedDeviceID *int64
+	trustedCookieSet := false
+	if req.TrustDevice {
+		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
+			return
+		}
+		h.setTrustedDeviceCookie(c, payload.Token)
+		trustedDeviceID = &payload.RecordID
+		trustedCookieSet = true
+	}
+
+	if authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+		return
+	}
+
+	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
+		log.Printf("failed updating session mfa state: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
+		return
+	}
+	if trustedDeviceID != nil {
+		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
+			log.Printf("failed attaching trusted device to session: %v", err)
+		}
+	}
+
+	response := VerifyMFAResponse{
+		MFAVerifiedAt:         now,
+		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
+		TrustedDeviceCookie:   trustedCookieSet,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// RegenerateBackupCodes godoc
+// @Summary Regenerate backup codes
+// @Description Generates a fresh set of backup codes. Existing codes are invalidated immediately.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} BackupCodesResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/backup-codes/regenerate [post]
+func (h *AuthHandler) RegenerateBackupCodes(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil || userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+	codes, err := h.mfaService.GenerateBackupCodes(userRecord.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, BackupCodesResponse{BackupCodes: codes})
+}
+
+// GetMFAStatus godoc
+// @Summary Get MFA status for current session
+// @Description Returns enrollment state, configured methods, trusted devices, and backup code summary.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} MFAStatusResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /auth/mfa/status [get]
+func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+	if userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+	methods, err := h.database.ListMFAMethods(userRecord.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list mfa methods"})
+		return
+	}
+	trustedDevices, err := h.database.ListTrustedDevices(userRecord.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list trusted devices"})
+		return
+	}
+	backupCodes, err := h.database.ListBackupCodes(userRecord.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list backup codes"})
+		return
+	}
+	methodResp := make([]MFAMethodResponse, 0, len(methods))
+	for _, method := range methods {
+		if method == nil {
+			continue
+		}
+		methodResp = append(methodResp, makeMFAMethodResponse(method))
+	}
+	trustedResp := make([]TrustedDeviceResponse, 0, len(trustedDevices))
+	for _, device := range trustedDevices {
+		if device == nil {
+			continue
+		}
+		if device.RevokedAt != nil {
+			continue
+		}
+		trustedResp = append(trustedResp, makeTrustedDeviceResponse(device))
+	}
+	summary := summarizeBackupCodes(backupCodes)
+	var recentExpires *time.Time
+	if authUser.Session != nil && authUser.Session.RecentStepUpAt != nil {
+		expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
+		recentExpires = &expires
+	}
+	response := MFAStatusResponse{
+		Enrolled:              userRecord.MFAEnrolled,
+		Required:              h.isMFARequired(userRecord),
+		Methods:               methodResp,
+		TrustedDevices:        trustedResp,
+		BackupCodes:           summary,
+		RecentStepUpExpiresAt: recentExpires,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// DeleteMFAMethod godoc
+// @Summary Delete an MFA method
+// @Description Removes an existing MFA method for the current user.
+// @Tags Auth
+// @Param methodID path int true "MFA method ID"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/methods/{methodID} [delete]
+func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+	if userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+	methodIDParam := strings.TrimSpace(c.Param("methodID"))
+	if methodIDParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "method id required"})
+		return
+	}
+	methodID, err := strconv.ParseInt(methodIDParam, 10, 64)
+	if err != nil || methodID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid method id"})
+		return
+	}
+	method, err := h.database.GetMFAMethodByID(methodID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load mfa method"})
+		return
+	}
+	if method == nil || method.UserID != userRecord.ID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "mfa method not found"})
+		return
+	}
+	if err := h.database.DeleteMFAMethod(method.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete mfa method"})
+		return
+	}
+	remaining, err := h.database.ListMFAMethods(userRecord.ID)
+	if err == nil {
+		hasConfirmed := false
+		for _, candidate := range remaining {
+			if candidate != nil && candidate.ConfirmedAt != nil {
+				hasConfirmed = true
+				break
+			}
+		}
+		if !hasConfirmed {
+			if err := h.database.SetUserMFAEnrolled(userRecord.ID, false); err != nil {
+				log.Printf("failed to update mfa enrollment after delete: %v", err)
+			}
+		}
+	} else {
+		log.Printf("failed to list remaining mfa methods: %v", err)
+	}
+	c.JSON(http.StatusOK, StatusResponse{Status: "deleted"})
+}
+
+// RevokeTrustedDevice godoc
+// @Summary Revoke a trusted device
+// @Description Revokes a trusted device token for the current user.
+// @Tags Auth
+// @Param deviceID path int true "Trusted device ID"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/trusted-devices/{deviceID} [delete]
+func (h *AuthHandler) RevokeTrustedDevice(c *gin.Context) {
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+	if userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+	deviceIDParam := strings.TrimSpace(c.Param("deviceID"))
+	if deviceIDParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "device id required"})
+		return
+	}
+	deviceID, err := strconv.ParseInt(deviceIDParam, 10, 64)
+	if err != nil || deviceID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device id"})
+		return
+	}
+	device, err := h.database.GetTrustedDeviceByID(deviceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load trusted device"})
+		return
+	}
+	if device == nil || device.UserID != userRecord.ID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "trusted device not found"})
+		return
+	}
+	if device.RevokedAt != nil {
+		c.JSON(http.StatusOK, StatusResponse{Status: "revoked"})
+		return
+	}
+	if err := h.database.RevokeTrustedDevice(device.ID, "user_request"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke trusted device"})
+		return
+	}
+	c.JSON(http.StatusOK, StatusResponse{Status: "revoked"})
+}
+
+func makeMFAMethodResponse(method *db.MFAMethod) MFAMethodResponse {
+	if method == nil {
+		return MFAMethodResponse{}
+	}
+	label := strings.TrimSpace(method.Label)
+	if label == "" {
+		label = strings.ToUpper(strings.TrimSpace(method.Type))
+	}
+	resp := MFAMethodResponse{
+		ID:        method.ID,
+		Type:      method.Type,
+		Label:     truncateLabel(label, 120),
+		CreatedAt: method.CreatedAt,
+	}
+	if method.ConfirmedAt != nil {
+		confirmed := *method.ConfirmedAt
+		resp.ConfirmedAt = &confirmed
+	}
+	if method.LastUsedAt != nil {
+		last := *method.LastUsedAt
+		resp.LastUsedAt = &last
+	}
+	return resp
+}
+
+func makeTrustedDeviceResponse(device *db.TrustedDevice) TrustedDeviceResponse {
+	if device == nil {
+		return TrustedDeviceResponse{}
+	}
+	ua := extractTrustedDeviceUserAgent(device)
+	label := ua
+	if label == "" {
+		label = fmt.Sprintf("Device %s", shortDeviceID(device.DeviceID))
+	}
+	ip := strings.TrimSpace(device.IPLast)
+	if ip == "" {
+		ip = strings.TrimSpace(device.IPFirst)
+	}
+	resp := TrustedDeviceResponse{
+		ID:        device.ID,
+		Label:     truncateLabel(label, 160),
+		CreatedAt: device.CreatedAt,
+		ExpiresAt: device.ExpiresAt,
+		IPAddress: ip,
+		UserAgent: truncateLabel(ua, 200),
+	}
+	last := device.LastUsedAt
+	resp.LastUsedAt = &last
+	if device.RevokedAt != nil {
+		resp.RevokedAt = device.RevokedAt
+	}
+	if reason := strings.TrimSpace(device.RevokedReason); reason != "" {
+		resp.RevokedReason = reason
+	}
+	return resp
+}
+
+func extractTrustedDeviceUserAgent(device *db.TrustedDevice) string {
+	if device == nil || len(device.Metadata) == 0 {
+		return ""
+	}
+	var meta map[string]interface{}
+	if err := json.Unmarshal(device.Metadata, &meta); err != nil {
+		return ""
+	}
+	if ua, ok := meta["user_agent"].(string); ok {
+		return strings.TrimSpace(ua)
+	}
+	return ""
+}
+
+func shortDeviceID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "unknown"
+	}
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
+}
+
+func truncateLabel(value string, limit int) string {
+	runes := []rune(strings.TrimSpace(value))
+	if limit <= 0 || len(runes) <= limit {
+		return strings.TrimSpace(value)
+	}
+	return strings.TrimSpace(string(runes[:limit])) + "…"
+}
+
+func summarizeBackupCodes(codes []*db.MFABackupCode) MFABackupCodesSummary {
+	summary := MFABackupCodesSummary{Total: len(codes)}
+	for _, code := range codes {
+		if code == nil {
+			continue
+		}
+		created := code.CreatedAt
+		if summary.LastGeneratedAt == nil || created.After(*summary.LastGeneratedAt) {
+			createdCopy := created
+			summary.LastGeneratedAt = &createdCopy
+		}
+		if code.UsedAt == nil {
+			summary.Unused++
+			continue
+		}
+		used := *code.UsedAt
+		if summary.LastUsedAt == nil || used.After(*summary.LastUsedAt) {
+			usedCopy := used
+			summary.LastUsedAt = &usedCopy
+		}
+	}
+	return summary
+}
+
+func (h *AuthHandler) handlePostLoginMFA(c *gin.Context, user *db.User, session *db.UserSession) error {
+	if h.sessions == nil || user == nil || session == nil {
+		return nil
+	}
+
+	if !h.isMFARequired(user) {
+		now := time.Now()
+		if err := h.sessions.UpdateSessionMFAVerified(session.ID, now, nil); err != nil {
+			return fmt.Errorf("mark session verified: %w", err)
+		}
+		session.MFAVerifiedAt = &now
+		return nil
+	}
+
+	trustedDevice, err := h.consumeTrustedDevice(c, user)
+	if err != nil {
+		return fmt.Errorf("consume trusted device: %w", err)
+	}
+	if trustedDevice == nil {
+		return nil
+	}
+
+	now := time.Now()
+	if err := h.sessions.UpdateSessionMFAVerified(session.ID, now, &trustedDevice.ID); err != nil {
+		return fmt.Errorf("update session with trusted device: %w", err)
+	}
+	session.MFAVerifiedAt = &now
+	session.TrustedDeviceID = &trustedDevice.ID
+	return nil
+}
+
+func (h *AuthHandler) consumeTrustedDevice(c *gin.Context, user *db.User) (*db.TrustedDevice, error) {
+	if h.mfaService == nil || user == nil {
+		return nil, nil
+	}
+
+	cookie, err := c.Request.Cookie(trustedDeviceCookie)
+	if err != nil {
+		return nil, nil
+	}
+	token := strings.TrimSpace(cookie.Value)
+	if token == "" {
+		return nil, nil
+	}
+
+	device, err := h.mfaService.ConsumeTrustedDevice(token, c.ClientIP(), c.GetHeader("User-Agent"))
+	if err != nil {
+		h.clearTrustedDeviceCookie(c)
+		return nil, err
+	}
+	if device.UserID != user.ID {
+		_ = h.database.RevokeTrustedDevice(device.ID, "mismatched_user")
+		h.clearTrustedDeviceCookie(c)
+		return nil, fmt.Errorf("trusted device mismatch")
+	}
+
+	return device, nil
+}
+
+func (h *AuthHandler) setTrustedDeviceCookie(c *gin.Context, token string) {
+	secure := h.cookieSecure()
+	maxAge := h.trustedDeviceMaxAge()
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(trustedDeviceCookie, token, maxAge, "/", "", secure, true)
+	c.SetSameSite(http.SameSiteDefaultMode)
+}
+
+func (h *AuthHandler) clearTrustedDeviceCookie(c *gin.Context) {
+	secure := h.cookieSecure()
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(trustedDeviceCookie, "", -1, "/", "", secure, true)
+	c.SetSameSite(http.SameSiteDefaultMode)
+}
+
+func (h *AuthHandler) isMFARequired(user *db.User) bool {
+	if user == nil {
+		return false
+	}
+	if h.mfaSettings == nil {
+		return true
+	}
+	if h.mfaSettings.RequireAllUsers {
+		return true
+	}
+	return h.isMFAEnforcedForUser(user)
+}
+
+func (h *AuthHandler) isMFAEnforcedForUser(user *db.User) bool {
+	if user == nil {
+		return false
+	}
+	return user.MFAEnforcedAt != nil
+}
+
+func (h *AuthHandler) stepUpWindow() time.Duration {
+	window := 10 * time.Minute
+	if h.mfaSettings != nil && h.mfaSettings.StepUpWindowMinutes > 0 {
+		window = time.Duration(h.mfaSettings.StepUpWindowMinutes) * time.Minute
+	}
+	return window
+}
+
+func (h *AuthHandler) trustedDeviceMaxAge() int {
+	ttl := 30 * 24 * time.Hour
+	if h.mfaSettings != nil && h.mfaSettings.TrustedDeviceTTLDays > 0 {
+		ttl = time.Duration(h.mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
+	}
+	return int(ttl.Seconds())
 }

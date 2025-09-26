@@ -1,10 +1,80 @@
 package handlers
 
-import "github.com/DocSpring/convox-gateway/internal/gateway/db"
+import (
+	"time"
+
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+)
 
 // ErrorResponse represents a standard error payload.
 type ErrorResponse struct {
 	Error string `json:"error"`
+}
+
+// MFA enrollment and verification payloads.
+type StartTOTPEnrollmentResponse struct {
+	MethodID    int64    `json:"method_id"`
+	Secret      string   `json:"secret"`
+	URI         string   `json:"uri"`
+	BackupCodes []string `json:"backup_codes"`
+}
+
+type ConfirmTOTPEnrollmentRequest struct {
+	MethodID    int64  `json:"method_id" binding:"required"`
+	Code        string `json:"code" binding:"required"`
+	TrustDevice bool   `json:"trust_device"`
+}
+
+type VerifyMFARequest struct {
+	Code        string `json:"code" binding:"required"`
+	TrustDevice bool   `json:"trust_device"`
+}
+
+type VerifyMFAResponse struct {
+	MFAVerifiedAt         time.Time `json:"mfa_verified_at"`
+	RecentStepUpExpiresAt time.Time `json:"recent_step_up_expires_at"`
+	TrustedDeviceCookie   bool      `json:"trusted_device_cookie"`
+}
+
+type BackupCodesResponse struct {
+	BackupCodes []string `json:"backup_codes"`
+}
+
+type MFAMethodResponse struct {
+	ID          int64      `json:"id"`
+	Type        string     `json:"type"`
+	Label       string     `json:"label,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+}
+
+type TrustedDeviceResponse struct {
+	ID            int64      `json:"id"`
+	Label         string     `json:"label"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt     time.Time  `json:"expires_at"`
+	IPAddress     string     `json:"ip_address,omitempty"`
+	UserAgent     string     `json:"user_agent,omitempty"`
+	RevokedAt     *time.Time `json:"revoked_at,omitempty"`
+	RevokedReason string     `json:"revoked_reason,omitempty"`
+}
+
+type MFABackupCodesSummary struct {
+	Total           int        `json:"total"`
+	Unused          int        `json:"unused"`
+	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
+	LastGeneratedAt *time.Time `json:"last_generated_at,omitempty"`
+}
+
+type MFAStatusResponse struct {
+	Enrolled              bool                    `json:"enrolled"`
+	Required              bool                    `json:"required"`
+	Methods               []MFAMethodResponse     `json:"methods"`
+	TrustedDevices        []TrustedDeviceResponse `json:"trusted_devices"`
+	BackupCodes           MFABackupCodesSummary   `json:"backup_codes"`
+	RecentStepUpExpiresAt *time.Time              `json:"recent_step_up_expires_at,omitempty"`
 }
 
 // StatusResponse is returned for simple acknowledgment payloads.
@@ -27,11 +97,14 @@ type RackSummary struct {
 
 // CurrentUserResponse describes the authenticated user's profile and permissions.
 type CurrentUserResponse struct {
-	Email       string       `json:"email"`
-	Name        string       `json:"name"`
-	Roles       []string     `json:"roles"`
-	Permissions []string     `json:"permissions"`
-	Rack        *RackSummary `json:"rack,omitempty"`
+	Email                 string       `json:"email"`
+	Name                  string       `json:"name"`
+	Roles                 []string     `json:"roles"`
+	Permissions           []string     `json:"permissions"`
+	Rack                  *RackSummary `json:"rack,omitempty"`
+	MFAEnrolled           bool         `json:"mfa_enrolled"`
+	MFARequired           bool         `json:"mfa_required"`
+	RecentStepUpExpiresAt *time.Time   `json:"recent_step_up_expires_at,omitempty"`
 }
 
 // EnvValuesResponse wraps environment variable key/value pairs.
@@ -54,8 +127,27 @@ type UpdateEnvValuesResponse struct {
 
 // CLILoginCompleteRequest represents the payload used to finish the CLI OAuth flow.
 type CLILoginCompleteRequest struct {
-	State        string `json:"state" binding:"required"`
-	CodeVerifier string `json:"code_verifier" binding:"required"`
+	State         string `json:"state" binding:"required"`
+	CodeVerifier  string `json:"code_verifier" binding:"required"`
+	DeviceID      string `json:"device_id"`
+	DeviceName    string `json:"device_name"`
+	DeviceOS      string `json:"device_os"`
+	ClientVersion string `json:"client_version"`
+}
+
+// CLILoginResponse represents the session token returned to the CLI.
+type CLILoginResponse struct {
+	Token              string    `json:"token"`
+	Email              string    `json:"email"`
+	Name               string    `json:"name"`
+	ExpiresAt          time.Time `json:"expires_at"`
+	SessionID          int64     `json:"session_id"`
+	Channel            string    `json:"channel"`
+	DeviceID           string    `json:"device_id"`
+	DeviceName         string    `json:"device_name"`
+	MFAVerified        bool      `json:"mfa_verified"`
+	MFARequired        bool      `json:"mfa_required"`
+	EnrollmentRequired bool      `json:"enrollment_required"`
 }
 
 // UserSummary represents the minimal user payload returned by admin endpoints.
@@ -160,4 +252,9 @@ type UpdateProtectedEnvVarsRequest struct {
 // UpdateAllowDestructiveActionsRequest defines the payload for toggling destructive actions.
 type UpdateAllowDestructiveActionsRequest struct {
 	AllowDestructiveActions bool `json:"allow_destructive_actions"`
+}
+
+// UpdateMFASettingsRequest defines the payload for updating MFA enforcement defaults.
+type UpdateMFASettingsRequest struct {
+	RequireAllUsers bool `json:"require_all_users"`
 }

@@ -9,8 +9,11 @@ import type { HandlersRackSummary } from './handlersRackSummary';
 
 export interface HandlersCurrentUserResponse {
   email?: string;
+  mfa_enrolled?: boolean;
+  mfa_required?: boolean;
   name?: string;
   permissions?: string[];
   rack?: HandlersRackSummary;
+  recent_step_up_expires_at?: string;
   roles?: string[];
 }

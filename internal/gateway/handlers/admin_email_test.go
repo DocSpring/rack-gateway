@@ -65,7 +65,8 @@ func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandl
 		},
 	}
 
-	handler := handlers.NewAdminHandler(rbacManager, database, tokenService, sender, cfg, nil, nil)
+	mfaSettings, _ := database.GetMFASettings()
+	handler := handlers.NewAdminHandler(rbacManager, database, tokenService, sender, cfg, nil, nil, mfaSettings)
 	return handler, database, rbacManager
 }
 

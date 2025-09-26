@@ -10,18 +10,17 @@ import (
 )
 
 // CreateUserSession stores a new authenticated session for a user.
-func (d *Database) CreateUserSession(userID int64, tokenHash string, expiresAt time.Time, ipAddress, userAgent string, metadata map[string]interface{}) (*UserSession, error) {
+func (d *Database) CreateUserSession(userID int64, tokenHash string, expiresAt time.Time, channel string, deviceID string, deviceName string, ipAddress, userAgent string, metadata map[string]interface{}, deviceMetadata map[string]interface{}) (*UserSession, error) {
 	if strings.TrimSpace(tokenHash) == "" {
 		return nil, fmt.Errorf("token hash is required")
 	}
-	var metaJSON interface{}
-	if metadata != nil {
-		b, err := json.Marshal(metadata)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal session metadata: %w", err)
-		}
-		metaJSON = string(b)
+	chanVal := strings.TrimSpace(channel)
+	if chanVal == "" {
+		chanVal = "web"
 	}
+
+	metaJSON := marshalJSONMap(metadata)
+	deviceMetaJSON := marshalJSONMap(deviceMetadata)
 
 	var (
 		id         int64
@@ -31,12 +30,12 @@ func (d *Database) CreateUserSession(userID int64, tokenHash string, expiresAt t
 	)
 
 	query := `
-		INSERT INTO user_sessions (user_id, token_hash, expires_at, ip_address, user_agent, metadata)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO user_sessions (user_id, token_hash, expires_at, channel, device_id, device_name, ip_address, user_agent, metadata, device_metadata)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, created_at, updated_at, last_seen_at
 	`
 
-	if err := d.queryRow(query, userID, tokenHash, expiresAt, nullableIP(ipAddress), nullableString(sanitizeUserAgent(userAgent), 512), metaJSON).
+	if err := d.queryRow(query, userID, tokenHash, expiresAt, chanVal, nullableUUID(deviceID), nullableString(strings.TrimSpace(deviceName), 150), nullableIP(ipAddress), nullableString(sanitizeUserAgent(userAgent), 512), metaJSON, deviceMetaJSON).
 		Scan(&id, &createdAt, &updatedAt, &lastSeenAt); err != nil {
 		return nil, fmt.Errorf("failed to create user session: %w", err)
 	}
@@ -49,6 +48,9 @@ func (d *Database) CreateUserSession(userID int64, tokenHash string, expiresAt t
 		UpdatedAt:  updatedAt,
 		LastSeenAt: lastSeenAt,
 		ExpiresAt:  expiresAt,
+		Channel:    chanVal,
+		DeviceID:   strings.TrimSpace(deviceID),
+		DeviceName: strings.TrimSpace(deviceName),
 		IPAddress:  strings.TrimSpace(ipAddress),
 		UserAgent:  sanitizeUserAgent(userAgent),
 	}, nil
@@ -56,30 +58,55 @@ func (d *Database) CreateUserSession(userID int64, tokenHash string, expiresAt t
 
 func (d *Database) getUserSession(where string, args ...interface{}) (*UserSession, error) {
 	query := fmt.Sprintf(`
-		SELECT id, user_id, token_hash, created_at, updated_at, last_seen_at, expires_at,
-		       ip_address, user_agent, revoked_at, revoked_by_user_id, metadata
+		SELECT id, user_id, token_hash, created_at, updated_at, last_seen_at, expires_at, channel, device_id, device_name,
+		       mfa_verified_at, recent_step_up_at, trusted_device_id, ip_address, user_agent, revoked_at, revoked_by_user_id, metadata, device_metadata
 		FROM user_sessions
 		WHERE %s
 	`, where)
 
 	var (
-		session UserSession
-		ip      sql.NullString
-		ua      sql.NullString
-		revoked sql.NullTime
-		revoker sql.NullInt64
-		meta    sql.NullString
+		session     UserSession
+		deviceID    sql.NullString
+		deviceName  sql.NullString
+		mfaVerified sql.NullTime
+		recentStep  sql.NullTime
+		trustedID   sql.NullInt64
+		ip          sql.NullString
+		ua          sql.NullString
+		revoked     sql.NullTime
+		revoker     sql.NullInt64
+		meta        sql.NullString
+		deviceMeta  sql.NullString
 	)
 
 	row := d.queryRow(query, args...)
 	if err := row.Scan(&session.ID, &session.UserID, &session.TokenHash, &session.CreatedAt, &session.UpdatedAt,
-		&session.LastSeenAt, &session.ExpiresAt, &ip, &ua, &revoked, &revoker, &meta); err != nil {
+		&session.LastSeenAt, &session.ExpiresAt, &session.Channel, &deviceID, &deviceName, &mfaVerified, &recentStep, &trustedID, &ip, &ua, &revoked, &revoker, &meta, &deviceMeta); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get user session: %w", err)
 	}
 
+	if deviceID.Valid {
+		session.DeviceID = deviceID.String
+	}
+	if deviceName.Valid {
+		session.DeviceName = deviceName.String
+	}
+
+	if mfaVerified.Valid {
+		verified := mfaVerified.Time
+		session.MFAVerifiedAt = &verified
+	}
+	if recentStep.Valid {
+		step := recentStep.Time
+		session.RecentStepUpAt = &step
+	}
+	if trustedID.Valid {
+		id := trustedID.Int64
+		session.TrustedDeviceID = &id
+	}
 	if ip.Valid {
 		session.IPAddress = ip.String
 	}
@@ -96,6 +123,9 @@ func (d *Database) getUserSession(where string, args ...interface{}) (*UserSessi
 	}
 	if meta.Valid {
 		session.Metadata = json.RawMessage(meta.String)
+	}
+	if deviceMeta.Valid {
+		session.DeviceMetadata = json.RawMessage(deviceMeta.String)
 	}
 
 	return &session, nil
@@ -194,8 +224,8 @@ func (d *Database) RevokeAllUserSessions(userID int64, revokedBy *int64) (int64,
 // ListActiveSessionsByUser returns non-expired, non-revoked sessions for a user.
 func (d *Database) ListActiveSessionsByUser(userID int64) ([]*UserSession, error) {
 	query := `
-		SELECT id, user_id, token_hash, created_at, updated_at, last_seen_at, expires_at,
-		       ip_address, user_agent, metadata
+		SELECT id, user_id, token_hash, created_at, updated_at, last_seen_at, expires_at, channel, device_id, device_name,
+		       mfa_verified_at, recent_step_up_at, trusted_device_id, ip_address, user_agent, metadata, device_metadata
 		FROM user_sessions
 		WHERE user_id = ? AND revoked_at IS NULL AND expires_at > NOW()
 		ORDER BY last_seen_at DESC
@@ -210,14 +240,37 @@ func (d *Database) ListActiveSessionsByUser(userID int64) ([]*UserSession, error
 	sessions := []*UserSession{}
 	for rows.Next() {
 		var (
-			sess UserSession
-			ip   sql.NullString
-			ua   sql.NullString
-			meta sql.NullString
+			sess        UserSession
+			deviceID    sql.NullString
+			deviceName  sql.NullString
+			mfaVerified sql.NullTime
+			recentStep  sql.NullTime
+			trustedID   sql.NullInt64
+			ip          sql.NullString
+			ua          sql.NullString
+			meta        sql.NullString
+			deviceMeta  sql.NullString
 		)
-		if err := rows.Scan(&sess.ID, &sess.UserID, &sess.TokenHash, &sess.CreatedAt, &sess.UpdatedAt,
-			&sess.LastSeenAt, &sess.ExpiresAt, &ip, &ua, &meta); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.UserID, &sess.TokenHash, &sess.CreatedAt, &sess.UpdatedAt, &sess.LastSeenAt, &sess.ExpiresAt, &sess.Channel, &deviceID, &deviceName, &mfaVerified, &recentStep, &trustedID, &ip, &ua, &meta, &deviceMeta); err != nil {
 			return nil, fmt.Errorf("failed to scan user session: %w", err)
+		}
+		if deviceID.Valid {
+			sess.DeviceID = deviceID.String
+		}
+		if deviceName.Valid {
+			sess.DeviceName = deviceName.String
+		}
+		if mfaVerified.Valid {
+			verified := mfaVerified.Time
+			sess.MFAVerifiedAt = &verified
+		}
+		if recentStep.Valid {
+			step := recentStep.Time
+			sess.RecentStepUpAt = &step
+		}
+		if trustedID.Valid {
+			id := trustedID.Int64
+			sess.TrustedDeviceID = &id
 		}
 		if ip.Valid {
 			sess.IPAddress = ip.String
@@ -228,6 +281,9 @@ func (d *Database) ListActiveSessionsByUser(userID int64) ([]*UserSession, error
 		if meta.Valid {
 			sess.Metadata = json.RawMessage(meta.String)
 		}
+		if deviceMeta.Valid {
+			sess.DeviceMetadata = json.RawMessage(deviceMeta.String)
+		}
 		sessions = append(sessions, &sess)
 	}
 
@@ -236,6 +292,48 @@ func (d *Database) ListActiveSessionsByUser(userID int64) ([]*UserSession, error
 	}
 
 	return sessions, nil
+}
+
+func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Time, trustedDeviceID *int64) error {
+	var trusted interface{}
+	if trustedDeviceID != nil {
+		trusted = *trustedDeviceID
+	}
+	_, err := d.exec(
+		"UPDATE user_sessions SET mfa_verified_at = ?, recent_step_up_at = ?, trusted_device_id = COALESCE(?, trusted_device_id), updated_at = NOW() WHERE id = ?",
+		verifiedAt,
+		verifiedAt,
+		trusted,
+		sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update MFA verification: %w", err)
+	}
+	return nil
+}
+
+func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
+	_, err := d.exec(
+		"UPDATE user_sessions SET recent_step_up_at = ?, updated_at = NOW() WHERE id = ?",
+		when,
+		sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update session step-up timestamp: %w", err)
+	}
+	return nil
+}
+
+func (d *Database) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID int64) error {
+	_, err := d.exec(
+		"UPDATE user_sessions SET trusted_device_id = ?, updated_at = NOW() WHERE id = ?",
+		trustedDeviceID,
+		sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to attach trusted device to session: %w", err)
+	}
+	return nil
 }
 
 func sanitizeUserAgent(ua string) string {
@@ -271,4 +369,23 @@ func nullableString(s string, max int) interface{} {
 		return s[:max]
 	}
 	return s
+}
+
+func marshalJSONMap(m map[string]interface{}) interface{} {
+	if len(m) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return string(b)
+}
+
+func nullableUUID(val string) interface{} {
+	trimmed := strings.TrimSpace(val)
+	if trimmed == "" {
+		return nil
+	}
+	return trimmed
 }

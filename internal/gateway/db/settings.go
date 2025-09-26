@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 )
 
@@ -95,10 +97,71 @@ func (d *Database) GetRackTLSCert() (*RackTLSCert, bool, error) {
 	return &cert, true, nil
 }
 
+// MFASettings capture system-wide MFA configuration values.
+type MFASettings struct {
+	RequireAllUsers      bool `json:"require_all_users"`
+	TrustedDeviceTTLDays int  `json:"trusted_device_ttl_days"`
+	StepUpWindowMinutes  int  `json:"step_up_window_minutes"`
+}
+
+func defaultRequireAllUsers() bool {
+	if v := strings.TrimSpace(os.Getenv("MFA_REQUIRE_ALL_USERS")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			return parsed
+		}
+	}
+	return true
+}
+
 // UpsertRackTLSCert persists the pinned rack TLS certificate.
 func (d *Database) UpsertRackTLSCert(cert *RackTLSCert, updatedByUserID *int64) error {
 	if cert == nil {
 		return fmt.Errorf("rack TLS certificate cannot be nil")
 	}
 	return d.UpsertSetting("rack_tls_cert", cert, updatedByUserID)
+}
+
+// GetMFASettings returns MFA configuration with sensible defaults when not set.
+func (d *Database) GetMFASettings() (*MFASettings, error) {
+	defaults := &MFASettings{
+		RequireAllUsers:      defaultRequireAllUsers(),
+		TrustedDeviceTTLDays: 30,
+		StepUpWindowMinutes:  10,
+	}
+
+	raw, ok, err := d.GetSettingRaw("mfa")
+	if err != nil {
+		return defaults, err
+	}
+	if !ok || len(raw) == 0 {
+		return defaults, nil
+	}
+
+	var settings MFASettings
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return defaults, fmt.Errorf("invalid mfa settings: %w", err)
+	}
+
+	if settings.TrustedDeviceTTLDays <= 0 {
+		settings.TrustedDeviceTTLDays = defaults.TrustedDeviceTTLDays
+	}
+	if settings.StepUpWindowMinutes <= 0 {
+		settings.StepUpWindowMinutes = defaults.StepUpWindowMinutes
+	}
+
+	return &settings, nil
+}
+
+// UpsertMFASettings stores the MFA configuration settings atomically.
+func (d *Database) UpsertMFASettings(settings *MFASettings, updatedByUserID *int64) error {
+	if settings == nil {
+		return fmt.Errorf("mfa settings cannot be nil")
+	}
+	if settings.TrustedDeviceTTLDays <= 0 {
+		settings.TrustedDeviceTTLDays = 30
+	}
+	if settings.StepUpWindowMinutes <= 0 {
+		settings.StepUpWindowMinutes = 10
+	}
+	return d.UpsertSetting("mfa", settings, updatedByUserID)
 }

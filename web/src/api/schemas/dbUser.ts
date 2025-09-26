@@ -13,6 +13,8 @@ export interface DbUser {
   created_by_user_id?: number;
   email?: string;
   id?: number;
+  mfa_enforced_at?: string;
+  mfa_enrolled?: boolean;
   name?: string;
   roles?: string[];
   suspended?: boolean;

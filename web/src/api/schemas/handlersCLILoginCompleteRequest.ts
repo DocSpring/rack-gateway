@@ -7,6 +7,10 @@
  */
 
 export interface HandlersCLILoginCompleteRequest {
+  client_version?: string;
   code_verifier: string;
+  device_id?: string;
+  device_name?: string;
+  device_os?: string;
   state: string;
 }

@@ -98,11 +98,16 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		case "Bearer":
 			if strings.HasPrefix(credentials, "cgw_") {
 				user, err = a.validateAPIToken(credentials)
+			} else if a.sessions != nil {
+				user, err = a.validateSessionToken(credentials, r)
+				if err != nil {
+					user, err = a.validateJWT(credentials)
+				}
 			} else {
 				user, err = a.validateJWT(credentials)
 			}
 		case "Basic":
-			user, err = a.validateBasicAuth(credentials)
+			user, err = a.validateBasicAuth(credentials, r)
 		default:
 			return nil, "header", fmt.Errorf("unsupported authorization type")
 		}
@@ -225,7 +230,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 	return userResp, nil
 }
 
-func (a *AuthService) validateBasicAuth(credentials string) (*AuthUser, error) {
+func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*AuthUser, error) {
 	// For Basic auth, try to decode and check both username:password formats
 	decoded, err := decodeBasicAuth(credentials)
 	if err != nil {
@@ -240,18 +245,27 @@ func (a *AuthService) validateBasicAuth(credentials string) (*AuthUser, error) {
 	username := parts[0]
 	password := parts[1]
 
-	// If username is "convox", password should be a JWT (Convox CLI behavior)
+	// If username is "convox", password may be a JWT, session token, or API token
 	if username == "convox" {
-		// Support API tokens used as the CLI password as well
 		if strings.HasPrefix(password, "cgw_") {
 			return a.validateAPIToken(password)
+		}
+		if a.sessions != nil {
+			if user, err := a.validateSessionToken(password, r); err == nil {
+				return user, nil
+			}
 		}
 		return a.validateJWT(password)
 	}
 
-	// Otherwise, password could be an API token
+	// Otherwise, password could be an API token or session token tied to a specific account
 	if strings.HasPrefix(password, "cgw_") {
 		return a.validateAPIToken(password)
+	}
+	if a.sessions != nil {
+		if user, err := a.validateSessionToken(password, r); err == nil {
+			return user, nil
+		}
 	}
 
 	return nil, fmt.Errorf("unsupported authentication method")
@@ -283,4 +297,28 @@ func decodeBasicAuth(credentials string) (string, error) {
 		return "", fmt.Errorf("failed to decode base64: %w", err)
 	}
 	return string(decoded), nil
+}
+
+func (a *AuthService) validateSessionToken(token string, r *http.Request) (*AuthUser, error) {
+	if a.sessions == nil {
+		return nil, fmt.Errorf("session authentication unavailable")
+	}
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return nil, fmt.Errorf("empty session token")
+	}
+	result, err := a.sessions.ValidateSession(trimmed, clientIPFromRequest(r), r.UserAgent())
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || result.User == nil || result.Session == nil {
+		return nil, fmt.Errorf("session invalid")
+	}
+	return &AuthUser{
+		Email:      result.User.Email,
+		Name:       result.User.Name,
+		Roles:      result.User.Roles,
+		IsAPIToken: false,
+		Session:    result.Session,
+	}, nil
 }
