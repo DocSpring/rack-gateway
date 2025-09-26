@@ -410,6 +410,10 @@ The integration tests create backups of the real Convox CLI configuration to pre
 
 ## Important Instructions
 
+- Add SSG static pre-rendering for some CLI login success/error pages via the Vite build; Go handlers should only serve those pre-rendered assets.
+
+- Go handlers must never render HTML. All HTML must be rendered through the web app via pre-rendered (static) React pages; add new routes/pages to the web project and serve them statically.
+
 Don't leave old code lying around. When you see it, tidy it.
 
 - We never maintain backwards-compatibility shims or legacy fallbacks.

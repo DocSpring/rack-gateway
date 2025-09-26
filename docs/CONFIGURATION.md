@@ -46,6 +46,9 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - When set, embeds the Sentry DSN into the served web SPA for browser error reporting.
 - `SENTRY_JS_TRACES_SAMPLE_RATE` (optional)
   - Floating point sample rate (0-1) for browser performance tracing. Defaults to `0`.
+- `ENABLE_SENTRY_TEST_BUTTONS` (optional)
+  - When set to `true`, surfaces the Sentry diagnostics actions in the admin settings UI. Defaults to
+    `false` to keep the test triggers hidden.
 
 ### Web Frontend (runtime)
 

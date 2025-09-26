@@ -1230,6 +1230,10 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		}
 	}
 
+	if h.config != nil {
+		resp["sentry_tests_enabled"] = h.config.SentryTestsEnabled
+	}
+
 	pinningEnabled := h.config != nil && h.config.RackTLSPinningEnabled
 	resp["rack_tls_pinning_enabled"] = pinningEnabled
 	if pinningEnabled && h.rackCertMgr != nil {

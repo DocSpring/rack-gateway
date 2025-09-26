@@ -21,7 +21,10 @@ import { AppReleasesPage } from './pages/app-releases-page'
 import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
+import { CLIAuthApprovePage } from './pages/cli-auth-approve-page'
+import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
 import { InstancesPage } from './pages/instances-page'
+import { LoginErrorPage } from './pages/login-error-page'
 import { LoginPage } from './pages/login-page'
 import { RackPage } from './pages/rack-page'
 import { SettingsPage } from './pages/settings-page'
@@ -54,6 +57,22 @@ function buildRouteTree() {
     getParentRoute: () => rootRoute,
     path: 'auth/callback',
     component: CallbackPage,
+  })
+  const loginErrorRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: 'auth/error',
+    component: LoginErrorPage,
+  })
+
+  const cliAuthApproveRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: 'cli/auth/approve',
+    component: CLIAuthApprovePage,
+  })
+  const cliAuthSuccessRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: 'cli/auth/success',
+    component: CLIAuthSuccessPage,
   })
 
   // App layout route with nested pages
@@ -167,6 +186,9 @@ function buildRouteTree() {
   return rootRoute.addChildren([
     loginRoute,
     callbackRoute,
+    loginErrorRoute,
+    cliAuthApproveRoute,
+    cliAuthSuccessRoute,
     layoutRoute.addChildren([
       rackRoute,
       instancesRoute,

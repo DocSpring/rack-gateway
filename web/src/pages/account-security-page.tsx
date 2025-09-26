@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -279,62 +279,126 @@ export function AccountSecurityPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Multi-Factor Authentication</CardTitle>
-          <Badge variant={status?.enrolled ? 'default' : 'outline'}>
-            {status?.enrolled ? 'Enabled' : 'Disabled'}
-          </Badge>
-        </CardHeader>
-        <CardContent className="space-y-7">
-          {status?.required && !status.enrolled ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
-              MFA is required. Enable it before accessing sensitive operations.
-            </div>
-          ) : null}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              disabled={startEnrollmentMutation.isPending || !!enrollment}
-              onClick={() => startEnrollmentMutation.mutate()}
-            >
-              {enrollment ? 'Enrollment In Progress' : 'Enable MFA'}
-            </Button>
-            <Button
-              disabled={methods.length === 0 || deleteMethodMutation.isPending}
-              onClick={() => {
-                if (methods.length === 0) {
-                  return
-                }
-                if (
-                  !window.confirm(
-                    'Disable MFA for this account? All registered authenticators will be removed.'
-                  )
-                ) {
-                  return
-                }
-                runWithStepUp(async () => {
-                  for (const method of methods) {
-                    if (!method.id) {
-                      continue
-                    }
-                    await deleteMethodMutation.mutateAsync(method.id)
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle>Multi-Factor Authentication</CardTitle>
+            <Badge variant={status?.enrolled ? 'success' : 'outline'}>
+              {status?.enrolled ? 'Enabled' : 'Disabled'}
+            </Badge>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-7">
+            {status?.required && !status.enrolled ? (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
+                MFA is required. Enable it before accessing sensitive operations.
+              </div>
+            ) : null}
+            {status?.enrolled ? (
+              <p className="text-muted-foreground text-sm">
+                Multi-factor authentication is active for your account.
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Protect your account by requiring a TOTP code in addition to your password for
+                sensitive actions.
+              </p>
+            )}
+          </CardContent>
+          <CardFooter className="mt-auto flex flex-wrap gap-3">
+            {status?.enrolled ? (
+              <Button
+                disabled={methods.length === 0 || deleteMethodMutation.isPending}
+                onClick={() => {
+                  if (methods.length === 0) {
+                    return
                   }
-                })
-              }}
-              variant="outline"
-            >
-              Disable MFA
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                  if (
+                    !window.confirm(
+                      'Disable MFA for this account? All registered authenticators will be removed.'
+                    )
+                  ) {
+                    return
+                  }
+                  runWithStepUp(async () => {
+                    for (const method of methods) {
+                      if (!method.id) {
+                        continue
+                      }
+                      await deleteMethodMutation.mutateAsync(method.id)
+                    }
+                  })
+                }}
+                variant="destructive"
+              >
+                Disable MFA
+              </Button>
+            ) : (
+              <Button
+                disabled={startEnrollmentMutation.isPending || !!enrollment}
+                onClick={() => startEnrollmentMutation.mutate()}
+              >
+                {enrollment ? 'Enrollment In Progress' : 'Enable MFA'}
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+
+        {showBackupCard ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Backup Codes</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-6 pb-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Unused codes
+                  </p>
+                  <p className="font-semibold text-2xl">{backupSummary?.unused ?? 0}</p>
+                </div>
+                {backupSummary?.last_generated_at ? (
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                      Last generated
+                    </p>
+                    <p className="text-sm">
+                      <TimeAgo date={backupSummary.last_generated_at} />
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </CardContent>
+            <CardFooter className="mt-auto flex flex-wrap gap-2">
+              <Button
+                disabled={regenerateCodesMutation.isPending}
+                onClick={() =>
+                  runWithStepUp(async () => {
+                    await regenerateCodesMutation.mutateAsync()
+                  })
+                }
+              >
+                Regenerate backup codes
+              </Button>
+              {recentBackupCodes && recentBackupCodes.length > 0 ? (
+                <Button
+                  onClick={() => handleDownloadCodes(recentBackupCodes)}
+                  size="sm"
+                  variant="outline"
+                >
+                  Download latest codes
+                </Button>
+              ) : null}
+            </CardFooter>
+          </Card>
+        ) : null}
+      </div>
 
       {enrollment ? (
         <Card>
           <CardHeader>
             <CardTitle>Finish MFA Enrollment</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pb-2">
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-3">
                 <h3 className="font-semibold text-base">1. Scan the QR code</h3>
@@ -409,18 +473,17 @@ export function AccountSecurityPage() {
                 autoCapitalize="none"
                 autoComplete="one-time-code"
                 autoCorrect="off"
-                data-1p-ignore
-                data-lpignore="true"
                 id="verification-code"
                 inputMode="numeric"
                 maxLength={6}
-                name="mfa-code"
+                name="otp_entry"
                 onChange={(event) => setVerificationCode(event.target.value.trim())}
                 pattern="[0-9]*"
                 placeholder="123456"
+                type="text"
                 value={verificationCode}
               />
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 py-5 text-sm">
                 <input
                   checked={trustEnrollmentDevice}
                   onChange={(event) => setTrustEnrollmentDevice(event.target.checked)}
@@ -495,8 +558,7 @@ export function AccountSecurityPage() {
                               await deleteMethodMutation.mutateAsync(method.id as number)
                             })
                           }}
-                          size="sm"
-                          variant="outline"
+                          variant="destructive"
                         >
                           Remove
                         </Button>
@@ -557,8 +619,7 @@ export function AccountSecurityPage() {
                               await revokeDeviceMutation.mutateAsync(device.id as number)
                             })
                           }}
-                          size="sm"
-                          variant="outline"
+                          variant="destructive"
                         >
                           Revoke
                         </Button>
@@ -571,49 +632,6 @@ export function AccountSecurityPage() {
           )}
         </CardContent>
       </Card>
-
-      {showBackupCard ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Backup Codes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div>
-                <span className="font-medium">Unused codes:</span>{' '}
-                <span>{backupSummary?.unused ?? 0}</span>
-              </div>
-              {backupSummary?.last_generated_at ? (
-                <div>
-                  <span className="font-medium">Last generated:</span>{' '}
-                  <TimeAgo date={backupSummary.last_generated_at} />
-                </div>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={regenerateCodesMutation.isPending}
-                onClick={() =>
-                  runWithStepUp(async () => {
-                    await regenerateCodesMutation.mutateAsync()
-                  })
-                }
-              >
-                Regenerate backup codes
-              </Button>
-              {recentBackupCodes && recentBackupCodes.length > 0 ? (
-                <Button
-                  onClick={() => handleDownloadCodes(recentBackupCodes)}
-                  size="sm"
-                  variant="outline"
-                >
-                  Download latest codes
-                </Button>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Dialog
         onOpenChange={(open) => {
@@ -649,14 +667,14 @@ export function AccountSecurityPage() {
                 autoComplete="one-time-code"
                 autoCorrect="off"
                 autoFocus
-                data-1p-ignore
-                data-lpignore="true"
                 id="step-up-code"
                 inputMode="numeric"
                 maxLength={6}
+                name="otp_entry"
                 onChange={(event) => setStepUpCode(event.target.value.trim())}
                 placeholder="123456"
                 required
+                type="text"
                 value={stepUpCode}
               />
             </div>

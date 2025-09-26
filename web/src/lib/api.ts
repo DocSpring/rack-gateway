@@ -226,6 +226,16 @@ export const confirmTOTPEnrollment = (
   payload: ConfirmTOTPEnrollmentRequest
 ): Promise<VerifyMFAResponse> => post<VerifyMFAResponse>('/auth/mfa/enroll/totp/confirm', payload)
 
+export const verifyCliMfa = (payload: {
+  state: string
+  code: string
+}): Promise<{ redirect: string }> =>
+  gatewayAxios
+    .post<{ redirect: string }>('/auth/cli/mfa', payload, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    .then((res) => res.data)
+
 export const verifyMFA = (payload: VerifyMFARequest): Promise<VerifyMFAResponse> =>
   post<VerifyMFAResponse>('/auth/mfa/verify', payload)
 

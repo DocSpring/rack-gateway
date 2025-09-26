@@ -176,8 +176,8 @@ login_cli_as() {
     local totp_code
     totp_code=$(generate_totp_code "$secret")
     curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" \
-      -H "Content-Type: application/x-www-form-urlencoded" \
-      --data "state=${STATE}&code=${totp_code}" \
+      -H "Content-Type: application/json" \
+      --data "{\"state\":\"${STATE}\",\"code\":\"${totp_code}\"}" \
       "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/auth/cli/mfa" \
       -o /dev/null || true
   fi

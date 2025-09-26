@@ -18,6 +18,7 @@ type Config struct {
 	SentryRelease         string
 	SentryJSDsn           string
 	SentryJSTracesRate    string
+	SentryTestsEnabled    bool
 	JWTSecret             string
 	JWTExpiry             time.Duration
 	SessionIdleTimeout    time.Duration
@@ -80,6 +81,7 @@ func Load() (*Config, error) {
 		SentryRelease:       release,
 		SentryJSDsn:         strings.TrimSpace(getEnv("SENTRY_JS_DSN", "")),
 		SentryJSTracesRate:  jsTracesRate,
+		SentryTestsEnabled:  getEnv("ENABLE_SENTRY_TEST_BUTTONS", "false") == "true",
 		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),

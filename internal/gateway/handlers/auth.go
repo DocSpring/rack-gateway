@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -112,100 +111,95 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, redirect)
 }
 
-func (h *AuthHandler) renderCLILoginPage(c *gin.Context, status int, body string) {
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Writer.WriteHeader(status)
-	_, _ = c.Writer.Write([]byte(body))
-}
-
 func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	state := strings.TrimSpace(c.Query("state"))
+	redirectBase := WebRoute("/cli/auth/approve")
+
 	if state == "" {
-		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Missing login state.</p>")
+		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=missing_state")
 		return
 	}
-
 	if h.database == nil {
-		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Login state service unavailable.</p>")
+		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=service_unavailable")
 		return
 	}
 
 	record, err := h.database.GetCLILoginState(state)
 	if err != nil {
-		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Failed to load login state.</p>")
+		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=load_failure")
 		return
 	}
 	if record == nil {
-		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Login session not found or expired. Return to your terminal and start login again.</p>")
+		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=expired")
 		return
 	}
 
 	if record.MFAVerifiedAt.Valid {
-		email := ""
-		if record.LoginEmail.Valid {
-			email = record.LoginEmail.String
-		}
-		success := fmt.Sprintf(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>CLI Login Complete</title>
-		<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#1e293b;padding:32px;border-radius:12px;max-width:420px;box-shadow:0 20px 45px rgba(15,23,42,0.35);} h1{margin-top:0;font-size:22px;color:#38bdf8;} p{line-height:1.5;} a{color:#38bdf8;}</style>
-		</head><body><div class="card"><h1>Multi-factor verified</h1><p>The CLI session for <strong>%s</strong> is now approved.</p><p>Return to your terminal to finish the login.</p></div></body></html>`, template.HTMLEscapeString(email))
-		h.renderCLILoginPage(c, http.StatusOK, success)
+		c.Redirect(http.StatusTemporaryRedirect, WebRoute("/cli/auth/success"))
 		return
 	}
 
-	form := fmt.Sprintf(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>CLI Multi-factor Verification</title>
-	<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#1e293b;padding:32px;border-radius:12px;max-width:420px;box-shadow:0 20px 45px rgba(15,23,42,0.35);} h1{margin-top:0;font-size:22px;color:#38bdf8;} label{display:block;font-size:14px;margin-bottom:8px;color:#cbd5f5;} input[type="text"]{width:100%%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:16px;} button{margin-top:16px;width:100%%;padding:12px;border:none;border-radius:8px;background:#38bdf8;color:#0f172a;font-size:16px;font-weight:600;cursor:pointer;} button:hover{background:#0ea5e9;} .help{margin-top:16px;font-size:14px;color:#94a3b8;line-height:1.5;}</style>
-	</head><body><div class="card"><h1>Approve CLI Login</h1><form method="POST" action="/.gateway/api/auth/cli/mfa"><input type="hidden" name="state" value="%s"><label for="code">Enter the 6-digit code from your authenticator</label><input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" autofocus required><button type="submit">Verify and Continue</button></form><p class="help">Keep this window open until your CLI shows "Successfully logged in". If you close it early, rerun the login command.</p></div></body></html>`, template.HTMLEscapeString(state))
-
-	h.renderCLILoginPage(c, http.StatusOK, form)
+	target := fmt.Sprintf("%s?state=%s", redirectBase, url.QueryEscape(state))
+	c.Redirect(http.StatusTemporaryRedirect, target)
 }
 
 func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	if h.database == nil || h.mfaService == nil {
-		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Service unavailable.</p>")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service_unavailable"})
 		return
 	}
 
-	state := strings.TrimSpace(c.PostForm("state"))
-	code := strings.TrimSpace(c.PostForm("code"))
+	var payload struct {
+		State string `json:"state"`
+		Code  string `json:"code"`
+	}
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+		return
+	}
+
+	state := strings.TrimSpace(payload.State)
+	code := strings.TrimSpace(payload.Code)
 	if state == "" || code == "" {
-		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Both state and code are required.</p>")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state_and_code_required"})
 		return
 	}
 
 	record, err := h.database.GetCLILoginState(state)
 	if err != nil {
-		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Failed to load login state.</p>")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "load_failure"})
 		return
 	}
 	if record == nil {
-		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Login session not found or expired. Return to your terminal and start login again.</p>")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session_expired"})
 		return
 	}
 	if record.MFAVerifiedAt.Valid {
-		h.CLILoginMFAForm(c)
+		c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("/cli/auth/success")})
 		return
 	}
 
 	if !record.Code.Valid || !record.CodeVerifier.Valid {
-		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Login session is incomplete. Return to your terminal and restart the login.</p>")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session_incomplete"})
 		return
 	}
 
 	loginResp, err := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
 	if err != nil {
-		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Authentication exchange failed. Close this window and restart the login from your terminal.</p>")
+		c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
 		return
 	}
 
 	userRecord, err := h.database.GetUser(loginResp.Email)
 	if err != nil || userRecord == nil {
-		h.renderCLILoginPage(c, http.StatusUnauthorized, "<p>You do not have access to this gateway.</p>")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	verification, err := h.mfaService.VerifyTOTP(userRecord, code)
 	if err != nil {
-		h.renderCLILoginPage(c, http.StatusBadRequest, "<p>Invalid authentication code. Try again.</p>")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_code"})
 		return
 	}
 
@@ -215,14 +209,11 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	}
 
 	if err := h.database.SaveCLILoginResult(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt, methodID); err != nil {
-		h.renderCLILoginPage(c, http.StatusInternalServerError, "<p>Failed to persist login approval.</p>")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
 		return
 	}
 
-	const successHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>CLI Login Approved</title>
-	<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;} .card{background:#1e293b;padding:32px;border-radius:12px;max-width:420px;box-shadow:0 20px 45px rgba(15,23,42,0.35);} h1{margin-top:0;font-size:22px;color:#38bdf8;} p{line-height:1.5;} a{color:#38bdf8;}</style>
-	</head><body><div class="card"><h1>Authentication approved</h1><p>Multi-factor authentication succeeded. Return to your terminal to finish logging in.</p><p>You may close this window.</p></div></body></html>`
-	h.renderCLILoginPage(c, http.StatusOK, successHTML)
+	c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("/cli/auth/success")})
 }
 
 // CLILoginComplete godoc
@@ -409,7 +400,11 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 	if err := h.handlePostLoginMFA(c, userRecord, session); err != nil {
 		log.Printf("post-login mfa (web) failed: user=%s session=%d err=%v", userRecord.Email, session.ID, err)
-		c.String(http.StatusInternalServerError, "Failed to finalize login")
+		params := url.Values{}
+		params.Set("reason", "mfa-finalize")
+		params.Set("message", "Failed to finalize login")
+		errorURL := fmt.Sprintf("%s?%s", WebLoginErrorRoute, params.Encode())
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 	h.setSessionCookie(c, sessionToken)

@@ -5,7 +5,8 @@ const (
 	webRootPath = "/.gateway/web"
 
 	// DefaultWebRoute is the landing page for the SPA after login.
-	DefaultWebRoute = webRootPath + "/rack"
+	DefaultWebRoute    = webRootPath + "/rack"
+	WebLoginErrorRoute = webRootPath + "/auth/error"
 )
 
 // APIRoute builds a fully-qualified gateway API route from a relative path.

@@ -9,7 +9,6 @@ export default defineConfig(() => {
   const fastBuild = process.env.VITE_FAST_BUILD === 'true'
   const rollupInputs = {
     main: path.resolve(process.cwd(), 'index.html'),
-    'cli-auth-success': path.resolve(process.cwd(), 'cli-auth-success.html'),
   }
 
   return {
@@ -30,6 +29,7 @@ export default defineConfig(() => {
       }),
     ],
     build: {
+      manifest: true,
       ...(fastBuild
         ? {
             minify: false,

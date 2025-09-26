@@ -36,6 +36,7 @@ type SettingsResponse = {
   rack_tls_pinning_enabled?: boolean
   rack_tls_cert?: RackTLSCert | null
   mfa?: MFASettings
+  sentry_tests_enabled?: boolean
 }
 
 function extractErrorMessage(error: unknown): string | undefined {
@@ -75,6 +76,7 @@ export function SettingsPage() {
   const cert = data?.rack_tls_cert ?? null
   const certFetchedAt = cert?.fetched_at ? new Date(cert.fetched_at).toLocaleString() : null
   const pinningEnabled = !!data?.rack_tls_pinning_enabled
+  const sentryTestsEnabled = data?.sentry_tests_enabled ?? false
 
   const saveEnvMutation = useMutation({
     mutationFn: async (vars: string[]) =>
@@ -315,7 +317,7 @@ export function SettingsPage() {
               When enabled, delete/force operations are allowed globally. Disable to protect against
               accidental destructive changes.
             </p>
-            <label className="flex items-center gap-3">
+            <label className="mt-6 flex items-center gap-3">
               <input
                 checked={!!allowDestructive}
                 disabled={!isAdmin || isLoading || toggleDestructiveMutation.isPending}
@@ -336,7 +338,7 @@ export function SettingsPage() {
               Require every user to enable multi-factor authentication before accessing sensitive
               actions.
             </p>
-            <label className="flex items-center gap-3">
+            <label className="mt-6 flex items-center gap-3">
               <input
                 checked={requireAllUsers}
                 disabled={!isAdmin || isLoading || updateMfaMutation.isPending}
@@ -385,34 +387,36 @@ export function SettingsPage() {
         ) : null}
       </div>
 
-      <div className="mt-8 max-w-sm">
-        <Card>
-          <CardHeader>
-            <CardTitle>Test Sentry Error Reports</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-xs">
-              Send sample events to confirm Sentry ingestion from the gateway and browser.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-4">
-              <Button
-                disabled={sentryApiTestMutation.isPending}
-                onClick={() => sentryApiTestMutation.mutate()}
-                size="sm"
-                variant="destructive"
-              >
-                {sentryApiTestMutation.isPending ? 'API…' : 'API'}
-              </Button>
-              <Button onClick={triggerJsTest} size="sm" variant="destructive">
-                JS
-              </Button>
-              <Button onClick={triggerCspTest} size="sm" variant="destructive">
-                CSP
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {sentryTestsEnabled ? (
+        <div className="mt-8 max-w-sm">
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Sentry Error Reports</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm">
+                Send sample events to confirm Sentry ingestion from the gateway and browser.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-4">
+                <Button
+                  disabled={sentryApiTestMutation.isPending}
+                  onClick={() => sentryApiTestMutation.mutate()}
+                  size="sm"
+                  variant="destructive"
+                >
+                  {sentryApiTestMutation.isPending ? 'API…' : 'API'}
+                </Button>
+                <Button onClick={triggerJsTest} size="sm" variant="destructive">
+                  JS
+                </Button>
+                <Button onClick={triggerCspTest} size="sm" variant="destructive">
+                  CSP
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 }

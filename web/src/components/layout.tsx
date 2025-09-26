@@ -1,9 +1,10 @@
-import { Link, Navigate, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
+import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
 import {
   Boxes,
   FileText,
   Key,
   LogOut,
+  type LucideIcon,
   Server,
   Settings,
   ShieldCheck,
@@ -18,7 +19,14 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 
-const baseNavigation = [
+type NavigationItem = {
+  name: string
+  icon: LucideIcon
+  href?: string
+  onSelect?: () => void
+}
+
+const baseNavigation: NavigationItem[] = [
   { name: 'Rack', href: '/rack', icon: Server },
   { name: 'Apps', href: '/apps', icon: Boxes },
   { name: 'Processes', href: '/processes', icon: TerminalSquare },
@@ -32,7 +40,10 @@ const baseNavigation = [
 
 const USER_AUDIT_RE = /\/users\/[^/]+\/audit_logs/
 
-function isNavigationItemActive(item: { name: string; href: string }, pathname: string): boolean {
+function isNavigationItemActive(item: NavigationItem, pathname: string): boolean {
+  if (!item.href) {
+    return false
+  }
   if (item.href === '/rack') {
     return pathname === '/rack'
   }
@@ -53,7 +64,6 @@ function isNavigationItemActive(item: { name: string; href: string }, pathname: 
 export function Layout() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const navigate = useNavigate()
   const pathname = useMemo(() => {
     const p = location.pathname || ''
     const base = '/.gateway/web'
@@ -71,19 +81,27 @@ export function Layout() {
   const rackAlias = user?.rack?.alias ?? user?.rack?.name ?? 'default'
   const gatewayOrigin = useMemo(() => {
     try {
-      // Prefer current origin (handles http/https and host)
       return window.location.origin
     } catch {
       return 'https://gateway.example.com'
     }
   }, [])
 
-  // Add Settings for admins
-  const navigation = useMemo(() => {
+  const navigation = useMemo<NavigationItem[]>(() => {
     const nav = baseNavigation.slice()
+
+    nav.push({ name: 'Account Security', href: '/account/security', icon: ShieldCheck })
+
+    nav.push({
+      name: 'Configure CLI',
+      icon: TerminalSquare,
+      onSelect: () => setShowCliDialog(true),
+    })
+
     if (user?.roles?.includes('admin')) {
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
     }
+
     return nav
   }, [user?.roles])
 
@@ -124,20 +142,32 @@ export function Layout() {
           {navigation.map((item) => {
             const Icon = item.icon
             const isActive = isNavigationItemActive(item, pathname)
+            const itemClassName = cn(
+              'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
+              isActive
+                ? 'bg-accent text-white'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            )
+
+            if (item.href) {
+              return (
+                <Link className={itemClassName} key={item.name} to={item.href}>
+                  <Icon className="mr-4 h-6 w-6" />
+                  {item.name}
+                </Link>
+              )
+            }
+
             return (
-              <Link
-                className={cn(
-                  'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
-                  isActive
-                    ? 'bg-accent text-white'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )}
+              <button
+                className={cn(itemClassName, 'w-full cursor-pointer')}
                 key={item.name}
-                to={item.href}
+                onClick={item.onSelect}
+                type="button"
               >
-                <Icon className="mr-3 h-4 w-4" />
+                <Icon className="mr-4 h-6 w-6" />
                 {item.name}
-              </Link>
+              </button>
             )
           })}
         </nav>
@@ -180,22 +210,6 @@ export function Layout() {
               </div>
             </div>
           )}
-          <Button
-            className="mb-2 w-full"
-            onClick={() => navigate({ to: '/account/security' })}
-            size="sm"
-            variant="secondary"
-          >
-            <ShieldCheck className="mr-2 h-4 w-4" /> Account Security
-          </Button>
-          <Button
-            className="mb-2 w-full"
-            onClick={() => setShowCliDialog(true)}
-            size="sm"
-            variant="secondary"
-          >
-            <TerminalSquare className="mr-2 h-4 w-4" /> Configure CLI
-          </Button>
           <Button className="w-full" onClick={logout} size="sm" variant="outline">
             <LogOut className="mr-2 h-4 w-4" />
             Logout

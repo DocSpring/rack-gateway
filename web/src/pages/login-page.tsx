@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { GoogleIcon } from '@/components/google-icon'
 import { ModeToggle } from '@/components/mode-toggle'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 
@@ -51,7 +51,7 @@ export function LoginPage() {
               Use your company Google account to continue
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardFooter className="my-2">
             <Button
               className="w-full text-white"
               data-testid="login-cta"
@@ -73,7 +73,7 @@ export function LoginPage() {
                 </>
               )}
             </Button>
-          </CardContent>
+          </CardFooter>
         </Card>
       </div>
     </div>
