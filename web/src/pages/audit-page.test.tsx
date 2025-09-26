@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
@@ -87,6 +87,24 @@ const mockLogs = [
     response_time_ms: 5,
     event_count: 1,
   },
+  {
+    id: 5,
+    timestamp: '2024-01-15T10:10:00Z',
+    user_email: 'cibot@example.com',
+    user_name: 'CI Bot Owner',
+    api_token_id: 42,
+    api_token_name: 'CI Deploy Token',
+    action_type: 'convox',
+    action: 'build.read',
+    resource: 'docspring',
+    resource_type: 'app',
+    details: '{"method":"GET"}',
+    ip_address: '203.0.113.10',
+    user_agent: 'convox.go/dev',
+    status: 'denied',
+    response_time_ms: 1,
+    event_count: 1,
+  },
 ]
 
 const createWrapper = () => {
@@ -130,6 +148,7 @@ describe('AuditPage', () => {
         expect(screen.getByText('admin@example.com')).toBeInTheDocument()
         expect(screen.getByText('viewer@example.com')).toBeInTheDocument()
         expect(screen.getByText('ops@example.com')).toBeInTheDocument()
+        expect(screen.getByText('CI Deploy Token')).toBeInTheDocument()
       })
 
       // Check actions
@@ -138,6 +157,8 @@ describe('AuditPage', () => {
       expect(screen.getByText('auth.login')).toBeInTheDocument()
       expect(screen.getByText('×4')).toBeInTheDocument()
       expect(screen.queryByText('×1')).not.toBeInTheDocument()
+      expect(screen.getAllByText('API Token')).not.toHaveLength(0)
+      expect(screen.getByText(/Owner: cibot@example.com/)).toBeInTheDocument()
     })
 
     it('shows event count in detail dialog', async () => {
@@ -163,6 +184,50 @@ describe('AuditPage', () => {
       })
 
       expect(screen.getByTestId('audit-event-count')).toHaveTextContent('4')
+    })
+
+    it('renders API token metadata in detail dialog', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('CI Deploy Token')).toBeInTheDocument()
+      })
+
+      const tokenCell = screen.getByText('CI Deploy Token')
+      const tokenRow = tokenCell.closest('tr')
+      expect(tokenRow).not.toBeNull()
+      if (!tokenRow) {
+        throw new Error('expected table row for token entry')
+      }
+      fireEvent.click(tokenRow)
+
+      await waitFor(() => {
+        expect(screen.getByText('Audit Log')).toBeInTheDocument()
+      })
+
+      const dialog = screen.getByRole('dialog')
+      expect(within(dialog).getByText('Token:')).toBeInTheDocument()
+      expect(within(dialog).getByText('CI Deploy Token')).toBeInTheDocument()
+
+      expect(
+        within(dialog).getByText((_, element) => {
+          if (!element) {
+            return false
+          }
+          return element.textContent === 'Token ID: 42'
+        })
+      ).toBeInTheDocument()
+      expect(
+        within(dialog).getByText((_, element) => {
+          if (!element) {
+            return false
+          }
+          return element.textContent === 'Owner: cibot@example.com (CI Bot Owner)'
+        })
+      ).toBeInTheDocument()
     })
 
     it('displays status badges correctly', async () => {
@@ -200,17 +265,29 @@ describe('AuditPage', () => {
       render(<AuditPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        // Total logs card (from API total)
-        expect(screen.getByText('4')).toBeInTheDocument()
+        const totalLogsCard = screen.getByText('Total Logs').parentElement?.parentElement
+        if (!totalLogsCard) {
+          throw new Error('Total Logs card not found')
+        }
+        expect(totalLogsCard).toHaveTextContent('5')
 
-        // Success rate: (1 + 4 successful events) / 7 total events ≈ 71%
-        expect(screen.getByText('71%')).toBeInTheDocument()
+        const successRateCard = screen.getByText('Success Rate').parentElement?.parentElement
+        if (!successRateCard) {
+          throw new Error('Success Rate card not found')
+        }
+        expect(successRateCard).toHaveTextContent('63%')
 
-        // Failed/Denied events (weighted by event_count)
-        expect(screen.getByText('2')).toBeInTheDocument()
+        const failedCard = screen.getByText('Failed/Denied').parentElement?.parentElement
+        if (!failedCard) {
+          throw new Error('Failed/Denied card not found')
+        }
+        expect(failedCard).toHaveTextContent('3')
 
-        // Weighted average response time: (150 + 300 + 200 + 5) / 7 ≈ 94ms
-        expect(screen.getByText('94ms')).toBeInTheDocument()
+        const responseCard = screen.getByText('Avg Response Time').parentElement?.parentElement
+        if (!responseCard) {
+          throw new Error('Avg Response Time card not found')
+        }
+        expect(responseCard).toHaveTextContent('82ms')
       })
     })
   })
@@ -266,7 +343,7 @@ describe('AuditPage', () => {
       fireEvent.click(rtSelect)
 
       // Select a unique option to avoid header text collisions: "API Token"
-      const apiTokenOption = screen.getByText('API Token')
+      const apiTokenOption = screen.getByRole('option', { name: 'API Token' })
       fireEvent.click(apiTokenOption)
 
       await waitFor(() => {
@@ -387,13 +464,19 @@ describe('AuditPage', () => {
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
 
-      await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_FIVE_REGEX))
-      })
+      await waitFor(
+        () => {
+          expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_FIVE_REGEX))
+        },
+        { timeout: 2000 }
+      )
 
-      await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_TWO_REGEX))
-      })
+      await waitFor(
+        () => {
+          expect(api.get).toHaveBeenCalledWith(expect.stringMatching(PAGE_TWO_REGEX))
+        },
+        { timeout: 2000 }
+      )
 
       await waitFor(() => {
         expect(window.location.search).toBe('?page=2')

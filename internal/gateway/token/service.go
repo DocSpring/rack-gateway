@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -17,6 +18,13 @@ import (
 type Service struct {
 	db *db.Database
 }
+
+var (
+	// ErrAPITokenNameRequired indicates the API token name is missing after trimming.
+	ErrAPITokenNameRequired = errors.New("api token name is required")
+	// ErrAPITokenNameExists indicates the desired token name is already in use.
+	ErrAPITokenNameExists = errors.New("api token name already exists")
+)
 
 // APITokenRequest represents a request to create an API token
 type APITokenRequest struct {
@@ -40,8 +48,31 @@ func NewService(database *db.Database) *Service {
 	}
 }
 
+func normalizeTokenName(name string) string {
+	return strings.TrimSpace(name)
+}
+
+func (s *Service) ensureUniqueTokenName(name string, excludeID int64) error {
+	exists, err := s.db.APITokenNameExists(name, excludeID)
+	if err != nil {
+		return fmt.Errorf("failed to check token name uniqueness: %w", err)
+	}
+	if exists {
+		return ErrAPITokenNameExists
+	}
+	return nil
+}
+
 // GenerateAPIToken creates a new API token
 func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, error) {
+	name := normalizeTokenName(req.Name)
+	if name == "" {
+		return nil, ErrAPITokenNameRequired
+	}
+	if err := s.ensureUniqueTokenName(name, 0); err != nil {
+		return nil, err
+	}
+
 	// Generate a secure random token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -56,7 +87,7 @@ func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, err
 	tokenHash := hex.EncodeToString(hash[:])
 
 	// Store in database
-	apiToken, err := s.db.CreateAPIToken(tokenHash, req.Name, req.UserID, req.Permissions, req.ExpiresAt, req.CreatedByUserID)
+	apiToken, err := s.db.CreateAPIToken(tokenHash, name, req.UserID, req.Permissions, req.ExpiresAt, req.CreatedByUserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API token: %w", err)
 	}
@@ -118,7 +149,14 @@ func (s *Service) DeleteToken(tokenID int64) error {
 
 // UpdateTokenName updates the display name of an API token
 func (s *Service) UpdateTokenName(tokenID int64, name string) error {
-	return s.db.UpdateAPITokenName(tokenID, name)
+	trimmed := normalizeTokenName(name)
+	if trimmed == "" {
+		return ErrAPITokenNameRequired
+	}
+	if err := s.ensureUniqueTokenName(trimmed, tokenID); err != nil {
+		return err
+	}
+	return s.db.UpdateAPITokenName(tokenID, trimmed)
 }
 
 // UpdateTokenPermissions updates the permission list for an API token

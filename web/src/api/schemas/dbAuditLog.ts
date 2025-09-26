@@ -11,6 +11,8 @@ export interface DbAuditLog {
   action?: string;
   /** "convox", "users", "auth" */
   action_type?: string;
+  api_token_id?: number;
+  api_token_name?: string;
   command?: string;
   /** JSON string */
   details?: string;

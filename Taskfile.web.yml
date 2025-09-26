@@ -71,8 +71,7 @@ tasks:
       - public/**/*
     generates:
       - dist/**/*
-    cmds:
-      - pnpm build
+    cmds: [pnpm build]
 
   lint:
     desc: Run TypeScript typecheck and Biome lint
@@ -86,36 +85,37 @@ tasks:
     dir: web
     desc: Run TypeScript type checking
     deps: [deps, ":go:generate"]
-    cmds:
-      - pnpm typecheck
+    cmds: [pnpm typecheck]
 
   lint:biome:
     dir: web
     desc: Run Biome lint
     deps: [deps]
-    cmds:
-      - pnpm lint
+    cmds: [pnpm lint]
 
   lint:biome:fix:
     dir: web
     desc: Run Biome lint
     deps: [deps]
-    cmds:
-      - pnpm lint:fix
+    cmds: [pnpm lint:fix]
+
+  format:
+    dir: web
+    desc: Format web code (Biome + Prettier equivalents)
+    deps: [deps]
+    cmds: [pnpm format]
 
   lint:unsafe:
     dir: web
     desc: Auto-fix Biome issues (unsafe, may change code semantics)
     deps: [deps]
-    cmds:
-      - pnpm lint:unsafe
+    cmds: [pnpm lint:unsafe]
 
   test:
     dir: web
     desc: Run web unit tests (Vitest)
     deps: [deps, ":go:generate"]
-    cmds:
-      - pnpm test --run
+    cmds: [pnpm test --run]
 
   e2e:deps:
     dir: web

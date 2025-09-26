@@ -41,6 +41,26 @@ function safeParseDetails(details: string | undefined | null): Record<string, un
   }
 }
 
+function getAPITokenInfo(log: AuditLogRecord): {
+  hasToken: boolean
+  displayName: string
+  tokenId: number | null
+} {
+  const rawName = typeof log.api_token_name === 'string' ? log.api_token_name.trim() : ''
+  const tokenId = typeof log.api_token_id === 'number' ? log.api_token_id : null
+  let displayName = ''
+  if (rawName !== '') {
+    displayName = rawName
+  } else if (tokenId !== null) {
+    displayName = `Token #${tokenId}`
+  }
+  return {
+    hasToken: displayName !== '' || tokenId !== null,
+    displayName,
+    tokenId,
+  }
+}
+
 function resourceLabelForLog(log: AuditLogRecord): string {
   const details = safeParseDetails(log.details)
   let label = ''
@@ -211,7 +231,6 @@ function renderActionCell(log: AuditLogRecord) {
   )
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI glue code is easier to follow inline.
 export function AuditLogsPane({
   title,
   logs,
@@ -254,7 +273,7 @@ export function AuditLogsPane({
         <Table className="text-sm">
           <TableHeader>
             <TableRow>
-              <TableHead>User</TableHead>
+              <TableHead>Actor</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Action</TableHead>
               <TableHead>Resource Type</TableHead>
@@ -287,6 +306,8 @@ export function AuditLogsPane({
                 return log.status ?? '-'
               })()
 
+              const tokenInfo = getAPITokenInfo(log)
+
               return (
                 <TableRow
                   className="cursor-pointer hover:bg-accent/50"
@@ -294,12 +315,27 @@ export function AuditLogsPane({
                   onClick={() => handleRowClick(log)}
                 >
                   <TableCell>
-                    <div>
-                      <div className="font-medium">{log.user_email ?? '-'}</div>
-                      {log.user_name && (
-                        <div className="text-muted-foreground text-xs">{log.user_name}</div>
-                      )}
-                    </div>
+                    {tokenInfo.hasToken ? (
+                      <div>
+                        <div className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">
+                          API Token
+                        </div>
+                        <div className="font-medium">{tokenInfo.displayName || 'API Token'}</div>
+                        {log.user_email && (
+                          <div className="text-muted-foreground text-xs">
+                            Owner: {log.user_email}
+                            {log.user_name ? ` (${log.user_name})` : ''}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="font-medium">{log.user_email ?? '-'}</div>
+                        {log.user_name && (
+                          <div className="text-muted-foreground text-xs">{log.user_name}</div>
+                        )}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge className={appearance.className} variant={appearance.variant}>
@@ -378,10 +414,38 @@ export function AuditLogsPane({
                 <span className="text-muted-foreground">Timestamp:</span>{' '}
                 {selected.timestamp ? new Date(selected.timestamp).toISOString() : '-'}
               </div>
-              <div>
-                <span className="text-muted-foreground">User:</span> {selected.user_email}{' '}
-                {selected.user_name ? `(${selected.user_name})` : ''}
-              </div>
+              {(() => {
+                const tokenInfo = getAPITokenInfo(selected)
+                if (tokenInfo.hasToken) {
+                  return (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">Token:</span>{' '}
+                        {tokenInfo.displayName || 'API Token'}
+                      </div>
+                      {tokenInfo.tokenId !== null && (
+                        <div>
+                          <span className="text-muted-foreground">Token ID:</span>{' '}
+                          {tokenInfo.tokenId}
+                        </div>
+                      )}
+                      {selected.user_email && (
+                        <div>
+                          <span className="text-muted-foreground">Owner:</span>{' '}
+                          {selected.user_email}{' '}
+                          {selected.user_name ? `(${selected.user_name})` : ''}
+                        </div>
+                      )}
+                    </>
+                  )
+                }
+                return (
+                  <div>
+                    <span className="text-muted-foreground">User:</span> {selected.user_email}{' '}
+                    {selected.user_name ? `(${selected.user_name})` : ''}
+                  </div>
+                )
+              })()}
               <div>
                 <span className="text-muted-foreground">Type:</span> {selected.action_type}
               </div>

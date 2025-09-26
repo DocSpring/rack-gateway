@@ -30,10 +30,11 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 
 	_, err := d.exec(
 		`INSERT INTO audit_logs (
-            user_email, user_name, action_type, action, command, resource, resource_type,
+            user_email, user_name, api_token_id, api_token_name, action_type, action, command, resource, resource_type,
             details, ip_address, user_agent, status, rbac_decision, http_status, response_time_ms, event_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::inet, ?, ?, ?, ?, ?, ?)`,
-		log.UserEmail, log.UserName, log.ActionType, log.Action, log.Command, log.Resource, log.ResourceType,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::inet, ?, ?, ?, ?, ?, ?)`,
+		log.UserEmail, log.UserName, nullableInt64(log.APITokenID), nullableString(log.APITokenName, 150),
+		log.ActionType, log.Action, log.Command, log.Resource, log.ResourceType,
 		log.Details, nullableIP(log.IPAddress), log.UserAgent, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs, log.EventCount,
 	)
 	if err != nil {
@@ -55,6 +56,8 @@ func shouldAggregateAudit(action string) bool {
 
 type auditLogSnapshot struct {
 	ID           int64
+	APITokenID   *int64
+	APITokenName string
 	ActionType   string
 	Action       string
 	Command      string
@@ -72,7 +75,7 @@ type auditLogSnapshot struct {
 
 func (d *Database) tryIncrementAuditLog(log *AuditLog) (bool, error) {
 	row := d.queryRow(
-		`SELECT "id", "action_type", "action", COALESCE("command", ''), COALESCE("resource", ''),
+		`SELECT "id", "api_token_id", "api_token_name", "action_type", "action", COALESCE("command", ''), COALESCE("resource", ''),
 		        COALESCE("resource_type", ''), COALESCE("details", ''), COALESCE(host("ip_address"::inet), ''),
 		        COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
 		        "response_time_ms", "event_count"
@@ -82,8 +85,10 @@ func (d *Database) tryIncrementAuditLog(log *AuditLog) (bool, error) {
 		 LIMIT 1`, log.UserEmail,
 	)
 	var prev auditLogSnapshot
+	var prevTokenID sql.NullInt64
+	var prevTokenName sql.NullString
 	if err := row.Scan(
-		&prev.ID, &prev.ActionType, &prev.Action, &prev.Command, &prev.Resource, &prev.ResourceType,
+		&prev.ID, &prevTokenID, &prevTokenName, &prev.ActionType, &prev.Action, &prev.Command, &prev.Resource, &prev.ResourceType,
 		&prev.Details, &prev.IPAddress, &prev.UserAgent, &prev.Status, &prev.RBACDecision,
 		&prev.HTTPStatus, &prev.ResponseTime, &prev.EventCount,
 	); err != nil {
@@ -91,6 +96,13 @@ func (d *Database) tryIncrementAuditLog(log *AuditLog) (bool, error) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to fetch previous audit log: %w", err)
+	}
+	if prevTokenID.Valid {
+		id := prevTokenID.Int64
+		prev.APITokenID = &id
+	}
+	if prevTokenName.Valid {
+		prev.APITokenName = prevTokenName.String
 	}
 
 	if !shouldAggregateAudit(prev.Action) {
@@ -118,6 +130,12 @@ func (d *Database) tryIncrementAuditLog(log *AuditLog) (bool, error) {
 	if strings.TrimSpace(prev.UserAgent) != strings.TrimSpace(log.UserAgent) {
 		return false, nil
 	}
+	if !equalInt64Ptr(prev.APITokenID, log.APITokenID) {
+		return false, nil
+	}
+	if strings.TrimSpace(prev.APITokenName) != strings.TrimSpace(log.APITokenName) {
+		return false, nil
+	}
 	if !strings.EqualFold(strings.TrimSpace(prev.Status), strings.TrimSpace(log.Status)) {
 		return false, nil
 	}
@@ -134,15 +152,27 @@ func (d *Database) tryIncrementAuditLog(log *AuditLog) (bool, error) {
 	_, err := d.exec(
 		`UPDATE audit_logs
 		 SET timestamp = NOW(), details = ?, command = ?, status = ?, rbac_decision = ?,
-		     http_status = ?, response_time_ms = ?, event_count = event_count + 1
+		     http_status = ?, response_time_ms = ?, event_count = event_count + 1,
+		     api_token_id = COALESCE(?, api_token_id), api_token_name = COALESCE(?, api_token_name)
 		 WHERE id = ?`,
-		log.Details, log.Command, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs, prev.ID,
+		log.Details, log.Command, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs,
+		nullableInt64(log.APITokenID), nullableString(log.APITokenName, 150), prev.ID,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to increment audit log: %w", err)
 	}
 	log.EventCount = prev.EventCount + 1
 	return true, nil
+}
+
+func equalInt64Ptr(a, b *int64) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 func detailsEquivalent(a, b string) bool {
@@ -170,7 +200,7 @@ func normalizeDetails(details string) interface{} {
 // GetAuditLogs retrieves audit logs with optional filters
 func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([]*AuditLog, error) {
 	query := `
-        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "action_type", "action",
+        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
                COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count"
         FROM "audit_logs"
@@ -204,14 +234,23 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	var logs []*AuditLog
 	for rows.Next() {
 		log := new(AuditLog)
+		var tokenID sql.NullInt64
+		var tokenName sql.NullString
 
 		err := rows.Scan(
 			&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName,
-			&log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details,
+			&tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details,
 			&log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan audit log: %w", err)
+		}
+		if tokenID.Valid {
+			id := tokenID.Int64
+			log.APITokenID = &id
+		}
+		if tokenName.Valid {
+			log.APITokenName = tokenName.String
 		}
 
 		logs = append(logs, log)
@@ -277,6 +316,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 		whereClause += ` AND (
             "user_email" ILIKE ? OR
             "user_name" ILIKE ? OR
+            "api_token_name" ILIKE ? OR
             "action" ILIKE ? OR
             "resource" ILIKE ? OR
             "details" ILIKE ? OR
@@ -284,7 +324,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
             "user_agent" ILIKE ?
         )`
 		searchPattern := "%" + filters.Search + "%"
-		for i := 0; i < 7; i++ {
+		for i := 0; i < 8; i++ {
 			args = append(args, searchPattern)
 		}
 	}
@@ -298,7 +338,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 
 	// Get paginated results - build query safely
 	query := `
-        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "action_type", "action",
+        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
                COALESCE("details", ''), COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
                "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count"
@@ -317,8 +357,17 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 	var logs []*AuditLog
 	for rows.Next() {
 		log := new(AuditLog)
-		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount); err != nil {
+		var tokenID sql.NullInt64
+		var tokenName sql.NullString
+		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan audit log: %w", err)
+		}
+		if tokenID.Valid {
+			id := tokenID.Int64
+			log.APITokenID = &id
+		}
+		if tokenName.Valid {
+			log.APITokenName = tokenName.String
 		}
 		logs = append(logs, log)
 	}

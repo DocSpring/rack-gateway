@@ -17,6 +17,10 @@ tasks:
     desc: Run linters, code generation, tests, and build
     deps: [lint:fix, generate:test, build]
 
+  format:
+    desc: Format Go, web, and mock OAuth code
+    deps: [go:format, web:format, mock-oauth:format]
+
   lint:
     desc: Run web + Go linters and typecheck
     deps: [web:lint, go:lint, mock-oauth:lint]

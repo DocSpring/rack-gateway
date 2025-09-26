@@ -3,6 +3,7 @@ package audit
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,6 +101,39 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "app.delete", log.Action)
 		assert.Equal(t, "myapp", log.Resource)
 		assert.Equal(t, 1, log.EventCount)
+	})
+
+	t.Run("LogRequestRecordsAPITokenMetadata", func(t *testing.T) {
+		owner, err := database.CreateUser("token-owner@example.com", "Automation Bot", []string{"admin"})
+		require.NoError(t, err)
+
+		token, err := database.CreateAPIToken(
+			strings.Repeat("a", 64),
+			"CI Deploy",
+			owner.ID,
+			[]string{"convox:build:read"},
+			nil,
+			nil,
+		)
+		require.NoError(t, err)
+
+		req, err := http.NewRequest("GET", "/apps/tokenapp/builds", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("X-User-Name", "Automation Bot")
+		req.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", token.ID))
+		req.Header.Set("X-API-Token-Name", token.Name)
+
+		logger.LogRequest(req, "token-owner@example.com", "production", "allow", 200, 20*time.Millisecond, nil)
+
+		logs, err := database.GetAuditLogs("token-owner@example.com", time.Time{}, 0)
+		require.NoError(t, err)
+		require.Len(t, logs, 1)
+
+		log := logs[0]
+		require.NotNil(t, log.APITokenID)
+		assert.Equal(t, token.ID, *log.APITokenID)
+		assert.Equal(t, token.Name, log.APITokenName)
 	})
 
 }

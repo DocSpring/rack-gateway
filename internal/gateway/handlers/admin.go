@@ -1464,6 +1464,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		h.respondAuditError(c, http.StatusBadRequest, "api_token.create", strings.TrimSpace(req.UserEmail), err.Error(), start, nil)
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
 
 	currentUser := c.GetString("user_email")
 	targetEmail := req.UserEmail
@@ -1493,8 +1494,18 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 
 	resp, err := h.tokenService.GenerateAPIToken(tokenReq)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "api_token.create", targetEmail, "failed to create token", start, map[string]interface{}{"name": req.Name})
-		return
+		details := map[string]interface{}{"name": tokenReq.Name}
+		switch {
+		case errors.Is(err, token.ErrAPITokenNameExists):
+			h.respondAuditError(c, http.StatusBadRequest, "api_token.create", targetEmail, "token name already exists", start, details)
+			return
+		case errors.Is(err, token.ErrAPITokenNameRequired):
+			h.respondAuditError(c, http.StatusBadRequest, "api_token.create", targetEmail, "token name is required", start, details)
+			return
+		default:
+			h.respondAuditError(c, http.StatusInternalServerError, "api_token.create", targetEmail, "failed to create token", start, details)
+			return
+		}
 	}
 
 	h.notifyAPITokenCreated(c, targetEmail, req.Name)
@@ -1661,8 +1672,17 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 
 	if name := strings.TrimSpace(req.Name); name != "" && name != existing.Name {
 		if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
-			h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to update token name", start, nil)
-			return
+			switch {
+			case errors.Is(err, token.ErrAPITokenNameExists):
+				h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "token name already exists", start, map[string]interface{}{"name": name})
+				return
+			case errors.Is(err, token.ErrAPITokenNameRequired):
+				h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "token name is required", start, nil)
+				return
+			default:
+				h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to update token name", start, map[string]interface{}{"name": name})
+				return
+			}
 		}
 		details["name"] = name
 	}

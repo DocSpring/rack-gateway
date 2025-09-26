@@ -30,6 +30,7 @@ type AuthUser struct {
 	Permissions []string        `json:"permissions,omitempty"` // For API token users
 	IsAPIToken  bool            `json:"is_api_token"`
 	TokenID     *int64          `json:"token_id,omitempty"` // For API tokens
+	TokenName   string          `json:"token_name,omitempty"`
 	Session     *db.UserSession `json:"-"`
 }
 
@@ -60,6 +61,22 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 		r.Header.Set("X-User-Name", user.Name)
 		r.Header.Set("X-User-Email", user.Email)
 		r.Header.Set("X-Auth-Source", source)
+		if user.IsAPIToken {
+			if user.TokenID != nil {
+				r.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", *user.TokenID))
+			} else {
+				r.Header.Del("X-API-Token-ID")
+			}
+			tokenName := strings.TrimSpace(user.TokenName)
+			if tokenName != "" {
+				r.Header.Set("X-API-Token-Name", tokenName)
+			} else {
+				r.Header.Del("X-API-Token-Name")
+			}
+		} else {
+			r.Header.Del("X-API-Token-ID")
+			r.Header.Del("X-API-Token-Name")
+		}
 
 		// Note: admin API accepts cookie auth in this environment; endpoints are internal and behind VPN.
 
@@ -221,10 +238,11 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 
 	userResp := &AuthUser{
 		Email:       user.Email,
-		Name:        user.Name + " (API)",
+		Name:        user.Name,
 		Permissions: apiToken.Permissions,
 		IsAPIToken:  true,
 		TokenID:     &apiToken.ID,
+		TokenName:   apiToken.Name,
 	}
 
 	return userResp, nil

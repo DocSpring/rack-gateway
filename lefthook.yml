@@ -22,37 +22,18 @@ pre-commit:
         done
       stage_fixed: true
 
-    go-fmt:
+    go-format:
       glob: "**/*.go"
-      run: gofmt -w {staged_files}
+      run: task go:format
       stage_fixed: true
 
-    go-vet:
+    go-lint:
       glob: "**/*.go"
-      run: go vet ./...
+      run: task go:lint
 
     go-test:
       glob: "**/*.go"
-      run: ./scripts/safe-test.sh -short ./...
-
-    golangci-lint:
-      glob: "**/*.go"
-      run: |
-        files=({staged_files})
-        if [ ${#files[@]} -eq 0 ]; then
-          exit 0
-        fi
-        dirs=$(printf '%s\n' "${files[@]}" | awk '{print "./"$0}' | xargs -n1 dirname | sort -u)
-        targets=()
-        for dir in $dirs; do
-          if [ -d "$dir" ]; then
-            targets+=("$dir")
-          fi
-        done
-        if [ ${#targets[@]} -eq 0 ]; then
-          exit 0
-        fi
-        golangci-lint run "${targets[@]}"
+      run: task go:test
 
     golangci-config-verify:
       glob: ".golangci.yml"

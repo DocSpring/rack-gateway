@@ -74,6 +74,22 @@ func Authenticated(authService *auth.AuthService, rbacManager rbac.RBACManager) 
 		if source != "" {
 			c.Request.Header.Set("X-Auth-Source", source)
 		}
+		if authUser.IsAPIToken {
+			if authUser.TokenID != nil {
+				c.Request.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", *authUser.TokenID))
+			} else {
+				c.Request.Header.Del("X-API-Token-ID")
+			}
+			tokenName := strings.TrimSpace(authUser.TokenName)
+			if tokenName != "" {
+				c.Request.Header.Set("X-API-Token-Name", tokenName)
+			} else {
+				c.Request.Header.Del("X-API-Token-Name")
+			}
+		} else {
+			c.Request.Header.Del("X-API-Token-ID")
+			c.Request.Header.Del("X-API-Token-Name")
+		}
 
 		c.Next()
 	}

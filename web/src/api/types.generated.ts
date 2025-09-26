@@ -2654,6 +2654,8 @@ export interface components {
             action?: string;
             /** @description "convox", "users", "auth" */
             action_type?: string;
+            api_token_id?: number;
+            api_token_name?: string;
             command?: string;
             /** @description JSON string */
             details?: string;

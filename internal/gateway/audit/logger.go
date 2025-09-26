@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,21 +84,28 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 		count = 1
 	}
 	payload := map[string]interface{}{
-		"ts":            time.Now().UTC().Format(time.RFC3339),
-		"user_email":    al.UserEmail,
-		"user_name":     al.UserName,
-		"action_type":   al.ActionType,
-		"action":        al.Action,
-		"resource":      al.Resource,
-		"resource_type": al.ResourceType,
-		"command":       al.Command,
-		"status":        al.Status,
-		"rbac_decision": al.RBACDecision,
-		"http_status":   al.HTTPStatus,
-		"latency_ms":    al.ResponseTimeMs,
-		"ip_address":    al.IPAddress,
-		"user_agent":    al.UserAgent,
-		"event_count":   count,
+		"ts":             time.Now().UTC().Format(time.RFC3339),
+		"user_email":     al.UserEmail,
+		"user_name":      al.UserName,
+		"api_token_name": strings.TrimSpace(al.APITokenName),
+		"action_type":    al.ActionType,
+		"action":         al.Action,
+		"resource":       al.Resource,
+		"resource_type":  al.ResourceType,
+		"command":        al.Command,
+		"status":         al.Status,
+		"rbac_decision":  al.RBACDecision,
+		"http_status":    al.HTTPStatus,
+		"latency_ms":     al.ResponseTimeMs,
+		"ip_address":     al.IPAddress,
+		"user_agent":     al.UserAgent,
+		"event_count":    count,
+	}
+	if al.APITokenID != nil {
+		payload["api_token_id"] = *al.APITokenID
+	}
+	if strings.TrimSpace(al.APITokenName) == "" {
+		delete(payload, "api_token_name")
 	}
 	// Omit verbose request details; method/path are already logged separately
 	if data, err := json.Marshal(payload); err == nil {
@@ -148,9 +156,19 @@ func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision 
 		finalStatus = l.mapHttpStatusToStatus(status)
 	}
 
+	var tokenIDPtr *int64
+	if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
+		if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
+			tokenIDPtr = &parsed
+		}
+	}
+	tokenName := strings.TrimSpace(r.Header.Get("X-API-Token-Name"))
+
 	auditLog := &db.AuditLog{
 		UserEmail:      userEmail,
 		UserName:       userName,
+		APITokenID:     tokenIDPtr,
+		APITokenName:   tokenName,
 		ActionType:     "convox",
 		Action:         action,
 		Resource:       resource,

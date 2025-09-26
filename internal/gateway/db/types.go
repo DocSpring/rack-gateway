@@ -79,6 +79,8 @@ type AuditLog struct {
 	Timestamp      time.Time `json:"timestamp"`
 	UserEmail      string    `json:"user_email"`
 	UserName       string    `json:"user_name,omitempty"`
+	APITokenID     *int64    `json:"api_token_id,omitempty"`
+	APITokenName   string    `json:"api_token_name,omitempty"`
 	ActionType     string    `json:"action_type"` // "convox", "users", "auth"
 	Action         string    `json:"action"`      // e.g., "env.read", "user.create", "auth.failed"
 	Command        string    `json:"command,omitempty"`

@@ -9,6 +9,8 @@
     "start": "pnpm run build && node dist/server.js",
     "dev": "nodemon --watch server.ts --exec \"pnpm exec ts-node --esm server.ts\"",
     "lint": "pnpm exec biome check .",
+    "lint:fix": "pnpm exec biome check --write .",
+    "format": "pnpm exec biome format --write .",
     "typecheck": "pnpm exec tsc -b --noEmit --pretty false"
   },
   "dependencies": {

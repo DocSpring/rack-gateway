@@ -162,6 +162,10 @@ func TestTokenService(t *testing.T) {
 		err = service.UpdateTokenName(resp.APIToken.ID, newName)
 		assert.NoError(t, err)
 
+		// Reject empty name updates
+		err = service.UpdateTokenName(resp.APIToken.ID, "   ")
+		assert.ErrorIs(t, err, ErrAPITokenNameRequired)
+
 		// Verify via list
 		tokens, err := service.ListTokensForUser(user.ID)
 		require.NoError(t, err)
@@ -174,5 +178,29 @@ func TestTokenService(t *testing.T) {
 		}
 		require.NotNil(t, found, "renamed token not found in list")
 		assert.Equal(t, newName, found.Name)
+	})
+
+	t.Run("DuplicateTokenNameRejected", func(t *testing.T) {
+		name := "Deploy Token"
+		req := &APITokenRequest{
+			Name:        name,
+			UserID:      user.ID,
+			Permissions: DefaultCICDPermissions(),
+		}
+		_, err := service.GenerateAPIToken(req)
+		require.NoError(t, err)
+
+		_, err = service.GenerateAPIToken(req)
+		assert.ErrorIs(t, err, ErrAPITokenNameExists)
+	})
+
+	t.Run("EmptyTokenNameRejected", func(t *testing.T) {
+		req := &APITokenRequest{
+			Name:        "   ",
+			UserID:      user.ID,
+			Permissions: DefaultCICDPermissions(),
+		}
+		_, err := service.GenerateAPIToken(req)
+		assert.ErrorIs(t, err, ErrAPITokenNameRequired)
 	})
 }

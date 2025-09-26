@@ -2232,6 +2232,12 @@
                     "description": "\"convox\", \"users\", \"auth\"",
                     "type": "string"
                 },
+                "api_token_id": {
+                    "type": "integer"
+                },
+                "api_token_name": {
+                    "type": "string"
+                },
                 "command": {
                     "type": "string"
                 },

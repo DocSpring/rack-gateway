@@ -108,9 +108,13 @@ tasks:
       - ./scripts/safe-test.sh -v -race -short -timeout 30s ./cmd/gateway/... ./cmd/cli/... ./cmd/mock-convox/... ./internal/gateway/... ./internal/integration/...
       - ./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
+  format:
+    desc: Format Go code with gofmt
+    cmds:
+      - go fmt ./...
+
   lint:
-    aliases: [lint:fix]
-    desc: Run Go vet/fmt/staticcheck
+    desc: Run Go linters (check mode)
     deps: [deps]
     sources:
       - Taskfile.go.yml
@@ -119,6 +123,17 @@ tasks:
       - internal/**/*.go
     cmds:
       - golangci-lint run ./...
+
+  lint:fix:
+    desc: Auto-fix Go formatting and lint issues
+    deps: [deps, format]
+    sources:
+      - Taskfile.go.yml
+      - go.*
+      - cmd/**/*.go
+      - internal/**/*.go
+    cmds:
+      - golangci-lint run --fix ./...
 
   e2e:dev:
     aliases: [e2e]

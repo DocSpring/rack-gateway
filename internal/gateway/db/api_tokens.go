@@ -124,6 +124,25 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 	return &token, nil
 }
 
+// APITokenNameExists reports whether a token name is already taken.
+func (d *Database) APITokenNameExists(name string, excludeID int64) (bool, error) {
+	query := "SELECT 1 FROM api_tokens WHERE name = ?"
+	args := []interface{}{name}
+	if excludeID > 0 {
+		query += " AND id <> ?"
+		args = append(args, excludeID)
+	}
+	var exists int
+	err := d.queryRow(query, args...).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check token name: %w", err)
+	}
+	return true, nil
+}
+
 // ListAPITokensByUser returns all API tokens for a user
 func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 	rows, err := d.query(

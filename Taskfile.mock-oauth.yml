@@ -9,8 +9,7 @@ tasks:
       - package.json
       - pnpm-lock.yaml
       - ../Taskfile.mock-oauth.yml
-    cmds:
-      - pnpm install
+    cmds: [pnpm install]
 
   build:
     dir: mock-oauth
@@ -24,38 +23,42 @@ tasks:
       - "*.ts"
     generates:
       - dist/**/*
-    cmds:
-      - pnpm build
+    cmds: [pnpm build]
 
   lint:
     desc: Run TypeScript typecheck and Biome lint
     deps: [lint:typecheck, lint:biome]
 
+  lint:fix:
+    desc: Run TypeScript typecheck and auto-fix Biome issues (safe)
+    deps: [lint:typecheck, lint:biome:fix]
+
   lint:typecheck:
     dir: mock-oauth
     desc: Run TypeScript type checking
     deps: [deps]
-    cmds:
-      - pnpm typecheck
+    cmds: [pnpm typecheck]
 
   lint:biome:
     dir: mock-oauth
     desc: Run Biome lint
     deps: [deps]
-    cmds:
-      - pnpm exec biome check .
+    cmds: [pnpm exec biome check .]
 
   lint:biome:fix:
     dir: mock-oauth
-    aliases: [lint:fix]
     desc: Lint mock OAuth server and apply safe fixes
     deps: [deps]
-    cmds:
-      - pnpm exec biome check . --write
+    cmds: [pnpm exec biome check . --write]
+
+  format:
+    dir: mock-oauth
+    desc: Format mock OAuth code (Biome)
+    deps: [deps]
+    cmds: [pnpm exec biome format --write .]
 
   dev:
     dir: mock-oauth
     desc: Run mock OAuth server in watch mode
     deps: [deps]
-    cmds:
-      - pnpm dev
+    cmds: [pnpm dev]
