@@ -62,19 +62,6 @@ func (h *APIHandler) primaryRack() (config.RackConfig, bool) {
 	return config.RackConfig{}, false
 }
 
-func (h *APIHandler) isMFARequired(user *db.User) bool {
-	if user == nil {
-		return false
-	}
-	if h.mfaSettings == nil {
-		return true
-	}
-	if h.mfaSettings.RequireAllUsers {
-		return true
-	}
-	return user.MFAEnforcedAt != nil
-}
-
 func (h *APIHandler) stepUpWindow() time.Duration {
 	if h.mfaSettings != nil && h.mfaSettings.StepUpWindowMinutes > 0 {
 		return time.Duration(h.mfaSettings.StepUpWindowMinutes) * time.Minute
@@ -224,8 +211,8 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 			response.Name = dbUser.Name
 		}
 		response.MFAEnrolled = dbUser.MFAEnrolled
-		response.MFARequired = h.isMFARequired(dbUser)
-	} else if h.mfaSettings != nil && h.mfaSettings.RequireAllUsers {
+	}
+	if shouldEnforceMFA(h.mfaSettings, dbUser) {
 		response.MFARequired = true
 	}
 	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && authUser.Session != nil && authUser.Session.RecentStepUpAt != nil {

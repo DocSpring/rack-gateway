@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
-import { WebRoute } from '@/lib/routes'
+import { authenticator } from 'otplib'
+import { APIRoute, WebRoute } from '@/lib/routes'
 import { expireStepUpForAllSessions, resetMfaForUser } from './db'
 import { expect } from './fixtures'
 
@@ -41,6 +42,8 @@ export async function login(page: Page, options: LoginOptions = {}) {
       return cookies.some((cookie) => cookie.name === 'session_token')
     })
     .toBeTruthy()
+
+  await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
 }
 
 export async function resetMfaFor(email: string) {
@@ -49,4 +52,28 @@ export async function resetMfaFor(email: string) {
 
 export async function clearStepUpSessions() {
   await expireStepUpForAllSessions()
+}
+
+export async function ensureMfaEnrollment(page: Page) {
+  const startResp = await page.request.post(APIRoute('auth/mfa/enroll/totp/start'))
+  if (startResp.status() >= 400) {
+    // Assume MFA is already enrolled if the server rejects the start request.
+    return
+  }
+
+  const startData = (await startResp.json()) as { method_id: number; secret: string }
+  if (!(startData?.method_id && startData?.secret)) {
+    return
+  }
+
+  const code = authenticator.generate(startData.secret)
+  await page.request.post(APIRoute('auth/mfa/enroll/totp/confirm'), {
+    data: {
+      method_id: startData.method_id,
+      code,
+      trust_device: true,
+    },
+  })
+
+  await page.reload({ waitUntil: 'networkidle' })
 }

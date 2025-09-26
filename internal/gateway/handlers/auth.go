@@ -113,34 +113,50 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 
 func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	state := strings.TrimSpace(c.Query("state"))
-	redirectBase := WebRoute("/cli/auth/approve")
+	challengeRoute := WebRoute("auth/mfa/challenge")
+	buildChallengeURL := func(params url.Values) string {
+		if params == nil {
+			params = url.Values{}
+		}
+		params.Set("channel", "cli")
+		return fmt.Sprintf("%s?%s", challengeRoute, params.Encode())
+	}
 
 	if state == "" {
-		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=missing_state")
+		params := url.Values{}
+		params.Set("error", "missing_state")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
 		return
 	}
 	if h.database == nil {
-		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=service_unavailable")
+		params := url.Values{}
+		params.Set("error", "service_unavailable")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
 		return
 	}
 
 	record, err := h.database.GetCLILoginState(state)
 	if err != nil {
-		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=load_failure")
+		params := url.Values{}
+		params.Set("error", "load_failure")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
 		return
 	}
 	if record == nil {
-		c.Redirect(http.StatusTemporaryRedirect, redirectBase+"?error=expired")
+		params := url.Values{}
+		params.Set("error", "expired")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
 		return
 	}
 
 	if record.MFAVerifiedAt.Valid {
-		c.Redirect(http.StatusTemporaryRedirect, WebRoute("/cli/auth/success"))
+		c.Redirect(http.StatusTemporaryRedirect, WebRoute("cli/auth/success"))
 		return
 	}
 
-	target := fmt.Sprintf("%s?state=%s", redirectBase, url.QueryEscape(state))
-	c.Redirect(http.StatusTemporaryRedirect, target)
+	params := url.Values{}
+	params.Set("state", state)
+	c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
 }
 
 func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
@@ -176,7 +192,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 	if record.MFAVerifiedAt.Valid {
-		c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("/cli/auth/success")})
+		c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
 		return
 	}
 
@@ -213,7 +229,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("/cli/auth/success")})
+	c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
 }
 
 // CLILoginComplete godoc
@@ -298,8 +314,9 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		}
 	}
 
+	enforceMFA := shouldEnforceMFA(h.mfaSettings, userRecord)
 	mfaRequired := h.isMFARequired(userRecord) && session.MFAVerifiedAt == nil
-	enrollmentRequired := h.isMFARequired(userRecord) && !userRecord.MFAEnrolled
+	enrollmentRequired := enforceMFA && !userRecord.MFAEnrolled
 	name := userRecord.Name
 	if record.LoginName.Valid && strings.TrimSpace(record.LoginName.String) != "" {
 		name = record.LoginName.String
@@ -409,7 +426,15 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	}
 	h.setSessionCookie(c, sessionToken)
 
-	// Audit successful login
+	requireMFA := h.isMFARequired(userRecord)
+	if requireMFA && session.MFAVerifiedAt == nil {
+		params := url.Values{}
+		params.Set("channel", "web")
+		params.Set("redirect", DefaultWebRoute)
+		challengeURL := fmt.Sprintf("%s?%s", WebRoute("auth/mfa/challenge"), params.Encode())
+		c.Redirect(http.StatusFound, challengeURL)
+		return
+	}
 	if h.database != nil {
 		if err := audit.LogDB(h.database, &db.AuditLog{
 			UserEmail:    resp.Email,
@@ -877,7 +902,7 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 	}
 	response := MFAStatusResponse{
 		Enrolled:              userRecord.MFAEnrolled,
-		Required:              h.isMFARequired(userRecord),
+		Required:              shouldEnforceMFA(h.mfaSettings, userRecord),
 		Methods:               methodResp,
 		TrustedDevices:        trustedResp,
 		BackupCodes:           summary,
@@ -1208,23 +1233,7 @@ func (h *AuthHandler) clearTrustedDeviceCookie(c *gin.Context) {
 }
 
 func (h *AuthHandler) isMFARequired(user *db.User) bool {
-	if user == nil {
-		return false
-	}
-	if h.mfaSettings == nil {
-		return true
-	}
-	if h.mfaSettings.RequireAllUsers {
-		return true
-	}
-	return h.isMFAEnforcedForUser(user)
-}
-
-func (h *AuthHandler) isMFAEnforcedForUser(user *db.User) bool {
-	if user == nil {
-		return false
-	}
-	return user.MFAEnforcedAt != nil
+	return isMFAChallengeRequired(h.mfaSettings, user)
 }
 
 func (h *AuthHandler) stepUpWindow() time.Duration {

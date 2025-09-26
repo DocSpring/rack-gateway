@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { login } from './helpers'
+import { ensureMfaEnrollment, login } from './helpers'
 
 function extractAlias(label: string | null): string {
   if (!label) return 'default'
@@ -12,8 +12,10 @@ function extractAlias(label: string | null): string {
 test.describe('Configure CLI dialog', () => {
   test('shows rack alias in login instructions', async ({ page }) => {
     await login(page)
-
-    const rackText = await page.locator('text=Rack:').first().textContent()
+    await ensureMfaEnrollment(page)
+    const rackTextLocator = page.locator('text=Rack:').first()
+    await rackTextLocator.waitFor({ state: 'visible' })
+    const rackText = await rackTextLocator.textContent()
     const rackAlias = extractAlias(rackText)
 
     await page.getByRole('button', { name: /Configure CLI/i }).click()

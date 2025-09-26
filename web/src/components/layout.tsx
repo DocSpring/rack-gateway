@@ -24,6 +24,7 @@ type NavigationItem = {
   icon: LucideIcon
   href?: string
   onSelect?: () => void
+  disabled?: boolean
 }
 
 const baseNavigation: NavigationItem[] = [
@@ -78,6 +79,8 @@ export function Layout() {
   }, [location.pathname])
   const [showCliDialog, setShowCliDialog] = useState(false)
 
+  const needsMfaEnrollment = Boolean(user?.mfaRequired && !user?.mfaEnrolled)
+
   const rackAlias = user?.rack?.alias ?? user?.rack?.name ?? 'default'
   const gatewayOrigin = useMemo(() => {
     try {
@@ -102,8 +105,17 @@ export function Layout() {
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
     }
 
+    if (needsMfaEnrollment) {
+      return nav.map((item) => {
+        if (item.href && item.href !== '/account/security') {
+          return { ...item, disabled: true }
+        }
+        return item
+      })
+    }
+
     return nav
-  }, [user?.roles])
+  }, [needsMfaEnrollment, user?.roles])
 
   const currentUserHref = useMemo(() => {
     if (!user?.email) {
@@ -113,8 +125,12 @@ export function Layout() {
   }, [user?.email])
 
   // Declarative redirect: when at layout root, go to Rack
+  if (needsMfaEnrollment && pathname !== '/account/security') {
+    return <Navigate replace to="/account/security" />
+  }
+
   if (pathname === '/') {
-    return <Navigate replace to="/rack" />
+    return <Navigate replace to={needsMfaEnrollment ? '/account/security' : '/rack'} />
   }
 
   return (
@@ -146,7 +162,8 @@ export function Layout() {
               'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
               isActive
                 ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              item.disabled && 'pointer-events-none opacity-50'
             )
 
             if (item.href) {
@@ -160,7 +177,12 @@ export function Layout() {
 
             return (
               <button
-                className={cn(itemClassName, 'w-full cursor-pointer')}
+                className={cn(
+                  itemClassName,
+                  'w-full cursor-pointer',
+                  item.disabled && 'cursor-not-allowed'
+                )}
+                disabled={item.disabled}
                 key={item.name}
                 onClick={item.onSelect}
                 type="button"
@@ -219,6 +241,14 @@ export function Layout() {
 
       {/* Main content */}
       <div className="flex-1 overflow-auto">
+        {needsMfaEnrollment ? (
+          <div className="bg-destructive text-destructive-foreground">
+            <div className="px-6 py-3 font-semibold text-sm">
+              Multi-factor authentication is required before you can access the rest of the app.
+              Visit <span className="underline">Account Security</span> to finish setup.
+            </div>
+          </div>
+        ) : null}
         <Outlet />
       </div>
 

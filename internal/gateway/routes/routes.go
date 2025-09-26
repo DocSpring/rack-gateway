@@ -217,5 +217,9 @@ func Setup(router *gin.Engine, cfg *Config) {
 	}
 
 	// Catch-all: Proxy to Convox (CLI only, no cookie auth)
-	router.NoRoute(middleware.CLIOnly(cfg.AuthService), proxyHandler.ProxyToRack)
+	router.NoRoute(
+		middleware.CLIOnly(cfg.AuthService),
+		middleware.RequireMFAEnrollment(cfg.Database, cfg.MFASettings),
+		proxyHandler.ProxyToRack,
+	)
 }

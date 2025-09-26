@@ -9,6 +9,9 @@ export type User = {
   name: string
   roles: string[]
   rack?: { name: string; alias?: string; host: string }
+  mfaEnrolled?: boolean
+  mfaRequired?: boolean
+  recentStepUpExpiresAt?: string | null
 }
 
 export type AuthState = {

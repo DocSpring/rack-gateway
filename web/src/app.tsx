@@ -21,11 +21,11 @@ import { AppReleasesPage } from './pages/app-releases-page'
 import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
-import { CLIAuthApprovePage } from './pages/cli-auth-approve-page'
 import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
 import { InstancesPage } from './pages/instances-page'
 import { LoginErrorPage } from './pages/login-error-page'
 import { LoginPage } from './pages/login-page'
+import { MFAChallengePage } from './pages/mfa-challenge-page'
 import { RackPage } from './pages/rack-page'
 import { SettingsPage } from './pages/settings-page'
 import { TokensPage } from './pages/tokens-page'
@@ -64,10 +64,10 @@ function buildRouteTree() {
     component: LoginErrorPage,
   })
 
-  const cliAuthApproveRoute = createRoute({
+  const mfaChallengeRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: 'cli/auth/approve',
-    component: CLIAuthApprovePage,
+    path: 'auth/mfa/challenge',
+    component: MFAChallengePage,
   })
   const cliAuthSuccessRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -187,7 +187,7 @@ function buildRouteTree() {
     loginRoute,
     callbackRoute,
     loginErrorRoute,
-    cliAuthApproveRoute,
+    mfaChallengeRoute,
     cliAuthSuccessRoute,
     layoutRoute.addChildren([
       rackRoute,

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { User } from '../lib/auth'
 import { authService } from '../lib/auth'
 
@@ -9,6 +9,7 @@ type AuthContextType = {
   isAuthenticated: boolean
   login: (rack?: string) => Promise<void>
   logout: () => void
+  refresh: () => Promise<User | null>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -44,22 +45,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  const fetchUser = useCallback(async (options: { suppressAuthError?: boolean } = {}) => {
+    const currentUser = await authService.getCurrentUser(options)
+    setUser(currentUser)
+    return currentUser
+  }, [])
+
   useEffect(() => {
     // Check if user is already logged in
     const suppressAuthError = isLoginRoute()
-    authService
-      .getCurrentUser({ suppressAuthError })
-      .then((currentUser) => {
-        setUser(currentUser)
-      })
+    fetchUser({ suppressAuthError })
       .catch(() => {
-        // Not logged in or token expired
-        setUser(null)
+        /* swallow fetch errors; getCurrentUser already suppresses 401 */
       })
       .finally(() => {
         setIsLoading(false)
       })
-  }, [])
+  }, [fetchUser])
 
   const login = async (rack?: string) => {
     await authService.startLogin(rack)
@@ -70,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  const refresh = useCallback(async () => fetchUser({ suppressAuthError: true }), [fetchUser])
+
   return (
     <AuthContext.Provider
       value={{
@@ -78,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         login,
         logout,
+        refresh,
       }}
     >
       {children}

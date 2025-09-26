@@ -21,6 +21,7 @@ export type ConfirmDeleteDialogProps = {
   busy?: boolean
   confirmText?: string
   confirmButtonText?: string
+  busyText?: string
   inputLabel?: string
   inputPlaceholder?: string
   inputId?: string
@@ -37,6 +38,7 @@ export function ConfirmDeleteDialog({
   busy = false,
   confirmText = 'DELETE',
   confirmButtonText = 'Delete',
+  busyText,
   inputLabel = 'Confirmation',
   inputPlaceholder,
   inputId = 'confirm-delete-input',
@@ -58,6 +60,7 @@ export function ConfirmDeleteDialog({
   }, [confirmText, inputPlaceholder])
 
   const disabled = busy || normalize(value) !== normalizedConfirm
+  const confirmBusyLabel = busyText ?? `${confirmButtonText}...`
 
   const handleConfirm = () => {
     if (disabled) {
@@ -93,7 +96,7 @@ export function ConfirmDeleteDialog({
             Cancel
           </Button>
           <Button disabled={disabled} onClick={handleConfirm} variant="destructive">
-            {busy ? 'Deleting...' : confirmButtonText}
+            {busy ? confirmBusyLabel : confirmButtonText}
           </Button>
         </DialogFooter>
       </DialogContent>

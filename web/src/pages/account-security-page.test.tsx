@@ -20,6 +20,18 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   useNavigate: () => vi.fn(),
+  useLocation: () => ({
+    pathname: '/account/security',
+    search: '',
+    hash: '',
+    params: {},
+  }),
+}))
+
+vi.mock('@/contexts/auth-context', () => ({
+  useAuth: () => ({
+    refresh: vi.fn().mockResolvedValue(null),
+  }),
 }))
 
 vi.mock('@/components/ui/use-toast', () => ({

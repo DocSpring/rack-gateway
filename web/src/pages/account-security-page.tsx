@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from '@tanstack/react-router'
 import { isAxiosError } from 'axios'
 import QRCode from 'qrcode'
 import { useEffect, useMemo, useState } from 'react'
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
+import { useAuth } from '@/contexts/auth-context'
 import {
   type BackupCodesResponse,
   confirmTOTPEnrollment,
@@ -29,6 +31,8 @@ import {
   startTOTPEnrollment,
   verifyMFA,
 } from '@/lib/api'
+import { normalizeRedirectPath } from '@/lib/navigation'
+import { WebRoute } from '@/lib/routes'
 
 type EnrollmentState = StartTOTPEnrollmentResponse & {
   qrDataUrl?: string | null
@@ -67,6 +71,8 @@ function formatCodeForDownload(codes: string[]): string {
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: MFA management page coordinates multiple flows.
 export function AccountSecurityPage() {
   const queryClient = useQueryClient()
+  const location = useLocation()
+  const { refresh: refreshUser } = useAuth()
   const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null)
   const [verificationCode, setVerificationCode] = useState('')
   const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
@@ -74,10 +80,16 @@ export function AccountSecurityPage() {
   const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(null)
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [stepUpCode, setStepUpCode] = useState('')
-  const [stepUpTrustDevice, setStepUpTrustDevice] = useState(false)
+  const [stepUpTrustDevice, setStepUpTrustDevice] = useState(true)
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [disableDialogOpen, setDisableDialogOpen] = useState(false)
   const [disableAllPending, setDisableAllPending] = useState(false)
+  const [autoPrompted, setAutoPrompted] = useState(false)
+
+  const searchParams = useMemo(() => new URLSearchParams(location.search ?? ''), [location.search])
+  const promptMfa = searchParams.get('mfa') === 'verify'
+  const redirectParam = searchParams.get('redirect')
+  const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
 
   const {
     data: status,
@@ -145,6 +157,9 @@ export function AccountSecurityPage() {
       setVerificationCode('')
       setTrustEnrollmentDevice(true)
       invalidateStatus()
+      refreshUser().catch(() => {
+        /* noop */
+      })
     },
     onError: (error) => {
       toast.error(extractErrorMessage(error))
@@ -156,6 +171,9 @@ export function AccountSecurityPage() {
     onSuccess: () => {
       toast.success('MFA method removed')
       invalidateStatus()
+      refreshUser().catch(() => {
+        /* noop */
+      })
     },
     onError: (error) => {
       toast.error(extractErrorMessage(error))
@@ -193,7 +211,7 @@ export function AccountSecurityPage() {
       toast.success('MFA verification successful')
       setStepUpOpen(false)
       setStepUpCode('')
-      setStepUpTrustDevice(false)
+      setStepUpTrustDevice(true)
       setPendingAction(null)
       await invalidateStatus()
       if (action) {
@@ -201,6 +219,14 @@ export function AccountSecurityPage() {
           await action()
         } catch (error) {
           toast.error(extractErrorMessage(error))
+        }
+        return
+      }
+      if (promptMfa && redirectTarget) {
+        const targetPath = redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget
+        const absolute = WebRoute(targetPath)
+        if (typeof window !== 'undefined') {
+          window.location.assign(absolute)
         }
       }
     },
@@ -218,7 +244,7 @@ export function AccountSecurityPage() {
     }
     setPendingAction(() => action)
     setStepUpCode('')
-    setStepUpTrustDevice(false)
+    setStepUpTrustDevice(true)
     setStepUpOpen(true)
   }
 
@@ -261,6 +287,32 @@ export function AccountSecurityPage() {
       toast.error('Unable to copy backup codes')
     }
   }
+
+  useEffect(() => {
+    if (
+      promptMfa &&
+      !autoPrompted &&
+      status?.required &&
+      status?.enrolled &&
+      needsStepUp &&
+      !isLoading &&
+      !isFetching &&
+      !verifyMutation.isPending
+    ) {
+      setAutoPrompted(true)
+      setStepUpTrustDevice(true)
+      setStepUpOpen(true)
+    }
+  }, [
+    promptMfa,
+    autoPrompted,
+    status?.required,
+    status?.enrolled,
+    needsStepUp,
+    isLoading,
+    isFetching,
+    verifyMutation.isPending,
+  ])
 
   const handleDisableAllMfa = () => {
     if (methods.length === 0) {
@@ -318,8 +370,9 @@ export function AccountSecurityPage() {
           </CardHeader>
           <CardContent className="flex-1 space-y-7">
             {status?.required && !status.enrolled ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
-                MFA is required. Enable it before accessing sensitive operations.
+              <div className="rounded-md border border-destructive bg-destructive/10 p-4 font-medium text-destructive-foreground text-sm">
+                Multi-factor authentication is required for all gateway users. Enable MFA now to
+                restore access to the CLI and the rest of the web console.
               </div>
             ) : null}
             {status?.enrolled ? (
@@ -640,9 +693,14 @@ export function AccountSecurityPage() {
 
       <ConfirmDeleteDialog
         busy={disableAllPending || deleteMethodMutation.isPending}
+        busyText="Disabling..."
         confirmButtonText="Disable MFA"
         confirmText="DISABLE"
-        description={<>Type DISABLE to remove all registered authenticators and turn off MFA for your account.</>}
+        description={
+          <>
+            Type DISABLE to remove all registered authenticators and turn off MFA for your account.
+          </>
+        }
         inputId="confirm-disable-mfa"
         onConfirm={handleDisableAllMfa}
         onOpenChange={setDisableDialogOpen}
@@ -655,7 +713,7 @@ export function AccountSecurityPage() {
           setStepUpOpen(open)
           if (!open) {
             setStepUpCode('')
-            setStepUpTrustDevice(false)
+            setStepUpTrustDevice(true)
             if (!verifyMutation.isPending) {
               setPendingAction(null)
             }

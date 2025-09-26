@@ -34,6 +34,11 @@ async function completeStepUp(page: Page, secret: string) {
   const dialog = page.getByRole('dialog', { name: /MFA verification required/i })
   await expect(dialog).toBeVisible()
 
+  const trustCheckbox = dialog.getByLabel('Trust this browser for 30 days')
+  if (await trustCheckbox.isChecked()) {
+    await trustCheckbox.uncheck()
+  }
+
   const code = authenticator.generate(secret)
   await dialog.getByLabel('Verification code').fill(code)
   await dialog.getByRole('button', { name: /^Verify$/ }).click()
@@ -59,7 +64,7 @@ test.describe('Account security', () => {
     await expect(mfaCard.getByText('Enabled', { exact: true })).toHaveCount(0)
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled()
-    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toBeDisabled()
+    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0)
     const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
     await expect(methodsCard.getByText('No MFA methods configured.', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
@@ -91,7 +96,7 @@ test.describe('Account security', () => {
     await expect(methodRow.getByText('TOTP')).toBeVisible()
 
     const backupCard = cardByTitle(page, 'Backup Codes').first()
-    await expect(backupCard.getByText('Unused codes:', { exact: false })).toBeVisible()
+    await expect(backupCard.getByText('Unused codes', { exact: false })).toBeVisible()
 
     const trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
     await expect(trustedDevicesCard.getByRole('button', { name: /^Revoke$/ })).toBeVisible()
@@ -117,19 +122,18 @@ test.describe('Account security', () => {
     await revokeButton.click()
     await completeStepUp(page, secret)
     await revokeResponsePromise
-    await expect(
-      trustedDevicesCard.getByText('No trusted devices on file.', { exact: true })
-    ).toBeVisible()
+    await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0)
 
     await requireStepUp(page)
     const deleteResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/methods/') && response.request().method() === 'DELETE'
     )
-    page.once('dialog', async (dialog) => {
-      await dialog.accept()
-    })
     await page.getByRole('button', { name: /^Disable MFA$/ }).click()
+    const disableDialog = page.getByRole('dialog', { name: 'Disable MFA' })
+    await expect(disableDialog).toBeVisible()
+    await disableDialog.getByLabel('Confirmation').fill('DISABLE')
+    await disableDialog.getByRole('button', { name: 'Disable MFA' }).click()
     await completeStepUp(page, secret)
     await deleteResponsePromise
     await expect(page.getByText('Disabled', { exact: true })).toBeVisible()

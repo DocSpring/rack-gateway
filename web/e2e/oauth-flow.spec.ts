@@ -1,5 +1,6 @@
 import { APIRoute, WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
+import { ensureMfaEnrollment } from './helpers'
 
 test('full OAuth login flow succeeds and /me returns user', async ({ page }) => {
   // Hit login
@@ -33,7 +34,10 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
     timeout: 20_000,
   })
 
-  // Land on the protected area (Rack page)
+  await ensureMfaEnrollment(page)
+
+  // Navigate to the Rack page now that enrollment is complete
+  await page.goto(WebRoute('rack'))
   await expect(page.getByRole('heading', { name: /Rack/i })).toBeVisible({ timeout: 10_000 })
 
   // Navigate to Users and ensure it renders without crashing
