@@ -628,7 +628,6 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 	var loginResp *LoginResponse
 	deadline := time.Now().Add(2 * time.Minute)
 	pendingNotified := false
-	var lastErr error
 	for {
 		resp, err := completeLogin(gatewayURL, startResp.State, startResp.CodeVerifier, deviceInfo)
 		if err == nil {
@@ -641,12 +640,9 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 				pendingNotified = true
 			}
 		} else {
-			lastErr = err
+			return fmt.Errorf("login failed: %w", err)
 		}
 		if time.Now().After(deadline) {
-			if lastErr != nil {
-				return fmt.Errorf("login did not complete before timeout: %w", lastErr)
-			}
 			return fmt.Errorf("login did not complete before timeout")
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -804,7 +800,7 @@ func completeLogin(gatewayURL, state, codeVerifier string, device DeviceInfo) (*
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("login callback failed: %s", renderGatewayError(body))
+		return nil, fmt.Errorf("%s", renderGatewayError(body))
 	}
 
 	var result LoginResponse

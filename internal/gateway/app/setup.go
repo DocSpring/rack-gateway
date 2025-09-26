@@ -53,9 +53,17 @@ func (a *App) initializeServices() error {
 	}
 	a.MFASettings = mfaSettings
 
-	issuer := strings.TrimSpace(a.Config.Domain)
-	if issuer == "" {
-		issuer = "Convox Gateway"
+	issuerBase := strings.TrimSpace(a.Config.Domain)
+	if issuerBase == "" {
+		issuerBase = "Convox Gateway"
+	}
+	enforcedRackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
+	if enforcedRackAlias == "" {
+		enforcedRackAlias = strings.TrimSpace(os.Getenv("RACK"))
+	}
+	issuer := issuerBase
+	if enforcedRackAlias != "" {
+		issuer = fmt.Sprintf("%s (%s)", issuerBase, enforcedRackAlias)
 	}
 	trustedDeviceTTL := time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
 	stepUpWindow := time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute

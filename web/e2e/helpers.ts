@@ -10,10 +10,16 @@ export type LoginOptions = {
    * Defaults to "Admin User" when omitted.
    */
   userCardText?: string
+  /**
+   * When true (default), ensure the authenticated user has completed MFA enrollment
+   * so gated routes remain accessible during tests. Disable for scenarios that
+   * explicitly exercise the enrollment UX.
+   */
+  autoEnrollMfa?: boolean
 }
 
 export async function login(page: Page, options: LoginOptions = {}) {
-  const { userCardText = 'Admin User' } = options
+  const { userCardText = 'Admin User', autoEnrollMfa = true } = options
 
   await page.goto(WebRoute('login'))
   const btn = page
@@ -44,6 +50,10 @@ export async function login(page: Page, options: LoginOptions = {}) {
     .toBeTruthy()
 
   await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
+
+  if (autoEnrollMfa) {
+    await ensureMfaEnrollment(page)
+  }
 }
 
 export async function resetMfaFor(email: string) {
@@ -55,10 +65,45 @@ export async function clearStepUpSessions() {
 }
 
 export async function ensureMfaEnrollment(page: Page) {
-  const startResp = await page.request.post(APIRoute('auth/mfa/enroll/totp/start'))
+  await page
+    .waitForFunction(
+      () => {
+        const meta = document.querySelector<HTMLMetaElement>('meta[name="cgw-csrf-token"]')
+        const value = meta?.content?.trim()
+        return Boolean(value && value !== 'CGW_CSRF_TOKEN')
+      },
+      undefined,
+      { timeout: 5000 }
+    )
+    .catch(() => {})
+
+  const csrfToken = await page.evaluate(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="cgw-csrf-token"]')
+    const value = meta?.content?.trim()
+    if (!value || value === 'CGW_CSRF_TOKEN') {
+      return ''
+    }
+    return value
+  })
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  }
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken
+  }
+
+  const startResp = await page.request.post(APIRoute('auth/mfa/enroll/totp/start'), {
+    headers,
+  })
   if (startResp.status() >= 400) {
-    // Assume MFA is already enrolled if the server rejects the start request.
-    return
+    const detail = await startResp.text().catch(() => '')
+    if (startResp.status() === 409) {
+      return
+    }
+    throw new Error(
+      `failed to start MFA enrollment (${startResp.status()}): ${detail || 'no response body'}`
+    )
   }
 
   const startData = (await startResp.json()) as { method_id: number; secret: string }
@@ -67,13 +112,32 @@ export async function ensureMfaEnrollment(page: Page) {
   }
 
   const code = authenticator.generate(startData.secret)
-  await page.request.post(APIRoute('auth/mfa/enroll/totp/confirm'), {
+  const confirmResp = await page.request.post(APIRoute('auth/mfa/enroll/totp/confirm'), {
     data: {
       method_id: startData.method_id,
       code,
       trust_device: true,
     },
+    headers,
   })
 
+  if (confirmResp.status() >= 400) {
+    const detail = await confirmResp.text().catch(() => '')
+    throw new Error(
+      `failed to confirm MFA enrollment (${confirmResp.status()}): ${detail || 'no response body'}`
+    )
+  }
+
   await page.reload({ waitUntil: 'networkidle' })
+
+  await expect
+    .poll(async () => {
+      const statusResp = await page.request.get(APIRoute('auth/mfa/status'))
+      if (statusResp.status() >= 400) {
+        return false
+      }
+      const payload = (await statusResp.json()) as { enrolled?: boolean }
+      return payload?.enrolled === true
+    })
+    .toBe(true)
 }

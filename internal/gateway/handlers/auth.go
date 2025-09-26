@@ -31,6 +31,7 @@ type OAuthProvider interface {
 const webOAuthStateCookie = "cgw_oauth_state"
 const webOAuthStateTTL = 5 * time.Minute
 const trustedDeviceCookie = "cgw_trusted_device"
+const cliEnrollmentErrorMessage = "You must set up multi-factor authentication before you can continue using the CLI."
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
@@ -149,8 +150,115 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		return
 	}
 
+	if record.LoginError.Valid {
+		params := url.Values{}
+		params.Set("error", strings.TrimSpace(record.LoginError.String))
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		return
+	}
+
 	if record.MFAVerifiedAt.Valid {
 		c.Redirect(http.StatusTemporaryRedirect, WebRoute("cli/auth/success"))
+		return
+	}
+
+	var loginEmail string
+	if record.LoginEmail.Valid {
+		loginEmail = strings.TrimSpace(record.LoginEmail.String)
+	}
+
+	if loginEmail == "" || !record.LoginToken.Valid || !record.LoginExpiresAt.Valid {
+		if !record.Code.Valid || !record.CodeVerifier.Valid {
+			params := url.Values{}
+			params.Set("error", "session_incomplete")
+			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			return
+		}
+
+		loginResp, exchangeErr := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
+		if exchangeErr != nil {
+			params := url.Values{}
+			params.Set("error", "exchange_failed")
+			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			return
+		}
+
+		if err := h.database.SetCLILoginProfile(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt); err != nil {
+			params := url.Values{}
+			params.Set("error", "persist_failure")
+			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			return
+		}
+
+		loginEmail = strings.TrimSpace(loginResp.Email)
+	}
+
+	if loginEmail == "" {
+		if err := h.database.FailCLILoginState(state, "Unable to determine account information for CLI login."); err != nil {
+			log.Printf("cli login fail (missing email): state=%s err=%v", state, err)
+		}
+		params := url.Values{}
+		params.Set("error", "unauthorized")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		return
+	}
+
+	userRecord, err := h.database.GetUser(loginEmail)
+	if err != nil {
+		params := url.Values{}
+		params.Set("error", "load_failure")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		return
+	}
+	if userRecord == nil {
+		if err := h.database.FailCLILoginState(state, "User not authorized for this gateway."); err != nil {
+			log.Printf("cli login fail (unknown user): state=%s err=%v", state, err)
+		}
+		params := url.Values{}
+		params.Set("error", "unauthorized")
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		return
+	}
+
+	if !shouldEnforceMFA(h.mfaSettings, userRecord) {
+		if err := h.database.MarkCLILoginVerified(state, nil); err != nil {
+			log.Printf("cli login mark verified failed: state=%s err=%v", state, err)
+			params := url.Values{}
+			params.Set("error", "persist_failure")
+			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			return
+		}
+		c.Redirect(http.StatusTemporaryRedirect, WebRoute("cli/auth/success"))
+		return
+	}
+
+	if !userRecord.MFAEnrolled {
+		if err := h.database.FailCLILoginState(state, cliEnrollmentErrorMessage); err != nil {
+			log.Printf("cli login fail (enrollment required): state=%s err=%v", state, err)
+		}
+
+		if h.sessions != nil {
+			sessionToken, _, createErr := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
+				Channel:   "web",
+				IPAddress: c.ClientIP(),
+				UserAgent: c.GetHeader("User-Agent"),
+				Extra: map[string]interface{}{
+					"login_flow": "cli-enrollment",
+				},
+			})
+			if createErr == nil {
+				h.setSessionCookie(c, sessionToken)
+				// Leave MFAVerifiedAt unset; the UI will gate access until enrollment completes.
+			} else {
+				log.Printf("cli enrollment session create failed: user=%s err=%v", userRecord.Email, createErr)
+			}
+		}
+
+		enrollParams := url.Values{}
+		enrollParams.Set("enrollment", "required")
+		enrollParams.Set("channel", "cli")
+		enrollParams.Set("state", state)
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?%s", WebRoute("account/security"), enrollParams.Encode()))
 		return
 	}
 
@@ -196,18 +304,26 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	if !record.Code.Valid || !record.CodeVerifier.Valid {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "session_incomplete"})
-		return
+	if !record.LoginEmail.Valid {
+		if record.Code.Valid && record.CodeVerifier.Valid {
+			loginResp, exchangeErr := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
+			if exchangeErr != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
+				return
+			}
+			if err := h.database.SetCLILoginProfile(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
+				return
+			}
+			record.LoginEmail.String = loginResp.Email
+			record.LoginEmail.Valid = true
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "session_incomplete"})
+			return
+		}
 	}
 
-	loginResp, err := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
-		return
-	}
-
-	userRecord, err := h.database.GetUser(loginResp.Email)
+	userRecord, err := h.database.GetUser(strings.TrimSpace(record.LoginEmail.String))
 	if err != nil || userRecord == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -224,7 +340,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		methodID = &verification.MethodID
 	}
 
-	if err := h.database.SaveCLILoginResult(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt, methodID); err != nil {
+	if err := h.database.MarkCLILoginVerified(state, methodID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
 		return
 	}
@@ -257,6 +373,14 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 	}
 	if record == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
+		return
+	}
+	if record.LoginError.Valid {
+		reason := strings.TrimSpace(record.LoginError.String)
+		if reason == "" {
+			reason = "login_failed"
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": reason})
 		return
 	}
 	if !record.LoginEmail.Valid || !record.MFAVerifiedAt.Valid {

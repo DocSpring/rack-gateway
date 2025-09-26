@@ -255,25 +255,50 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     reset_user_mfa "$user_email"
   done
 
-  echo -e "${YELLOW}Verifying MFA enforcement shows pending message...${NC}"
-  TMP_LOG="$(mktemp)"
+  echo -e "${YELLOW}Verifying CLI login fails until MFA enrollment...${NC}"
+  AUTH_FILE="$(mktemp)"
+  OUTPUT_FILE="$(mktemp)"
+  COOKIE_FILE="$(mktemp)"
   set -m
-  ./bin/convox-gateway login "e2e" "http://127.0.0.1:${GATEWAY_PORT}" --no-open >"$TMP_LOG" 2>&1 &
-  CHECK_PID=$!
-  sleep 2
-  kill $CHECK_PID >/dev/null 2>&1 || true
-  wait $CHECK_PID 2>/dev/null || true
-  set +m
-  FIRST_OUTPUT=$(cat "$TMP_LOG")
-  rm -f "$TMP_LOG"
+  ./bin/convox-gateway login "e2e" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$OUTPUT_FILE" 2>&1 &
+  CLI_PID=$!
+  for _i in $(seq 1 50); do
+    [[ -s "$AUTH_FILE" ]] && break
+    sleep 0.1
+  done
 
-  if ! echo "$FIRST_OUTPUT" | grep -Fq "Waiting for multi-factor authentication to complete in your browser"; then
-    echo -e "${RED}CLI did not prompt for MFA completion as expected.${NC}" >&2
-    echo "$FIRST_OUTPUT" >&2
+  AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
+  STATE=$(sed -n 's/^STATE=//p' "$AUTH_FILE")
+  if [[ -z "$AUTH_URL" || -z "$STATE" ]]; then
+    echo -e "${RED}CLI login did not produce AUTH_URL/STATE${NC}" >&2
+    kill $CLI_PID || true
     exit 1
   fi
 
-  # Clean up any pending login state from the aborted attempt
+  # Simulate the browser selecting the unenrolled admin user
+  curl -s -L -c "$COOKIE_FILE" -b "$COOKIE_FILE" "${AUTH_URL}&selected_user=admin@example.com" -o /dev/null || true
+
+  set +e
+  wait $CLI_PID
+  CLI_STATUS=$?
+  set -e
+  set +m
+  CLI_OUTPUT=$(cat "$OUTPUT_FILE")
+  rm -f "$AUTH_FILE" "$OUTPUT_FILE" "$COOKIE_FILE"
+
+  if [[ $CLI_STATUS -eq 0 ]]; then
+    echo -e "${RED}CLI login succeeded unexpectedly when MFA enrollment is required.${NC}" >&2
+    echo "$CLI_OUTPUT" >&2
+    exit 1
+  fi
+
+  if ! echo "$CLI_OUTPUT" | grep -Fq "Error: login failed: You must set up multi-factor authentication before you can continue using the CLI."; then
+    echo -e "${RED}CLI did not report MFA enrollment error as expected.${NC}" >&2
+    echo "$CLI_OUTPUT" >&2
+    exit 1
+  fi
+
+  # Clean up any pending login state from the failed attempt
   psql_exec "DELETE FROM cli_login_states"
 
   # Provision deterministic MFA methods for automated verification

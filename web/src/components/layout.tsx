@@ -106,12 +106,24 @@ export function Layout() {
     }
 
     if (needsMfaEnrollment) {
-      return nav.map((item) => {
-        if (item.href && item.href !== '/account/security') {
+      return nav
+        .map((item) => {
+          if (item.href === '/account/security') {
+            return item
+          }
           return { ...item, disabled: true }
-        }
-        return item
-      })
+        })
+        .sort((a, b) => {
+          const aIsAccount = a.href === '/account/security'
+          const bIsAccount = b.href === '/account/security'
+          if (aIsAccount && !bIsAccount) {
+            return -1
+          }
+          if (!aIsAccount && bIsAccount) {
+            return 1
+          }
+          return 0
+        })
     }
 
     return nav
@@ -163,12 +175,26 @@ export function Layout() {
               isActive
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              item.disabled && 'pointer-events-none opacity-50'
+              item.disabled && 'pointer-events-none cursor-not-allowed opacity-50'
             )
 
             if (item.href) {
+              if (item.disabled) {
+                return (
+                  <span aria-disabled="true" className={itemClassName} key={item.name}>
+                    <Icon className="mr-4 h-6 w-6" />
+                    {item.name}
+                  </span>
+                )
+              }
               return (
-                <Link className={itemClassName} key={item.name} to={item.href}>
+                <Link
+                  aria-disabled={item.disabled ? true : undefined}
+                  className={itemClassName}
+                  key={item.name}
+                  tabIndex={item.disabled ? -1 : undefined}
+                  to={item.href}
+                >
                   <Icon className="mr-4 h-6 w-6" />
                   {item.name}
                 </Link>
@@ -177,11 +203,7 @@ export function Layout() {
 
             return (
               <button
-                className={cn(
-                  itemClassName,
-                  'w-full cursor-pointer',
-                  item.disabled && 'cursor-not-allowed'
-                )}
+                className={cn(itemClassName, 'w-full', !item.disabled && 'cursor-pointer')}
                 disabled={item.disabled}
                 key={item.name}
                 onClick={item.onSelect}

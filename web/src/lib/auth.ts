@@ -1,5 +1,6 @@
 import type { AxiosError } from 'axios'
 import axios from 'axios'
+import type { HandlersCurrentUserResponse, HandlersRackSummary } from '@/api/schemas'
 import { APIRoute } from './routes'
 
 export const SESSION_EXPIRED_MESSAGE = 'Session expired. Please sign in again.'
@@ -57,10 +58,26 @@ class AuthService {
   // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)
   async getCurrentUser(options: { suppressAuthError?: boolean } = {}): Promise<User | null> {
     try {
-      const response = await axios.get(APIRoute('me'), {
+      const response = await axios.get<HandlersCurrentUserResponse>(APIRoute('me'), {
         withCredentials: true,
       })
-      return response.data
+      const payload = response.data ?? {}
+
+      const rack: User['rack'] = normalizeRack(payload.rack)
+      const roles = Array.isArray(payload.roles) ? payload.roles : []
+      const fallbackRoles = Array.isArray(payload.permissions) ? payload.permissions : []
+
+      const mapped: User = {
+        email: payload.email ?? '',
+        name: payload.name ?? '',
+        roles: roles.length > 0 ? roles : fallbackRoles,
+        rack,
+        mfaEnrolled: Boolean(payload.mfa_enrolled),
+        mfaRequired: Boolean(payload.mfa_required),
+        recentStepUpExpiresAt: payload.recent_step_up_expires_at ?? null,
+      }
+
+      return mapped
     } catch (err: unknown) {
       // Mark for UI to show an error after redirect to login
       const status = (err as AxiosError)?.response?.status
@@ -87,6 +104,23 @@ class AuthService {
         // Use assign to ease testing under jsdom and avoid Location href setter issues
         window.location.assign(`${base}login`)
       })
+  }
+}
+
+function normalizeRack(summary?: HandlersRackSummary | null): User['rack'] {
+  if (!summary) {
+    return
+  }
+  const name = summary.name?.trim() ?? ''
+  const aliasValue = summary.alias?.trim() ?? ''
+  const host = summary.host?.trim() ?? ''
+  if (name === '' && aliasValue === '' && host === '') {
+    return
+  }
+  return {
+    name,
+    alias: aliasValue === '' ? undefined : aliasValue,
+    host,
   }
 }
 

@@ -55,6 +55,79 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 	}
 }
 
+// RequireMFAEnrollmentWeb blocks authenticated requests that rely on cookie-based sessions
+// (primarily the web UI) from hitting API routes unrelated to MFA setup while enrollment is
+// enforced but incomplete. This keeps every channel other than the dedicated CLI proxy locked
+// down to the Account Security flows until enrollment succeeds.
+func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+
+		authUser, ok := auth.GetAuthUser(c.Request.Context())
+		if !ok || authUser == nil || authUser.IsAPIToken {
+			c.Next()
+			return
+		}
+		if database == nil {
+			c.Next()
+			return
+		}
+
+		user, err := database.GetUser(authUser.Email)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+			c.Abort()
+			return
+		}
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+			c.Abort()
+			return
+		}
+
+		if !shouldEnforceMFAForMiddleware(settings, user) || user.MFAEnrolled {
+			c.Next()
+			return
+		}
+
+		path := c.Request.URL.Path
+		if isMFAEnrollmentAllowedPath(path) {
+			c.Next()
+			return
+		}
+
+		c.Header("X-MFA-Required", "enrollment")
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "mfa_enrollment_required",
+			"message": "Multi-factor authentication enrollment is required before you can access this resource.",
+		})
+		c.Abort()
+	}
+}
+
+var mfaEnrollmentAllowedPrefixes = []string{
+	"/.gateway/api/auth/mfa",
+}
+
+var mfaEnrollmentAllowedExact = map[string]struct{}{
+	"/.gateway/api/me": {},
+}
+
+func isMFAEnrollmentAllowedPath(path string) bool {
+	if _, ok := mfaEnrollmentAllowedExact[path]; ok {
+		return true
+	}
+	for _, prefix := range mfaEnrollmentAllowedPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // handlersShouldEnforceMFA mirrors the logic used by handlers without creating a
 // circular dependency (middleware cannot import handlers directly).
 func shouldEnforceMFAForMiddleware(settings *db.MFASettings, user *db.User) bool {

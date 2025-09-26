@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { isAxiosError } from 'axios'
+import { ShieldAlert } from 'lucide-react'
 import QRCode from 'qrcode'
 import { useEffect, useMemo, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { MFAInput } from '@/components/mfa-input'
 import { TimeAgo } from '@/components/time-ago'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -93,6 +95,8 @@ export function AccountSecurityPage() {
   const promptMfa = searchParams.get('mfa') === 'verify'
   const redirectParam = searchParams.get('redirect')
   const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
+  const enrollmentRequiredFlag = searchParams.get('enrollment') === 'required'
+  const enrollmentChannel = searchParams.get('channel') ?? undefined
 
   const {
     data: status,
@@ -136,6 +140,17 @@ export function AccountSecurityPage() {
   }, [status?.recent_step_up_expires_at])
 
   const invalidateStatus = () => queryClient.invalidateQueries({ queryKey: STEP_UP_QUERY_KEY })
+
+  useEffect(() => {
+    if (enrollmentRequiredFlag && enrollmentChannel === 'cli') {
+      toast({
+        variant: 'warning',
+        title: 'CLI login blocked until MFA enrollment completes',
+        description:
+          'Finish setting up multi-factor authentication on this page, then rerun the CLI login command.',
+      })
+    }
+  }, [enrollmentChannel, enrollmentRequiredFlag])
 
   const startEnrollmentMutation = useMutation({
     mutationFn: startTOTPEnrollment,
@@ -367,6 +382,18 @@ export function AccountSecurityPage() {
         </p>
       </div>
 
+      {enrollmentRequiredFlag && enrollmentChannel === 'cli' ? (
+        <Alert className="border-amber-500 bg-amber-500/10">
+          <ShieldAlert className="size-4" />
+          <div className="pl-7 font-semibold">MFA enrollment required for CLI login</div>
+          <AlertDescription>
+            Complete your authenticator setup and click “Disable” only if you intend to remove MFA.
+            Once enrollment is finished, rerun{' '}
+            <span className="font-mono">convox-gateway login</span> in your terminal.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -537,26 +564,26 @@ export function AccountSecurityPage() {
                 )}
               </div>
             </div>
-              <div className="space-y-3 mt-8">
-                <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
-                <MFAInput
-                  id="verification-code"
+            <div className="mt-8 space-y-3">
+              <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
+              <MFAInput
+                className="max-w-64"
+                id="verification-code"
+                maxLength={6}
+                onChange={(event) => setVerificationCode(event.target.value.trim())}
+                placeholder="123456"
+                value={verificationCode}
+              />
+              <div className="mt-8 space-y-2">
+                <Label htmlFor="mfa-method-label">Authenticator label</Label>
+                <Input
                   className="max-w-64"
-                  maxLength={6}
-                  onChange={(event) => setVerificationCode(event.target.value.trim())}
-                  placeholder="123456"
-                  value={verificationCode}
+                  id="mfa-method-label"
+                  maxLength={150}
+                  onChange={(event) => setEnrollmentLabel(event.target.value)}
+                  placeholder={DEFAULT_MFA_LABEL}
+                  value={enrollmentLabel}
                 />
-                <div className="space-y-2 mt-8">
-                  <Label htmlFor="mfa-method-label">Authenticator label</Label>
-                  <Input
-                    id="mfa-method-label"
-                    className="max-w-64"
-                    maxLength={150}
-                    onChange={(event) => setEnrollmentLabel(event.target.value)}
-                    placeholder={DEFAULT_MFA_LABEL}
-                    value={enrollmentLabel}
-                  />
               </div>
               <label className="flex items-center gap-2 py-5 text-sm">
                 <input

@@ -17,6 +17,7 @@ type CLILoginState struct {
 	LoginExpiresAt sql.NullTime
 	MFAVerifiedAt  sql.NullTime
 	MFAMethodID    sql.NullInt64
+	LoginError     sql.NullString
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -35,6 +36,7 @@ func (d *Database) StoreCLILoginState(state, codeVerifier string) error {
                       login_expires_at = NULL,
                       mfa_verified_at = NULL,
                       mfa_method_id = NULL,
+                      login_error = NULL,
                       updated_at = NOW()
     `, state, codeVerifier)
 	if err != nil {
@@ -54,6 +56,15 @@ func (d *Database) UpdateCLILoginCode(state, code string) error {
 
 // SaveCLILoginResult persists the successful login response after MFA verification.
 func (d *Database) SaveCLILoginResult(state, token, email, name string, expiresAt time.Time, methodID *int64) error {
+	if err := d.SetCLILoginProfile(state, token, email, name, expiresAt); err != nil {
+		return err
+	}
+	return d.MarkCLILoginVerified(state, methodID)
+}
+
+// SetCLILoginProfile stores the OAuth exchange result so the CLI can poll for completion while
+// additional MFA checks (or enrollment) are performed.
+func (d *Database) SetCLILoginProfile(state, token, email, name string, expiresAt time.Time) error {
 	_, err := d.exec(`
         UPDATE cli_login_states
         SET code = NULL,
@@ -62,13 +73,43 @@ func (d *Database) SaveCLILoginResult(state, token, email, name string, expiresA
             login_email = ?,
             login_name = ?,
             login_expires_at = ?,
-            mfa_verified_at = NOW(),
-            mfa_method_id = ?,
+            login_error = NULL,
             updated_at = NOW()
         WHERE state = ?
-    `, token, email, name, expiresAt, nullableInt64(methodID), state)
+    `, token, email, name, expiresAt, state)
 	if err != nil {
-		return fmt.Errorf("failed to store CLI login result: %w", err)
+		return fmt.Errorf("failed to store CLI login profile: %w", err)
+	}
+	return nil
+}
+
+// MarkCLILoginVerified records that the CLI login has satisfied MFA requirements.
+func (d *Database) MarkCLILoginVerified(state string, methodID *int64) error {
+	_, err := d.exec(`
+        UPDATE cli_login_states
+        SET mfa_verified_at = NOW(),
+            mfa_method_id = ?,
+            login_error = NULL,
+            updated_at = NOW()
+        WHERE state = ?
+    `, nullableInt64(methodID), state)
+	if err != nil {
+		return fmt.Errorf("failed to mark CLI login verified: %w", err)
+	}
+	return nil
+}
+
+// FailCLILoginState stores a terminal error for a CLI login attempt so polling clients can
+// stop waiting and surface the failure message.
+func (d *Database) FailCLILoginState(state, reason string) error {
+	_, err := d.exec(`
+        UPDATE cli_login_states
+        SET login_error = ?,
+            updated_at = NOW()
+        WHERE state = ?
+    `, nullableString(reason, 255), state)
+	if err != nil {
+		return fmt.Errorf("failed to mark CLI login failed: %w", err)
 	}
 	return nil
 }
@@ -77,7 +118,8 @@ func (d *Database) SaveCLILoginResult(state, token, email, name string, expiresA
 func (d *Database) GetCLILoginState(state string) (*CLILoginState, error) {
 	query := `
         SELECT state, code, code_verifier, login_token, login_email, login_name,
-               login_expires_at, mfa_verified_at, mfa_method_id, created_at, updated_at
+               login_expires_at, mfa_verified_at, mfa_method_id, login_error,
+               created_at, updated_at
         FROM cli_login_states WHERE state = ?
     `
 
@@ -92,6 +134,7 @@ func (d *Database) GetCLILoginState(state string) (*CLILoginState, error) {
 		&record.LoginExpiresAt,
 		&record.MFAVerifiedAt,
 		&record.MFAMethodID,
+		&record.LoginError,
 		&record.CreatedAt,
 		&record.UpdatedAt,
 	)

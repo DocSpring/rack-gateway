@@ -15,7 +15,7 @@ includes:
 tasks:
   all:
     desc: Run linters, code generation, tests, and build
-    deps: [lint, generate:test, build]
+    deps: [lint:fix, generate:test, build]
 
   lint:
     desc: Run web + Go linters and typecheck

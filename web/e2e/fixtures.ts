@@ -27,6 +27,10 @@ export const test = base.extend({
         } catch {}
         const snippet = body ? body.slice(0, 200).replace(/\s+/g, ' ').trim() : ''
 
+        if (status === 403 && snippet.includes('mfa_enrollment_required')) {
+          return
+        }
+
         if (status === 401 && url.includes(APIRoute('me'))) return
 
         console.log(`[resp ${status}] ${method} ${url}${snippet ? ` body="${snippet}"` : ''}`)
@@ -52,6 +56,9 @@ export const test = base.extend({
         // Ignore all 401/Unauthorized console errors (expected before login)
         const is401 = /\b401\b/i.test(text) || /Unauthorized/i.test(text)
         if (is401) return
+        if (/mfa_enrollment_required/i.test(text)) return
+        const isGeneric403 = /status of 403 \(Forbidden\)/i.test(text)
+        if (isGeneric403) return
         const isDevModule502 =
           /status of 502 \(Bad Gateway\)/i.test(text) && text.includes(WebRoute('/'))
         if (isDevModule502) return

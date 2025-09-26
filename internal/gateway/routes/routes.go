@@ -137,6 +137,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 		// Authenticated endpoints
 		authenticated := api.Group("")
 		authenticated.Use(middleware.Authenticated(cfg.AuthService, cfg.RBACManager))
+		authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.MFASettings))
 		{
 			mfaGroup := authenticated.Group("/auth/mfa")
 			mfaGroup.Use(middleware.RateLimit(cfg.Config))

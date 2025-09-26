@@ -55,7 +55,7 @@ test.describe('Account security', () => {
   test('user can manage MFA enrollment, backup codes, trusted devices, and removal flows', async ({
     page,
   }) => {
-    await login(page)
+    await login(page, { autoEnrollMfa: false })
 
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
@@ -80,9 +80,7 @@ test.describe('Account security', () => {
     await expect(page.getByText(/Finish MFA Enrollment/i)).toBeVisible()
 
     const secret = enrollment.secret
-    await page
-      .getByLabel(/2\. Enter the 6-digit code to confirm/i)
-      .fill(authenticator.generate(secret))
+    await page.getByLabel(/Enter the 6-digit code to confirm/i).fill(authenticator.generate(secret))
     await page.getByRole('button', { name: /^Confirm$/ }).click()
 
     await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
@@ -151,7 +149,7 @@ test.describe('Account security', () => {
     const reEnroll = (await reEnrollResponse.json()) as { secret: string }
 
     await page
-      .getByLabel(/2\. Enter the 6-digit code to confirm/i)
+      .getByLabel(/Enter the 6-digit code to confirm/i)
       .fill(authenticator.generate(reEnroll.secret))
     await page.getByRole('button', { name: /^Confirm$/ }).click()
     await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
