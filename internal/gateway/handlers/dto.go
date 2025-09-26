@@ -23,6 +23,7 @@ type ConfirmTOTPEnrollmentRequest struct {
 	MethodID    int64  `json:"method_id" binding:"required"`
 	Code        string `json:"code" binding:"required"`
 	TrustDevice bool   `json:"trust_device"`
+	Label       string `json:"label"`
 }
 
 type VerifyMFARequest struct {

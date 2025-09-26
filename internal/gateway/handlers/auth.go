@@ -678,6 +678,16 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		return
 	}
 
+	if h.database != nil {
+		label := strings.TrimSpace(req.Label)
+		if label == "" {
+			label = "Authenticator App"
+		}
+		if err := h.database.UpdateMFAMethodLabel(req.MethodID, label); err != nil {
+			log.Printf("failed updating MFA method label: %v", err)
+		}
+	}
+
 	now := time.Now()
 	var trustedDeviceID *int64
 	trustedCookieSet := false

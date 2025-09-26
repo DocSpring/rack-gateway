@@ -85,6 +85,14 @@ func (d *Database) ConfirmMFAMethod(methodID int64, confirmedAt time.Time) error
 	return nil
 }
 
+func (d *Database) DeleteUnconfirmedMFAMethods(userID int64) error {
+	_, err := d.exec("DELETE FROM mfa_methods WHERE user_id = ? AND confirmed_at IS NULL", userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete unconfirmed MFA methods: %w", err)
+	}
+	return nil
+}
+
 func (d *Database) UpdateMFAMethodLastUsed(methodID int64, lastUsedAt time.Time) error {
 	_, err := d.exec("UPDATE mfa_methods SET last_used_at = ? WHERE id = ?", lastUsedAt, methodID)
 	if err != nil {
@@ -104,7 +112,7 @@ func (d *Database) DeleteMFAMethod(methodID int64) error {
 func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at
-        FROM mfa_methods WHERE user_id = ? ORDER BY created_at
+        FROM mfa_methods WHERE user_id = ? AND confirmed_at IS NOT NULL ORDER BY created_at
     `
 	rows, err := d.query(query, userID)
 	if err != nil {
@@ -149,6 +157,14 @@ func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 		return nil, fmt.Errorf("failed to iterate MFA methods: %w", err)
 	}
 	return methods, nil
+}
+
+func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
+	_, err := d.exec("UPDATE mfa_methods SET label = ? WHERE id = ?", nullableString(label, 150), methodID)
+	if err != nil {
+		return fmt.Errorf("failed to update mfa method label: %w", err)
+	}
+	return nil
 }
 
 func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {

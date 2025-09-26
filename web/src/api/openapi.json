@@ -2935,6 +2935,9 @@
                     "code": {
                         "type": "string"
                     },
+                    "label": {
+                        "type": "string"
+                    },
                     "method_id": {
                         "type": "integer"
                     },

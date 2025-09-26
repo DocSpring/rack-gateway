@@ -2716,6 +2716,7 @@ export interface components {
         };
         "handlers.ConfirmTOTPEnrollmentRequest": {
             code: string;
+            label?: string;
             method_id: number;
             trust_device?: boolean;
         };

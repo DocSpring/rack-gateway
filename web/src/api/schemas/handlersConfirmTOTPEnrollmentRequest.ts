@@ -8,6 +8,7 @@
 
 export interface HandlersConfirmTOTPEnrollmentRequest {
   code: string;
+  label?: string;
   method_id: number;
   trust_device?: boolean;
 }

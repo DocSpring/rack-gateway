@@ -80,6 +80,9 @@ func (s *Service) StartTOTPEnrollment(user *db.User) (*StartTOTPEnrollmentResult
 	if user == nil {
 		return nil, fmt.Errorf("user required")
 	}
+	if err := s.db.DeleteUnconfirmedMFAMethods(user.ID); err != nil {
+		return nil, err
+	}
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      s.issuer,
 		AccountName: user.Email,

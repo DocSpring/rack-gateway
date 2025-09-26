@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
@@ -44,6 +45,7 @@ const STEP_UP_QUERY_KEY = ['mfaStatus'] as const
 const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
 }
+const DEFAULT_MFA_LABEL = 'Authenticator App'
 
 function extractErrorMessage(error: unknown): string {
   if (isAxiosError<{ error?: string }>(error)) {
@@ -78,6 +80,7 @@ export function AccountSecurityPage() {
   const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(null)
+  const [enrollmentLabel, setEnrollmentLabel] = useState(DEFAULT_MFA_LABEL)
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [stepUpCode, setStepUpCode] = useState('')
   const [stepUpTrustDevice, setStepUpTrustDevice] = useState(true)
@@ -138,6 +141,7 @@ export function AccountSecurityPage() {
     mutationFn: startTOTPEnrollment,
     onSuccess: (data) => {
       setEnrollment(data)
+      setEnrollmentLabel(DEFAULT_MFA_LABEL)
       setVerificationCode('')
       setTrustEnrollmentDevice(true)
       setRecentBackupCodes(data.backup_codes ?? null)
@@ -153,6 +157,7 @@ export function AccountSecurityPage() {
     onSuccess: () => {
       toast.success('Multi-factor authentication enabled')
       setEnrollment(null)
+      setEnrollmentLabel(DEFAULT_MFA_LABEL)
       setQrDataUrl(null)
       setVerificationCode('')
       setTrustEnrollmentDevice(true)
@@ -253,10 +258,12 @@ export function AccountSecurityPage() {
       toast.error('Enrollment session expired. Start again.')
       return
     }
+    const normalizedLabel = enrollmentLabel.trim() || DEFAULT_MFA_LABEL
     confirmEnrollmentMutation.mutate({
       method_id: enrollment.method_id,
       code: verificationCode,
       trust_device: trustEnrollmentDevice,
+      label: normalizedLabel,
     })
   }
 
@@ -466,7 +473,7 @@ export function AccountSecurityPage() {
           <CardContent className="space-y-6 pb-2">
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-3">
-                <h3 className="font-semibold text-base">1. Scan the QR code</h3>
+                <h3 className="font-semibold text-base">Scan the QR code</h3>
                 {qrDataUrl ? (
                   /* biome-ignore lint/performance/noImgElement: Using inline QR code image for authenticator setup. */
                   <img
@@ -481,23 +488,21 @@ export function AccountSecurityPage() {
                     Unable to render QR code. Use the secret key instead.
                   </p>
                 )}
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="w-fit"
+                    onClick={() => handleCopy(enrollment.secret ?? '')}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    Copy secret for manual entry
+                  </Button>
+                  <p className="text-muted-foreground text-xs">
+                    Use this if your authenticator app cannot scan the QR code.
+                  </p>
+                </div>
               </div>
               <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold text-base">Secret key</h3>
-                  <p className="break-all rounded border bg-muted px-3 py-2 font-mono text-sm">
-                    {enrollment.secret}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => handleCopy(enrollment.secret ?? '')}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Copy secret
-                    </Button>
-                  </div>
-                </div>
                 {recentBackupCodes && recentBackupCodes.length > 0 && (
                   <div>
                     <h3 className="font-semibold text-base">Backup codes</h3>
@@ -532,15 +537,27 @@ export function AccountSecurityPage() {
                 )}
               </div>
             </div>
-            <div className="space-y-3">
-              <Label htmlFor="verification-code">2. Enter the 6-digit code to confirm</Label>
-              <MFAInput
-                id="verification-code"
-                maxLength={6}
-                onChange={(event) => setVerificationCode(event.target.value.trim())}
-                placeholder="123456"
-                value={verificationCode}
-              />
+              <div className="space-y-3 mt-8">
+                <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
+                <MFAInput
+                  id="verification-code"
+                  className="max-w-64"
+                  maxLength={6}
+                  onChange={(event) => setVerificationCode(event.target.value.trim())}
+                  placeholder="123456"
+                  value={verificationCode}
+                />
+                <div className="space-y-2 mt-8">
+                  <Label htmlFor="mfa-method-label">Authenticator label</Label>
+                  <Input
+                    id="mfa-method-label"
+                    className="max-w-64"
+                    maxLength={150}
+                    onChange={(event) => setEnrollmentLabel(event.target.value)}
+                    placeholder={DEFAULT_MFA_LABEL}
+                    value={enrollmentLabel}
+                  />
+              </div>
               <label className="flex items-center gap-2 py-5 text-sm">
                 <input
                   checked={trustEnrollmentDevice}
@@ -559,6 +576,7 @@ export function AccountSecurityPage() {
                 <Button
                   onClick={() => {
                     setEnrollment(null)
+                    setEnrollmentLabel(DEFAULT_MFA_LABEL)
                     setQrDataUrl(null)
                     setVerificationCode('')
                   }}
@@ -572,14 +590,12 @@ export function AccountSecurityPage() {
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Registered MFA Methods</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {methods.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No MFA methods configured.</p>
-          ) : (
+      {methods.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Registered MFA Methods</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[320px] text-left text-sm">
                 <thead className="border-b text-muted-foreground text-xs uppercase">
@@ -598,7 +614,7 @@ export function AccountSecurityPage() {
                         {MFA_METHOD_TYPE_LABELS[(method.type ?? '').toLowerCase()] ??
                           (method.type ? method.type.toUpperCase() : 'MFA')}
                       </td>
-                      <td className="py-2">{method.label ?? 'Authenticator app'}</td>
+                      <td className="py-2">{method.label ?? DEFAULT_MFA_LABEL}</td>
                       <td className="py-2">
                         <TimeAgo date={method.created_at ?? null} />
                       </td>
@@ -626,9 +642,9 @@ export function AccountSecurityPage() {
                 </tbody>
               </table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

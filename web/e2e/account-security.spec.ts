@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
@@ -6,7 +6,7 @@ import { clearStepUpSessions, login, resetMfaFor } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
-function cardByTitle(page: Page, title: string) {
+function cardByTitle(page: Page, title: string): Locator {
   return page.locator('[data-slot="card"]').filter({
     has: page.locator('[data-slot="card-title"]', { hasText: title }),
   })
@@ -65,8 +65,7 @@ test.describe('Account security', () => {
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled()
     await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0)
-    const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
-    await expect(methodsCard.getByText('No MFA methods configured.', { exact: true })).toBeVisible()
+    await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
     const enrollmentResponsePromise = page.waitForResponse(
@@ -90,6 +89,8 @@ test.describe('Account security', () => {
 
     await expect(mfaCard.getByText('Enabled', { exact: true })).toBeVisible()
 
+    let methodsCard: Locator = cardByTitle(page, 'Registered MFA Methods').first()
+    await expect(methodsCard).toBeVisible()
     const methodsTable = methodsCard.locator('table').first()
     await expect(methodsTable.locator('tbody tr')).toHaveCount(1)
     const methodRow = methodsTable.locator('tbody tr').first()
@@ -137,7 +138,7 @@ test.describe('Account security', () => {
     await completeStepUp(page, secret)
     await deleteResponsePromise
     await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
-    await expect(methodsCard.getByText('No MFA methods configured.', { exact: true })).toBeVisible()
+    await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
     const reEnrollResponsePromise = page.waitForResponse(
@@ -160,11 +161,13 @@ test.describe('Account security', () => {
       (response) =>
         response.url().includes('/auth/mfa/methods/') && response.request().method() === 'DELETE'
     )
+    methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
+    await expect(methodsCard).toBeVisible()
     const removeButton = methodsCard.getByRole('button', { name: /^Remove$/ }).first()
     await removeButton.click()
     await completeStepUp(page, reEnroll.secret)
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
-    await expect(methodsCard.getByText('No MFA methods configured.', { exact: true })).toBeVisible()
+    await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
   })
 })

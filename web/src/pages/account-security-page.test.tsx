@@ -114,5 +114,8 @@ describe('AccountSecurityPage', () => {
       expect(apiMocks.startTOTPEnrollment).toHaveBeenCalled()
       expect(screen.getByText(/finish mfa enrollment/i)).toBeInTheDocument()
     })
+
+    const labelInput = screen.getByLabelText(/Authenticator label/i)
+    expect(labelInput).toHaveValue('Authenticator App')
   })
 })
