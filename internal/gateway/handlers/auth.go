@@ -1308,7 +1308,9 @@ func (h *AuthHandler) handlePostLoginMFA(c *gin.Context, user *db.User, session 
 
 	trustedDevice, err := h.consumeTrustedDevice(c, user)
 	if err != nil {
-		return fmt.Errorf("consume trusted device: %w", err)
+		log.Printf("post-login mfa: consume trusted device failed for user=%s: %v", user.Email, err)
+		h.clearTrustedDeviceCookie(c)
+		return nil
 	}
 	if trustedDevice == nil {
 		return nil

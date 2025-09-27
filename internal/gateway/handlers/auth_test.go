@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
 	"github.com/gin-gonic/gin"
 )
@@ -61,6 +63,65 @@ func findCookie(res *http.Response, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
+	oauth := &fakeOAuth{}
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
+	user, err := database.CreateUser("user@example.com", "User", []string{"viewer"})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	if err := database.SetUserMFAEnrolled(user.ID, true); err != nil {
+		t.Fatalf("failed to mark user enrolled: %v", err)
+	}
+	if user, err = database.GetUser("user@example.com"); err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+
+	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionToken, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	if sessionToken == "" {
+		t.Fatalf("expected non-empty session token")
+	}
+
+	pepper := []byte("mfa-pepper-for-tests")
+	mfaService, err := mfa.NewService(database, "Convox Gateway", 30*time.Minute, 10*time.Minute, pepper)
+	if err != nil {
+		t.Fatalf("failed to init mfa service: %v", err)
+	}
+
+	settings := &db.MFASettings{RequireAllUsers: true}
+	config := &config.Config{DevMode: true}
+	handler := NewAuthHandler(oauth, database, config, sessionManager, mfaService, settings)
+
+	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback")
+	c.Request.AddCookie(&http.Cookie{Name: trustedDeviceCookie, Value: "stale-token"})
+	c.Request.Header.Set("User-Agent", "Playwright Test")
+
+	if err := handler.handlePostLoginMFA(c, user, session); err != nil {
+		t.Fatalf("handlePostLoginMFA returned error: %v", err)
+	}
+
+	res := w.Result()
+	cookie := findCookie(res, trustedDeviceCookie)
+	if cookie == nil {
+		t.Fatalf("expected trusted device cookie to be cleared")
+	}
+	if cookie.Value != "" {
+		t.Fatalf("expected cleared cookie value, got %q", cookie.Value)
+	}
+	if cookie.MaxAge >= 0 && !cookie.Expires.Before(time.Now()) {
+		t.Fatalf("expected trusted device cookie to expire immediately")
+	}
+	if session.MFAVerifiedAt != nil {
+		t.Fatalf("expected session to remain unverified when trusted device is stale")
+	}
 }
 
 func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {

@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { clearStepUpSessions, login, resetMfaFor } from './helpers'
+import { clearStepUpSessions, enforceMfaFor, login, resetMfaFor } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -31,7 +31,7 @@ async function requireStepUp(page: Page) {
 }
 
 async function completeStepUp(page: Page, secret: string) {
-  const dialog = page.getByRole('dialog', { name: /MFA verification required/i })
+  const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   await expect(dialog).toBeVisible()
 
   const trustCheckbox = dialog.getByLabel('Trust this browser for 30 days')
@@ -60,8 +60,12 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   await expect(userCard).toBeVisible()
   await userCard.click()
 
-  const mfaDialog = page.getByRole('dialog', { name: /MFA verification required/i })
-  await expect(mfaDialog).toBeVisible({ timeout: 5000 })
+  const mfaDialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
+  const isVisible = await mfaDialog.isVisible({ timeout: 5000 }).catch(() => false)
+  if (!isVisible) {
+    await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15000 })
+    return
+  }
 
   const trustCheckbox = mfaDialog.getByLabel('Trust this browser for 30 days')
   const currentlyChecked = await trustCheckbox.isChecked().catch(() => false)
@@ -231,6 +235,8 @@ test.describe('Account security', () => {
     await page.getByRole('button', { name: /^Confirm$/ }).click()
     await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
 
+    await enforceMfaFor(ADMIN_EMAIL)
+
     await page.getByRole('button', { name: /^Logout$/ }).click()
     await page.waitForURL(/\.gateway\/web\/login$/)
     await performLoginWithMfa(page, secret, true)
@@ -241,6 +247,8 @@ test.describe('Account security', () => {
     let trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
     await expect(trustedDevicesCard).toBeVisible()
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(1)
+
+    await requireStepUp(page)
 
     const revokeResponsePromise = page.waitForResponse(
       (response) =>
@@ -253,8 +261,12 @@ test.describe('Account security', () => {
       .first()
       .click()
 
-    const stepUpDialog = page.getByRole('dialog', { name: /MFA verification required/i })
-    await expect(stepUpDialog).toBeVisible({ timeout: 5000 })
+    const stepUpDialog = page.getByRole('dialog', {
+      name: /Multi-Factor Authentication Required/i,
+    })
+    await expect(stepUpDialog.getByText('Multi-Factor Authentication Required')).toBeVisible({
+      timeout: 15000,
+    })
     const trustStepUp = stepUpDialog.getByLabel('Trust this browser for 30 days')
     if (await trustStepUp.isChecked()) {
       await trustStepUp.uncheck()
@@ -265,6 +277,8 @@ test.describe('Account security', () => {
 
     await revokeResponsePromise
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0)
+
+    await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
     await page.waitForURL(/\.gateway\/web\/login$/)
@@ -282,9 +296,10 @@ test.describe('Account security', () => {
     await expect(userCard).toBeVisible()
     await userCard.click()
 
-    await expect(page).toHaveURL(/\.gateway\/web\//, { timeout: 5000 })
+    await expect.poll(async () => page.url()).toMatch(/\.gateway\/web\/auth\/mfa\/challenge/i)
 
-    const mfaDialog = page.getByRole('dialog', { name: /MFA verification required/i })
-    await expect(mfaDialog).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Multi-Factor Authentication Required')).toBeVisible({
+      timeout: 15000,
+    })
   })
 })

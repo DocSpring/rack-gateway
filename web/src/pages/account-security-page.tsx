@@ -766,7 +766,7 @@ export function AccountSecurityPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>MFA verification required</DialogTitle>
+            <DialogTitle>Multi-Factor Authentication Required</DialogTitle>
             <DialogDescription>
               Enter a code from your authenticator or an unused backup code to continue.
             </DialogDescription>

@@ -111,3 +111,9 @@ export async function resetMfaForUser(email: string) {
     )
   })
 }
+
+export async function enforceMfaForUser(email: string) {
+  await withDbClient(async (client) => {
+    await client.query('UPDATE users SET mfa_enforced_at = NOW() WHERE email = $1;', [email])
+  })
+}
