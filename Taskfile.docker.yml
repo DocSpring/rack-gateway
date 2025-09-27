@@ -38,7 +38,7 @@ tasks:
     run: once
     aliases: [wait]
     cmds:
-      - WEB_PORT={{.WEB_PORT}} GATEWAY_PORT={{.GATEWAY_PORT}} MOCK_OAUTH_PORT={{.MOCK_OAUTH_PORT}} CHECK_VITE_PROXY={{.CHECK_VITE_PROXY | default "true"}} bash scripts/wait-services.sh
+      - WEB_PORT={{.WEB_PORT}} GATEWAY_PORT={{.GATEWAY_PORT}} MOCK_OAUTH_PORT={{.MOCK_OAUTH_PORT}} CHECK_VITE_PROXY={{.CHECK_VITE_PROXY | default "true"}} bash scripts/wait-for-services.sh
 
   down:dev:
     desc: Down full dev stack (infra + web + gateway)
@@ -96,7 +96,7 @@ tasks:
     desc: Wait for preview stack readiness (gateway serves SPA under GATEWAY_PORT)
     run: once
     cmds:
-      - WEB_PORT={{.GATEWAY_PORT}} GATEWAY_PORT={{.GATEWAY_PORT}} MOCK_OAUTH_PORT={{.MOCK_OAUTH_PORT}} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
+      - WEB_PORT={{.GATEWAY_PORT}} GATEWAY_PORT={{.GATEWAY_PORT}} MOCK_OAUTH_PORT={{.MOCK_OAUTH_PORT}} CHECK_VITE_PROXY=false bash scripts/wait-for-services.sh
 
   down:preview:
     desc: Down full preview stack

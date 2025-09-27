@@ -30,7 +30,7 @@ describe('AuthResultCard', () => {
   })
 
   it('renders description when provided', () => {
-    render(<AuthResultCard status="error" title="Oops" description="Something failed" />)
+    render(<AuthResultCard description="Something failed" status="error" title="Oops" />)
 
     expect(screen.getByText('Something failed')).toBeInTheDocument()
   })

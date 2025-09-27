@@ -46,7 +46,7 @@ export function AuthResultCard({
           >
             {icon ?? styles.defaultIcon}
           </div>
-          <CardTitle aria-level={2} role="heading" className="text-2xl">
+          <CardTitle aria-level={2} className="text-2xl" role="heading">
             {title}
           </CardTitle>
           {description ? (

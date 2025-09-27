@@ -120,10 +120,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-image
     env:
-      WEB_PORT: 5173
       GATEWAY_PORT: 8447
+      WEB_PORT: 8447
       MOCK_OAUTH_PORT: 3345
       GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
+      WEB_UI_PATH: "/.gateway/web/"
+      CHECK_VITE_PROXY: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -162,8 +164,7 @@ jobs:
 
       - name: Wait for services
         run: |
-          chmod +x scripts/wait-services.sh
-          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
+          ./scripts/wait-services.sh
 
       - name: Install Convox CLI
         run: |
@@ -179,7 +180,7 @@ jobs:
           convox version || true
 
       - name: Run CLI E2E
-        run: bash scripts/cli-e2e.sh
+        run: ./scripts/cli-e2e.sh
 
       - name: Docker logs (on failure)
         if: failure()

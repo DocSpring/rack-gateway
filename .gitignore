@@ -52,3 +52,6 @@ web/playwright-report/
 
 # Task cache
 .task/
+
+# Renamify workspace
+.renamify/

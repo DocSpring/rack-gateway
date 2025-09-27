@@ -45,6 +45,38 @@ async function completeStepUp(page: Page, secret: string) {
   await expect(dialog).toBeHidden({ timeout: 4000 })
 }
 
+async function performLoginWithMfa(page: Page, secret: string, trustDevice: boolean) {
+  await page.goto(WebRoute('login'))
+  const btn = page
+    .getByTestId('login-cta')
+    .or(page.getByRole('button', { name: /Continue with/i }))
+    .or(page.getByRole('link', { name: /Continue with/i }))
+  await expect(btn).toBeVisible({ timeout: 5000 })
+  const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
+  await btn.click()
+  await navPromise
+
+  const userCard = page.locator('text=Admin User').first()
+  await expect(userCard).toBeVisible()
+  await userCard.click()
+
+  const mfaDialog = page.getByRole('dialog', { name: /MFA verification required/i })
+  await expect(mfaDialog).toBeVisible({ timeout: 5000 })
+
+  const trustCheckbox = mfaDialog.getByLabel('Trust this browser for 30 days')
+  const currentlyChecked = await trustCheckbox.isChecked().catch(() => false)
+  if (trustDevice && !currentlyChecked) {
+    await trustCheckbox.check()
+  } else if (!trustDevice && currentlyChecked) {
+    await trustCheckbox.uncheck()
+  }
+
+  await mfaDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
+  await mfaDialog.getByRole('button', { name: /^Verify$/ }).click()
+  await expect(mfaDialog).toBeHidden({ timeout: 5000 })
+  await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15000 })
+}
+
 test.describe('Account security', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -167,5 +199,92 @@ test.describe('Account security', () => {
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
+  })
+
+  test('revoking trusted device forces MFA challenge on next login', async ({ page }) => {
+    await resetMfaFor(ADMIN_EMAIL)
+
+    await login(page, { autoEnrollMfa: false })
+
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    const mfaCard = cardByTitle(page, 'Multi-Factor Authentication').first()
+    await expect(mfaCard).toBeVisible()
+
+    const enrollmentResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/enroll/totp/start') &&
+        response.request().method() === 'POST'
+    )
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+    const enrollmentResponse = await enrollmentResponsePromise
+    const enrollment = (await enrollmentResponse.json()) as { secret: string }
+    const secret = enrollment.secret
+
+    await expect(page.getByText(/Finish MFA Enrollment/i)).toBeVisible()
+    await page.getByLabel(/Enter the 6-digit code to confirm/i).fill(authenticator.generate(secret))
+    const trustCheckbox = page.getByLabel('Trust this browser for 30 days')
+    if (!(await trustCheckbox.isChecked())) {
+      await trustCheckbox.check()
+    }
+    await page.getByRole('button', { name: /^Confirm$/ }).click()
+    await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
+
+    await page.getByRole('button', { name: /^Logout$/ }).click()
+    await page.waitForURL(/\.gateway\/web\/login$/)
+    await performLoginWithMfa(page, secret, true)
+
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    let trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
+    await expect(trustedDevicesCard).toBeVisible()
+    await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(1)
+
+    const revokeResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/trusted-devices/') &&
+        response.request().method() === 'DELETE'
+    )
+
+    await trustedDevicesCard
+      .getByRole('button', { name: /^Revoke$/ })
+      .first()
+      .click()
+
+    const stepUpDialog = page.getByRole('dialog', { name: /MFA verification required/i })
+    await expect(stepUpDialog).toBeVisible({ timeout: 5000 })
+    const trustStepUp = stepUpDialog.getByLabel('Trust this browser for 30 days')
+    if (await trustStepUp.isChecked()) {
+      await trustStepUp.uncheck()
+    }
+    await stepUpDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
+    await stepUpDialog.getByRole('button', { name: /^Verify$/ }).click()
+    await expect(stepUpDialog).toBeHidden({ timeout: 5000 })
+
+    await revokeResponsePromise
+    await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0)
+
+    await page.getByRole('button', { name: /^Logout$/ }).click()
+    await page.waitForURL(/\.gateway\/web\/login$/)
+
+    const btn = page
+      .getByTestId('login-cta')
+      .or(page.getByRole('button', { name: /Continue with/i }))
+      .or(page.getByRole('link', { name: /Continue with/i }))
+    await expect(btn).toBeVisible({ timeout: 5000 })
+    const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
+    await btn.click()
+    await navPromise
+
+    const userCard = page.locator('text=Admin User').first()
+    await expect(userCard).toBeVisible()
+    await userCard.click()
+
+    await expect(page).toHaveURL(/\.gateway\/web\//, { timeout: 5000 })
+
+    const mfaDialog = page.getByRole('dialog', { name: /MFA verification required/i })
+    await expect(mfaDialog).toBeVisible({ timeout: 5000 })
   })
 })

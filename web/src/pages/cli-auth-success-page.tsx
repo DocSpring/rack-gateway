@@ -1,5 +1,5 @@
-import { Button } from '@/components/ui/button'
 import { AuthResultCard } from '@/components/auth-result-card'
+import { Button } from '@/components/ui/button'
 
 export function CLIAuthSuccessPage() {
   return (

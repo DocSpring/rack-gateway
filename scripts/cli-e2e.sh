@@ -249,7 +249,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   echo -e "${YELLOW}Restarting gateway-api-dev to apply MFA setting...${NC}"
   docker compose restart gateway-api-dev >/dev/null
-  ./scripts/wait-services.sh
+  ./scripts/wait-for-services.sh
 
   for user_email in "admin@example.com" "deployer@example.com" "viewer@example.com"; do
     reset_user_mfa "$user_email"

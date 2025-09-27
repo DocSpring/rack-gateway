@@ -1,8 +1,8 @@
 import { RefreshCcw } from 'lucide-react'
 import { useMemo } from 'react'
+import { AuthResultCard } from '@/components/auth-result-card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { AuthResultCard } from '@/components/auth-result-card'
 
 const REASON_MESSAGES: Record<string, { title: string; description: string }> = {
   'mfa-finalize': {
@@ -36,7 +36,7 @@ export function LoginErrorPage() {
       status="error"
       title={info.title}
     >
-      <Alert variant="destructive" className="w-full">
+      <Alert className="w-full" variant="destructive">
         <AlertDescription>
           {message && message.trim().length > 0 ? message : info.description}
         </AlertDescription>
