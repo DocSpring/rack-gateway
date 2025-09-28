@@ -74,12 +74,15 @@ func TestDeployRequestDuplicateGuard(t *testing.T) {
 	require.NoError(t, err)
 	token := createAPITokenHelper(t, database, user.ID)
 
-	_, err = database.CreateDeployRequest("production", "Deploy one", user.ID, nil, token.ID, &user.ID)
+	_, err = database.CreateDeployRequest("production", "Deploy branch", user.ID, nil, token.ID, &user.ID)
 	require.NoError(t, err)
 
-	_, err = database.CreateDeployRequest("production", "Deploy two", user.ID, nil, token.ID, &user.ID)
+	_, err = database.CreateDeployRequest("production", "Deploy branch", user.ID, nil, token.ID, &user.ID)
 	require.Error(t, err)
 	require.ErrorIs(t, err, db.ErrDeployRequestActive)
+
+	_, err = database.CreateDeployRequest("production", "Deploy another branch", user.ID, nil, token.ID, &user.ID)
+	require.NoError(t, err)
 }
 
 func TestDeployRequestExpiration(t *testing.T) {

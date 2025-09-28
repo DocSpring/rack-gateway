@@ -36,6 +36,18 @@ var (
 	ErrDeployRequestExpired       = errors.New("deploy approval expired")
 )
 
+type DeployRequestConflictError struct {
+	Request *DeployRequest
+}
+
+func (e *DeployRequestConflictError) Error() string {
+	return ErrDeployRequestActive.Error()
+}
+
+func (e *DeployRequestConflictError) Unwrap() error {
+	return ErrDeployRequestActive
+}
+
 const deployRequestSelect = `
 SELECT
     dr.id,
@@ -226,37 +238,24 @@ func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
 	return &dr, nil
 }
 
-func (d *Database) hasActiveDeployRequest(targetTokenID int64) (bool, error) {
-	var exists int
-	err := d.queryRow(
-		"SELECT 1 FROM deploy_requests WHERE target_api_token_id = ? AND status IN ('pending','approved') LIMIT 1",
-		targetTokenID,
-	).Scan(&exists)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 func (d *Database) CreateDeployRequest(rack, message string, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployRequest, error) {
 	if strings.TrimSpace(rack) == "" {
 		rack = "default"
 	}
-	if strings.TrimSpace(message) == "" {
+	message = strings.TrimSpace(message)
+	if message == "" {
 		return nil, fmt.Errorf("message is required")
 	}
 	if targetAPITokenID <= 0 {
 		return nil, fmt.Errorf("target api token required")
 	}
-	active, err := d.hasActiveDeployRequest(targetAPITokenID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check existing deploy requests: %w", err)
+
+	existing, err := d.activeDeployRequestByMessage(rack, message)
+	if err == nil && existing != nil {
+		return nil, &DeployRequestConflictError{Request: existing}
 	}
-	if active {
-		return nil, ErrDeployRequestActive
+	if err != nil && !errors.Is(err, ErrDeployRequestNotFound) {
+		return nil, fmt.Errorf("failed to check existing deploy requests: %w", err)
 	}
 
 	var createdAPIToken sql.NullInt64
@@ -273,7 +272,7 @@ func (d *Database) CreateDeployRequest(rack, message string, createdByUserID int
 		`INSERT INTO deploy_requests (rack, message, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
          VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		rack,
-		strings.TrimSpace(message),
+		message,
 		DeployRequestStatusPending,
 		createdByUserID,
 		createdAPIToken,
@@ -288,6 +287,28 @@ func (d *Database) CreateDeployRequest(rack, message string, createdByUserID int
 
 func (d *Database) GetDeployRequest(id int64) (*DeployRequest, error) {
 	row := d.queryRow(deployRequestSelect+" WHERE dr.id = ?", id)
+	return scanDeployRequest(row)
+}
+
+func (d *Database) activeDeployRequestByMessage(rack, message string) (*DeployRequest, error) {
+	trimmedRack := strings.TrimSpace(rack)
+	if trimmedRack == "" {
+		trimmedRack = "default"
+	}
+	trimmedMessage := strings.TrimSpace(message)
+	row := d.queryRow(
+		deployRequestSelect+` WHERE dr.rack = ? AND dr.message = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
+		trimmedRack,
+		trimmedMessage,
+	)
+	return scanDeployRequest(row)
+}
+
+func (d *Database) ActiveDeployRequestByToken(tokenID int64) (*DeployRequest, error) {
+	row := d.queryRow(
+		deployRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
+		tokenID,
+	)
 	return scanDeployRequest(row)
 }
 

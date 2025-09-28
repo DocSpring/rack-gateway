@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { VariantProps } from 'class-variance-authority'
-import { Loader2, X, Timer, Check } from 'lucide-react'
+import { Check, Loader2, Timer, X } from 'lucide-react'
 import type { ChangeEvent } from 'react'
 import { useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'

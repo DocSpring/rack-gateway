@@ -28,6 +28,14 @@ type deployRequest struct {
 	ApprovalNotes      string     `json:"approval_notes,omitempty"`
 }
 
+type deployRequestConflictError struct {
+	request *deployRequest
+}
+
+func (e *deployRequestConflictError) Error() string {
+	return "deploy request already exists"
+}
+
 func newDeployApprovalCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy-approval",
@@ -96,11 +104,23 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 
 			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, "", nil)
 			if err != nil {
-				return err
+				var conflict *deployRequestConflictError
+				if errors.As(err, &conflict) && conflict.request != nil {
+					created = conflict.request
+					if err := writef(cmd.OutOrStdout(), "Deploy request %d already exists (status: %s)\n", created.ID, created.Status); err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
+			} else {
+				if err := writef(cmd.OutOrStdout(), "Deploy request %d created (status: %s)\n", created.ID, created.Status); err != nil {
+					return err
+				}
 			}
 
-			if err := writef(cmd.OutOrStdout(), "Deploy request %d created (status: %s)\n", created.ID, created.Status); err != nil {
-				return err
+			if created == nil {
+				return fmt.Errorf("failed to create deploy request")
 			}
 
 			if waitFlag {
@@ -238,6 +258,12 @@ func postDeployRequest(cmd *cobra.Command, gatewayURL, bearer, path string, payl
 		}
 
 		if resp.StatusCode >= 400 {
+			if resp.StatusCode == http.StatusConflict {
+				var existing deployRequest
+				if len(body) > 0 && json.Unmarshal(body, &existing) == nil && existing.ID > 0 {
+					return &existing, &deployRequestConflictError{request: &existing}
+				}
+			}
 			return nil, fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		}
 
