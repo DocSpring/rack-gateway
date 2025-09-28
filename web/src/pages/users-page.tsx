@@ -18,6 +18,7 @@ import {
 } from '../components/ui/table'
 import type { UserEditDialogMode, UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
+import { UserMetaCell } from '../components/user-meta-cell'
 import { useAuth } from '../contexts/auth-context'
 import { api, type RoleName } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
@@ -367,8 +368,11 @@ export function UsersPage() {
                 <TableCell>
                   <Badge variant={'default'}>Active</Badge>
                 </TableCell>
-                <TableCell className="text-sm">
-                  {user.created_by_email || user.created_by_name || '-'}
+                <TableCell>
+                  <UserMetaCell
+                    email={user.created_by_email ?? undefined}
+                    name={user.created_by_name ?? undefined}
+                  />
                 </TableCell>
                 <TableCell className="text-sm">
                   <TimeAgo date={user.created_at} />

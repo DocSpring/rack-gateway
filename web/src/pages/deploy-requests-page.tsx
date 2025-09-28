@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/use-toast'
+import { UserMetaCell } from '@/components/user-meta-cell'
 import { useStepUp } from '@/contexts/step-up-context'
 import {
   approveDeployRequest,
@@ -202,6 +203,7 @@ export function DeployRequestsPage() {
                 <TableHead>Message</TableHead>
                 <TableHead>Target Token</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Decided By</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead>Expires</TableHead>
@@ -379,6 +381,21 @@ function DeployRequestRow({
   const canReject = normalizedStatus === 'pending' || normalizedStatus === 'approved'
 
   const showExpiresAt = request.approval_expires_at && canReject
+  const decidedBy = (() => {
+    if (request.approved_by_email || request.approved_by_name) {
+      return {
+        name: request.approved_by_name ?? undefined,
+        email: request.approved_by_email ?? undefined,
+      }
+    }
+    if (request.rejected_by_email || request.rejected_by_name) {
+      return {
+        name: request.rejected_by_name ?? undefined,
+        email: request.rejected_by_email ?? undefined,
+      }
+    }
+    return null
+  })()
 
   const handleRowClick = () => onSelect(request)
   const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
@@ -409,11 +426,15 @@ function DeployRequestRow({
       </TableCell>
       <TableCell>{statusBadge(status)}</TableCell>
       <TableCell>
+        <UserMetaCell email={decidedBy?.email} name={decidedBy?.name} />
+      </TableCell>
+      <TableCell>
         <TimeAgo date={request.created_at} />
       </TableCell>
       <TableCell>
         <TimeAgo date={request.updated_at} />
       </TableCell>
+
       <TableCell>
         <div className="flex items-center gap-1 text-sm">
           {showExpiresAt ? (
