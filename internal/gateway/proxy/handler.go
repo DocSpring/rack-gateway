@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -45,6 +46,16 @@ type Handler struct {
 	rackAlias        string
 	rackCertManager  *rackcert.Manager
 }
+
+type deployApprovalTracker struct {
+	request *db.DeployRequest
+	stage   db.DeployRequestStage
+	tokenID int64
+}
+
+type deployApprovalContextKeyType string
+
+const deployApprovalContextKey deployApprovalContextKeyType = "deployApproval"
 
 const maskedSecret = envutil.MaskedSecret
 
@@ -232,8 +243,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check permissions (different logic for JWT vs API tokens)
-	var allowed bool
-	var err error
+	var (
+		allowed         bool
+		approvalTracker *deployApprovalTracker
+		err             error
+	)
 	methodForRBAC := r.Method
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
@@ -246,14 +260,26 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if authUser.IsAPIToken {
-		// For API tokens, check permissions directly
-		allowed = h.hasAPITokenPermission(authUser, resource, action)
+		allowed, approvalTracker, err = h.evaluateAPITokenPermission(r, authUser, rackConfig, resource, action)
+		if err != nil {
+			if appErr, ok := err.(*deployApprovalError); ok {
+				h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", appErr.status, time.Since(start), errors.New(appErr.message))
+				http.Error(w, appErr.message, appErr.status)
+				return
+			}
+			h.handleError(w, r, "failed to validate deploy approval", http.StatusInternalServerError, rackConfig.Name, start)
+			return
+		}
 	} else {
-		// For JWT users, use RBAC
 		allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action)
 		if err != nil {
 			allowed = false
 		}
+	}
+
+	if approvalTracker != nil {
+		ctx := context.WithValue(r.Context(), deployApprovalContextKey, approvalTracker)
+		r = r.WithContext(ctx)
 	}
 
 	// Additional RBAC for release/environment set operations and body rewrite
@@ -311,6 +337,13 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Forward the request to the rack
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
+	if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && err == nil && status >= 200 && status < 300 {
+		if tracker.stage == db.DeployRequestStagePromote {
+			if releaseID := extractReleaseIDFromPath(path); releaseID != "" {
+				h.markDeployApprovalPromote(tracker, releaseID)
+			}
+		}
+	}
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			logRackTLSMismatch("proxy_forward", fpErr)
@@ -1074,6 +1107,8 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
+	tracker := getDeployApprovalTracker(r.Context())
+
 	setResource := func(resourceType, resourceID string, setAudit bool) bool {
 		if strings.TrimSpace(resourceID) == "" {
 			return false
@@ -1099,10 +1134,34 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/builds") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			setResource("build", id, true)
+			if tracker != nil && tracker.stage == db.DeployRequestStageBuild {
+				h.markDeployApprovalBuild(tracker, id)
+			}
 		}
 		if rel := extractJSONString(obj["release"]); rel != "" {
 			if h.recordResourceCreator("release", rel, email) {
 				r.Header.Add("X-Release-Created", rel)
+			}
+			if tracker != nil {
+				h.markDeployApprovalRelease(tracker, rel)
+			}
+		}
+	}
+	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
+		key := extractJSONString(obj["key"])
+		if key == "" {
+			key = extractJSONString(obj["id"])
+		}
+		if key == "" {
+			segments := strings.Split(strings.TrimSpace(path), "/")
+			if len(segments) > 0 {
+				key = segments[len(segments)-1]
+			}
+		}
+		if key != "" {
+			setResource("object", key, false)
+			if tracker != nil && tracker.stage == db.DeployRequestStageObject {
+				h.markDeployApprovalObject(tracker, key)
 			}
 		}
 	}
@@ -1123,6 +1182,9 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			r.Header.Set("X-Audit-Resource", id)
 			if h.recordResourceCreator("release", id, email) {
 				r.Header.Add("X-Release-Created", id)
+			}
+			if tracker != nil && tracker.stage == db.DeployRequestStageRelease {
+				h.markDeployApprovalRelease(tracker, id)
 			}
 		}
 	}
@@ -1494,6 +1556,164 @@ func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource, actio
 	}
 
 	return false
+}
+
+type deployApprovalError struct {
+	status  int
+	message string
+}
+
+func (e *deployApprovalError) Error() string { return e.message }
+
+func tokenHasPermission(perms []string, target string) bool {
+	for _, perm := range perms {
+		if perm == target {
+			return true
+		}
+	}
+	return false
+}
+
+func approvalStageFor(resource, action string) (db.DeployRequestStage, bool) {
+	switch resource {
+	case "build":
+		if action == "create" {
+			return db.DeployRequestStageBuild, true
+		}
+	case "object":
+		if action == "create" {
+			return db.DeployRequestStageObject, true
+		}
+	case "release":
+		if action == "create" {
+			return db.DeployRequestStageRelease, true
+		}
+		if action == "promote" {
+			return db.DeployRequestStagePromote, true
+		}
+	}
+	return "", false
+}
+
+func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.AuthUser, rack config.RackConfig, resource, action string) (bool, *deployApprovalTracker, error) {
+	if authUser == nil || authUser.TokenID == nil {
+		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+	}
+
+	basePerm := fmt.Sprintf("convox:%s:%s", resource, action)
+	withApprovalPerm := fmt.Sprintf("convox:%s:%s-with-approval", resource, action)
+	hasBasePermission := h.hasAPITokenPermission(authUser, resource, action)
+	if hasBasePermission {
+		return true, nil, nil
+	}
+
+	stage, ok := approvalStageFor(resource, action)
+	if !ok {
+		return false, nil, nil
+	}
+
+	if h.config != nil && h.config.DeployApprovalsDisabled {
+		if hasBasePermission ||
+			tokenHasPermission(authUser.Permissions, basePerm) ||
+			tokenHasPermission(authUser.Permissions, withApprovalPerm) {
+			return true, nil, nil
+		}
+		return false, nil, nil
+	}
+
+	perm := withApprovalPerm
+	if !tokenHasPermission(authUser.Permissions, perm) {
+		return false, nil, nil
+	}
+
+	rackName := strings.TrimSpace(rack.Name)
+	if rackName == "" {
+		rackName = strings.TrimSpace(rack.Alias)
+	}
+	if rackName == "" {
+		rackName = "default"
+	}
+
+	if h.database == nil {
+		return false, nil, fmt.Errorf("database unavailable for deploy approvals")
+	}
+
+	window := 15 * time.Minute
+	if h.config != nil && h.config.DeployApprovalWindow > 0 {
+		window = h.config.DeployApprovalWindow
+	}
+
+	req, err := h.database.ActiveDeployRequestForStage(*authUser.TokenID, rackName, stage, window)
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrDeployApprovalMissing):
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: fmt.Sprintf("deployment approval required (%s stage)", string(stage))}
+		case errors.Is(err, db.ErrDeployRequestExpired):
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval expired"}
+		case errors.Is(err, db.ErrDeployRequestStageMismatch):
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval not in required stage"}
+		default:
+			return false, nil, err
+		}
+	}
+	if req == nil {
+		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval required"}
+	}
+
+	tracker := &deployApprovalTracker{
+		request: req,
+		stage:   stage,
+		tokenID: *authUser.TokenID,
+	}
+
+	return true, tracker, nil
+}
+
+func getDeployApprovalTracker(ctx context.Context) *deployApprovalTracker {
+	if ctx == nil {
+		return nil
+	}
+	val := ctx.Value(deployApprovalContextKey)
+	if tracker, ok := val.(*deployApprovalTracker); ok {
+		return tracker
+	}
+	return nil
+}
+
+func (h *Handler) markDeployApprovalBuild(tracker *deployApprovalTracker, buildID string) {
+	if tracker == nil || h.database == nil || strings.TrimSpace(buildID) == "" {
+		return
+	}
+	if err := h.database.MarkDeployRequestBuildUsed(tracker.request.ID, buildID, time.Now()); err != nil {
+		log.Printf("deploy approval build update failed: %v", err)
+	}
+}
+
+func (h *Handler) markDeployApprovalObject(tracker *deployApprovalTracker, objectKey string) {
+	if tracker == nil || h.database == nil || strings.TrimSpace(objectKey) == "" {
+		return
+	}
+	if err := h.database.MarkDeployRequestObjectUsed(tracker.request.ID, objectKey, time.Now()); err != nil {
+		log.Printf("deploy approval object update failed: %v", err)
+	}
+}
+
+func (h *Handler) markDeployApprovalRelease(tracker *deployApprovalTracker, releaseID string) {
+	if tracker == nil || h.database == nil || strings.TrimSpace(releaseID) == "" {
+		return
+	}
+	if err := h.database.MarkDeployRequestReleaseCreated(tracker.request.ID, releaseID, time.Now()); err != nil {
+		log.Printf("deploy approval release update failed: %v", err)
+	}
+}
+
+func (h *Handler) markDeployApprovalPromote(tracker *deployApprovalTracker, releaseID string) {
+	if tracker == nil || h.database == nil || strings.TrimSpace(releaseID) == "" {
+		return
+	}
+	if err := h.database.MarkDeployRequestPromoted(tracker.request.ID, releaseID, tracker.tokenID, time.Now()); err != nil {
+		log.Printf("deploy approval promote update failed: %v", err)
+	}
 }
 
 // checkWebSocketOrigin validates the origin header for WebSocket connections
