@@ -152,7 +152,12 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
 	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
-	cmd.Flags().StringVar(&timeoutStr, "timeout", "", "Maximum time to wait; empty for indefinite")
+	cmd.Flags().StringVar(
+		&timeoutStr,
+		"timeout",
+		"20m",
+		"Maximum time to wait before giving up (set to 0 to wait indefinitely)",
+	)
 
 	return cmd
 }
