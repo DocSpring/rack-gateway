@@ -146,11 +146,12 @@ type DeviceInfo struct {
 }
 
 var (
-	configPath string
-	rackFlag   string
-	Version    = "dev"
-	BuildTime  = "unknown"
-	httpClient = &http.Client{Timeout: 30 * time.Second}
+	configPath   string
+	rackFlag     string
+	apiTokenFlag string
+	Version      = "dev"
+	BuildTime    = "unknown"
+	httpClient   = &http.Client{Timeout: 30 * time.Second}
 )
 
 func silenceOnError(fn func(cmd *cobra.Command, args []string) error) func(*cobra.Command, []string) error {
@@ -191,6 +192,8 @@ Rack management:
 			return cmd.Help()
 		},
 	}
+
+	rootCmd.PersistentFlags().StringVar(&apiTokenFlag, "api-token", "", "API token to use for CLI requests (overrides CONVOX_GATEWAY_API_TOKEN)")
 
 	var noOpen bool
 	var authFile string

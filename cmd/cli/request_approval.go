@@ -30,8 +30,7 @@ type deployRequest struct {
 
 func newRequestApprovalCommand() *cobra.Command {
 	var (
-		tokenIdentifier string
-		tokenID         int64
+		targetToken     string
 		rackFlag        string
 		waitFlag        bool
 		pollIntervalStr string
@@ -54,13 +53,6 @@ func newRequestApprovalCommand() *cobra.Command {
 			}
 			if strings.TrimSpace(rackFlag) != "" {
 				rack = strings.TrimSpace(rackFlag)
-			}
-
-			if tokenID < 0 {
-				return fmt.Errorf("--token-id must be a positive integer")
-			}
-			if tokenID == 0 && strings.TrimSpace(tokenIdentifier) == "" {
-				return fmt.Errorf("--token or --token-id is required")
 			}
 
 			pollInterval := 5 * time.Second
@@ -89,7 +81,7 @@ func newRequestApprovalCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, tokenIdentifier, tokenID)
+			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, strings.TrimSpace(targetToken))
 			if err != nil {
 				return err
 			}
@@ -124,8 +116,7 @@ func newRequestApprovalCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&tokenIdentifier, "token", "", "Target API token name or ID")
-	cmd.Flags().Int64Var(&tokenID, "token-id", 0, "Target API token numeric ID")
+	cmd.Flags().StringVar(&targetToken, "target-api-token", "", "Target API token name (defaults to the authenticated token)")
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
 	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
@@ -134,15 +125,13 @@ func newRequestApprovalCommand() *cobra.Command {
 	return cmd
 }
 
-func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message, tokenIdentifier string, tokenID int64) (*deployRequest, error) {
+func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message, targetToken string) (*deployRequest, error) {
 	payload := map[string]interface{}{
 		"message": message,
 		"rack":    rack,
 	}
-	if tokenID > 0 {
-		payload["target_api_token_id"] = tokenID
-	} else if strings.TrimSpace(tokenIdentifier) != "" {
-		payload["target_api_token"] = strings.TrimSpace(tokenIdentifier)
+	if targetToken != "" {
+		payload["target_api_token"] = targetToken
 	}
 
 	resp, body, err := sendDeployRequest(gatewayURL, bearer, http.MethodPost, "/deploy-requests", payload)

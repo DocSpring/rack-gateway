@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
+	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
@@ -78,7 +79,9 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		return
 	}
 
-	token, err := h.resolveDeployRequestToken(c, dbUser, req)
+	authUser, _ := auth.GetAuthUser(c.Request.Context())
+
+	token, err := h.resolveDeployRequestToken(c, dbUser, req, authUser)
 	if err != nil {
 		switch {
 		case errors.Is(err, errDeployRequestTokenNotFound):
@@ -151,7 +154,7 @@ var (
 	errDeployRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
 )
 
-func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, req CreateDeployRequestRequest) (*db.APIToken, error) {
+func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, req CreateDeployRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPIToken)
 	var token *db.APIToken
 	var err error
@@ -164,6 +167,8 @@ func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, re
 		} else {
 			token, err = h.database.GetAPITokenByName(identifier)
 		}
+	} else if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil && *authUser.TokenID > 0 {
+		token, err = h.database.GetAPITokenByID(*authUser.TokenID)
 	} else {
 		return nil, errDeployRequestTargetMissing
 	}

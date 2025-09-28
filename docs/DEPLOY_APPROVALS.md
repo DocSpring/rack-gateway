@@ -42,14 +42,14 @@ If a user/token already has the direct permission (for example `convox:build:cre
 ## CLI Request Flow
 
 ```bash
-# Request approval for a deploy. --token can be an API token name or ID.
-./bin/convox-gateway request-approval "Deploy 1234abcd to Production" \
-  --token my-ci-token --wait --timeout 20m
+# Request approval for a deploy using the authenticated API token (from CONVOX_GATEWAY_API_TOKEN or --api-token)
+CONVOX_GATEWAY_API_TOKEN=... ./bin/convox-gateway request-approval "Deploy 1234abcd to Production" --wait --timeout 20m
 ```
 
 Flags:
 
-- `--token` or `--token-id` – identifies which CI token will perform the release steps.
+- `--api-token` – optional override for the API token used to authenticate (otherwise read from `CONVOX_GATEWAY_API_TOKEN` or stored config).
+- `--target-api-token` – request approval on behalf of a different API token (admins only).
 - `--rack` – override the current rack if needed.
 - `--wait` – blocks until the request is approved/rejected (with optional `--poll-interval` and `--timeout`).
 
@@ -131,4 +131,3 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 - When automating rollback flows, request a fresh approval to avoid failing the approval-consumption guard.
 
 For additional environment variables or advanced configuration, consult [docs/CONFIGURATION.md](./CONFIGURATION.md).
-

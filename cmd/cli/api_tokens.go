@@ -408,7 +408,10 @@ func gatewayAuthInfo(rack string) (string, string, error) {
 		return "", "", err
 	}
 
-	bearer := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_API_TOKEN"))
+	bearer := strings.TrimSpace(apiTokenFlag)
+	if bearer == "" {
+		bearer = strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_API_TOKEN"))
+	}
 	if bearer == "" {
 		token, err := loadToken(rack)
 		if err != nil {
