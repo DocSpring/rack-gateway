@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { VariantProps } from 'class-variance-authority'
-import { CheckCircle2, Loader2, ShieldX, Timer } from 'lucide-react'
+import { Loader2, X, Timer, Check } from 'lucide-react'
 import type { ChangeEvent } from 'react'
 import { useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
@@ -227,7 +227,7 @@ export function DeployRequestsPage() {
               {rejectMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <ShieldX className="h-4 w-4" />
+                <X className="h-4 w-4" />
               )}
               Reject request
             </Button>
@@ -306,11 +306,11 @@ function DeployRequestRow({
       <TableCell>
         <div className="flex justify-end gap-2">
           {canApprove && (
-            <Button disabled={approveDisabled} onClick={() => onApprove(id)} variant="outline">
+            <Button disabled={approveDisabled} onClick={() => onApprove(id)} variant="success">
               {approvePending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <CheckCircle2 className="mr-2 h-4 w-4" />
+                <Check className="mr-2 h-4 w-4" />
               )}
               Approve
             </Button>
@@ -324,7 +324,7 @@ function DeployRequestRow({
               {rejectPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <ShieldX className="h-4 w-4" />
+                <X className="h-4 w-4" />
               )}
               Reject
             </Button>

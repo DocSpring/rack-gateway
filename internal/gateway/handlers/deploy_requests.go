@@ -54,7 +54,7 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		return
 	}
 	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "you do not have permission to request a deploy approval"})
 		return
 	}
 
@@ -91,6 +91,10 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for target token"})
 		case errors.Is(err, errDeployRequestTargetMissing):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, errDeployRequestUserPrivileged):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "you already have permission to deploy"})
+		case errors.Is(err, errDeployRequestHumanNeedsToken):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "deploy approvals are only required for CI/CD API tokens. Use --target-api-token-id to specify one."})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
 		}
@@ -150,10 +154,24 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 }
 
 var (
-	errDeployRequestTokenNotFound = errors.New("api token not found")
-	errDeployRequestForbidden     = errors.New("not authorized for target token")
-	errDeployRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
+	errDeployRequestTokenNotFound   = errors.New("api token not found")
+	errDeployRequestForbidden       = errors.New("not authorized for target token")
+	errDeployRequestTargetMissing   = errors.New("target_api_token_id or target_api_token is required")
+	errDeployRequestUserPrivileged  = errors.New("user already permitted to deploy")
+	errDeployRequestHumanNeedsToken = errors.New("target API token required for approvals")
 )
+
+func userHasAdminRole(authUser *auth.AuthUser) bool {
+	if authUser == nil {
+		return false
+	}
+	for _, role := range authUser.Roles {
+		if strings.EqualFold(strings.TrimSpace(role), "admin") {
+			return true
+		}
+	}
+	return false
+}
 
 func resolveDeployRequestToken(database *db.Database, rbacSvc rbac.RBACManager, user *db.User, req CreateDeployRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPITokenName)
@@ -188,6 +206,12 @@ func resolveDeployRequestToken(database *db.Database, rbacSvc rbac.RBACManager, 
 	if token == nil {
 		if hasExplicitTarget {
 			return nil, errDeployRequestTokenNotFound
+		}
+		if authUser != nil && !authUser.IsAPIToken {
+			if userHasAdminRole(authUser) {
+				return nil, errDeployRequestUserPrivileged
+			}
+			return nil, errDeployRequestHumanNeedsToken
 		}
 		return nil, errDeployRequestTargetMissing
 	}
