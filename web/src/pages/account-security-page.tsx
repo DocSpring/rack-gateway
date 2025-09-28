@@ -481,7 +481,6 @@ export function AccountSecurityPage() {
               {recentBackupCodes && recentBackupCodes.length > 0 ? (
                 <Button
                   onClick={() => handleDownloadCodes(recentBackupCodes)}
-                  size="sm"
                   variant="outline"
                 >
                   Download latest codes
@@ -519,7 +518,6 @@ export function AccountSecurityPage() {
                   <Button
                     className="w-fit"
                     onClick={() => handleCopy(enrollment.secret ?? '')}
-                    size="sm"
                     variant="secondary"
                   >
                     Copy secret for manual entry
@@ -547,14 +545,12 @@ export function AccountSecurityPage() {
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Button
                         onClick={() => handleCopyCodes(recentBackupCodes)}
-                        size="sm"
                         variant="secondary"
                       >
                         Copy codes
                       </Button>
                       <Button
                         onClick={() => handleDownloadCodes(recentBackupCodes)}
-                        size="sm"
                         variant="secondary"
                       >
                         Download
