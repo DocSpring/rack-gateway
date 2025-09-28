@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { VariantProps } from 'class-variance-authority'
-import { CheckCircle2, Loader2, ShieldX, Timer, XCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, ShieldX, Timer } from 'lucide-react'
 import type { ChangeEvent } from 'react'
 import { useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
@@ -120,6 +120,11 @@ export function DeployRequestsPage() {
   const approveDisabled = approveMutation.isPending || rejectMutation.isPending
   const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
 
+  const handleRejectClick = (request: DeployRequest) => {
+    setRejectRequest(request)
+    setRejectNotes('')
+  }
+
   return (
     <PageLayout description="Manual review queue for CI/CD deploys" title="Deploy Approvals">
       <div className="space-y-6">
@@ -163,91 +168,20 @@ export function DeployRequestsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {requests.map((request) => {
-                if (request.id == null) {
-                  return null
-                }
-                const id = request.id
-                const message = request.message ?? '(no message provided)'
-                const tokenLabel =
-                  request.target_api_token_name ??
-                  (request.target_api_token_id != null
-                    ? `Token ${request.target_api_token_id}`
-                    : 'Unknown token')
-                const tokenIdLabel = request.target_api_token_id ?? '—'
-                const status = request.status ?? 'unknown'
-                const normalizedStatus = status.toLowerCase()
-
-                return (
-                  <TableRow key={id}>
-                    <TableCell className="font-mono text-sm">{id}</TableCell>
-                    <TableCell className="max-w-xs truncate" title={message}>
-                      {message}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col text-sm">
-                        <span>{tokenLabel}</span>
-                        <span className="text-muted-foreground text-xs">ID {tokenIdLabel}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{statusBadge(status)}</TableCell>
-                    <TableCell>
-                      <TimeAgo date={request.created_at} />
-                    </TableCell>
-                    <TableCell>
-                      <TimeAgo date={request.updated_at} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm">
-                        {request.approval_expires_at ? (
-                          <>
-                            <Timer className="h-4 w-4 text-muted-foreground" />
-                            <TimeAgo date={request.approval_expires_at} />
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        {normalizedStatus === 'pending' ? (
-                          <>
-                            <Button
-                              disabled={approveDisabled}
-                              onClick={() => approveMutation.mutate(id)}
-                              variant="outline"
-                            >
-                              {approveMutation.isPending ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                              )}
-                              Approve
-                            </Button>
-                            <Button
-                              disabled={rejectDisabled}
-                              onClick={() => {
-                                setRejectRequest(request)
-                                setRejectNotes('')
-                              }}
-                              variant="destructive"
-                            >
-                              <ShieldX className="mr-2 h-4 w-4" />
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          <Button disabled size="sm" variant="ghost">
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Resolved
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+              {requests.map((request) =>
+                request.id == null ? null : (
+                  <DeployRequestRow
+                    approveDisabled={approveDisabled}
+                    approvePending={approveMutation.isPending}
+                    key={request.id}
+                    onApprove={(id) => approveMutation.mutate(id)}
+                    onReject={handleRejectClick}
+                    rejectDisabled={rejectDisabled}
+                    rejectPending={rejectMutation.isPending}
+                    request={request}
+                  />
                 )
-              })}
+              )}
             </TableBody>
           </Table>
         </TablePane>
@@ -291,9 +225,9 @@ export function DeployRequestsPage() {
               variant="destructive"
             >
               {rejectMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <ShieldX className="mr-2 h-4 w-4" />
+                <ShieldX className="h-4 w-4" />
               )}
               Reject request
             </Button>
@@ -301,5 +235,102 @@ export function DeployRequestsPage() {
         </DialogContent>
       </Dialog>
     </PageLayout>
+  )
+}
+
+type DeployRequestRowProps = {
+  request: DeployRequest
+  approveDisabled: boolean
+  approvePending: boolean
+  rejectDisabled: boolean
+  rejectPending: boolean
+  onApprove: (id: number) => void
+  onReject: (request: DeployRequest) => void
+}
+
+function DeployRequestRow({
+  request,
+  approveDisabled,
+  approvePending,
+  rejectDisabled,
+  rejectPending,
+  onApprove,
+  onReject,
+}: DeployRequestRowProps) {
+  const id = request.id
+  if (id == null) {
+    return null
+  }
+
+  const message = request.message ?? '(no message provided)'
+  const tokenLabel =
+    request.target_api_token_name ??
+    (request.target_api_token_id != null ? `Token ${request.target_api_token_id}` : 'Unknown token')
+  const tokenIdLabel = request.target_api_token_id ?? '—'
+  const status = request.status ?? 'unknown'
+  const normalizedStatus = status.toLowerCase()
+  const canApprove = normalizedStatus === 'pending'
+  const canReject = normalizedStatus === 'pending' || normalizedStatus === 'approved'
+
+  return (
+    <TableRow key={id}>
+      <TableCell className="font-mono text-sm">{id}</TableCell>
+      <TableCell className="max-w-xs truncate" title={message}>
+        {message}
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col text-sm">
+          <span>{tokenLabel}</span>
+          <span className="text-muted-foreground text-sm">ID {tokenIdLabel}</span>
+        </div>
+      </TableCell>
+      <TableCell>{statusBadge(status)}</TableCell>
+      <TableCell>
+        <TimeAgo date={request.created_at} />
+      </TableCell>
+      <TableCell>
+        <TimeAgo date={request.updated_at} />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1 text-sm">
+          {request.approval_expires_at ? (
+            <>
+              <Timer className="h-4 w-4 text-muted-foreground" />
+              <TimeAgo date={request.approval_expires_at} />
+            </>
+          ) : (
+            '—'
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex justify-end gap-2">
+          {canApprove && (
+            <Button disabled={approveDisabled} onClick={() => onApprove(id)} variant="outline">
+              {approvePending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Approve
+            </Button>
+          )}
+          {canReject && (
+            <Button
+              disabled={rejectDisabled}
+              onClick={() => onReject(request)}
+              variant="destructive"
+            >
+              {rejectPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldX className="h-4 w-4" />
+              )}
+              Reject
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
   )
 }

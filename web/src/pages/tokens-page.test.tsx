@@ -79,6 +79,7 @@ const defaultPermissions = [
 const mockTokens: APIToken[] = [
   {
     id: 1,
+    public_id: 'tok-1',
     name: 'CI/CD Pipeline',
     user_id: 10,
     permissions: defaultPermissions,
@@ -88,6 +89,7 @@ const mockTokens: APIToken[] = [
   },
   {
     id: 2,
+    public_id: 'tok-2',
     name: 'Development Token',
     user_id: 11,
     permissions: ['convox:app:list'],
@@ -463,6 +465,7 @@ describe('TokensPage', () => {
       const badTokens: APIToken[] = [
         {
           id: 999,
+          public_id: 'tok-999',
           name: 'Bad Token',
           user_id: 42,
           permissions: [],

@@ -28,18 +28,6 @@ type NavigationItem = {
   disabled?: boolean
 }
 
-const baseNavigation: NavigationItem[] = [
-  { name: 'Rack', href: '/rack', icon: Server },
-  { name: 'Apps', href: '/apps', icon: Boxes },
-  { name: 'Processes', href: '/processes', icon: TerminalSquare },
-  { name: 'Instances', href: '/instances', icon: TerminalSquare },
-  { name: 'Builds', href: '/builds', icon: FileText },
-  { name: 'Releases', href: '/releases', icon: FileText },
-  { name: 'Users', href: '/users', icon: Users },
-  { name: 'API Tokens', href: '/api_tokens', icon: Key },
-  { name: 'Audit Logs', href: '/audit_logs', icon: FileText },
-]
-
 const USER_AUDIT_RE = /\/users\/[^/]+\/audit_logs/
 
 function isNavigationItemActive(item: NavigationItem, pathname: string): boolean {
@@ -92,8 +80,22 @@ export function Layout() {
   }, [])
 
   const navigation = useMemo<NavigationItem[]>(() => {
-    const nav = baseNavigation.slice()
+    const nav: NavigationItem[] = [
+      { name: 'Rack', href: '/rack', icon: Server },
+      { name: 'Apps', href: '/apps', icon: Boxes },
+      { name: 'Processes', href: '/processes', icon: TerminalSquare },
+      { name: 'Instances', href: '/instances', icon: TerminalSquare },
+      { name: 'Builds', href: '/builds', icon: FileText },
+      { name: 'Releases', href: '/releases', icon: FileText },
+      { name: 'Users', href: '/users', icon: Users },
+      { name: 'API Tokens', href: '/api_tokens', icon: Key },
+    ]
 
+    if (user?.roles?.includes('admin')) {
+      nav.push({ name: 'Deploy Approvals', href: '/deploy_requests', icon: ListChecks })
+    }
+
+    nav.push({ name: 'Audit Logs', href: '/audit_logs', icon: FileText })
     nav.push({ name: 'Account Security', href: '/account/security', icon: Shield })
 
     nav.push({
@@ -102,9 +104,6 @@ export function Layout() {
       onSelect: () => setShowCliDialog(true),
     })
 
-    if (user?.roles?.includes('admin')) {
-      nav.push({ name: 'Deploy Approvals', href: '/deploy_requests', icon: ListChecks })
-    }
     if (user?.roles?.includes('admin')) {
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
     }
