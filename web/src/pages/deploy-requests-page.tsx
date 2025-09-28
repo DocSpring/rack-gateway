@@ -86,6 +86,10 @@ export function DeployRequestsPage() {
       const params = statusFilter === 'all' ? undefined : { status: statusFilter }
       return listDeployRequests(params)
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
   })
 
   const approveMutation = useMutation({
@@ -272,6 +276,8 @@ function DeployRequestRow({
   const canApprove = normalizedStatus === 'pending'
   const canReject = normalizedStatus === 'pending' || normalizedStatus === 'approved'
 
+  const showExpiresAt = request.approval_expires_at && canReject
+
   return (
     <TableRow key={id}>
       <TableCell className="font-mono text-sm">{id}</TableCell>
@@ -293,7 +299,7 @@ function DeployRequestRow({
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1 text-sm">
-          {request.approval_expires_at ? (
+          {showExpiresAt ? (
             <>
               <Timer className="h-4 w-4 text-muted-foreground" />
               <TimeAgo date={request.approval_expires_at} />

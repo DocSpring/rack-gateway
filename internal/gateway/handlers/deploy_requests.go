@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -135,6 +136,12 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		return
 	}
 
+	details := auditDetails(map[string]string{
+		"token_uuid": token.PublicID,
+		"rack":       rackName,
+		"message":    message,
+	})
+
 	if err := audit.LogDB(h.database, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
@@ -142,7 +149,7 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		Action:       "deploy-request.create",
 		ResourceType: "deploy-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      fmt.Sprintf("token_uuid=%s,rack=%s", token.PublicID, rackName),
+		Details:      details,
 		Status:       "success",
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
@@ -489,6 +496,14 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		return
 	}
 
+	details := auditDetails(map[string]string{
+		"token_uuid": token.PublicID,
+		"rack":       rackName,
+		"message":    message,
+		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+		"notes":      notes,
+	})
+
 	if err := audit.LogDB(h.database, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
@@ -496,7 +511,7 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		Action:       "deploy-request.preapprove",
 		ResourceType: "deploy-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      fmt.Sprintf("token_uuid=%s,rack=%s", token.PublicID, rackName),
+		Details:      details,
 		Status:       "success",
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
@@ -580,6 +595,12 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 		return
 	}
 
+	details := auditDetails(map[string]string{
+		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+		"notes":      strings.TrimSpace(payload.Notes),
+		"message":    strings.TrimSpace(record.Message),
+	})
+
 	_ = audit.LogDB(h.database, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
@@ -587,7 +608,7 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 		Action:       "deploy-request.approve",
 		ResourceType: "deploy-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      fmt.Sprintf("expires_at=%s", expiresAt.UTC().Format(time.RFC3339)),
+		Details:      details,
 		Status:       "success",
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusOK,
@@ -663,6 +684,11 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		return
 	}
 
+	details := auditDetails(map[string]string{
+		"notes":   strings.TrimSpace(payload.Notes),
+		"message": strings.TrimSpace(record.Message),
+	})
+
 	_ = audit.LogDB(h.database, &db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
@@ -670,7 +696,7 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		Action:       "deploy-request.reject",
 		ResourceType: "deploy-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      strings.TrimSpace(payload.Notes),
+		Details:      details,
 		Status:       "success",
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusOK,
@@ -728,4 +754,24 @@ func toDeployRequestResponse(dr *db.DeployRequest) DeployRequestResponse {
 		resp.ReleasePromotedByTokenID = dr.ReleasePromotedByAPITokenID
 	}
 	return resp
+}
+
+func auditDetails(values map[string]string) string {
+	filtered := make(map[string]string)
+	for key, value := range values {
+		k := strings.TrimSpace(key)
+		v := strings.TrimSpace(value)
+		if k == "" || v == "" {
+			continue
+		}
+		filtered[k] = v
+	}
+	if len(filtered) == 0 {
+		return "{}"
+	}
+	data, err := json.Marshal(filtered)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
