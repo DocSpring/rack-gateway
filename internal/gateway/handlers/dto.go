@@ -262,10 +262,10 @@ type UpdateMFASettingsRequest struct {
 
 // CreateDeployRequestRequest represents the payload to open a deploy approval request.
 type CreateDeployRequestRequest struct {
-	Message          string `json:"message" binding:"required"`
-	TargetAPITokenID *int64 `json:"target_api_token_id,omitempty"`
-	TargetAPIToken   string `json:"target_api_token,omitempty"`
-	Rack             string `json:"rack,omitempty"`
+	Message            string  `json:"message" binding:"required"`
+	TargetAPITokenID   *string `json:"target_api_token_id,omitempty"`
+	TargetAPITokenName string  `json:"target_api_token,omitempty"`
+	Rack               string  `json:"rack,omitempty"`
 }
 
 // UpdateDeployRequestStatusRequest carries optional admin notes when approving/rejecting.
@@ -283,7 +283,7 @@ type DeployRequestResponse struct {
 	UpdatedAt                time.Time  `json:"updated_at"`
 	CreatedByEmail           string     `json:"created_by_email,omitempty"`
 	CreatedByName            string     `json:"created_by_name,omitempty"`
-	TargetAPITokenID         int64      `json:"target_api_token_id"`
+	TargetAPITokenID         string     `json:"target_api_token_id"`
 	TargetAPITokenName       string     `json:"target_api_token_name,omitempty"`
 	ApprovedByEmail          string     `json:"approved_by_email,omitempty"`
 	ApprovedByName           string     `json:"approved_by_name,omitempty"`

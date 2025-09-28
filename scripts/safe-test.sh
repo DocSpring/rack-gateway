@@ -100,6 +100,10 @@ echo "Running tests with Convox config protection..."
 mkdir -p "$CONVOX_CFG_DIR"
 touch "$GUARD_FILE"
 
+if [ -n "${TEST_DATABASE_URL:-}" ]; then
+    export DATABASE_URL="${TEST_DATABASE_URL}"
+fi
+
 ensure_local_database() {
     if ! command -v python3 >/dev/null 2>&1; then
         return

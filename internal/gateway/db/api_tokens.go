@@ -22,12 +22,16 @@ func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissi
 		expVal = nil
 	}
 
-	var id int64
-	if err := d.queryRow("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id", tokenHash, name, userID, string(permissionsJSON), expVal, createdByUserID).Scan(&id); err != nil {
+	var (
+		id       int64
+		publicID string
+	)
+	if err := d.queryRow("INSERT INTO api_tokens (token_hash, name, user_id, permissions, expires_at, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, public_id", tokenHash, name, userID, string(permissionsJSON), expVal, createdByUserID).Scan(&id, &publicID); err != nil {
 		return nil, fmt.Errorf("failed to create API token: %w", err)
 	}
 	return &APIToken{
 		ID:              id,
+		PublicID:        publicID,
 		TokenHash:       tokenHash,
 		Name:            name,
 		UserID:          userID,
@@ -47,9 +51,9 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 
 	var createdByNull sql.NullInt64
 	err := d.queryRow(
-		"SELECT id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at, created_by_user_id FROM api_tokens WHERE token_hash = ?",
+		"SELECT id, public_id, token_hash, name, user_id, permissions, created_at, expires_at, last_used_at, created_by_user_id FROM api_tokens WHERE token_hash = ?",
 		tokenHash,
-	).Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON,
+	).Scan(&token.ID, &token.PublicID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON,
 		&token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull)
 
 	if err == sql.ErrNoRows {
@@ -89,10 +93,10 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 	var createdByName sql.NullString
 
 	row := d.queryRow(
-		"SELECT t.id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.id = ?",
+		"SELECT t.id, t.public_id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.id = ?",
 		id,
 	)
-	err := row.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
+	err := row.Scan(&token.ID, &token.PublicID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -144,6 +148,26 @@ func (d *Database) GetAPITokenByName(name string) (*APIToken, error) {
 	return d.GetAPITokenByID(id)
 }
 
+// GetAPITokenByPublicID retrieves an API token by its public UUID identifier.
+func (d *Database) GetAPITokenByPublicID(publicID string) (*APIToken, error) {
+	if strings.TrimSpace(publicID) == "" {
+		return nil, fmt.Errorf("token public id required")
+	}
+	row := d.queryRow(
+		"SELECT t.id FROM api_tokens t WHERE t.public_id = ?",
+		publicID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query api token by public id: %w", err)
+	}
+	return d.GetAPITokenByID(id)
+}
+
 // APITokenNameExists reports whether a token name is already taken.
 func (d *Database) APITokenNameExists(name string, excludeID int64) (bool, error) {
 	query := "SELECT 1 FROM api_tokens WHERE name = ?"
@@ -166,7 +190,7 @@ func (d *Database) APITokenNameExists(name string, excludeID int64) (bool, error
 // ListAPITokensByUser returns all API tokens for a user
 func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 	rows, err := d.query(
-		"SELECT t.id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.user_id = ? ORDER BY t.created_at DESC",
+		"SELECT t.id, t.public_id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.user_id = ? ORDER BY t.created_at DESC",
 		userID,
 	)
 	if err != nil {
@@ -184,7 +208,7 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 		var createdByEmail sql.NullString
 		var createdByName sql.NullString
 
-		err := rows.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID,
+		err := rows.Scan(&token.ID, &token.PublicID, &token.TokenHash, &token.Name, &token.UserID,
 			&permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan API token: %w", err)
@@ -221,7 +245,7 @@ func (d *Database) ListAPITokensByUser(userID int64) ([]*APIToken, error) {
 // ListAllAPITokens returns all API tokens with creator metadata
 func (d *Database) ListAllAPITokens() ([]*APIToken, error) {
 	rows, err := d.query(
-		"SELECT t.id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id ORDER BY t.created_at DESC",
+		"SELECT t.id, t.public_id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id ORDER BY t.created_at DESC",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API tokens: %w", err)
@@ -238,7 +262,7 @@ func (d *Database) ListAllAPITokens() ([]*APIToken, error) {
 		var createdByEmail sql.NullString
 		var createdByName sql.NullString
 
-		err := rows.Scan(&token.ID, &token.TokenHash, &token.Name, &token.UserID,
+		err := rows.Scan(&token.ID, &token.PublicID, &token.TokenHash, &token.Name, &token.UserID,
 			&permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan API token: %w", err)

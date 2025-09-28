@@ -390,15 +390,15 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     --output json)
 
   API_TOKEN=$(jq -r '.token' <<<"$API_TOKEN_JSON")
-  API_TOKEN_ID=$(jq -r '.api_token.id' <<<"$API_TOKEN_JSON")
+  API_TOKEN_PUBLIC_ID=$(jq -r '.api_token.public_id' <<<"$API_TOKEN_JSON")
 
-  if [[ -z "$API_TOKEN" || -z "$API_TOKEN_ID" ]]; then
+  if [[ -z "$API_TOKEN" || -z "$API_TOKEN_PUBLIC_ID" ]]; then
     echo -e "${RED}Failed to parse API token response${NC}" >&2
     echo -e "${RED}API Token JSON: $API_TOKEN_JSON${NC}"
     exit 1
   fi
 
-  echo -e "${GREEN}API Token ID: $API_TOKEN_ID${NC}, Token: $API_TOKEN${NC}"
+  echo -e "${GREEN}API Token ID: $API_TOKEN_PUBLIC_ID${NC}, Token: $API_TOKEN${NC}"
 
   logout_cli
 
@@ -422,7 +422,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   DEPLOY_REQUEST_JSON=$(curl -sfS \
     -H "Authorization: Bearer ${API_TOKEN}" \
     -H "Content-Type: application/json" \
-    --data "$(jq -nc --arg msg "CLI E2E deployment ${E2E_TS}" --argjson token_id ${API_TOKEN_ID} '{message: $msg, target_api_token_id: $token_id}')" \
+    --data "$(jq -nc --arg msg "CLI E2E deployment ${E2E_TS}" --arg token_id ${API_TOKEN_PUBLIC_ID} '{message: $msg, target_api_token_id: $token_id}')" \
     "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/deploy-requests")
 
   DEPLOY_REQUEST_ID=$(jq -r '.id' <<<"$DEPLOY_REQUEST_JSON")
@@ -446,7 +446,7 @@ SQL
   )
   psql_exec "$APPROVE_SQL"
 
-  echo -e "${GREEN}Deploy request ${DEPLOY_REQUEST_ID} approved for token ${API_TOKEN_ID}${NC}"
+  echo -e "${GREEN}Deploy request ${DEPLOY_REQUEST_ID} approved for token ${API_TOKEN_PUBLIC_ID}${NC}"
 
   # Create build and capture release identifier
   set +e

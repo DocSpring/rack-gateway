@@ -136,7 +136,7 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		Action:       "deploy-request.create",
 		ResourceType: "deploy-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      fmt.Sprintf("token_id=%d,rack=%s", token.ID, rackName),
+		Details:      fmt.Sprintf("token_uuid=%s,rack=%s", token.PublicID, rackName),
 		Status:       "success",
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
@@ -155,29 +155,40 @@ var (
 )
 
 func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, req CreateDeployRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
-	identifier := strings.TrimSpace(req.TargetAPIToken)
+	identifier := strings.TrimSpace(req.TargetAPITokenName)
 	var token *db.APIToken
 	var err error
 
-	if req.TargetAPITokenID != nil && *req.TargetAPITokenID > 0 {
-		token, err = h.database.GetAPITokenByID(*req.TargetAPITokenID)
-	} else if identifier != "" {
-		if id, parseErr := strconv.ParseInt(identifier, 10, 64); parseErr == nil {
-			token, err = h.database.GetAPITokenByID(id)
-		} else {
-			token, err = h.database.GetAPITokenByName(identifier)
+	var hasExplicitTarget bool
+
+	if req.TargetAPITokenID != nil {
+		if trimmed := strings.TrimSpace(*req.TargetAPITokenID); trimmed != "" {
+			token, err = h.database.GetAPITokenByPublicID(trimmed)
+			hasExplicitTarget = true
 		}
-	} else if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil && *authUser.TokenID > 0 {
-		token, err = h.database.GetAPITokenByID(*authUser.TokenID)
-	} else {
-		return nil, errDeployRequestTargetMissing
+	}
+
+	if token == nil && err == nil {
+		if identifier != "" {
+			hasExplicitTarget = true
+			if id, parseErr := strconv.ParseInt(identifier, 10, 64); parseErr == nil {
+				token, err = h.database.GetAPITokenByID(id)
+			} else {
+				token, err = h.database.GetAPITokenByName(identifier)
+			}
+		} else if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil && *authUser.TokenID > 0 {
+			token, err = h.database.GetAPITokenByID(*authUser.TokenID)
+		}
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve api token: %w", err)
 	}
 	if token == nil {
-		return nil, errDeployRequestTokenNotFound
+		if hasExplicitTarget {
+			return nil, errDeployRequestTokenNotFound
+		}
+		return nil, errDeployRequestTargetMissing
 	}
 
 	if token.UserID != user.ID {
@@ -525,7 +536,7 @@ func toDeployRequestResponse(dr *db.DeployRequest) DeployRequestResponse {
 		UpdatedAt:          dr.UpdatedAt,
 		CreatedByEmail:     dr.CreatedByEmail,
 		CreatedByName:      dr.CreatedByName,
-		TargetAPITokenID:   dr.TargetAPITokenID,
+		TargetAPITokenID:   dr.TargetAPITokenPublicID,
 		TargetAPITokenName: dr.TargetAPITokenName,
 		ApprovedByEmail:    dr.ApprovedByEmail,
 		ApprovedByName:     dr.ApprovedByName,

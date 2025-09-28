@@ -49,7 +49,7 @@ CONVOX_GATEWAY_API_TOKEN=... ./bin/convox-gateway request-approval "Deploy 1234a
 Flags:
 
 - `--api-token` – optional override for the API token used to authenticate (otherwise read from `CONVOX_GATEWAY_API_TOKEN` or stored config).
-- `--target-api-token` – request approval on behalf of a different API token (admins only).
+- `--target-api-token-id` – request approval on behalf of a different API token (admins only, use the token’s UUID).
 - `--rack` – override the current rack if needed.
 - `--wait` – blocks until the request is approved/rejected (with optional `--poll-interval` and `--timeout`).
 
@@ -101,10 +101,9 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 
 4. **Submit an approval request**
    ```bash
-   ./bin/convox-gateway request-approval "Deploy demo release" \
-     --token ci-deployer --wait
+   ./bin/convox-gateway request-approval "Deploy demo release" --wait
    ```
-   The command blocks until a reviewer acts.
+   The command blocks until a reviewer acts. Administrators can supply `--target-api-token-id <uuid>` to approve on behalf of another token.
 
 5. **Review in the UI**
    - Visit `http://localhost:9447/.gateway/web/deploy_requests` in the browser.

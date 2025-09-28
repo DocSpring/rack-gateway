@@ -883,7 +883,7 @@
                 "summary": "Get API token",
                 "parameters": [
                     {
-                        "type": "integer",
+                        "type": "string",
                         "description": "Token ID",
                         "name": "tokenID",
                         "in": "path",
@@ -939,7 +939,7 @@
                 "summary": "Update an API token",
                 "parameters": [
                     {
-                        "type": "integer",
+                        "type": "string",
                         "description": "Token ID",
                         "name": "tokenID",
                         "in": "path",
@@ -960,56 +960,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/db.APIToken"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Permanently removes an API token.",
-                "tags": [
-                    "API Tokens"
-                ],
-                "summary": "Delete an API token",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Token ID",
-                        "name": "tokenID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content",
-                        "schema": {
-                            "type": "string"
                         }
                     },
                     "400": {
@@ -2589,6 +2539,9 @@
                         "type": "string"
                     }
                 },
+                "public_id": {
+                    "type": "string"
+                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -2871,7 +2824,7 @@
                     "type": "string"
                 },
                 "target_api_token_id": {
-                    "type": "integer"
+                    "type": "string"
                 }
             }
         },
@@ -3017,7 +2970,7 @@
                     "type": "string"
                 },
                 "target_api_token_id": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "target_api_token_name": {
                     "type": "string"

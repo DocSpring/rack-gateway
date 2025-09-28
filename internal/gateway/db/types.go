@@ -31,6 +31,7 @@ type User struct {
 // APIToken represents an API token for CI/CD
 type APIToken struct {
 	ID              int64      `json:"id"`
+	PublicID        string     `json:"public_id"`
 	TokenHash       string     `json:"-"` // Never expose the actual token
 	Name            string     `json:"name"`
 	UserID          int64      `json:"user_id"`
@@ -123,6 +124,7 @@ type DeployRequest struct {
 	CreatedByEmail              string     `json:"created_by_email,omitempty"`
 	CreatedByName               string     `json:"created_by_name,omitempty"`
 	TargetAPITokenID            int64      `json:"target_api_token_id"`
+	TargetAPITokenPublicID      string     `json:"target_api_token_public_id"`
 	TargetAPITokenName          string     `json:"target_api_token_name,omitempty"`
 	TargetUserID                *int64     `json:"target_user_id,omitempty"`
 	ApprovedByUserID            *int64     `json:"approved_by_user_id,omitempty"`

@@ -48,6 +48,7 @@ SELECT
     created_user.email,
     created_user.name,
     dr.target_api_token_id,
+    target_token.public_id,
     target_token.name,
     dr.target_user_id,
     dr.approved_by_user_id,
@@ -81,6 +82,7 @@ func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
 		createdByUserID   sql.NullInt64
 		createdByEmail    sql.NullString
 		createdByName     sql.NullString
+		targetTokenPublic sql.NullString
 		targetTokenName   sql.NullString
 		targetUserID      sql.NullInt64
 		approvedByUserID  sql.NullInt64
@@ -114,6 +116,7 @@ func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
 		&createdByEmail,
 		&createdByName,
 		&dr.TargetAPITokenID,
+		&targetTokenPublic,
 		&targetTokenName,
 		&targetUserID,
 		&approvedByUserID,
@@ -149,6 +152,9 @@ func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
 	}
 	if createdByName.Valid {
 		dr.CreatedByName = createdByName.String
+	}
+	if targetTokenPublic.Valid {
+		dr.TargetAPITokenPublicID = targetTokenPublic.String
 	}
 	if targetTokenName.Valid {
 		dr.TargetAPITokenName = targetTokenName.String

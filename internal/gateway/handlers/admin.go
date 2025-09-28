@@ -1604,7 +1604,7 @@ func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 // @Description Returns metadata for a specific API token.
 // @Tags API Tokens
 // @Produce json
-// @Param tokenID path int true "Token ID"
+// @Param tokenID path string true "Token ID"
 // @Success 200 {object} db.APIToken
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -1612,13 +1612,13 @@ func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 // @Security SessionCookie
 // @Router /admin/tokens/{tokenID} [get]
 func (h *AdminHandler) GetAPIToken(c *gin.Context) {
-	tokenID, err := strconv.ParseInt(c.Param("tokenID"), 10, 64)
-	if err != nil {
+	tokenID := strings.TrimSpace(c.Param("tokenID"))
+	if tokenID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token ID"})
 		return
 	}
 
-	token, err := h.database.GetAPITokenByID(tokenID)
+	token, err := h.database.GetAPITokenByPublicID(tokenID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
 		return
@@ -1633,7 +1633,7 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 // @Tags API Tokens
 // @Accept json
 // @Produce json
-// @Param tokenID path int true "Token ID"
+// @Param tokenID path string true "Token ID"
 // @Param request body UpdateAPITokenRequest true "Token update"
 // @Success 200 {object} db.APIToken
 // @Failure 400 {object} ErrorResponse
@@ -1644,9 +1644,8 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 // @Router /admin/tokens/{tokenID} [put]
 func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	start := time.Now()
-	tokenIDStr := c.Param("tokenID")
-	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
-	if err != nil {
+	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
+	if tokenIDStr == "" {
 		h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "invalid token ID", start, nil)
 		return
 	}
@@ -1658,7 +1657,7 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 		return
 	}
 
-	existing, err := h.database.GetAPITokenByID(tokenID)
+	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
 	if err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to load token", start, nil)
 		return
@@ -1667,6 +1666,8 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 		h.respondAuditError(c, http.StatusNotFound, "api_token.update", tokenIDStr, "token not found", start, nil)
 		return
 	}
+
+	tokenID := existing.ID
 
 	details := make(map[string]interface{})
 
@@ -1718,7 +1719,7 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 // @Summary Delete an API token
 // @Description Permanently removes an API token.
 // @Tags API Tokens
-// @Param tokenID path int true "Token ID"
+// @Param tokenID path string true "Token ID"
 // @Success 204 {string} string "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -1726,16 +1727,16 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 // @Security SessionCookie
 // @Security CSRFToken
 // @Router /admin/tokens/{tokenID} [delete]
+
 func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	start := time.Now()
-	tokenIDStr := c.Param("tokenID")
-	tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
-	if err != nil {
+	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
+	if tokenIDStr == "" {
 		h.respondAuditError(c, http.StatusBadRequest, "api_token.delete", tokenIDStr, "invalid token ID", start, nil)
 		return
 	}
 
-	existing, err := h.database.GetAPITokenByID(tokenID)
+	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
 	if err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "api_token.delete", tokenIDStr, "failed to load token", start, nil)
 		return
@@ -1745,7 +1746,7 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 		return
 	}
 
-	if err := h.database.DeleteAPIToken(tokenID); err != nil {
+	if err := h.database.DeleteAPIToken(existing.ID); err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "api_token.delete", tokenIDStr, "failed to delete token", start, nil)
 		return
 	}

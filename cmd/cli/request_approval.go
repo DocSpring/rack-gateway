@@ -20,7 +20,7 @@ type deployRequest struct {
 	Status             string     `json:"status"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
-	TargetAPITokenID   *int64     `json:"target_api_token_id"`
+	TargetAPITokenID   string     `json:"target_api_token_id"`
 	TargetAPITokenName string     `json:"target_api_token_name,omitempty"`
 	ApprovedAt         *time.Time `json:"approved_at,omitempty"`
 	ApprovalExpiresAt  *time.Time `json:"approval_expires_at,omitempty"`
@@ -30,7 +30,7 @@ type deployRequest struct {
 
 func newRequestApprovalCommand() *cobra.Command {
 	var (
-		targetToken     string
+		targetTokenID   string
 		rackFlag        string
 		waitFlag        bool
 		pollIntervalStr string
@@ -81,7 +81,7 @@ func newRequestApprovalCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, strings.TrimSpace(targetToken))
+			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, strings.TrimSpace(targetTokenID))
 			if err != nil {
 				return err
 			}
@@ -116,7 +116,7 @@ func newRequestApprovalCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&targetToken, "target-api-token", "", "Target API token name (defaults to the authenticated token)")
+	cmd.Flags().StringVar(&targetTokenID, "target-api-token-id", "", "Target API token ID (public UUID; defaults to the authenticated token)")
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
 	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
@@ -131,7 +131,7 @@ func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message,
 		"rack":    rack,
 	}
 	if targetToken != "" {
-		payload["target_api_token"] = targetToken
+		payload["target_api_token_id"] = targetToken
 	}
 
 	resp, body, err := sendDeployRequest(gatewayURL, bearer, http.MethodPost, "/deploy-requests", payload)

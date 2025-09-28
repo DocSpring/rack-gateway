@@ -18,6 +18,7 @@ import (
 
 type apiToken struct {
 	ID              int64      `json:"id"`
+	PublicID        string     `json:"public_id"`
 	Name            string     `json:"name"`
 	UserID          int64      `json:"user_id"`
 	CreatedByUserID *int64     `json:"created_by_user_id"`
@@ -95,7 +96,7 @@ func newAPITokenListCommand() *cobra.Command {
 				return writeLine(cmd.OutOrStdout(), "No API tokens found")
 			}
 
-			if err := writef(cmd.OutOrStdout(), "%-5s %-25s %-25s %-19s %-19s\n", "ID", "NAME", "OWNER", "CREATED", "LAST USED"); err != nil {
+			if err := writef(cmd.OutOrStdout(), "%-36s %-25s %-25s %-19s %-19s\n", "UUID", "NAME", "OWNER", "CREATED", "LAST USED"); err != nil {
 				return err
 			}
 			for _, t := range tokens {
@@ -108,7 +109,7 @@ func newAPITokenListCommand() *cobra.Command {
 				if t.LastUsedAt != nil {
 					lastUsed = t.LastUsedAt.Format(time.RFC3339)
 				}
-				if err := writef(cmd.OutOrStdout(), "%-5d %-25s %-25s %-19s %-19s\n", t.ID, t.Name, owner, created, lastUsed); err != nil {
+				if err := writef(cmd.OutOrStdout(), "%-36s %-25s %-25s %-19s %-19s\n", t.PublicID, t.Name, owner, created, lastUsed); err != nil {
 					return err
 				}
 			}
@@ -140,7 +141,10 @@ func newAPITokenGetCommand() *cobra.Command {
 				return printJSON(cmd, token)
 			}
 
-			if err := writef(cmd.OutOrStdout(), "ID: %d\n", token.ID); err != nil {
+			if err := writef(cmd.OutOrStdout(), "Public ID: %s\n", token.PublicID); err != nil {
+				return err
+			}
+			if err := writef(cmd.OutOrStdout(), "Internal ID: %d\n", token.ID); err != nil {
 				return err
 			}
 			if err := writef(cmd.OutOrStdout(), "Name: %s\n", token.Name); err != nil {
@@ -244,8 +248,8 @@ func newAPITokenCreateCommand() *cobra.Command {
 			if resp == nil || resp.APIToken == nil {
 				return errors.New("gateway returned an incomplete API token payload")
 			}
-			if resp.APIToken.ID == 0 {
-				return fmt.Errorf("gateway returned invalid API token id: %d", resp.APIToken.ID)
+			if strings.TrimSpace(resp.APIToken.PublicID) == "" {
+				return errors.New("gateway returned API token without a public id")
 			}
 			if strings.TrimSpace(resp.APIToken.Name) == "" {
 				return errors.New("gateway returned API token without a name")
@@ -257,7 +261,7 @@ func newAPITokenCreateCommand() *cobra.Command {
 			case "token":
 				return writeLine(cmd.OutOrStdout(), resp.Token)
 			case "text", "", "table":
-				if err := writef(cmd.OutOrStdout(), "Created token %q (id %d)\n", resp.APIToken.Name, resp.APIToken.ID); err != nil {
+				if err := writef(cmd.OutOrStdout(), "Created token %q (id %s)\n", resp.APIToken.Name, resp.APIToken.PublicID); err != nil {
 					return err
 				}
 				return writef(cmd.OutOrStdout(), "Token: %s\n", resp.Token)

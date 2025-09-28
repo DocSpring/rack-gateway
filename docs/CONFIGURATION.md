@@ -105,6 +105,7 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
 - Local development uses two logical databases:
   - `gateway_dev` for the dev/preview stacks.
   - `gateway_test` for the isolated test stack. Task automation ensures both exist when the Docker stack starts.
+- `TEST_DATABASE_URL` – optional override for test workflows (defaults to the same host as `DATABASE_URL` but points at `gateway_test`). The Go and web test harnesses automatically prefer this when present.
 
 - Protected Env Vars
 

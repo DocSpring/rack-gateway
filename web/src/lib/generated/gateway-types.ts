@@ -8,6 +8,7 @@
 
 export interface APIToken {
     id: number;
+    public_id: string;
     name: string;
     user_id: number;
     created_by_user_id?: number;

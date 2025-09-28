@@ -31,6 +31,7 @@ RACK_USERNAME = "convox"
 
 # Postgres for dev/test (Docker compose exposes 55432 by default)
 DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_dev?sslmode=disable"
+TEST_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable"
 
 # Config directory for CLI (stores config.json with tokens and rack settings)
 # GATEWAY_CLI_CONFIG_DIR = "./config/cli"

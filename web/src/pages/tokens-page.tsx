@@ -182,18 +182,33 @@ function TokenRow({
   deletePending,
   onDelete,
   onEdit,
+  onCopyId,
   canEdit,
 }: {
   token: APIToken
   deletePending: boolean
   onDelete: () => void
   onEdit: () => void
+  onCopyId: (publicId: string) => void
   canEdit: boolean
 }) {
   const exp = token.expires_at ? new Date(token.expires_at) : null
   const isExpired = exp ? exp < new Date() : false
   return (
     <TableRow key={token.id}>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs">{token.public_id}</span>
+          <Button
+            aria-label={`Copy token ID for ${token.name}`}
+            onClick={() => onCopyId(token.public_id)}
+            size="icon"
+            variant="ghost"
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
       <TableCell className="font-medium">{token.name}</TableCell>
       <TableCell>
         <Badge variant={isExpired ? 'destructive' : 'default'}>
@@ -440,6 +455,14 @@ function TokensPageInner() {
     },
   })
 
+  const copyToClipboard = (value: string, successMessage: string) => {
+    if (!value) return
+    navigator.clipboard
+      .writeText(value)
+      .then(() => toast.success(successMessage))
+      .catch(() => toast.error('Failed to copy to clipboard'))
+  }
+
   const handleCreateToken = () => {
     const parsed = tokenFormSchema.safeParse({
       name: newTokenName,
@@ -465,8 +488,7 @@ function TokensPageInner() {
 
   const handleCopyToken = () => {
     if (createdToken) {
-      navigator.clipboard.writeText(createdToken)
-      toast.success('Token copied to clipboard')
+      copyToClipboard(createdToken, 'Token copied to clipboard')
     }
   }
 
@@ -639,6 +661,7 @@ function TokensPageInner() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Token ID</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created By</TableHead>
@@ -659,6 +682,7 @@ function TokensPageInner() {
                   canEdit={canEdit}
                   deletePending={deleteTokenMutation.isPending}
                   key={token.id}
+                  onCopyId={(value) => copyToClipboard(value, 'Token ID copied to clipboard')}
                   onDelete={() => {
                     if (!canEdit) {
                       return
