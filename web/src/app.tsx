@@ -22,6 +22,7 @@ import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
 import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
+import { DeployRequestsPage } from './pages/deploy-requests-page'
 import { InstancesPage } from './pages/instances-page'
 import { LoginErrorPage } from './pages/login-error-page'
 import { LoginPage } from './pages/login-page'
@@ -104,6 +105,12 @@ function buildRouteTree() {
     getParentRoute: () => layoutRoute,
     path: 'api_tokens',
     component: TokensPage,
+  })
+
+  const deployRequestsRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'deploy_requests',
+    component: DeployRequestsPage,
   })
 
   const accountSecurityRoute = createRoute({
@@ -201,6 +208,7 @@ function buildRouteTree() {
       userRoute,
       userAuditRoute,
       tokensRoute,
+      deployRequestsRoute,
       auditRoute,
       settingsRoute,
       accountSecurityRoute,

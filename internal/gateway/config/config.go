@@ -11,31 +11,33 @@ import (
 )
 
 type Config struct {
-	Port                  string
-	Domain                string
-	SentryDSN             string
-	SentryEnvironment     string
-	SentryRelease         string
-	SentryJSDsn           string
-	SentryJSTracesRate    string
-	SentryTestsEnabled    bool
-	JWTSecret             string
-	JWTExpiry             time.Duration
-	SessionIdleTimeout    time.Duration
-	GoogleClientID        string
-	GoogleClientSecret    string
-	GoogleAllowedDomain   string
-	GoogleOAuthBaseURL    string
-	AdminUsers            []string
-	ViewerUsers           []string
-	DeployerUsers         []string
-	OperationsUsers       []string
-	DevMode               bool
-	Racks                 map[string]RackConfig
-	LogResponseBodies     bool
-	LogResponseMaxBytes   int
-	RackTLSPinningEnabled bool
-	TrustedProxies        []string
+	Port                    string
+	Domain                  string
+	SentryDSN               string
+	SentryEnvironment       string
+	SentryRelease           string
+	SentryJSDsn             string
+	SentryJSTracesRate      string
+	SentryTestsEnabled      bool
+	JWTSecret               string
+	JWTExpiry               time.Duration
+	SessionIdleTimeout      time.Duration
+	GoogleClientID          string
+	GoogleClientSecret      string
+	GoogleAllowedDomain     string
+	GoogleOAuthBaseURL      string
+	AdminUsers              []string
+	ViewerUsers             []string
+	DeployerUsers           []string
+	OperationsUsers         []string
+	DevMode                 bool
+	Racks                   map[string]RackConfig
+	LogResponseBodies       bool
+	LogResponseMaxBytes     int
+	RackTLSPinningEnabled   bool
+	TrustedProxies          []string
+	DeployApprovalsDisabled bool
+	DeployApprovalWindow    time.Duration
 }
 
 type RackConfig struct {
@@ -95,7 +97,9 @@ func Load() (*Config, error) {
 		// certificate on every restart (see stdapi.Server.Listen). Pinning that dynamic cert would
 		// break after each deploy. If Convox supports providing a stable internal certificate in the
 		// future, operators can enable this flag to re-activate TOFU pinning.
-		RackTLSPinningEnabled: getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
+		RackTLSPinningEnabled:   getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
+		DeployApprovalsDisabled: getEnv("DISABLE_DEPLOY_APPROVALS", "false") == "true",
+		DeployApprovalWindow:    15 * time.Minute,
 	}
 	if mb := getEnv("LOG_RESPONSE_MAX_BYTES", "65536"); mb != "" {
 		if v, err := strconv.Atoi(mb); err == nil && v > 0 {
@@ -149,6 +153,12 @@ func Load() (*Config, error) {
 	}
 
 	cfg.loadRacksFromEnv()
+
+	if window := strings.TrimSpace(getEnv("DEPLOY_APPROVAL_WINDOW", "")); window != "" {
+		if dur, err := time.ParseDuration(window); err == nil && dur > 0 {
+			cfg.DeployApprovalWindow = dur
+		}
+	}
 
 	return cfg, nil
 }

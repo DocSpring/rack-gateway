@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -122,6 +123,25 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 	}
 
 	return &token, nil
+}
+
+func (d *Database) GetAPITokenByName(name string) (*APIToken, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("token name required")
+	}
+	row := d.queryRow(
+		"SELECT t.id FROM api_tokens t WHERE t.name = ?",
+		name,
+	)
+	var id int64
+	err := row.Scan(&id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query api token: %w", err)
+	}
+	return d.GetAPITokenByID(id)
 }
 
 // APITokenNameExists reports whether a token name is already taken.

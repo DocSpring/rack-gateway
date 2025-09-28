@@ -259,3 +259,50 @@ type UpdateAllowDestructiveActionsRequest struct {
 type UpdateMFASettingsRequest struct {
 	RequireAllUsers bool `json:"require_all_users"`
 }
+
+// CreateDeployRequestRequest represents the payload to open a deploy approval request.
+type CreateDeployRequestRequest struct {
+	Message          string `json:"message" binding:"required"`
+	TargetAPITokenID *int64 `json:"target_api_token_id,omitempty"`
+	TargetAPIToken   string `json:"target_api_token,omitempty"`
+	Rack             string `json:"rack,omitempty"`
+}
+
+// UpdateDeployRequestStatusRequest carries optional admin notes when approving/rejecting.
+type UpdateDeployRequestStatusRequest struct {
+	Notes string `json:"notes"`
+}
+
+// DeployRequestResponse exposes deploy approval state to the CLI and admin UI.
+type DeployRequestResponse struct {
+	ID                       int64      `json:"id"`
+	Rack                     string     `json:"rack"`
+	Message                  string     `json:"message"`
+	Status                   string     `json:"status"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+	CreatedByEmail           string     `json:"created_by_email,omitempty"`
+	CreatedByName            string     `json:"created_by_name,omitempty"`
+	TargetAPITokenID         int64      `json:"target_api_token_id"`
+	TargetAPITokenName       string     `json:"target_api_token_name,omitempty"`
+	ApprovedByEmail          string     `json:"approved_by_email,omitempty"`
+	ApprovedByName           string     `json:"approved_by_name,omitempty"`
+	ApprovedAt               *time.Time `json:"approved_at,omitempty"`
+	ApprovalExpiresAt        *time.Time `json:"approval_expires_at,omitempty"`
+	RejectedByEmail          string     `json:"rejected_by_email,omitempty"`
+	RejectedByName           string     `json:"rejected_by_name,omitempty"`
+	RejectedAt               *time.Time `json:"rejected_at,omitempty"`
+	ApprovalNotes            string     `json:"approval_notes,omitempty"`
+	BuildID                  string     `json:"build_id,omitempty"`
+	BuildCreatedAt           *time.Time `json:"build_created_at,omitempty"`
+	ObjectKey                string     `json:"object_key,omitempty"`
+	ObjectCreatedAt          *time.Time `json:"object_created_at,omitempty"`
+	ReleaseID                string     `json:"release_id,omitempty"`
+	ReleaseCreatedAt         *time.Time `json:"release_created_at,omitempty"`
+	ReleasePromotedAt        *time.Time `json:"release_promoted_at,omitempty"`
+	ReleasePromotedByTokenID *int64     `json:"release_promoted_by_api_token_id,omitempty"`
+}
+
+type DeployRequestList struct {
+	DeployRequests []DeployRequestResponse `json:"deploy_requests"`
+}

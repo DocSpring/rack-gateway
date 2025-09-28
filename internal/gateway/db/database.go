@@ -190,6 +190,7 @@ func (d *Database) ResetDatabase() error {
 	// Drop dependent tables first to satisfy foreign keys.
 	for _, table := range []string{
 		"user_resources",
+		"deploy_requests",
 		"api_tokens",
 		"audit_logs",
 		"cli_login_states",

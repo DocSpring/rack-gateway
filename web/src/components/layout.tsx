@@ -3,6 +3,7 @@ import {
   Boxes,
   FileText,
   Key,
+  ListChecks,
   LogOut,
   type LucideIcon,
   Server,
@@ -101,6 +102,9 @@ export function Layout() {
       onSelect: () => setShowCliDialog(true),
     })
 
+    if (user?.roles?.includes('admin')) {
+      nav.push({ name: 'Deploy Approvals', href: '/deploy_requests', icon: ListChecks })
+    }
     if (user?.roles?.includes('admin')) {
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
     }

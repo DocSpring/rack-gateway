@@ -6,6 +6,7 @@ import type {
   DbAPIToken,
   DbAuditLog,
   DbUser,
+  GetAdminDeployRequestsParams,
   GetAdminRoles200,
   GetRack200,
   HandlersAuditLogsResponse,
@@ -15,6 +16,8 @@ import type {
   HandlersCreateAPITokenResponse,
   HandlersCreateUserRequest,
   HandlersCurrentUserResponse,
+  HandlersDeployRequestList,
+  HandlersDeployRequestResponse,
   HandlersHealthResponse,
   HandlersMFAMethodResponse,
   HandlersMFAStatusResponse,
@@ -25,6 +28,7 @@ import type {
   HandlersTokenPermissionMetadata,
   HandlersTrustedDeviceResponse,
   HandlersUpdateAPITokenRequest,
+  HandlersUpdateDeployRequestStatusRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
   HandlersUserSessionResponse,
@@ -81,6 +85,9 @@ export type MFAStatusResponse = HandlersMFAStatusResponse
 export type MFAMethod = HandlersMFAMethodResponse
 export type TrustedDevice = HandlersTrustedDeviceResponse
 export type StatusResponse = HandlersStatusResponse
+export type DeployRequest = HandlersDeployRequestResponse
+export type DeployRequestList = HandlersDeployRequestList
+export type UpdateDeployRequestStatusRequest = HandlersUpdateDeployRequestStatusRequest
 
 type EnvValuesResponseShape = {
   env?: EnvValuesMap
@@ -145,6 +152,20 @@ export const revokeUserSession = (
 
 export const revokeAllUserSessions = (email: string): Promise<RevokeAllSessionsResponse> =>
   unwrap(gateway.postAdminUsersEmailSessionsRevokeAll(email))
+
+export const listDeployRequests = (
+  params?: GetAdminDeployRequestsParams
+): Promise<DeployRequestList> => unwrap(gateway.getAdminDeployRequests(params))
+
+export const approveDeployRequest = (
+  id: number,
+  payload?: UpdateDeployRequestStatusRequest
+): Promise<DeployRequest> => unwrap(gateway.postAdminDeployRequestsIdApprove(id, payload ?? {}))
+
+export const rejectDeployRequest = (
+  id: number,
+  payload?: UpdateDeployRequestStatusRequest
+): Promise<DeployRequest> => unwrap(gateway.postAdminDeployRequestsIdReject(id, payload ?? {}))
 
 export type AuditLogQuery = Partial<{
   search: string

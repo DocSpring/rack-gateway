@@ -406,6 +406,36 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     "convox ps --app convox-gateway" \
     "p-web-1"
 
+  echo -e "${YELLOW}Requesting deploy approval for pipeline token...${NC}"
+  DEPLOY_REQUEST_JSON=$(curl -sfS \
+    -H "Authorization: Bearer ${API_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data "$(jq -nc --arg msg "CLI E2E deployment ${E2E_TS}" --argjson token_id ${API_TOKEN_ID} '{message: $msg, target_api_token_id: $token_id}')" \
+    "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/deploy-requests")
+
+  DEPLOY_REQUEST_ID=$(jq -r '.id' <<<"$DEPLOY_REQUEST_JSON")
+  if [[ -z "$DEPLOY_REQUEST_ID" || "$DEPLOY_REQUEST_ID" == "null" ]]; then
+    echo -e "${RED}Failed to create deploy request${NC}" >&2
+    echo "$DEPLOY_REQUEST_JSON" >&2
+    exit 1
+  fi
+
+  echo -e "${GREEN}Deploy request created: ${DEPLOY_REQUEST_ID}${NC}"
+
+  APPROVE_SQL=$(cat <<SQL
+UPDATE deploy_requests
+SET status = 'approved',
+    approved_by_user_id = (SELECT id FROM users WHERE email = 'admin@example.com'),
+    approved_at = NOW(),
+    approval_expires_at = NOW() + INTERVAL '15 minutes',
+    updated_at = NOW()
+WHERE id = ${DEPLOY_REQUEST_ID};
+SQL
+  )
+  psql_exec "$APPROVE_SQL"
+
+  echo -e "${GREEN}Deploy request ${DEPLOY_REQUEST_ID} approved for token ${API_TOKEN_ID}${NC}"
+
   # Create build and capture release identifier
   set +e
   build_output=$(./bin/convox-gateway convox build --app convox-gateway --description "cli-e2e" --id 2>&1)

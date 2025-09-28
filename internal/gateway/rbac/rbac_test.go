@@ -34,10 +34,23 @@ func TestEnforceDeployerPermissions(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok, "deployer should NOT be allowed to delete apps")
 
+	// Deploy approval permissions
+	ok, err = mgr.Enforce("deployer@test.com", "gateway:deploy-request", "create")
+	require.NoError(t, err)
+	require.True(t, ok, "deployer should be allowed to request deploy approval")
+
+	ok, err = mgr.Enforce("deployer@test.com", "gateway:deploy-request", "approve")
+	require.NoError(t, err)
+	require.False(t, ok, "deployer should NOT be allowed to approve deploy requests")
+
 	// Admin: allowed delete
 	ok, err = mgr.Enforce("admin@test.com", "app", "delete")
 	require.NoError(t, err)
 	require.True(t, ok, "admin should be allowed to delete apps")
+
+	ok, err = mgr.Enforce("admin@test.com", "gateway:deploy-request", "approve")
+	require.NoError(t, err)
+	require.True(t, ok, "admin should be allowed to approve deploy requests")
 }
 
 func TestSaveUserUpdatesDisplayName(t *testing.T) {

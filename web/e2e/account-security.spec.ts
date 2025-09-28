@@ -63,7 +63,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   const mfaDialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   const isVisible = await mfaDialog.isVisible({ timeout: 5000 }).catch(() => false)
   if (!isVisible) {
-    await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15000 })
+    await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
     return
   }
 
@@ -78,7 +78,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   await mfaDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
   await mfaDialog.getByRole('button', { name: /^Verify$/ }).click()
   await expect(mfaDialog).toBeHidden({ timeout: 5000 })
-  await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15000 })
+  await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
 }
 
 test.describe('Account security', () => {
@@ -244,7 +244,7 @@ test.describe('Account security', () => {
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-    let trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
+    const trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
     await expect(trustedDevicesCard).toBeVisible()
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(1)
 
@@ -265,7 +265,7 @@ test.describe('Account security', () => {
       name: /Multi-Factor Authentication Required/i,
     })
     await expect(stepUpDialog.getByText('Multi-Factor Authentication Required')).toBeVisible({
-      timeout: 15000,
+      timeout: 15_000,
     })
     const trustStepUp = stepUpDialog.getByLabel('Trust this browser for 30 days')
     if (await trustStepUp.isChecked()) {
@@ -299,7 +299,7 @@ test.describe('Account security', () => {
     await expect.poll(async () => page.url()).toMatch(/\.gateway\/web\/auth\/mfa\/challenge/i)
 
     await expect(page.getByText('Multi-Factor Authentication Required')).toBeVisible({
-      timeout: 15000,
+      timeout: 15_000,
     })
   })
 })

@@ -92,6 +92,8 @@ var roleConfigs = map[string]roleConfig{
 			"convox:env:read",
 			"convox:env:set",
 			"convox:app:update",
+			"gateway:deploy-request:create",
+			"gateway:deploy-request:view",
 		},
 		Parents: []string{"ops"},
 	},
@@ -100,14 +102,16 @@ var roleConfigs = map[string]roleConfig{
 		Permissions: []string{
 			"convox:app:list",
 			"convox:app:read",
-			"convox:build:create",
+			"gateway:deploy-request:create",
+			"gateway:deploy-request:view",
+			"convox:build:create-with-approval",
 			"convox:build:list",
 			"convox:build:read",
 			"convox:log:read",
-			"convox:object:create",
-			"convox:release:create",
+			"convox:object:create-with-approval",
+			"convox:release:create-with-approval",
 			"convox:release:list",
-			"convox:release:promote",
+			"convox:release:promote-with-approval",
 			"convox:process:list",
 			"convox:process:read",
 			"convox:process:start",
@@ -119,7 +123,7 @@ var roleConfigs = map[string]roleConfig{
 		},
 	},
 	"admin": {
-		Permissions: []string{"convox:*:*"},
+		Permissions: []string{"convox:*:*", "gateway:*:*"},
 	},
 }
 
@@ -305,8 +309,11 @@ func (m *DBManager) Enforce(userEmail, resource, action string) (bool, error) {
 		return false, nil // User is suspended
 	}
 
-	// Format permission as convox:resource:action
+	// Format permission; support non-Convox namespaces (e.g., gateway:deploy-request)
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)
+	if strings.Contains(resource, ":") {
+		permission = fmt.Sprintf("%s:%s", resource, action)
+	}
 
 	// Check permission using Casbin with 3 parameters (sub, obj, act)
 	// The third parameter is "*" as we don't use it in our model

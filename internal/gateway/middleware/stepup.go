@@ -15,8 +15,13 @@ func RequireMFAStepUp(settings *db.MFASettings) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		authUser, ok := auth.GetAuthUser(c.Request.Context())
-		if !ok || authUser == nil || authUser.IsAPIToken {
+		if !ok || authUser == nil {
 			denyStepUp(c)
+			return
+		}
+
+		if authUser.IsAPIToken {
+			c.Next()
 			return
 		}
 

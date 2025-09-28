@@ -50,6 +50,11 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - When set to `true`, surfaces the Sentry diagnostics actions in the admin settings UI. Defaults to
     `false` to keep the test triggers hidden.
 
+- `DISABLE_DEPLOY_APPROVALS` (optional)
+  - When set to `true`, disables deploy approval enforcement. Useful for staging environments.
+- `DEPLOY_APPROVAL_WINDOW` (default: `15m`)
+  - Duration an approved request remains valid before expiring. Accepts Go duration strings (e.g., `10m`).
+
 ### Web Frontend (runtime)
 
 - `SENTRY_JS_DSN` (optional)
