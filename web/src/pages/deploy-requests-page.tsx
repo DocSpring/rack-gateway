@@ -3,6 +3,7 @@ import type { VariantProps } from 'class-variance-authority'
 import { CheckCircle2, Loader2, ShieldX, Timer, XCircle } from 'lucide-react'
 import type { ChangeEvent } from 'react'
 import { useMemo, useState } from 'react'
+import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
 import { Badge, type badgeVariants } from '@/components/ui/badge'
@@ -120,34 +121,34 @@ export function DeployRequestsPage() {
   const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
 
   return (
-    <div className="space-y-6">
-      <TablePane
-        description="Manual review queue for CI/CD deploys"
-        empty={isEmpty}
-        emptyMessage="No deploy requests found."
-        error={isError ? error : null}
-        headerRight={
-          <div className="flex items-center gap-2">
-            <Select
-              onValueChange={(value) => setStatusFilter(value as StatusFilter)}
-              value={statusFilter}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter status" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        }
-        loading={isLoading}
-        title="Deploy Approvals"
-      >
+    <PageLayout description="Manual review queue for CI/CD deploys" title="Deploy Approvals">
+      <div className="space-y-6">
+        <TablePane
+          empty={isEmpty}
+          emptyMessage="No deploy requests found."
+          error={isError ? error : null}
+          headerRight={
+            <div className="flex items-center gap-2">
+              <Select
+                onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+                value={statusFilter}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Filter status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          }
+          loading={isLoading}
+          title="Deploy Requests"
+        >
         <Table>
           <TableHeader>
             <TableRow>
@@ -215,7 +216,6 @@ export function DeployRequestsPage() {
                           <Button
                             disabled={approveDisabled}
                             onClick={() => approveMutation.mutate(id)}
-                            size="sm"
                             variant="outline"
                           >
                             {approveMutation.isPending ? (
@@ -231,7 +231,6 @@ export function DeployRequestsPage() {
                               setRejectRequest(request)
                               setRejectNotes('')
                             }}
-                            size="sm"
                             variant="destructive"
                           >
                             <ShieldX className="mr-2 h-4 w-4" />
@@ -251,7 +250,8 @@ export function DeployRequestsPage() {
             })}
           </TableBody>
         </Table>
-      </TablePane>
+        </TablePane>
+      </div>
 
       <Dialog
         onOpenChange={(open) => (open ? null : setRejectRequest(null))}
@@ -300,6 +300,6 @@ export function DeployRequestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   )
 }

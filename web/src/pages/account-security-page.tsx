@@ -479,10 +479,7 @@ export function AccountSecurityPage() {
                 Regenerate backup codes
               </Button>
               {recentBackupCodes && recentBackupCodes.length > 0 ? (
-                <Button
-                  onClick={() => handleDownloadCodes(recentBackupCodes)}
-                  variant="outline"
-                >
+                <Button onClick={() => handleDownloadCodes(recentBackupCodes)} variant="outline">
                   Download latest codes
                 </Button>
               ) : null}
