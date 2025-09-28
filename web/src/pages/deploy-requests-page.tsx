@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { VariantProps } from 'class-variance-authority'
 import { Check, Loader2, Timer, X } from 'lucide-react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
@@ -76,6 +76,7 @@ export function DeployRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectRequest, setRejectRequest] = useState<DeployRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
+  const [selectedRequest, setSelectedRequest] = useState<DeployRequest | null>(null)
   const queryClient = useQueryClient()
 
   const queryKey = useMemo(() => ['deploy-requests', statusFilter], [statusFilter])
@@ -95,7 +96,7 @@ export function DeployRequestsPage() {
   const approveMutation = useMutation({
     mutationFn: (id: number) => approveDeployRequest(id, {}),
     onSuccess: (_data, id) => {
-      toast({ title: 'Deploy request approved', description: `Request ${id} was approved.` })
+      toast.success(`Request ${id} was approved`)
       queryClient.invalidateQueries({ queryKey })
     },
     onError: (err: Error) => {
@@ -107,7 +108,7 @@ export function DeployRequestsPage() {
     mutationFn: ({ id, notes }: { id: number; notes: string }) =>
       rejectDeployRequest(id, toNotesPayload(notes)),
     onSuccess: (_data, { id }) => {
-      toast({ title: 'Deploy request rejected', description: `Request ${id} was rejected.` })
+      toast.success(`Request ${id} was rejected`)
       setRejectRequest(null)
       setRejectNotes('')
       queryClient.invalidateQueries({ queryKey })
@@ -180,6 +181,7 @@ export function DeployRequestsPage() {
                     key={request.id}
                     onApprove={(id) => approveMutation.mutate(id)}
                     onReject={handleRejectClick}
+                    onSelect={setSelectedRequest}
                     rejectDisabled={rejectDisabled}
                     rejectPending={rejectMutation.isPending}
                     request={request}
@@ -238,6 +240,66 @@ export function DeployRequestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        onOpenChange={(open) => (open ? null : setSelectedRequest(null))}
+        open={selectedRequest != null}
+      >
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Deploy request details</DialogTitle>
+            <DialogDescription>
+              Review the full metadata for the selected request.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedRequest && (
+            <div className="space-y-3 text-sm">
+              <DetailRow label="Message" value={selectedRequest.message ?? '—'} />
+              <DetailRow label="Status" value={selectedRequest.status ?? '—'} />
+              <DetailRow
+                label="Target Token"
+                value={
+                  selectedRequest.target_api_token_name ??
+                  selectedRequest.target_api_token_id ??
+                  '—'
+                }
+              />
+              <DetailRow label="Created" value={renderTime(selectedRequest.created_at)} />
+              <DetailRow label="Updated" value={renderTime(selectedRequest.updated_at)} />
+              <DetailRow label="Expires" value={renderTime(selectedRequest.approval_expires_at)} />
+              <DetailRow
+                label="Created By"
+                value={formatUser(
+                  selectedRequest.created_by_name,
+                  selectedRequest.created_by_email
+                )}
+              />
+              <DetailRow
+                label="Approved By"
+                value={formatUser(
+                  selectedRequest.approved_by_name,
+                  selectedRequest.approved_by_email
+                )}
+              />
+              <DetailRow label="Approved At" value={renderTime(selectedRequest.approved_at)} />
+              <DetailRow
+                label="Rejected By"
+                value={formatUser(
+                  selectedRequest.rejected_by_name,
+                  selectedRequest.rejected_by_email
+                )}
+              />
+              <DetailRow label="Rejected At" value={renderTime(selectedRequest.rejected_at)} />
+              <DetailRow label="Reviewer Notes" value={selectedRequest.approval_notes ?? '—'} />
+            </div>
+          )}
+          <div className="mt-2 flex justify-end">
+            <Button onClick={() => setSelectedRequest(null)} variant="outline">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   )
 }
@@ -250,6 +312,7 @@ type DeployRequestRowProps = {
   rejectPending: boolean
   onApprove: (id: number) => void
   onReject: (request: DeployRequest) => void
+  onSelect: (request: DeployRequest) => void
 }
 
 function DeployRequestRow({
@@ -260,6 +323,7 @@ function DeployRequestRow({
   rejectPending,
   onApprove,
   onReject,
+  onSelect,
 }: DeployRequestRowProps) {
   const id = request.id
   if (id == null) {
@@ -278,8 +342,23 @@ function DeployRequestRow({
 
   const showExpiresAt = request.approval_expires_at && canReject
 
+  const handleRowClick = () => onSelect(request)
+  const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onSelect(request)
+    }
+  }
+
   return (
-    <TableRow key={id}>
+    <TableRow
+      className="cursor-pointer hover:bg-muted/40"
+      key={id}
+      onClick={handleRowClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+    >
       <TableCell className="font-mono text-sm">{id}</TableCell>
       <TableCell className="max-w-xs truncate" title={message}>
         {message}
@@ -312,7 +391,14 @@ function DeployRequestRow({
       <TableCell>
         <div className="flex justify-end gap-2">
           {canApprove && (
-            <Button disabled={approveDisabled} onClick={() => onApprove(id)} variant="success">
+            <Button
+              disabled={approveDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onApprove(id)
+              }}
+              variant="success"
+            >
               {approvePending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -324,7 +410,10 @@ function DeployRequestRow({
           {canReject && (
             <Button
               disabled={rejectDisabled}
-              onClick={() => onReject(request)}
+              onClick={(event) => {
+                event.stopPropagation()
+                onReject(request)
+              }}
               variant="destructive"
             >
               {rejectPending ? (
@@ -338,5 +427,29 @@ function DeployRequestRow({
         </div>
       </TableCell>
     </TableRow>
+  )
+}
+
+type DetailRowProps = {
+  label: string
+  value: ReactNode
+}
+
+function renderTime(value?: string | null): ReactNode {
+  return value ? <TimeAgo date={value} /> : '—'
+}
+
+function formatUser(name?: string | null, email?: string | null): string {
+  if (name && email) {
+    return `${name} (${email})`
+  }
+  return name ?? email ?? '—'
+}
+
+function DetailRow({ label, value }: DetailRowProps) {
+  return (
+    <div className="break-words text-sm">
+      <span className="text-muted-foreground">{label}:</span> {value ?? '—'}
+    </div>
   )
 }

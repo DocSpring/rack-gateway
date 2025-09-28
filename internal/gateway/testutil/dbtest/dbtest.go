@@ -32,7 +32,7 @@ func Reset(t *testing.T, database *db.Database) {
 // and returns a connected *db.Database. The database is dropped on test cleanup.
 func NewDatabase(t *testing.T) *db.Database {
 	t.Helper()
-	base := os.Getenv("DATABASE_URL")
+	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
 		// Build from PG* env
 		host := getenv("PGHOST", "localhost")
@@ -44,7 +44,7 @@ func NewDatabase(t *testing.T) *db.Database {
 	}
 	u, err := url.Parse(base)
 	if err != nil {
-		t.Fatalf("invalid DATABASE_URL: %v", err)
+		t.Fatalf("invalid TEST_DATABASE_URL: %v", err)
 	}
 	// Connect to maintenance DB (postgres)
 	u.Path = "/postgres"

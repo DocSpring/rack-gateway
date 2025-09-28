@@ -82,7 +82,7 @@ const ToastDescription = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ToastPrimitiveDescription>
 >(({ className, ...props }, ref) => (
   <ToastPrimitiveDescription
-    className={cn('text-muted-foreground text-xs sm:text-sm', className)}
+    className={cn('text-xs sm:text-sm', className)}
     ref={ref}
     {...props}
   />

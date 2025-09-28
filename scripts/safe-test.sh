@@ -101,7 +101,8 @@ mkdir -p "$CONVOX_CFG_DIR"
 touch "$GUARD_FILE"
 
 if [ -n "${TEST_DATABASE_URL:-}" ]; then
-    export DATABASE_URL="${TEST_DATABASE_URL}"
+  echo "Setting DATABASE_URL to ${TEST_DATABASE_URL}"
+  export DATABASE_URL="${TEST_DATABASE_URL}"
 fi
 
 ensure_local_database() {

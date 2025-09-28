@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react'
+import { CircleAlert, Check, Info, TriangleAlert, X } from 'lucide-react'
 import React from 'react'
 
 import {
@@ -17,7 +17,7 @@ type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'info'
 type ToastIconKey = Exclude<ToastVariant, 'default'>
 
 const variantIcons: Partial<Record<ToastIconKey, React.ReactNode>> = {
-  success: <CircleCheck aria-hidden="true" className="h-5 w-5" />,
+  success: <Check aria-hidden="true" className="h-5 w-5" />,
   error: <CircleAlert aria-hidden="true" className="h-5 w-5" />,
   warning: <TriangleAlert aria-hidden="true" className="h-5 w-5" />,
   info: <Info aria-hidden="true" className="h-5 w-5" />,
