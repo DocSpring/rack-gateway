@@ -226,6 +226,13 @@ func (m *SessionManager) UpdateSessionMFAVerified(sessionID int64, verifiedAt ti
 	return m.db.UpdateSessionMFAVerified(sessionID, verifiedAt, trustedDeviceID)
 }
 
+func (m *SessionManager) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
+	if m == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	return m.db.UpdateSessionRecentStepUp(sessionID, when)
+}
+
 func (m *SessionManager) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID int64) error {
 	if m == nil {
 		return fmt.Errorf("session manager not initialized")

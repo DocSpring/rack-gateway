@@ -435,6 +435,11 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 			log.Printf("failed to stamp session MFA verification: %v", err)
 		} else {
 			session.MFAVerifiedAt = &record.MFAVerifiedAt.Time
+			if err := h.sessions.UpdateSessionRecentStepUp(session.ID, record.MFAVerifiedAt.Time); err != nil {
+				log.Printf("failed updating session step-up timestamp: %v", err)
+			} else {
+				session.RecentStepUpAt = &record.MFAVerifiedAt.Time
+			}
 		}
 	}
 
@@ -836,6 +841,11 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
 		return
 	}
+	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
+		log.Printf("failed updating session step-up timestamp: %v", err)
+	} else if authUser.Session != nil {
+		authUser.Session.RecentStepUpAt = &now
+	}
 	if trustedDeviceID != nil {
 		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
 			log.Printf("failed attaching trusted device to session: %v", err)
@@ -917,6 +927,11 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		log.Printf("failed updating session mfa state: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
 		return
+	}
+	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
+		log.Printf("failed updating session step-up timestamp: %v", err)
+	} else if authUser.Session != nil {
+		authUser.Session.RecentStepUpAt = &now
 	}
 	if trustedDeviceID != nil {
 		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {

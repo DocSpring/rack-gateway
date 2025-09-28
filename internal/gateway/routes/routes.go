@@ -223,13 +223,16 @@ func Setup(router *gin.Engine, cfg *Config) {
 				deployApprove.POST("/:id/reject", adminHandler.RejectDeployRequest)
 
 				// API tokens (rate limit creation)
-				tokenGroup := admin.Group("")
-				tokenGroup.POST("/tokens", middleware.RateLimit(cfg.Config), adminHandler.CreateAPIToken)
-				tokenGroup.GET("/tokens", adminHandler.ListAPITokens)
-				tokenGroup.GET("/tokens/permissions", adminHandler.GetTokenPermissionMetadata)
-				tokenGroup.GET("/tokens/:tokenID", adminHandler.GetAPIToken)
-				tokenGroup.PUT("/tokens/:tokenID", adminHandler.UpdateAPIToken)
-				tokenGroup.DELETE("/tokens/:tokenID", adminHandler.DeleteAPIToken)
+				tokenGroup := admin.Group("/tokens")
+				tokenGroup.GET("", adminHandler.ListAPITokens)
+				tokenGroup.GET("/permissions", adminHandler.GetTokenPermissionMetadata)
+				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
+
+				tokenSensitive := tokenGroup.Group("")
+				tokenSensitive.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				tokenSensitive.POST("", middleware.RateLimit(cfg.Config), adminHandler.CreateAPIToken)
+				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
+				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
 			}
 		}
 	}
