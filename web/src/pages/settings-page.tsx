@@ -401,8 +401,8 @@ export function SettingsPage() {
                 <Button
                   disabled={sentryApiTestMutation.isPending}
                   onClick={() => sentryApiTestMutation.mutate()}
-                  variant="destructive"
                   size="sm"
+                  variant="destructive"
                 >
                   {sentryApiTestMutation.isPending ? 'API…' : 'API'}
                 </Button>
