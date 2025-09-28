@@ -12,6 +12,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 )
 
@@ -81,7 +82,7 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 
 	authUser, _ := auth.GetAuthUser(c.Request.Context())
 
-	token, err := h.resolveDeployRequestToken(c, dbUser, req, authUser)
+	token, err := resolveDeployRequestToken(h.database, h.rbac, dbUser, req, authUser)
 	if err != nil {
 		switch {
 		case errors.Is(err, errDeployRequestTokenNotFound):
@@ -154,16 +155,16 @@ var (
 	errDeployRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
 )
 
-func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, req CreateDeployRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
+func resolveDeployRequestToken(database *db.Database, rbacSvc rbac.RBACManager, user *db.User, req CreateDeployRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPITokenName)
 	var token *db.APIToken
 	var err error
 
-	var hasExplicitTarget bool
+	hasExplicitTarget := false
 
 	if req.TargetAPITokenID != nil {
 		if trimmed := strings.TrimSpace(*req.TargetAPITokenID); trimmed != "" {
-			token, err = h.database.GetAPITokenByPublicID(trimmed)
+			token, err = database.GetAPITokenByPublicID(trimmed)
 			hasExplicitTarget = true
 		}
 	}
@@ -172,12 +173,12 @@ func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, re
 		if identifier != "" {
 			hasExplicitTarget = true
 			if id, parseErr := strconv.ParseInt(identifier, 10, 64); parseErr == nil {
-				token, err = h.database.GetAPITokenByID(id)
+				token, err = database.GetAPITokenByID(id)
 			} else {
-				token, err = h.database.GetAPITokenByName(identifier)
+				token, err = database.GetAPITokenByName(identifier)
 			}
 		} else if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil && *authUser.TokenID > 0 {
-			token, err = h.database.GetAPITokenByID(*authUser.TokenID)
+			token, err = database.GetAPITokenByID(*authUser.TokenID)
 		}
 	}
 
@@ -192,7 +193,7 @@ func (h *APIHandler) resolveDeployRequestToken(c *gin.Context, user *db.User, re
 	}
 
 	if token.UserID != user.ID {
-		allowedAdmin, err := h.rbac.Enforce(user.Email, "gateway:deploy-request", "approve")
+		allowedAdmin, err := rbacSvc.Enforce(user.Email, "gateway:deploy-request", "approve")
 		if err != nil {
 			return nil, fmt.Errorf("failed to check admin permission: %w", err)
 		}
@@ -349,6 +350,156 @@ func (h *AdminHandler) ListDeployRequests(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, DeployRequestList{DeployRequests: responses})
+}
+
+// PreapproveDeployRequest godoc
+// @Summary Pre-approve deploy request
+// @Description Creates and immediately approves a deploy request for a target API token.
+// @Tags DeployRequests
+// @Accept json
+// @Produce json
+// @Param request body CreateDeployRequestRequest true "Deploy request payload"
+// @Success 201 {object} DeployRequestResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse "Conflict - pending request already exists"
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/deploy-requests/preapprove [post]
+func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
+	if h == nil || h.database == nil || h.rbac == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+		return
+	}
+
+	userEmail := strings.TrimSpace(c.GetString("user_email"))
+	if userEmail == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "approve")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return
+	}
+
+	var req CreateDeployRequestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	if req.TargetAPITokenID == nil || strings.TrimSpace(*req.TargetAPITokenID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "target_api_token_id is required"})
+		return
+	}
+
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
+		return
+	}
+
+	dbUser, err := h.database.GetUser(userEmail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+	if dbUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+		return
+	}
+
+	targetID := strings.TrimSpace(*req.TargetAPITokenID)
+	req.TargetAPITokenID = &targetID
+
+	authUser, _ := auth.GetAuthUser(c.Request.Context())
+	token, err := resolveDeployRequestToken(h.database, h.rbac, dbUser, req, authUser)
+	if err != nil {
+		switch {
+		case errors.Is(err, errDeployRequestTokenNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "api token not found"})
+		case errors.Is(err, errDeployRequestForbidden):
+			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for target token"})
+		case errors.Is(err, errDeployRequestTargetMissing):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
+		}
+		return
+	}
+	if token == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
+		return
+	}
+
+	rackName := strings.TrimSpace(req.Rack)
+	if rackName == "" {
+		if rc, ok := h.primaryRack(); ok {
+			rackName = rc.Name
+			if rackName == "" {
+				rackName = "default"
+			}
+		} else {
+			rackName = "default"
+		}
+	}
+
+	var targetUserID *int64
+	if token.UserID > 0 {
+		id := token.UserID
+		targetUserID = &id
+	}
+
+	record, err := h.database.CreateDeployRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrDeployRequestActive):
+			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy request"})
+		}
+		return
+	}
+
+	window := 15 * time.Minute
+	if h.config != nil && h.config.DeployApprovalWindow > 0 {
+		window = h.config.DeployApprovalWindow
+	}
+
+	expiresAt := time.Now().Add(window)
+	notes := fmt.Sprintf("preapproved by %s", userEmail)
+
+	record, err = h.database.ApproveDeployRequest(record.ID, dbUser.ID, expiresAt, notes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy request"})
+		return
+	}
+
+	if err := audit.LogDB(h.database, &db.AuditLog{
+		UserEmail:    userEmail,
+		UserName:     dbUser.Name,
+		ActionType:   "gateway",
+		Action:       "deploy-request.preapprove",
+		ResourceType: "deploy-request",
+		Resource:     fmt.Sprintf("%d", record.ID),
+		Details:      fmt.Sprintf("token_uuid=%s,rack=%s", token.PublicID, rackName),
+		Status:       "success",
+		RBACDecision: "allow",
+		HTTPStatus:   http.StatusCreated,
+	}); err != nil {
+		_ = err
+	}
+
+	c.JSON(http.StatusCreated, toDeployRequestResponse(record))
 }
 
 // ApproveDeployRequest godoc

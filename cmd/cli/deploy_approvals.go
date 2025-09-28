@@ -28,9 +28,22 @@ type deployRequest struct {
 	ApprovalNotes      string     `json:"approval_notes,omitempty"`
 }
 
-func newRequestApprovalCommand() *cobra.Command {
+func newDeployApprovalCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "deploy-approval",
+		Short: "Manage deploy approvals",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+
+	cmd.AddCommand(newDeployApprovalRequestCommand(), newDeployApprovalPreApproveCommand())
+
+	return cmd
+}
+
+func newDeployApprovalRequestCommand() *cobra.Command {
 	var (
-		targetTokenID   string
 		rackFlag        string
 		waitFlag        bool
 		pollIntervalStr string
@@ -38,7 +51,7 @@ func newRequestApprovalCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "request-approval <message>",
+		Use:   "request <message>",
 		Short: "Request manual approval for CI/CD deploy",
 		Args:  cobra.ExactArgs(1),
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
@@ -81,7 +94,7 @@ func newRequestApprovalCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, strings.TrimSpace(targetTokenID))
+			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, "", nil)
 			if err != nil {
 				return err
 			}
@@ -116,7 +129,6 @@ func newRequestApprovalCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&targetTokenID, "target-api-token-id", "", "Target API token ID (public UUID; defaults to the authenticated token)")
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
 	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
@@ -125,39 +137,133 @@ func newRequestApprovalCommand() *cobra.Command {
 	return cmd
 }
 
-func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message, targetToken string) (*deployRequest, error) {
+func newDeployApprovalPreApproveCommand() *cobra.Command {
+	var (
+		targetTokenID string
+		rackFlag      string
+		mfaCode       string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "pre-approve <message>",
+		Short: "Create and immediately approve a deploy request for a CI/CD token",
+		Args:  cobra.ExactArgs(1),
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
+			message := strings.TrimSpace(args[0])
+			if message == "" {
+				return fmt.Errorf("message is required")
+			}
+
+			trimmedTarget := strings.TrimSpace(targetTokenID)
+			if trimmedTarget == "" {
+				return fmt.Errorf("--target-api-token-id is required")
+			}
+
+			rack, err := selectedRack()
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(rackFlag) != "" {
+				rack = strings.TrimSpace(rackFlag)
+			}
+
+			gatewayURL, bearer, err := gatewayAuthInfo(rack)
+			if err != nil {
+				return err
+			}
+
+			created, err := preapproveDeploy(cmd, rack, gatewayURL, bearer, message, trimmedTarget, &mfaCode)
+			if err != nil {
+				return err
+			}
+
+			statusLine := fmt.Sprintf("Deploy request %d pre-approved", created.ID)
+			if created.ApprovalExpiresAt != nil {
+				statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, created.ApprovalExpiresAt.UTC().Format(time.RFC3339))
+			}
+			if err := writeLine(cmd.OutOrStdout(), statusLine); err != nil {
+				return err
+			}
+			return nil
+		}),
+	}
+
+	cmd.Flags().StringVar(&targetTokenID, "target-api-token-id", "", "Target API token ID (public UUID)")
+	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
+	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
+	if err := cmd.MarkFlagRequired("target-api-token-id"); err != nil {
+		panic(err)
+	}
+
+	return cmd
+}
+
+func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployRequest, error) {
 	payload := map[string]interface{}{
 		"message": message,
 		"rack":    rack,
 	}
-	if targetToken != "" {
-		payload["target_api_token_id"] = targetToken
+	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
+		payload["target_api_token_id"] = trimmed
 	}
+	return postDeployRequest(cmd, gatewayURL, bearer, "/deploy-requests", payload, mfaCode)
+}
 
-	resp, body, err := sendDeployRequest(gatewayURL, bearer, http.MethodPost, "/deploy-requests", payload)
-	if err != nil {
-		return nil, err
+func preapproveDeploy(cmd *cobra.Command, rack, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployRequest, error) {
+	payload := map[string]interface{}{
+		"message":             message,
+		"rack":                rack,
+		"target_api_token_id": strings.TrimSpace(targetToken),
 	}
+	return postDeployRequest(cmd, gatewayURL, bearer, "/admin/deploy-requests/preapprove", payload, mfaCode)
+}
 
-	if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-		if err := promptAndVerifyMFA(cmd, gatewayURL, bearer); err != nil {
-			return nil, err
-		}
-		resp, body, err = sendDeployRequest(gatewayURL, bearer, http.MethodPost, "/deploy-requests", payload)
+func postDeployRequest(cmd *cobra.Command, gatewayURL, bearer, path string, payload map[string]interface{}, mfaCode *string) (*deployRequest, error) {
+	fullPath := path
+	attempts := 0
+	for {
+		attempts++
+		resp, body, err := sendDeployRequest(gatewayURL, bearer, http.MethodPost, fullPath, payload)
 		if err != nil {
 			return nil, err
 		}
-	}
 
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
+		if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
+			if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, mfaCode); err != nil {
+				return nil, err
+			}
+			if attempts < 3 {
+				continue
+			}
+		}
 
-	var result deployRequest
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse deploy request response: %w", err)
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+
+		var result deployRequest
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse deploy request response: %w", err)
+		}
+		return &result, nil
 	}
-	return &result, nil
+}
+
+func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer string, mfaCode *string) error {
+	if mfaCode != nil {
+		code := strings.TrimSpace(*mfaCode)
+		if code != "" {
+			if err := submitMFAVerification(gatewayURL, bearer, code); err != nil {
+				return fmt.Errorf("MFA verification failed: %w", err)
+			}
+			if err := writeLine(cmd.OutOrStdout(), "MFA verified."); err != nil {
+				return err
+			}
+			*mfaCode = ""
+			return nil
+		}
+	}
+	return promptAndVerifyMFA(cmd, gatewayURL, bearer)
 }
 
 func waitForDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer string, id int64, interval, timeout time.Duration) (*deployRequest, error) {

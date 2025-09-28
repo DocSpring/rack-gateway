@@ -334,6 +334,14 @@ func OriginValidator(cfg *config.Config) gin.HandlerFunc {
 
 // CSRF validates CSRF tokens for state-changing requests
 func CSRF(sessionManager *auth.SessionManager) gin.HandlerFunc {
+	if sessionManager == nil {
+		// CLI requests use Authorization headers and never rely on cookies,
+		// so CSRF offers no protection and may block legitimate automation.
+		// Keep middleware as a no-op when session storage is disabled.
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
 	return func(c *gin.Context) {
 		// Skip if has Authorization header (API token)
 		if c.GetHeader("Authorization") != "" {

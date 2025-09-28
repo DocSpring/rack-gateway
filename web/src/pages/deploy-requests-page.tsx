@@ -42,14 +42,14 @@ import {
   type UpdateDeployRequestStatusRequest,
 } from '@/lib/api'
 
-type StatusFilter = 'pending' | 'approved' | 'rejected' | 'consumed' | 'all'
+type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'consumed'
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'consumed', label: 'Consumed' },
-  { value: 'all', label: 'All' },
 ]
 
 type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>['variant']>
@@ -73,7 +73,7 @@ function toNotesPayload(notes: string): UpdateDeployRequestStatusRequest | undef
 }
 
 export function DeployRequestsPage() {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectRequest, setRejectRequest] = useState<DeployRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const queryClient = useQueryClient()
@@ -125,7 +125,7 @@ export function DeployRequestsPage() {
       <div className="space-y-6">
         <TablePane
           empty={isEmpty}
-          emptyMessage="No deploy requests found."
+          emptyMessage={`No ${statusFilter} deploy requests found`}
           error={isError ? error : null}
           headerRight={
             <div className="flex items-center gap-2">

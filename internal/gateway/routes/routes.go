@@ -164,9 +164,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 			{
 				deployRequests.GET("/:id", apiHandler.GetDeployRequest)
 				createDeploy := deployRequests.Group("")
-				if cfg.SessionManager != nil {
-					createDeploy.Use(middleware.CSRF(cfg.SessionManager))
-				}
 				createDeploy.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				createDeploy.POST("", apiHandler.CreateDeployRequest)
 			}
@@ -217,6 +214,9 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 				deployAdmin := admin.Group("/deploy-requests")
 				deployAdmin.GET("", adminHandler.ListDeployRequests)
+				preapprove := deployAdmin.Group("")
+				preapprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				preapprove.POST("/preapprove", adminHandler.PreapproveDeploy)
 				deployApprove := deployAdmin.Group("")
 				deployApprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployRequest)
