@@ -27,8 +27,10 @@ import {
 } from '../components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { useAuth } from '../contexts/auth-context'
+import { useStepUp } from '../contexts/step-up-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
+import { getErrorMessage } from '../lib/error-utils'
 import type { APIToken as APITokenModel, APITokenResponse } from '../lib/generated/gateway-types'
 import { toFieldErrorMap, tokenFormSchema } from '../lib/validation'
 
@@ -254,6 +256,7 @@ export function TokensPage() {
 function TokensPageInner() {
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
+  const { handleStepUpError } = useStepUp()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newTokenName, setNewTokenName] = useState('')
   const [createdToken, setCreatedToken] = useState<string | null>(null)
@@ -401,10 +404,6 @@ function TokensPageInner() {
       toast.success('API token created successfully')
       setCreateErrors({ name: undefined, permissions: undefined })
     },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to create token')
-    },
   })
 
   // Delete token mutation
@@ -416,10 +415,6 @@ function TokensPageInner() {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('Token deleted successfully')
       handleDeleteDialogOpenChange(false)
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to delete token')
     },
   })
 
@@ -449,10 +444,6 @@ function TokensPageInner() {
       setEditActiveRole(null)
       setEditErrors({ name: undefined, permissions: undefined })
     },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to update token')
-    },
   })
 
   const copyToClipboard = (value: string, successMessage: string) => {
@@ -463,7 +454,7 @@ function TokensPageInner() {
       .catch(() => toast.error('Failed to copy to clipboard'))
   }
 
-  const handleCreateToken = () => {
+  const handleCreateToken = async () => {
     const parsed = tokenFormSchema.safeParse({
       name: newTokenName,
       permissions: selectedPermissions,
@@ -483,7 +474,14 @@ function TokensPageInner() {
     setNewTokenName(payload.name)
     setSelectedPermissions(payload.permissions)
 
-    createTokenMutation.mutate(payload)
+    try {
+      await createTokenMutation.mutateAsync(payload)
+    } catch (err) {
+      if (handleStepUpError(err, () => createTokenMutation.mutateAsync(payload))) {
+        return
+      }
+      toast.error(getErrorMessage(err, 'Failed to create token'))
+    }
   }
 
   const handleCopyToken = () => {
@@ -523,11 +521,19 @@ function TokensPageInner() {
     }
   }
 
-  const confirmDeleteToken = () => {
+  const confirmDeleteToken = async () => {
     if (!tokenToDelete) {
       return
     }
-    deleteTokenMutation.mutate(tokenToDelete.id)
+    const tokenId = tokenToDelete.id
+    try {
+      await deleteTokenMutation.mutateAsync(tokenId)
+    } catch (err) {
+      if (handleStepUpError(err, () => deleteTokenMutation.mutateAsync(tokenId))) {
+        return
+      }
+      toast.error(getErrorMessage(err, 'Failed to delete token'))
+    }
   }
 
   const handleRoleShortcut = (role: TokenRoleInfo) => {
@@ -595,7 +601,7 @@ function TokensPageInner() {
     }
   }, [isCreateOpen, resetCreateState])
 
-  const handleUpdateToken = () => {
+  const handleUpdateToken = async () => {
     if (!editToken) {
       return
     }
@@ -618,11 +624,20 @@ function TokensPageInner() {
     setEditName(payload.name)
     setEditPermissions(payload.permissions)
 
-    updateTokenMutation.mutate({
+    const args = {
       id: editToken.id,
       name: payload.name,
       permissions: payload.permissions,
-    })
+    }
+
+    try {
+      await updateTokenMutation.mutateAsync(args)
+    } catch (err) {
+      if (handleStepUpError(err, () => updateTokenMutation.mutateAsync(args))) {
+        return
+      }
+      toast.error(getErrorMessage(err, 'Failed to update token'))
+    }
   }
 
   return (
@@ -787,7 +802,9 @@ function TokensPageInner() {
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      handleUpdateToken()
+                      handleUpdateToken().catch(() => {
+                        /* errors handled by handler */
+                      })
                     }
                   }}
                   value={editName}
@@ -815,7 +832,11 @@ function TokensPageInner() {
               </Button>
               <Button
                 disabled={updateTokenMutation.isPending || isPermissionLoading || !editToken}
-                onClick={handleUpdateToken}
+                onClick={() => {
+                  handleUpdateToken().catch(() => {
+                    /* errors handled by handler */
+                  })
+                }}
               >
                 {updateTokenMutation.isPending ? 'Saving...' : 'Save'}
               </Button>
@@ -832,7 +853,11 @@ function TokensPageInner() {
           <>This action cannot be undone. Type DELETE to remove "{tokenToDelete?.name}".</>
         }
         inputId="confirm-delete-token"
-        onConfirm={confirmDeleteToken}
+        onConfirm={() => {
+          confirmDeleteToken().catch(() => {
+            /* errors handled in handler */
+          })
+        }}
         onOpenChange={handleDeleteDialogOpenChange}
         open={isDeleteOpen}
         title="Delete API Token"
@@ -1066,7 +1091,7 @@ type CreateTokenDialogProps = {
   onOpenChange: (open: boolean) => void
   onPermissionToggle: (permission: string) => void
   onRoleSelect: (role: TokenRoleInfo) => void
-  onSubmit: () => void
+  onSubmit: () => void | Promise<void>
   onTokenNameChange: (value: string) => void
   onClose: () => void
   roleShortcuts: TokenRoleInfo[]
@@ -1135,7 +1160,16 @@ function CreateTokenDialog({
                   inputMode="text"
                   name="token_name"
                   onChange={(e) => onTokenNameChange(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const result = onSubmit()
+                      if (result instanceof Promise) {
+                        result.catch(() => {
+                          /* errors handled by caller */
+                        })
+                      }
+                    }
+                  }}
                   placeholder="e.g., CI/CD Pipeline"
                   spellCheck={false}
                   value={tokenName}
@@ -1165,7 +1199,17 @@ function CreateTokenDialog({
                 <Button onClick={onCancel} variant="outline">
                   Cancel
                 </Button>
-                <Button disabled={isCreating || isPermissionLoading} onClick={onSubmit}>
+                <Button
+                  disabled={isCreating || isPermissionLoading}
+                  onClick={() => {
+                    const result = onSubmit()
+                    if (result instanceof Promise) {
+                      result.catch(() => {
+                        /* errors handled by caller */
+                      })
+                    }
+                  }}
+                >
                   {isCreating ? 'Creating...' : 'Create Token'}
                 </Button>
               </>

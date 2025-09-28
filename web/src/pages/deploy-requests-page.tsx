@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { VariantProps } from 'class-variance-authority'
 import { Check, Loader2, Timer, X } from 'lucide-react'
 import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/use-toast'
+import { useStepUp } from '@/contexts/step-up-context'
 import {
   approveDeployRequest,
   type DeployRequest,
@@ -41,6 +42,7 @@ import {
   rejectDeployRequest,
   type UpdateDeployRequestStatusRequest,
 } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error-utils'
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'consumed'
 
@@ -78,6 +80,7 @@ export function DeployRequestsPage() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [selectedRequest, setSelectedRequest] = useState<DeployRequest | null>(null)
   const queryClient = useQueryClient()
+  const { handleStepUpError } = useStepUp()
 
   const queryKey = useMemo(() => ['deploy-requests', statusFilter], [statusFilter])
 
@@ -99,9 +102,6 @@ export function DeployRequestsPage() {
       toast.success(`Request ${id} was approved`)
       queryClient.invalidateQueries({ queryKey })
     },
-    onError: (err: Error) => {
-      toast.error('Approval failed', { description: err.message })
-    },
   })
 
   const rejectMutation = useMutation({
@@ -113,9 +113,6 @@ export function DeployRequestsPage() {
       setRejectNotes('')
       queryClient.invalidateQueries({ queryKey })
     },
-    onError: (err: Error) => {
-      toast.error('Rejection failed', { description: err.message })
-    },
   })
 
   const requests = data?.deploy_requests ?? []
@@ -124,6 +121,45 @@ export function DeployRequestsPage() {
 
   const approveDisabled = approveMutation.isPending || rejectMutation.isPending
   const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
+
+  const approveRequest = useCallback(
+    async (id: number) => {
+      try {
+        await approveMutation.mutateAsync(id)
+      } catch (err) {
+        if (handleStepUpError(err, () => approveMutation.mutateAsync(id))) {
+          return
+        }
+        const description = getErrorMessage(err, 'Failed to approve request')
+        toast.error('Approval failed', { description })
+      }
+    },
+    [approveMutation, handleStepUpError]
+  )
+
+  const submitRejection = useCallback(
+    async (id: number, notes: string) => {
+      try {
+        await rejectMutation.mutateAsync({ id, notes })
+      } catch (err) {
+        if (handleStepUpError(err, () => rejectMutation.mutateAsync({ id, notes }))) {
+          return
+        }
+        const description = getErrorMessage(err, 'Failed to reject request')
+        toast.error('Rejection failed', { description })
+      }
+    },
+    [handleStepUpError, rejectMutation]
+  )
+
+  const handleApprove = useCallback(
+    (id: number) => {
+      approveRequest(id).catch(() => {
+        /* errors handled within approveRequest */
+      })
+    },
+    [approveRequest]
+  )
 
   const handleRejectClick = (request: DeployRequest) => {
     setRejectRequest(request)
@@ -179,7 +215,7 @@ export function DeployRequestsPage() {
                     approveDisabled={approveDisabled}
                     approvePending={approveMutation.isPending}
                     key={request.id}
-                    onApprove={(id) => approveMutation.mutate(id)}
+                    onApprove={handleApprove}
                     onReject={handleRejectClick}
                     onSelect={setSelectedRequest}
                     rejectDisabled={rejectDisabled}
@@ -226,7 +262,9 @@ export function DeployRequestsPage() {
                 if (!rejectRequest || rejectRequest.id == null) {
                   return
                 }
-                rejectMutation.mutate({ id: rejectRequest.id, notes: rejectNotes })
+                submitRejection(rejectRequest.id, rejectNotes).catch(() => {
+                  /* errors handled within submitRejection */
+                })
               }}
               variant="destructive"
             >

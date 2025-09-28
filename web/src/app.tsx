@@ -9,6 +9,7 @@ import {
 import { Layout } from './components/layout'
 import { Toaster } from './components/ui/toaster'
 import { AuthProvider } from './contexts/auth-context'
+import { StepUpProvider } from './contexts/step-up-context'
 import { AccountSecurityPage } from './pages/account-security-page'
 import { AllBuildsPage } from './pages/all-builds-page'
 import { AllProcessesPage } from './pages/all-processes-page'
@@ -263,8 +264,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RouterProvider router={router} />
-        <Toaster />
+        <StepUpProvider>
+          <RouterProvider router={router} />
+          <Toaster />
+        </StepUpProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

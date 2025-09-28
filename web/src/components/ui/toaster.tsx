@@ -1,4 +1,4 @@
-import { CircleAlert, Check, Info, TriangleAlert, X } from 'lucide-react'
+import { Check, CircleAlert, Info, TriangleAlert, X } from 'lucide-react'
 import React from 'react'
 
 import {

@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { isAxiosError } from 'axios'
 import { ShieldAlert } from 'lucide-react'
 import QRCode from 'qrcode'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { MFAInput } from '@/components/mfa-input'
 import { TimeAgo } from '@/components/time-ago'
@@ -11,17 +10,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
+import { useStepUp } from '@/contexts/step-up-context'
 import {
   type BackupCodesResponse,
   confirmTOTPEnrollment,
@@ -32,8 +25,8 @@ import {
   revokeTrustedDevice,
   type StartTOTPEnrollmentResponse,
   startTOTPEnrollment,
-  verifyMFA,
 } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error-utils'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { WebRoute } from '@/lib/routes'
 
@@ -41,26 +34,11 @@ type EnrollmentState = StartTOTPEnrollmentResponse & {
   qrDataUrl?: string | null
 }
 
-type PendingAction = (() => Promise<void>) | null
-
 const STEP_UP_QUERY_KEY = ['mfaStatus'] as const
 const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
 }
 const DEFAULT_MFA_LABEL = 'Authenticator App'
-
-function extractErrorMessage(error: unknown): string {
-  if (isAxiosError<{ error?: string }>(error)) {
-    const message = error.response?.data?.error
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message
-    }
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Something went wrong'
-}
 
 function formatCodeForDownload(codes: string[]): string {
   const header = [
@@ -77,16 +55,13 @@ export function AccountSecurityPage() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { refresh: refreshUser } = useAuth()
+  const { openStepUp, requireStepUp, isVerifying: isGlobalStepUpVerifying } = useStepUp()
   const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null)
   const [verificationCode, setVerificationCode] = useState('')
   const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(null)
   const [enrollmentLabel, setEnrollmentLabel] = useState(DEFAULT_MFA_LABEL)
-  const [stepUpOpen, setStepUpOpen] = useState(false)
-  const [stepUpCode, setStepUpCode] = useState('')
-  const [stepUpTrustDevice, setStepUpTrustDevice] = useState(true)
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [disableDialogOpen, setDisableDialogOpen] = useState(false)
   const [disableAllPending, setDisableAllPending] = useState(false)
   const [autoPrompted, setAutoPrompted] = useState(false)
@@ -139,7 +114,10 @@ export function AccountSecurityPage() {
     return Number.isNaN(expires) || expires <= Date.now()
   }, [status?.recent_step_up_expires_at])
 
-  const invalidateStatus = () => queryClient.invalidateQueries({ queryKey: STEP_UP_QUERY_KEY })
+  const invalidateStatus = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: STEP_UP_QUERY_KEY }),
+    [queryClient]
+  )
 
   useEffect(() => {
     if (enrollmentRequiredFlag && enrollmentChannel === 'cli') {
@@ -163,7 +141,7 @@ export function AccountSecurityPage() {
       toast.success('MFA enrollment started')
     },
     onError: (error) => {
-      toast.error(extractErrorMessage(error))
+      toast.error(getErrorMessage(error))
     },
   })
 
@@ -182,7 +160,7 @@ export function AccountSecurityPage() {
       })
     },
     onError: (error) => {
-      toast.error(extractErrorMessage(error))
+      toast.error(getErrorMessage(error))
     },
   })
 
@@ -196,7 +174,7 @@ export function AccountSecurityPage() {
       })
     },
     onError: (error) => {
-      toast.error(extractErrorMessage(error))
+      toast.error(getErrorMessage(error))
     },
   })
 
@@ -207,7 +185,7 @@ export function AccountSecurityPage() {
       invalidateStatus()
     },
     onError: (error) => {
-      toast.error(extractErrorMessage(error))
+      toast.error(getErrorMessage(error))
     },
   })
 
@@ -220,52 +198,21 @@ export function AccountSecurityPage() {
       invalidateStatus()
     },
     onError: (error) => {
-      toast.error(extractErrorMessage(error))
-    },
-  })
-
-  const verifyMutation = useMutation({
-    mutationFn: verifyMFA,
-    onSuccess: async () => {
-      const action = pendingAction
-      toast.success('MFA verification successful')
-      setStepUpOpen(false)
-      setStepUpCode('')
-      setStepUpTrustDevice(true)
-      setPendingAction(null)
-      await invalidateStatus()
-      if (action) {
-        try {
-          await action()
-        } catch (error) {
-          toast.error(extractErrorMessage(error))
-        }
-        return
-      }
-      if (promptMfa && redirectTarget) {
-        const targetPath = redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget
-        const absolute = WebRoute(targetPath)
-        if (typeof window !== 'undefined') {
-          window.location.assign(absolute)
-        }
-      }
-    },
-    onError: (error) => {
-      toast.error(extractErrorMessage(error))
+      toast.error(getErrorMessage(error))
     },
   })
 
   const runWithStepUp = (action: () => Promise<void>) => {
     if (!needsStepUp) {
       action().catch((error) => {
-        toast.error(extractErrorMessage(error))
+        toast.error(getErrorMessage(error))
       })
       return
     }
-    setPendingAction(() => action)
-    setStepUpCode('')
-    setStepUpTrustDevice(true)
-    setStepUpOpen(true)
+    requireStepUp(async () => {
+      await invalidateStatus()
+      await action()
+    })
   }
 
   const handleConfirmEnrollment = () => {
@@ -319,11 +266,23 @@ export function AccountSecurityPage() {
       needsStepUp &&
       !isLoading &&
       !isFetching &&
-      !verifyMutation.isPending
+      !isGlobalStepUpVerifying
     ) {
       setAutoPrompted(true)
-      setStepUpTrustDevice(true)
-      setStepUpOpen(true)
+      openStepUp({
+        action: async () => {
+          await invalidateStatus()
+          if (promptMfa && redirectTarget) {
+            const targetPath = redirectTarget.startsWith('/')
+              ? redirectTarget.slice(1)
+              : redirectTarget
+            const absolute = WebRoute(targetPath)
+            if (typeof window !== 'undefined') {
+              window.location.assign(absolute)
+            }
+          }
+        },
+      })
     }
   }, [
     promptMfa,
@@ -333,7 +292,10 @@ export function AccountSecurityPage() {
     needsStepUp,
     isLoading,
     isFetching,
-    verifyMutation.isPending,
+    isGlobalStepUpVerifying,
+    openStepUp,
+    invalidateStatus,
+    redirectTarget,
   ])
 
   const handleDisableAllMfa = () => {
@@ -743,72 +705,6 @@ export function AccountSecurityPage() {
         open={disableDialogOpen}
         title="Disable MFA"
       />
-
-      <Dialog
-        onOpenChange={(open) => {
-          setStepUpOpen(open)
-          if (!open) {
-            setStepUpCode('')
-            setStepUpTrustDevice(true)
-            if (!verifyMutation.isPending) {
-              setPendingAction(null)
-            }
-          }
-        }}
-        open={stepUpOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Multi-Factor Authentication Required</DialogTitle>
-            <DialogDescription>
-              Enter a code from your authenticator or an unused backup code to continue.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              verifyMutation.mutate({ code: stepUpCode, trust_device: stepUpTrustDevice })
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="step-up-code">Verification code</Label>
-              <MFAInput
-                autoFocus
-                id="step-up-code"
-                maxLength={6}
-                onChange={(event) => setStepUpCode(event.target.value.trim())}
-                placeholder="123456"
-                required
-                value={stepUpCode}
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                checked={stepUpTrustDevice}
-                onChange={(event) => setStepUpTrustDevice(event.target.checked)}
-                type="checkbox"
-              />
-              Trust this browser for 30 days
-            </label>
-            <div className="flex justify-end gap-2">
-              <Button
-                onClick={() => {
-                  setStepUpOpen(false)
-                  setPendingAction(null)
-                }}
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-              <Button disabled={verifyMutation.isPending || stepUpCode.length === 0} type="submit">
-                Verify
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {isBusy ? (
         <p className="text-muted-foreground text-sm">Loading latest security information…</p>
