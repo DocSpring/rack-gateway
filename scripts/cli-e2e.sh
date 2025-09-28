@@ -11,11 +11,14 @@ NC='\033[0m' # No Color
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+E2E_DATABASE_NAME="${E2E_DATABASE_NAME:-gateway_test}"
+E2E_GATEWAY_SERVICE="${E2E_GATEWAY_SERVICE:-gateway-api-test}"
+
 psql_exec() {
   local sql="$1"
   local output
   set +e
-  output=$(docker exec -i convox-gateway-postgres-1 psql -U postgres -d gateway -At -F $'\t' -c "$sql" 2>&1)
+  output=$(docker exec -i convox-gateway-postgres-1 psql -U postgres -d "$E2E_DATABASE_NAME" -At -F $'\t' -c "$sql" 2>&1)
   local status=$?
   set -e
   if [[ $status -ne 0 ]]; then
@@ -65,10 +68,19 @@ reset_all_mfa_state() {
   local sql
   sql=$(cat <<'SQL'
 UPDATE user_sessions SET trusted_device_id = NULL, mfa_verified_at = NULL, recent_step_up_at = NULL;
-DELETE FROM trusted_devices;
-DELETE FROM mfa_backup_codes;
-DELETE FROM mfa_methods;
+TRUNCATE TABLE trusted_devices RESTART IDENTITY CASCADE;
+TRUNCATE TABLE mfa_backup_codes RESTART IDENTITY CASCADE;
+TRUNCATE TABLE mfa_methods RESTART IDENTITY CASCADE;
 UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL;
+UPDATE settings
+   SET value = jsonb_set(value, '{require_all_users}', 'false'::jsonb, true),
+       updated_at = NOW()
+ WHERE key = 'mfa';
+INSERT INTO settings (key, value, updated_at)
+     VALUES ('mfa', jsonb_build_object('require_all_users', false), NOW())
+ON CONFLICT (key) DO UPDATE
+     SET value = jsonb_set(settings.value, '{require_all_users}', 'false'::jsonb, true),
+         updated_at = NOW();
 SQL
   )
 
@@ -134,8 +146,8 @@ toml_get() {
   return 1
 }
 
-GATEWAY_PORT="${GATEWAY_PORT:-}"
-[[ -z "$GATEWAY_PORT" ]] && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
+GATEWAY_PORT="${GATEWAY_PORT:-${E2E_GATEWAY_PORT:-}}"
+[[ -z "$GATEWAY_PORT" ]] && GATEWAY_PORT="$(toml_get E2E_GATEWAY_PORT "$MiseFile" || toml_get TEST_GATEWAY_PORT "$MiseFile" || toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
 
 echo "Building CLI..."
 task go:build:cli
@@ -247,8 +259,8 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${YELLOW}Enabling MFA enforcement...${NC}"
   psql_exec "UPDATE settings SET value = jsonb_set(value, '{require_all_users}', 'true'::jsonb, true), updated_at = NOW() WHERE key = 'mfa';"
 
-  echo -e "${YELLOW}Restarting gateway-api-dev to apply MFA setting...${NC}"
-  docker compose restart gateway-api-dev >/dev/null
+  echo -e "${YELLOW}Restarting ${E2E_GATEWAY_SERVICE} to apply MFA setting...${NC}"
+  docker compose restart "${E2E_GATEWAY_SERVICE}" >/dev/null
   ./scripts/wait-for-services.sh
 
   for user_email in "admin@example.com" "deployer@example.com" "viewer@example.com"; do

@@ -1,0 +1,123 @@
+version: "3"
+
+vars:
+  STACK: "{{.STACK}}"
+  PROFILE: "{{.PROFILE}}"
+  SERVICES: "{{.SERVICES}}"
+  GATEWAY_SERVICE: "{{.GATEWAY_SERVICE}}"
+  WEB_SERVICE: "{{.WEB_SERVICE}}"
+  DEPENDENCY_SERVICES: "{{.DEPENDENCY_SERVICES}}"
+  WAIT_GATEWAY_PORT: "{{.WAIT_GATEWAY_PORT}}"
+  WAIT_WEB_PORT: "{{.WAIT_WEB_PORT}}"
+  WAIT_MOCK_OAUTH_PORT: "{{.WAIT_MOCK_OAUTH_PORT}}"
+  WAIT_CHECK_VITE_PROXY: "{{.WAIT_CHECK_VITE_PROXY}}"
+
+tasks:
+  up:
+    desc: Up full {{.STACK}} stack
+    cmds:
+      - |
+        {{- if .DEPENDENCY_SERVICES -}}
+        docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.DEPENDENCY_SERVICES}}
+        {{- end -}}
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.SERVICES}}
+      - |
+        if docker ps --format '{{"{{.Names}}"}}' | grep -q '^convox-gateway-postgres-1$'; then
+          for _ in $(seq 1 20); do
+            if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+              for dbname in gateway_dev gateway_test; do
+                if ! docker compose exec -T postgres psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" | grep -q 1; then
+                  docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${dbname}\";"
+                fi
+              done
+              break
+            fi
+            sleep 1
+          done
+        fi
+        true
+
+  up:gateway:
+    desc: Up {{.STACK}} gateway
+    cmds:
+      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.GATEWAY_SERVICE}}
+
+  up:web:
+    desc: Up {{.STACK}} web frontend
+    cmds:
+      - |
+        {{- if .WEB_SERVICE -}}
+        docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.WEB_SERVICE}}
+        {{- else -}}
+        echo "No web service defined for stack {{.STACK}}, skipping."
+        {{- end -}}
+
+  wait:
+    desc: Wait for {{.STACK}} stack readiness
+    cmds:
+      - WEB_PORT={{if .WAIT_WEB_PORT}}{{.WAIT_WEB_PORT}}{{else}}{{.WAIT_GATEWAY_PORT}}{{end}} GATEWAY_PORT={{.WAIT_GATEWAY_PORT}} MOCK_OAUTH_PORT={{.WAIT_MOCK_OAUTH_PORT}} CHECK_VITE_PROXY={{.WAIT_CHECK_VITE_PROXY | default "false"}} bash scripts/wait-for-services.sh
+
+  down:
+    desc: Down full {{.STACK}} stack
+    cmds:
+      - docker compose stop {{.SERVICES}}
+      - cmd: docker compose rm -f -v {{.SERVICES}}
+        ignore_error: true
+
+  down:gateway:
+    desc: Down {{.STACK}} gateway
+    cmds:
+      - docker compose stop {{.GATEWAY_SERVICE}}
+      - cmd: docker compose rm -f -v {{.GATEWAY_SERVICE}}
+        ignore_error: true
+
+  down:web:
+    desc: Down {{.STACK}} web frontend
+    cmds:
+      - |
+        {{- if .WEB_SERVICE -}}
+        docker compose stop {{.WEB_SERVICE}}
+        docker compose rm -f -v {{.WEB_SERVICE}} || true
+        {{- else -}}
+        echo "No web service defined for stack {{.STACK}}, skipping."
+        {{- end -}}
+
+  stop:
+    desc: Stop {{.STACK}} stack
+    cmds:
+      - docker compose stop {{.SERVICES}}
+
+  stop:gateway:
+    desc: Stop {{.STACK}} gateway
+    cmds:
+      - docker compose stop {{.GATEWAY_SERVICE}}
+
+  stop:web:
+    desc: Stop {{.STACK}} web frontend
+    cmds:
+      - |
+        {{- if .WEB_SERVICE -}}
+        docker compose stop {{.WEB_SERVICE}}
+        {{- else -}}
+        echo "No web service defined for stack {{.STACK}}, skipping."
+        {{- end -}}
+
+  reset:
+    desc: Reset {{.STACK}} stack (down + up)
+    cmds:
+      - task: down
+      - task: up
+
+  logs:
+    desc: Tail logs for {{.STACK}} stack
+    cmds:
+      - cmd: exec docker compose --profile {{.PROFILE}} logs -f $SRVS
+        interactive: true
+        tty: true
+        ignore_error: true
+
+  start:
+    desc: Start {{.STACK}} stack and follow logs
+    cmds:
+      - task: up
+      - task: logs

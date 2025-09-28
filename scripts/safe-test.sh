@@ -100,4 +100,96 @@ echo "Running tests with Convox config protection..."
 mkdir -p "$CONVOX_CFG_DIR"
 touch "$GUARD_FILE"
 
+ensure_local_database() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        return
+    fi
+    if [ -z "${DATABASE_URL:-}" ]; then
+        return
+    fi
+
+    local IFS=$'\n'
+    read -r db_name admin_uri host port <<'EOF'
+$(python3 <<'PY'
+import os
+from urllib.parse import urlsplit, urlunsplit
+
+uri = os.environ.get("DATABASE_URL")
+if not uri:
+    raise SystemExit
+
+parts = urlsplit(uri)
+dbname = parts.path.lstrip('/')
+if not dbname:
+    raise SystemExit
+
+admin_parts = parts._replace(path='/postgres')
+admin_uri = urlunsplit(admin_parts)
+print(dbname)
+print(admin_uri)
+print(parts.hostname or '')
+print(parts.port or '')
+PY
+)
+EOF
+
+    if [ -z "$db_name" ] || [ -z "$admin_uri" ]; then
+        return
+    fi
+
+    local use_docker=false
+    if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        case "$host" in
+            ''|localhost|127.0.0.*)
+                if [ "${port:-}" = "55432" ]; then
+                    docker compose up -d --pull never postgres >/dev/null 2>&1 || true
+                    for _ in $(seq 1 20); do
+                        if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+                            use_docker=true
+                            break
+                        fi
+                        sleep 1
+                    done
+                fi
+                ;;
+        esac
+    fi
+
+    if [ "$use_docker" = true ]; then
+        if docker compose exec -T postgres psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1; then
+            return
+        fi
+
+        echo "Creating local database $db_name for tests (docker compose)..."
+        if ! docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\";" >/dev/null; then
+            echo "Warning: failed to create database $db_name in docker (continuing)." >&2
+        fi
+        return
+    fi
+
+    case "$host" in
+        ''|localhost|127.0.0.*)
+            ;;
+        *)
+            # Avoid touching remote databases
+            return
+            ;;
+    esac
+
+    if ! command -v psql >/dev/null 2>&1; then
+        return
+    fi
+
+    if psql "$admin_uri" -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1; then
+        return
+    fi
+
+    echo "Creating local database $db_name for tests..."
+    if ! psql "$admin_uri" -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\";" >/dev/null; then
+        echo "Warning: failed to create database $db_name (continuing)." >&2
+    fi
+}
+
+ensure_local_database
+
 go test "$@"

@@ -55,6 +55,25 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 - `DEPLOY_APPROVAL_WINDOW` (default: `15m`)
   - Duration an approved request remains valid before expiring. Accepts Go duration strings (e.g., `10m`).
 
+### Local Development Ports
+
+All development and test ports are defined in `mise.toml`.
+
+- `GATEWAY_PORT` (default: `8447`)
+  - Gateway API port for the dev and preview stacks.
+- `WEB_PORT` (default: `5223`)
+  - Vite dev server port when running the dev stack.
+- `MOCK_OAUTH_PORT` (default: `3345`)
+  - Mock Google OAuth server port for dev/preview stacks.
+- `MOCK_CONVOX_PORT` (default: `5443`)
+  - Mock Convox rack API port for dev/preview stacks.
+- `TEST_GATEWAY_PORT` (default: `9447`)
+  - Gateway API port for the dedicated test stack (used by E2E suites).
+- `TEST_MOCK_OAUTH_PORT` (default: `9345`)
+  - Mock OAuth server port for the test stack.
+- `TEST_MOCK_CONVOX_PORT` (default: `6443`)
+  - Mock Convox rack API port for the test stack.
+
 ### Web Frontend (runtime)
 
 - `SENTRY_JS_DSN` (optional)
@@ -82,6 +101,10 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 ## Database and Auditing
 
 Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
+
+- Local development uses two logical databases:
+  - `gateway_dev` for the dev/preview stacks.
+  - `gateway_test` for the isolated test stack. Task automation ensures both exist when the Docker stack starts.
 
 - Protected Env Vars
 

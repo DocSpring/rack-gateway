@@ -4,6 +4,9 @@ GATEWAY_PORT = "8447"
 WEB_PORT = "5223"
 MOCK_OAUTH_PORT = "3345"
 MOCK_CONVOX_PORT = "5443"
+TEST_GATEWAY_PORT = "9447"
+TEST_MOCK_OAUTH_PORT = "9345"
+TEST_MOCK_CONVOX_PORT = "6443"
 
 # Google OAuth credentials (for production OAuth)
 GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
@@ -19,3 +22,4 @@ GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 # Override rack configuration for testing with real Convox
 # RACK_HOST = "https://your-rack.convox.cloud"
 # RACK_TOKEN = "your-rack-token"
+# DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_dev?sslmode=disable"

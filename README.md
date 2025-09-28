@@ -136,6 +136,11 @@ For complete development setup with real Google OAuth (instead of mock), see **[
 - Web UI: http://localhost:5223
 - Mock Convox: http://localhost:5443
 - Mock OAuth: http://localhost:3345 (configurable via `MOCK_OAUTH_PORT`)
+- Test Gateway API (preview stack used by E2E): http://localhost:9447
+- Test Mock Convox: http://localhost:6443
+- Test Mock OAuth: http://localhost:9345
+
+Use `task docker:up:test` to boot the isolated preview-style stack on the test ports. It runs alongside the dev or preview stack while reusing the shared Postgres container.
 
 The development environment includes a mock Google OAuth server that simulates the authentication flow with test users:
 

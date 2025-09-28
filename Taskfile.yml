@@ -39,20 +39,20 @@ tasks:
     desc: Run all tests
     deps: [go:test, web:test]
     cmds:
-      - task: go:e2e:dev
-      - task: web:e2e:dev
+      - task: web:e2e
+      - task: go:e2e
 
   generate:test:
     desc: Run code generation and tests. Can run all the go tasks in parallel.
-    deps: [go:test, go:e2e:dev, go:generate, web:test]
+    deps: [go:test, go:e2e, go:generate, web:test]
     cmds:
-      - task: web:e2e:dev
+      - task: web:e2e
 
   e2e:
     desc: Run all E2E tests
     cmds:
-      - task: go:e2e:dev
-      - task: web:e2e:dev
+      - task: web:e2e
+      - task: go:e2e
 
   build:
     desc: Build web + gateway + cli + mock binaries

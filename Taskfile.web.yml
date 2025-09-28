@@ -3,6 +3,9 @@ version: "3"
 env:
   WEB_PORT: "{{.WEB_PORT | default 5223}}"
   GATEWAY_PORT: "{{.GATEWAY_PORT | default 8447}}"
+  MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT | default 3345}}"
+  TEST_GATEWAY_PORT: "{{.TEST_GATEWAY_PORT | default 9447}}"
+  TEST_MOCK_OAUTH_PORT: "{{.TEST_MOCK_OAUTH_PORT | default 9345}}"
 
 tasks:
   deps:
@@ -130,21 +133,13 @@ tasks:
     cmds:
       - pnpm exec playwright install --with-deps || pnpm exec playwright install
 
-  e2e:dev:
+  e2e:
     dir: web
-    aliases: [e2e]
-    desc: Run Web E2E against dev stack (Vite/HMR)
-    deps: [":docker:up:dev", "e2e:deps", ":go:generate"]
+    desc: Run Web E2E against dedicated test stack (preview-style)
+    deps: [":docker:up:test", ":docker:wait:test", "e2e:deps", ":go:generate"]
     cmds:
-      - env WEB_PORT={{.WEB_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
-
-  e2e:preview:
-    dir: web
-    desc: Run Web E2E against preview stack (compiled SPA)
-    deps: [":docker:up:preview", "e2e:deps", ":go:generate"]
-    cmds:
-      - env GATEWAY_PORT={{.GATEWAY_PORT}} PLAYWRIGHT_FORCE_TTY=false pnpm e2e
+      - env GATEWAY_PORT={{.TEST_GATEWAY_PORT}} WEB_PORT={{.TEST_GATEWAY_PORT}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT}} PLAYWRIGHT_BASE_URL=http://localhost:{{.TEST_GATEWAY_PORT}} E2E_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 
   test:all:
     desc: Run all tests in parallel
-    deps: [test, e2e:dev]
+    deps: [test, e2e]

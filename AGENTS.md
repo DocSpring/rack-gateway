@@ -255,7 +255,7 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 
 **IMPORTANT: All task commands automatically handle their dependencies. You NEVER need to manually rebuild or restart services before running tests. For example:**
 
-- `task web:e2e:dev` automatically rebuilds the gateway, restarts docker containers, and runs tests
+- `task web:e2e` automatically rebuilds the gateway, restarts docker containers, and runs tests
 - `task go:test` automatically downloads dependencies and runs tests
 - `task docker:up` automatically builds all images before starting containers
 
@@ -305,10 +305,8 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 | Command                | Description                        |
 | ---------------------- | ---------------------------------- |
 | `task e2e`             | Run ALL E2E tests                  |
-| `task web:e2e:dev`     | Web E2E against dev (Vite)         |
-| `task web:e2e:preview` | Web E2E against preview (compiled) |
-| `task go:e2e:dev`      | CLI E2E against dev                |
-| `task go:e2e:preview`  | CLI E2E against preview            |
+| `task web:e2e`         | Web E2E against dedicated test stack |
+| `task go:e2e`          | CLI E2E against dedicated test stack |
 
 ### 🎭 Mock Services
 
