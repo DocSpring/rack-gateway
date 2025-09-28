@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { VariantProps } from 'class-variance-authority'
 import { Check, Loader2, Timer, X } from 'lucide-react'
 import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
@@ -43,6 +43,7 @@ import {
   rejectDeployRequest,
   type UpdateDeployRequestStatusRequest,
 } from '@/lib/api'
+import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/error-utils'
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'consumed'
@@ -75,6 +76,48 @@ function toNotesPayload(notes: string): UpdateDeployRequestStatusRequest | undef
   return trimmed ? { notes: trimmed } : undefined
 }
 
+type PaginationResult<T> = {
+  page: number
+  setPage: (value: number | ((prev: number) => number)) => void
+  total: number
+  totalPages: number
+  start: number
+  end: number
+  items: T[]
+}
+
+function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
+  const [page, setPage] = useState(1)
+  const total = items.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const visibleItems = useMemo(() => items.slice(start, end), [items, start, end])
+
+  useEffect(() => {
+    if (total === 0) {
+      if (page !== 1) {
+        setPage(1)
+      }
+      return
+    }
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, total, totalPages])
+
+  return {
+    page,
+    setPage,
+    total,
+    totalPages,
+    start,
+    end,
+    items: visibleItems,
+  }
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keep consolidated for now.
 export function DeployRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectRequest, setRejectRequest] = useState<DeployRequest | null>(null)
@@ -118,7 +161,17 @@ export function DeployRequestsPage() {
 
   const requests = data?.deploy_requests ?? []
 
-  const isEmpty = !isLoading && requests.length === 0
+  const {
+    page,
+    setPage,
+    total,
+    totalPages,
+    start,
+    end,
+    items: visibleRequests,
+  } = usePagination(requests, DEFAULT_PER_PAGE)
+
+  const isEmpty = !isLoading && total === 0
 
   const approveDisabled = approveMutation.isPending || rejectMutation.isPending
   const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
@@ -177,7 +230,10 @@ export function DeployRequestsPage() {
           headerRight={
             <div className="flex items-center gap-2">
               <Select
-                onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+                onValueChange={(value) => {
+                  setStatusFilter(value as StatusFilter)
+                  setPage(1)
+                }}
                 value={statusFilter}
               >
                 <SelectTrigger className="w-40">
@@ -211,7 +267,7 @@ export function DeployRequestsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {requests.map((request) =>
+              {visibleRequests.map((request) =>
                 request.id == null ? null : (
                   <DeployRequestRow
                     approveDisabled={approveDisabled}
@@ -228,6 +284,29 @@ export function DeployRequestsPage() {
               )}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-muted-foreground text-sm">
+                Showing {start + 1}–{end} of {total} requests
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  variant="outline"
+                >
+                  Previous
+                </Button>
+                <Button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  variant="outline"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TablePane>
       </div>
 
@@ -307,6 +386,11 @@ export function DeployRequestsPage() {
               <DetailRow label="Created" value={renderTime(selectedRequest.created_at)} />
               <DetailRow label="Updated" value={renderTime(selectedRequest.updated_at)} />
               <DetailRow label="Expires" value={renderTime(selectedRequest.approval_expires_at)} />
+
+              <DetailRow
+                label="Promoted By Token"
+                value={selectedRequest.release_promoted_by_api_token_id ?? '—'}
+              />
               <DetailRow
                 label="Created By"
                 value={formatUser(
@@ -331,6 +415,26 @@ export function DeployRequestsPage() {
               />
               <DetailRow label="Rejected At" value={renderTime(selectedRequest.rejected_at)} />
               <DetailRow label="Reviewer Notes" value={selectedRequest.approval_notes ?? '—'} />
+
+              <DetailRow label="Build ID" value={selectedRequest.build_id ?? '—'} />
+              <DetailRow
+                label="Build Created"
+                value={renderTime(selectedRequest.build_created_at)}
+              />
+              <DetailRow label="Object Key" value={selectedRequest.object_key ?? '—'} />
+              <DetailRow
+                label="Object Created"
+                value={renderTime(selectedRequest.object_created_at)}
+              />
+              <DetailRow label="Release ID" value={selectedRequest.release_id ?? '—'} />
+              <DetailRow
+                label="Release Created"
+                value={renderTime(selectedRequest.release_created_at)}
+              />
+              <DetailRow
+                label="Release Promoted"
+                value={renderTime(selectedRequest.release_promoted_at)}
+              />
             </div>
           )}
           <div className="mt-2 flex justify-end">
