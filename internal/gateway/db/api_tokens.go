@@ -150,12 +150,13 @@ func (d *Database) GetAPITokenByName(name string) (*APIToken, error) {
 
 // GetAPITokenByPublicID retrieves an API token by its public UUID identifier.
 func (d *Database) GetAPITokenByPublicID(publicID string) (*APIToken, error) {
-	if strings.TrimSpace(publicID) == "" {
+	trimmed := strings.TrimSpace(publicID)
+	if trimmed == "" {
 		return nil, fmt.Errorf("token public id required")
 	}
 	row := d.queryRow(
 		"SELECT t.id FROM api_tokens t WHERE t.public_id = ?",
-		publicID,
+		trimmed,
 	)
 	var id int64
 	err := row.Scan(&id)

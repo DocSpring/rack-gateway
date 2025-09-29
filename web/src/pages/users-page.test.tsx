@@ -301,7 +301,7 @@ describe('UsersPage', () => {
       })
 
       // Should not crash; placeholders should render
-      expect(screen.getAllByText('-').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0)
     })
   })
 

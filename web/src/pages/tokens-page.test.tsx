@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { format } from 'date-fns'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthProvider } from '../contexts/auth-context'
-import { api } from '../lib/api'
+import { StepUpProvider } from '@/contexts/step-up-context'
+import { api } from '@/lib/api'
 import type { APIToken } from './tokens-page'
 import { TokensPage } from './tokens-page'
 
@@ -11,17 +12,66 @@ const CREATE_TOKEN_RE = /Create Token/i
 const COPY_TOKEN_NOW_RE = /Copy this token now/i
 const DELETE_TOKEN_RE = /Delete Token/i
 
+const { mockApi } = vi.hoisted(() => ({
+  mockApi: {
+    get: vi.fn(),
+    post: vi.fn(),
+    delete: vi.fn(),
+    put: vi.fn(),
+  },
+}))
+
+const { mockVerifyMFA } = vi.hoisted(() => ({
+  mockVerifyMFA: vi.fn().mockResolvedValue({}),
+}))
+
+const { mockUseAuth } = vi.hoisted(() => ({
+  mockUseAuth: vi.fn(),
+}))
+
+const { stepUpContextStub } = vi.hoisted(() => ({
+  stepUpContextStub: {
+    openStepUp: vi.fn(),
+    requireStepUp: vi.fn(async (action?: (() => void) | (() => Promise<void>)) => {
+      if (typeof action === 'function') {
+        await action()
+      }
+    }),
+    handleStepUpError: vi.fn().mockReturnValue(false),
+    closeStepUp: vi.fn(),
+    isOpen: false,
+    isVerifying: false,
+  },
+}))
+
+async function createStepUpMock() {
+  const React = await vi.importActual<typeof import('react')>('react')
+  const StepUpContext = React.createContext(stepUpContextStub)
+  const MockStepUpProvider = ({ children }: { children: ReactNode }) => (
+    <StepUpContext.Provider value={stepUpContextStub}>{children}</StepUpContext.Provider>
+  )
+  return {
+    StepUpProvider: MockStepUpProvider,
+    useStepUp: () => React.useContext(StepUpContext),
+  }
+}
+
 // Mock the API while preserving exported constants such as AVAILABLE_ROLES
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
   return {
     ...actual,
-    api: {
-      get: vi.fn(),
-      post: vi.fn(),
-      delete: vi.fn(),
-      put: vi.fn(),
-    },
+    api: { ...actual.api, ...mockApi },
+    verifyMFA: mockVerifyMFA,
+  }
+})
+
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return {
+    ...actual,
+    api: { ...actual.api, ...mockApi },
+    verifyMFA: mockVerifyMFA,
   }
 })
 
@@ -49,11 +99,19 @@ vi.mock('../components/time-ago', () => ({
 }))
 
 // Mock useAuth globally to control roles
-const mockUseAuth = vi.fn()
 vi.mock('../contexts/auth-context', () => ({
   useAuth: () => mockUseAuth(),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+  AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
+
+vi.mock('@/contexts/auth-context', () => ({
+  useAuth: () => mockUseAuth(),
+  AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}))
+
+vi.mock('../contexts/step-up-context', () => createStepUpMock())
+
+vi.mock('@/contexts/step-up-context', () => createStepUpMock())
 
 // Mock clipboard API
 Object.assign(navigator, {
@@ -146,13 +204,15 @@ const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) 
   mockUseAuth.mockReturnValue({
     user,
     isAuthenticated: true,
+    isLoading: false,
     login: vi.fn(),
     logout: vi.fn(),
+    refresh: vi.fn().mockResolvedValue(user),
   })
 
-  return ({ children }: { children: React.ReactNode }) => (
+  return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <StepUpProvider>{children}</StepUpProvider>
     </QueryClientProvider>
   )
 }
@@ -506,15 +566,7 @@ describe('TokensPage', () => {
         expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
       })
 
-      // Find delete button for first token by looking for the trash icon button
-      const rows = screen.getAllByRole('row')
-      // Find the row with CI/CD Pipeline
-      const pipelineRow = rows.find((row) => row.textContent?.includes('CI/CD Pipeline'))
-      const deleteButton = pipelineRow?.querySelector('button')
-
-      if (!deleteButton) {
-        throw new Error('Delete button not found')
-      }
+      const deleteButton = screen.getByLabelText('Delete Token CI/CD Pipeline')
       fireEvent.click(deleteButton)
       // Confirm modal: type DELETE and confirm
       const confirmInput = await screen.findByLabelText('Confirmation')
@@ -600,13 +652,7 @@ describe('TokensPage', () => {
       })
 
       // Try to delete token
-      const rows = screen.getAllByRole('row')
-      const pipelineRow = rows.find((row) => row.textContent?.includes('CI/CD Pipeline'))
-      const deleteButton = pipelineRow?.querySelector('button')
-
-      if (!deleteButton) {
-        throw new Error('Delete button not found')
-      }
+      const deleteButton = screen.getByLabelText('Delete Token CI/CD Pipeline')
       fireEvent.click(deleteButton)
       const confirmInput = await screen.findByLabelText('Confirmation')
       fireEvent.change(confirmInput, { target: { value: 'DELETE' } })

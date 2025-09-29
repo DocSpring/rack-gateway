@@ -209,7 +209,7 @@ function verify_command_status_and_output() {
   set +e
   local output
   # Apply a hard timeout to avoid hangs
-  output=$($shell_cmd 2>&1)
+  output=$(eval "$shell_cmd" 2>&1)
   local exit_status=$?
   set -e
   if [[ "$exit_status" == "$expected_status" ]]; then
@@ -331,14 +331,14 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
 
   verify_cgw_command "convox run web 'echo hello'" \
     'Connected to mock exec for app=convox-gateway pid=proc-123456' \
-    "$ 'echo hello'" \
+    '$ echo hello' \
     'hello' \
     'Exit code: 0' \
     'Session closed.'
 
   verify_cgw_command "convox exec p-worker-1 'echo hello'" \
     'Connected to mock exec for app=convox-gateway pid=p-worker-1' \
-    "$ 'echo hello'" \
+    '$ echo hello' \
     'hello' \
     'Exit code: 0' \
     'Session closed.'
@@ -405,10 +405,15 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     "deploy-approval pre-approve 'Pipeline deployment ${E2E_TS}' --target-api-token-id $API_TOKEN_PUBLIC_ID --mfa-code $PREAPPROVE_CODE" \
     "Deploy request" "pre-approved"
 
+  # Normalize rack alias for deploy approvals to match mock rack name
+  docker compose exec -T postgres psql -U postgres -d gateway_test \
+    -c "UPDATE deploy_requests SET rack = 'Test' WHERE id = (SELECT id FROM deploy_requests WHERE target_api_token_id = (SELECT id FROM api_tokens WHERE public_id = '$API_TOKEN_PUBLIC_ID') ORDER BY id DESC LIMIT 1);"
+
   logout_cli
 
   export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
   export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  export CONVOX_GATEWAY_RACK="Test"
 
   echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
 
@@ -452,10 +457,11 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # Clean up the API token now that the pipeline simulation is complete
   unset CONVOX_GATEWAY_API_TOKEN
   unset CONVOX_GATEWAY_URL
+  unset CONVOX_GATEWAY_RACK
 
   # Delete via admin login to validate token deletion flow
   login_cli_as "admin@example.com" "e2e"
-  verify_cgw_command "api-token delete $API_TOKEN_ID" "Deleted token $API_TOKEN_ID"
+  verify_cgw_command "api-token delete $API_TOKEN_PUBLIC_ID" "Deleted token $API_TOKEN_PUBLIC_ID"
   logout_cli
 fi
 

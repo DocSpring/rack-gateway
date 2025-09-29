@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { StepUpProvider } from '@/contexts/step-up-context'
 import { AccountSecurityPage } from './account-security-page'
 
 vi.mock('qrcode', () => {
@@ -28,11 +29,53 @@ vi.mock('@tanstack/react-router', () => ({
   }),
 }))
 
-vi.mock('@/contexts/auth-context', () => ({
-  useAuth: () => ({
+const { mockAuthValue } = vi.hoisted(() => ({
+  mockAuthValue: {
+    user: {
+      email: 'admin@example.com',
+      name: 'Admin User',
+      roles: ['admin'],
+    },
+    isLoading: false,
+    isAuthenticated: true,
+    login: vi.fn(),
+    logout: vi.fn(),
     refresh: vi.fn().mockResolvedValue(null),
-  }),
+  },
 }))
+
+const { stepUpStub } = vi.hoisted(() => ({
+  stepUpStub: {
+    openStepUp: vi.fn(),
+    requireStepUp: vi.fn(async (action?: (() => void) | (() => Promise<void>)) => {
+      if (typeof action === 'function') {
+        await action()
+      }
+    }),
+    handleStepUpError: vi.fn().mockReturnValue(false),
+    closeStepUp: vi.fn(),
+    isOpen: false,
+    isVerifying: false,
+  },
+}))
+
+vi.mock('@/contexts/auth-context', () => ({
+  useAuth: () => mockAuthValue,
+}))
+
+async function createStepUpMock() {
+  const React = await vi.importActual<typeof import('react')>('react')
+  const StepUpContext = React.createContext(stepUpStub)
+  const MockStepUpProvider = ({ children }: { children: ReactNode }) => (
+    <StepUpContext.Provider value={stepUpStub}>{children}</StepUpContext.Provider>
+  )
+  return {
+    StepUpProvider: MockStepUpProvider,
+    useStepUp: () => React.useContext(StepUpContext),
+  }
+}
+
+vi.mock('@/contexts/step-up-context', () => createStepUpMock())
 
 vi.mock('@/components/ui/use-toast', () => ({
   toast: {
@@ -67,8 +110,10 @@ const createWrapper = () => {
     },
   })
 
-  return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <StepUpProvider>{children}</StepUpProvider>
+    </QueryClientProvider>
   )
 }
 
