@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
@@ -29,6 +30,8 @@ type App struct {
 	ProxyHandler    *proxy.Handler
 	RackCertManager *rackcert.Manager
 	SentryEnabled   bool
+	AuditLogger     *audit.Logger
+	DefaultRack     string
 	router          *gin.Engine
 }
 

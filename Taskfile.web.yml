@@ -136,7 +136,7 @@ tasks:
   e2e:
     dir: web
     desc: Run Web E2E against dedicated test stack (preview-style)
-    deps: [":docker:up:test", ":docker:wait:test", "e2e:deps", ":go:generate"]
+    deps: [":docker:test:up", ":docker:test:wait", "e2e:deps", ":go:generate"]
     cmds:
       - env GATEWAY_PORT={{.TEST_GATEWAY_PORT}} WEB_PORT={{.TEST_GATEWAY_PORT}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT}} PLAYWRIGHT_BASE_URL=http://localhost:{{.TEST_GATEWAY_PORT}} E2E_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable PLAYWRIGHT_FORCE_TTY=false pnpm e2e
 

@@ -116,6 +116,14 @@ tasks:
         tty: true
         ignore_error: true
 
+  logs:tail:
+    desc: Tail logs for {{.STACK}} stack from now
+    cmds:
+      - cmd: exec docker compose --profile {{.PROFILE}} logs -f --tail=0 $SRVS
+        interactive: true
+        tty: true
+        ignore_error: true
+
   start:
     desc: Start {{.STACK}} stack and follow logs
     cmds:

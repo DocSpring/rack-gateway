@@ -3,6 +3,7 @@ package routes
 import (
 	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
@@ -38,6 +39,8 @@ type Config struct {
 	ProxyHandler   *proxy.Handler
 	RackCertMgr    *rackcert.Manager
 	SentryEnabled  bool
+	AuditLogger    *audit.Logger
+	DefaultRack    string
 }
 
 // Setup configures all routes for the application
@@ -65,7 +68,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
 	router.Use(gin.Recovery())
-	router.Use(middleware.FilteredLogger()) // Suppress health check logs
+	router.Use(middleware.RequestLogger(cfg.AuditLogger, cfg.DefaultRack))
 
 	// CORS configuration - allow requests from the configured domain
 	// In production this is set via DOMAIN env var

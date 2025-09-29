@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,10 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
 )
+
+type contextKey string
+
+const requestLoggedKey contextKey = "cgw-request-logged"
 
 type Logger struct {
 	redactPatterns []*regexp.Regexp
@@ -221,6 +226,8 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 
 	// Also store in database for queryability
 	l.storeInDatabase(r, userEmail, rack, rbacDecision, status, latency, err)
+
+	markRequestLogged(r)
 }
 
 func (l *Logger) redactMap(data map[string]interface{}) map[string]interface{} {
@@ -300,6 +307,26 @@ func getRequestID(r *http.Request) string {
 		requestID = uuid.New().String()
 	}
 	return requestID
+}
+
+func markRequestLogged(r *http.Request) {
+	if r == nil {
+		return
+	}
+	ctx := context.WithValue(r.Context(), requestLoggedKey, true)
+	*r = *r.WithContext(ctx)
+}
+
+func RequestAlreadyLogged(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if v := r.Context().Value(requestLoggedKey); v != nil {
+		if logged, ok := v.(bool); ok {
+			return logged
+		}
+	}
+	return false
 }
 
 func getClientIP(r *http.Request) string {

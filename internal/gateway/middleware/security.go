@@ -13,7 +13,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
@@ -418,10 +420,39 @@ func clientIPFromRequest(r *http.Request) string {
 	return strings.TrimSpace(r.RemoteAddr)
 }
 
-// FilteredLogger creates a logger that suppresses health check logs
-func FilteredLogger() gin.HandlerFunc {
+func RequestLogger(logger *audit.Logger, defaultRack string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		start := time.Now()
 		c.Next()
+		if logger == nil {
+			return
+		}
+		path := c.Request.URL.Path
+		if path == "/.gateway/api/health" {
+			return
+		}
+		if audit.RequestAlreadyLogged(c.Request) {
+			return
+		}
+		userEmail := strings.TrimSpace(c.Request.Header.Get("X-User-Email"))
+		if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil {
+			if strings.TrimSpace(authUser.Email) != "" {
+				userEmail = authUser.Email
+			}
+		}
+		rack := strings.TrimSpace(defaultRack)
+		if rack == "" {
+			if alias := strings.TrimSpace(c.Request.Header.Get("X-Rack-Alias")); alias != "" {
+				rack = alias
+			} else if name := strings.TrimSpace(c.Request.Header.Get("X-Rack-Name")); name != "" {
+				rack = name
+			}
+		}
+		rbacDecision := strings.TrimSpace(c.Request.Header.Get("X-RBAC-Decision"))
+		if rbacDecision == "" {
+			rbacDecision = "allow"
+		}
+		logger.LogRequest(c.Request, userEmail, rack, rbacDecision, c.Writer.Status(), time.Since(start), nil)
 	}
 }
 

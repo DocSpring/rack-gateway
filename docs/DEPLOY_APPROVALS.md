@@ -28,16 +28,16 @@ If a user/token already has the direct permission (for example `convox:build:cre
 
 `deploy_requests` captures the lifecycle:
 
-| Column | Notes |
-| ------ | ----- |
-| `id` | Primary key, auto-generated |
-| `created_by_user_id` / `created_by_api_token_id` | Tracks who requested approval |
-| `target_api_token_id` | The CI/CD token that will consume the approval |
-| `message` | Human readable context supplied by the requester |
-| `status` | `pending`, `approved`, `rejected`, or `consumed` |
-| `approval_notes` | Optional reviewer notes |
-| `approval_expires_at` | Timestamp when the approval ages out |
-| `build_id` / `object_id` / `release_id` | Populated when each Convox action is executed under the approval |
+| Column                                           | Notes                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `id`                                             | Primary key, auto-generated                                      |
+| `created_by_user_id` / `created_by_api_token_id` | Tracks who requested approval                                    |
+| `target_api_token_id`                            | The CI/CD token that will consume the approval                   |
+| `message`                                        | Human readable context supplied by the requester                 |
+| `status`                                         | `pending`, `approved`, `rejected`, or `consumed`                 |
+| `approval_notes`                                 | Optional reviewer notes                                          |
+| `approval_expires_at`                            | Timestamp when the approval ages out                             |
+| `build_id` / `object_id` / `release_id`          | Populated when each Convox action is executed under the approval |
 
 ## CLI Request Flow
 
@@ -79,10 +79,10 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 
 ## Configuration
 
-| Setting | Default | Description |
-| ------- | ------- | ----------- |
-| `DISABLE_DEPLOY_APPROVALS` | `false` | When `true`, the gateway skips approval checks entirely. Useful for staging.
-| `DEPLOY_APPROVAL_WINDOW` | `15m` | How long an approval remains valid after being granted.
+| Setting                    | Default | Description                                                                  |
+| -------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `DISABLE_DEPLOY_APPROVALS` | `false` | When `true`, the gateway skips approval checks entirely. Useful for staging. |
+| `DEPLOY_APPROVAL_WINDOW`   | `15m`   | How long an approval remains valid after being granted.                      |
 
 ## Local Testing
 
@@ -90,44 +90,55 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 
 - `task web:e2e` – Runs the Playwright suite against the dedicated **test** stack (pre-compiles the SPA). Includes UI coverage for approve/reject.
 - `task go:e2e` – Exercises the CLI happy-path, including automated approval via the test database.
-- `task all` – Full pipeline (lint, unit, integration, web + CLI E2E) with approvals wired through the isolated stack.
+- `task ci` – Full pipeline (lint, unit, integration, web + CLI E2E) with approvals wired through the isolated stack.
 
 ### Manual smoke test
 
 1. **Start the test stack**
+
    ```bash
-   task docker:up:test
+   task docker:test:up
    ```
+
    This launches the gateway, mock OAuth, mock Convox, and Postgres using the dedicated test ports / database (`gateway_test`).
 
 2. **Build the CLI**
+
    ```bash
    task go:build:cli
    ```
 
 3. **Log in as an admin** (uses seeded credentials from the test fixtures)
+
    ```bash
    ./bin/convox-gateway login test http://localhost:9447 --no-open
    ```
+
    Open the printed URL in a browser, choose `admin@example.com`, and enter the displayed MFA code (or reuse the seeded secret `JBSWY3DPEHPK3PXP`).
 
 4. **Submit an approval request**
+
    ```bash
    ./bin/convox-gateway deploy-approval request "Deploy demo release" --wait
    ```
+
    The command blocks until a reviewer acts.
 
 5. **Review in the UI**
+
    - Visit `http://localhost:9447/.gateway/web/deploy_requests` in the browser.
    - Approve or reject the pending row. When approved, the CLI unblocks with a success message.
 
 6. **Pre-approve via CLI (optional)**
+
    ```bash
    ./bin/convox-gateway deploy-approval pre-approve "Deploy demo release" --target-api-token-id <token-uuid> --mfa-code <code>
    ```
+
    This is useful when teeing up an approval before the pipeline runs.
 
 7. **Trigger a guarded action** (optional)
+
    - Run a build via `convox-gateway convox builds create ...` using the same token to see the approval consumed.
 
 8. **Shut down services**

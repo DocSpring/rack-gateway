@@ -23,7 +23,7 @@ includes:
       WAIT_GATEWAY_PORT: "{{.GATEWAY_PORT}}"
       WAIT_WEB_PORT: "{{.WEB_PORT}}"
       WAIT_MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT}}"
-      WAIT_CHECK_VITE_PROXY: "{{.CHECK_VITE_PROXY | default \"true\"}}"
+      WAIT_CHECK_VITE_PROXY: '{{.CHECK_VITE_PROXY | default "true"}}'
   preview:
     taskfile: ./taskfiles/docker-stack.yml
     vars:
@@ -52,218 +52,17 @@ includes:
 
 tasks:
   # ------------------------------
-  # DEV stack (Vite + dev gateway)
-  # ------------------------------
-  up:dev:
-    desc: Up full dev stack (infra + web + gateway)
-    run: once
-    aliases: [up]
-    deps: ["stop:preview:gateway"]
-    cmds:
-      - task: dev:up
-
-  up:dev:web:
-    desc: Up dev web (Vite)
-    run: once
-    cmds:
-      - task: dev:up:web
-
-  up:dev:gateway:
-    desc: Up dev gateway
-    run: once
-    deps: ["stop:preview:gateway"]
-    cmds:
-      - task: dev:up:gateway
-
-  wait:dev:
-    desc: Wait for dev stack readiness (Vite web under WEB_PORT)
-    run: once
-    aliases: [wait]
-    cmds:
-      - task: dev:wait
-
-  down:dev:
-    desc: Down full dev stack (infra + web + gateway)
-    run: once
-    cmds:
-      - task: dev:down
-
-  down:dev:web:
-    desc: Down dev web (Vite)
-    run: once
-    cmds:
-      - task: dev:down:web
-
-  down:dev:gateway:
-    desc: Down dev gateway
-    run: once
-    cmds:
-      - task: dev:down:gateway
-
-  stop:dev:
-    desc: Stop dev stack
-    run: once
-    deps: ["stop:dev:web", "stop:dev:gateway"]
-
-  stop:dev:web:
-    desc: Stop dev web (Vite)
-    run: once
-    cmds:
-      - task: dev:stop:web
-
-  stop:dev:gateway:
-    desc: Stop dev gateway
-    run: once
-    cmds:
-      - task: dev:stop:gateway
-
-  reset:dev:
-    desc: Reset dev stack (down + up to recreate volumes and DB)
-    run: once
-    aliases: [reset]
-    cmds:
-      - task: down:dev
-      - task: up:dev
-
-  logs:dev:
-    aliases: [logs]
-    deps: [wait:dev]
-    desc: Tail logs for the dev stack
-    cmds:
-      - task: dev:logs
-
-  start:dev:
-    aliases: [start]
-    desc: Start dev stack and follow logs
-    cmds:
-      - task: up:dev
-      - task: logs:dev
-
-  # ----------------------------------------------
-  # PREVIEW stack (compiled SPA + preview gateway)
-  # ----------------------------------------------
-  up:preview:
-    desc: Up full preview stack (infra + web + gateway)
-    run: once
-    deps: ["stop:dev:web", "stop:dev:gateway"]
-    cmds:
-      - task: preview:up
-
-  up:preview:gateway:
-    desc: Up preview gateway (serves compiled SPA)
-    run: once
-    deps: ["stop:dev:gateway"]
-    cmds:
-      - task: preview:up:gateway
-
-  wait:preview:
-    desc: Wait for preview stack readiness (gateway serves SPA under GATEWAY_PORT)
-    run: once
-    cmds:
-      - task: preview:wait
-
-  down:preview:
-    desc: Down full preview stack
-    run: once
-    cmds:
-      - task: preview:down
-
-  down:preview:gateway:
-    desc: Down preview gateway
-    run: once
-    cmds:
-      - task: preview:down:gateway
-
-  stop:preview:
-    desc: Stop preview stack
-    run: once
-    deps: ["stop:preview:gateway"]
-
-  stop:preview:gateway:
-    desc: Stop preview gateway
-    run: once
-    cmds:
-      - task: preview:stop:gateway
-
-  logs:preview:
-    desc: Tail logs for the preview stack
-    cmds:
-      - task: preview:logs
-
-  start:preview:
-    desc: Start preview stack and follow logs
-    cmds:
-      - task: up:preview
-      - task: logs:preview
-
-  # ------------------------------
-  # TEST stack (isolated preview-style stack)
-  # ------------------------------
-  up:test:
-    desc: Up full test stack (infra + gateway)
-    run: once
-    cmds:
-      - task: test:up
-
-  up:test:gateway:
-    desc: Up test gateway
-    run: once
-    cmds:
-      - task: test:up:gateway
-
-  wait:test:
-    desc: Wait for test stack readiness
-    run: once
-    cmds:
-      - task: test:wait
-
-  down:test:
-    desc: Down full test stack
-    run: once
-    cmds:
-      - task: test:down
-
-  down:test:gateway:
-    desc: Down test gateway
-    run: once
-    cmds:
-      - task: test:down:gateway
-
-  stop:test:
-    desc: Stop test stack
-    run: once
-    cmds:
-      - task: test:stop
-
-  stop:test:gateway:
-    desc: Stop test gateway
-    run: once
-    cmds:
-      - task: test:stop:gateway
-
-  logs:test:
-    desc: Tail logs for the test stack
-    cmds:
-      - task: test:logs
-
-  start:test:
-    desc: Start test stack and follow logs
-    cmds:
-      - task: up:test
-      - task: logs:test
-
-  # ------------------------------
   # Database maintenance (dev gateway container)
   # ------------------------------
   db:migrate:
     desc: Apply database migrations inside the dev gateway container
-    deps: [up:dev:gateway]
+    deps: [dev:up:gateway]
     cmds:
       - docker compose exec -T gateway-api-dev ./convox-gateway-api migrate
 
   db:reset:
     desc: Drop and recreate the dev database (DELETES ALL DATA)
-    deps: [up:dev:gateway]
+    deps: [dev:up:gateway]
     vars:
       db_reset_env: >-
         RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA{{with .DISABLE_DATABASE_ENVIRONMENT_CHECK}} DISABLE_DATABASE_ENVIRONMENT_CHECK={{.}}{{end}}
@@ -273,6 +72,10 @@ tasks:
   # ------------------------------
   # Misc
   # ------------------------------
+  up:
+    desc: Start dev stack
+    deps: [dev:up]
+
   down:
     desc: Tear down everything (all profiles) and remove volumes
     run: once

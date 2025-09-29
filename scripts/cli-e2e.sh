@@ -402,7 +402,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   PREAPPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
   verify_cgw_command \
-    "deploy-approval pre-approve \"Pipeline deployment ${E2E_TS}\" --target-api-token-id $API_TOKEN_PUBLIC_ID --mfa-code $PREAPPROVE_CODE" \
+    "deploy-approval pre-approve 'Pipeline deployment ${E2E_TS}' --target-api-token-id $API_TOKEN_PUBLIC_ID --mfa-code $PREAPPROVE_CODE" \
     "Deploy request" "pre-approved"
 
   logout_cli

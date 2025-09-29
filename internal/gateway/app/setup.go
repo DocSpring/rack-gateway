@@ -128,6 +128,7 @@ func (a *App) initializeServices() error {
 
 	// Initialize audit logger
 	auditLogger := audit.NewLogger(a.Database)
+	a.AuditLogger = auditLogger
 
 	// Rack TLS certificate manager
 	if a.Config.RackTLSPinningEnabled {
@@ -177,6 +178,7 @@ func (a *App) initializeServices() error {
 	}
 
 	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, pinnedMgr)
+	a.DefaultRack = rackAlias
 
 	return nil
 }
@@ -212,6 +214,8 @@ func (a *App) setupRouter() {
 		ProxyHandler:   a.ProxyHandler,
 		RackCertMgr:    a.RackCertManager,
 		SentryEnabled:  a.SentryEnabled,
+		AuditLogger:    a.AuditLogger,
+		DefaultRack:    a.DefaultRack,
 	})
 
 	a.router = router

@@ -13,8 +13,8 @@ includes:
   mock-oauth: ./Taskfile.mock-oauth.yml
 
 tasks:
-  all:
-    desc: Run linters, code generation, tests, and build
+  ci:
+    desc: "Runs everything that runs on CI: linters, codegen, tests, build"
     deps: [lint:fix, generate:test, build]
 
   format:
@@ -61,12 +61,12 @@ tasks:
   # Convenience alias for local dev stack (delegates to docker tasks)
   dev:
     desc: Start dev stack and follow logs
-    deps: [docker:start:dev]
+    deps: [docker:dev:start]
 
   logs:
     desc: Tail logs for the dev stack
-    deps: [docker:logs:dev]
+    deps: [docker:dev:logs]
 
   preview:
     desc: Start preview stack and follow logs
-    deps: [docker:start:preview]
+    deps: [docker:preview:start]
