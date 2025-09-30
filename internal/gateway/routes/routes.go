@@ -15,6 +15,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/security"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
@@ -24,23 +25,24 @@ import (
 
 // Config holds dependencies needed for route setup
 type Config struct {
-	App            interface{} // Reference to app for handlers that need it
-	Config         *config.Config
-	Database       *db.Database
-	RBACManager    rbac.RBACManager
-	JWTManager     *auth.JWTManager
-	SessionManager *auth.SessionManager
-	OAuthHandler   *auth.OAuthHandler
-	AuthService    *auth.AuthService
-	TokenService   *token.Service
-	MFAService     *mfa.Service
-	MFASettings    *db.MFASettings
-	EmailSender    email.Sender
-	ProxyHandler   *proxy.Handler
-	RackCertMgr    *rackcert.Manager
-	SentryEnabled  bool
-	AuditLogger    *audit.Logger
-	DefaultRack    string
+	App              interface{} // Reference to app for handlers that need it
+	Config           *config.Config
+	Database         *db.Database
+	RBACManager      rbac.RBACManager
+	JWTManager       *auth.JWTManager
+	SessionManager   *auth.SessionManager
+	OAuthHandler     *auth.OAuthHandler
+	AuthService      *auth.AuthService
+	TokenService     *token.Service
+	MFAService       *mfa.Service
+	MFASettings      *db.MFASettings
+	EmailSender      email.Sender
+	ProxyHandler     *proxy.Handler
+	RackCertMgr      *rackcert.Manager
+	SentryEnabled    bool
+	AuditLogger      *audit.Logger
+	DefaultRack      string
+	SecurityNotifier *security.Notifier
 }
 
 // Setup configures all routes for the application
@@ -92,7 +94,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings)
+	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier)
 	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings)
 	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
@@ -118,7 +120,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	{
 		// Rate limited auth endpoints
 		authGroup := api.Group("")
-		authGroup.Use(middleware.RateLimit(cfg.Config))
+		authGroup.Use(middleware.RateLimit(cfg.Config, cfg.SecurityNotifier))
 		{
 			// CLI auth flow
 			authGroup.POST("/auth/cli/start", authHandler.CLILoginStart)
@@ -143,7 +145,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 		authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.MFASettings))
 		{
 			mfaGroup := authenticated.Group("/auth/mfa")
-			mfaGroup.Use(middleware.RateLimit(cfg.Config))
+			mfaGroup.Use(middleware.RateLimit(cfg.Config, cfg.SecurityNotifier))
 			if cfg.SessionManager != nil {
 				mfaGroup.Use(middleware.CSRF(cfg.SessionManager))
 			}
@@ -233,7 +235,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 				tokenSensitive := tokenGroup.Group("")
 				tokenSensitive.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
-				tokenSensitive.POST("", middleware.RateLimit(cfg.Config), adminHandler.CreateAPIToken)
+				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
 			}

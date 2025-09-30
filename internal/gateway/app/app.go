@@ -10,29 +10,31 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/convox-gateway/internal/gateway/security"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
 )
 
 // App holds all application dependencies
 type App struct {
-	Config          *config.Config
-	Database        *db.Database
-	RBACManager     rbac.RBACManager
-	JWTManager      *auth.JWTManager
-	SessionManager  *auth.SessionManager
-	OAuthHandler    *auth.OAuthHandler
-	AuthService     *auth.AuthService
-	TokenService    *token.Service
-	MFAService      *mfa.Service
-	MFASettings     *db.MFASettings
-	EmailSender     email.Sender
-	ProxyHandler    *proxy.Handler
-	RackCertManager *rackcert.Manager
-	SentryEnabled   bool
-	AuditLogger     *audit.Logger
-	DefaultRack     string
-	router          *gin.Engine
+	Config           *config.Config
+	Database         *db.Database
+	RBACManager      rbac.RBACManager
+	JWTManager       *auth.JWTManager
+	SessionManager   *auth.SessionManager
+	OAuthHandler     *auth.OAuthHandler
+	AuthService      *auth.AuthService
+	TokenService     *token.Service
+	MFAService       *mfa.Service
+	MFASettings      *db.MFASettings
+	EmailSender      email.Sender
+	ProxyHandler     *proxy.Handler
+	RackCertManager  *rackcert.Manager
+	SentryEnabled    bool
+	AuditLogger      *audit.Logger
+	DefaultRack      string
+	SecurityNotifier *security.Notifier
+	router           *gin.Engine
 }
 
 // New creates a new application instance with all dependencies initialized

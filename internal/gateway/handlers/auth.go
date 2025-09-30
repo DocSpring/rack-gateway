@@ -17,6 +17,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/security"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -35,23 +36,25 @@ const cliEnrollmentErrorMessage = "You must set up multi-factor authentication b
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	oauth       OAuthProvider
-	database    *db.Database
-	config      *config.Config
-	sessions    *auth.SessionManager
-	mfaService  *mfa.Service
-	mfaSettings *db.MFASettings
+	oauth            OAuthProvider
+	database         *db.Database
+	config           *config.Config
+	sessions         *auth.SessionManager
+	mfaService       *mfa.Service
+	mfaSettings      *db.MFASettings
+	securityNotifier *security.Notifier
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager, mfaService *mfa.Service, mfaSettings *db.MFASettings) *AuthHandler {
+func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager, mfaService *mfa.Service, mfaSettings *db.MFASettings, securityNotifier *security.Notifier) *AuthHandler {
 	return &AuthHandler{
-		oauth:       oauth,
-		database:    database,
-		config:      cfg,
-		sessions:    sessions,
-		mfaService:  mfaService,
-		mfaSettings: mfaSettings,
+		oauth:            oauth,
+		database:         database,
+		config:           cfg,
+		sessions:         sessions,
+		mfaService:       mfaService,
+		mfaSettings:      mfaSettings,
+		securityNotifier: securityNotifier,
 	}
 }
 
@@ -331,6 +334,10 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 
 	verification, err := h.mfaService.VerifyTOTP(userRecord, code)
 	if err != nil {
+		// Notify about failed CLI MFA attempt
+		if h.securityNotifier != nil {
+			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_code"})
 		return
 	}
@@ -390,6 +397,14 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 
 	userRecord, err := h.database.GetUser(record.LoginEmail.String)
 	if err != nil || userRecord == nil {
+		// Notify about unauthorized CLI login attempt
+		userName := ""
+		if record.LoginName.Valid {
+			userName = record.LoginName.String
+		}
+		if h.securityNotifier != nil {
+			h.securityNotifier.LoginAttempt(record.LoginEmail.String, userName, "cli", "user_not_authorized", c.ClientIP(), c.GetHeader("User-Agent"), false)
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
 		return
 	}
@@ -467,6 +482,11 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 
 	_ = h.database.DeleteCLILoginState(req.State)
 
+	// Notify about successful CLI login
+	if h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(userRecord.Email, userRecord.Name, "cli", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
+	}
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -516,6 +536,10 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	// Web flow doesn't use PKCE (code_verifier is empty)
 	resp, err := h.oauth.CompleteLogin(code, state, "")
 	if err != nil {
+		// Notify about failed login
+		if h.securityNotifier != nil {
+			h.securityNotifier.LoginAttempt("", "", "web", "oauth_failed", c.ClientIP(), c.GetHeader("User-Agent"), false)
+		}
 		c.String(http.StatusInternalServerError, "Authentication failed")
 		return
 	}
@@ -527,6 +551,10 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 	userRecord, err := h.database.GetUser(resp.Email)
 	if err != nil || userRecord == nil {
+		// Notify about unauthorized login attempt
+		if h.securityNotifier != nil {
+			h.securityNotifier.LoginAttempt(resp.Email, resp.Name, "web", "user_not_authorized", c.ClientIP(), c.GetHeader("User-Agent"), false)
+		}
 		c.String(http.StatusUnauthorized, "User not authorized")
 		return
 	}
@@ -564,6 +592,11 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		c.Redirect(http.StatusFound, challengeURL)
 		return
 	}
+	// Notify about successful login
+	if h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(resp.Email, resp.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
+	}
+
 	if h.database != nil {
 		if err := audit.LogDB(h.database, &db.AuditLog{
 			UserEmail:    resp.Email,
@@ -803,6 +836,10 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 	}
 
 	if err := h.mfaService.ConfirmTOTP(userRecord, req.MethodID, strings.TrimSpace(req.Code)); err != nil {
+		// Notify about failed MFA enrollment attempt
+		if h.securityNotifier != nil {
+			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -900,6 +937,10 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 	}
 
 	if _, err := h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code)); err != nil {
+		// Notify about failed MFA attempt
+		if h.securityNotifier != nil {
+			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

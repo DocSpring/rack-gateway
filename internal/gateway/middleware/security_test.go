@@ -197,7 +197,7 @@ func TestRateLimitIgnoresSpoofedForwardedFor(t *testing.T) {
 		t.Fatalf("failed to configure trusted proxies: %v", err)
 	}
 	cfg := &config.Config{}
-	router.Use(RateLimit(cfg))
+	router.Use(RateLimit(cfg, nil))
 	router.GET("/auth", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
 	})

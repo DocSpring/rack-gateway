@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
 	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
+	"github.com/DocSpring/convox-gateway/internal/gateway/security"
 	securemw "github.com/gin-contrib/secure"
 	"github.com/gin-gonic/gin"
 )
@@ -457,7 +458,7 @@ func RequestLogger(logger *audit.Logger, defaultRack string) gin.HandlerFunc {
 }
 
 // RateLimit creates rate limiting middleware
-func RateLimit(cfg *config.Config) gin.HandlerFunc {
+func RateLimit(cfg *config.Config, securityNotifier *security.Notifier) gin.HandlerFunc {
 	// Read rate limit config from environment, same as original main.go
 	// Default: 10 req/s with burst of 20 for production
 	rps := 10.0
@@ -501,8 +502,21 @@ func RateLimit(cfg *config.Config) gin.HandlerFunc {
 		// Run the rate limiter
 		handler.ServeHTTP(writer, c.Request)
 
-		// If rate limited, abort the Gin chain
+		// If rate limited, abort the Gin chain and notify
 		if writer.statusCode == http.StatusTooManyRequests {
+			// Extract user info from context if authenticated
+			userEmail := ""
+			userName := ""
+			if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil {
+				userEmail = authUser.Email
+				userName = authUser.Name
+			}
+
+			// Notify about rate limit exceeded
+			if securityNotifier != nil {
+				securityNotifier.RateLimitExceeded(userEmail, userName, c.Request.URL.Path, clientIP, c.GetHeader("User-Agent"))
+			}
+
 			c.Abort()
 		}
 	}

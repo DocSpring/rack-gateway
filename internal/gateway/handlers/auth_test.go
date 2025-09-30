@@ -98,7 +98,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 
 	settings := &db.MFASettings{RequireAllUsers: true}
 	config := &config.Config{DevMode: true}
-	handler := NewAuthHandler(oauth, database, config, sessionManager, mfaService, settings)
+	handler := NewAuthHandler(oauth, database, config, sessionManager, mfaService, settings, nil)
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback")
 	c.Request.AddCookie(&http.Cookie{Name: trustedDeviceCookie, Value: "stale-token"})
@@ -132,7 +132,7 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 		t.Fatalf("failed to create test user: %v", err)
 	}
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil)
+	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil)
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=state")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
@@ -169,7 +169,7 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 		t.Fatalf("failed to create test user: %v", err)
 	}
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil)
+	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil, nil)
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=state")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state", Secure: true})
@@ -193,7 +193,7 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil)
+	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil)
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/logout")
 	handler.WebLogout(c)
@@ -219,7 +219,7 @@ func TestWebLoginStartSetsStateCookie(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil)
+	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil, nil)
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/login")
 	handler.WebLoginStart(c)
@@ -248,7 +248,7 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil)
+	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil)
 
 	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=other")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})

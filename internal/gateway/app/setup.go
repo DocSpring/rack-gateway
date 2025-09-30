@@ -18,6 +18,7 @@ import (
 	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
+	"github.com/DocSpring/convox-gateway/internal/gateway/security"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
 )
@@ -151,6 +152,27 @@ func (a *App) initializeServices() error {
 	pmStream := os.Getenv("POSTMARK_STREAM")
 	a.EmailSender = email.NewSender(pmToken, from, pmStream)
 
+	// Collect admin emails for security notifications
+	adminEmails := []string{}
+	if allUsers, err := a.Database.ListUsers(); err == nil {
+		for _, user := range allUsers {
+			// Check if user has admin role
+			hasAdminRole := false
+			for _, role := range user.Roles {
+				if role == "admin" {
+					hasAdminRole = true
+					break
+				}
+			}
+			if hasAdminRole && strings.TrimSpace(user.Email) != "" {
+				adminEmails = append(adminEmails, user.Email)
+			}
+		}
+	}
+
+	// Initialize security notifier
+	a.SecurityNotifier = security.NewNotifier(a.EmailSender, auditLogger, a.Database, adminEmails)
+
 	// Determine rack name for notifications
 	rackName := strings.TrimSpace(os.Getenv("RACK"))
 	if rackName == "" {
@@ -200,22 +222,23 @@ func (a *App) setupRouter() {
 
 	// Set up routes with all dependencies
 	routes.Setup(router, &routes.Config{
-		Config:         a.Config,
-		Database:       a.Database,
-		RBACManager:    a.RBACManager,
-		JWTManager:     a.JWTManager,
-		SessionManager: a.SessionManager,
-		OAuthHandler:   a.OAuthHandler,
-		AuthService:    a.AuthService,
-		TokenService:   a.TokenService,
-		MFAService:     a.MFAService,
-		MFASettings:    a.MFASettings,
-		EmailSender:    a.EmailSender,
-		ProxyHandler:   a.ProxyHandler,
-		RackCertMgr:    a.RackCertManager,
-		SentryEnabled:  a.SentryEnabled,
-		AuditLogger:    a.AuditLogger,
-		DefaultRack:    a.DefaultRack,
+		Config:           a.Config,
+		Database:         a.Database,
+		RBACManager:      a.RBACManager,
+		JWTManager:       a.JWTManager,
+		SessionManager:   a.SessionManager,
+		OAuthHandler:     a.OAuthHandler,
+		AuthService:      a.AuthService,
+		TokenService:     a.TokenService,
+		MFAService:       a.MFAService,
+		MFASettings:      a.MFASettings,
+		EmailSender:      a.EmailSender,
+		ProxyHandler:     a.ProxyHandler,
+		RackCertMgr:      a.RackCertManager,
+		SentryEnabled:    a.SentryEnabled,
+		AuditLogger:      a.AuditLogger,
+		DefaultRack:      a.DefaultRack,
+		SecurityNotifier: a.SecurityNotifier,
 	})
 
 	a.router = router
