@@ -1,20 +1,20 @@
 import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
 import {
+  Blocks,
   Boxes,
+  Cpu,
+  Hammer,
+  HardDrive,
   Key,
   ListChecks,
+  Lock,
   LogOut,
+  Logs,
   type LucideIcon,
   Server,
   Settings,
   TerminalSquare,
   Users,
-  Cpu,
-  Blocks,
-  Hammer,
-  Logs,
-  Lock,
-  HardDrive
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
@@ -100,9 +100,7 @@ export function Layout() {
     }
 
     nav.push({ name: 'Audit Logs', href: '/audit_logs', icon: Logs })
-    nav.push({ name: 'Account Security', href: '/account/security', icon: Lock,
-      HardDrive
-     })
+    nav.push({ name: 'Account Security', href: '/account/security', icon: Lock })
 
     nav.push({
       name: 'Configure CLI',
