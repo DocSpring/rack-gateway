@@ -44,6 +44,7 @@ jobs:
       GATEWAY_DEBUG_OAUTH: "false"
       CHECK_VITE_PROXY: "false"
       GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
+      E2E_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +93,9 @@ jobs:
           chmod +x scripts/wait-for-services.sh
           WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-for-services.sh
 
+      - name: Run database migrations
+        run: docker compose exec -T gateway-api-preview ./convox-gateway-api migrate
+
       - name: Diagnose endpoints
         run: |
           set -x
@@ -107,7 +111,7 @@ jobs:
 
       - name: Run Web E2E
         working-directory: web
-        run: WEB_PORT=${{ env.GATEWAY_PORT }} pnpm e2e
+        run: pnpm e2e
 
       - name: Docker logs (on failure)
         if: failure()
@@ -168,6 +172,9 @@ jobs:
         run: |
           ./scripts/wait-for-services.sh
 
+      - name: Run database migrations
+        run: docker compose exec -T gateway-api-preview ./convox-gateway-api migrate
+
       - name: Install Convox CLI
         run: |
           set -euo pipefail
@@ -182,7 +189,7 @@ jobs:
           convox version || true
 
       - name: Run CLI E2E
-        run: ./scripts/cli-e2e.sh
+        run: E2E_DATABASE_NAME=gateway_dev E2E_GATEWAY_SERVICE=gateway-api-preview ./scripts/cli-e2e.sh
 
       - name: Docker logs (on failure)
         if: failure()
