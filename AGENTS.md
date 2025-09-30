@@ -86,23 +86,49 @@ This is an authentication and authorization proxy for self-hosted Convox racks. 
 - Google Workspace OAuth authentication
 - Role-based access control (RBAC)
 - Complete audit logging with automatic secret redaction
-- Multi-rack support (staging, US, EU, etc.)
+- Deploy approval workflows for CI/CD
+
+## Architecture Philosophy
+
+**One Gateway Per Rack (Single-Tenant Design)**
+
+Each gateway instance is deployed alongside a single Convox rack. The gateway is not a multi-tenant SaaS service - it's infrastructure that runs directly next to the Convox API it protects.
+
+- **Gateway server**: Single-tenant, deployed per rack, proxies to exactly one Convox API
+- **CLI client**: Multi-rack aware, can switch between multiple gateways using `--rack` flag
+- **No remote rack management**: Each gateway only knows about its own rack
+- **Future**: Will use SSM parameter store to fetch rack credentials directly from AWS
+
+**Example deployment:**
+
+```
+Production Rack:
+  Convox API (port 5443) <-> Gateway (port 8447)
+
+Staging Rack:
+  Convox API (port 5443) <-> Gateway (port 8447)
+
+Developer CLI:
+  ~/.config/convox-gateway/config.json stores:
+    - production: https://gateway-prod.example.com (JWT token)
+    - staging: https://gateway-staging.example.com (JWT token)
+```
 
 ## Architecture
 
 ```
-Developer Machine -> Gateway Server (Admin-run) -> Convox Racks
+Developer Machine -> Gateway Server (per rack) -> Convox Rack API
                      |
                      v
                   Audit Logs -> CloudWatch
 
 Flow:
-1. Developer runs: convox-gateway apps
+1. Developer runs: convox-gateway apps --rack staging
 2. CLI loads JWT from ~/.config/convox-gateway/config.json
 3. CLI sets RACK_URL with JWT and calls real convox CLI
 4. Request goes to Gateway API Server with JWT auth
 5. Gateway validates JWT and checks RBAC permissions
-6. Gateway proxies to real Convox rack using actual token
+6. Gateway proxies to THE Convox rack using actual token
 7. Gateway logs request to CloudWatch
 8. Response flows back through gateway to developer
 ```
@@ -111,18 +137,20 @@ Flow:
 
 ### Distributed Architecture
 
-**Gateway Server (Admin-managed):**
+**Gateway Server (Admin-managed, one per rack):**
 
-- Runs on dedicated infrastructure
-- Has access to real Convox rack credentials
-- Configured via environment variables (RACK*URL*_, RACK*TOKEN*_)
+- Runs on dedicated infrastructure alongside the Convox rack
+- Has access to exactly ONE Convox rack's credentials
+- Configured via environment variables (RACK_HOST, RACK_TOKEN)
 - Handles OAuth, RBAC, and audit logging
+- Single-tenant by design
 
-**Developer CLI (User-installed):**
+**Developer CLI (User-installed, multi-rack aware):**
 
 - Installed as binary at `/usr/local/bin/convox-gateway`
 - Wraps the real `convox` CLI
-- Stores config in `~/.config/convox-gateway/config.json`
+- Stores config for multiple racks in `~/.config/convox-gateway/config.json`
+- Uses `--rack` flag to switch between gateways
 - Never has direct access to Convox rack tokens
 
 ### Authentication Flow
@@ -136,10 +164,34 @@ Flow:
 
 ### Authorization (RBAC)
 
-- Database-backed RBAC manager (Postgres)
+- Database-backed RBAC manager (PostgreSQL)
 - Roles: viewer, ops, deployer, admin
 - Permission mapping to Convox routes/actions, e.g., `convox:{resource}:{action}`
 - Admin role has wildcard access
+
+### Database
+
+**This project uses PostgreSQL, NOT SQLite.**
+
+**Development environment:**
+- Database: `gateway_dev`
+- Connection: `postgres://postgres:postgres@postgres:5432/gateway_dev?sslmode=disable`
+- Docker container: `convox-gateway-postgres-1`
+- Host port: `55432` (to avoid conflicts with local Postgres)
+
+**Test environment:**
+- Database: `gateway_test`
+- Connection: `postgres://postgres:postgres@postgres:5432/gateway_test?sslmode=disable`
+
+**Querying the dev database:**
+```bash
+docker exec convox-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT ..."
+```
+
+**Querying the test database:**
+```bash
+docker exec convox-gateway-postgres-1 psql -U postgres -d gateway_test -c "SELECT ..."
+```
 
 ### Proxy Behavior
 

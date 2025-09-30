@@ -51,7 +51,8 @@ monitoring and alerts, workflows for CI/CD, etc.
 - **Google Workspace OAuth**: Secure authentication with domain restrictions
 - **Role-Based Access Control**: Granular permissions (viewer, ops, deployer, admin)
 - **Audit Logging**: Complete activity logs with automatic secret redaction
-- **Multi-Rack Support**: Manage staging, US, EU, and other racks
+- **Single-Tenant Design**: One gateway per rack, deployed alongside Convox API
+- **Multi-Rack CLI**: CLI can switch between multiple gateways using `--rack` flag
 - **Session Management**: 30-day JWT sessions with secure token storage
 - **Minimal Web UI**: User and role management interface
 - **Deploy Approvals**: Manual approval workflow for CI/CD actions (build/object/release/promote)

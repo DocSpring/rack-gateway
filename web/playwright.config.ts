@@ -21,6 +21,8 @@ export default defineConfig({
     // Use localhost to match OAuth + cookie host set by the gateway
     baseURL: `http://localhost:${port}`,
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
 
   projects: [

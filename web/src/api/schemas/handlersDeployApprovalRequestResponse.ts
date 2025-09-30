@@ -21,7 +21,6 @@ export interface HandlersDeployApprovalRequestResponse {
   message?: string;
   object_created_at?: string;
   object_key?: string;
-  rack?: string;
   rejected_at?: string;
   rejected_by_email?: string;
   rejected_by_name?: string;
@@ -30,7 +29,7 @@ export interface HandlersDeployApprovalRequestResponse {
   release_promoted_at?: string;
   release_promoted_by_api_token_id?: number;
   status?: string;
-  target_api_token_id?: number;
+  target_api_token_id?: string;
   target_api_token_name?: string;
   updated_at?: string;
 }

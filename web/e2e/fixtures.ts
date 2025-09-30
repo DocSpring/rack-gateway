@@ -1,8 +1,10 @@
+import { writeFileSync } from 'node:fs'
 import { test as base, expect as playwrightExpect } from '@playwright/test'
+import { format } from 'prettier'
 import { APIRoute, WebRoute } from '@/lib/routes'
 
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page }, use, testInfo) => {
     const errors: string[] = []
     // Log 4xx/5xx responses with URL and a short body snippet
     page.on('response', async (resp) => {
@@ -70,6 +72,17 @@ export const test = base.extend({
       errors.push(`pageerror: ${String(err)}`)
     })
     await use(page)
+
+    // Save HTML snapshot on failure
+    if (testInfo.status !== testInfo.expectedStatus) {
+      const htmlPath = testInfo.outputPath('page-content.html')
+      const html = await page.content()
+      // Format HTML for readability
+      const formatted = await format(html, { parser: 'html', printWidth: 120 })
+      writeFileSync(htmlPath, formatted)
+      testInfo.attachments.push({ name: 'page-html', path: htmlPath, contentType: 'text/html' })
+    }
+
     if (errors.length > 0) {
       throw new Error(`JS errors detected during test:\n${errors.join('\n')}`)
     }

@@ -200,19 +200,19 @@ export const getTokenPermissionMetadata = (): Promise<TokenPermissionMetadata> =
 
 export const listAPITokens = (): Promise<APIToken[]> => unwrap(gateway.getAdminTokens())
 
-export const getAPIToken = (tokenId: number): Promise<APIToken> =>
-  unwrap(gateway.getAdminTokensTokenID(tokenId))
+export const getAPIToken = (tokenPublicId: string): Promise<APIToken> =>
+  unwrap(gateway.getAdminTokensTokenID(tokenPublicId))
 
 export const createAPIToken = (payload: CreateAPITokenRequest): Promise<CreateAPITokenResponse> =>
   unwrap(gateway.postAdminTokens(payload))
 
 export const updateAPIToken = (
-  tokenId: number,
+  tokenPublicId: string,
   payload: UpdateAPITokenRequest
-): Promise<APIToken> => unwrap(gateway.putAdminTokensTokenID(tokenId, payload))
+): Promise<APIToken> => unwrap(gateway.putAdminTokensTokenID(tokenPublicId, payload))
 
-export const deleteAPIToken = async (tokenId: number): Promise<void> => {
-  await unwrap(gateway.deleteAdminTokensTokenID(tokenId))
+export const deleteAPIToken = async (tokenPublicId: string): Promise<void> => {
+  await unwrap(gateway.deleteAdminTokensTokenID(tokenPublicId))
 }
 
 export const getCurrentUser = (): Promise<CurrentUserResponse> => unwrap(gateway.getMe())

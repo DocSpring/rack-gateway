@@ -574,7 +574,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/1')
+        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/tok-1')
       })
     })
   })

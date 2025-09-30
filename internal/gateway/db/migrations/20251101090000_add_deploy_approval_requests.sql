@@ -2,7 +2,6 @@
 
 CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   id BIGSERIAL PRIMARY KEY,
-  rack VARCHAR(120) NOT NULL,
   message TEXT NOT NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','consumed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

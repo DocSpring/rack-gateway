@@ -8,7 +8,6 @@
 
 export interface HandlersCreateDeployApprovalRequestRequest {
   message: string;
-  rack?: string;
   target_api_token?: string;
-  target_api_token_id?: number;
+  target_api_token_id?: string;
 }

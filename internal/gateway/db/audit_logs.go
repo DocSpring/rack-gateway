@@ -81,6 +81,7 @@ func (d *Database) tryIncrementAuditLog(log *AuditLog) (bool, error) {
 		        "response_time_ms", "event_count"
 		 FROM "audit_logs"
 		 WHERE "user_email" = ?
+		   AND "timestamp" >= NOW() - INTERVAL '10 seconds'
 		 ORDER BY "timestamp" DESC
 		 LIMIT 1`, log.UserEmail,
 	)

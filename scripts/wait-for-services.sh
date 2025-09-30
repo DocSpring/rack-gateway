@@ -7,7 +7,7 @@ WEB_UI_PATH="${WEB_UI_PATH:-/.gateway/web/}"
 GATEWAY_PORT="${GATEWAY_PORT:-8447}"
 OAUTH_PORT="${MOCK_OAUTH_PORT:-3345}"
 # Max total wait (seconds)
-MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-30}"
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-120}"
 
 retry() {
   local url="$1"

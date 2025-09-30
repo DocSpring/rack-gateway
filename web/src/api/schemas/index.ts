@@ -33,6 +33,7 @@ export * from './handlersConfirmTOTPEnrollmentRequest';
 export * from './handlersCreateAPITokenRequest';
 export * from './handlersCreateAPITokenResponse';
 export * from './handlersCreateDeployApprovalRequestRequest';
+export * from './handlersCreateDeployApprovalRequestRequestBody';
 export * from './handlersCreateUserRequest';
 export * from './handlersCurrentUserResponse';
 export * from './handlersDeployApprovalRequestList';

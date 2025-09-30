@@ -10,13 +10,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-
-	"net"
-	"net/url"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
@@ -103,6 +103,16 @@ func (l *logAccumulator) Bytes() []byte {
 	out := append([]byte{}, l.buf.Bytes()...)
 	out = append(out, []byte("…(truncated)")...)
 	return out
+}
+
+// logAudit is a helper to log audit entries and mark the request context
+func (h *Handler) logAudit(r *http.Request, al *db.AuditLog) error {
+	err := audit.LogDB(h.database, al)
+	if err == nil && r != nil {
+		ctx := audit.MarkAuditLogCreated(r.Context())
+		*r = *r.WithContext(ctx)
+	}
+	return err
 }
 
 func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager) *Handler {
@@ -326,6 +336,24 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Pre-validate audit log requirements BEFORE proxying to ensure we can return proper error
+	if !audit.HasAuditLogBeenCreated(r.Context()) {
+		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method)
+		if action == "unknown" || resource == "unknown" {
+			errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s", r.Method, r.URL.Path)
+			log.Printf(`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s"}`, errorMsg, r.Method, r.URL.Path, action, resource)
+			h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackConfig.Name, start)
+			return
+		}
+		resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
+		if resourceType == "unknown" {
+			errorMsg := fmt.Sprintf("cannot determine resource type for %s %s", r.Method, r.URL.Path)
+			log.Printf(`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s","resource_type":"%s"}`, errorMsg, r.Method, r.URL.Path, action, resource, resourceType)
+			h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackConfig.Name, start)
+			return
+		}
+	}
+
 	// Pre-capture system parameters if this is a rack params update
 	var beforeParams map[string]string
 	isRackParamsUpdate := (r.Method == http.MethodPut && routematch.KeyMatch3(path, "/system"))
@@ -357,6 +385,44 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if status == 0 {
 		status = http.StatusOK
 	}
+
+	// Create generic audit log if no explicit audit logs were created during request handling
+	// (validation already happened before proxy, so action/resource/resourceType are guaranteed to be valid)
+	if !audit.HasAuditLogBeenCreated(r.Context()) {
+		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method)
+		resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
+
+		var tokenIDPtr *int64
+		if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
+			if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
+				tokenIDPtr = &parsed
+			}
+		}
+
+		auditLog := &db.AuditLog{
+			UserEmail:      authUser.Email,
+			UserName:       r.Header.Get("X-User-Name"),
+			APITokenID:     tokenIDPtr,
+			APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
+			ActionType:     "convox",
+			Action:         action,
+			Resource:       resource,
+			ResourceType:   resourceType,
+			Details:        h.auditLogger.BuildDetailsJSON(r),
+			IPAddress:      h.auditLogger.GetClientIP(r),
+			UserAgent:      r.UserAgent(),
+			Status:         h.auditLogger.MapHttpStatusToStatus(status),
+			RBACDecision:   "allow",
+			HTTPStatus:     status,
+			ResponseTimeMs: int(time.Since(start).Milliseconds()),
+			EventCount:     1,
+		}
+		if dbErr := h.logAudit(r, auditLog); dbErr != nil {
+			log.Printf("Failed to store audit log in database: %v", dbErr)
+		}
+	}
+
+	// Log request to stdout for CloudWatch (after audit validation passes)
 	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", status, time.Since(start), nil)
 
 	// On success, write detailed audit entries for each env change
@@ -372,7 +438,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 				if skipManualReleaseLog {
 					continue
 				}
-				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				_ = h.logAudit(r, &db.AuditLog{
 					UserEmail:      authUser.Email,
 					UserName:       r.Header.Get("X-User-Name"),
 					ActionType:     "convox",
@@ -507,7 +573,7 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes 
 		return m
 	}()}
 	b, _ := json.Marshal(payload)
-	_ = audit.LogDB(h.database, &db.AuditLog{
+	_ = h.logAudit(r, &db.AuditLog{
 		UserEmail:    actor,
 		UserName:     r.Header.Get("X-User-Name"),
 		ActionType:   "convox",
@@ -663,7 +729,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 			// Log denied secrets.set per offending key for audit clarity
 			userName := r.Header.Get("X-User-Name")
 			for _, key := range offending {
-				_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+				_ = h.logAudit(r, &db.AuditLog{
 					UserEmail:      email,
 					UserName:       userName,
 					ActionType:     "convox",
@@ -687,7 +753,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	for k := range posted {
 		if h.isProtectedKey(k) {
 			userName := r.Header.Get("X-User-Name")
-			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+			_ = h.logAudit(r, &db.AuditLog{
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
@@ -729,7 +795,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		// Log denied env.set entries for submitted keys
 		userName := r.Header.Get("X-User-Name")
 		for _, key := range order {
-			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+			_ = h.logAudit(r, &db.AuditLog{
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
@@ -790,7 +856,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 			// Log denied change for protected key
 			userName := r.Header.Get("X-User-Name")
 			app := extractAppFromPath(r.URL.Path)
-			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+			_ = h.logAudit(r, &db.AuditLog{
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
@@ -883,7 +949,7 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []envut
 				action = "env.unset"
 			}
 		}
-		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+		_ = h.logAudit(r, &db.AuditLog{
 			UserEmail:      email,
 			UserName:       userName,
 			ActionType:     "convox",
@@ -1626,14 +1692,6 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		return false, nil, nil
 	}
 
-	rackName := strings.TrimSpace(rack.Name)
-	if rackName == "" {
-		rackName = strings.TrimSpace(rack.Alias)
-	}
-	if rackName == "" {
-		rackName = "default"
-	}
-
 	if h.database == nil {
 		return false, nil, fmt.Errorf("database unavailable for deploy approvals")
 	}
@@ -1643,7 +1701,7 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		window = h.config.DeployApprovalWindow
 	}
 
-	req, err := h.database.ActiveDeployApprovalRequestForStage(*authUser.TokenID, rackName, stage, window)
+	req, err := h.database.ActiveDeployApprovalRequestForStage(*authUser.TokenID, stage, window)
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrDeployApprovalMissing):

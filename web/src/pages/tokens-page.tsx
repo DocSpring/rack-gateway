@@ -408,8 +408,8 @@ function TokensPageInner() {
 
   // Delete token mutation
   const deleteTokenMutation = useMutation({
-    mutationFn: async (tokenId: number) => {
-      await api.delete(`/.gateway/api/admin/tokens/${tokenId}`)
+    mutationFn: async (tokenPublicId: string) => {
+      await api.delete(`/.gateway/api/admin/tokens/${tokenPublicId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
@@ -421,15 +421,15 @@ function TokensPageInner() {
   // Update token mutation (name and permissions)
   const updateTokenMutation = useMutation({
     mutationFn: async ({
-      id,
+      publicId,
       name,
       permissions,
     }: {
-      id: number
+      publicId: string
       name: string
       permissions: string[]
     }) => {
-      await api.put(`/.gateway/api/admin/tokens/${id}`, {
+      await api.put(`/.gateway/api/admin/tokens/${publicId}`, {
         name,
         permissions,
       })
@@ -525,11 +525,11 @@ function TokensPageInner() {
     if (!tokenToDelete) {
       return
     }
-    const tokenId = tokenToDelete.id
+    const tokenPublicId = tokenToDelete.public_id
     try {
-      await deleteTokenMutation.mutateAsync(tokenId)
+      await deleteTokenMutation.mutateAsync(tokenPublicId)
     } catch (err) {
-      if (handleStepUpError(err, () => deleteTokenMutation.mutateAsync(tokenId))) {
+      if (handleStepUpError(err, () => deleteTokenMutation.mutateAsync(tokenPublicId))) {
         return
       }
       toast.error(getErrorMessage(err, 'Failed to delete token'))
@@ -625,7 +625,7 @@ function TokensPageInner() {
     setEditPermissions(payload.permissions)
 
     const args = {
-      id: editToken.id,
+      publicId: editToken.public_id,
       name: payload.name,
       permissions: payload.permissions,
     }

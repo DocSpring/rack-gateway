@@ -16,5 +16,6 @@ export interface DbAPIToken {
   last_used_at?: string;
   name?: string;
   permissions?: string[];
+  public_id?: string;
   user_id?: number;
 }

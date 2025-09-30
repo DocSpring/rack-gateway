@@ -115,7 +115,6 @@ type CreatorInfo struct {
 // DeployApprovalRequest tracks manual approval requirements for CI/CD actions.
 type DeployApprovalRequest struct {
 	ID                          int64      `json:"id"`
-	Rack                        string     `json:"rack"`
 	Message                     string     `json:"message"`
 	Status                      string     `json:"status"`
 	CreatedAt                   time.Time  `json:"created_at" ts_type:"string"`

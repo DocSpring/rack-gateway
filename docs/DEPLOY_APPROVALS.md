@@ -37,7 +37,9 @@ If a user/token already has the direct permission (for example `convox:build:cre
 | `status`                                         | `pending`, `approved`, `rejected`, or `consumed`                 |
 | `approval_notes`                                 | Optional reviewer notes                                          |
 | `approval_expires_at`                            | Timestamp when the approval ages out                             |
-| `build_id` / `object_id` / `release_id`          | Populated when each Convox action is executed under the approval |
+| `build_id` / `object_key` / `release_id`         | Populated when each Convox action is executed under the approval |
+
+**Note:** The gateway is single-tenant - each instance manages approvals for exactly one rack. There is no `rack` column in the database.
 
 ## CLI Request Flow
 
@@ -49,7 +51,7 @@ CONVOX_GATEWAY_API_TOKEN=... ./bin/convox-gateway deploy-approval request "Deplo
 Flags:
 
 - `--api-token` – optional override for the API token used to authenticate (otherwise read from `CONVOX_GATEWAY_API_TOKEN` or stored config).
-- `--rack` – override the current rack if needed.
+- `--rack` – selects which gateway to talk to (from CLI's multi-rack config). Each gateway is single-tenant.
 - `--wait` – blocks until the request is approved/rejected (with optional `--poll-interval` and `--timeout`).
 
 If MFA step-up is required, the CLI automatically prompts before retrying the request.
@@ -60,12 +62,12 @@ Administrators can pre-stage an approval for a CI token without waiting for the 
 
 ```bash
 ./bin/convox-gateway deploy-approval pre-approve \
+  01234567-89ab-cdef-0123-456789abcdef \
   "Deploy demo release" \
-  --target-api-token-id 01234567-89ab-cdef-0123-456789abcdef \
   --mfa-code 123456
 ```
 
-The command requires `gateway:deploy-approval-request:approve`, an MFA step-up, and the public UUID of the target API token. The resulting request is inserted with status `approved` and expires after `DEPLOY_APPROVAL_WINDOW`. When the CI token next triggers a guarded Convox action, the pre-approved record is consumed automatically.
+The command requires `gateway:deploy-approval-request:approve`, an MFA step-up, and the public UUID of the target API token (first positional argument). The resulting request is inserted with status `approved` and expires after `DEPLOY_APPROVAL_WINDOW`. When the CI token next triggers a guarded Convox action, the pre-approved record is consumed automatically.
 
 ## Admin UI
 

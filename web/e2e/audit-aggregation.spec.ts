@@ -17,8 +17,10 @@ test('aggregates repeated app list views into single audit entry', async ({ page
   const table = page.getByRole('table')
   await expect(table).toBeVisible()
 
-  const targetRow = table.getByRole('row', { name: /app\.list/i }).filter({ hasText: /×\d+/i })
+  // Scroll to table to ensure it's in screenshot
+  await table.scrollIntoViewIfNeeded()
 
+  const targetRow = table.getByRole('row', { name: /app\.list/i }).filter({ hasText: /×\d+/i })
   await expect(targetRow).toHaveCount(1)
 
   const countBadge = targetRow.getByText(/×\d+/)

@@ -311,6 +311,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/deploy-approval-requests/preapprove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pre-approve deploy approval request
+         * @description Creates and immediately approves a deploy approval request for a target API token.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: components["requestBodies"]["handlers.CreateDeployApprovalRequestRequest"];
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Conflict - pending request already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/deploy-approval-requests/{id}/approve": {
         parameters: {
             query?: never;
@@ -988,7 +1081,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description Token ID */
-                    tokenID: number;
+                    tokenID: string;
                 };
                 cookie?: never;
             };
@@ -1042,7 +1135,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description Token ID */
-                    tokenID: number;
+                    tokenID: string;
                 };
                 cookie?: never;
             };
@@ -1092,60 +1185,7 @@ export interface paths {
             };
         };
         post?: never;
-        /**
-         * Delete an API token
-         * @description Permanently removes an API token.
-         */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Token ID */
-                    tokenID: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description No Content */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2618,12 +2658,7 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            /** @description Deploy approval request payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.CreateDeployApprovalRequestRequest"];
-                };
-            };
+            requestBody: components["requestBodies"]["handlers.CreateDeployApprovalRequestRequest"];
             responses: {
                 /** @description Created */
                 201: {
@@ -3100,6 +3135,7 @@ export interface components {
             last_used_at?: string;
             name?: string;
             permissions?: string[];
+            public_id?: string;
             user_id?: number;
         };
         "db.AuditLog": {
@@ -3189,9 +3225,8 @@ export interface components {
         };
         "handlers.CreateDeployApprovalRequestRequest": {
             message: string;
-            rack?: string;
             target_api_token?: string;
-            target_api_token_id?: number;
+            target_api_token_id?: string;
         };
         "handlers.CreateUserRequest": {
             email: string;
@@ -3226,7 +3261,6 @@ export interface components {
             message?: string;
             object_created_at?: string;
             object_key?: string;
-            rack?: string;
             rejected_at?: string;
             rejected_by_email?: string;
             rejected_by_name?: string;
@@ -3235,7 +3269,7 @@ export interface components {
             release_promoted_at?: string;
             release_promoted_by_api_token_id?: number;
             status?: string;
-            target_api_token_id?: number;
+            target_api_token_id?: string;
             target_api_token_name?: string;
             updated_at?: string;
         };
@@ -3380,7 +3414,14 @@ export interface components {
     };
     responses: never;
     parameters: never;
-    requestBodies: never;
+    requestBodies: {
+        /** @description Deploy approval request payload */
+        "handlers.CreateDeployApprovalRequestRequest": {
+            content: {
+                "application/json": components["schemas"]["handlers.CreateDeployApprovalRequestRequest"];
+            };
+        };
+    };
     headers: never;
     pathItems: never;
 }

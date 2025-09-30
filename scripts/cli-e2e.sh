@@ -402,7 +402,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   PREAPPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
   verify_cgw_command \
-    "deploy-approval pre-approve 'Pipeline deployment ${E2E_TS}' --target-api-token-id $API_TOKEN_PUBLIC_ID --mfa-code $PREAPPROVE_CODE" \
+    "deploy-approval pre-approve $API_TOKEN_PUBLIC_ID 'Pipeline deployment ${E2E_TS}' --mfa-code $PREAPPROVE_CODE" \
     "Deploy approval request" "pre-approved"
 
   # Normalize rack alias for deploy approvals to match mock rack name

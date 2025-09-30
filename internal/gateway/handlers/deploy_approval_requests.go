@@ -102,25 +102,13 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	rackName := strings.TrimSpace(req.Rack)
-	if rackName == "" {
-		if rc, ok := h.primaryRack(); ok {
-			rackName = rc.Name
-			if rackName == "" {
-				rackName = "default"
-			}
-		} else {
-			rackName = "default"
-		}
-	}
-
 	var targetUserID *int64
 	if token != nil && token.UserID > 0 {
 		id := token.UserID
 		targetUserID = &id
 	}
 
-	record, err := h.database.CreateDeployApprovalRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
+	record, err := h.database.CreateDeployApprovalRequest(message, dbUser.ID, nil, token.ID, targetUserID)
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrDeployApprovalRequestActive):
@@ -138,7 +126,6 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	details := auditDetails(map[string]string{
 		"token_uuid": token.PublicID,
-		"rack":       rackName,
 		"message":    message,
 	})
 
@@ -453,25 +440,13 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		return
 	}
 
-	rackName := strings.TrimSpace(req.Rack)
-	if rackName == "" {
-		if rc, ok := h.primaryRack(); ok {
-			rackName = rc.Name
-			if rackName == "" {
-				rackName = "default"
-			}
-		} else {
-			rackName = "default"
-		}
-	}
-
 	var targetUserID *int64
 	if token.UserID > 0 {
 		id := token.UserID
 		targetUserID = &id
 	}
 
-	record, err := h.database.CreateDeployApprovalRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
+	record, err := h.database.CreateDeployApprovalRequest(message, dbUser.ID, nil, token.ID, targetUserID)
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrDeployApprovalRequestActive):
@@ -498,7 +473,6 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 
 	details := auditDetails(map[string]string{
 		"token_uuid": token.PublicID,
-		"rack":       rackName,
 		"message":    message,
 		"expires_at": expiresAt.UTC().Format(time.RFC3339),
 		"notes":      notes,
@@ -711,7 +685,6 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 	}
 	resp := DeployApprovalRequestResponse{
 		ID:                 dr.ID,
-		Rack:               dr.Rack,
 		Message:            dr.Message,
 		Status:             dr.Status,
 		CreatedAt:          dr.CreatedAt,

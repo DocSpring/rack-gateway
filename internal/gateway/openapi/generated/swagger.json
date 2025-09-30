@@ -1059,6 +1059,56 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Permanently removes an API token.",
+                "tags": [
+                    "API Tokens"
+                ],
+                "summary": "Delete an API token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token ID",
+                        "name": "tokenID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/admin/users": {
@@ -2895,9 +2945,6 @@
                 "message": {
                     "type": "string"
                 },
-                "rack": {
-                    "type": "string"
-                },
                 "target_api_token": {
                     "type": "string"
                 },
@@ -3018,9 +3065,6 @@
                     "type": "string"
                 },
                 "object_key": {
-                    "type": "string"
-                },
-                "rack": {
                     "type": "string"
                 },
                 "rejected_at": {

@@ -230,6 +230,45 @@ func TestDatabase(t *testing.T) {
 		assert.Equal(t, 1, all[0].EventCount)
 		assert.Equal(t, 2, all[1].EventCount)
 	})
+
+	t.Run("AuditAggregationTimeWindow", func(t *testing.T) {
+		dbtest.Reset(t, db)
+
+		// Create first audit log
+		first := &gwdb.AuditLog{
+			UserEmail:      "test@example.com",
+			ActionType:     "convox",
+			Action:         "app.list",
+			Resource:       "all",
+			ResourceType:   "app",
+			Status:         "success",
+			ResponseTimeMs: 100,
+		}
+		require.NoError(t, db.CreateAuditLog(first))
+
+		// Manually set timestamp to 11 seconds ago to simulate old entry
+		_, err = db.DB().Exec(`UPDATE audit_logs SET timestamp = NOW() - INTERVAL '11 seconds' WHERE user_email = $1`, first.UserEmail)
+		require.NoError(t, err)
+
+		// Create second audit log (should NOT aggregate due to time window)
+		second := &gwdb.AuditLog{
+			UserEmail:      "test@example.com",
+			ActionType:     "convox",
+			Action:         "app.list",
+			Resource:       "all",
+			ResourceType:   "app",
+			Status:         "success",
+			ResponseTimeMs: 105,
+		}
+		require.NoError(t, db.CreateAuditLog(second))
+
+		// Should have 2 separate entries (not aggregated due to time window)
+		logs, err := db.GetAuditLogs(first.UserEmail, time.Time{}, 0)
+		require.NoError(t, err)
+		require.Len(t, logs, 2, "logs should not aggregate when outside 10 second window")
+		assert.Equal(t, 1, logs[0].EventCount)
+		assert.Equal(t, 1, logs[1].EventCount)
+	})
 }
 
 func TestGetAuditLogsPaged(t *testing.T) {

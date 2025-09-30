@@ -105,19 +105,6 @@ func (h *AdminHandler) publicBaseURL(c *gin.Context) string {
 	return ""
 }
 
-func (h *AdminHandler) primaryRack() (config.RackConfig, bool) {
-	if h == nil || h.config == nil {
-		return config.RackConfig{}, false
-	}
-	if rc, ok := h.config.Racks["default"]; ok && rc.Enabled {
-		return rc, true
-	}
-	if rc, ok := h.config.Racks["local"]; ok && rc.Enabled {
-		return rc, true
-	}
-	return config.RackConfig{}, false
-}
-
 // TriggerSentryTest dispatches a synthetic event to validate Sentry plumbing.
 func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
 	var payload struct {
@@ -1740,7 +1727,6 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 // @Security SessionCookie
 // @Security CSRFToken
 // @Router /admin/tokens/{tokenID} [delete]
-
 func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))

@@ -3,7 +3,6 @@ package audit
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +27,7 @@ func TestAuditLogger(t *testing.T) {
 			if method == "SOCKET" {
 				method = http.MethodGet
 			}
-			action, resource := logger.parseConvoxAction(path, method)
+			action, resource := logger.ParseConvoxAction(path, method)
 			expectedAction := fmt.Sprintf("%s.%s", spec.Resource, spec.Action)
 			expectedResource := resourceInstance(path, spec.Resource, spec.Action)
 			assert.Equal(t, expectedAction, action, "pattern %s %s", spec.Method, spec.Pattern)
@@ -52,88 +51,73 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "[REDACTED]", red["SECRET_TOKEN"])
 	})
 
-	t.Run("LogRequest", func(t *testing.T) {
-		// Create a mock HTTP request
+	t.Run("LogRequest_OnlyLogsToStdout", func(t *testing.T) {
+		// LogRequest only logs to stdout now, not database
 		req, err := http.NewRequest("GET", "/apps/myapp/releases?limit=1", nil)
 		require.NoError(t, err)
 
 		req.Header.Set("X-User-Name", "Test User")
 		req.RemoteAddr = "192.168.1.1:1234"
 
-		// Log the request
+		// This should not panic and should not create database entries
 		logger.LogRequest(req, "test@example.com", "production", "allow", 200, 150*time.Millisecond, nil)
 
-		// Verify it was stored in database
+		// Verify NO database entry was created by LogRequest
 		logs, err := database.GetAuditLogs("test@example.com", time.Time{}, 0)
 		require.NoError(t, err)
-		require.Len(t, logs, 1)
-
-		log := logs[0]
-		assert.Equal(t, "test@example.com", log.UserEmail)
-		assert.Equal(t, "Test User", log.UserName)
-		assert.Equal(t, "convox", log.ActionType)
-		assert.Equal(t, "release.list", log.Action)
-		assert.Equal(t, "all", log.Resource)
-		assert.Equal(t, "success", log.Status)
-		assert.Equal(t, 150, log.ResponseTimeMs)
-		assert.Equal(t, "192.168.1.1", log.IPAddress)
-		assert.Equal(t, 1, log.EventCount)
-		assert.Contains(t, log.Details, "GET")
-		assert.Contains(t, log.Details, "/apps/myapp/releases")
+		require.Len(t, logs, 0, "LogRequest should not create database entries")
 	})
 
-	t.Run("LogDeniedRequest", func(t *testing.T) {
-		req, err := http.NewRequest("DELETE", "/apps/myapp", nil)
-		require.NoError(t, err)
+	t.Run("ParseConvoxAction_ListEndpoints", func(t *testing.T) {
+		// Test that all list endpoints return proper action and resource
+		// (should never return "unknown")
+		testCases := []struct {
+			method           string
+			path             string
+			expectedAction   string
+			expectedResource string
+		}{
+			{"GET", "/apps", "app.list", "all"},
+			{"GET", "/instances", "instance.list", "all"},
+			{"GET", "/apps/myapp/processes", "process.list", "all"},
+			{"GET", "/apps/myapp/builds", "build.list", "all"},
+			{"GET", "/apps/myapp/releases", "release.list", "all"},
+		}
 
-		req.Header.Set("X-User-Name", "Viewer User")
-
-		// Log a denied request
-		logger.LogRequest(req, "viewer@example.com", "production", "deny", 403, 50*time.Millisecond, nil)
-
-		// Verify it was stored with denied status
-		logs, err := database.GetAuditLogs("viewer@example.com", time.Time{}, 0)
-		require.NoError(t, err)
-		require.Len(t, logs, 1)
-
-		log := logs[0]
-		assert.Equal(t, "denied", log.Status)
-		assert.Equal(t, "app.delete", log.Action)
-		assert.Equal(t, "myapp", log.Resource)
-		assert.Equal(t, 1, log.EventCount)
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%s %s", tc.method, tc.path), func(t *testing.T) {
+				action, resource := logger.ParseConvoxAction(tc.path, tc.method)
+				assert.Equal(t, tc.expectedAction, action, "action mismatch for %s %s", tc.method, tc.path)
+				assert.Equal(t, tc.expectedResource, resource, "resource mismatch for %s %s", tc.method, tc.path)
+				assert.NotEqual(t, "unknown", action, "action should not be unknown")
+				assert.NotEqual(t, "unknown", resource, "resource should not be unknown")
+			})
+		}
 	})
 
-	t.Run("LogRequestRecordsAPITokenMetadata", func(t *testing.T) {
-		owner, err := database.CreateUser("token-owner@example.com", "Automation Bot", []string{"admin"})
-		require.NoError(t, err)
+	t.Run("InferResourceType_NeverUnknown", func(t *testing.T) {
+		// Test that InferResourceType returns proper resource type for common paths
+		testCases := []struct {
+			path         string
+			action       string
+			expectedType string
+		}{
+			{"/apps", "app.list", "app"},
+			{"/apps/myapp", "app.read", "app"},
+			{"/instances", "instance.list", "instance"},
+			{"/apps/myapp/processes", "process.list", "process"},
+			{"/apps/myapp/builds", "build.list", "build"},
+			{"/apps/myapp/releases", "release.list", "release"},
+			{"/system", "rack.read", "rack"}, // System endpoints have action "rack.*" so type is "rack"
+		}
 
-		token, err := database.CreateAPIToken(
-			strings.Repeat("a", 64),
-			"CI Deploy",
-			owner.ID,
-			[]string{"convox:build:read"},
-			nil,
-			nil,
-		)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest("GET", "/apps/tokenapp/builds", nil)
-		require.NoError(t, err)
-
-		req.Header.Set("X-User-Name", "Automation Bot")
-		req.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", token.ID))
-		req.Header.Set("X-API-Token-Name", token.Name)
-
-		logger.LogRequest(req, "token-owner@example.com", "production", "allow", 200, 20*time.Millisecond, nil)
-
-		logs, err := database.GetAuditLogs("token-owner@example.com", time.Time{}, 0)
-		require.NoError(t, err)
-		require.Len(t, logs, 1)
-
-		log := logs[0]
-		require.NotNil(t, log.APITokenID)
-		assert.Equal(t, token.ID, *log.APITokenID)
-		assert.Equal(t, token.Name, log.APITokenName)
+		for _, tc := range testCases {
+			t.Run(tc.path, func(t *testing.T) {
+				resourceType := logger.InferResourceType(tc.path, tc.action)
+				assert.Equal(t, tc.expectedType, resourceType, "resource type mismatch for %s", tc.path)
+				assert.NotEqual(t, "unknown", resourceType, "resource type should not be unknown")
+			})
+		}
 	})
 
 }

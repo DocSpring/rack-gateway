@@ -265,7 +265,6 @@ type CreateDeployApprovalRequestRequest struct {
 	Message            string  `json:"message" binding:"required"`
 	TargetAPITokenID   *string `json:"target_api_token_id,omitempty"`
 	TargetAPITokenName string  `json:"target_api_token,omitempty"`
-	Rack               string  `json:"rack,omitempty"`
 }
 
 // UpdateDeployApprovalRequestStatusRequest carries optional admin notes when approving/rejecting.
@@ -276,7 +275,6 @@ type UpdateDeployApprovalRequestStatusRequest struct {
 // DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
 type DeployApprovalRequestResponse struct {
 	ID                       int64      `json:"id"`
-	Rack                     string     `json:"rack"`
 	Message                  string     `json:"message"`
 	Status                   string     `json:"status"`
 	CreatedAt                time.Time  `json:"created_at"`

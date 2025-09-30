@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +18,7 @@ import (
 type contextKey string
 
 const requestLoggedKey contextKey = "cgw-request-logged"
+const auditLogCreatedKey contextKey = "cgw-audit-log-created"
 
 type Logger struct {
 	redactPatterns []*regexp.Regexp
@@ -65,6 +64,16 @@ func (l *Logger) LogDBEntry(al *db.AuditLog) error {
 	return LogDB(l.database, al)
 }
 
+// LogDBEntryWithContext persists a DB-style audit log entry and marks the context as having an audit log.
+// Returns the updated context.
+func (l *Logger) LogDBEntryWithContext(ctx context.Context, al *db.AuditLog) (context.Context, error) {
+	err := LogDB(l.database, al)
+	if err == nil {
+		ctx = MarkAuditLogCreated(ctx)
+	}
+	return ctx, err
+}
+
 func (l *Logger) Log(entry *LogEntry) {
 	if entry.RequestBody != nil {
 		entry.RequestBody = l.redactMap(entry.RequestBody)
@@ -82,6 +91,7 @@ func (l *Logger) Log(entry *LogEntry) {
 
 // LogDB writes a DB-style audit entry to stdout as structured JSON and persists it.
 // Use this helper anywhere an audit log would otherwise be written directly to the DB.
+// This marks the request context as having created an audit log.
 func LogDB(database *db.Database, al *db.AuditLog) error {
 	// Mirror fields into a structured line suitable for CloudWatch ingestion
 	count := al.EventCount
@@ -124,85 +134,23 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 	return database.CreateAuditLog(al)
 }
 
-// storeInDatabase stores the audit log for admin UI and compliance
-func (l *Logger) storeInDatabase(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
-	if l.database == nil {
-		return // Skip database logging if not configured
-	}
+// MarkAuditLogCreated marks that an explicit audit log was created for this request
+func MarkAuditLogCreated(ctx context.Context) context.Context {
+	return context.WithValue(ctx, auditLogCreatedKey, true)
+}
 
-	// Determine action and resource from path
-	action, resource := l.parseConvoxAction(r.URL.Path, r.Method)
-	// Allow override of resource via header for create events where we know the created ID
-	if override := r.Header.Get("X-Audit-Resource"); override != "" {
-		resource = override
-	}
-	// Normalize list actions to resource="all"
-	if strings.HasSuffix(action, ".list") {
-		resource = "all"
-	} else if resource == "unknown" && rack != "" {
-		// For rack-wide endpoints like /system when no specific resource, use the rack name
-		if strings.HasPrefix(action, "system.") {
-			resource = rack
+// HasAuditLogBeenCreated checks if an explicit audit log was created for this request
+func HasAuditLogBeenCreated(ctx context.Context) bool {
+	if v := ctx.Value(auditLogCreatedKey); v != nil {
+		if created, ok := v.(bool); ok {
+			return created
 		}
 	}
-
-	// Get user name if available from context or header
-	userName := r.Header.Get("X-User-Name") // Set by auth middleware
-
-	// Create database audit log
-	// Determine resource type (app, rack, process, system, etc.)
-	resourceType := l.inferResourceType(r.URL.Path, action)
-
-	// Determine final status: if RBAC denied, mark as denied; otherwise map HTTP code
-	finalStatus := ""
-	if strings.ToLower(rbacDecision) == "deny" {
-		finalStatus = "denied"
-	} else {
-		finalStatus = l.mapHttpStatusToStatus(status)
-	}
-
-	var tokenIDPtr *int64
-	if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
-		if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
-			tokenIDPtr = &parsed
-		}
-	}
-	tokenName := strings.TrimSpace(r.Header.Get("X-API-Token-Name"))
-
-	auditLog := &db.AuditLog{
-		UserEmail:      userEmail,
-		UserName:       userName,
-		APITokenID:     tokenIDPtr,
-		APITokenName:   tokenName,
-		ActionType:     "convox",
-		Action:         action,
-		Resource:       resource,
-		ResourceType:   resourceType,
-		Details:        l.buildDetailsJSON(r),
-		IPAddress:      getClientIP(r),
-		UserAgent:      r.UserAgent(),
-		Status:         finalStatus,
-		RBACDecision:   rbacDecision,
-		HTTPStatus:     status,
-		ResponseTimeMs: int(latency.Milliseconds()),
-		EventCount:     1,
-	}
-
-	// Enrich with command when executing
-	if action == "process.exec" {
-		if cmd := r.Header.Get("command"); cmd != "" {
-			auditLog.Command = cmd
-		}
-	}
-
-	// Persist and mirror to stdout as DB-style JSON
-	if dbErr := LogDB(l.database, auditLog); dbErr != nil {
-		log.Printf("Failed to store audit log in database: %v", dbErr)
-	}
+	return false
 }
 
 func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
-	// Create audit log entry for stdout/CloudWatch
+	// Log request to stdout for CloudWatch (all requests)
 	entry := &LogEntry{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		UserEmail:    userEmail,
@@ -221,12 +169,7 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 		entry.ResponseError = err.Error()
 	}
 
-	// Log to stdout for CloudWatch
 	l.Log(entry)
-
-	// Also store in database for queryability
-	l.storeInDatabase(r, userEmail, rack, rbacDecision, status, latency, err)
-
 	markRequestLogged(r)
 }
 
@@ -329,6 +272,11 @@ func RequestAlreadyLogged(r *http.Request) bool {
 	return false
 }
 
+// GetClientIP extracts the client IP address from the request
+func (l *Logger) GetClientIP(r *http.Request) string {
+	return getClientIP(r)
+}
+
 func getClientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
 		parts := strings.Split(ip, ",")
@@ -340,8 +288,9 @@ func getClientIP(r *http.Request) string {
 	return strings.Split(r.RemoteAddr, ":")[0]
 }
 
-// parseConvoxAction extracts meaningful action and resource from the request
-func (l *Logger) parseConvoxAction(path, method string) (action, resource string) {
+// ParseConvoxAction extracts meaningful action and resource from the request.
+// Returns "unknown" for both if route cannot be matched - caller must handle this.
+func (l *Logger) ParseConvoxAction(path, method string) (action, resource string) {
 	// For audit purposes, treat WebSocket GET upgrades as SOCKET method for matching
 	res, act, ok := routematch.Match(method, path)
 	if !ok && method == http.MethodGet && strings.Contains(path, "/logs") {
@@ -356,8 +305,15 @@ func (l *Logger) parseConvoxAction(path, method string) (action, resource string
 }
 
 func resourceInstance(path, resource, action string) string {
+	// For collection list actions, return "all" to indicate all resources
+	// Check this FIRST before checking for specific resource instances
+	if action == "list" {
+		return "all"
+	}
+
 	p := strings.TrimPrefix(path, "/")
 	parts := strings.Split(p, "/")
+
 	// Processes with ID
 	if resource == "process" {
 		for i, seg := range parts {
@@ -386,15 +342,11 @@ func resourceInstance(path, resource, action string) string {
 			return parts[1]
 		}
 	}
-	// For collection list actions, prefer "unknown" (UI will render as "all")
-	if action == "list" {
-		return "unknown"
-	}
 	return resource
 }
 
-// buildDetailsJSON creates a JSON string with request details
-func (l *Logger) buildDetailsJSON(r *http.Request) string {
+// BuildDetailsJSON creates a JSON string with request details
+func (l *Logger) BuildDetailsJSON(r *http.Request) string {
 	details := map[string]interface{}{
 		"method": r.Method,
 		"path":   r.URL.Path,
@@ -433,8 +385,8 @@ func (l *Logger) buildDetailsJSON(r *http.Request) string {
 	return string(data)
 }
 
-// mapStatusToString converts HTTP status and RBAC decision to audit status
-func (l *Logger) mapHttpStatusToStatus(httpStatus int) string {
+// MapHttpStatusToStatus converts HTTP status code to audit status string
+func (l *Logger) MapHttpStatusToStatus(httpStatus int) string {
 	switch {
 	case httpStatus == 101: // WebSocket Switching Protocols treated as success
 		return "success"
@@ -454,20 +406,19 @@ func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
 	if strings.ToLower(rbacDecision) == "deny" {
 		return "denied"
 	}
-	return l.mapHttpStatusToStatus(httpStatus)
+	return l.MapHttpStatusToStatus(httpStatus)
 }
 
-// inferResourceType attempts to derive a normalized resource type label for UI display.
-func (l *Logger) inferResourceType(path, action string) string {
+// InferResourceType attempts to derive a normalized resource type label for UI display.
+func (l *Logger) InferResourceType(path, action string) string {
+	// First, try to infer from action (most reliable)
+	if i := strings.Index(action, "."); i > 0 {
+		return action[:i]
+	}
+
+	// Fallback to path-based inference
 	p := strings.TrimPrefix(path, "/")
 	parts := strings.Split(p, "/")
-	if strings.HasPrefix(action, "release.") {
-		return "release"
-	}
-	// Priority by path patterns
-	if strings.Contains(path, "/processes/") {
-		return "process"
-	}
 	if len(parts) > 0 {
 		switch parts[0] {
 		case "apps":
@@ -476,12 +427,11 @@ func (l *Logger) inferResourceType(path, action string) string {
 			return "rack"
 		case "system":
 			return "system"
+		case "instances":
+			return "instance"
 		}
 	}
-	// Fallback to action prefix (e.g., env.read -> env)
-	if i := strings.Index(action, "."); i > 0 {
-		return action[:i]
-	}
+
 	if action != "" {
 		return action
 	}

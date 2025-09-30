@@ -15,7 +15,6 @@ import (
 
 type deployApprovalRequest struct {
 	ID                 int64      `json:"id"`
-	Rack               string     `json:"rack"`
 	Message            string     `json:"message"`
 	Status             string     `json:"status"`
 	CreatedAt          time.Time  `json:"created_at"`
@@ -102,7 +101,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, rack, gatewayURL, bearer, message, "", nil)
+			created, err := createDeployApproval(cmd, gatewayURL, bearer, message, "", nil)
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) && conflict.request != nil {
@@ -124,7 +123,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 			}
 
 			if waitFlag {
-				final, err := waitForDeployApproval(cmd, rack, gatewayURL, bearer, created.ID, pollInterval, timeout)
+				final, err := waitForDeployApproval(cmd, gatewayURL, bearer, created.ID, pollInterval, timeout)
 				if err != nil {
 					return err
 				}
@@ -149,7 +148,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
+	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
 	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
 	cmd.Flags().StringVar(
@@ -164,24 +163,23 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 
 func newDeployApprovalPreApproveCommand() *cobra.Command {
 	var (
-		targetTokenID string
-		rackFlag      string
-		mfaCode       string
+		rackFlag string
+		mfaCode  string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "pre-approve <message>",
+		Use:   "pre-approve <token_uuid> <message>",
 		Short: "Create and immediately approve a deploy approval request for a CI/CD token",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(2),
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			message := strings.TrimSpace(args[0])
-			if message == "" {
-				return fmt.Errorf("message is required")
+			trimmedTarget := strings.TrimSpace(args[0])
+			if trimmedTarget == "" {
+				return fmt.Errorf("token_uuid is required")
 			}
 
-			trimmedTarget := strings.TrimSpace(targetTokenID)
-			if trimmedTarget == "" {
-				return fmt.Errorf("--target-api-token-id is required")
+			message := strings.TrimSpace(args[1])
+			if message == "" {
+				return fmt.Errorf("message is required")
 			}
 
 			rack, err := selectedRack()
@@ -197,7 +195,7 @@ func newDeployApprovalPreApproveCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := preapproveDeploy(cmd, rack, gatewayURL, bearer, message, trimmedTarget, &mfaCode)
+			created, err := preapproveDeploy(cmd, gatewayURL, bearer, message, trimmedTarget, &mfaCode)
 			if err != nil {
 				return err
 			}
@@ -213,20 +211,15 @@ func newDeployApprovalPreApproveCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&targetTokenID, "target-api-token-id", "", "Target API token ID (public UUID)")
-	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name override")
+	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
 	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
-	if err := cmd.MarkFlagRequired("target-api-token-id"); err != nil {
-		panic(err)
-	}
 
 	return cmd
 }
 
-func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message": message,
-		"rack":    rack,
 	}
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed
@@ -234,10 +227,9 @@ func createDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer, message,
 	return postDeployApprovalRequest(cmd, gatewayURL, bearer, "/deploy-approval-requests", payload, mfaCode)
 }
 
-func preapproveDeploy(cmd *cobra.Command, rack, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
+func preapproveDeploy(cmd *cobra.Command, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message":             message,
-		"rack":                rack,
 		"target_api_token_id": strings.TrimSpace(targetToken),
 	}
 	return postDeployApprovalRequest(cmd, gatewayURL, bearer, "/admin/deploy-approval-requests/preapprove", payload, mfaCode)
@@ -297,7 +289,7 @@ func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer string, mfaCode *st
 	return promptAndVerifyMFA(cmd, gatewayURL, bearer)
 }
 
-func waitForDeployApproval(cmd *cobra.Command, rack, gatewayURL, bearer string, id int64, interval, timeout time.Duration) (*deployApprovalRequest, error) {
+func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer string, id int64, interval, timeout time.Duration) (*deployApprovalRequest, error) {
 	start := time.Now()
 	var lastStatus string
 	for {
