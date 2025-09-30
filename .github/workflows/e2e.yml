@@ -111,7 +111,7 @@ jobs:
 
       - name: Docker logs (on failure)
         if: failure()
-        run: task docker:preview:logs
+        run: docker compose --profile preview logs --no-color --timestamps
 
       - name: Teardown
         if: always()
@@ -186,7 +186,7 @@ jobs:
 
       - name: Docker logs (on failure)
         if: failure()
-        run: task docker:preview:logs
+        run: docker compose --profile preview logs --no-color --timestamps
 
       - name: Teardown
         if: always()
