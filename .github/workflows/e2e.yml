@@ -122,10 +122,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-image
     env:
-      GATEWAY_PORT: 8447
-      WEB_PORT: 8447
-      MOCK_OAUTH_PORT: 3345
-      GATEWAY_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
+      TEST_GATEWAY_PORT: 9447
+      TEST_MOCK_OAUTH_PORT: 9345
+      TEST_MOCK_CONVOX_PORT: 6443
+      GATEWAY_TEST_IMAGE: convox-gateway-api:e2e-${{ github.sha }}
       WEB_UI_PATH: "/.gateway/web/"
       CHECK_VITE_PROXY: false
     steps:
@@ -163,11 +163,11 @@ jobs:
         run: task db:ensure
 
       - name: Start stack (gateway serves UI)
-        run: task docker:preview:up
+        run: task docker:test:up
 
       - name: Wait for services
         run: |
-          ./scripts/wait-for-services.sh
+          GATEWAY_PORT=9447 WEB_PORT=9447 MOCK_OAUTH_PORT=9345 CHECK_VITE_PROXY=false ./scripts/wait-for-services.sh
 
       - name: Install Convox CLI
         run: |
@@ -183,11 +183,11 @@ jobs:
           convox version || true
 
       - name: Run CLI E2E
-        run: E2E_DATABASE_NAME=gateway_dev E2E_GATEWAY_SERVICE=gateway-api-preview ./scripts/cli-e2e.sh
+        run: GATEWAY_PORT=9447 MOCK_OAUTH_PORT=9345 MOCK_CONVOX_PORT=6443 E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ./scripts/cli-e2e.sh
 
       - name: Docker logs (on failure)
         if: failure()
-        run: docker compose --profile preview logs --no-color --timestamps
+        run: docker compose --profile test logs --no-color --timestamps
 
       - name: Teardown
         if: always()
