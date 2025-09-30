@@ -57,6 +57,10 @@ jobs:
           sudo chmod 755 /usr/local/bin/convox
           convox version || true
 
+      - name: Create test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE gateway_test;"
+
       - name: Pre-build binaries for integration tests
         run: task go:build
 
