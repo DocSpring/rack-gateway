@@ -1,3 +1,8 @@
+appSettings:
+  awsLogs:
+    cwRetention: ${LOG_RETENTION_DAYS}
+    disableRetention: false
+
 environment:
   - DOMAIN # required, e.g. gateway.example.com
   - APP_SECRET_KEY # required

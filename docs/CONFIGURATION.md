@@ -107,6 +107,11 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
   - `gateway_test` for the isolated test stack. Task automation ensures both exist when the Docker stack starts.
 - `TEST_DATABASE_URL` – optional override for test workflows (defaults to the same host as `DATABASE_URL` but points at `gateway_test`). The Go and web test harnesses automatically prefer this when present.
 
+- `LOG_RETENTION_DAYS` (required for production deploys)
+  - Number of days to retain CloudWatch logs for the gateway service.
+  - Recommended value: `2557` (7 years).
+  - This must be set before deployment on Convox to configure log retention properly.
+
 - Protected Env Vars
 
   - Stored in the `settings` table under the key `protected_env_vars` (JSON array of variable names, e.g. `["DATABASE_URL","RACK_TOKEN"]`).

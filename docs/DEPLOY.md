@@ -51,6 +51,10 @@ Generate a strong APP_SECRET_KEY (256‑bit, base64). Examples:
 openssl rand -base64 32
 ```
 
+### 2.3 Set all required environment variables
+
+**Important:** `LOG_RETENTION_DAYS` is required for production deploys. Set to `2557` (7 years) for audit log retention.
+
 ```
 convox env set \
   RACK_TOKEN=xxxxx \
@@ -60,7 +64,8 @@ convox env set \
   GOOGLE_CLIENT_ID=... \
   GOOGLE_CLIENT_SECRET=... \
   ADMIN_USERS=admin@yourexample.com \
-  POSTMARK_API_TOKEN=xxxx
+  POSTMARK_API_TOKEN=xxxx \
+  LOG_RETENTION_DAYS=2557
 ```
 
 See docs/CONFIGURATION.md for all options.
