@@ -201,10 +201,11 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 	}
 
 	response := CurrentUserResponse{
-		Email:       email,
-		Name:        name,
-		Roles:       roles,
-		Permissions: user.Roles,
+		Email:                  email,
+		Name:                   name,
+		Roles:                  roles,
+		Permissions:            user.Roles,
+		DeployApprovalsEnabled: h.config == nil || !h.config.DeployApprovalsDisabled,
 	}
 	if dbUser != nil {
 		if strings.TrimSpace(response.Name) == "" {

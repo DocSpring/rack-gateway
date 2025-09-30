@@ -2979,6 +2979,9 @@
         "handlers.CurrentUserResponse": {
             "type": "object",
             "properties": {
+                "deploy_approvals_enabled": {
+                    "type": "boolean"
+                },
                 "email": {
                     "type": "string"
                 },

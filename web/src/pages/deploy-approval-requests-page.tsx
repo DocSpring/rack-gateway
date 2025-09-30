@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Navigate } from '@tanstack/react-router'
 import type { VariantProps } from 'class-variance-authority'
 import { Check, Loader2, Timer, X } from 'lucide-react'
 import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
@@ -35,6 +36,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/use-toast'
 import { UserMetaCell } from '@/components/user-meta-cell'
+import { useAuth } from '@/contexts/auth-context'
 import { useStepUp } from '@/contexts/step-up-context'
 import {
   approveDeployApprovalRequest,
@@ -119,6 +121,7 @@ function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keep consolidated for now.
 export function DeployApprovalRequestsPage() {
+  const { user } = useAuth()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectRequest, setRejectRequest] = useState<DeployApprovalRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
@@ -218,6 +221,11 @@ export function DeployApprovalRequestsPage() {
   const handleRejectClick = (request: DeployApprovalRequest) => {
     setRejectRequest(request)
     setRejectNotes('')
+  }
+
+  // Redirect if deploy approvals are disabled (must be after all hooks)
+  if (!user?.deploy_approvals_enabled) {
+    return <Navigate replace to="/" />
   }
 
   return (

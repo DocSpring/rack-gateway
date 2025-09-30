@@ -88,8 +88,8 @@ jobs:
 
       - name: Wait for services
         run: |
-          chmod +x scripts/wait-services.sh
-          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-services.sh
+          chmod +x scripts/wait-for-services.sh
+          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-for-services.sh
 
       - name: Diagnose endpoints
         run: |
@@ -164,7 +164,7 @@ jobs:
 
       - name: Wait for services
         run: |
-          ./scripts/wait-services.sh
+          ./scripts/wait-for-services.sh
 
       - name: Install Convox CLI
         run: |

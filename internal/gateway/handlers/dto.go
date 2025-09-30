@@ -98,14 +98,15 @@ type RackSummary struct {
 
 // CurrentUserResponse describes the authenticated user's profile and permissions.
 type CurrentUserResponse struct {
-	Email                 string       `json:"email"`
-	Name                  string       `json:"name"`
-	Roles                 []string     `json:"roles"`
-	Permissions           []string     `json:"permissions"`
-	Rack                  *RackSummary `json:"rack,omitempty"`
-	MFAEnrolled           bool         `json:"mfa_enrolled"`
-	MFARequired           bool         `json:"mfa_required"`
-	RecentStepUpExpiresAt *time.Time   `json:"recent_step_up_expires_at,omitempty"`
+	Email                  string       `json:"email"`
+	Name                   string       `json:"name"`
+	Roles                  []string     `json:"roles"`
+	Permissions            []string     `json:"permissions"`
+	Rack                   *RackSummary `json:"rack,omitempty"`
+	MFAEnrolled            bool         `json:"mfa_enrolled"`
+	MFARequired            bool         `json:"mfa_required"`
+	RecentStepUpExpiresAt  *time.Time   `json:"recent_step_up_expires_at,omitempty"`
+	DeployApprovalsEnabled bool         `json:"deploy_approvals_enabled"`
 }
 
 // EnvValuesResponse wraps environment variable key/value pairs.

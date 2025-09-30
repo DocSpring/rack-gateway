@@ -39,7 +39,18 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 	if h.config != nil && h.config.DeployApprovalsDisabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deploy approvals are disabled"})
+		// When deploy approvals are disabled, return an auto-approved response
+		// so CI pipelines can use the same code across all environments
+		c.JSON(http.StatusCreated, DeployApprovalRequestResponse{
+			ID:                0,
+			Message:           "deploy approvals disabled - auto-approved",
+			Status:            "approved",
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
+			ApprovedAt:        ptrTime(time.Now()),
+			ApprovalExpiresAt: ptrTime(time.Now().Add(24 * time.Hour)),
+			ApprovalNotes:     "deploy approvals feature disabled",
+		})
 		return
 	}
 
@@ -371,6 +382,22 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+		return
+	}
+
+	// When deploy approvals are disabled, return an auto-approved response
+	// so CI pipelines can use the same code across all environments
+	if h.config != nil && h.config.DeployApprovalsDisabled {
+		c.JSON(http.StatusCreated, DeployApprovalRequestResponse{
+			ID:                0,
+			Message:           "deploy approvals disabled - auto-approved",
+			Status:            "approved",
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
+			ApprovedAt:        ptrTime(time.Now()),
+			ApprovalExpiresAt: ptrTime(time.Now().Add(24 * time.Hour)),
+			ApprovalNotes:     "deploy approvals feature disabled",
+		})
 		return
 	}
 
@@ -747,4 +774,8 @@ func auditDetails(values map[string]string) string {
 		return "{}"
 	}
 	return string(data)
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }

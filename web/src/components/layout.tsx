@@ -91,7 +91,7 @@ export function Layout() {
       { name: 'API Tokens', href: '/api_tokens', icon: Key },
     ]
 
-    if (user?.roles?.includes('admin')) {
+    if (user?.roles?.includes('admin') && user?.deploy_approvals_enabled) {
       nav.push({ name: 'Deploy Approvals', href: '/deploy_approval_requests', icon: ListChecks })
     }
 
@@ -130,7 +130,7 @@ export function Layout() {
     }
 
     return nav
-  }, [needsMfaEnrollment, user?.roles])
+  }, [needsMfaEnrollment, user?.roles, user?.deploy_approvals_enabled])
 
   const currentUserHref = useMemo(() => {
     if (!user?.email) {

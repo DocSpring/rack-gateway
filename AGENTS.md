@@ -346,8 +346,7 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 | Command                   | Description                   |
 | ------------------------- | ----------------------------- |
 | `task web:build`          | Build web SPA                 |
-| `task web:lint`           | Run TypeScript/Biome checks   |
-| `task web:lint:fix`       | Auto-fix web linting issues   |
+| `task web:lint:fix`       | Auto-fix web linting issues (preferred over web:lint) |
 | `task web:test`           | Run Vitest unit tests         |
 | `task web:e2e`            | Run Playwright E2E tests      |
 | `task web:lint:typecheck` | TypeScript type checking only |
@@ -382,6 +381,10 @@ grep "PASS" test_output.txt
 # ❌ WRONG - Never pipe or filter test output
 task test | grep -v "SKIP"
 task go:test | head -20
+
+# ❌ WRONG - Don't use lint without fix
+task web:lint    # Use web:lint:fix instead
+task go:lint     # Use go:lint:fix or lint:fix instead
 ```
 
 **ALWAYS DO THIS:**
@@ -392,6 +395,10 @@ task go:test
 task build
 task web:test
 task ci  # Run everything, see full output
+
+# ✅ CORRECT - Always use lint:fix, not lint
+task lint:fix      # Fix all linting issues
+task web:lint:fix  # Fix web linting issues
 ```
 
 ## Pre-Push Checks

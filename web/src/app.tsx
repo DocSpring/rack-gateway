@@ -191,29 +191,31 @@ function buildRouteTree() {
     component: AppEnvPage,
   })
 
+  const layoutChildren = [
+    rackRoute,
+    instancesRoute,
+    allBuildsRoute,
+    allReleasesRoute,
+    allProcessesRoute,
+    appsListRoute,
+    appRoute.addChildren([appProcsRoute, appBuildsRoute, appReleasesRoute, appEnvRoute]),
+    usersRoute,
+    userRoute,
+    userAuditRoute,
+    tokensRoute,
+    deployApprovalRequestsRoute,
+    auditRoute,
+    settingsRoute,
+    accountSecurityRoute,
+  ]
+
   return rootRoute.addChildren([
     loginRoute,
     callbackRoute,
     loginErrorRoute,
     mfaChallengeRoute,
     cliAuthSuccessRoute,
-    layoutRoute.addChildren([
-      rackRoute,
-      instancesRoute,
-      allBuildsRoute,
-      allReleasesRoute,
-      allProcessesRoute,
-      appsListRoute,
-      appRoute.addChildren([appProcsRoute, appBuildsRoute, appReleasesRoute, appEnvRoute]),
-      usersRoute,
-      userRoute,
-      userAuditRoute,
-      tokensRoute,
-      deployApprovalRequestsRoute,
-      auditRoute,
-      settingsRoute,
-      accountSecurityRoute,
-    ]),
+    layoutRoute.addChildren(layoutChildren),
   ])
 }
 

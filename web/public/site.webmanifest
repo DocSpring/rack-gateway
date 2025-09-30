@@ -1,6 +1,6 @@
 {
-  "name": "Convox Gateway",
-  "short_name": "CGW",
+  "name": "Rack Gateway",
+  "short_name": "RGW",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",

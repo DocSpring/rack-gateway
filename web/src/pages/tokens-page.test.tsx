@@ -9,7 +9,7 @@ import type { APIToken } from './tokens-page'
 import { TokensPage } from './tokens-page'
 
 const CREATE_TOKEN_RE = /Create Token/i
-const COPY_TOKEN_NOW_RE = /Copy this token now/i
+const COPY_TOKEN_NOW_RE = /Copy the token secret now/i
 const DELETE_TOKEN_RE = /Delete Token/i
 
 const { mockApi } = vi.hoisted(() => ({
@@ -323,6 +323,7 @@ describe('TokensPage', () => {
         token: 'gat_abc123xyz456',
         api_token: {
           id: 3,
+          public_id: 'tok-3',
           name: 'New Token',
           user_id: 12,
           permissions: defaultPermissions,
@@ -383,6 +384,7 @@ describe('TokensPage', () => {
         token: 'gat_abc123xyz456',
         api_token: {
           id: 3,
+          public_id: 'tok-3',
           name: 'New Token',
           user_id: 12,
           permissions: defaultPermissions,
@@ -409,8 +411,13 @@ describe('TokensPage', () => {
         expect(screen.getByText('gat_abc123xyz456')).toBeInTheDocument()
       })
 
-      // Copy token
-      fireEvent.click(screen.getByText('Copy Token'))
+      // Copy token - find the copy button next to the Token Secret label
+      const tokenSecretSection = screen.getByText('Token Secret').closest('div')
+      const copyButton = tokenSecretSection?.querySelector('button')
+      expect(copyButton).toBeInTheDocument()
+      if (copyButton) {
+        fireEvent.click(copyButton)
+      }
 
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('gat_abc123xyz456')
     })
@@ -435,6 +442,7 @@ describe('TokensPage', () => {
         token: 'gat_viewer123',
         api_token: {
           id: 4,
+          public_id: 'tok-4',
           name: 'Viewer Token',
           user_id: 13,
           permissions: ['convox:app:list'],

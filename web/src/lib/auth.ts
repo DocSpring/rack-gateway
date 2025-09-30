@@ -13,6 +13,7 @@ export type User = {
   mfaEnrolled?: boolean
   mfaRequired?: boolean
   recentStepUpExpiresAt?: string | null
+  deploy_approvals_enabled?: boolean
 }
 
 export type AuthState = {
@@ -75,6 +76,7 @@ class AuthService {
         mfaEnrolled: Boolean(payload.mfa_enrolled),
         mfaRequired: Boolean(payload.mfa_required),
         recentStepUpExpiresAt: payload.recent_step_up_expires_at ?? null,
+        deploy_approvals_enabled: payload.deploy_approvals_enabled ?? true,
       }
 
       return mapped

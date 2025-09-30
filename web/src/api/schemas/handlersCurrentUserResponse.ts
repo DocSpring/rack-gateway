@@ -8,6 +8,7 @@
 import type { HandlersRackSummary } from './handlersRackSummary';
 
 export interface HandlersCurrentUserResponse {
+  deploy_approvals_enabled?: boolean;
   email?: string;
   mfa_enrolled?: boolean;
   mfa_required?: boolean;
