@@ -52,43 +52,6 @@ includes:
 
 tasks:
   # ------------------------------
-  # Database maintenance (dev gateway container)
-  # ------------------------------
-  db:ensure:
-    desc: Ensure the gateway_dev database exists
-    cmds:
-      - |
-        # Start postgres if not running
-        docker compose up -d postgres
-        # Wait for postgres to be ready
-        for i in {1..30}; do
-          if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
-            echo "Postgres is ready"
-            break
-          fi
-          echo "Waiting for Postgres..."
-          sleep 1
-        done
-        # Create gateway_dev database if it doesn't exist
-        docker compose exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'gateway_dev'" | grep -q 1 || \
-          docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE gateway_dev;"
-
-  db:migrate:
-    desc: Apply database migrations inside the dev gateway container
-    deps: [dev:up:gateway]
-    cmds:
-      - docker compose exec -T gateway-api-dev ./convox-gateway-api migrate
-
-  db:reset:
-    desc: Drop and recreate the dev database (DELETES ALL DATA)
-    deps: [dev:up:gateway]
-    vars:
-      db_reset_env: >-
-        RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA{{with .DISABLE_DATABASE_ENVIRONMENT_CHECK}} DISABLE_DATABASE_ENVIRONMENT_CHECK={{.}}{{end}}
-    cmds:
-      - docker compose exec -T gateway-api-dev env {{.db_reset_env}} ./convox-gateway-api reset-db
-
-  # ------------------------------
   # Misc
   # ------------------------------
   up:

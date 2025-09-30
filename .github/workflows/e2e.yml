@@ -83,7 +83,7 @@ jobs:
         run: docker compose pull postgres || docker pull postgres:16-alpine
 
       - name: Ensure database exists
-        run: task docker:db:ensure
+        run: task db:ensure
 
       - name: Start stack (gateway serves UI)
         run: task docker:preview:up
@@ -92,9 +92,6 @@ jobs:
         run: |
           chmod +x scripts/wait-for-services.sh
           WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-for-services.sh
-
-      - name: Run database migrations
-        run: docker compose exec -T gateway-api-preview ./convox-gateway-api migrate
 
       - name: Diagnose endpoints
         run: |
@@ -163,7 +160,7 @@ jobs:
         run: docker compose pull postgres || docker pull postgres:16-alpine
 
       - name: Ensure database exists
-        run: task docker:db:ensure
+        run: task db:ensure
 
       - name: Start stack (gateway serves UI)
         run: task docker:preview:up
@@ -171,9 +168,6 @@ jobs:
       - name: Wait for services
         run: |
           ./scripts/wait-for-services.sh
-
-      - name: Run database migrations
-        run: docker compose exec -T gateway-api-preview ./convox-gateway-api migrate
 
       - name: Install Convox CLI
         run: |

@@ -261,7 +261,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   echo -e "${YELLOW}Restarting ${E2E_GATEWAY_SERVICE} to apply MFA setting...${NC}"
   docker compose restart "${E2E_GATEWAY_SERVICE}" >/dev/null
-  ./scripts/wait-for-services.sh
+  WEB_PORT="${GATEWAY_PORT}" CHECK_VITE_PROXY=false ./scripts/wait-for-services.sh
 
   for user_email in "admin@example.com" "deployer@example.com" "viewer@example.com"; do
     reset_user_mfa "$user_email"

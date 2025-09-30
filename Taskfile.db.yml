@@ -1,0 +1,56 @@
+version: "3"
+
+tasks:
+  ensure:
+    desc: Ensure the gateway_dev database exists
+    cmds:
+      - |
+        # Start postgres if not running
+        docker compose up -d postgres
+        # Wait for postgres to be ready
+        for i in {1..30}; do
+          if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+            echo "Postgres is ready"
+            break
+          fi
+          echo "Waiting for Postgres..."
+          sleep 1
+        done
+        # Create gateway_dev database if it doesn't exist
+        docker compose exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'gateway_dev'" | grep -q 1 || \
+          docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE gateway_dev;"
+
+  migrate:dev:
+    aliases: [migrate]
+    desc: Apply database migrations to dev database
+    deps: [":docker:dev:up:gateway"]
+    cmds:
+      - docker compose exec -T gateway-api-dev ./convox-gateway-api migrate
+
+  migrate:test:
+    desc: Apply database migrations to test database
+    deps: [":docker:test:up", ":docker:test:wait"]
+    cmds:
+      - docker compose exec -T gateway-api-test ./convox-gateway-api migrate
+
+  migrate:preview:
+    desc: Apply database migrations to preview database
+    deps: [":docker:preview:up", ":docker:preview:wait"]
+    cmds:
+      - docker compose exec -T gateway-api-preview ./convox-gateway-api migrate
+
+  reset:
+    aliases: [reset:all]
+    desc: Drop and recreate all databases (DELETES ALL DATA)
+    cmds:
+      - ./scripts/reset-databases.sh
+
+  reset:dev:
+    desc: Drop and recreate dev database (DELETES ALL DATA)
+    cmds:
+      - ./scripts/reset-databases.sh gateway_dev gateway-api-dev
+
+  reset:test:
+    desc: Drop and recreate test database (DELETES ALL DATA)
+    cmds:
+      - ./scripts/reset-databases.sh gateway_test gateway-api-test

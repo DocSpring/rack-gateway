@@ -11,6 +11,7 @@ includes:
   go: ./Taskfile.go.yml
   web: ./Taskfile.web.yml
   mock-oauth: ./Taskfile.mock-oauth.yml
+  db: ./Taskfile.db.yml
 
 tasks:
   ci:
