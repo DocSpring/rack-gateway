@@ -1,16 +1,20 @@
 import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
 import {
   Boxes,
-  FileText,
   Key,
   ListChecks,
   LogOut,
   type LucideIcon,
   Server,
   Settings,
-  Shield,
   TerminalSquare,
   Users,
+  Cpu,
+  Blocks,
+  Hammer,
+  Logs,
+  Lock,
+  HardDrive
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
@@ -83,10 +87,10 @@ export function Layout() {
     const nav: NavigationItem[] = [
       { name: 'Rack', href: '/rack', icon: Server },
       { name: 'Apps', href: '/apps', icon: Boxes },
-      { name: 'Processes', href: '/processes', icon: TerminalSquare },
-      { name: 'Instances', href: '/instances', icon: TerminalSquare },
-      { name: 'Builds', href: '/builds', icon: FileText },
-      { name: 'Releases', href: '/releases', icon: FileText },
+      { name: 'Processes', href: '/processes', icon: Cpu },
+      { name: 'Instances', href: '/instances', icon: HardDrive },
+      { name: 'Builds', href: '/builds', icon: Hammer },
+      { name: 'Releases', href: '/releases', icon: Blocks },
       { name: 'Users', href: '/users', icon: Users },
       { name: 'API Tokens', href: '/api_tokens', icon: Key },
     ]
@@ -95,8 +99,10 @@ export function Layout() {
       nav.push({ name: 'Deploy Approvals', href: '/deploy_approval_requests', icon: ListChecks })
     }
 
-    nav.push({ name: 'Audit Logs', href: '/audit_logs', icon: FileText })
-    nav.push({ name: 'Account Security', href: '/account/security', icon: Shield })
+    nav.push({ name: 'Audit Logs', href: '/audit_logs', icon: Logs })
+    nav.push({ name: 'Account Security', href: '/account/security', icon: Lock,
+      HardDrive
+     })
 
     nav.push({
       name: 'Configure CLI',
