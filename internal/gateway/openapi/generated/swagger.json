@@ -331,84 +331,6 @@
                 }
             }
         },
-        "/admin/deploy-approval-requests/preapprove": {
-            "post": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Creates and immediately approves a deploy approval request for a target API token.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "DeployApprovalRequests"
-                ],
-                "summary": "Pre-approve deploy approval request",
-                "parameters": [
-                    {
-                        "description": "Deploy approval request payload",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateDeployApprovalRequestRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.DeployApprovalRequestResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - pending request already exists",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/admin/deploy-approval-requests/{id}/approve": {
             "post": {
                 "security": [
@@ -2939,10 +2861,18 @@
         "handlers.CreateDeployApprovalRequestRequest": {
             "type": "object",
             "required": [
-                "message"
+                "app",
+                "message",
+                "release_id"
             ],
             "properties": {
+                "app": {
+                    "type": "string"
+                },
                 "message": {
+                    "type": "string"
+                },
+                "release_id": {
                     "type": "string"
                 },
                 "target_api_token": {
@@ -3028,6 +2958,9 @@
         "handlers.DeployApprovalRequestResponse": {
             "type": "object",
             "properties": {
+                "app": {
+                    "type": "string"
+                },
                 "approval_expires_at": {
                     "type": "string"
                 },
@@ -3043,12 +2976,6 @@
                 "approved_by_name": {
                     "type": "string"
                 },
-                "build_created_at": {
-                    "type": "string"
-                },
-                "build_id": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "string"
                 },
@@ -3062,12 +2989,6 @@
                     "type": "integer"
                 },
                 "message": {
-                    "type": "string"
-                },
-                "object_created_at": {
-                    "type": "string"
-                },
-                "object_key": {
                     "type": "string"
                 },
                 "rejected_at": {

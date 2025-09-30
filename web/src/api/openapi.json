@@ -3585,10 +3585,18 @@
             "handlers.CreateDeployApprovalRequestRequest": {
                 "type": "object",
                 "required": [
-                    "message"
+                    "app",
+                    "message",
+                    "release_id"
                 ],
                 "properties": {
+                    "app": {
+                        "type": "string"
+                    },
                     "message": {
+                        "type": "string"
+                    },
+                    "release_id": {
                         "type": "string"
                     },
                     "target_api_token": {
@@ -3674,6 +3682,9 @@
             "handlers.DeployApprovalRequestResponse": {
                 "type": "object",
                 "properties": {
+                    "app": {
+                        "type": "string"
+                    },
                     "approval_expires_at": {
                         "type": "string"
                     },
@@ -3689,12 +3700,6 @@
                     "approved_by_name": {
                         "type": "string"
                     },
-                    "build_created_at": {
-                        "type": "string"
-                    },
-                    "build_id": {
-                        "type": "string"
-                    },
                     "created_at": {
                         "type": "string"
                     },
@@ -3708,12 +3713,6 @@
                         "type": "integer"
                     },
                     "message": {
-                        "type": "string"
-                    },
-                    "object_created_at": {
-                        "type": "string"
-                    },
-                    "object_key": {
                         "type": "string"
                     },
                     "rejected_at": {

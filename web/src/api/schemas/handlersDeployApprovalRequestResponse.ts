@@ -7,20 +7,17 @@
  */
 
 export interface HandlersDeployApprovalRequestResponse {
+  app?: string;
   approval_expires_at?: string;
   approval_notes?: string;
   approved_at?: string;
   approved_by_email?: string;
   approved_by_name?: string;
-  build_created_at?: string;
-  build_id?: string;
   created_at?: string;
   created_by_email?: string;
   created_by_name?: string;
   id?: number;
   message?: string;
-  object_created_at?: string;
-  object_key?: string;
   rejected_at?: string;
   rejected_by_email?: string;
   rejected_by_name?: string;

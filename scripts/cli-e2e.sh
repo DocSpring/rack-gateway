@@ -400,15 +400,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   echo -e "${GREEN}API Token ID: $API_TOKEN_PUBLIC_ID${NC}, Token: $API_TOKEN${NC}"
 
-  PREAPPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
-  verify_cgw_command \
-    "deploy-approval pre-approve $API_TOKEN_PUBLIC_ID 'Pipeline deployment ${E2E_TS}' --mfa-code $PREAPPROVE_CODE" \
-    "Deploy approval request" "pre-approved"
-
-  # Normalize rack alias for deploy approvals to match mock rack name
-  docker compose exec -T postgres psql -U postgres -d gateway_test \
-    -c "UPDATE deploy_approval_requests SET rack = 'Test' WHERE id = (SELECT id FROM deploy_approval_requests WHERE target_api_token_id = (SELECT id FROM api_tokens WHERE public_id = '$API_TOKEN_PUBLIC_ID') ORDER BY id DESC LIMIT 1);"
-
+  # Log out admin before switching to API token
   logout_cli
 
   export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
@@ -443,6 +435,51 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     echo -e "${RED}Failed to parse release id from build output${NC}" >&2
     exit 1
   fi
+
+  echo -e "${GREEN}Build created release: $RELEASE_ID${NC}"
+
+  # Request approval as API token
+  echo -e "${YELLOW}API token requesting deploy approval...${NC}"
+  set +e
+  approval_output=$(./bin/convox-gateway deploy-approval request convox-gateway "$RELEASE_ID" "Pipeline deployment ${E2E_TS}" 2>&1)
+  approval_status=$?
+  set -e
+  if [[ $approval_status -ne 0 ]]; then
+    echo -e "${RED}deploy-approval request failed:${NC}\n$approval_output" >&2
+    exit 1
+  fi
+  echo "$approval_output"
+  REQUEST_ID=$(echo "$approval_output" | grep -oE 'request [0-9]+' | grep -oE '[0-9]+' | head -n1)
+  if [[ -z "$REQUEST_ID" ]]; then
+    echo -e "${RED}Failed to parse request ID from approval output${NC}" >&2
+    exit 1
+  fi
+
+  echo -e "${GREEN}Created approval request: $REQUEST_ID${NC}"
+
+  # Normalize rack alias for deploy approvals to match mock rack name
+  docker compose exec -T postgres psql -U postgres -d gateway_test \
+    -c "UPDATE deploy_approval_requests SET rack = 'Test' WHERE id = $REQUEST_ID;"
+
+  # Unset API token temporarily to log in as admin for approval
+  unset CONVOX_GATEWAY_API_TOKEN
+  unset CONVOX_GATEWAY_URL
+  unset CONVOX_GATEWAY_RACK
+
+  # Log in as admin to approve the request
+  login_cli_as "admin@example.com" "e2e"
+
+  APPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
+  verify_cgw_command \
+    "deploy-approval approve $REQUEST_ID --notes 'Approved for E2E test' --mfa-code $APPROVE_CODE" \
+    "Deploy approval request" "approved"
+
+  # Log out admin and switch back to API token
+  logout_cli
+
+  export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
+  export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  export CONVOX_GATEWAY_RACK="Test"
 
   # Run mock migration command on the new release
   verify_cgw_command \

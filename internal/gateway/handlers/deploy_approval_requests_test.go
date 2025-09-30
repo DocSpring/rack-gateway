@@ -1,14 +1,12 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
@@ -98,20 +96,6 @@ func (a *allowAllRBAC) GetRolePermissions(role string) ([]string, error) {
 	return []string{}, nil
 }
 
-func createAPITokenHelper(t *testing.T, database *db.Database, userID int64) *db.APIToken {
-	t.Helper()
-	hash := strings.Repeat("a", 64)
-	perms := []string{
-		"convox:build:create-with-approval",
-		"convox:object:create-with-approval",
-		"convox:release:create-with-approval",
-		"convox:release:promote-with-approval",
-	}
-	token, err := database.CreateAPIToken(hash, "ci-token", userID, perms, nil, nil)
-	require.NoError(t, err)
-	return token
-}
-
 func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
@@ -121,7 +105,12 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 	require.NoError(t, err)
 
 	tokenHash := strings.Repeat("a", 64)
-	permissions := []string{"convox:build:create-with-approval"}
+	permissions := []string{
+		"convox:build:create-with-approval",
+		"convox:object:create-with-approval",
+		"convox:release:create-with-approval",
+		"convox:release:promote-with-approval",
+	}
 	token, err := database.CreateAPIToken(tokenHash, "ci-token", user.ID, permissions, nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, token.PublicID)
@@ -136,6 +125,8 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 
 	body := map[string]string{
 		"message":             "Deploy release",
+		"app":                 "my-app",
+		"release_id":          "R123",
 		"rack":                "staging",
 		"target_api_token_id": token.PublicID,
 	}
@@ -167,94 +158,4 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 	err = json.NewDecoder(resp.Body).Decode(&got)
 	require.NoError(t, err)
 	require.Equal(t, token.PublicID, got.TargetAPITokenID)
-}
-
-func TestPreapproveDeployCreatesApprovedRequest(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
-
-	admin, err := database.CreateUser("admin@example.com", "Admin", []string{"admin"})
-	require.NoError(t, err)
-	deployer, err := database.CreateUser("ci@example.com", "CI Bot", []string{"cicd"})
-	require.NoError(t, err)
-	token := createAPITokenHelper(t, database, deployer.ID)
-
-	handler := &AdminHandler{
-		rbac:     newAllowAllRBAC(admin, deployer),
-		database: database,
-		config: &config.Config{
-			DeployApprovalWindow: 10 * time.Minute,
-			Racks: map[string]config.RackConfig{
-				"default": {Name: "staging", Enabled: true},
-			},
-		},
-	}
-
-	body := map[string]string{
-		"message":             "CI pipeline run",
-		"rack":                "staging",
-		"target_api_token_id": token.PublicID,
-	}
-	payload, err := json.Marshal(body)
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(http.MethodPost, "/admin/deploy-approval-requests/preapprove", bytes.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{Email: admin.Email, Name: admin.Name}))
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = req
-	c.Set("user_email", admin.Email)
-
-	handler.PreapproveDeploy(c)
-
-	require.Equal(t, http.StatusCreated, w.Code)
-
-	var resp DeployApprovalRequestResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, token.PublicID, resp.TargetAPITokenID)
-	require.Equal(t, "approved", strings.ToLower(resp.Status))
-	require.NotNil(t, resp.ApprovalExpiresAt)
-}
-
-func TestPreapproveDeployRequiresTarget(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
-
-	admin, err := database.CreateUser("admin@example.com", "Admin", []string{"admin"})
-	require.NoError(t, err)
-
-	handler := &AdminHandler{
-		rbac:     newAllowAllRBAC(admin),
-		database: database,
-		config: &config.Config{
-			DeployApprovalWindow: 5 * time.Minute,
-			Racks: map[string]config.RackConfig{
-				"default": {Name: "staging", Enabled: true},
-			},
-		},
-	}
-
-	body := map[string]string{
-		"message": "CI pipeline run",
-	}
-	payload, err := json.Marshal(body)
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(http.MethodPost, "/admin/deploy-approval-requests/preapprove", bytes.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{Email: admin.Email, Name: admin.Name}))
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = req
-	c.Set("user_email", admin.Email)
-
-	handler.PreapproveDeploy(c)
-
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	require.Contains(t, w.Body.String(), "target_api_token_id")
 }

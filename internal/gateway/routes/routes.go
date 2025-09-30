@@ -219,9 +219,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 				deployAdmin := admin.Group("/deploy-approval-requests")
 				deployAdmin.GET("", adminHandler.ListDeployApprovalRequests)
-				preapprove := deployAdmin.Group("")
-				preapprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
-				preapprove.POST("/preapprove", adminHandler.PreapproveDeploy)
 				deployApprove := deployAdmin.Group("")
 				deployApprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)

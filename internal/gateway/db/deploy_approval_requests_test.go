@@ -13,7 +13,7 @@ import (
 func createAPITokenHelper(t *testing.T, database *db.Database, userID int64) *db.APIToken {
 	t.Helper()
 	hash := strings.Repeat("a", 64)
-	perms := []string{"convox:build:create-with-approval", "convox:object:create-with-approval", "convox:release:create-with-approval", "convox:release:promote-with-approval"}
+	perms := []string{"convox:build:create", "convox:object:create", "convox:release:create", "convox:release:promote-with-approval"}
 	token, err := database.CreateAPIToken(hash, "ci-token", userID, perms, nil, nil)
 	require.NoError(t, err)
 	return token
@@ -28,43 +28,38 @@ func TestDeployApprovalRequestLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	token := createAPITokenHelper(t, database, user.ID)
+	app := "my-app"
+	releaseID := "R123"
 
-	req, err := database.CreateDeployApprovalRequest("Deploy release", user.ID, nil, token.ID, &user.ID)
+	// Create approval request for specific release
+	req, err := database.CreateDeployApprovalRequest("Deploy release R123", app, releaseID, user.ID, nil, token.ID, &user.ID)
 	require.NoError(t, err)
 	require.Equal(t, db.DeployApprovalRequestStatusPending, req.Status)
+	require.Equal(t, app, req.App)
+	require.Equal(t, releaseID, req.ReleaseID)
 
+	// Approve the request
 	approved, err := database.ApproveDeployApprovalRequest(req.ID, approver.ID, time.Now().Add(15*time.Minute), "approved")
 	require.NoError(t, err)
 	require.Equal(t, db.DeployApprovalRequestStatusApproved, approved.Status)
 
-	active, err := database.ActiveDeployApprovalRequestForStage(token.ID, db.DeployApprovalRequestStageObject, 15*time.Minute)
+	// Check approval exists for (app, token, release) triple
+	active, err := database.ActiveDeployApprovalRequestByTokenAndRelease(token.ID, app, releaseID)
 	require.NoError(t, err)
 	require.Equal(t, req.ID, active.ID)
+	require.Equal(t, app, active.App)
+	require.Equal(t, releaseID, active.ReleaseID)
 
-	require.NoError(t, database.MarkDeployApprovalRequestObjectUsed(req.ID, "obj-key", time.Now()))
+	// Mark as promoted
+	require.NoError(t, database.MarkDeployApprovalRequestPromoted(req.ID, app, releaseID, token.ID, time.Now()))
 
-	active, err = database.ActiveDeployApprovalRequestForStage(token.ID, db.DeployApprovalRequestStageBuild, 15*time.Minute)
-	require.NoError(t, err)
-	require.Equal(t, req.ID, active.ID)
-
-	require.NoError(t, database.MarkDeployApprovalRequestBuildUsed(req.ID, "B123", time.Now()))
-
-	active, err = database.ActiveDeployApprovalRequestForStage(token.ID, db.DeployApprovalRequestStageRelease, 15*time.Minute)
-	require.NoError(t, err)
-	require.Equal(t, req.ID, active.ID)
-
-	require.NoError(t, database.MarkDeployApprovalRequestReleaseCreated(req.ID, "R123", time.Now()))
-
-	active, err = database.ActiveDeployApprovalRequestForStage(token.ID, db.DeployApprovalRequestStagePromote, 15*time.Minute)
-	require.NoError(t, err)
-	require.Equal(t, req.ID, active.ID)
-
-	require.NoError(t, database.MarkDeployApprovalRequestPromoted(req.ID, "R123", token.ID, time.Now()))
-
+	// Verify final status
 	final, err := database.GetDeployApprovalRequest(req.ID)
 	require.NoError(t, err)
 	require.Equal(t, db.DeployApprovalRequestStatusConsumed, final.Status)
 	require.NotNil(t, final.ReleasePromotedAt)
+	require.Equal(t, app, final.App)
+	require.Equal(t, releaseID, final.ReleaseID)
 }
 
 func TestDeployApprovalRequestDuplicateGuard(t *testing.T) {
@@ -73,15 +68,24 @@ func TestDeployApprovalRequestDuplicateGuard(t *testing.T) {
 	user, err := database.CreateUser("deployer@example.com", "Deploy", []string{"deployer"})
 	require.NoError(t, err)
 	token := createAPITokenHelper(t, database, user.ID)
+	app := "my-app"
+	releaseID := "R123"
 
-	_, err = database.CreateDeployApprovalRequest("Deploy branch", user.ID, nil, token.ID, &user.ID)
+	// First request should succeed
+	_, err = database.CreateDeployApprovalRequest("Deploy release", app, releaseID, user.ID, nil, token.ID, &user.ID)
 	require.NoError(t, err)
 
-	_, err = database.CreateDeployApprovalRequest("Deploy branch", user.ID, nil, token.ID, &user.ID)
+	// Duplicate request for same (app, token, release) should fail
+	_, err = database.CreateDeployApprovalRequest("Deploy release again", app, releaseID, user.ID, nil, token.ID, &user.ID)
 	require.Error(t, err)
 	require.ErrorIs(t, err, db.ErrDeployApprovalRequestActive)
 
-	_, err = database.CreateDeployApprovalRequest("Deploy another branch", user.ID, nil, token.ID, &user.ID)
+	// Request for different release should succeed
+	_, err = database.CreateDeployApprovalRequest("Deploy different release", app, "R456", user.ID, nil, token.ID, &user.ID)
+	require.NoError(t, err)
+
+	// Request for different app should succeed
+	_, err = database.CreateDeployApprovalRequest("Deploy to different app", "other-app", releaseID, user.ID, nil, token.ID, &user.ID)
 	require.NoError(t, err)
 }
 
@@ -91,20 +95,20 @@ func TestDeployApprovalRequestExpiration(t *testing.T) {
 	user, err := database.CreateUser("deployer@example.com", "Deploy", []string{"deployer"})
 	require.NoError(t, err)
 	token := createAPITokenHelper(t, database, user.ID)
+	app := "my-app"
+	releaseID := "R123"
 
-	req, err := database.CreateDeployApprovalRequest("Deploy release", user.ID, nil, token.ID, &user.ID)
+	req, err := database.CreateDeployApprovalRequest("Deploy release", app, releaseID, user.ID, nil, token.ID, &user.ID)
 	require.NoError(t, err)
 
+	// Approve with expiration in the past
 	_, err = database.ApproveDeployApprovalRequest(req.ID, user.ID, time.Now().Add(-1*time.Minute), "expired")
 	require.NoError(t, err)
 
-	_, err = database.ActiveDeployApprovalRequestForStage(token.ID, db.DeployApprovalRequestStageBuild, 15*time.Minute)
+	// Should not find active approval (expired)
+	_, err = database.ActiveDeployApprovalRequestByTokenAndRelease(token.ID, app, releaseID)
 	require.Error(t, err)
-	require.ErrorIs(t, err, db.ErrDeployApprovalRequestExpired)
-
-	updated, err := database.GetDeployApprovalRequest(req.ID)
-	require.NoError(t, err)
-	require.Equal(t, db.DeployApprovalRequestStatusConsumed, updated.Status)
+	require.ErrorIs(t, err, db.ErrDeployApprovalRequestNotFound)
 }
 
 func TestDeployApprovalRequestReject(t *testing.T) {
@@ -116,7 +120,7 @@ func TestDeployApprovalRequestReject(t *testing.T) {
 	require.NoError(t, err)
 	token := createAPITokenHelper(t, database, user.ID)
 
-	req, err := database.CreateDeployApprovalRequest("Deploy", user.ID, nil, token.ID, &user.ID)
+	req, err := database.CreateDeployApprovalRequest("Deploy", "my-app", "R123", user.ID, nil, token.ID, &user.ID)
 	require.NoError(t, err)
 
 	rejected, err := database.RejectDeployApprovalRequest(req.ID, admin.ID, "not today")

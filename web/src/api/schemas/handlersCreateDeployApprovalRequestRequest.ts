@@ -7,7 +7,9 @@
  */
 
 export interface HandlersCreateDeployApprovalRequestRequest {
+  app: string;
   message: string;
+  release_id: string;
   target_api_token?: string;
   target_api_token_id?: string;
 }

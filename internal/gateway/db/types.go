@@ -136,11 +136,8 @@ type DeployApprovalRequest struct {
 	RejectedByName              string     `json:"rejected_by_name,omitempty"`
 	RejectedAt                  *time.Time `json:"rejected_at,omitempty" ts_type:"string | null"`
 	ApprovalNotes               string     `json:"approval_notes,omitempty"`
-	BuildID                     string     `json:"build_id,omitempty"`
-	BuildCreatedAt              *time.Time `json:"build_created_at,omitempty" ts_type:"string | null"`
-	ObjectKey                   string     `json:"object_key,omitempty"`
-	ObjectCreatedAt             *time.Time `json:"object_created_at,omitempty" ts_type:"string | null"`
-	ReleaseID                   string     `json:"release_id,omitempty"`
+	App                         string     `json:"app"`
+	ReleaseID                   string     `json:"release_id"`
 	ReleaseCreatedAt            *time.Time `json:"release_created_at,omitempty" ts_type:"string | null"`
 	ReleasePromotedAt           *time.Time `json:"release_promoted_at,omitempty" ts_type:"string | null"`
 	ReleasePromotedByAPITokenID *int64     `json:"release_promoted_by_api_token_id,omitempty"`

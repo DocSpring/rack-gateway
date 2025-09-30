@@ -12,15 +12,6 @@ type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
 
-type DeployApprovalRequestStage string
-
-const (
-	DeployApprovalRequestStageBuild   DeployApprovalRequestStage = "build"
-	DeployApprovalRequestStageObject  DeployApprovalRequestStage = "object"
-	DeployApprovalRequestStageRelease DeployApprovalRequestStage = "release"
-	DeployApprovalRequestStagePromote DeployApprovalRequestStage = "promote"
-)
-
 const (
 	DeployApprovalRequestStatusPending  = "pending"
 	DeployApprovalRequestStatusApproved = "approved"
@@ -29,11 +20,10 @@ const (
 )
 
 var (
-	ErrDeployApprovalRequestActive        = errors.New("a deploy approval request is already pending or approved for this token")
-	ErrDeployApprovalRequestNotFound      = errors.New("deploy approval request not found")
-	ErrDeployApprovalMissing              = errors.New("deployment approval required")
-	ErrDeployApprovalRequestStageMismatch = errors.New("deploy approval not in required stage")
-	ErrDeployApprovalRequestExpired       = errors.New("deploy approval expired")
+	ErrDeployApprovalRequestActive   = errors.New("a deploy approval request is already pending or approved for this token and release")
+	ErrDeployApprovalRequestNotFound = errors.New("deploy approval request not found")
+	ErrDeployApprovalMissing         = errors.New("deployment approval required")
+	ErrDeployApprovalRequestExpired  = errors.New("deploy approval expired")
 )
 
 type DeployApprovalRequestConflictError struct {
@@ -72,10 +62,7 @@ SELECT
     rejected_user.name,
     dr.rejected_at,
     dr.approval_notes,
-    dr.build_id,
-    dr.build_created_at,
-    dr.object_key,
-    dr.object_created_at,
+    dr.app,
     dr.release_id,
     dr.release_created_at,
     dr.release_promoted_at,
@@ -106,11 +93,8 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		rejectedByName    sql.NullString
 		rejectedAt        sql.NullTime
 		approvalNotes     sql.NullString
-		buildID           sql.NullString
-		buildCreatedAt    sql.NullTime
-		objectKey         sql.NullString
-		objectCreatedAt   sql.NullTime
-		releaseID         sql.NullString
+		app               string
+		releaseID         string
 		releaseCreatedAt  sql.NullTime
 		releasePromotedAt sql.NullTime
 		releasePromotedBy sql.NullInt64
@@ -139,10 +123,7 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		&rejectedByName,
 		&rejectedAt,
 		&approvalNotes,
-		&buildID,
-		&buildCreatedAt,
-		&objectKey,
-		&objectCreatedAt,
+		&app,
 		&releaseID,
 		&releaseCreatedAt,
 		&releasePromotedAt,
@@ -205,23 +186,8 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	if approvalNotes.Valid {
 		dr.ApprovalNotes = approvalNotes.String
 	}
-	if buildID.Valid {
-		dr.BuildID = buildID.String
-	}
-	if buildCreatedAt.Valid {
-		t := buildCreatedAt.Time
-		dr.BuildCreatedAt = &t
-	}
-	if objectKey.Valid {
-		dr.ObjectKey = objectKey.String
-	}
-	if objectCreatedAt.Valid {
-		t := objectCreatedAt.Time
-		dr.ObjectCreatedAt = &t
-	}
-	if releaseID.Valid {
-		dr.ReleaseID = releaseID.String
-	}
+	dr.App = app
+	dr.ReleaseID = releaseID
 	if releaseCreatedAt.Valid {
 		t := releaseCreatedAt.Time
 		dr.ReleaseCreatedAt = &t
@@ -236,16 +202,25 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	return &dr, nil
 }
 
-func (d *Database) CreateDeployApprovalRequest(message string, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
+func (d *Database) CreateDeployApprovalRequest(message, app, releaseID string, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil, fmt.Errorf("message is required")
+	}
+	app = strings.TrimSpace(app)
+	if app == "" {
+		return nil, fmt.Errorf("app is required")
+	}
+	releaseID = strings.TrimSpace(releaseID)
+	if releaseID == "" {
+		return nil, fmt.Errorf("release_id is required")
 	}
 	if targetAPITokenID <= 0 {
 		return nil, fmt.Errorf("target api token required")
 	}
 
-	existing, err := d.activeDeployApprovalRequestByMessage(message)
+	// Check for existing approval with same (app, token, release_id) triple
+	existing, err := d.ActiveDeployApprovalRequestByTokenAndRelease(targetAPITokenID, app, releaseID)
 	if err == nil && existing != nil {
 		return nil, &DeployApprovalRequestConflictError{Request: existing}
 	}
@@ -264,9 +239,11 @@ func (d *Database) CreateDeployApprovalRequest(message string, createdByUserID i
 
 	var id int64
 	err = d.queryRow(
-		`INSERT INTO deploy_approval_requests (message, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+		`INSERT INTO deploy_approval_requests (message, app, release_id, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		message,
+		app,
+		releaseID,
 		DeployApprovalRequestStatusPending,
 		createdByUserID,
 		createdAPIToken,
@@ -284,19 +261,12 @@ func (d *Database) GetDeployApprovalRequest(id int64) (*DeployApprovalRequest, e
 	return scanDeployApprovalRequest(row)
 }
 
-func (d *Database) activeDeployApprovalRequestByMessage(message string) (*DeployApprovalRequest, error) {
-	trimmedMessage := strings.TrimSpace(message)
+func (d *Database) ActiveDeployApprovalRequestByTokenAndRelease(tokenID int64, app, releaseID string) (*DeployApprovalRequest, error) {
 	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.message = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
-		trimmedMessage,
-	)
-	return scanDeployApprovalRequest(row)
-}
-
-func (d *Database) ActiveDeployApprovalRequestByToken(tokenID int64) (*DeployApprovalRequest, error) {
-	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
+		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.app = ? AND dr.release_id = ? AND dr.status IN ('pending','approved') AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.created_at DESC LIMIT 1`,
 		tokenID,
+		app,
+		releaseID,
 	)
 	return scanDeployApprovalRequest(row)
 }
@@ -405,162 +375,23 @@ func (d *Database) RejectDeployApprovalRequest(id int64, approverUserID int64, n
 	return d.GetDeployApprovalRequest(id)
 }
 
-func (d *Database) ActiveDeployApprovalRequestForStage(tokenID int64, stage DeployApprovalRequestStage, window time.Duration) (*DeployApprovalRequest, error) {
-	// First check if there's any approved/consumed approval for this token, regardless of stage
-	// This allows us to detect expiration before checking stage requirements
-	anyQuery := deployApprovalRequestSelect + `
-WHERE dr.target_api_token_id = ?
-  AND dr.status IN (?, ?)
-  AND dr.approved_at IS NOT NULL
-ORDER BY dr.created_at ASC
-LIMIT 1
-`
-	anyRow := d.queryRow(anyQuery, tokenID, DeployApprovalRequestStatusApproved, DeployApprovalRequestStatusConsumed)
-	anyReq, anyErr := scanDeployApprovalRequest(anyRow)
-	if anyErr == nil {
-		// Check expiration first
-		now := time.Now()
-		if (anyReq.ApprovalExpiresAt == nil || anyReq.ApprovalExpiresAt.IsZero()) && anyReq.ApprovedAt != nil && window > 0 {
-			exp := anyReq.ApprovedAt.Add(window)
-			anyReq.ApprovalExpiresAt = &exp
-		}
-		if anyReq.ApprovalExpiresAt != nil && now.After(*anyReq.ApprovalExpiresAt) {
-			if anyReq.Status == DeployApprovalRequestStatusApproved {
-				_, _ = d.exec("UPDATE deploy_approval_requests SET status = ?, updated_at = NOW() WHERE id = ? AND status = ?", DeployApprovalRequestStatusConsumed, anyReq.ID, DeployApprovalRequestStatusApproved)
-			}
-			return nil, ErrDeployApprovalRequestExpired
-		}
+func (d *Database) MarkDeployApprovalRequestPromoted(id int64, app, releaseID string, tokenID int64, when time.Time) error {
+	if strings.TrimSpace(app) == "" {
+		return fmt.Errorf("app is required")
 	}
-
-	// Now check for stage-specific approval
-	stageFilter := ""
-	switch stage {
-	case DeployApprovalRequestStageObject:
-		stageFilter = "AND dr.build_id IS NULL AND dr.object_key IS NULL"
-	case DeployApprovalRequestStageBuild:
-		stageFilter = "AND dr.object_key IS NOT NULL AND dr.build_id IS NULL"
-	case DeployApprovalRequestStageRelease:
-		stageFilter = "AND dr.build_id IS NOT NULL AND dr.release_id IS NULL"
-	case DeployApprovalRequestStagePromote:
-		stageFilter = "AND dr.release_id IS NOT NULL AND dr.release_promoted_at IS NULL"
-	default:
-		return nil, fmt.Errorf("unknown deploy approval request stage: %s", stage)
-	}
-
-	query := deployApprovalRequestSelect + `
-WHERE dr.target_api_token_id = ?
-  AND dr.status = ?
-  AND dr.approved_at IS NOT NULL
-  ` + stageFilter + `
-ORDER BY dr.created_at ASC
-LIMIT 1
-`
-	row := d.queryRow(query, tokenID, DeployApprovalRequestStatusApproved)
-	req, err := scanDeployApprovalRequest(row)
-	if err != nil {
-		if errors.Is(err, ErrDeployApprovalRequestNotFound) {
-			return nil, ErrDeployApprovalMissing
-		}
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrDeployApprovalMissing
-		}
-		return nil, err
-	}
-
-	return req, nil
-}
-
-func (d *Database) MarkDeployApprovalRequestBuildUsed(id int64, buildID string, when time.Time) error {
-	if strings.TrimSpace(buildID) == "" {
-		return fmt.Errorf("build id required")
-	}
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET build_id = ?, build_created_at = ?, updated_at = NOW()
-         WHERE id = ? AND status = ? AND object_key IS NOT NULL AND build_id IS NULL`,
-		buildID,
-		when,
-		id,
-		DeployApprovalRequestStatusApproved,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to mark build usage: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to mark build usage: %w", err)
-	}
-	if rows == 0 {
-		return ErrDeployApprovalRequestStageMismatch
-	}
-	return nil
-}
-
-func (d *Database) MarkDeployApprovalRequestObjectUsed(id int64, objectKey string, when time.Time) error {
-	if strings.TrimSpace(objectKey) == "" {
-		return fmt.Errorf("object key required")
-	}
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET object_key = ?, object_created_at = ?, updated_at = NOW()
-         WHERE id = ? AND status = ? AND build_id IS NULL AND object_key IS NULL`,
-		objectKey,
-		when,
-		id,
-		DeployApprovalRequestStatusApproved,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to mark object usage: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to mark object usage: %w", err)
-	}
-	if rows == 0 {
-		return ErrDeployApprovalRequestStageMismatch
-	}
-	return nil
-}
-
-func (d *Database) MarkDeployApprovalRequestReleaseCreated(id int64, releaseID string, when time.Time) error {
-	if strings.TrimSpace(releaseID) == "" {
-		return fmt.Errorf("release id required")
-	}
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET release_id = ?, release_created_at = ?, updated_at = NOW()
-         WHERE id = ? AND status = ? AND build_id IS NOT NULL AND object_key IS NOT NULL AND release_id IS NULL`,
-		releaseID,
-		when,
-		id,
-		DeployApprovalRequestStatusApproved,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to mark release creation: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to mark release creation: %w", err)
-	}
-	if rows == 0 {
-		return ErrDeployApprovalRequestStageMismatch
-	}
-	return nil
-}
-
-func (d *Database) MarkDeployApprovalRequestPromoted(id int64, releaseID string, tokenID int64, when time.Time) error {
 	if strings.TrimSpace(releaseID) == "" {
 		return fmt.Errorf("release id required")
 	}
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
          SET release_promoted_at = ?, release_promoted_by_api_token_id = ?, status = ?, updated_at = NOW()
-         WHERE id = ? AND status = ? AND release_id = ? AND release_promoted_at IS NULL`,
+         WHERE id = ? AND status = ? AND app = ? AND release_id = ? AND release_promoted_at IS NULL`,
 		when,
 		tokenID,
 		DeployApprovalRequestStatusConsumed,
 		id,
 		DeployApprovalRequestStatusApproved,
+		app,
 		releaseID,
 	)
 	if err != nil {
@@ -571,7 +402,7 @@ func (d *Database) MarkDeployApprovalRequestPromoted(id int64, releaseID string,
 		return fmt.Errorf("failed to mark release promotion: %w", err)
 	}
 	if rows == 0 {
-		return ErrDeployApprovalRequestStageMismatch
+		return fmt.Errorf("deployment approval not found or already promoted")
 	}
 	return nil
 }

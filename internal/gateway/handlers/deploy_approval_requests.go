@@ -82,6 +82,18 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
+	app := strings.TrimSpace(req.App)
+	if app == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+		return
+	}
+
+	releaseID := strings.TrimSpace(req.ReleaseID)
+	if releaseID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "release_id is required"})
+		return
+	}
+
 	dbUser, err := h.database.GetUser(userEmail)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
@@ -119,7 +131,12 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		targetUserID = &id
 	}
 
-	record, err := h.database.CreateDeployApprovalRequest(message, dbUser.ID, nil, token.ID, targetUserID)
+	var createdByAPITokenID *int64
+	if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil {
+		createdByAPITokenID = authUser.TokenID
+	}
+
+	record, err := h.database.CreateDeployApprovalRequest(message, app, releaseID, dbUser.ID, createdByAPITokenID, token.ID, targetUserID)
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrDeployApprovalRequestActive):
@@ -128,7 +145,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 				c.JSON(http.StatusConflict, toDeployApprovalRequestResponse(conflict.Request))
 				return
 			}
-			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token"})
+			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token and release"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
 		}
@@ -137,6 +154,8 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	details := auditDetails(map[string]string{
 		"token_uuid": token.PublicID,
+		"app":        app,
+		"release_id": releaseID,
 		"message":    message,
 	})
 
@@ -373,155 +392,6 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 409 {object} ErrorResponse "Conflict - pending request already exists"
-// @Failure 500 {object} ErrorResponse
-// @Security SessionCookie
-// @Security CSRFToken
-// @Router /admin/deploy-approval-requests/preapprove [post]
-func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
-		return
-	}
-
-	// When deploy approvals are disabled, return an auto-approved response
-	// so CI pipelines can use the same code across all environments
-	if h.config != nil && h.config.DeployApprovalsDisabled {
-		c.JSON(http.StatusCreated, DeployApprovalRequestResponse{
-			ID:                0,
-			Message:           "deploy approvals disabled - auto-approved",
-			Status:            "approved",
-			CreatedAt:         time.Now(),
-			UpdatedAt:         time.Now(),
-			ApprovedAt:        ptrTime(time.Now()),
-			ApprovalExpiresAt: ptrTime(time.Now().Add(24 * time.Hour)),
-			ApprovalNotes:     "deploy approvals feature disabled",
-		})
-		return
-	}
-
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return
-	}
-
-	var req CreateDeployApprovalRequestRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
-		return
-	}
-
-	if req.TargetAPITokenID == nil || strings.TrimSpace(*req.TargetAPITokenID) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "target_api_token_id is required"})
-		return
-	}
-
-	message := strings.TrimSpace(req.Message)
-	if message == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
-		return
-	}
-
-	dbUser, err := h.database.GetUser(userEmail)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
-		return
-	}
-	if dbUser == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
-		return
-	}
-
-	targetID := strings.TrimSpace(*req.TargetAPITokenID)
-	req.TargetAPITokenID = &targetID
-
-	authUser, _ := auth.GetAuthUser(c.Request.Context())
-	token, err := resolveDeployApprovalRequestToken(h.database, h.rbac, dbUser, req, authUser)
-	if err != nil {
-		switch {
-		case errors.Is(err, errDeployApprovalRequestTokenNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "api token not found"})
-		case errors.Is(err, errDeployApprovalRequestForbidden):
-			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for target token"})
-		case errors.Is(err, errDeployApprovalRequestTargetMissing):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
-		}
-		return
-	}
-	if token == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
-		return
-	}
-
-	var targetUserID *int64
-	if token.UserID > 0 {
-		id := token.UserID
-		targetUserID = &id
-	}
-
-	record, err := h.database.CreateDeployApprovalRequest(message, dbUser.ID, nil, token.ID, targetUserID)
-	if err != nil {
-		switch {
-		case errors.Is(err, db.ErrDeployApprovalRequestActive):
-			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token"})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
-		}
-		return
-	}
-
-	window := 15 * time.Minute
-	if h.config != nil && h.config.DeployApprovalWindow > 0 {
-		window = h.config.DeployApprovalWindow
-	}
-
-	expiresAt := time.Now().Add(window)
-	notes := fmt.Sprintf("preapproved by %s", userEmail)
-
-	record, err = h.database.ApproveDeployApprovalRequest(record.ID, dbUser.ID, expiresAt, notes)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy approval request"})
-		return
-	}
-
-	details := auditDetails(map[string]string{
-		"token_uuid": token.PublicID,
-		"message":    message,
-		"expires_at": expiresAt.UTC().Format(time.RFC3339),
-		"notes":      notes,
-	})
-
-	if err := audit.LogDB(h.database, &db.AuditLog{
-		UserEmail:    userEmail,
-		UserName:     dbUser.Name,
-		ActionType:   "gateway",
-		Action:       "deploy-approval-request.preapprove",
-		ResourceType: "deploy-approval-request",
-		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      details,
-		Status:       "success",
-		RBACDecision: "allow",
-		HTTPStatus:   http.StatusCreated,
-	}); err != nil {
-		_ = err
-	}
-
-	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
-}
 
 // ApproveDeployApprovalRequest godoc
 // @Summary Approve deploy approval request
@@ -725,8 +595,7 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		ApprovalNotes:      dr.ApprovalNotes,
 		RejectedByEmail:    dr.RejectedByEmail,
 		RejectedByName:     dr.RejectedByName,
-		BuildID:            dr.BuildID,
-		ObjectKey:          dr.ObjectKey,
+		App:                dr.App,
 		ReleaseID:          dr.ReleaseID,
 	}
 	if dr.ApprovedAt != nil {
@@ -737,12 +606,6 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 	}
 	if dr.RejectedAt != nil {
 		resp.RejectedAt = dr.RejectedAt
-	}
-	if dr.BuildCreatedAt != nil {
-		resp.BuildCreatedAt = dr.BuildCreatedAt
-	}
-	if dr.ObjectCreatedAt != nil {
-		resp.ObjectCreatedAt = dr.ObjectCreatedAt
 	}
 	if dr.ReleaseCreatedAt != nil {
 		resp.ReleaseCreatedAt = dr.ReleaseCreatedAt

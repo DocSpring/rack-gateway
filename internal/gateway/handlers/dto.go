@@ -264,6 +264,8 @@ type UpdateMFASettingsRequest struct {
 // CreateDeployApprovalRequestRequest represents the payload to open a deploy approval request.
 type CreateDeployApprovalRequestRequest struct {
 	Message            string  `json:"message" binding:"required"`
+	App                string  `json:"app" binding:"required"`
+	ReleaseID          string  `json:"release_id" binding:"required"`
 	TargetAPITokenID   *string `json:"target_api_token_id,omitempty"`
 	TargetAPITokenName string  `json:"target_api_token,omitempty"`
 }
@@ -292,11 +294,8 @@ type DeployApprovalRequestResponse struct {
 	RejectedByName           string     `json:"rejected_by_name,omitempty"`
 	RejectedAt               *time.Time `json:"rejected_at,omitempty"`
 	ApprovalNotes            string     `json:"approval_notes,omitempty"`
-	BuildID                  string     `json:"build_id,omitempty"`
-	BuildCreatedAt           *time.Time `json:"build_created_at,omitempty"`
-	ObjectKey                string     `json:"object_key,omitempty"`
-	ObjectCreatedAt          *time.Time `json:"object_created_at,omitempty"`
-	ReleaseID                string     `json:"release_id,omitempty"`
+	App                      string     `json:"app"`
+	ReleaseID                string     `json:"release_id"`
 	ReleaseCreatedAt         *time.Time `json:"release_created_at,omitempty"`
 	ReleasePromotedAt        *time.Time `json:"release_promoted_at,omitempty"`
 	ReleasePromotedByTokenID *int64     `json:"release_promoted_by_api_token_id,omitempty"`

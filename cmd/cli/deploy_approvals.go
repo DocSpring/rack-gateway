@@ -44,7 +44,7 @@ func newDeployApprovalCommand() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(newDeployApprovalRequestCommand(), newDeployApprovalPreApproveCommand())
+	cmd.AddCommand(newDeployApprovalRequestCommand(), newDeployApprovalApproveCommand())
 
 	return cmd
 }
@@ -58,11 +58,21 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "request <message>",
+		Use:   "request <app> <release_id> <message>",
 		Short: "Request manual approval for CI/CD deploy",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(3),
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			message := strings.TrimSpace(args[0])
+			app := strings.TrimSpace(args[0])
+			if app == "" {
+				return fmt.Errorf("app is required")
+			}
+
+			releaseID := strings.TrimSpace(args[1])
+			if releaseID == "" {
+				return fmt.Errorf("release_id is required")
+			}
+
+			message := strings.TrimSpace(args[2])
 			if message == "" {
 				return fmt.Errorf("message is required")
 			}
@@ -101,7 +111,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, gatewayURL, bearer, message, "", nil)
+			created, err := createDeployApproval(cmd, gatewayURL, bearer, app, releaseID, message, "", nil)
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) && conflict.request != nil {
@@ -161,25 +171,21 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	return cmd
 }
 
-func newDeployApprovalPreApproveCommand() *cobra.Command {
+func newDeployApprovalApproveCommand() *cobra.Command {
 	var (
 		rackFlag string
 		mfaCode  string
+		notes    string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "pre-approve <token_uuid> <message>",
-		Short: "Create and immediately approve a deploy approval request for a CI/CD token",
-		Args:  cobra.ExactArgs(2),
+		Use:   "approve <request_id>",
+		Short: "Approve a deploy approval request",
+		Args:  cobra.ExactArgs(1),
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			trimmedTarget := strings.TrimSpace(args[0])
-			if trimmedTarget == "" {
-				return fmt.Errorf("token_uuid is required")
-			}
-
-			message := strings.TrimSpace(args[1])
-			if message == "" {
-				return fmt.Errorf("message is required")
+			requestID := strings.TrimSpace(args[0])
+			if requestID == "" {
+				return fmt.Errorf("request_id is required")
 			}
 
 			rack, err := selectedRack()
@@ -195,14 +201,14 @@ func newDeployApprovalPreApproveCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := preapproveDeploy(cmd, gatewayURL, bearer, message, trimmedTarget, &mfaCode)
+			approved, err := approveDeployRequest(cmd, gatewayURL, bearer, requestID, strings.TrimSpace(notes), &mfaCode)
 			if err != nil {
 				return err
 			}
 
-			statusLine := fmt.Sprintf("Deploy approval request %d pre-approved", created.ID)
-			if created.ApprovalExpiresAt != nil {
-				statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, created.ApprovalExpiresAt.UTC().Format(time.RFC3339))
+			statusLine := fmt.Sprintf("Deploy approval request %d approved", approved.ID)
+			if approved.ApprovalExpiresAt != nil {
+				statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
 			}
 			if err := writeLine(cmd.OutOrStdout(), statusLine); err != nil {
 				return err
@@ -213,13 +219,16 @@ func newDeployApprovalPreApproveCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
 	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
+	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval")
 
 	return cmd
 }
 
-func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, app, releaseID, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
-		"message": message,
+		"message":    message,
+		"app":        app,
+		"release_id": releaseID,
 	}
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed
@@ -227,12 +236,12 @@ func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, message, targe
 	return postDeployApprovalRequest(cmd, gatewayURL, bearer, "/deploy-approval-requests", payload, mfaCode)
 }
 
-func preapproveDeploy(cmd *cobra.Command, gatewayURL, bearer, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
-	payload := map[string]interface{}{
-		"message":             message,
-		"target_api_token_id": strings.TrimSpace(targetToken),
+func approveDeployRequest(cmd *cobra.Command, gatewayURL, bearer, requestID, notes string, mfaCode *string) (*deployApprovalRequest, error) {
+	payload := map[string]interface{}{}
+	if notes != "" {
+		payload["notes"] = notes
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, "/admin/deploy-approval-requests/preapprove", payload, mfaCode)
+	return postDeployApprovalRequest(cmd, gatewayURL, bearer, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload, mfaCode)
 }
 
 func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, path string, payload map[string]interface{}, mfaCode *string) (*deployApprovalRequest, error) {

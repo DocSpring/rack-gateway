@@ -265,6 +265,7 @@ export function DeployApprovalRequestsPage() {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>Message</TableHead>
+                <TableHead>App</TableHead>
                 <TableHead>Target Token</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Decided By</TableHead>
@@ -424,16 +425,7 @@ export function DeployApprovalRequestsPage() {
               <DetailRow label="Rejected At" value={renderTime(selectedRequest.rejected_at)} />
               <DetailRow label="Reviewer Notes" value={selectedRequest.approval_notes ?? '—'} />
 
-              <DetailRow label="Build ID" value={selectedRequest.build_id ?? '—'} />
-              <DetailRow
-                label="Build Created"
-                value={renderTime(selectedRequest.build_created_at)}
-              />
-              <DetailRow label="Object Key" value={selectedRequest.object_key ?? '—'} />
-              <DetailRow
-                label="Object Created"
-                value={renderTime(selectedRequest.object_created_at)}
-              />
+              <DetailRow label="App" value={selectedRequest.app ?? '—'} />
               <DetailRow label="Release ID" value={selectedRequest.release_id ?? '—'} />
               <DetailRow
                 label="Release Created"
@@ -530,6 +522,7 @@ function DeployApprovalRequestRow({
       <TableCell className="max-w-xs truncate" title={message}>
         {message}
       </TableCell>
+      <TableCell className="font-mono text-sm">{request.app ?? '—'}</TableCell>
       <TableCell>
         <div className="flex flex-col text-sm">
           <span>{tokenLabel}</span>
