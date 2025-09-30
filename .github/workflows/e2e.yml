@@ -76,15 +76,16 @@ jobs:
           docker image ls -a | grep convox-gateway-api || true
 
       - name: Build mock services
-        run: |
-          docker compose build mock-oauth mock-convox
+        run: task docker:build:mocks
 
       - name: Pull dependent images
-        run: |
-          docker compose pull postgres || docker pull postgres:16-alpine
+        run: docker compose pull postgres || docker pull postgres:16-alpine
+
+      - name: Ensure database exists
+        run: task docker:db:ensure
 
       - name: Start stack (gateway serves UI)
-        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api-preview
+        run: task docker:preview:up
 
       - name: Wait for services
         run: |
@@ -110,11 +111,11 @@ jobs:
 
       - name: Docker logs (on failure)
         if: failure()
-        run: docker compose logs --no-color
+        run: task docker:preview:logs
 
       - name: Teardown
         if: always()
-        run: docker compose down -v
+        run: task docker:down
 
   cli-e2e:
     runs-on: ubuntu-latest
@@ -152,15 +153,16 @@ jobs:
           docker image ls -a | grep convox-gateway-api || true
 
       - name: Build mock services
-        run: |
-          docker compose build mock-oauth mock-convox
+        run: task docker:build:mocks
 
       - name: Pull dependent images
-        run: |
-          docker compose pull postgres || docker pull postgres:16-alpine
+        run: docker compose pull postgres || docker pull postgres:16-alpine
+
+      - name: Ensure database exists
+        run: task docker:db:ensure
 
       - name: Start stack (gateway serves UI)
-        run: docker compose up -d --no-build --pull=never mock-oauth mock-convox gateway-api-preview
+        run: task docker:preview:up
 
       - name: Wait for services
         run: |
@@ -184,8 +186,8 @@ jobs:
 
       - name: Docker logs (on failure)
         if: failure()
-        run: docker compose logs --no-color
+        run: task docker:preview:logs
 
       - name: Teardown
         if: always()
-        run: docker compose down -v
+        run: task docker:down

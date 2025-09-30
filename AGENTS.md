@@ -36,6 +36,32 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 - Docker orchestration is surfaced through `task docker:*` helpers; use these instead of invoking `docker compose` directly (they coordinate dev vs preview stacks, readiness checks, and migrations).
 - The mock OAuth service has its own Taskfile; use `task mock-oauth:*` commands (e.g., `task mock-oauth:lint`) when you need to touch that package.
 
+## 🔍 DEBUGGING CI FAILURES
+
+When GitHub Actions CI fails, use these commands to fetch and analyze logs locally:
+
+```bash
+# Wait for the CI run to complete
+wait-for-github-actions
+
+# If there's a failure, fetch the logs
+fetch-github-actions-logs
+
+# Search for errors in the downloaded logs
+rg -i 'error|fail' tmp/ci-logs
+
+# View a specific failing job's log
+less tmp/ci-logs/<run-id>_<job-name>.log
+```
+
+The `fetch-github-actions-logs` script downloads logs for all failing jobs to `tmp/ci-logs/` where you can analyze them with `rg`, `grep`, or any text tools. The `tmp/` directory is gitignored.
+
+**Workflow:**
+1. Push changes and run `wait-for-github-actions` to monitor the CI run
+2. If CI fails, run `fetch-github-actions-logs` to download failure logs
+3. Use `rg` to search for the actual error messages
+4. Fix the issues and repeat
+
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
 **NEVER mark a task as "completed" unless ALL of these pass:**
@@ -45,6 +71,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 **⛔ FORBIDDEN: Never use `go build` directly - creates unwanted binaries in root**
 
 - `task ci` - All linters, typechecks, unit tests, builds, and E2E tests pass
+- If CI fails remotely, use `fetch-github-actions-logs` to download and analyze failure logs
 
 ### 📏 Code Quality
 
