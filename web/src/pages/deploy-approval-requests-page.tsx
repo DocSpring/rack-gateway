@@ -121,7 +121,7 @@ function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keep consolidated for now.
 export function DeployApprovalRequestsPage() {
-  const { user } = useAuth()
+  const { user, isLoading: isAuthLoading } = useAuth()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectRequest, setRejectRequest] = useState<DeployApprovalRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
@@ -224,7 +224,8 @@ export function DeployApprovalRequestsPage() {
   }
 
   // Redirect if deploy approvals are disabled (must be after all hooks)
-  if (!user?.deploy_approvals_enabled) {
+  // Wait for auth to load before checking to avoid false redirects on page refresh
+  if (!(isAuthLoading || user?.deploy_approvals_enabled)) {
     return <Navigate replace to="/" />
   }
 
