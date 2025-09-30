@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
 	"github.com/DocSpring/convox-gateway/internal/gateway/config"
@@ -302,5 +303,80 @@ func TestUpdateEnvValuesProtectedKeyDenied(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when modifying protected key, got %d", w.Code)
+	}
+}
+
+func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/apps/myapp/releases":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"id":"R1"}]`))
+		case r.Method == http.MethodGet && r.URL.Path == "/apps/myapp/releases/R1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"env":"FOO=bar"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	database := dbtest.NewDatabase(t)
+	handler, rbacManager := newAPIHandler(t, database, server.URL)
+
+	if err := rbacManager.SaveUser("deployer@example.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}); err != nil {
+		t.Fatalf("failed to seed user: %v", err)
+	}
+
+	// Set FOO to "bar" - the same value it already has
+	payload := map[string]interface{}{
+		"app": "myapp",
+		"set": map[string]string{"FOO": "bar"},
+	}
+	body, _ := json.Marshal(payload)
+	c, w := newJSONContext(http.MethodPut, "/.gateway/api/env", body)
+	attachUser(c, "deployer@example.com", "Deployer User")
+
+	handler.UpdateEnvValues(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	var resp handlers.UpdateEnvValuesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// No release should be created when there are no changes
+	if resp.ReleaseID != "" {
+		t.Fatalf("expected no release ID when there are no changes, got %s", resp.ReleaseID)
+	}
+
+	// Verify audit log was created even though no changes were made
+	logs, err := database.GetAuditLogs("", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("failed to fetch audit logs: %v", err)
+	}
+
+	if len(logs) == 0 {
+		t.Fatalf("expected audit log to be created even when no changes were made, but found none")
+	}
+
+	// Verify the audit log has the right action
+	found := false
+	for _, log := range logs {
+		if log.Action == "env.update" && log.Resource == "myapp" {
+			found = true
+			if log.Status != "success" {
+				t.Errorf("expected audit log status=success, got %s", log.Status)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected to find env.update audit log for myapp, but didn't find it")
 	}
 }

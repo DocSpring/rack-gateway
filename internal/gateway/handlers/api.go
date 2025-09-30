@@ -642,6 +642,26 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 	}
 
 	if len(diffs) == 0 {
+		// Log audit event even when no changes were made
+		ms := int(time.Since(start).Milliseconds())
+		ip := c.ClientIP()
+		ua := c.GetHeader("User-Agent")
+		_ = audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:      email,
+			UserName:       name,
+			ActionType:     "convox",
+			Action:         "env.update",
+			ResourceType:   "env",
+			Resource:       app,
+			Details:        `{"changes":"none"}`,
+			IPAddress:      ip,
+			UserAgent:      ua,
+			Status:         "success",
+			RBACDecision:   "allow",
+			HTTPStatus:     http.StatusOK,
+			ResponseTimeMs: ms,
+		})
+
 		responseEnv := make(map[string]string, len(merged))
 		for k, v := range merged {
 			value := v
