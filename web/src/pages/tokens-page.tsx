@@ -260,6 +260,7 @@ function TokensPageInner() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newTokenName, setNewTokenName] = useState('')
   const [createdToken, setCreatedToken] = useState<string | null>(null)
+  const [createdTokenUuid, setCreatedTokenUuid] = useState<string | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editToken, setEditToken] = useState<APIToken | null>(null)
   const [editName, setEditName] = useState('')
@@ -400,6 +401,7 @@ function TokensPageInner() {
     },
     onSuccess: (data) => {
       setCreatedToken(data.token || '')
+      setCreatedTokenUuid(data.api_token?.public_id || null)
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
       toast.success('API token created successfully')
       setCreateErrors({ name: undefined, permissions: undefined })
@@ -490,9 +492,16 @@ function TokensPageInner() {
     }
   }
 
+  const handleCopyUuid = () => {
+    if (createdTokenUuid) {
+      copyToClipboard(createdTokenUuid, 'UUID copied to clipboard')
+    }
+  }
+
   const resetCreateState = useCallback(() => {
     setNewTokenName('')
     setCreatedToken(null)
+    setCreatedTokenUuid(null)
     setSelectedPermissions([])
     setActiveRole(null)
     setCreateErrors({ name: undefined, permissions: undefined })
@@ -660,6 +669,7 @@ function TokensPageInner() {
               onClick={() => {
                 setNewTokenName('')
                 setCreatedToken(null)
+                setCreatedTokenUuid(null)
                 setSelectedPermissions([])
                 setActiveRole(null)
                 setCreateErrors({ name: undefined, permissions: undefined })
@@ -753,6 +763,7 @@ function TokensPageInner() {
         availablePermissions={availablePermissions}
         canAssignPermission={canAssignPermission}
         createdToken={createdToken}
+        createdTokenUuid={createdTokenUuid}
         errors={createErrors}
         isCreating={createTokenMutation.isPending}
         isOpen={isCreateOpen}
@@ -760,6 +771,7 @@ function TokensPageInner() {
         onCancel={closeCreateModalAndReset}
         onClose={closeCreateModal}
         onCopyToken={handleCopyToken}
+        onCopyUuid={handleCopyUuid}
         onOpenChange={setIsCreateOpen}
         onPermissionToggle={handlePermissionToggle}
         onRoleSelect={handleRoleShortcut}
@@ -1083,11 +1095,13 @@ type CreateTokenDialogProps = {
   canAssignPermission: (permission: string) => boolean
   errors: { name?: string; permissions?: string }
   createdToken: string | null
+  createdTokenUuid: string | null
   isCreating: boolean
   isOpen: boolean
   isPermissionLoading: boolean
   onCancel: () => void
   onCopyToken: () => void
+  onCopyUuid: () => void
   onOpenChange: (open: boolean) => void
   onPermissionToggle: (permission: string) => void
   onRoleSelect: (role: TokenRoleInfo) => void
@@ -1106,11 +1120,13 @@ function CreateTokenDialog({
   canAssignPermission,
   errors,
   createdToken,
+  createdTokenUuid,
   isCreating,
   isOpen,
   isPermissionLoading,
   onCancel,
   onCopyToken,
+  onCopyUuid,
   onOpenChange,
   onPermissionToggle,
   onRoleSelect,
@@ -1124,26 +1140,41 @@ function CreateTokenDialog({
 }: CreateTokenDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <TooltipProvider>
           <DialogHeader>
             <DialogTitle>Create API Token</DialogTitle>
             <DialogDescription>
               {createdToken
-                ? "Copy this token now. You won't be able to see it again."
+                ? "Copy the token secret now. You won't be able to see it again."
                 : 'Enter a name for the new API token'}
             </DialogDescription>
           </DialogHeader>
 
           {createdToken ? (
             <div className="space-y-4">
-              <div className="break-all rounded-md bg-muted p-3 font-mono text-sm">
-                {createdToken}
+              <div className="space-y-2">
+                <Label>Token UUID</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 break-all rounded-md bg-muted p-3 font-mono text-sm">
+                    {createdTokenUuid}
+                  </div>
+                  <Button onClick={onCopyUuid} size="icon" variant="ghost">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              <Button className="w-full" onClick={onCopyToken}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy Token
-              </Button>
+              <div className="space-y-2">
+                <Label>Token Secret</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 break-all rounded-md bg-muted p-3 font-mono text-sm">
+                    {createdToken}
+                  </div>
+                  <Button onClick={onCopyToken} size="icon" variant="ghost">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
