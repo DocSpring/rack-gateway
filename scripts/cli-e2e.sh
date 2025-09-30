@@ -457,10 +457,6 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   echo -e "${GREEN}Created approval request: $REQUEST_ID${NC}"
 
-  # Normalize rack alias for deploy approvals to match mock rack name
-  docker compose exec -T postgres psql -U postgres -d gateway_test \
-    -c "UPDATE deploy_approval_requests SET rack = 'Test' WHERE id = $REQUEST_ID;"
-
   # Unset API token temporarily to log in as admin for approval
   unset CONVOX_GATEWAY_API_TOKEN
   unset CONVOX_GATEWAY_URL
