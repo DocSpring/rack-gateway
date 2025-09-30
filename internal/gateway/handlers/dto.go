@@ -260,21 +260,21 @@ type UpdateMFASettingsRequest struct {
 	RequireAllUsers bool `json:"require_all_users"`
 }
 
-// CreateDeployRequestRequest represents the payload to open a deploy approval request.
-type CreateDeployRequestRequest struct {
+// CreateDeployApprovalRequestRequest represents the payload to open a deploy approval request.
+type CreateDeployApprovalRequestRequest struct {
 	Message            string  `json:"message" binding:"required"`
 	TargetAPITokenID   *string `json:"target_api_token_id,omitempty"`
 	TargetAPITokenName string  `json:"target_api_token,omitempty"`
 	Rack               string  `json:"rack,omitempty"`
 }
 
-// UpdateDeployRequestStatusRequest carries optional admin notes when approving/rejecting.
-type UpdateDeployRequestStatusRequest struct {
+// UpdateDeployApprovalRequestStatusRequest carries optional admin notes when approving/rejecting.
+type UpdateDeployApprovalRequestStatusRequest struct {
 	Notes string `json:"notes"`
 }
 
-// DeployRequestResponse exposes deploy approval state to the CLI and admin UI.
-type DeployRequestResponse struct {
+// DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
+type DeployApprovalRequestResponse struct {
 	ID                       int64      `json:"id"`
 	Rack                     string     `json:"rack"`
 	Message                  string     `json:"message"`
@@ -303,6 +303,6 @@ type DeployRequestResponse struct {
 	ReleasePromotedByTokenID *int64     `json:"release_promoted_by_api_token_id,omitempty"`
 }
 
-type DeployRequestList struct {
-	DeployRequests []DeployRequestResponse `json:"deploy_requests"`
+type DeployApprovalRequestList struct {
+	DeployApprovalRequests []DeployApprovalRequestResponse `json:"deploy_approval_requests"`
 }

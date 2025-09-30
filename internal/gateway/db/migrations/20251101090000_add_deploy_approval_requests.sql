@@ -1,6 +1,6 @@
--- Deploy requests for approval-gated deploy flows
+-- Deploy approval requests for approval-gated deploy flows
 
-CREATE TABLE IF NOT EXISTS deploy_requests (
+CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   id BIGSERIAL PRIMARY KEY,
   rack VARCHAR(120) NOT NULL,
   message TEXT NOT NULL,
@@ -27,9 +27,9 @@ CREATE TABLE IF NOT EXISTS deploy_requests (
   approval_notes TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_deploy_requests_token ON deploy_requests(target_api_token_id);
-CREATE INDEX IF NOT EXISTS idx_deploy_requests_status ON deploy_requests(status);
-CREATE INDEX IF NOT EXISTS idx_deploy_requests_approved_at ON deploy_requests(approved_at DESC);
-CREATE INDEX IF NOT EXISTS idx_deploy_requests_updated_at ON deploy_requests(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_token ON deploy_approval_requests(target_api_token_id);
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_status ON deploy_approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_approved_at ON deploy_approval_requests(approved_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_updated_at ON deploy_approval_requests(updated_at DESC);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_deploy_requests_active ON deploy_requests(target_api_token_id) WHERE status IN ('pending','approved');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_deploy_approval_requests_active ON deploy_approval_requests(target_api_token_id) WHERE status IN ('pending','approved');

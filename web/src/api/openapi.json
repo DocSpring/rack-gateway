@@ -304,7 +304,7 @@
                 }
             }
         },
-        "/admin/deploy-requests": {
+        "/admin/deploy-approval-requests": {
             "get": {
                 "security": [
                     {
@@ -316,7 +316,7 @@
                 ],
                 "description": "Lists deploy approval requests (admin).",
                 "tags": [
-                    "DeployRequests"
+                    "DeployApprovalRequests"
                 ],
                 "summary": "List deploy approvals",
                 "parameters": [
@@ -359,7 +359,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployRequestList"
+                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestList"
                                 }
                             }
                         }
@@ -407,7 +407,7 @@
                 }
             }
         },
-        "/admin/deploy-requests/{id}/approve": {
+        "/admin/deploy-approval-requests/{id}/approve": {
             "post": {
                 "security": [
                     {
@@ -419,12 +419,12 @@
                 ],
                 "description": "Approves a pending deploy approval request.",
                 "tags": [
-                    "DeployRequests"
+                    "DeployApprovalRequests"
                 ],
-                "summary": "Approve deploy request",
+                "summary": "Approve deploy approval request",
                 "parameters": [
                     {
-                        "description": "Deploy request ID",
+                        "description": "Deploy approval request ID",
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -437,7 +437,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateDeployRequestStatusRequest"
+                                "$ref": "#/components/schemas/handlers.UpdateDeployApprovalRequestStatusRequest"
                             }
                         }
                     },
@@ -449,7 +449,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployRequestResponse"
+                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
                                 }
                             }
                         }
@@ -507,7 +507,7 @@
                 }
             }
         },
-        "/admin/deploy-requests/{id}/reject": {
+        "/admin/deploy-approval-requests/{id}/reject": {
             "post": {
                 "security": [
                     {
@@ -519,12 +519,12 @@
                 ],
                 "description": "Rejects a pending deploy approval request.",
                 "tags": [
-                    "DeployRequests"
+                    "DeployApprovalRequests"
                 ],
-                "summary": "Reject deploy request",
+                "summary": "Reject deploy approval request",
                 "parameters": [
                     {
-                        "description": "Deploy request ID",
+                        "description": "Deploy approval request ID",
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -537,7 +537,7 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateDeployRequestStatusRequest"
+                                "$ref": "#/components/schemas/handlers.UpdateDeployApprovalRequestStatusRequest"
                             }
                         }
                     },
@@ -549,7 +549,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployRequestResponse"
+                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
                                 }
                             }
                         }
@@ -2674,7 +2674,7 @@
                 }
             }
         },
-        "/deploy-requests": {
+        "/deploy-approval-requests": {
             "post": {
                 "security": [
                     {
@@ -2683,18 +2683,18 @@
                 ],
                 "description": "Creates a manual approval record tied to an API token.",
                 "tags": [
-                    "DeployRequests"
+                    "DeployApprovalRequests"
                 ],
                 "summary": "Request deploy approval",
                 "requestBody": {
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/handlers.CreateDeployRequestRequest"
+                                "$ref": "#/components/schemas/handlers.CreateDeployApprovalRequestRequest"
                             }
                         }
                     },
-                    "description": "Deploy request payload",
+                    "description": "Deploy approval request payload",
                     "required": true
                 },
                 "responses": {
@@ -2703,7 +2703,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployRequestResponse"
+                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
                                 }
                             }
                         }
@@ -2771,7 +2771,7 @@
                 }
             }
         },
-        "/deploy-requests/{id}": {
+        "/deploy-approval-requests/{id}": {
             "get": {
                 "security": [
                     {
@@ -2780,12 +2780,12 @@
                 ],
                 "description": "Returns the status of a deploy approval request.",
                 "tags": [
-                    "DeployRequests"
+                    "DeployApprovalRequests"
                 ],
                 "summary": "Get deploy approval",
                 "parameters": [
                     {
-                        "description": "Deploy request ID",
+                        "description": "Deploy approval request ID",
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -2800,7 +2800,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployRequestResponse"
+                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
                                 }
                             }
                         }
@@ -3482,7 +3482,7 @@
                     }
                 }
             },
-            "handlers.CreateDeployRequestRequest": {
+            "handlers.CreateDeployApprovalRequestRequest": {
                 "type": "object",
                 "required": [
                     "message"
@@ -3560,18 +3560,18 @@
                     }
                 }
             },
-            "handlers.DeployRequestList": {
+            "handlers.DeployApprovalRequestList": {
                 "type": "object",
                 "properties": {
-                    "deploy_requests": {
+                    "deploy_approval_requests": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/handlers.DeployRequestResponse"
+                            "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
                         }
                     }
                 }
             },
-            "handlers.DeployRequestResponse": {
+            "handlers.DeployApprovalRequestResponse": {
                 "type": "object",
                 "properties": {
                     "approval_expires_at": {
@@ -3920,7 +3920,7 @@
                     }
                 }
             },
-            "handlers.UpdateDeployRequestStatusRequest": {
+            "handlers.UpdateDeployApprovalRequestStatusRequest": {
                 "type": "object",
                 "properties": {
                     "notes": {

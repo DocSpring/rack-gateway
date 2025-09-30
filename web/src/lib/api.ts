@@ -6,7 +6,7 @@ import type {
   DbAPIToken,
   DbAuditLog,
   DbUser,
-  GetAdminDeployRequestsParams,
+  GetAdminDeployApprovalRequestsParams,
   GetAdminRoles200,
   GetRack200,
   HandlersAuditLogsResponse,
@@ -16,8 +16,8 @@ import type {
   HandlersCreateAPITokenResponse,
   HandlersCreateUserRequest,
   HandlersCurrentUserResponse,
-  HandlersDeployRequestList,
-  HandlersDeployRequestResponse,
+  HandlersDeployApprovalRequestList,
+  HandlersDeployApprovalRequestResponse,
   HandlersHealthResponse,
   HandlersMFAMethodResponse,
   HandlersMFAStatusResponse,
@@ -28,7 +28,7 @@ import type {
   HandlersTokenPermissionMetadata,
   HandlersTrustedDeviceResponse,
   HandlersUpdateAPITokenRequest,
-  HandlersUpdateDeployRequestStatusRequest,
+  HandlersUpdateDeployApprovalRequestStatusRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
   HandlersUserSessionResponse,
@@ -85,9 +85,10 @@ export type MFAStatusResponse = HandlersMFAStatusResponse
 export type MFAMethod = HandlersMFAMethodResponse
 export type TrustedDevice = HandlersTrustedDeviceResponse
 export type StatusResponse = HandlersStatusResponse
-export type DeployRequest = HandlersDeployRequestResponse
-export type DeployRequestList = HandlersDeployRequestList
-export type UpdateDeployRequestStatusRequest = HandlersUpdateDeployRequestStatusRequest
+export type DeployApprovalRequest = HandlersDeployApprovalRequestResponse
+export type DeployApprovalRequestList = HandlersDeployApprovalRequestList
+export type UpdateDeployApprovalRequestStatusRequest =
+  HandlersUpdateDeployApprovalRequestStatusRequest
 
 type EnvValuesResponseShape = {
   env?: EnvValuesMap
@@ -153,19 +154,21 @@ export const revokeUserSession = (
 export const revokeAllUserSessions = (email: string): Promise<RevokeAllSessionsResponse> =>
   unwrap(gateway.postAdminUsersEmailSessionsRevokeAll(email))
 
-export const listDeployRequests = (
-  params?: GetAdminDeployRequestsParams
-): Promise<DeployRequestList> => unwrap(gateway.getAdminDeployRequests(params))
+export const listDeployApprovalRequests = (
+  params?: GetAdminDeployApprovalRequestsParams
+): Promise<DeployApprovalRequestList> => unwrap(gateway.getAdminDeployApprovalRequests(params))
 
-export const approveDeployRequest = (
+export const approveDeployApprovalRequest = (
   id: number,
-  payload?: UpdateDeployRequestStatusRequest
-): Promise<DeployRequest> => unwrap(gateway.postAdminDeployRequestsIdApprove(id, payload ?? {}))
+  payload?: UpdateDeployApprovalRequestStatusRequest
+): Promise<DeployApprovalRequest> =>
+  unwrap(gateway.postAdminDeployApprovalRequestsIdApprove(id, payload ?? {}))
 
-export const rejectDeployRequest = (
+export const rejectDeployApprovalRequest = (
   id: number,
-  payload?: UpdateDeployRequestStatusRequest
-): Promise<DeployRequest> => unwrap(gateway.postAdminDeployRequestsIdReject(id, payload ?? {}))
+  payload?: UpdateDeployApprovalRequestStatusRequest
+): Promise<DeployApprovalRequest> =>
+  unwrap(gateway.postAdminDeployApprovalRequestsIdReject(id, payload ?? {}))
 
 export type AuditLogQuery = Partial<{
   search: string

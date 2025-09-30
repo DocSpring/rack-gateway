@@ -48,8 +48,8 @@ type Handler struct {
 }
 
 type deployApprovalTracker struct {
-	request *db.DeployRequest
-	stage   db.DeployRequestStage
+	request *db.DeployApprovalRequest
+	stage   db.DeployApprovalRequestStage
 	tokenID int64
 }
 
@@ -338,7 +338,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Forward the request to the rack
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
 	if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && err == nil && status >= 200 && status < 300 {
-		if tracker.stage == db.DeployRequestStagePromote {
+		if tracker.stage == db.DeployApprovalRequestStagePromote {
 			if releaseID := extractReleaseIDFromPath(path); releaseID != "" {
 				h.markDeployApprovalPromote(tracker, releaseID)
 			}
@@ -1134,7 +1134,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/builds") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			setResource("build", id, true)
-			if tracker != nil && tracker.stage == db.DeployRequestStageBuild {
+			if tracker != nil && tracker.stage == db.DeployApprovalRequestStageBuild {
 				h.markDeployApprovalBuild(tracker, id)
 			}
 		}
@@ -1160,7 +1160,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 		if key != "" {
 			setResource("object", key, false)
-			if tracker != nil && tracker.stage == db.DeployRequestStageObject {
+			if tracker != nil && tracker.stage == db.DeployApprovalRequestStageObject {
 				h.markDeployApprovalObject(tracker, key)
 			}
 		}
@@ -1183,7 +1183,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			if h.recordResourceCreator("release", id, email) {
 				r.Header.Add("X-Release-Created", id)
 			}
-			if tracker != nil && tracker.stage == db.DeployRequestStageRelease {
+			if tracker != nil && tracker.stage == db.DeployApprovalRequestStageRelease {
 				h.markDeployApprovalRelease(tracker, id)
 			}
 		}
@@ -1574,22 +1574,22 @@ func tokenHasPermission(perms []string, target string) bool {
 	return false
 }
 
-func approvalStageFor(resource, action string) (db.DeployRequestStage, bool) {
+func approvalStageFor(resource, action string) (db.DeployApprovalRequestStage, bool) {
 	switch resource {
 	case "build":
 		if action == "create" {
-			return db.DeployRequestStageBuild, true
+			return db.DeployApprovalRequestStageBuild, true
 		}
 	case "object":
 		if action == "create" {
-			return db.DeployRequestStageObject, true
+			return db.DeployApprovalRequestStageObject, true
 		}
 	case "release":
 		if action == "create" {
-			return db.DeployRequestStageRelease, true
+			return db.DeployApprovalRequestStageRelease, true
 		}
 		if action == "promote" {
-			return db.DeployRequestStagePromote, true
+			return db.DeployApprovalRequestStagePromote, true
 		}
 	}
 	return "", false
@@ -1643,14 +1643,14 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		window = h.config.DeployApprovalWindow
 	}
 
-	req, err := h.database.ActiveDeployRequestForStage(*authUser.TokenID, rackName, stage, window)
+	req, err := h.database.ActiveDeployApprovalRequestForStage(*authUser.TokenID, rackName, stage, window)
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrDeployApprovalMissing):
 			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: fmt.Sprintf("deployment approval required (%s stage)", string(stage))}
-		case errors.Is(err, db.ErrDeployRequestExpired):
+		case errors.Is(err, db.ErrDeployApprovalRequestExpired):
 			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval expired"}
-		case errors.Is(err, db.ErrDeployRequestStageMismatch):
+		case errors.Is(err, db.ErrDeployApprovalRequestStageMismatch):
 			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval not in required stage"}
 		default:
 			return false, nil, err
@@ -1684,7 +1684,7 @@ func (h *Handler) markDeployApprovalBuild(tracker *deployApprovalTracker, buildI
 	if tracker == nil || h.database == nil || strings.TrimSpace(buildID) == "" {
 		return
 	}
-	if err := h.database.MarkDeployRequestBuildUsed(tracker.request.ID, buildID, time.Now()); err != nil {
+	if err := h.database.MarkDeployApprovalRequestBuildUsed(tracker.request.ID, buildID, time.Now()); err != nil {
 		log.Printf("deploy approval build update failed: %v", err)
 	}
 }
@@ -1693,7 +1693,7 @@ func (h *Handler) markDeployApprovalObject(tracker *deployApprovalTracker, objec
 	if tracker == nil || h.database == nil || strings.TrimSpace(objectKey) == "" {
 		return
 	}
-	if err := h.database.MarkDeployRequestObjectUsed(tracker.request.ID, objectKey, time.Now()); err != nil {
+	if err := h.database.MarkDeployApprovalRequestObjectUsed(tracker.request.ID, objectKey, time.Now()); err != nil {
 		log.Printf("deploy approval object update failed: %v", err)
 	}
 }
@@ -1702,7 +1702,7 @@ func (h *Handler) markDeployApprovalRelease(tracker *deployApprovalTracker, rele
 	if tracker == nil || h.database == nil || strings.TrimSpace(releaseID) == "" {
 		return
 	}
-	if err := h.database.MarkDeployRequestReleaseCreated(tracker.request.ID, releaseID, time.Now()); err != nil {
+	if err := h.database.MarkDeployApprovalRequestReleaseCreated(tracker.request.ID, releaseID, time.Now()); err != nil {
 		log.Printf("deploy approval release update failed: %v", err)
 	}
 }
@@ -1711,7 +1711,7 @@ func (h *Handler) markDeployApprovalPromote(tracker *deployApprovalTracker, rele
 	if tracker == nil || h.database == nil || strings.TrimSpace(releaseID) == "" {
 		return
 	}
-	if err := h.database.MarkDeployRequestPromoted(tracker.request.ID, releaseID, tracker.tokenID, time.Now()); err != nil {
+	if err := h.database.MarkDeployApprovalRequestPromoted(tracker.request.ID, releaseID, tracker.tokenID, time.Now()); err != nil {
 		log.Printf("deploy approval promote update failed: %v", err)
 	}
 }

@@ -14,7 +14,7 @@ import type {
   GetAdminAuditExportParams,
   GetAdminAuditParams,
   GetAdminConfig200,
-  GetAdminDeployRequestsParams,
+  GetAdminDeployApprovalRequestsParams,
   GetAdminRoles200,
   GetAdminSettings200,
   GetAuthCliCallbackParams,
@@ -29,11 +29,11 @@ import type {
   HandlersConfirmTOTPEnrollmentRequest,
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
-  HandlersCreateDeployRequestRequest,
+  HandlersCreateDeployApprovalRequestRequest,
   HandlersCreateUserRequest,
   HandlersCurrentUserResponse,
-  HandlersDeployRequestList,
-  HandlersDeployRequestResponse,
+  HandlersDeployApprovalRequestList,
+  HandlersDeployApprovalRequestResponse,
   HandlersEnvValuesResponse,
   HandlersHealthResponse,
   HandlersMFAStatusResponse,
@@ -44,7 +44,7 @@ import type {
   HandlersTokenPermissionMetadata,
   HandlersUpdateAPITokenRequest,
   HandlersUpdateAllowDestructiveActionsRequest,
-  HandlersUpdateDeployRequestStatusRequest,
+  HandlersUpdateDeployApprovalRequestStatusRequest,
   HandlersUpdateEnvValuesRequest,
   HandlersUpdateEnvValuesResponse,
   HandlersUpdateMFASettingsRequest,
@@ -124,31 +124,31 @@ export const getConvoxGatewayAPI = () => {
    * Lists deploy approval requests (admin).
    * @summary List deploy approvals
    */
-  const getAdminDeployRequests = (
-    params?: GetAdminDeployRequestsParams,
+  const getAdminDeployApprovalRequests = (
+    params?: GetAdminDeployApprovalRequestsParams,
     options?: SecondParameter<typeof createGatewayClient>,
   ) => {
-    return createGatewayClient<HandlersDeployRequestList>(
-      { url: `/admin/deploy-requests`, method: 'GET', params },
+    return createGatewayClient<HandlersDeployApprovalRequestList>(
+      { url: `/admin/deploy-approval-requests`, method: 'GET', params },
       options,
     );
   };
 
   /**
    * Approves a pending deploy approval request.
-   * @summary Approve deploy request
+   * @summary Approve deploy approval request
    */
-  const postAdminDeployRequestsIdApprove = (
+  const postAdminDeployApprovalRequestsIdApprove = (
     id: number,
-    handlersUpdateDeployRequestStatusRequest: HandlersUpdateDeployRequestStatusRequest,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
     options?: SecondParameter<typeof createGatewayClient>,
   ) => {
-    return createGatewayClient<HandlersDeployRequestResponse>(
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
       {
-        url: `/admin/deploy-requests/${id}/approve`,
+        url: `/admin/deploy-approval-requests/${id}/approve`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateDeployRequestStatusRequest,
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
       },
       options,
     );
@@ -156,19 +156,19 @@ export const getConvoxGatewayAPI = () => {
 
   /**
    * Rejects a pending deploy approval request.
-   * @summary Reject deploy request
+   * @summary Reject deploy approval request
    */
-  const postAdminDeployRequestsIdReject = (
+  const postAdminDeployApprovalRequestsIdReject = (
     id: number,
-    handlersUpdateDeployRequestStatusRequest: HandlersUpdateDeployRequestStatusRequest,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
     options?: SecondParameter<typeof createGatewayClient>,
   ) => {
-    return createGatewayClient<HandlersDeployRequestResponse>(
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
       {
-        url: `/admin/deploy-requests/${id}/reject`,
+        url: `/admin/deploy-approval-requests/${id}/reject`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateDeployRequestStatusRequest,
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
       },
       options,
     );
@@ -718,16 +718,16 @@ export const getConvoxGatewayAPI = () => {
    * Creates a manual approval record tied to an API token.
    * @summary Request deploy approval
    */
-  const postDeployRequests = (
-    handlersCreateDeployRequestRequest: HandlersCreateDeployRequestRequest,
+  const postDeployApprovalRequests = (
+    handlersCreateDeployApprovalRequestRequest: HandlersCreateDeployApprovalRequestRequest,
     options?: SecondParameter<typeof createGatewayClient>,
   ) => {
-    return createGatewayClient<HandlersDeployRequestResponse>(
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
       {
-        url: `/deploy-requests`,
+        url: `/deploy-approval-requests`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: handlersCreateDeployRequestRequest,
+        data: handlersCreateDeployApprovalRequestRequest,
       },
       options,
     );
@@ -737,12 +737,12 @@ export const getConvoxGatewayAPI = () => {
    * Returns the status of a deploy approval request.
    * @summary Get deploy approval
    */
-  const getDeployRequestsId = (
+  const getDeployApprovalRequestsId = (
     id: number,
     options?: SecondParameter<typeof createGatewayClient>,
   ) => {
-    return createGatewayClient<HandlersDeployRequestResponse>(
-      { url: `/deploy-requests/${id}`, method: 'GET' },
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      { url: `/deploy-approval-requests/${id}`, method: 'GET' },
       options,
     );
   };
@@ -818,9 +818,9 @@ export const getConvoxGatewayAPI = () => {
     getAdminAuditExport,
     getAdminConfig,
     putAdminConfig,
-    getAdminDeployRequests,
-    postAdminDeployRequestsIdApprove,
-    postAdminDeployRequestsIdReject,
+    getAdminDeployApprovalRequests,
+    postAdminDeployApprovalRequestsIdApprove,
+    postAdminDeployApprovalRequestsIdReject,
     getAdminRoles,
     getAdminSettings,
     putAdminSettingsAllowDestructiveActions,
@@ -856,8 +856,8 @@ export const getConvoxGatewayAPI = () => {
     getAuthWebLogin,
     getAuthWebLogout,
     getCreatedBy,
-    postDeployRequests,
-    getDeployRequestsId,
+    postDeployApprovalRequests,
+    getDeployApprovalRequestsId,
     getEnv,
     putEnv,
     getHealth,
@@ -879,22 +879,22 @@ export type GetAdminConfigResult = NonNullable<
 export type PutAdminConfigResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getConvoxGatewayAPI>['putAdminConfig']>>
 >;
-export type GetAdminDeployRequestsResult = NonNullable<
+export type GetAdminDeployApprovalRequestsResult = NonNullable<
   Awaited<
-    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getAdminDeployRequests']>
+    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getAdminDeployApprovalRequests']>
   >
 >;
-export type PostAdminDeployRequestsIdApproveResult = NonNullable<
+export type PostAdminDeployApprovalRequestsIdApproveResult = NonNullable<
   Awaited<
     ReturnType<
-      ReturnType<typeof getConvoxGatewayAPI>['postAdminDeployRequestsIdApprove']
+      ReturnType<typeof getConvoxGatewayAPI>['postAdminDeployApprovalRequestsIdApprove']
     >
   >
 >;
-export type PostAdminDeployRequestsIdRejectResult = NonNullable<
+export type PostAdminDeployApprovalRequestsIdRejectResult = NonNullable<
   Awaited<
     ReturnType<
-      ReturnType<typeof getConvoxGatewayAPI>['postAdminDeployRequestsIdReject']
+      ReturnType<typeof getConvoxGatewayAPI>['postAdminDeployApprovalRequestsIdReject']
     >
   >
 >;
@@ -1097,14 +1097,14 @@ export type GetAuthWebLogoutResult = NonNullable<
 export type GetCreatedByResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getCreatedBy']>>
 >;
-export type PostDeployRequestsResult = NonNullable<
+export type PostDeployApprovalRequestsResult = NonNullable<
   Awaited<
-    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['postDeployRequests']>
+    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['postDeployApprovalRequests']>
   >
 >;
-export type GetDeployRequestsIdResult = NonNullable<
+export type GetDeployApprovalRequestsIdResult = NonNullable<
   Awaited<
-    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getDeployRequestsId']>
+    ReturnType<ReturnType<typeof getConvoxGatewayAPI>['getDeployApprovalRequestsId']>
   >
 >;
 export type GetEnvResult = NonNullable<

@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface HandlersCreateDeployRequestRequest {
+export interface HandlersCreateDeployApprovalRequestRequest {
   message: string;
   rack?: string;
   target_api_token?: string;

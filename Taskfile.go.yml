@@ -18,6 +18,13 @@ tasks:
       - go install gotest.tools/gotestsum@latest
       - go install github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest
 
+  install:
+    aliases: [":install"]
+    desc: Install Convox Gateway CLI
+    deps: [deps]
+    cmds:
+      - ./scripts/install.sh
+
   generate:
     desc: Generate code
     deps: [generate:types, generate:swagger]

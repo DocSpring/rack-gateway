@@ -163,12 +163,12 @@ func Setup(router *gin.Engine, cfg *Config) {
 			authenticated.GET("/created-by", apiHandler.GetCreatedBy)
 			authenticated.GET("/rack", apiHandler.GetRackInfo)
 			authenticated.GET("/env", apiHandler.GetEnvValues)
-			deployRequests := authenticated.Group("/deploy-requests")
+			deployApprovalRequests := authenticated.Group("/deploy-approval-requests")
 			{
-				deployRequests.GET("/:id", apiHandler.GetDeployRequest)
-				createDeploy := deployRequests.Group("")
+				deployApprovalRequests.GET("/:id", apiHandler.GetDeployApprovalRequest)
+				createDeploy := deployApprovalRequests.Group("")
 				createDeploy.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
-				createDeploy.POST("", apiHandler.CreateDeployRequest)
+				createDeploy.POST("", apiHandler.CreateDeployApprovalRequest)
 			}
 			envMutations := authenticated.Group("")
 			if cfg.SessionManager != nil {
@@ -215,15 +215,15 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.GET("/audit", adminHandler.ListAuditLogs)
 				admin.GET("/audit/export", adminHandler.ExportAuditLogs)
 
-				deployAdmin := admin.Group("/deploy-requests")
-				deployAdmin.GET("", adminHandler.ListDeployRequests)
+				deployAdmin := admin.Group("/deploy-approval-requests")
+				deployAdmin.GET("", adminHandler.ListDeployApprovalRequests)
 				preapprove := deployAdmin.Group("")
 				preapprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				preapprove.POST("/preapprove", adminHandler.PreapproveDeploy)
 				deployApprove := deployAdmin.Group("")
 				deployApprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
-				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployRequest)
-				deployApprove.POST("/:id/reject", adminHandler.RejectDeployRequest)
+				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)
+				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 
 				// API tokens (rate limit creation)
 				tokenGroup := admin.Group("/tokens")

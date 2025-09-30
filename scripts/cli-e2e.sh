@@ -403,11 +403,11 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   PREAPPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
   verify_cgw_command \
     "deploy-approval pre-approve 'Pipeline deployment ${E2E_TS}' --target-api-token-id $API_TOKEN_PUBLIC_ID --mfa-code $PREAPPROVE_CODE" \
-    "Deploy request" "pre-approved"
+    "Deploy approval request" "pre-approved"
 
   # Normalize rack alias for deploy approvals to match mock rack name
   docker compose exec -T postgres psql -U postgres -d gateway_test \
-    -c "UPDATE deploy_requests SET rack = 'Test' WHERE id = (SELECT id FROM deploy_requests WHERE target_api_token_id = (SELECT id FROM api_tokens WHERE public_id = '$API_TOKEN_PUBLIC_ID') ORDER BY id DESC LIMIT 1);"
+    -c "UPDATE deploy_approval_requests SET rack = 'Test' WHERE id = (SELECT id FROM deploy_approval_requests WHERE target_api_token_id = (SELECT id FROM api_tokens WHERE public_id = '$API_TOKEN_PUBLIC_ID') ORDER BY id DESC LIMIT 1);"
 
   logout_cli
 

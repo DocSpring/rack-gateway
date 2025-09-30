@@ -92,8 +92,8 @@ var roleConfigs = map[string]roleConfig{
 			"convox:env:read",
 			"convox:env:set",
 			"convox:app:update",
-			"gateway:deploy-request:create",
-			"gateway:deploy-request:view",
+			"gateway:deploy-approval-request:create",
+			"gateway:deploy-approval-request:view",
 		},
 		Parents: []string{"ops"},
 	},
@@ -102,8 +102,8 @@ var roleConfigs = map[string]roleConfig{
 		Permissions: []string{
 			"convox:app:list",
 			"convox:app:read",
-			"gateway:deploy-request:create",
-			"gateway:deploy-request:view",
+			"gateway:deploy-approval-request:create",
+			"gateway:deploy-approval-request:view",
 			"convox:build:create-with-approval",
 			"convox:build:list",
 			"convox:build:read",
@@ -309,7 +309,7 @@ func (m *DBManager) Enforce(userEmail, resource, action string) (bool, error) {
 		return false, nil // User is suspended
 	}
 
-	// Format permission; support non-Convox namespaces (e.g., gateway:deploy-request)
+	// Format permission; support non-Convox namespaces (e.g., gateway:deploy-approval-request)
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)
 	if strings.Contains(resource, ":") {
 		permission = fmt.Sprintf("%s:%s", resource, action)

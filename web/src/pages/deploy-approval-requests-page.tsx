@@ -37,11 +37,11 @@ import { toast } from '@/components/ui/use-toast'
 import { UserMetaCell } from '@/components/user-meta-cell'
 import { useStepUp } from '@/contexts/step-up-context'
 import {
-  approveDeployRequest,
-  type DeployRequest,
-  listDeployRequests,
-  rejectDeployRequest,
-  type UpdateDeployRequestStatusRequest,
+  approveDeployApprovalRequest,
+  type DeployApprovalRequest,
+  listDeployApprovalRequests,
+  rejectDeployApprovalRequest,
+  type UpdateDeployApprovalRequestStatusRequest,
 } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -71,7 +71,7 @@ function statusBadge(status: string) {
   return <Badge variant={variant}>{status}</Badge>
 }
 
-function toNotesPayload(notes: string): UpdateDeployRequestStatusRequest | undefined {
+function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest | undefined {
   const trimmed = notes.trim()
   return trimmed ? { notes: trimmed } : undefined
 }
@@ -118,21 +118,21 @@ function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keep consolidated for now.
-export function DeployRequestsPage() {
+export function DeployApprovalRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [rejectRequest, setRejectRequest] = useState<DeployRequest | null>(null)
+  const [rejectRequest, setRejectRequest] = useState<DeployApprovalRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
-  const [selectedRequest, setSelectedRequest] = useState<DeployRequest | null>(null)
+  const [selectedRequest, setSelectedRequest] = useState<DeployApprovalRequest | null>(null)
   const queryClient = useQueryClient()
   const { handleStepUpError } = useStepUp()
 
-  const queryKey = useMemo(() => ['deploy-requests', statusFilter], [statusFilter])
+  const queryKey = useMemo(() => ['deploy-approval-requests', statusFilter], [statusFilter])
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey,
     queryFn: () => {
       const params = statusFilter === 'all' ? undefined : { status: statusFilter }
-      return listDeployRequests(params)
+      return listDeployApprovalRequests(params)
     },
     staleTime: 0,
     refetchOnMount: 'always',
@@ -141,7 +141,7 @@ export function DeployRequestsPage() {
   })
 
   const approveMutation = useMutation({
-    mutationFn: (id: number) => approveDeployRequest(id, {}),
+    mutationFn: (id: number) => approveDeployApprovalRequest(id, {}),
     onSuccess: (_data, id) => {
       toast.success(`Request ${id} was approved`)
       queryClient.invalidateQueries({ queryKey })
@@ -150,7 +150,7 @@ export function DeployRequestsPage() {
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, notes }: { id: number; notes: string }) =>
-      rejectDeployRequest(id, toNotesPayload(notes)),
+      rejectDeployApprovalRequest(id, toNotesPayload(notes)),
     onSuccess: (_data, { id }) => {
       toast.success(`Request ${id} was rejected`)
       setRejectRequest(null)
@@ -159,7 +159,7 @@ export function DeployRequestsPage() {
     },
   })
 
-  const requests = data?.deploy_requests ?? []
+  const requests = data?.deploy_approval_requests ?? []
 
   const {
     page,
@@ -215,7 +215,7 @@ export function DeployRequestsPage() {
     [approveRequest]
   )
 
-  const handleRejectClick = (request: DeployRequest) => {
+  const handleRejectClick = (request: DeployApprovalRequest) => {
     setRejectRequest(request)
     setRejectNotes('')
   }
@@ -225,7 +225,7 @@ export function DeployRequestsPage() {
       <div className="space-y-6">
         <TablePane
           empty={isEmpty}
-          emptyMessage={`No ${statusFilter} deploy requests found`}
+          emptyMessage={`No ${statusFilter} deploy approval requests found`}
           error={isError ? error : null}
           headerRight={
             <div className="flex items-center gap-2">
@@ -250,7 +250,7 @@ export function DeployRequestsPage() {
             </div>
           }
           loading={isLoading}
-          title="Deploy Requests"
+          title="Deploy Approval Requests"
         >
           <Table>
             <TableHeader>
@@ -269,7 +269,7 @@ export function DeployRequestsPage() {
             <TableBody>
               {visibleRequests.map((request) =>
                 request.id == null ? null : (
-                  <DeployRequestRow
+                  <DeployApprovalRequestRow
                     approveDisabled={approveDisabled}
                     approvePending={approveMutation.isPending}
                     key={request.id}
@@ -316,7 +316,7 @@ export function DeployRequestsPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reject deploy request</DialogTitle>
+            <DialogTitle>Reject deploy approval request</DialogTitle>
             <DialogDescription>
               Provide an optional reason for rejecting request {rejectRequest?.id ?? '—'}.
             </DialogDescription>
@@ -366,7 +366,7 @@ export function DeployRequestsPage() {
       >
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
           <DialogHeader>
-            <DialogTitle>Deploy request details</DialogTitle>
+            <DialogTitle>Deploy approval request details</DialogTitle>
             <DialogDescription>
               Review the full metadata for the selected request.
             </DialogDescription>
@@ -448,18 +448,18 @@ export function DeployRequestsPage() {
   )
 }
 
-type DeployRequestRowProps = {
-  request: DeployRequest
+type DeployApprovalRequestRowProps = {
+  request: DeployApprovalRequest
   approveDisabled: boolean
   approvePending: boolean
   rejectDisabled: boolean
   rejectPending: boolean
   onApprove: (id: number) => void
-  onReject: (request: DeployRequest) => void
-  onSelect: (request: DeployRequest) => void
+  onReject: (request: DeployApprovalRequest) => void
+  onSelect: (request: DeployApprovalRequest) => void
 }
 
-function DeployRequestRow({
+function DeployApprovalRequestRow({
   request,
   approveDisabled,
   approvePending,
@@ -468,7 +468,7 @@ function DeployRequestRow({
   onApprove,
   onReject,
   onSelect,
-}: DeployRequestRowProps) {
+}: DeployApprovalRequestRowProps) {
   const id = request.id
   if (id == null) {
     return null

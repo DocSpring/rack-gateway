@@ -12,43 +12,43 @@ type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
 
-type DeployRequestStage string
+type DeployApprovalRequestStage string
 
 const (
-	DeployRequestStageBuild   DeployRequestStage = "build"
-	DeployRequestStageObject  DeployRequestStage = "object"
-	DeployRequestStageRelease DeployRequestStage = "release"
-	DeployRequestStagePromote DeployRequestStage = "promote"
+	DeployApprovalRequestStageBuild   DeployApprovalRequestStage = "build"
+	DeployApprovalRequestStageObject  DeployApprovalRequestStage = "object"
+	DeployApprovalRequestStageRelease DeployApprovalRequestStage = "release"
+	DeployApprovalRequestStagePromote DeployApprovalRequestStage = "promote"
 )
 
 const (
-	DeployRequestStatusPending  = "pending"
-	DeployRequestStatusApproved = "approved"
-	DeployRequestStatusRejected = "rejected"
-	DeployRequestStatusConsumed = "consumed"
+	DeployApprovalRequestStatusPending  = "pending"
+	DeployApprovalRequestStatusApproved = "approved"
+	DeployApprovalRequestStatusRejected = "rejected"
+	DeployApprovalRequestStatusConsumed = "consumed"
 )
 
 var (
-	ErrDeployRequestActive        = errors.New("a deploy request is already pending or approved for this token")
-	ErrDeployRequestNotFound      = errors.New("deploy request not found")
-	ErrDeployApprovalMissing      = errors.New("deployment approval required")
-	ErrDeployRequestStageMismatch = errors.New("deploy approval not in required stage")
-	ErrDeployRequestExpired       = errors.New("deploy approval expired")
+	ErrDeployApprovalRequestActive        = errors.New("a deploy approval request is already pending or approved for this token")
+	ErrDeployApprovalRequestNotFound      = errors.New("deploy approval request not found")
+	ErrDeployApprovalMissing              = errors.New("deployment approval required")
+	ErrDeployApprovalRequestStageMismatch = errors.New("deploy approval not in required stage")
+	ErrDeployApprovalRequestExpired       = errors.New("deploy approval expired")
 )
 
-type DeployRequestConflictError struct {
-	Request *DeployRequest
+type DeployApprovalRequestConflictError struct {
+	Request *DeployApprovalRequest
 }
 
-func (e *DeployRequestConflictError) Error() string {
-	return ErrDeployRequestActive.Error()
+func (e *DeployApprovalRequestConflictError) Error() string {
+	return ErrDeployApprovalRequestActive.Error()
 }
 
-func (e *DeployRequestConflictError) Unwrap() error {
-	return ErrDeployRequestActive
+func (e *DeployApprovalRequestConflictError) Unwrap() error {
+	return ErrDeployApprovalRequestActive
 }
 
-const deployRequestSelect = `
+const deployApprovalRequestSelect = `
 SELECT
     dr.id,
     dr.rack,
@@ -81,15 +81,15 @@ SELECT
     dr.release_created_at,
     dr.release_promoted_at,
     dr.release_promoted_by_api_token_id
-FROM deploy_requests dr
+FROM deploy_approval_requests dr
 LEFT JOIN users created_user ON created_user.id = dr.created_by_user_id
 LEFT JOIN api_tokens target_token ON target_token.id = dr.target_api_token_id
 LEFT JOIN users approved_user ON approved_user.id = dr.approved_by_user_id
 LEFT JOIN users rejected_user ON rejected_user.id = dr.rejected_by_user_id
 `
 
-func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
-	var dr DeployRequest
+func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, error) {
+	var dr DeployApprovalRequest
 	var (
 		createdByUserID   sql.NullInt64
 		createdByEmail    sql.NullString
@@ -151,7 +151,7 @@ func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
 		&releasePromotedBy,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrDeployRequestNotFound
+			return nil, ErrDeployApprovalRequestNotFound
 		}
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func scanDeployRequest(scanner rowScanner) (*DeployRequest, error) {
 	return &dr, nil
 }
 
-func (d *Database) CreateDeployRequest(rack, message string, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployRequest, error) {
+func (d *Database) CreateDeployApprovalRequest(rack, message string, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
 	if strings.TrimSpace(rack) == "" {
 		rack = "default"
 	}
@@ -250,12 +250,12 @@ func (d *Database) CreateDeployRequest(rack, message string, createdByUserID int
 		return nil, fmt.Errorf("target api token required")
 	}
 
-	existing, err := d.activeDeployRequestByMessage(rack, message)
+	existing, err := d.activeDeployApprovalRequestByMessage(rack, message)
 	if err == nil && existing != nil {
-		return nil, &DeployRequestConflictError{Request: existing}
+		return nil, &DeployApprovalRequestConflictError{Request: existing}
 	}
-	if err != nil && !errors.Is(err, ErrDeployRequestNotFound) {
-		return nil, fmt.Errorf("failed to check existing deploy requests: %w", err)
+	if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
+		return nil, fmt.Errorf("failed to check existing deploy approval requests: %w", err)
 	}
 
 	var createdAPIToken sql.NullInt64
@@ -269,55 +269,55 @@ func (d *Database) CreateDeployRequest(rack, message string, createdByUserID int
 
 	var id int64
 	err = d.queryRow(
-		`INSERT INTO deploy_requests (rack, message, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
+		`INSERT INTO deploy_approval_requests (rack, message, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
          VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		rack,
 		message,
-		DeployRequestStatusPending,
+		DeployApprovalRequestStatusPending,
 		createdByUserID,
 		createdAPIToken,
 		targetAPITokenID,
 		tgtUser,
 	).Scan(&id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create deploy request: %w", err)
+		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
 	}
-	return d.GetDeployRequest(id)
+	return d.GetDeployApprovalRequest(id)
 }
 
-func (d *Database) GetDeployRequest(id int64) (*DeployRequest, error) {
-	row := d.queryRow(deployRequestSelect+" WHERE dr.id = ?", id)
-	return scanDeployRequest(row)
+func (d *Database) GetDeployApprovalRequest(id int64) (*DeployApprovalRequest, error) {
+	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.id = ?", id)
+	return scanDeployApprovalRequest(row)
 }
 
-func (d *Database) activeDeployRequestByMessage(rack, message string) (*DeployRequest, error) {
+func (d *Database) activeDeployApprovalRequestByMessage(rack, message string) (*DeployApprovalRequest, error) {
 	trimmedRack := strings.TrimSpace(rack)
 	if trimmedRack == "" {
 		trimmedRack = "default"
 	}
 	trimmedMessage := strings.TrimSpace(message)
 	row := d.queryRow(
-		deployRequestSelect+` WHERE dr.rack = ? AND dr.message = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
+		deployApprovalRequestSelect+` WHERE dr.rack = ? AND dr.message = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
 		trimmedRack,
 		trimmedMessage,
 	)
-	return scanDeployRequest(row)
+	return scanDeployApprovalRequest(row)
 }
 
-func (d *Database) ActiveDeployRequestByToken(tokenID int64) (*DeployRequest, error) {
+func (d *Database) ActiveDeployApprovalRequestByToken(tokenID int64) (*DeployApprovalRequest, error) {
 	row := d.queryRow(
-		deployRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
+		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.status IN ('pending','approved') ORDER BY dr.created_at DESC LIMIT 1`,
 		tokenID,
 	)
-	return scanDeployRequest(row)
+	return scanDeployApprovalRequest(row)
 }
 
-func (d *Database) GetDeployRequestForUser(id, userID int64) (*DeployRequest, error) {
-	row := d.queryRow(deployRequestSelect+" WHERE dr.id = ? AND dr.created_by_user_id = ?", id, userID)
-	return scanDeployRequest(row)
+func (d *Database) GetDeployApprovalRequestForUser(id, userID int64) (*DeployApprovalRequest, error) {
+	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.id = ? AND dr.created_by_user_id = ?", id, userID)
+	return scanDeployApprovalRequest(row)
 }
 
-type DeployRequestListOptions struct {
+type DeployApprovalRequestListOptions struct {
 	Status   string
 	Limit    int
 	Offset   int
@@ -325,7 +325,7 @@ type DeployRequestListOptions struct {
 	TokenID  int64
 }
 
-func (d *Database) ListDeployRequests(opts DeployRequestListOptions) ([]*DeployRequest, error) {
+func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOptions) ([]*DeployApprovalRequest, error) {
 	clauses := []string{"TRUE"}
 	args := []interface{}{}
 	if opts.Status != "" {
@@ -343,20 +343,20 @@ func (d *Database) ListDeployRequests(opts DeployRequestListOptions) ([]*DeployR
 	if limit <= 0 || limit > 200 {
 		limit = 200
 	}
-	query := deployRequestSelect + " WHERE " + strings.Join(clauses, " AND ") + " ORDER BY dr.created_at DESC LIMIT ? OFFSET ?"
+	query := deployApprovalRequestSelect + " WHERE " + strings.Join(clauses, " AND ") + " ORDER BY dr.created_at DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := d.query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list deploy requests: %w", err)
+		return nil, fmt.Errorf("failed to list deploy approval requests: %w", err)
 	}
 	defer rows.Close() //nolint:errcheck
 
-	var out []*DeployRequest
+	var out []*DeployApprovalRequest
 	for rows.Next() {
-		req, err := scanDeployRequest(rows)
+		req, err := scanDeployApprovalRequest(rows)
 		if err != nil {
-			if errors.Is(err, ErrDeployRequestNotFound) {
+			if errors.Is(err, ErrDeployApprovalRequestNotFound) {
 				continue
 			}
 			return nil, err
@@ -366,68 +366,68 @@ func (d *Database) ListDeployRequests(opts DeployRequestListOptions) ([]*DeployR
 	return out, nil
 }
 
-func (d *Database) ApproveDeployRequest(id int64, approverUserID int64, expiresAt time.Time, notes string) (*DeployRequest, error) {
+func (d *Database) ApproveDeployApprovalRequest(id int64, approverUserID int64, expiresAt time.Time, notes string) (*DeployApprovalRequest, error) {
 	res, err := d.exec(
-		`UPDATE deploy_requests
+		`UPDATE deploy_approval_requests
          SET status = ?, approved_by_user_id = ?, approved_at = NOW(), approval_expires_at = ?, approval_notes = ?, updated_at = NOW()
          WHERE id = ? AND status = ?`,
-		DeployRequestStatusApproved,
+		DeployApprovalRequestStatusApproved,
 		approverUserID,
 		expiresAt,
 		strings.TrimSpace(notes),
 		id,
-		DeployRequestStatusPending,
+		DeployApprovalRequestStatusPending,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve deploy request: %w", err)
+		return nil, fmt.Errorf("failed to approve deploy approval request: %w", err)
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve deploy request: %w", err)
+		return nil, fmt.Errorf("failed to approve deploy approval request: %w", err)
 	}
 	if rows == 0 {
-		return nil, ErrDeployRequestNotFound
+		return nil, ErrDeployApprovalRequestNotFound
 	}
-	return d.GetDeployRequest(id)
+	return d.GetDeployApprovalRequest(id)
 }
 
-func (d *Database) RejectDeployRequest(id int64, approverUserID int64, notes string) (*DeployRequest, error) {
+func (d *Database) RejectDeployApprovalRequest(id int64, approverUserID int64, notes string) (*DeployApprovalRequest, error) {
 	res, err := d.exec(
-		`UPDATE deploy_requests
+		`UPDATE deploy_approval_requests
          SET status = ?, rejected_by_user_id = ?, rejected_at = NOW(), approval_notes = ?, updated_at = NOW()
          WHERE id = ? AND status IN (?, ?)`,
-		DeployRequestStatusRejected,
+		DeployApprovalRequestStatusRejected,
 		approverUserID,
 		strings.TrimSpace(notes),
 		id,
-		DeployRequestStatusPending,
-		DeployRequestStatusApproved,
+		DeployApprovalRequestStatusPending,
+		DeployApprovalRequestStatusApproved,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to reject deploy request: %w", err)
+		return nil, fmt.Errorf("failed to reject deploy approval request: %w", err)
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		return nil, fmt.Errorf("failed to reject deploy request: %w", err)
+		return nil, fmt.Errorf("failed to reject deploy approval request: %w", err)
 	}
 	if rows == 0 {
-		return nil, ErrDeployRequestNotFound
+		return nil, ErrDeployApprovalRequestNotFound
 	}
-	return d.GetDeployRequest(id)
+	return d.GetDeployApprovalRequest(id)
 }
 
-func (d *Database) ActiveDeployRequestForStage(tokenID int64, rack string, stage DeployRequestStage, window time.Duration) (*DeployRequest, error) {
-	query := deployRequestSelect + `
+func (d *Database) ActiveDeployApprovalRequestForStage(tokenID int64, rack string, stage DeployApprovalRequestStage, window time.Duration) (*DeployApprovalRequest, error) {
+	query := deployApprovalRequestSelect + `
 WHERE dr.target_api_token_id = ?
   AND dr.status = ?
   AND dr.rack = ?
   AND dr.approved_at IS NOT NULL
 LIMIT 1
 `
-	row := d.queryRow(query, tokenID, DeployRequestStatusApproved, rack)
-	req, err := scanDeployRequest(row)
+	row := d.queryRow(query, tokenID, DeployApprovalRequestStatusApproved, rack)
+	req, err := scanDeployApprovalRequest(row)
 	if err != nil {
-		if errors.Is(err, ErrDeployRequestNotFound) {
+		if errors.Is(err, ErrDeployApprovalRequestNotFound) {
 			return nil, ErrDeployApprovalMissing
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -442,46 +442,46 @@ LIMIT 1
 		req.ApprovalExpiresAt = &exp
 	}
 	if req.ApprovalExpiresAt != nil && now.After(*req.ApprovalExpiresAt) {
-		_, _ = d.exec("UPDATE deploy_requests SET status = ?, updated_at = NOW() WHERE id = ? AND status = ?", DeployRequestStatusConsumed, req.ID, DeployRequestStatusApproved)
-		return nil, ErrDeployRequestExpired
+		_, _ = d.exec("UPDATE deploy_approval_requests SET status = ?, updated_at = NOW() WHERE id = ? AND status = ?", DeployApprovalRequestStatusConsumed, req.ID, DeployApprovalRequestStatusApproved)
+		return nil, ErrDeployApprovalRequestExpired
 	}
 
 	switch stage {
-	case DeployRequestStageObject:
+	case DeployApprovalRequestStageObject:
 		if strings.TrimSpace(req.BuildID) != "" || strings.TrimSpace(req.ObjectKey) != "" {
-			return nil, ErrDeployRequestStageMismatch
+			return nil, ErrDeployApprovalRequestStageMismatch
 		}
-	case DeployRequestStageBuild:
+	case DeployApprovalRequestStageBuild:
 		if strings.TrimSpace(req.ObjectKey) == "" || strings.TrimSpace(req.BuildID) != "" {
-			return nil, ErrDeployRequestStageMismatch
+			return nil, ErrDeployApprovalRequestStageMismatch
 		}
-	case DeployRequestStageRelease:
+	case DeployApprovalRequestStageRelease:
 		if strings.TrimSpace(req.BuildID) == "" || strings.TrimSpace(req.ReleaseID) != "" {
-			return nil, ErrDeployRequestStageMismatch
+			return nil, ErrDeployApprovalRequestStageMismatch
 		}
-	case DeployRequestStagePromote:
+	case DeployApprovalRequestStagePromote:
 		if strings.TrimSpace(req.ReleaseID) == "" || req.ReleasePromotedAt != nil {
-			return nil, ErrDeployRequestStageMismatch
+			return nil, ErrDeployApprovalRequestStageMismatch
 		}
 	default:
-		return nil, fmt.Errorf("unknown deploy request stage: %s", stage)
+		return nil, fmt.Errorf("unknown deploy approval request stage: %s", stage)
 	}
 
 	return req, nil
 }
 
-func (d *Database) MarkDeployRequestBuildUsed(id int64, buildID string, when time.Time) error {
+func (d *Database) MarkDeployApprovalRequestBuildUsed(id int64, buildID string, when time.Time) error {
 	if strings.TrimSpace(buildID) == "" {
 		return fmt.Errorf("build id required")
 	}
 	res, err := d.exec(
-		`UPDATE deploy_requests
+		`UPDATE deploy_approval_requests
          SET build_id = ?, build_created_at = ?, updated_at = NOW()
          WHERE id = ? AND status = ? AND object_key IS NOT NULL AND build_id IS NULL`,
 		buildID,
 		when,
 		id,
-		DeployRequestStatusApproved,
+		DeployApprovalRequestStatusApproved,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark build usage: %w", err)
@@ -491,23 +491,23 @@ func (d *Database) MarkDeployRequestBuildUsed(id int64, buildID string, when tim
 		return fmt.Errorf("failed to mark build usage: %w", err)
 	}
 	if rows == 0 {
-		return ErrDeployRequestStageMismatch
+		return ErrDeployApprovalRequestStageMismatch
 	}
 	return nil
 }
 
-func (d *Database) MarkDeployRequestObjectUsed(id int64, objectKey string, when time.Time) error {
+func (d *Database) MarkDeployApprovalRequestObjectUsed(id int64, objectKey string, when time.Time) error {
 	if strings.TrimSpace(objectKey) == "" {
 		return fmt.Errorf("object key required")
 	}
 	res, err := d.exec(
-		`UPDATE deploy_requests
+		`UPDATE deploy_approval_requests
          SET object_key = ?, object_created_at = ?, updated_at = NOW()
          WHERE id = ? AND status = ? AND build_id IS NULL AND object_key IS NULL`,
 		objectKey,
 		when,
 		id,
-		DeployRequestStatusApproved,
+		DeployApprovalRequestStatusApproved,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark object usage: %w", err)
@@ -517,23 +517,23 @@ func (d *Database) MarkDeployRequestObjectUsed(id int64, objectKey string, when 
 		return fmt.Errorf("failed to mark object usage: %w", err)
 	}
 	if rows == 0 {
-		return ErrDeployRequestStageMismatch
+		return ErrDeployApprovalRequestStageMismatch
 	}
 	return nil
 }
 
-func (d *Database) MarkDeployRequestReleaseCreated(id int64, releaseID string, when time.Time) error {
+func (d *Database) MarkDeployApprovalRequestReleaseCreated(id int64, releaseID string, when time.Time) error {
 	if strings.TrimSpace(releaseID) == "" {
 		return fmt.Errorf("release id required")
 	}
 	res, err := d.exec(
-		`UPDATE deploy_requests
+		`UPDATE deploy_approval_requests
          SET release_id = ?, release_created_at = ?, updated_at = NOW()
          WHERE id = ? AND status = ? AND build_id IS NOT NULL AND object_key IS NOT NULL AND release_id IS NULL`,
 		releaseID,
 		when,
 		id,
-		DeployRequestStatusApproved,
+		DeployApprovalRequestStatusApproved,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark release creation: %w", err)
@@ -543,24 +543,24 @@ func (d *Database) MarkDeployRequestReleaseCreated(id int64, releaseID string, w
 		return fmt.Errorf("failed to mark release creation: %w", err)
 	}
 	if rows == 0 {
-		return ErrDeployRequestStageMismatch
+		return ErrDeployApprovalRequestStageMismatch
 	}
 	return nil
 }
 
-func (d *Database) MarkDeployRequestPromoted(id int64, releaseID string, tokenID int64, when time.Time) error {
+func (d *Database) MarkDeployApprovalRequestPromoted(id int64, releaseID string, tokenID int64, when time.Time) error {
 	if strings.TrimSpace(releaseID) == "" {
 		return fmt.Errorf("release id required")
 	}
 	res, err := d.exec(
-		`UPDATE deploy_requests
+		`UPDATE deploy_approval_requests
          SET release_promoted_at = ?, release_promoted_by_api_token_id = ?, status = ?, updated_at = NOW()
          WHERE id = ? AND status = ? AND release_id = ? AND release_promoted_at IS NULL`,
 		when,
 		tokenID,
-		DeployRequestStatusConsumed,
+		DeployApprovalRequestStatusConsumed,
 		id,
-		DeployRequestStatusApproved,
+		DeployApprovalRequestStatusApproved,
 		releaseID,
 	)
 	if err != nil {
@@ -571,7 +571,7 @@ func (d *Database) MarkDeployRequestPromoted(id int64, releaseID string, tokenID
 		return fmt.Errorf("failed to mark release promotion: %w", err)
 	}
 	if rows == 0 {
-		return ErrDeployRequestStageMismatch
+		return ErrDeployApprovalRequestStageMismatch
 	}
 	return nil
 }

@@ -109,7 +109,7 @@ No production deployment can proceed without an authenticated administrator appr
 
 ### Audit and Evidence
 
-- All deploy requests, approvals, rejections, and completions logged.
+- All deploy approval requests, approvals, rejections, and completions logged.
 - Snapshot of approval context (commit, PR, diff link, artifact digest, policy checks).
 - Logs retained per SOC2 retention schedule.
 

@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
-export type GetAdminDeployRequestsParams = {
+export type GetAdminDeployApprovalRequestsParams = {
   /**
    * Filter by status
    */

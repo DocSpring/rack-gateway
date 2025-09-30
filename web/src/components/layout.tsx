@@ -92,7 +92,7 @@ export function Layout() {
     ]
 
     if (user?.roles?.includes('admin')) {
-      nav.push({ name: 'Deploy Approvals', href: '/deploy_requests', icon: ListChecks })
+      nav.push({ name: 'Deploy Approvals', href: '/deploy_approval_requests', icon: ListChecks })
     }
 
     nav.push({ name: 'Audit Logs', href: '/audit_logs', icon: FileText })

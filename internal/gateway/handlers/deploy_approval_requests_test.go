@@ -112,7 +112,7 @@ func createAPITokenHelper(t *testing.T, database *db.Database, userID int64) *db
 	return token
 }
 
-func TestCreateDeployRequestResolvesTargetTokenByPublicID(t *testing.T) {
+func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
@@ -142,7 +142,7 @@ func TestCreateDeployRequestResolvesTargetTokenByPublicID(t *testing.T) {
 	payload, err := json.Marshal(body)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/deploy-requests", strings.NewReader(string(payload)))
+	req := httptest.NewRequest(http.MethodPost, "/deploy-approval-requests", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email:      user.Email,
@@ -156,14 +156,14 @@ func TestCreateDeployRequestResolvesTargetTokenByPublicID(t *testing.T) {
 	c.Request = req
 	c.Set("user_email", user.Email)
 
-	handler.CreateDeployRequest(c)
+	handler.CreateDeployApprovalRequest(c)
 
 	resp := w.Result()
 	defer resp.Body.Close() //nolint:errcheck
 
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var got DeployRequestResponse
+	var got DeployApprovalRequestResponse
 	err = json.NewDecoder(resp.Body).Decode(&got)
 	require.NoError(t, err)
 	require.Equal(t, token.PublicID, got.TargetAPITokenID)
@@ -199,7 +199,7 @@ func TestPreapproveDeployCreatesApprovedRequest(t *testing.T) {
 	payload, err := json.Marshal(body)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/deploy-requests/preapprove", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/admin/deploy-approval-requests/preapprove", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{Email: admin.Email, Name: admin.Name}))
 
@@ -212,7 +212,7 @@ func TestPreapproveDeployCreatesApprovedRequest(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var resp DeployRequestResponse
+	var resp DeployApprovalRequestResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, token.PublicID, resp.TargetAPITokenID)
 	require.Equal(t, "approved", strings.ToLower(resp.Status))
@@ -244,7 +244,7 @@ func TestPreapproveDeployRequiresTarget(t *testing.T) {
 	payload, err := json.Marshal(body)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/deploy-requests/preapprove", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/admin/deploy-approval-requests/preapprove", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{Email: admin.Email, Name: admin.Name}))
 

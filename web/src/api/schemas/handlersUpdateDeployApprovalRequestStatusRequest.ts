@@ -5,8 +5,7 @@
  * API for the Convox Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
-import type { HandlersDeployRequestResponse } from './handlersDeployRequestResponse';
 
-export interface HandlersDeployRequestList {
-  deploy_requests?: HandlersDeployRequestResponse[];
+export interface HandlersUpdateDeployApprovalRequestStatusRequest {
+  notes?: string;
 }

@@ -7,7 +7,7 @@ This guide explains how the deploy-approval gate works, which roles can interact
 Deploy approvals add a manual checkpoint in front of sensitive Convox actions (build, object upload, release promote) when a user or API token only has the `*-with-approval` permissions. The flow is deliberately simple:
 
 1. A CI/CD bot (or human) asks the gateway for approval via `convox-gateway deploy-approval request "<message>"`.
-2. The request lands in the `deploy_requests` table with status `pending` and is visible in the admin UI at **Deploy Requests**.
+2. The request lands in the `deploy_approval_requests` table with status `pending` and is visible in the admin UI at **Deploy Approval Requests**.
 3. An administrator reviews the request, optionally adds notes, and either approves or rejects it.
 4. When approved, the request stays valid for `DEPLOY_APPROVAL_WINDOW` (15 minutes by default). The first Convox action that requires approval (build/object/release) consumes the record and stores the relevant IDs so it cannot be reused.
 5. If the requester has `--wait` enabled, the CLI command polls until the request leaves the pending state and exits with success/failure accordingly.
@@ -18,15 +18,15 @@ Approval can be bypassed entirely by setting `DISABLE_DEPLOY_APPROVALS=true` (in
 
 New RBAC scopes introduced with this feature:
 
-- `gateway:deploy-request:create` – allows an actor to call the deploy-request creation endpoint (the CLI uses this under the hood).
-- `gateway:deploy-request:approve` – surfaces the Deploy Requests admin page and enables approve/reject actions.
+- `gateway:deploy-approval-request:create` – allows an actor to call the deploy-approval-request creation endpoint (the CLI uses this under the hood).
+- `gateway:deploy-approval-request:approve` – surfaces the Deploy Approval Requests admin page and enables approve/reject actions.
 - `convox:build:create-with-approval`, `convox:object:create-with-approval`, `convox:release:create-with-approval`, `convox:release:promote-with-approval` – grant the ability to perform the action only when an approval record exists.
 
 If a user/token already has the direct permission (for example `convox:build:create`), the gateway skips the approval lookup.
 
 ### Database schema
 
-`deploy_requests` captures the lifecycle:
+`deploy_approval_requests` captures the lifecycle:
 
 | Column                                           | Notes                                                            |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
@@ -65,14 +65,14 @@ Administrators can pre-stage an approval for a CI token without waiting for the 
   --mfa-code 123456
 ```
 
-The command requires `gateway:deploy-request:approve`, an MFA step-up, and the public UUID of the target API token. The resulting request is inserted with status `approved` and expires after `DEPLOY_APPROVAL_WINDOW`. When the CI token next triggers a guarded Convox action, the pre-approved record is consumed automatically.
+The command requires `gateway:deploy-approval-request:approve`, an MFA step-up, and the public UUID of the target API token. The resulting request is inserted with status `approved` and expires after `DEPLOY_APPROVAL_WINDOW`. When the CI token next triggers a guarded Convox action, the pre-approved record is consumed automatically.
 
 ## Admin UI
 
-Admins (and any role with `gateway:deploy-request:approve`) can review requests at:
+Admins (and any role with `gateway:deploy-approval-request:approve`) can review requests at:
 
 ```
-/.gateway/web/deploy_requests
+/.gateway/web/deploy_approval_requests
 ```
 
 The page lists pending, approved, rejected and consumed requests, with filters on the top right. Approving or rejecting updates the status immediately and emits a toast notification.
@@ -126,7 +126,7 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 
 5. **Review in the UI**
 
-   - Visit `http://localhost:9447/.gateway/web/deploy_requests` in the browser.
+   - Visit `http://localhost:9447/.gateway/web/deploy_approval_requests` in the browser.
    - Approve or reject the pending row. When approved, the CLI unblocks with a success message.
 
 6. **Pre-approve via CLI (optional)**

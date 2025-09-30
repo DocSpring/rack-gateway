@@ -17,14 +17,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CreateDeployRequest godoc
+// CreateDeployApprovalRequest godoc
 // @Summary Request deploy approval
 // @Description Creates a manual approval record tied to an API token.
-// @Tags DeployRequests
+// @Tags DeployApprovalRequests
 // @Accept json
 // @Produce json
-// @Param request body CreateDeployRequestRequest true "Deploy request payload"
-// @Success 201 {object} DeployRequestResponse
+// @Param request body CreateDeployApprovalRequestRequest true "Deploy approval request payload"
+// @Success 201 {object} DeployApprovalRequestResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
@@ -32,8 +32,8 @@ import (
 // @Failure 409 {object} ErrorResponse "Conflict - pending request already exists"
 // @Failure 500 {object} ErrorResponse
 // @Security BearerAuth
-// @Router /deploy-requests [post]
-func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
+// @Router /deploy-approval-requests [post]
+func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
 		return
@@ -49,7 +49,7 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "create")
+	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "create")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -59,7 +59,7 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		return
 	}
 
-	var req CreateDeployRequestRequest
+	var req CreateDeployApprovalRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
@@ -83,14 +83,14 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 
 	authUser, _ := auth.GetAuthUser(c.Request.Context())
 
-	token, err := resolveDeployRequestToken(h.database, h.rbac, dbUser, req, authUser)
+	token, err := resolveDeployApprovalRequestToken(h.database, h.rbac, dbUser, req, authUser)
 	if err != nil {
 		switch {
-		case errors.Is(err, errDeployRequestTokenNotFound):
+		case errors.Is(err, errDeployApprovalRequestTokenNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "api token not found"})
-		case errors.Is(err, errDeployRequestForbidden):
+		case errors.Is(err, errDeployApprovalRequestForbidden):
 			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for target token"})
-		case errors.Is(err, errDeployRequestTargetMissing):
+		case errors.Is(err, errDeployApprovalRequestTargetMissing):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
@@ -120,18 +120,18 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		targetUserID = &id
 	}
 
-	record, err := h.database.CreateDeployRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
+	record, err := h.database.CreateDeployApprovalRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
 	if err != nil {
 		switch {
-		case errors.Is(err, db.ErrDeployRequestActive):
-			var conflict *db.DeployRequestConflictError
+		case errors.Is(err, db.ErrDeployApprovalRequestActive):
+			var conflict *db.DeployApprovalRequestConflictError
 			if errors.As(err, &conflict) && conflict.Request != nil {
-				c.JSON(http.StatusConflict, toDeployRequestResponse(conflict.Request))
+				c.JSON(http.StatusConflict, toDeployApprovalRequestResponse(conflict.Request))
 				return
 			}
 			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy request"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
 		}
 		return
 	}
@@ -146,8 +146,8 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
 		ActionType:   "gateway",
-		Action:       "deploy-request.create",
-		ResourceType: "deploy-request",
+		Action:       "deploy-approval-request.create",
+		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
 		Status:       "success",
@@ -158,16 +158,16 @@ func (h *APIHandler) CreateDeployRequest(c *gin.Context) {
 		_ = err
 	}
 
-	c.JSON(http.StatusCreated, toDeployRequestResponse(record))
+	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
 
 var (
-	errDeployRequestTokenNotFound = errors.New("api token not found")
-	errDeployRequestForbidden     = errors.New("not authorized for target token")
-	errDeployRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
+	errDeployApprovalRequestTokenNotFound = errors.New("api token not found")
+	errDeployApprovalRequestForbidden     = errors.New("not authorized for target token")
+	errDeployApprovalRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
 )
 
-func resolveDeployRequestToken(database *db.Database, rbacSvc rbac.RBACManager, user *db.User, req CreateDeployRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
+func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.RBACManager, user *db.User, req CreateDeployApprovalRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPITokenName)
 	var token *db.APIToken
 	var err error
@@ -199,39 +199,39 @@ func resolveDeployRequestToken(database *db.Database, rbacSvc rbac.RBACManager, 
 	}
 	if token == nil {
 		if hasExplicitTarget {
-			return nil, errDeployRequestTokenNotFound
+			return nil, errDeployApprovalRequestTokenNotFound
 		}
-		return nil, errDeployRequestTargetMissing
+		return nil, errDeployApprovalRequestTargetMissing
 	}
 
 	if token.UserID != user.ID {
-		allowedAdmin, err := rbacSvc.Enforce(user.Email, "gateway:deploy-request", "approve")
+		allowedAdmin, err := rbacSvc.Enforce(user.Email, "gateway:deploy-approval-request", "approve")
 		if err != nil {
 			return nil, fmt.Errorf("failed to check admin permission: %w", err)
 		}
 		if !allowedAdmin {
-			return nil, errDeployRequestForbidden
+			return nil, errDeployApprovalRequestForbidden
 		}
 	}
 
 	return token, nil
 }
 
-// GetDeployRequest godoc
+// GetDeployApprovalRequest godoc
 // @Summary Get deploy approval
 // @Description Returns the status of a deploy approval request.
-// @Tags DeployRequests
+// @Tags DeployApprovalRequests
 // @Produce json
-// @Param id path int true "Deploy request ID"
-// @Success 200 {object} DeployRequestResponse
+// @Param id path int true "Deploy approval request ID"
+// @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security BearerAuth
-// @Router /deploy-requests/{id} [get]
-func (h *APIHandler) GetDeployRequest(c *gin.Context) {
+// @Router /deploy-approval-requests/{id} [get]
+func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
 		return
@@ -259,17 +259,17 @@ func (h *APIHandler) GetDeployRequest(c *gin.Context) {
 		return
 	}
 
-	record, err := h.database.GetDeployRequest(id)
+	record, err := h.database.GetDeployApprovalRequest(id)
 	if err != nil {
-		if errors.Is(err, db.ErrDeployRequestNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "deploy request not found"})
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy approval request"})
 		return
 	}
 
-	allowedAdmin, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "approve")
+	allowedAdmin, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -283,27 +283,27 @@ func (h *APIHandler) GetDeployRequest(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, toDeployRequestResponse(record))
+	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
-// ListDeployRequests godoc
+// ListDeployApprovalRequests godoc
 // @Summary List deploy approvals
 // @Description Lists deploy approval requests (admin).
-// @Tags DeployRequests
+// @Tags DeployApprovalRequests
 // @Produce json
 // @Param status query string false "Filter by status"
 // @Param only_open query bool false "Only pending/approved"
 // @Param limit query int false "Limit"
 // @Param offset query int false "Offset"
-// @Success 200 {object} DeployRequestList
+// @Success 200 {object} DeployApprovalRequestList
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-requests [get]
-func (h *AdminHandler) ListDeployRequests(c *gin.Context) {
+// @Router /admin/deploy-approval-requests [get]
+func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
 		return
@@ -314,7 +314,7 @@ func (h *AdminHandler) ListDeployRequests(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 		return
 	}
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -324,7 +324,7 @@ func (h *AdminHandler) ListDeployRequests(c *gin.Context) {
 		return
 	}
 
-	opts := db.DeployRequestListOptions{}
+	opts := db.DeployApprovalRequestListOptions{}
 	if status := strings.TrimSpace(c.Query("status")); status != "" {
 		opts.Status = status
 	}
@@ -350,28 +350,28 @@ func (h *AdminHandler) ListDeployRequests(c *gin.Context) {
 		}
 	}
 
-	records, err := h.database.ListDeployRequests(opts)
+	records, err := h.database.ListDeployApprovalRequests(opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list deploy requests"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list deploy approval requests"})
 		return
 	}
 
-	responses := make([]DeployRequestResponse, 0, len(records))
+	responses := make([]DeployApprovalRequestResponse, 0, len(records))
 	for _, record := range records {
-		responses = append(responses, toDeployRequestResponse(record))
+		responses = append(responses, toDeployApprovalRequestResponse(record))
 	}
 
-	c.JSON(http.StatusOK, DeployRequestList{DeployRequests: responses})
+	c.JSON(http.StatusOK, DeployApprovalRequestList{DeployApprovalRequests: responses})
 }
 
-// PreapproveDeployRequest godoc
-// @Summary Pre-approve deploy request
-// @Description Creates and immediately approves a deploy request for a target API token.
-// @Tags DeployRequests
+// PreapproveDeployApprovalRequest godoc
+// @Summary Pre-approve deploy approval request
+// @Description Creates and immediately approves a deploy approval request for a target API token.
+// @Tags DeployApprovalRequests
 // @Accept json
 // @Produce json
-// @Param request body CreateDeployRequestRequest true "Deploy request payload"
-// @Success 201 {object} DeployRequestResponse
+// @Param request body CreateDeployApprovalRequestRequest true "Deploy approval request payload"
+// @Success 201 {object} DeployApprovalRequestResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
@@ -380,7 +380,7 @@ func (h *AdminHandler) ListDeployRequests(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-requests/preapprove [post]
+// @Router /admin/deploy-approval-requests/preapprove [post]
 func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
@@ -393,7 +393,7 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -403,7 +403,7 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		return
 	}
 
-	var req CreateDeployRequestRequest
+	var req CreateDeployApprovalRequestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
@@ -434,14 +434,14 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 	req.TargetAPITokenID = &targetID
 
 	authUser, _ := auth.GetAuthUser(c.Request.Context())
-	token, err := resolveDeployRequestToken(h.database, h.rbac, dbUser, req, authUser)
+	token, err := resolveDeployApprovalRequestToken(h.database, h.rbac, dbUser, req, authUser)
 	if err != nil {
 		switch {
-		case errors.Is(err, errDeployRequestTokenNotFound):
+		case errors.Is(err, errDeployApprovalRequestTokenNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "api token not found"})
-		case errors.Is(err, errDeployRequestForbidden):
+		case errors.Is(err, errDeployApprovalRequestForbidden):
 			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for target token"})
-		case errors.Is(err, errDeployRequestTargetMissing):
+		case errors.Is(err, errDeployApprovalRequestTargetMissing):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
@@ -471,13 +471,13 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		targetUserID = &id
 	}
 
-	record, err := h.database.CreateDeployRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
+	record, err := h.database.CreateDeployApprovalRequest(rackName, message, dbUser.ID, nil, token.ID, targetUserID)
 	if err != nil {
 		switch {
-		case errors.Is(err, db.ErrDeployRequestActive):
+		case errors.Is(err, db.ErrDeployApprovalRequestActive):
 			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy request"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
 		}
 		return
 	}
@@ -490,9 +490,9 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 	expiresAt := time.Now().Add(window)
 	notes := fmt.Sprintf("preapproved by %s", userEmail)
 
-	record, err = h.database.ApproveDeployRequest(record.ID, dbUser.ID, expiresAt, notes)
+	record, err = h.database.ApproveDeployApprovalRequest(record.ID, dbUser.ID, expiresAt, notes)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy approval request"})
 		return
 	}
 
@@ -508,8 +508,8 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
 		ActionType:   "gateway",
-		Action:       "deploy-request.preapprove",
-		ResourceType: "deploy-request",
+		Action:       "deploy-approval-request.preapprove",
+		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
 		Status:       "success",
@@ -519,18 +519,18 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 		_ = err
 	}
 
-	c.JSON(http.StatusCreated, toDeployRequestResponse(record))
+	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
 
-// ApproveDeployRequest godoc
-// @Summary Approve deploy request
+// ApproveDeployApprovalRequest godoc
+// @Summary Approve deploy approval request
 // @Description Approves a pending deploy approval request.
-// @Tags DeployRequests
+// @Tags DeployApprovalRequests
 // @Accept json
 // @Produce json
-// @Param id path int true "Deploy request ID"
-// @Param request body UpdateDeployRequestStatusRequest false "Approval notes"
-// @Success 200 {object} DeployRequestResponse
+// @Param id path int true "Deploy approval request ID"
+// @Param request body UpdateDeployApprovalRequestStatusRequest false "Approval notes"
+// @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
@@ -538,8 +538,8 @@ func (h *AdminHandler) PreapproveDeploy(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-requests/{id}/approve [post]
-func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
+// @Router /admin/deploy-approval-requests/{id}/approve [post]
+func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
 		return
@@ -551,7 +551,7 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -567,7 +567,7 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 		return
 	}
 
-	var payload UpdateDeployRequestStatusRequest
+	var payload UpdateDeployApprovalRequestStatusRequest
 	if err := c.ShouldBindJSON(&payload); err != nil && !errors.Is(err, io.EOF) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
@@ -585,13 +585,13 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 	}
 
 	expiresAt := time.Now().Add(window)
-	record, err := h.database.ApproveDeployRequest(id, approver.ID, expiresAt, payload.Notes)
+	record, err := h.database.ApproveDeployApprovalRequest(id, approver.ID, expiresAt, payload.Notes)
 	if err != nil {
-		if errors.Is(err, db.ErrDeployRequestNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "deploy request not found"})
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy approval request"})
 		return
 	}
 
@@ -605,8 +605,8 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
-		Action:       "deploy-request.approve",
-		ResourceType: "deploy-request",
+		Action:       "deploy-approval-request.approve",
+		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
 		Status:       "success",
@@ -614,18 +614,18 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 		HTTPStatus:   http.StatusOK,
 	})
 
-	c.JSON(http.StatusOK, toDeployRequestResponse(record))
+	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
-// RejectDeployRequest godoc
-// @Summary Reject deploy request
+// RejectDeployApprovalRequest godoc
+// @Summary Reject deploy approval request
 // @Description Rejects a pending deploy approval request.
-// @Tags DeployRequests
+// @Tags DeployApprovalRequests
 // @Accept json
 // @Produce json
-// @Param id path int true "Deploy request ID"
-// @Param request body UpdateDeployRequestStatusRequest false "Rejection notes"
-// @Success 200 {object} DeployRequestResponse
+// @Param id path int true "Deploy approval request ID"
+// @Param request body UpdateDeployApprovalRequestStatusRequest false "Rejection notes"
+// @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
@@ -633,8 +633,8 @@ func (h *AdminHandler) ApproveDeployRequest(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-requests/{id}/reject [post]
-func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
+// @Router /admin/deploy-approval-requests/{id}/reject [post]
+func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
 		return
@@ -646,7 +646,7 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -662,7 +662,7 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		return
 	}
 
-	var payload UpdateDeployRequestStatusRequest
+	var payload UpdateDeployApprovalRequestStatusRequest
 	if err := c.ShouldBindJSON(&payload); err != nil && !errors.Is(err, io.EOF) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
@@ -674,13 +674,13 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		return
 	}
 
-	record, err := h.database.RejectDeployRequest(id, approver.ID, payload.Notes)
+	record, err := h.database.RejectDeployApprovalRequest(id, approver.ID, payload.Notes)
 	if err != nil {
-		if errors.Is(err, db.ErrDeployRequestNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "deploy request not found"})
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reject deploy request"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reject deploy approval request"})
 		return
 	}
 
@@ -693,8 +693,8 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
-		Action:       "deploy-request.reject",
-		ResourceType: "deploy-request",
+		Action:       "deploy-approval-request.reject",
+		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
 		Status:       "success",
@@ -702,14 +702,14 @@ func (h *AdminHandler) RejectDeployRequest(c *gin.Context) {
 		HTTPStatus:   http.StatusOK,
 	})
 
-	c.JSON(http.StatusOK, toDeployRequestResponse(record))
+	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
-func toDeployRequestResponse(dr *db.DeployRequest) DeployRequestResponse {
+func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprovalRequestResponse {
 	if dr == nil {
-		return DeployRequestResponse{}
+		return DeployApprovalRequestResponse{}
 	}
-	resp := DeployRequestResponse{
+	resp := DeployApprovalRequestResponse{
 		ID:                 dr.ID,
 		Rack:               dr.Rack,
 		Message:            dr.Message,

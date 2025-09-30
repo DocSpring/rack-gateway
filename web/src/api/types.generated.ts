@@ -227,7 +227,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/deploy-requests": {
+    "/admin/deploy-approval-requests": {
         parameters: {
             query?: never;
             header?: never;
@@ -262,7 +262,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.DeployRequestList"];
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestList"];
                     };
                 };
                 /** @description Bad Request */
@@ -311,7 +311,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/deploy-requests/{id}/approve": {
+    "/admin/deploy-approval-requests/{id}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -321,7 +321,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Approve deploy request
+         * Approve deploy approval request
          * @description Approves a pending deploy approval request.
          */
         post: {
@@ -329,7 +329,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy request ID */
+                    /** @description Deploy approval request ID */
                     id: number;
                 };
                 cookie?: never;
@@ -337,7 +337,7 @@ export interface paths {
             /** @description Approval notes */
             requestBody?: {
                 content: {
-                    "application/json": components["schemas"]["handlers.UpdateDeployRequestStatusRequest"];
+                    "application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
                 };
             };
             responses: {
@@ -347,7 +347,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.DeployRequestResponse"];
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -403,7 +403,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/deploy-requests/{id}/reject": {
+    "/admin/deploy-approval-requests/{id}/reject": {
         parameters: {
             query?: never;
             header?: never;
@@ -413,7 +413,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reject deploy request
+         * Reject deploy approval request
          * @description Rejects a pending deploy approval request.
          */
         post: {
@@ -421,7 +421,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy request ID */
+                    /** @description Deploy approval request ID */
                     id: number;
                 };
                 cookie?: never;
@@ -429,7 +429,7 @@ export interface paths {
             /** @description Rejection notes */
             requestBody?: {
                 content: {
-                    "application/json": components["schemas"]["handlers.UpdateDeployRequestStatusRequest"];
+                    "application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
                 };
             };
             responses: {
@@ -439,7 +439,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.DeployRequestResponse"];
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -2598,7 +2598,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/deploy-requests": {
+    "/deploy-approval-requests": {
         parameters: {
             query?: never;
             header?: never;
@@ -2618,10 +2618,10 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            /** @description Deploy request payload */
+            /** @description Deploy approval request payload */
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["handlers.CreateDeployRequestRequest"];
+                    "application/json": components["schemas"]["handlers.CreateDeployApprovalRequestRequest"];
                 };
             };
             responses: {
@@ -2631,7 +2631,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.DeployRequestResponse"];
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -2696,7 +2696,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/deploy-requests/{id}": {
+    "/deploy-approval-requests/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2712,7 +2712,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy request ID */
+                    /** @description Deploy approval request ID */
                     id: number;
                 };
                 cookie?: never;
@@ -2725,7 +2725,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.DeployRequestResponse"];
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -3187,7 +3187,7 @@ export interface components {
             permissions?: string[];
             token?: string;
         };
-        "handlers.CreateDeployRequestRequest": {
+        "handlers.CreateDeployApprovalRequestRequest": {
             message: string;
             rack?: string;
             target_api_token?: string;
@@ -3208,10 +3208,10 @@ export interface components {
             recent_step_up_expires_at?: string;
             roles?: string[];
         };
-        "handlers.DeployRequestList": {
-            deploy_requests?: components["schemas"]["handlers.DeployRequestResponse"][];
+        "handlers.DeployApprovalRequestList": {
+            deploy_approval_requests?: components["schemas"]["handlers.DeployApprovalRequestResponse"][];
         };
-        "handlers.DeployRequestResponse": {
+        "handlers.DeployApprovalRequestResponse": {
             approval_expires_at?: string;
             approval_notes?: string;
             approved_at?: string;
@@ -3324,7 +3324,7 @@ export interface components {
         "handlers.UpdateAllowDestructiveActionsRequest": {
             allow_destructive_actions?: boolean;
         };
-        "handlers.UpdateDeployRequestStatusRequest": {
+        "handlers.UpdateDeployApprovalRequestStatusRequest": {
             notes?: string;
         };
         "handlers.UpdateEnvValuesRequest": {

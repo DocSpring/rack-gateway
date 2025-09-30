@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface HandlersDeployRequestResponse {
+export interface HandlersDeployApprovalRequestResponse {
   approval_expires_at?: string;
   approval_notes?: string;
   approved_at?: string;
