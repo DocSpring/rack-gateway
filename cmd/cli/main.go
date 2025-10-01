@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/convox-gateway/internal/cli/webauthn"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -838,8 +839,26 @@ func performMFAVerification(gatewayURL string, resp *LoginResponse) error {
 		return err
 	}
 
-	// TODO: Check for WebAuthn methods and try WebAuthn first if available
-	// For now, use TOTP/backup code verification
+	// Check if user has WebAuthn enrolled
+	mfaStatus, err := getMFAStatus(normalized, resp.Token)
+	if err != nil {
+		fmt.Printf("Warning: failed to check MFA status: %v\n", err)
+		// Continue with TOTP fallback
+	}
+
+	// Try WebAuthn first if available and device detected
+	if mfaStatus != nil && hasWebAuthnMethod(mfaStatus.Methods) && webauthn.CheckAvailability() {
+		if err := tryWebAuthnVerification(normalized, resp.Token); err == nil {
+			fmt.Println("MFA verified successfully with WebAuthn.")
+			resp.MFAVerified = true
+			resp.MFARequired = false
+			return nil
+		}
+		// If WebAuthn fails, fall back to TOTP
+		fmt.Printf("WebAuthn authentication failed, falling back to TOTP: %v\n", err)
+	}
+
+	// Fallback to TOTP prompt
 	for attempts := 0; attempts < 5; attempts++ {
 		code, err := promptMFACode()
 		if err != nil {
@@ -906,6 +925,163 @@ func promptMFACode() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(code), nil
+}
+
+type mfaStatusResponse struct {
+	Enrolled bool                `json:"enrolled"`
+	Required bool                `json:"required"`
+	Methods  []mfaMethodResponse `json:"methods"`
+}
+
+type mfaMethodResponse struct {
+	ID          int64  `json:"id"`
+	Type        string `json:"type"`
+	Label       string `json:"label"`
+	CreatedAt   string `json:"created_at"`
+	LastUsedAt  string `json:"last_used_at,omitempty"`
+	IsEnrolling bool   `json:"is_enrolling"`
+}
+
+func getMFAStatus(baseURL, sessionToken string) (*mfaStatusResponse, error) {
+	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/status", strings.TrimSuffix(baseURL, "/"))
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+sessionToken)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close() //nolint:errcheck // cleanup best-effort
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gateway error: %s", renderGatewayError(bodyBytes))
+	}
+
+	var status mfaStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return nil, fmt.Errorf("failed to decode MFA status: %w", err)
+	}
+
+	return &status, nil
+}
+
+func hasWebAuthnMethod(methods []mfaMethodResponse) bool {
+	for _, method := range methods {
+		if method.Type == "webauthn" && !method.IsEnrolling {
+			return true
+		}
+	}
+	return false
+}
+
+func tryWebAuthnVerification(baseURL, sessionToken string) error {
+	// Get assertion challenge from gateway
+	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/start", strings.TrimSuffix(baseURL, "/"))
+	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+sessionToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck // cleanup best-effort
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to start assertion: %s", renderGatewayError(bodyBytes))
+	}
+
+	var startResp struct {
+		Options struct {
+			Challenge        string `json:"challenge"`
+			Timeout          int    `json:"timeout"`
+			RPID             string `json:"rpId"`
+			AllowCredentials []struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+			} `json:"allowCredentials"`
+			UserVerification string `json:"userVerification"`
+		} `json:"options"`
+		SessionData string `json:"session_data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&startResp); err != nil {
+		return fmt.Errorf("failed to decode assertion start response: %w", err)
+	}
+
+	// Extract allowed credential IDs
+	var allowedCreds []string
+	for _, cred := range startResp.Options.AllowCredentials {
+		allowedCreds = append(allowedCreds, cred.ID)
+	}
+
+	// Get origin from base URL
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse gateway URL: %w", err)
+	}
+	origin := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+
+	// Perform WebAuthn assertion
+	assertionOpts := webauthn.AssertionOptions{
+		Challenge:        startResp.Options.Challenge,
+		RPID:             startResp.Options.RPID,
+		AllowCredentials: allowedCreds,
+		Timeout:          startResp.Options.Timeout,
+		UserVerification: startResp.Options.UserVerification,
+		Origin:           origin,
+	}
+
+	assertion, err := webauthn.GetAssertion(assertionOpts)
+	if err != nil {
+		return fmt.Errorf("WebAuthn assertion failed: %w", err)
+	}
+
+	// Serialize assertion response
+	assertionJSON, err := json.Marshal(assertion)
+	if err != nil {
+		return fmt.Errorf("failed to marshal assertion: %w", err)
+	}
+
+	// Submit assertion to gateway
+	verifyEndpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
+	verifyPayload := map[string]any{
+		"session_data":       startResp.SessionData,
+		"assertion_response": string(assertionJSON),
+		"trust_device":       false,
+	}
+
+	verifyBody, err := json.Marshal(verifyPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal verify payload: %w", err)
+	}
+
+	verifyReq, err := http.NewRequest(http.MethodPost, verifyEndpoint, bytes.NewReader(verifyBody))
+	if err != nil {
+		return err
+	}
+	verifyReq.Header.Set("Authorization", "Bearer "+sessionToken)
+	verifyReq.Header.Set("Content-Type", "application/json")
+
+	verifyResp, err := httpClient.Do(verifyReq)
+	if err != nil {
+		return err
+	}
+	defer verifyResp.Body.Close() //nolint:errcheck // cleanup best-effort
+
+	if verifyResp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(verifyResp.Body)
+		return fmt.Errorf("assertion verification failed: %s", renderGatewayError(bodyBytes))
+	}
+
+	return nil
 }
 
 func isInteractive() bool {
