@@ -296,7 +296,7 @@ export function MFAChallengePage() {
                 </p>
                 <Button className="w-full" disabled={disableWebAuthn} onClick={handleWebAuthn}>
                   {webAuthnMutation.isPending ? (
-                    <LoadingSpinner className="size-4" />
+                    <LoadingSpinner className="size-4" variant="white" />
                   ) : (
                     'Authenticate with Security Key'
                   )}
@@ -377,7 +377,11 @@ export function MFAChallengePage() {
         <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-4">
           {!useWebAuthn || mode === 'cli' ? (
             <Button className="w-full sm:w-auto" disabled={disableVerify} onClick={handleVerify}>
-              {mutation.isPending ? <LoadingSpinner className="size-4" /> : 'Verify and Continue'}
+              {mutation.isPending ? (
+                <LoadingSpinner className="size-4" variant="white" />
+              ) : (
+                'Verify and Continue'
+              )}
             </Button>
           ) : null}
           {mode === 'web' ? (

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import type { ReactNode } from 'react'
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Button } from '@/components/ui/button'
@@ -67,6 +67,14 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
 
   const hasWebAuthn = (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0
   const hasTOTP = (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0
+
+  // Update useWebAuthn when MFA status loads
+  useEffect(() => {
+    if (mfaStatus && isOpen) {
+      const defaultToWebAuthn = !hasTOTP && hasWebAuthn
+      setUseWebAuthn(defaultToWebAuthn)
+    }
+  }, [mfaStatus, hasTOTP, hasWebAuthn, isOpen])
 
   const resetForm = useCallback(() => {
     setVerificationCode('')
@@ -247,7 +255,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
                 }}
               >
                 {isVerifying ? (
-                  <LoadingSpinner className="size-4" />
+                  <LoadingSpinner className="size-4" variant="white" />
                 ) : (
                   'Authenticate with Security Key'
                 )}
