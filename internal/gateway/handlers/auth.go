@@ -857,7 +857,14 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 	now := time.Now()
 	var trustedDeviceID *int64
 	trustedCookieSet := false
-	if req.TrustDevice {
+
+	if authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+		return
+	}
+
+	// Only create a new trusted device if requested and session doesn't already have one
+	if req.TrustDevice && (authUser.Session.TrustedDeviceID == nil || *authUser.Session.TrustedDeviceID == 0) {
 		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
@@ -866,11 +873,9 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		h.setTrustedDeviceCookie(c, payload.Token)
 		trustedDeviceID = &payload.RecordID
 		trustedCookieSet = true
-	}
-
-	if authUser.Session == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
-		return
+	} else if authUser.Session.TrustedDeviceID != nil {
+		// Session already has a trusted device, reuse it
+		trustedDeviceID = authUser.Session.TrustedDeviceID
 	}
 
 	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
@@ -883,7 +888,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 	} else if authUser.Session != nil {
 		authUser.Session.RecentStepUpAt = &now
 	}
-	if trustedDeviceID != nil {
+	if trustedDeviceID != nil && trustedCookieSet {
 		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
 			log.Printf("failed attaching trusted device to session: %v", err)
 		}
@@ -948,7 +953,14 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 	now := time.Now()
 	var trustedDeviceID *int64
 	trustedCookieSet := false
-	if req.TrustDevice {
+
+	if authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+		return
+	}
+
+	// Only create a new trusted device if requested and session doesn't already have one
+	if req.TrustDevice && (authUser.Session.TrustedDeviceID == nil || *authUser.Session.TrustedDeviceID == 0) {
 		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
@@ -957,11 +969,9 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		h.setTrustedDeviceCookie(c, payload.Token)
 		trustedDeviceID = &payload.RecordID
 		trustedCookieSet = true
-	}
-
-	if authUser.Session == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
-		return
+	} else if authUser.Session.TrustedDeviceID != nil {
+		// Session already has a trusted device, reuse it
+		trustedDeviceID = authUser.Session.TrustedDeviceID
 	}
 
 	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
@@ -974,7 +984,7 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 	} else if authUser.Session != nil {
 		authUser.Session.RecentStepUpAt = &now
 	}
-	if trustedDeviceID != nil {
+	if trustedDeviceID != nil && trustedCookieSet {
 		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
 			log.Printf("failed attaching trusted device to session: %v", err)
 		}
@@ -1174,6 +1184,205 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 		log.Printf("failed to list remaining mfa methods: %v", err)
 	}
 	c.JSON(http.StatusOK, StatusResponse{Status: "deleted"})
+}
+
+// StartYubiOTPEnrollment godoc
+// @Summary Start Yubico OTP enrollment
+// @Description Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body StartYubiOTPEnrollmentRequest true "Yubikey OTP"
+// @Success 200 {object} StartYubiOTPEnrollmentResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/enroll/yubiotp/start [post]
+func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	var req StartYubiOTPEnrollmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	result, err := h.mfaService.StartYubiOTPEnrollment(userRecord, req.YubiOTP)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// StartWebAuthnEnrollment godoc
+// @Summary Start WebAuthn enrollment
+// @Description Begins WebAuthn credential registration. Returns a challenge for the browser.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Success 200 {object} StartWebAuthnEnrollmentResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/enroll/webauthn/start [post]
+func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	result, sessionData, err := h.mfaService.StartWebAuthnEnrollment(userRecord)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Store WebAuthn session data in the user's HTTP session metadata
+	sessionID, ok := auth.GetSessionID(c.Request.Context())
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "session not found"})
+		return
+	}
+
+	// Update session metadata with WebAuthn session
+	metadata := map[string]interface{}{
+		"webauthn_enrollment_session": sessionData,
+		"webauthn_enrollment_expires": time.Now().Add(5 * time.Minute).Unix(),
+	}
+	if err := h.database.UpdateSessionMetadata(sessionID, metadata); err != nil {
+		log.Printf("failed to store webauthn session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// ConfirmWebAuthnEnrollment godoc
+// @Summary Confirm WebAuthn enrollment
+// @Description Completes WebAuthn credential registration with the client's credential response.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body ConfirmWebAuthnEnrollmentRequest true "WebAuthn credential"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/enroll/webauthn/confirm [post]
+func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	var req ConfirmWebAuthnEnrollmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Retrieve WebAuthn session from HTTP session metadata
+	sessionID, ok := auth.GetSessionID(c.Request.Context())
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
+		return
+	}
+
+	session, err := h.database.GetSessionByID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load session"})
+		return
+	}
+
+	var sessionMeta map[string]interface{}
+	if len(session.Metadata) > 0 {
+		if err := json.Unmarshal(session.Metadata, &sessionMeta); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid session metadata"})
+			return
+		}
+	}
+
+	sessionDataStr, ok := sessionMeta["webauthn_enrollment_session"].(string)
+	if !ok || sessionDataStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session not found or expired"})
+		return
+	}
+
+	// Check expiration
+	expiresFloat, ok := sessionMeta["webauthn_enrollment_expires"].(float64)
+	if ok && time.Now().Unix() > int64(expiresFloat) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session expired"})
+		return
+	}
+
+	// Marshal credential to JSON
+	credentialJSON, err := json.Marshal(req.Credential)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid credential format"})
+		return
+	}
+
+	label := req.Label
+	if label == "" {
+		label = "Security Key"
+	}
+
+	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(userRecord, []byte(sessionDataStr), credentialJSON, label)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Clear WebAuthn session from metadata
+	delete(sessionMeta, "webauthn_enrollment_session")
+	delete(sessionMeta, "webauthn_enrollment_expires")
+	if err := h.database.UpdateSessionMetadata(sessionID, sessionMeta); err != nil {
+		log.Printf("failed to clear webauthn session: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "enrolled", "method_id": methodID})
 }
 
 // RevokeTrustedDevice godoc

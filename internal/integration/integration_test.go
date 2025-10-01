@@ -47,9 +47,9 @@ func TestIntegration(t *testing.T) {
 		t.Fatal("CRITICAL: Convox CLI is not installed. The convox-gateway requires the convox CLI to be installed. Install it from https://docs.convox.com/installation/cli/")
 	}
 
-	// Build binaries - fix paths to be relative to project root
-	t.Log("Building binaries...")
-	require.NoError(t, buildAllBinaries())
+	// Check that binaries exist (should be built by task build before running tests)
+	t.Log("Checking for pre-built binaries...")
+	require.NoError(t, checkBinariesExist())
 
 	// Start servers
 	servers := &TestServers{
@@ -105,28 +105,18 @@ func TestIntegration(t *testing.T) {
 	})
 }
 
-func buildAllBinaries() error {
-	jobs := []struct {
-		src string
-		out string
-	}{
-		{src: "../../cmd/mock-convox", out: "../../bin/mock-convox"},
-		{src: "../../cmd/gateway", out: "../../bin/convox-gateway-api"},
-		{src: "../../cmd/cli", out: "../../bin/convox-gateway"},
+func checkBinariesExist() error {
+	binaries := []string{
+		"../../bin/mock-convox",
+		"../../bin/convox-gateway-api",
+		"../../bin/convox-gateway",
 	}
-	for _, job := range jobs {
-		if err := buildBinary(job.src, job.out); err != nil {
-			return err
+	for _, binary := range binaries {
+		if _, err := os.Stat(binary); err != nil {
+			return fmt.Errorf("required binary not found: %s (run 'task build' first)", binary)
 		}
 	}
 	return nil
-}
-
-func buildBinary(source, output string) error {
-	cmd := exec.Command("go", "build", "-o", output, source)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 func (s *TestServers) startMockConvox(t *testing.T) {

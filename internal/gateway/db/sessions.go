@@ -388,3 +388,51 @@ func nullableUUID(val string) interface{} {
 	}
 	return trimmed
 }
+
+// GetSessionByID retrieves a session by its ID (alias for GetUserSessionByID for consistency).
+func (d *Database) GetSessionByID(id int64) (*UserSession, error) {
+	return d.GetUserSessionByID(id)
+}
+
+// UpdateSessionMetadata merges new metadata into the existing session metadata.
+func (d *Database) UpdateSessionMetadata(sessionID int64, metadata map[string]interface{}) error {
+	if len(metadata) == 0 {
+		return nil
+	}
+
+	// Get current session
+	session, err := d.GetSessionByID(sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+	if session == nil {
+		return fmt.Errorf("session not found")
+	}
+
+	// Parse existing metadata
+	existingMeta := make(map[string]interface{})
+	if len(session.Metadata) > 0 {
+		if err := json.Unmarshal(session.Metadata, &existingMeta); err != nil {
+			return fmt.Errorf("failed to parse existing metadata: %w", err)
+		}
+	}
+
+	// Merge new metadata
+	for k, v := range metadata {
+		existingMeta[k] = v
+	}
+
+	// Serialize back to JSON
+	metaJSON := marshalJSONMap(existingMeta)
+
+	// Update session
+	_, err = d.exec(
+		"UPDATE user_sessions SET metadata = ?, updated_at = NOW() WHERE id = ?",
+		metaJSON,
+		sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update session metadata: %w", err)
+	}
+	return nil
+}

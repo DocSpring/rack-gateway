@@ -13,6 +13,7 @@ export type User = {
   mfaEnrolled?: boolean
   mfaRequired?: boolean
   recentStepUpExpiresAt?: string | null
+  has_trusted_device?: boolean
   deploy_approvals_enabled?: boolean
 }
 
@@ -76,6 +77,7 @@ class AuthService {
         mfaEnrolled: Boolean(payload.mfa_enrolled),
         mfaRequired: Boolean(payload.mfa_required),
         recentStepUpExpiresAt: payload.recent_step_up_expires_at ?? null,
+        has_trusted_device: Boolean(payload.has_trusted_device),
         deploy_approvals_enabled: payload.deploy_approvals_enabled ?? true,
       }
 

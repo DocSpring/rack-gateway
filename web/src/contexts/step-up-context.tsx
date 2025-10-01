@@ -47,7 +47,7 @@ function isAxiosStepUpError(error: unknown): boolean {
 }
 
 export function StepUpProvider({ children }: { children: ReactNode }) {
-  const { refresh } = useAuth()
+  const { refresh, user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
   const [trustDevice, setTrustDevice] = useState(true)
@@ -194,14 +194,16 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
                 value={verificationCode}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                checked={trustDevice}
-                onChange={(event) => setTrustDevice(event.target.checked)}
-                type="checkbox"
-              />
-              Trust this browser for 30 days
-            </label>
+            {!user?.has_trusted_device && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  checked={trustDevice}
+                  onChange={(event) => setTrustDevice(event.target.checked)}
+                  type="checkbox"
+                />
+                Trust this browser for 30 days
+              </label>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 onClick={() => {

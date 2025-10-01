@@ -26,6 +26,28 @@ type ConfirmTOTPEnrollmentRequest struct {
 	Label       string `json:"label"`
 }
 
+type StartYubiOTPEnrollmentRequest struct {
+	YubiOTP string `json:"yubi_otp" binding:"required"`
+	Label   string `json:"label"`
+}
+
+type StartYubiOTPEnrollmentResponse struct {
+	MethodID    int64    `json:"method_id"`
+	BackupCodes []string `json:"backup_codes,omitempty"`
+}
+
+type StartWebAuthnEnrollmentResponse struct {
+	MethodID         int64       `json:"method_id"`
+	PublicKeyOptions interface{} `json:"public_key_options"`
+	BackupCodes      []string    `json:"backup_codes,omitempty"`
+}
+
+type ConfirmWebAuthnEnrollmentRequest struct {
+	MethodID   int64       `json:"method_id" binding:"required"`
+	Credential interface{} `json:"credential" binding:"required"`
+	Label      string      `json:"label"`
+}
+
 type VerifyMFARequest struct {
 	Code        string `json:"code" binding:"required"`
 	TrustDevice bool   `json:"trust_device"`
@@ -106,6 +128,7 @@ type CurrentUserResponse struct {
 	MFAEnrolled            bool         `json:"mfa_enrolled"`
 	MFARequired            bool         `json:"mfa_required"`
 	RecentStepUpExpiresAt  *time.Time   `json:"recent_step_up_expires_at,omitempty"`
+	HasTrustedDevice       bool         `json:"has_trusted_device"`
 	DeployApprovalsEnabled bool         `json:"deploy_approvals_enabled"`
 }
 

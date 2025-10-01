@@ -2092,6 +2092,214 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/enroll/webauthn/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm WebAuthn enrollment
+         * @description Completes WebAuthn credential registration with the client's credential response.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description WebAuthn credential */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.ConfirmWebAuthnEnrollmentRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StatusResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enroll/webauthn/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start WebAuthn enrollment
+         * @description Begins WebAuthn credential registration. Returns a challenge for the browser.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StartWebAuthnEnrollmentResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enroll/yubiotp/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Yubico OTP enrollment
+         * @description Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Yubikey OTP */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.StartYubiOTPEnrollmentRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StartYubiOTPEnrollmentResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/mfa/methods/{methodID}": {
         parameters: {
             query?: never;
@@ -3176,6 +3384,11 @@ export interface components {
             method_id: number;
             trust_device?: boolean;
         };
+        "handlers.ConfirmWebAuthnEnrollmentRequest": {
+            credential: unknown;
+            label?: string;
+            method_id: number;
+        };
         "handlers.CreateAPITokenRequest": {
             name: string;
             permissions?: string[];
@@ -3203,6 +3416,7 @@ export interface components {
         "handlers.CurrentUserResponse": {
             deploy_approvals_enabled?: boolean;
             email?: string;
+            has_trusted_device?: boolean;
             mfa_enrolled?: boolean;
             mfa_required?: boolean;
             name?: string;
@@ -3296,6 +3510,19 @@ export interface components {
             method_id?: number;
             secret?: string;
             uri?: string;
+        };
+        "handlers.StartWebAuthnEnrollmentResponse": {
+            backup_codes?: string[];
+            method_id?: number;
+            public_key_options?: unknown;
+        };
+        "handlers.StartYubiOTPEnrollmentRequest": {
+            label?: string;
+            yubi_otp: string;
+        };
+        "handlers.StartYubiOTPEnrollmentResponse": {
+            backup_codes?: string[];
+            method_id?: number;
         };
         "handlers.StatusResponse": {
             status?: string;

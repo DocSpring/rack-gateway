@@ -216,9 +216,15 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 	if shouldEnforceMFA(h.mfaSettings, dbUser) {
 		response.MFARequired = true
 	}
-	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && authUser.Session != nil && authUser.Session.RecentStepUpAt != nil {
-		expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
-		response.RecentStepUpExpiresAt = &expires
+	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && authUser.Session != nil {
+		if authUser.Session.RecentStepUpAt != nil {
+			expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
+			response.RecentStepUpExpiresAt = &expires
+		}
+		// Check if session has a trusted device attached
+		if authUser.Session.TrustedDeviceID != nil && *authUser.Session.TrustedDeviceID > 0 {
+			response.HasTrustedDevice = true
+		}
 	}
 
 	if rc, ok := h.primaryRack(); ok {

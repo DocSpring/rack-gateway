@@ -10,6 +10,7 @@ import type { HandlersRackSummary } from './handlersRackSummary';
 export interface HandlersCurrentUserResponse {
   deploy_approvals_enabled?: boolean;
   email?: string;
+  has_trusted_device?: boolean;
   mfa_enrolled?: boolean;
   mfa_required?: boolean;
   name?: string;

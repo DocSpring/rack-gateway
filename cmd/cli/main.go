@@ -888,7 +888,7 @@ func submitMFAVerification(baseURL, sessionToken, code string) error {
 func promptMFACode() (string, error) {
 	fd := int(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
-		fmt.Print("Enter 6-digit MFA code: ")
+		fmt.Print("Enter MFA code (TOTP, Yubikey OTP, or backup code): ")
 		codeBytes, err := term.ReadPassword(fd)
 		fmt.Println()
 		if err != nil {
@@ -897,7 +897,7 @@ func promptMFACode() (string, error) {
 		return strings.TrimSpace(string(codeBytes)), nil
 	}
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter 6-digit MFA code: ")
+	fmt.Print("Enter MFA code (TOTP, Yubikey OTP, or backup code): ")
 	code, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err

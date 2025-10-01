@@ -27,6 +27,7 @@ import type {
   HandlersBackupCodesResponse,
   HandlersCLILoginCompleteRequest,
   HandlersConfirmTOTPEnrollmentRequest,
+  HandlersConfirmWebAuthnEnrollmentRequest,
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
   HandlersCreateDeployApprovalRequestRequest,
@@ -40,6 +41,9 @@ import type {
   HandlersRevokeAllSessionsResponse,
   HandlersRevokeSessionResponse,
   HandlersStartTOTPEnrollmentResponse,
+  HandlersStartWebAuthnEnrollmentResponse,
+  HandlersStartYubiOTPEnrollmentRequest,
+  HandlersStartYubiOTPEnrollmentResponse,
   HandlersStatusResponse,
   HandlersTokenPermissionMetadata,
   HandlersUpdateAPITokenRequest,
@@ -601,6 +605,57 @@ export const getConvoxGatewayAPI = () => {
   };
 
   /**
+   * Completes WebAuthn credential registration with the client's credential response.
+   * @summary Confirm WebAuthn enrollment
+   */
+  const postAuthMfaEnrollWebauthnConfirm = (
+    handlersConfirmWebAuthnEnrollmentRequest: HandlersConfirmWebAuthnEnrollmentRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/auth/mfa/enroll/webauthn/confirm`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersConfirmWebAuthnEnrollmentRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Begins WebAuthn credential registration. Returns a challenge for the browser.
+   * @summary Start WebAuthn enrollment
+   */
+  const postAuthMfaEnrollWebauthnStart = (
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStartWebAuthnEnrollmentResponse>(
+      { url: `/auth/mfa/enroll/webauthn/start`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
+   * @summary Start Yubico OTP enrollment
+   */
+  const postAuthMfaEnrollYubiotpStart = (
+    handlersStartYubiOTPEnrollmentRequest: HandlersStartYubiOTPEnrollmentRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStartYubiOTPEnrollmentResponse>(
+      {
+        url: `/auth/mfa/enroll/yubiotp/start`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersStartYubiOTPEnrollmentRequest,
+      },
+      options,
+    );
+  };
+
+  /**
    * Removes an existing MFA method for the current user.
    * @summary Delete an MFA method
    */
@@ -848,6 +903,9 @@ export const getConvoxGatewayAPI = () => {
     postAuthMfaBackupCodesRegenerate,
     postAuthMfaEnrollTotpConfirm,
     postAuthMfaEnrollTotpStart,
+    postAuthMfaEnrollWebauthnConfirm,
+    postAuthMfaEnrollWebauthnStart,
+    postAuthMfaEnrollYubiotpStart,
     deleteAuthMfaMethodsMethodID,
     getAuthMfaStatus,
     deleteAuthMfaTrustedDevicesDeviceID,
@@ -1058,6 +1116,27 @@ export type PostAuthMfaEnrollTotpStartResult = NonNullable<
   Awaited<
     ReturnType<
       ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollTotpStart']
+    >
+  >
+>;
+export type PostAuthMfaEnrollWebauthnConfirmResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollWebauthnConfirm']
+    >
+  >
+>;
+export type PostAuthMfaEnrollWebauthnStartResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollWebauthnStart']
+    >
+  >
+>;
+export type PostAuthMfaEnrollYubiotpStartResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollYubiotpStart']
     >
   >
 >;

@@ -289,10 +289,19 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 	return nil, fmt.Errorf("unsupported authentication method")
 }
 
-// GetUser extracts the authenticated user from the request context
+// GetAuthUser extracts the authenticated user from the request context
 func GetAuthUser(ctx context.Context) (*AuthUser, bool) {
 	user, ok := ctx.Value(UserContextKey).(*AuthUser)
 	return user, ok
+}
+
+// GetSessionID extracts the session ID from the request context
+func GetSessionID(ctx context.Context) (int64, bool) {
+	authUser, ok := ctx.Value(UserContextKey).(*AuthUser)
+	if !ok || authUser.IsAPIToken || authUser.Session == nil {
+		return 0, false
+	}
+	return authUser.Session.ID, true
 }
 
 // GetUser returns JWT claims for non-API token requests

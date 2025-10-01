@@ -159,6 +159,56 @@ func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 	return methods, nil
 }
 
+func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
+	query := `
+        SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at
+        FROM mfa_methods WHERE user_id = ? ORDER BY created_at
+    `
+	rows, err := d.query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all MFA methods: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	var methods []*MFAMethod
+	for rows.Next() {
+		var method MFAMethod
+		var label sql.NullString
+		var transports sql.NullString
+		var metadata sql.NullString
+		var confirmed sql.NullTime
+		var lastUsed sql.NullTime
+		if err := rows.Scan(&method.ID, &method.UserID, &method.Type, &label, &method.Secret, &method.CredentialID, &method.PublicKey, &transports, &metadata, &method.CreatedAt, &confirmed, &lastUsed); err != nil {
+			return nil, fmt.Errorf("failed to scan MFA method: %w", err)
+		}
+		if label.Valid {
+			method.Label = label.String
+		}
+		if transports.Valid {
+			var arr []string
+			if err := json.Unmarshal([]byte(transports.String), &arr); err == nil {
+				method.Transports = arr
+			}
+		}
+		if metadata.Valid {
+			method.Metadata = []byte(metadata.String)
+		}
+		if confirmed.Valid {
+			t := confirmed.Time
+			method.ConfirmedAt = &t
+		}
+		if lastUsed.Valid {
+			t := lastUsed.Time
+			method.LastUsedAt = &t
+		}
+		methods = append(methods, &method)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate all MFA methods: %w", err)
+	}
+	return methods, nil
+}
+
 func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
 	_, err := d.exec("UPDATE mfa_methods SET label = ? WHERE id = ?", nullableString(label, 150), methodID)
 	if err != nil {

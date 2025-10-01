@@ -64,7 +64,24 @@ func (a *App) initializeServices() error {
 	}
 	trustedDeviceTTL := time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
 	stepUpWindow := time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute
-	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret))
+
+	// Optional Yubico OTP configuration
+	yubiClientID := strings.TrimSpace(os.Getenv("YUBICO_CLIENT_ID"))
+	yubiSecretKey := strings.TrimSpace(os.Getenv("YUBICO_SECRET_KEY"))
+
+	// Optional WebAuthn configuration
+	webAuthnRPID := strings.TrimSpace(os.Getenv("WEBAUTHN_RP_ID"))
+	webAuthnOrigin := strings.TrimSpace(os.Getenv("WEBAUTHN_ORIGIN"))
+	if webAuthnRPID == "" && a.Config.Domain != "" {
+		// Auto-derive RP ID from domain
+		webAuthnRPID = a.Config.Domain
+	}
+	if webAuthnOrigin == "" && a.Config.Domain != "" {
+		// Auto-derive origin from domain
+		webAuthnOrigin = fmt.Sprintf("https://%s", a.Config.Domain)
+	}
+
+	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin)
 	if err != nil {
 		return fmt.Errorf("failed to initialize MFA service: %w", err)
 	}

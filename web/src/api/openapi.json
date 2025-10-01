@@ -2202,6 +2202,205 @@
                 }
             }
         },
+        "/auth/mfa/enroll/webauthn/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Completes WebAuthn credential registration with the client's credential response.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Confirm WebAuthn enrollment",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.ConfirmWebAuthnEnrollmentRequest"
+                            }
+                        }
+                    },
+                    "description": "WebAuthn credential",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.StatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/enroll/webauthn/start": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Begins WebAuthn credential registration. Returns a challenge for the browser.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start WebAuthn enrollment",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.StartWebAuthnEnrollmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/enroll/yubiotp/start": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start Yubico OTP enrollment",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.StartYubiOTPEnrollmentRequest"
+                            }
+                        }
+                    },
+                    "description": "Yubikey OTP",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.StartYubiOTPEnrollmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/mfa/methods/{methodID}": {
             "delete": {
                 "security": [
@@ -3442,6 +3641,22 @@
                     }
                 }
             },
+            "handlers.ConfirmWebAuthnEnrollmentRequest": {
+                "type": "object",
+                "required": [
+                    "credential",
+                    "method_id"
+                ],
+                "properties": {
+                    "credential": {},
+                    "label": {
+                        "type": "string"
+                    },
+                    "method_id": {
+                        "type": "integer"
+                    }
+                }
+            },
             "handlers.CreateAPITokenRequest": {
                 "type": "object",
                 "required": [
@@ -3541,6 +3756,9 @@
                     },
                     "email": {
                         "type": "string"
+                    },
+                    "has_trusted_device": {
+                        "type": "boolean"
                     },
                     "mfa_enrolled": {
                         "type": "boolean"
@@ -3825,6 +4043,49 @@
                     },
                     "uri": {
                         "type": "string"
+                    }
+                }
+            },
+            "handlers.StartWebAuthnEnrollmentResponse": {
+                "type": "object",
+                "properties": {
+                    "backup_codes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "method_id": {
+                        "type": "integer"
+                    },
+                    "public_key_options": {}
+                }
+            },
+            "handlers.StartYubiOTPEnrollmentRequest": {
+                "type": "object",
+                "required": [
+                    "yubi_otp"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string"
+                    },
+                    "yubi_otp": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.StartYubiOTPEnrollmentResponse": {
+                "type": "object",
+                "properties": {
+                    "backup_codes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "method_id": {
+                        "type": "integer"
                     }
                 }
             },
