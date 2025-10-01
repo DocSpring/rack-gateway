@@ -290,6 +290,17 @@ func (d *Database) ActiveDeployApprovalRequestByTokenAndRelease(tokenID int64, a
 	return scanDeployApprovalRequest(row)
 }
 
+// ActiveDeployApprovalRequestByTokenAndApp returns the most recent active (pending or approved, non-expired)
+// deploy approval request for the given token+app, regardless of release.
+func (d *Database) ActiveDeployApprovalRequestByTokenAndApp(tokenID int64, app string) (*DeployApprovalRequest, error) {
+	row := d.queryRow(
+		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.app = ? AND dr.status IN ('pending','approved') AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.created_at DESC LIMIT 1`,
+		tokenID,
+		app,
+	)
+	return scanDeployApprovalRequest(row)
+}
+
 func (d *Database) GetDeployApprovalRequestForUser(id, userID int64) (*DeployApprovalRequest, error) {
 	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.id = ? AND dr.created_by_user_id = ?", id, userID)
 	return scanDeployApprovalRequest(row)

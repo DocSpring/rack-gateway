@@ -60,7 +60,7 @@ SQL
   psql_exec "$sql"
 }
 
-reset_all_mfa_state() {
+reset_all_test_state() {
   if ! docker ps --format '{{.Names}}' | grep -q '^convox-gateway-postgres-1$'; then
     return 0
   fi
@@ -81,13 +81,19 @@ INSERT INTO settings (key, value, updated_at)
 ON CONFLICT (key) DO UPDATE
      SET value = jsonb_set(settings.value, '{require_all_users}', 'false'::jsonb, true),
          updated_at = NOW();
+-- Allow specific commands for E2E tests (deploy approvals)
+INSERT INTO settings (key, value, updated_at)
+     VALUES ('approved_commands', '{"commands": ["echo hello", "echo migrate"]}'::jsonb, NOW())
+ON CONFLICT (key) DO UPDATE
+     SET value = '{"commands": ["echo hello", "echo migrate"]}'::jsonb,
+         updated_at = NOW();
 SQL
   )
 
   psql_exec "$sql"
 }
 
-trap 'reset_all_mfa_state || true' EXIT
+trap 'reset_all_test_state || true' EXIT
 
 generate_totp_code() {
   local secret="$1"
@@ -251,6 +257,9 @@ function logout_cli() {
 # Tests
 # --------------------------------------------
 echo "Running CLI tests..."
+
+# Reset all state and set up approved commands for tests
+reset_all_test_state
 
 if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
@@ -420,6 +429,17 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     "convox ps --app convox-gateway" \
     "p-web-1"
 
+  # No commands allowed
+  verify_cgw_command_failure \
+    "convox run web --app convox-gateway 'delete everything'" \
+    "ERROR:"
+
+  # Not even approved commands
+  verify_cgw_command_failure \
+    "convox run web --app convox-gateway 'echo hello'" \
+    "ERROR:"
+
+
   # Create build and capture release identifier
   set +e
   build_output=$(./bin/convox-gateway convox build --app convox-gateway --description "cli-e2e" --id 2>&1)
@@ -477,6 +497,18 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
   export CONVOX_GATEWAY_RACK="Test"
 
+
+  # No unapproved commands allowed
+  verify_cgw_command_failure \
+    "convox run web --app convox-gateway 'delete everything'" \
+    "ERROR:"
+
+  # But now an approved command is allowed to be run
+  verify_cgw_command "convox run web 'echo hello'" \
+    'Connected to mock exec for app=convox-gateway pid=proc-123456' \
+    '$ echo hello'
+
+
   # Run mock migration command on the new release
   verify_cgw_command \
     "convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
@@ -486,6 +518,11 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   verify_cgw_command \
     "convox releases promote $RELEASE_ID --app convox-gateway" \
     "OK"
+
+  # Deploy approval request has been consumed. No more commands allowed
+  verify_cgw_command_failure \
+    "convox run web 'echo hello'" \
+    "ERROR:"
 
   # Clean up the API token now that the pipeline simulation is complete
   unset CONVOX_GATEWAY_API_TOKEN

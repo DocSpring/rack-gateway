@@ -104,12 +104,18 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
+    // Click Enable MFA button
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+    // Wait for method selector to appear and choose TOTP
+    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
+
     const enrollmentResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/enroll/totp/start') &&
         response.request().method() === 'POST'
     )
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
     const enrollmentResponse = await enrollmentResponsePromise
     const enrollment = (await enrollmentResponse.json()) as { secret: string }
 

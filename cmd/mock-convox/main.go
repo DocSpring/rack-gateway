@@ -51,6 +51,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -148,6 +149,7 @@ type System struct {
 
 // In-memory state for releases and current app release
 var (
+	idCounter           atomic.Uint64
 	currentReleaseByApp = map[string]string{
 		"convox-gateway": "RAPP123456",
 	}
@@ -157,6 +159,7 @@ var (
 			{ID: "RAPI123455", App: "convox-gateway", Build: "BAPI123455", Description: "Deployed by mock", Version: 9, Created: time.Now().Add(-48 * time.Hour), Env: envString()},
 		},
 	}
+
 	// In-memory, mutable rack parameters for GET/PUT /system
 	mockSystemParameters = map[string]string{
 		"access_log_retention_in_days": "7",
@@ -170,6 +173,11 @@ var (
 		"schedule_rack_scale_up":       "30 18 * * MON-THU",
 	}
 )
+
+// nextID appends an incrementing counter to a base ID to make it unique
+func nextID(base string) string {
+	return fmt.Sprintf("%s-%04d", base, idCounter.Add(1))
+}
 
 func main() {
 	if len(os.Args) > 1 {
@@ -513,7 +521,7 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 		"method":  r.Method,
 		"app":     app,
 		"service": service,
-		"id":      "proc-123456",
+		"id":      nextID("proc-123456"),
 	})
 }
 
@@ -756,7 +764,8 @@ func getBuild(w http.ResponseWriter, r *http.Request) {
 func createBuild(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
-	id := fmt.Sprintf("BNEW%06d", time.Now().UnixNano()%1000000)
+	baseID := fmt.Sprintf("BNEW%06d", time.Now().UnixNano()%1000000)
+	id := nextID(baseID)
 	build := Build{
 		ID:          id,
 		App:         app,
@@ -787,11 +796,12 @@ func handleReleases(w http.ResponseWriter, r *http.Request) {
 	app := vars["app"]
 	if r.Method == http.MethodPost {
 		// Create a new release and append to store
-		id := fmt.Sprintf("RAPI%06d", time.Now().UnixNano()%1000000)
+		baseID := fmt.Sprintf("RAPI%06d", time.Now().UnixNano()%1000000)
+		id := nextID(baseID)
 		rel := Release{
 			ID:          id,
 			App:         app,
-			Build:       "BNEW123456",
+			Build:       nextID("BNEW123456"),
 			Description: "Created by mock env set",
 			Version:     42,
 			Created:     time.Now(),

@@ -9,6 +9,8 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 - [Configuration](#configuration)
   - [Table of Contents](#table-of-contents)
   - [Core Server](#core-server)
+    - [Local Development Ports](#local-development-ports)
+    - [Web Frontend (runtime)](#web-frontend-runtime)
   - [Rack Connectivity](#rack-connectivity)
   - [Cookies and Session](#cookies-and-session)
   - [Database and Auditing](#database-and-auditing)
@@ -47,6 +49,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 - `SENTRY_JS_TRACES_SAMPLE_RATE` (optional)
   - Floating point sample rate (0-1) for browser performance tracing. Defaults to `0`.
 - `ENABLE_SENTRY_TEST_BUTTONS` (optional)
+
   - When set to `true`, surfaces the Sentry diagnostics actions in the admin settings UI. Defaults to
     `false` to keep the test triggers hidden.
 
@@ -95,8 +98,6 @@ All development and test ports are defined in `mise.toml`.
   - Controls the `Secure` attribute for auth and CSRF cookies.
 - `DEV_MODE` (default: `false`)
   - Enables developer-friendly behavior (e.g., non-secure cookies, dev email logging fallback, dev racks).
-- `FRONTEND_BASE_URL` (default: `/`)
-  - Redirect target after successful web login.
 
 ## Database and Auditing
 
@@ -108,6 +109,7 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
 - `TEST_DATABASE_URL` – optional override for test workflows (defaults to the same host as `DATABASE_URL` but points at `gateway_test`). The Go and web test harnesses automatically prefer this when present.
 
 - `LOG_RETENTION_DAYS` (required for production deploys)
+
   - Number of days to retain CloudWatch logs for the gateway service.
   - Recommended value: `2557` (7 years).
   - This must be set before deployment on Convox to configure log retention properly.
