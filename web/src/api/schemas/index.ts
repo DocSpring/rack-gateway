@@ -73,3 +73,5 @@ export * from './handlersUserSessionResponse';
 export * from './handlersUserSummary';
 export * from './handlersVerifyMFARequest';
 export * from './handlersVerifyMFAResponse';
+export * from './handlersVerifyWebAuthnAssertionRequest';
+export * from './handlersWebAuthnAssertionStartResponse';

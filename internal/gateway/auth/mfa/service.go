@@ -43,6 +43,11 @@ type Service struct {
 	timeFunc         func() time.Time // for testing
 }
 
+// IsWebAuthnConfigured returns true if WebAuthn is available
+func (s *Service) IsWebAuthnConfigured() bool {
+	return s.webAuthn != nil
+}
+
 // now returns the current time (mockable for tests)
 func (s *Service) now() time.Time {
 	if s.timeFunc != nil {

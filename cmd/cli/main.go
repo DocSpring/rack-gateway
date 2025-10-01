@@ -23,10 +23,12 @@ import (
 )
 
 type Config struct {
-	Current   string                   `json:"current,omitempty"`
-	Gateways  map[string]GatewayConfig `json:"gateways"`
-	Tokens    map[string]Token         `json:"tokens"`
-	MachineID string                   `json:"machine_id,omitempty"`
+	Current        string                   `json:"current,omitempty"`
+	Gateways       map[string]GatewayConfig `json:"gateways"`
+	Tokens         map[string]Token         `json:"tokens"`
+	MachineID      string                   `json:"machine_id,omitempty"`
+	MFAPreference  string                   `json:"mfa_preference,omitempty"`  // "auto", "webauthn", "totp", "backup_code", or "prompt"
+	MFAPreferences map[string]string        `json:"mfa_preferences,omitempty"` // per-rack MFA preferences
 }
 
 type GatewayConfig struct {
@@ -72,9 +74,16 @@ func loadConfig() (*Config, bool, error) {
 	if cfg.Tokens == nil {
 		cfg.Tokens = make(map[string]Token)
 	}
+	if cfg.MFAPreferences == nil {
+		cfg.MFAPreferences = make(map[string]string)
+	}
 	dirty := false
 	if strings.TrimSpace(cfg.MachineID) == "" {
 		cfg.MachineID = uuid.NewString()
+		dirty = true
+	}
+	if cfg.MFAPreference == "" {
+		cfg.MFAPreference = "auto" // Default to auto mode
 		dirty = true
 	}
 	if dirty {
@@ -94,6 +103,9 @@ func saveConfig(cfg *Config) error {
 	}
 	if cfg.Tokens == nil {
 		cfg.Tokens = make(map[string]Token)
+	}
+	if cfg.MFAPreferences == nil {
+		cfg.MFAPreferences = make(map[string]string)
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -839,45 +851,53 @@ func performMFAVerification(gatewayURL string, resp *LoginResponse) error {
 		return err
 	}
 
-	// Check if user has WebAuthn enrolled
+	// Get current rack to check for per-rack preference
+	rack, _ := getCurrentRack()
+
+	// Check what MFA methods user has enrolled
 	mfaStatus, err := getMFAStatus(normalized, resp.Token)
 	if err != nil {
-		fmt.Printf("Warning: failed to check MFA status: %v\n", err)
-		// Continue with TOTP fallback
+		return fmt.Errorf("failed to check MFA status: %w", err)
 	}
 
-	// Try WebAuthn first if available and device detected
-	if mfaStatus != nil && hasWebAuthnMethod(mfaStatus.Methods) && webauthn.CheckAvailability() {
-		if err := tryWebAuthnVerification(normalized, resp.Token); err == nil {
-			fmt.Println("MFA verified successfully with WebAuthn.")
+	if len(mfaStatus.Methods) == 0 {
+		return fmt.Errorf("no MFA methods enrolled")
+	}
+
+	// Determine which method to use based on preference
+	cfg, _, err := loadConfig()
+	if err != nil {
+		cfg = &Config{MFAPreference: "auto"}
+	}
+
+	preference := cfg.MFAPreference
+	if rack != "" && cfg.MFAPreferences != nil {
+		if rackPref, ok := cfg.MFAPreferences[rack]; ok {
+			preference = rackPref
+		}
+	}
+
+	// Try methods based on preference
+	if preference == "prompt" || (preference == "auto" && len(mfaStatus.Methods) > 1) {
+		// Let user select
+		return promptAndVerifyMFAMethod(normalized, resp, mfaStatus.Methods)
+	}
+
+	// Auto mode with single method, or specific preference
+	methods := filterMethodsByPreference(mfaStatus.Methods, preference)
+
+	for _, method := range methods {
+		if err := tryMFAMethod(normalized, resp.Token, method); err == nil {
+			fmt.Printf("MFA verified successfully with %s.\n", method.Type)
 			resp.MFAVerified = true
 			resp.MFARequired = false
 			return nil
 		}
-		// If WebAuthn fails, fall back to TOTP
-		fmt.Printf("WebAuthn authentication failed, falling back to TOTP: %v\n", err)
+		// Try next method
 	}
 
-	// Fallback to TOTP prompt
-	for attempts := 0; attempts < 5; attempts++ {
-		code, err := promptMFACode()
-		if err != nil {
-			return err
-		}
-		if code == "" {
-			fmt.Println("MFA code cannot be empty.")
-			continue
-		}
-		if err := submitMFAVerification(normalized, resp.Token, code); err != nil {
-			fmt.Printf("MFA verification failed: %v\n", err)
-			continue
-		}
-		fmt.Println("MFA verified successfully.")
-		resp.MFAVerified = true
-		resp.MFARequired = false
-		return nil
-	}
-	return fmt.Errorf("failed to verify MFA after multiple attempts")
+	// If all methods failed, prompt user to try manually
+	return promptAndVerifyMFAMethod(normalized, resp, mfaStatus.Methods)
 }
 
 func submitMFAVerification(baseURL, sessionToken, code string) error {
@@ -966,15 +986,6 @@ func getMFAStatus(baseURL, sessionToken string) (*mfaStatusResponse, error) {
 	}
 
 	return &status, nil
-}
-
-func hasWebAuthnMethod(methods []mfaMethodResponse) bool {
-	for _, method := range methods {
-		if method.Type == "webauthn" && !method.IsEnrolling {
-			return true
-		}
-	}
-	return false
 }
 
 func tryWebAuthnVerification(baseURL, sessionToken string) error {
@@ -1082,6 +1093,149 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	}
 
 	return nil
+}
+
+// filterMethodsByPreference returns methods sorted by preference
+func filterMethodsByPreference(methods []mfaMethodResponse, preference string) []mfaMethodResponse {
+	if preference == "auto" {
+		// Auto mode: try WebAuthn first if device available, then TOTP, then backup codes
+		var ordered []mfaMethodResponse
+		for _, m := range methods {
+			if m.Type == "webauthn" && !m.IsEnrolling && webauthn.CheckAvailability() {
+				ordered = append(ordered, m)
+			}
+		}
+		for _, m := range methods {
+			if m.Type == "totp" && !m.IsEnrolling {
+				ordered = append(ordered, m)
+			}
+		}
+		for _, m := range methods {
+			if m.Type == "backup_code" && !m.IsEnrolling {
+				ordered = append(ordered, m)
+			}
+		}
+		return ordered
+	}
+
+	// Specific preference - filter to only that type
+	var filtered []mfaMethodResponse
+	for _, m := range methods {
+		if m.Type == preference && !m.IsEnrolling {
+			filtered = append(filtered, m)
+		}
+	}
+	return filtered
+}
+
+// tryMFAMethod attempts to verify using a specific MFA method
+func tryMFAMethod(baseURL, sessionToken string, method mfaMethodResponse) error {
+	switch method.Type {
+	case "webauthn":
+		if !webauthn.CheckAvailability() {
+			return fmt.Errorf("no WebAuthn device detected")
+		}
+		return tryWebAuthnVerification(baseURL, sessionToken)
+	case "totp", "backup_code":
+		// For TOTP and backup codes, we need to prompt the user
+		return fmt.Errorf("interactive prompt required for %s", method.Type)
+	default:
+		return fmt.Errorf("unsupported MFA method: %s", method.Type)
+	}
+}
+
+// promptAndVerifyMFAMethod lets user select and verify an MFA method interactively
+func promptAndVerifyMFAMethod(baseURL string, resp *LoginResponse, methods []mfaMethodResponse) error {
+	if len(methods) == 0 {
+		return fmt.Errorf("no MFA methods available")
+	}
+
+	// If only one method, use it directly
+	if len(methods) == 1 {
+		return promptSingleMethod(baseURL, resp, methods[0])
+	}
+
+	// Multiple methods - let user choose
+	fmt.Println("\nAvailable MFA methods:")
+	for i, method := range methods {
+		label := method.Label
+		if label == "" {
+			label = method.Type
+		}
+		fmt.Printf("%d. %s (%s)\n", i+1, label, method.Type)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	for attempts := 0; attempts < 3; attempts++ {
+		fmt.Print("\nSelect method (1-", len(methods), "): ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read input: %w", err)
+		}
+
+		var choice int
+		if _, err := fmt.Sscanf(strings.TrimSpace(input), "%d", &choice); err != nil || choice < 1 || choice > len(methods) {
+			fmt.Println("Invalid choice, please try again.")
+			continue
+		}
+
+		method := methods[choice-1]
+		if err := promptSingleMethod(baseURL, resp, method); err == nil {
+			return nil
+		}
+		fmt.Printf("Verification failed: %v\n", err)
+		fmt.Println("Try another method or press Ctrl+C to cancel.")
+	}
+
+	return fmt.Errorf("failed to verify MFA after multiple attempts")
+}
+
+// promptSingleMethod handles verification for a single method
+func promptSingleMethod(baseURL string, resp *LoginResponse, method mfaMethodResponse) error {
+	switch method.Type {
+	case "webauthn":
+		if !webauthn.CheckAvailability() {
+			return fmt.Errorf("no WebAuthn device detected")
+		}
+		if err := tryWebAuthnVerification(baseURL, resp.Token); err != nil {
+			return err
+		}
+		fmt.Println("MFA verified successfully with WebAuthn.")
+		resp.MFAVerified = true
+		resp.MFARequired = false
+		return nil
+
+	case "totp":
+		fmt.Printf("\nEnter TOTP code from %s: ", method.Label)
+		code, err := promptMFACode()
+		if err != nil {
+			return err
+		}
+		if err := submitMFAVerification(baseURL, resp.Token, code); err != nil {
+			return err
+		}
+		fmt.Println("MFA verified successfully with TOTP.")
+		resp.MFAVerified = true
+		resp.MFARequired = false
+		return nil
+
+	case "backup_code":
+		fmt.Printf("\nEnter backup code: ")
+		code, err := promptMFACode()
+		if err != nil {
+			return err
+		}
+		if err := submitMFAVerification(baseURL, resp.Token, code); err != nil {
+			return err
+		}
+		fmt.Println("MFA verified successfully with backup code.")
+		resp.MFAVerified = true
+		resp.MFARequired = false
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported MFA method: %s", method.Type)
+	}
 }
 
 func isInteractive() bool {

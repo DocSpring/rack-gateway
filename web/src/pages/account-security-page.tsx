@@ -42,7 +42,6 @@ type MFAMethodType = 'totp' | 'webauthn'
 const STEP_UP_QUERY_KEY = ['mfaStatus'] as const
 const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
-  yubiotp: 'Yubikey OTP',
   webauthn: 'WebAuthn',
 }
 const DEFAULT_MFA_LABEL = 'Authenticator App'
@@ -93,7 +92,12 @@ export function AccountSecurityPage() {
   })
 
   useEffect(() => {
-    if (!enrollment?.uri) {
+    if (
+      !enrollment ||
+      enrollment.enrollmentType !== 'totp' ||
+      !('uri' in enrollment) ||
+      !enrollment.uri
+    ) {
       setQrDataUrl(null)
       return
     }
@@ -112,7 +116,7 @@ export function AccountSecurityPage() {
     return () => {
       cancelled = true
     }
-  }, [enrollment?.uri])
+  }, [enrollment])
 
   const needsStepUp = useMemo(() => {
     if (!status?.recent_step_up_expires_at) {
@@ -166,7 +170,13 @@ export function AccountSecurityPage() {
       toast.success('WebAuthn enrollment started')
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error))
+      const msg = getErrorMessage(error)
+      // If WebAuthn not configured, silently fall back to TOTP instead of showing error
+      if (msg.includes('not configured') || msg.includes('WebAuthn')) {
+        startTOTPMutation.mutate()
+      } else {
+        toast.error(msg)
+      }
     },
   })
 
@@ -438,7 +448,14 @@ export function AccountSecurityPage() {
                 disabled={
                   startTOTPMutation.isPending || startWebAuthnMutation.isPending || !!enrollment
                 }
-                onClick={() => setShowMethodSelector(true)}
+                onClick={() => {
+                  // If only TOTP is available, skip method selector and go straight to enrollment
+                  if (status?.webauthn_available) {
+                    setShowMethodSelector(true)
+                  } else {
+                    handleStartEnrollment('totp')
+                  }
+                }}
               >
                 {enrollment ? 'Enrollment In Progress' : 'Enable MFA'}
               </Button>
@@ -504,7 +521,7 @@ export function AccountSecurityPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <button
-                className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={startTOTPMutation.isPending}
                 onClick={() => handleStartEnrollment('totp')}
                 type="button"
@@ -515,17 +532,19 @@ export function AccountSecurityPage() {
                 </p>
               </button>
 
-              <button
-                className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={startWebAuthnMutation.isPending}
-                onClick={() => handleStartEnrollment('webauthn')}
-                type="button"
-              >
-                <h3 className="font-semibold">WebAuthn / FIDO2</h3>
-                <p className="text-muted-foreground text-sm">
-                  Use security keys, Touch ID, or Windows Hello
-                </p>
-              </button>
+              {status?.webauthn_available && (
+                <button
+                  className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={startWebAuthnMutation.isPending}
+                  onClick={() => handleStartEnrollment('webauthn')}
+                  type="button"
+                >
+                  <h3 className="font-semibold">WebAuthn / FIDO2</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Use security keys, Touch ID, or Windows Hello
+                  </p>
+                </button>
+              )}
             </div>
 
             <Button onClick={() => setShowMethodSelector(false)} variant="outline">
@@ -562,7 +581,9 @@ export function AccountSecurityPage() {
                   <div className="flex flex-col gap-2">
                     <Button
                       className="w-fit"
-                      onClick={() => handleCopy(enrollment.secret ?? '')}
+                      onClick={() =>
+                        handleCopy('secret' in enrollment ? (enrollment.secret ?? '') : '')
+                      }
                       variant="secondary"
                     >
                       Copy secret for manual entry
@@ -571,14 +592,6 @@ export function AccountSecurityPage() {
                       Use this if your authenticator app cannot scan the QR code.
                     </p>
                   </div>
-                </div>
-              )}
-              {enrollment.enrollmentType === 'yubiotp' && (
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-base">Yubikey Enrolled</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Your Yubikey has been registered. Enter a code from it to confirm enrollment.
-                  </p>
                 </div>
               )}
               {enrollment.enrollmentType === 'webauthn' && (

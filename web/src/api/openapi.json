@@ -2747,6 +2747,119 @@
                 }
             }
         },
+        "/auth/mfa/webauthn/assertion/start": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start WebAuthn assertion for MFA",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.WebAuthnAssertionStartResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/webauthn/assertion/verify": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Completes the WebAuthn assertion ceremony by validating the signed response.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Verify WebAuthn assertion for MFA",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.VerifyWebAuthnAssertionRequest"
+                            }
+                        }
+                    },
+                    "description": "Assertion response and session data",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.VerifyMFAResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/web/callback": {
             "get": {
                 "description": "Validates the OAuth callback, issues a session cookie, and redirects to the SPA.",
@@ -4033,6 +4146,9 @@
                         "items": {
                             "$ref": "#/components/schemas/handlers.TrustedDeviceResponse"
                         }
+                    },
+                    "webauthn_available": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -4416,6 +4532,36 @@
                     },
                     "trusted_device_cookie": {
                         "type": "boolean"
+                    }
+                }
+            },
+            "handlers.VerifyWebAuthnAssertionRequest": {
+                "type": "object",
+                "required": [
+                    "assertion_response",
+                    "session_data"
+                ],
+                "properties": {
+                    "assertion_response": {
+                        "type": "string"
+                    },
+                    "session_data": {
+                        "type": "string"
+                    },
+                    "trust_device": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "handlers.WebAuthnAssertionStartResponse": {
+                "type": "object",
+                "properties": {
+                    "options": {
+                        "description": "protocol.CredentialAssertion"
+                    },
+                    "session_data": {
+                        "description": "Serialized session to send back with verification",
+                        "type": "string"
                     }
                 }
             }

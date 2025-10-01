@@ -103,7 +103,8 @@ LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILDTIME}"
 
 echo "Building CLI (version: $VERSION)..."
 GOFLAGS=${GOFLAGS:-}
-CGO_ENABLED=0 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/convox-gateway ./cmd/cli
+# Note: CGO is required for WebAuthn/FIDO2 support (HID device access)
+CGO_ENABLED=1 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/convox-gateway ./cmd/cli
 
 popd >/dev/null
 

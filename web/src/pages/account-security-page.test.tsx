@@ -91,6 +91,8 @@ const { apiMocks } = vi.hoisted(() => ({
     getMFAStatus: vi.fn(),
     startTOTPEnrollment: vi.fn(),
     confirmTOTPEnrollment: vi.fn(),
+    startWebAuthnEnrollment: vi.fn(),
+    confirmWebAuthnEnrollment: vi.fn(),
     deleteMFAMethod: vi.fn(),
     revokeTrustedDevice: vi.fn(),
     regenerateBackupCodes: vi.fn(),

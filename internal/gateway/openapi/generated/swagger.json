@@ -3464,6 +3464,9 @@
                     "items": {
                         "$ref": "#/definitions/handlers.TrustedDeviceResponse"
                     }
+                },
+                "webauthn_available": {
+                    "type": "boolean"
                 }
             }
         },

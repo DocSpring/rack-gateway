@@ -109,6 +109,7 @@ type MFAStatusResponse struct {
 	TrustedDevices        []TrustedDeviceResponse `json:"trusted_devices"`
 	BackupCodes           MFABackupCodesSummary   `json:"backup_codes"`
 	RecentStepUpExpiresAt *time.Time              `json:"recent_step_up_expires_at,omitempty"`
+	WebAuthnAvailable     bool                    `json:"webauthn_available"`
 }
 
 // StatusResponse is returned for simple acknowledgment payloads.

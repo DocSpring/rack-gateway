@@ -60,6 +60,8 @@ import type {
   HandlersUserSummary,
   HandlersVerifyMFARequest,
   HandlersVerifyMFAResponse,
+  HandlersVerifyWebAuthnAssertionRequest,
+  HandlersWebAuthnAssertionStartResponse,
 } from './schemas';
 
 import { createGatewayClient } from './http-client';
@@ -736,6 +738,38 @@ export const getConvoxGatewayAPI = () => {
   };
 
   /**
+   * Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.
+   * @summary Start WebAuthn assertion for MFA
+   */
+  const postAuthMfaWebauthnAssertionStart = (
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersWebAuthnAssertionStartResponse>(
+      { url: `/auth/mfa/webauthn/assertion/start`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Completes the WebAuthn assertion ceremony by validating the signed response.
+   * @summary Verify WebAuthn assertion for MFA
+   */
+  const postAuthMfaWebauthnAssertionVerify = (
+    handlersVerifyWebAuthnAssertionRequest: HandlersVerifyWebAuthnAssertionRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      {
+        url: `/auth/mfa/webauthn/assertion/verify`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersVerifyWebAuthnAssertionRequest,
+      },
+      options,
+    );
+  };
+
+  /**
    * Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
    * @summary Complete web OAuth login
    */
@@ -931,6 +965,8 @@ export const getConvoxGatewayAPI = () => {
     getAuthMfaStatus,
     deleteAuthMfaTrustedDevicesDeviceID,
     postAuthMfaVerify,
+    postAuthMfaWebauthnAssertionStart,
+    postAuthMfaWebauthnAssertionVerify,
     getAuthWebCallback,
     getAuthWebLogin,
     getAuthWebLogout,
@@ -1192,6 +1228,24 @@ export type DeleteAuthMfaTrustedDevicesDeviceIDResult = NonNullable<
 export type PostAuthMfaVerifyResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaVerify']>
+  >
+>;
+export type PostAuthMfaWebauthnAssertionStartResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getConvoxGatewayAPI
+      >['postAuthMfaWebauthnAssertionStart']
+    >
+  >
+>;
+export type PostAuthMfaWebauthnAssertionVerifyResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getConvoxGatewayAPI
+      >['postAuthMfaWebauthnAssertionVerify']
+    >
   >
 >;
 export type GetAuthWebCallbackResult = NonNullable<

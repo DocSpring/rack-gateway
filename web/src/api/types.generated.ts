@@ -2655,6 +2655,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/webauthn/assertion/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start WebAuthn assertion for MFA
+         * @description Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.WebAuthnAssertionStartResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/webauthn/assertion/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify WebAuthn assertion for MFA
+         * @description Completes the WebAuthn assertion ceremony by validating the signed response.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Assertion response and session data */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.VerifyWebAuthnAssertionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.VerifyMFAResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/web/callback": {
         parameters: {
             query?: never;
@@ -3549,6 +3677,7 @@ export interface components {
             recent_step_up_expires_at?: string;
             required?: boolean;
             trusted_devices?: components["schemas"]["handlers.TrustedDeviceResponse"][];
+            webauthn_available?: boolean;
         };
         "handlers.RackSummary": {
             alias?: string;
@@ -3669,6 +3798,17 @@ export interface components {
             mfa_verified_at?: string;
             recent_step_up_expires_at?: string;
             trusted_device_cookie?: boolean;
+        };
+        "handlers.VerifyWebAuthnAssertionRequest": {
+            assertion_response: string;
+            session_data: string;
+            trust_device?: boolean;
+        };
+        "handlers.WebAuthnAssertionStartResponse": {
+            /** @description protocol.CredentialAssertion */
+            options?: unknown;
+            /** @description Serialized session to send back with verification */
+            session_data?: string;
         };
     };
     responses: never;

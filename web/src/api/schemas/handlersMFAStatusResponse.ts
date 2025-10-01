@@ -16,4 +16,5 @@ export interface HandlersMFAStatusResponse {
   recent_step_up_expires_at?: string;
   required?: boolean;
   trusted_devices?: HandlersTrustedDeviceResponse[];
+  webauthn_available?: boolean;
 }

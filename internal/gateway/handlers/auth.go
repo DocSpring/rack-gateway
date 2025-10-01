@@ -1236,6 +1236,7 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 		TrustedDevices:        trustedResp,
 		BackupCodes:           summary,
 		RecentStepUpExpiresAt: recentExpires,
+		WebAuthnAvailable:     h.mfaService.IsWebAuthnConfigured(),
 	}
 	c.JSON(http.StatusOK, response)
 }

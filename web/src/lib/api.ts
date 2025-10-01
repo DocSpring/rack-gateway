@@ -12,6 +12,7 @@ import type {
   HandlersAuditLogsResponse,
   HandlersBackupCodesResponse,
   HandlersConfirmTOTPEnrollmentRequest,
+  HandlersConfirmWebAuthnEnrollmentRequest,
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
   HandlersCreateUserRequest,
@@ -24,6 +25,9 @@ import type {
   HandlersRevokeAllSessionsResponse,
   HandlersRevokeSessionResponse,
   HandlersStartTOTPEnrollmentResponse,
+  HandlersStartWebAuthnEnrollmentResponse,
+  HandlersStartYubiOTPEnrollmentRequest,
+  HandlersStartYubiOTPEnrollmentResponse,
   HandlersStatusResponse,
   HandlersTokenPermissionMetadata,
   HandlersTrustedDeviceResponse,
@@ -84,6 +88,10 @@ export type BackupCodesResponse = HandlersBackupCodesResponse
 export type MFAStatusResponse = HandlersMFAStatusResponse
 export type MFAMethod = HandlersMFAMethodResponse
 export type TrustedDevice = HandlersTrustedDeviceResponse
+export type StartYubiOTPEnrollmentRequest = HandlersStartYubiOTPEnrollmentRequest
+export type StartYubiOTPEnrollmentResponse = HandlersStartYubiOTPEnrollmentResponse
+export type StartWebAuthnEnrollmentResponse = HandlersStartWebAuthnEnrollmentResponse
+export type ConfirmWebAuthnEnrollmentRequest = HandlersConfirmWebAuthnEnrollmentRequest
 export type StatusResponse = HandlersStatusResponse
 export type DeployApprovalRequest = HandlersDeployApprovalRequestResponse
 export type DeployApprovalRequestList = HandlersDeployApprovalRequestList
@@ -251,17 +259,17 @@ export const confirmTOTPEnrollment = (
 ): Promise<VerifyMFAResponse> => post<VerifyMFAResponse>('/auth/mfa/enroll/totp/confirm', payload)
 
 export const startYubiOTPEnrollment = (
-  payload: StartYubiOTPEnrollmentRequest
-): Promise<StartYubiOTPEnrollmentResponse> =>
-  post<StartYubiOTPEnrollmentResponse>('/auth/mfa/enroll/yubiotp/start', payload)
+  payload: HandlersStartYubiOTPEnrollmentRequest
+): Promise<HandlersStartYubiOTPEnrollmentResponse> =>
+  post<HandlersStartYubiOTPEnrollmentResponse>('/auth/mfa/enroll/yubiotp/start', payload)
 
-export const startWebAuthnEnrollment = (): Promise<StartWebAuthnEnrollmentResponse> =>
-  post<StartWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/start')
+export const startWebAuthnEnrollment = (): Promise<HandlersStartWebAuthnEnrollmentResponse> =>
+  post<HandlersStartWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/start')
 
 export const confirmWebAuthnEnrollment = (
-  payload: ConfirmWebAuthnEnrollmentRequest
-): Promise<VerifyMFAResponse> =>
-  post<VerifyMFAResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
+  payload: HandlersConfirmWebAuthnEnrollmentRequest
+): Promise<HandlersVerifyMFAResponse> =>
+  post<HandlersVerifyMFAResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
 
 export const verifyCliMfa = (payload: {
   state: string

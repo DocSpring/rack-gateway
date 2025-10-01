@@ -55,7 +55,7 @@ openssl rand -base64 32
 
 **Important:** `LOG_RETENTION_DAYS` is required for production deploys. Set to `2557` (7 years) for audit log retention.
 
-```
+```bash
 convox env set \
   RACK_TOKEN=xxxxx \
   DOMAIN=gateway.example.com \
@@ -67,6 +67,22 @@ convox env set \
   POSTMARK_API_TOKEN=xxxx \
   LOG_RETENTION_DAYS=2557
 ```
+
+### 2.4 (Optional) Enable WebAuthn/FIDO2 Support
+
+To enable WebAuthn for MFA (security keys, Touch ID, Windows Hello), set:
+
+```bash
+convox env set \
+  WEBAUTHN_RP_DISPLAY_NAME="Your Company Gateway" \
+  WEBAUTHN_RP_ID=gateway.example.com \
+  WEBAUTHN_RP_ORIGIN=https://gateway.example.com
+```
+
+**Important:**
+- `WEBAUTHN_RP_ID` must match the domain where users access the gateway (without protocol or port)
+- `WEBAUTHN_RP_ORIGIN` must be the full URL including `https://`
+- If these variables are not set, WebAuthn will be disabled and users will only see TOTP as an MFA option
 
 See docs/CONFIGURATION.md for all options.
 
