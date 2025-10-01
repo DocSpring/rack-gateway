@@ -835,6 +835,23 @@ export function AccountSecurityPage() {
               </table>
             </div>
           </CardContent>
+          <CardFooter>
+            <Button
+              disabled={
+                startTOTPMutation.isPending || startWebAuthnMutation.isPending || !!enrollment
+              }
+              onClick={() => {
+                if (status?.webauthn_available) {
+                  setShowMethodSelector(true)
+                } else {
+                  handleStartEnrollment('totp')
+                }
+              }}
+              variant="outline"
+            >
+              Add Method
+            </Button>
+          </CardFooter>
         </Card>
       ) : null}
 

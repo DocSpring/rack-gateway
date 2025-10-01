@@ -592,22 +592,9 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		c.Redirect(http.StatusFound, challengeURL)
 		return
 	}
-	// Notify about successful login
+	// Notify about successful login (includes audit logging)
 	if h.securityNotifier != nil {
 		h.securityNotifier.LoginAttempt(resp.Email, resp.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
-	}
-
-	if h.database != nil {
-		if err := audit.LogDB(h.database, &db.AuditLog{
-			UserEmail:    resp.Email,
-			ActionType:   "auth",
-			Action:       "login.complete",
-			ResourceType: "auth",
-			Resource:     "web",
-			Status:       "success",
-		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"login.complete","error":%q}`, err)
-		}
 	}
 
 	// Redirect to web UI
@@ -894,6 +881,31 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		}
 	}
 
+	// Audit log for MFA enrollment completion
+	if h.database != nil {
+		methodLabel := strings.TrimSpace(req.Label)
+		if methodLabel == "" {
+			methodLabel = "Authenticator App"
+		}
+		details, _ := json.Marshal(map[string]interface{}{
+			"label": methodLabel,
+		})
+		if err := audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    userRecord.Email,
+			UserName:     userRecord.Name,
+			ActionType:   "auth",
+			Action:       "mfa.enroll",
+			ResourceType: "mfa_method",
+			Resource:     "totp",
+			Details:      string(details),
+			Status:       "success",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		}); err != nil {
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":"mfa.enroll","error":%q}`, err)
+		}
+	}
+
 	response := VerifyMFAResponse{
 		MFAVerifiedAt:         now,
 		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
@@ -974,6 +986,9 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		trustedDeviceID = authUser.Session.TrustedDeviceID
 	}
 
+	// Detect if this is login flow (first MFA verification) vs step-up
+	isLoginFlow := authUser.Session.MFAVerifiedAt == nil
+
 	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
 		log.Printf("failed updating session mfa state: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
@@ -988,6 +1003,11 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
 			log.Printf("failed attaching trusted device to session: %v", err)
 		}
+	}
+
+	// Audit log for login completion after MFA verification
+	if isLoginFlow && h.database != nil && h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(userRecord.Email, userRecord.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
 	}
 
 	response := VerifyMFAResponse{
@@ -1111,12 +1131,20 @@ func (h *AuthHandler) VerifyWebAuthnAssertion(c *gin.Context) {
 		trustedCookieSet = true
 	}
 
+	// Detect if this is login flow (first MFA verification) vs step-up
+	isLoginFlow := authUser.Session.MFAVerifiedAt == nil
+
 	// Update session with MFA verification and recent step-up timestamps
 	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
 		log.Printf("Warning: failed to update session MFA verified: %v", err)
 	}
 	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
 		log.Printf("Warning: failed to update session step-up: %v", err)
+	}
+
+	// Audit log for login completion after MFA verification
+	if isLoginFlow && h.database != nil && h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(userRecord.Email, userRecord.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
 	}
 
 	response := VerifyMFAResponse{
@@ -1522,6 +1550,27 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 	delete(sessionMeta, "webauthn_enrollment_expires")
 	if err := h.database.UpdateSessionMetadata(sessionID, sessionMeta); err != nil {
 		log.Printf("failed to clear webauthn session: %v", err)
+	}
+
+	// Audit log for WebAuthn enrollment completion
+	if h.database != nil {
+		details, _ := json.Marshal(map[string]interface{}{
+			"label": label,
+		})
+		if err := audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    userRecord.Email,
+			UserName:     userRecord.Name,
+			ActionType:   "auth",
+			Action:       "mfa.enroll",
+			ResourceType: "mfa_method",
+			Resource:     "webauthn",
+			Details:      string(details),
+			Status:       "success",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.GetHeader("User-Agent"),
+		}); err != nil {
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":"mfa.enroll","error":%q}`, err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "enrolled", "method_id": methodID})
