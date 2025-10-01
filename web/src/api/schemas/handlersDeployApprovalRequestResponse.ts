@@ -14,6 +14,8 @@ export interface HandlersDeployApprovalRequestResponse {
   approved_by_email?: string;
   approved_by_name?: string;
   created_at?: string;
+  created_by_api_token_id?: string;
+  created_by_api_token_name?: string;
   created_by_email?: string;
   created_by_name?: string;
   id?: number;

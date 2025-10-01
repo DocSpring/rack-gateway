@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/convox-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/convox-gateway/internal/gateway/token"
 	"github.com/tkrajina/typescriptify-golang-structs/typescriptify"
 )
@@ -25,6 +26,7 @@ func main() {
 
 	converter.Add(db.APIToken{})
 	converter.Add(token.APITokenResponse{})
+	converter.Add(handlers.DeployApprovalRequestResponse{})
 
 	if err := converter.ConvertToFile(output); err != nil {
 		log.Fatalf("failed to generate types: %v", err)

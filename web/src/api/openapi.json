@@ -407,98 +407,6 @@
                 }
             }
         },
-        "/admin/deploy-approval-requests/preapprove": {
-            "post": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Creates and immediately approves a deploy approval request for a target API token.",
-                "tags": [
-                    "DeployApprovalRequests"
-                ],
-                "summary": "Pre-approve deploy approval request",
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/handlers.CreateDeployApprovalRequestRequest"
-                },
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - pending request already exists",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/admin/deploy-approval-requests/{id}/approve": {
             "post": {
                 "security": [
@@ -2779,7 +2687,15 @@
                 ],
                 "summary": "Request deploy approval",
                 "requestBody": {
-                    "$ref": "#/components/requestBodies/handlers.CreateDeployApprovalRequestRequest"
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.CreateDeployApprovalRequestRequest"
+                            }
+                        }
+                    },
+                    "description": "Deploy approval request payload",
+                    "required": true
                 },
                 "responses": {
                     "201": {
@@ -3221,19 +3137,6 @@
         }
     ],
     "components": {
-        "requestBodies": {
-            "handlers.CreateDeployApprovalRequestRequest": {
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "$ref": "#/components/schemas/handlers.CreateDeployApprovalRequestRequest"
-                        }
-                    }
-                },
-                "description": "Deploy approval request payload",
-                "required": true
-            }
-        },
         "securitySchemes": {
             "CSRFToken": {
                 "description": "HMAC-derived CSRF token tied to the active session.",
@@ -3701,6 +3604,12 @@
                         "type": "string"
                     },
                     "created_at": {
+                        "type": "string"
+                    },
+                    "created_by_api_token_id": {
+                        "type": "string"
+                    },
+                    "created_by_api_token_name": {
                         "type": "string"
                     },
                     "created_by_email": {

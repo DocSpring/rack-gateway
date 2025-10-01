@@ -122,6 +122,9 @@ type DeployApprovalRequest struct {
 	CreatedByUserID             *int64     `json:"created_by_user_id,omitempty"`
 	CreatedByEmail              string     `json:"created_by_email,omitempty"`
 	CreatedByName               string     `json:"created_by_name,omitempty"`
+	CreatedByAPITokenID         *int64     `json:"created_by_api_token_id,omitempty"`
+	CreatedByAPITokenPublicID   string     `json:"created_by_api_token_public_id,omitempty"`
+	CreatedByAPITokenName       string     `json:"created_by_api_token_name,omitempty"`
 	TargetAPITokenID            int64      `json:"target_api_token_id"`
 	TargetAPITokenPublicID      string     `json:"target_api_token_public_id"`
 	TargetAPITokenName          string     `json:"target_api_token_name,omitempty"`

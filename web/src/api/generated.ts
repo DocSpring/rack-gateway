@@ -29,7 +29,7 @@ import type {
   HandlersConfirmTOTPEnrollmentRequest,
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
-  HandlersCreateDeployApprovalRequestRequestBody,
+  HandlersCreateDeployApprovalRequestRequest,
   HandlersCreateUserRequest,
   HandlersCurrentUserResponse,
   HandlersDeployApprovalRequestList,
@@ -130,25 +130,6 @@ export const getConvoxGatewayAPI = () => {
   ) => {
     return createGatewayClient<HandlersDeployApprovalRequestList>(
       { url: `/admin/deploy-approval-requests`, method: 'GET', params },
-      options,
-    );
-  };
-
-  /**
-   * Creates and immediately approves a deploy approval request for a target API token.
-   * @summary Pre-approve deploy approval request
-   */
-  const postAdminDeployApprovalRequestsPreapprove = (
-    handlersCreateDeployApprovalRequestRequestBody: HandlersCreateDeployApprovalRequestRequestBody,
-    options?: SecondParameter<typeof createGatewayClient>,
-  ) => {
-    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-      {
-        url: `/admin/deploy-approval-requests/preapprove`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersCreateDeployApprovalRequestRequestBody,
-      },
       options,
     );
   };
@@ -738,7 +719,7 @@ export const getConvoxGatewayAPI = () => {
    * @summary Request deploy approval
    */
   const postDeployApprovalRequests = (
-    handlersCreateDeployApprovalRequestRequestBody: HandlersCreateDeployApprovalRequestRequestBody,
+    handlersCreateDeployApprovalRequestRequest: HandlersCreateDeployApprovalRequestRequest,
     options?: SecondParameter<typeof createGatewayClient>,
   ) => {
     return createGatewayClient<HandlersDeployApprovalRequestResponse>(
@@ -746,7 +727,7 @@ export const getConvoxGatewayAPI = () => {
         url: `/deploy-approval-requests`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: handlersCreateDeployApprovalRequestRequestBody,
+        data: handlersCreateDeployApprovalRequestRequest,
       },
       options,
     );
@@ -838,7 +819,6 @@ export const getConvoxGatewayAPI = () => {
     getAdminConfig,
     putAdminConfig,
     getAdminDeployApprovalRequests,
-    postAdminDeployApprovalRequestsPreapprove,
     postAdminDeployApprovalRequestsIdApprove,
     postAdminDeployApprovalRequestsIdReject,
     getAdminRoles,
@@ -903,15 +883,6 @@ export type GetAdminDeployApprovalRequestsResult = NonNullable<
   Awaited<
     ReturnType<
       ReturnType<typeof getConvoxGatewayAPI>['getAdminDeployApprovalRequests']
-    >
-  >
->;
-export type PostAdminDeployApprovalRequestsPreapproveResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getConvoxGatewayAPI
-      >['postAdminDeployApprovalRequestsPreapprove']
     >
   >
 >;

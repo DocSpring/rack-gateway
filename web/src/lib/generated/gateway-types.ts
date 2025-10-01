@@ -23,3 +23,29 @@ export interface APITokenResponse {
     token: string;
     api_token?: APIToken;
 }
+export interface DeployApprovalRequestResponse {
+    id: number;
+    message: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    created_by_email?: string;
+    created_by_name?: string;
+    created_by_api_token_id?: string;
+    created_by_api_token_name?: string;
+    target_api_token_id: string;
+    target_api_token_name?: string;
+    approved_by_email?: string;
+    approved_by_name?: string;
+    approved_at?: string;
+    approval_expires_at?: string;
+    rejected_by_email?: string;
+    rejected_by_name?: string;
+    rejected_at?: string;
+    approval_notes?: string;
+    app: string;
+    release_id: string;
+    release_created_at?: string;
+    release_promoted_at?: string;
+    release_promoted_by_api_token_id?: number;
+}

@@ -2979,6 +2979,12 @@
                 "created_at": {
                     "type": "string"
                 },
+                "created_by_api_token_id": {
+                    "type": "string"
+                },
+                "created_by_api_token_name": {
+                    "type": "string"
+                },
                 "created_by_email": {
                     "type": "string"
                 },

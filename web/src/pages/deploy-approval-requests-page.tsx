@@ -403,10 +403,10 @@ export function DeployApprovalRequestsPage() {
               />
               <DetailRow
                 label="Created By"
-                value={formatUser(
-                  selectedRequest.created_by_name,
-                  selectedRequest.created_by_email
-                )}
+                value={
+                  selectedRequest.created_by_api_token_name ??
+                  formatUser(selectedRequest.created_by_name, selectedRequest.created_by_email)
+                }
               />
               <DetailRow
                 label="Approved By"

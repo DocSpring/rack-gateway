@@ -48,6 +48,9 @@ SELECT
     dr.created_by_user_id,
     created_user.email,
     created_user.name,
+    dr.created_by_api_token_id,
+    created_token.public_id,
+    created_token.name,
     dr.target_api_token_id,
     target_token.public_id,
     target_token.name,
@@ -69,6 +72,7 @@ SELECT
     dr.release_promoted_by_api_token_id
 FROM deploy_approval_requests dr
 LEFT JOIN users created_user ON created_user.id = dr.created_by_user_id
+LEFT JOIN api_tokens created_token ON created_token.id = dr.created_by_api_token_id
 LEFT JOIN api_tokens target_token ON target_token.id = dr.target_api_token_id
 LEFT JOIN users approved_user ON approved_user.id = dr.approved_by_user_id
 LEFT JOIN users rejected_user ON rejected_user.id = dr.rejected_by_user_id
@@ -77,27 +81,30 @@ LEFT JOIN users rejected_user ON rejected_user.id = dr.rejected_by_user_id
 func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, error) {
 	var dr DeployApprovalRequest
 	var (
-		createdByUserID   sql.NullInt64
-		createdByEmail    sql.NullString
-		createdByName     sql.NullString
-		targetTokenPublic sql.NullString
-		targetTokenName   sql.NullString
-		targetUserID      sql.NullInt64
-		approvedByUserID  sql.NullInt64
-		approvedByEmail   sql.NullString
-		approvedByName    sql.NullString
-		approvedAt        sql.NullTime
-		approvalExpiresAt sql.NullTime
-		rejectedByUserID  sql.NullInt64
-		rejectedByEmail   sql.NullString
-		rejectedByName    sql.NullString
-		rejectedAt        sql.NullTime
-		approvalNotes     sql.NullString
-		app               string
-		releaseID         string
-		releaseCreatedAt  sql.NullTime
-		releasePromotedAt sql.NullTime
-		releasePromotedBy sql.NullInt64
+		createdByUserID    sql.NullInt64
+		createdByEmail     sql.NullString
+		createdByName      sql.NullString
+		createdByTokenID   sql.NullInt64
+		createdTokenPublic sql.NullString
+		createdTokenName   sql.NullString
+		targetTokenPublic  sql.NullString
+		targetTokenName    sql.NullString
+		targetUserID       sql.NullInt64
+		approvedByUserID   sql.NullInt64
+		approvedByEmail    sql.NullString
+		approvedByName     sql.NullString
+		approvedAt         sql.NullTime
+		approvalExpiresAt  sql.NullTime
+		rejectedByUserID   sql.NullInt64
+		rejectedByEmail    sql.NullString
+		rejectedByName     sql.NullString
+		rejectedAt         sql.NullTime
+		approvalNotes      sql.NullString
+		app                string
+		releaseID          string
+		releaseCreatedAt   sql.NullTime
+		releasePromotedAt  sql.NullTime
+		releasePromotedBy  sql.NullInt64
 	)
 
 	if err := scanner.Scan(
@@ -109,6 +116,9 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		&createdByUserID,
 		&createdByEmail,
 		&createdByName,
+		&createdByTokenID,
+		&createdTokenPublic,
+		&createdTokenName,
 		&dr.TargetAPITokenID,
 		&targetTokenPublic,
 		&targetTokenName,
@@ -143,6 +153,15 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	}
 	if createdByName.Valid {
 		dr.CreatedByName = createdByName.String
+	}
+	if createdByTokenID.Valid {
+		dr.CreatedByAPITokenID = &createdByTokenID.Int64
+	}
+	if createdTokenPublic.Valid {
+		dr.CreatedByAPITokenPublicID = createdTokenPublic.String
+	}
+	if createdTokenName.Valid {
+		dr.CreatedByAPITokenName = createdTokenName.String
 	}
 	if targetTokenPublic.Valid {
 		dr.TargetAPITokenPublicID = targetTokenPublic.String
