@@ -159,6 +159,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				mfaGroup.POST("/verify", authHandler.VerifyMFA)
 				mfaGroup.POST("/webauthn/assertion/start", authHandler.StartWebAuthnAssertion)
 				mfaGroup.POST("/webauthn/assertion/verify", authHandler.VerifyWebAuthnAssertion)
+				mfaGroup.PUT("/preferred-method", authHandler.UpdatePreferredMFAMethod)
 				mfaStepUp := mfaGroup.Group("")
 				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				mfaStepUp.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)

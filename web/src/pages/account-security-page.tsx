@@ -12,12 +12,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useStepUp } from '@/contexts/step-up-context'
 import {
   type BackupCodesResponse,
   confirmTOTPEnrollment,
+  confirmWebAuthnEnrollment,
   deleteMFAMethod,
   getMFAStatus,
   type MFAStatusResponse,
@@ -27,10 +29,12 @@ import {
   type StartWebAuthnEnrollmentResponse,
   startTOTPEnrollment,
   startWebAuthnEnrollment,
+  updatePreferredMFAMethod,
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { WebRoute } from '@/lib/routes'
+import { prepareCreationOptions, serializeRegistrationCredential } from '@/lib/webauthn-utils'
 
 type EnrollmentState = (StartTOTPEnrollmentResponse | StartWebAuthnEnrollmentResponse) & {
   qrDataUrl?: string | null
@@ -60,7 +64,7 @@ function formatCodeForDownload(codes: string[]): string {
 export function AccountSecurityPage() {
   const queryClient = useQueryClient()
   const location = useLocation()
-  const { refresh: refreshUser } = useAuth()
+  const { refresh: refreshUser, user } = useAuth()
   const { openStepUp, requireStepUp, isVerifying: isGlobalStepUpVerifying } = useStepUp()
   const [showMethodSelector, setShowMethodSelector] = useState(false)
   const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null)
@@ -160,14 +164,50 @@ export function AccountSecurityPage() {
 
   const startWebAuthnMutation = useMutation({
     mutationFn: startWebAuthnEnrollment,
-    onSuccess: (data) => {
-      setEnrollment({ ...data, enrollmentType: 'webauthn' })
-      setEnrollmentLabel('Security Key')
-      setVerificationCode('')
-      setTrustEnrollmentDevice(true)
-      setRecentBackupCodes(data.backup_codes ?? null)
-      setShowMethodSelector(false)
-      toast.success('WebAuthn enrollment started')
+    onSuccess: async (data) => {
+      // Immediately trigger the WebAuthn browser prompt
+      try {
+        if (!data.public_key_options) {
+          throw new Error('No public key options received from server')
+        }
+
+        // Convert server options to browser-compatible format
+        const webAuthnOptions = prepareCreationOptions(data.public_key_options)
+
+        // Call the browser WebAuthn API to create a credential
+        const credential = await navigator.credentials.create({
+          publicKey: webAuthnOptions,
+        })
+
+        if (!credential) {
+          throw new Error('No credential created')
+        }
+
+        // Serialize the credential for the backend
+        const credentialForBackend = serializeRegistrationCredential(
+          credential as PublicKeyCredential
+        )
+
+        await confirmWebAuthnEnrollment({
+          method_id: data.method_id ?? 0,
+          credential: credentialForBackend,
+          label: 'Security Key',
+        })
+
+        // Success!
+        setRecentBackupCodes(data.backup_codes ?? null)
+        setShowMethodSelector(false)
+        toast.success('WebAuthn enrollment completed')
+        invalidateStatus()
+        refreshUser().catch(() => {
+          /* noop */
+        })
+      } catch (error) {
+        const msg = getErrorMessage(error)
+        toast.error(`WebAuthn enrollment failed: ${msg}`)
+        // Reset state on error
+        setEnrollment(null)
+      }
     },
     onError: (error) => {
       const msg = getErrorMessage(error)
@@ -245,6 +285,19 @@ export function AccountSecurityPage() {
       setRecentBackupCodes(codes)
       toast.success('Backup codes regenerated')
       invalidateStatus()
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+    },
+  })
+
+  const updatePreferredMethodMutation = useMutation({
+    mutationFn: updatePreferredMFAMethod,
+    onSuccess: () => {
+      toast.success('Preferred MFA method updated')
+      refreshUser().catch(() => {
+        /* noop */
+      })
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
@@ -385,6 +438,18 @@ export function AccountSecurityPage() {
   const backupSummary = status?.backup_codes
   const showBackupCard = Boolean(status?.enrolled)
 
+  // Check if user has both TOTP and WebAuthn methods enrolled
+  const hasTOTP = methods.some((m) => m.type === 'totp')
+  const hasWebAuthn = methods.some((m) => m.type === 'webauthn')
+  const hasBothMethods = hasTOTP && hasWebAuthn
+
+  const handlePreferredMethodChange = (value: string) => {
+    const method: string | undefined = value === 'none' ? undefined : value
+    updatePreferredMethodMutation.mutate({
+      preferred_method: method,
+    })
+  }
+
   return (
     <div className="space-y-8 p-8">
       <div className="space-y-2">
@@ -431,6 +496,34 @@ export function AccountSecurityPage() {
                 sensitive actions.
               </p>
             )}
+
+            {status?.enrolled && hasBothMethods ? (
+              <div className="space-y-3">
+                <Label>Preferred sign-in method</Label>
+                <RadioGroup
+                  disabled={updatePreferredMethodMutation.isPending}
+                  onValueChange={handlePreferredMethodChange}
+                  value={user?.preferred_mfa_method || 'totp'}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem id="totp" value="totp" />
+                    <Label className="cursor-pointer font-normal" htmlFor="totp">
+                      TOTP Authenticator
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem id="webauthn" value="webauthn" />
+                    <Label className="cursor-pointer font-normal" htmlFor="webauthn">
+                      WebAuthn / Security Key
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-muted-foreground text-xs">
+                  This method will be used by default when signing in. You can always use the other
+                  method if needed.
+                </p>
+              </div>
+            ) : null}
           </CardContent>
           <CardFooter className="mt-auto flex flex-wrap gap-3">
             {status?.enrolled ? (

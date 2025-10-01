@@ -2081,6 +2081,60 @@
                 }
             }
         },
+        "/auth/mfa/preferred-method": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Sets the user's preferred MFA method for sign-in (totp or webauthn)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Update preferred MFA method",
+                "parameters": [
+                    {
+                        "description": "Preferred method",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdatePreferredMFAMethodRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/mfa/status": {
             "get": {
                 "security": [
@@ -3039,6 +3093,9 @@
                 "name": {
                     "type": "string"
                 },
+                "preferred_mfa_method": {
+                    "type": "string"
+                },
                 "roles": {
                     "type": "array",
                     "items": {
@@ -3265,6 +3322,9 @@
                     "items": {
                         "type": "string"
                     }
+                },
+                "preferred_mfa_method": {
+                    "type": "string"
                 },
                 "rack": {
                     "$ref": "#/definitions/handlers.RackSummary"
@@ -3741,6 +3801,15 @@
             "properties": {
                 "require_all_users": {
                     "type": "boolean"
+                }
+            }
+        },
+        "handlers.UpdatePreferredMFAMethodRequest": {
+            "type": "object",
+            "properties": {
+                "preferred_method": {
+                    "description": "\"totp\", \"webauthn\", or null to clear",
+                    "type": "string"
                 }
             }
         },

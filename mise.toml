@@ -14,6 +14,7 @@ TEST_MOCK_CONVOX_PORT = "6443"
 # Application configuration
 DEV_MODE = "true"
 LOG_LEVEL = "debug"
+DOMAIN = "localhost"
 
 # OAuth configuration (override in mise.local.toml)
 GOOGLE_CLIENT_ID = "mock-client-id"

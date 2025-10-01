@@ -53,6 +53,7 @@ import type {
   HandlersUpdateEnvValuesRequest,
   HandlersUpdateEnvValuesResponse,
   HandlersUpdateMFASettingsRequest,
+  HandlersUpdatePreferredMFAMethodRequest,
   HandlersUpdateProtectedEnvVarsRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
@@ -692,6 +693,25 @@ export const getConvoxGatewayAPI = () => {
   };
 
   /**
+   * Sets the user's preferred MFA method for sign-in (totp or webauthn)
+   * @summary Update preferred MFA method
+   */
+  const putAuthMfaPreferredMethod = (
+    handlersUpdatePreferredMFAMethodRequest: HandlersUpdatePreferredMFAMethodRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/auth/mfa/preferred-method`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdatePreferredMFAMethodRequest,
+      },
+      options,
+    );
+  };
+
+  /**
    * Returns enrollment state, configured methods, trusted devices, and backup code summary.
    * @summary Get MFA status for current session
    */
@@ -962,6 +982,7 @@ export const getConvoxGatewayAPI = () => {
     postAuthMfaEnrollWebauthnStart,
     postAuthMfaEnrollYubiotpStart,
     deleteAuthMfaMethodsMethodID,
+    putAuthMfaPreferredMethod,
     getAuthMfaStatus,
     deleteAuthMfaTrustedDevicesDeviceID,
     postAuthMfaVerify,
@@ -1208,6 +1229,13 @@ export type DeleteAuthMfaMethodsMethodIDResult = NonNullable<
   Awaited<
     ReturnType<
       ReturnType<typeof getConvoxGatewayAPI>['deleteAuthMfaMethodsMethodID']
+    >
+  >
+>;
+export type PutAuthMfaPreferredMethodResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['putAuthMfaPreferredMethod']
     >
   >
 >;

@@ -15,6 +15,7 @@ export interface HandlersCurrentUserResponse {
   mfa_required?: boolean;
   name?: string;
   permissions?: string[];
+  preferred_mfa_method?: string;
   rack?: HandlersRackSummary;
   recent_step_up_expires_at?: string;
   roles?: string[];

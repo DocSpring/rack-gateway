@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { AlertCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -8,10 +8,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { verifyCliMfa, verifyMFA } from '@/lib/api'
+import {
+  getMFAStatus,
+  startWebAuthnAssertion,
+  verifyCliMfa,
+  verifyMFA,
+  verifyWebAuthnAssertion,
+} from '@/lib/api'
 import { authService } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { DEFAULT_WEB_ROUTE, WebRoute } from '@/lib/routes'
+import { prepareRequestOptions, serializeAssertionCredential } from '@/lib/webauthn-utils'
 
 type ChallengeMode = 'cli' | 'web'
 
@@ -100,6 +107,7 @@ function resolveMode(channelParam: string | null, state: string | null): Challen
   return state ? 'cli' : 'web'
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: MFA management page coordinates multiple flows.
 export function MFAChallengePage() {
   const search = useMemo(() => new URLSearchParams(window.location.search), [])
   const state = extractParam(search, 'state')
@@ -113,6 +121,29 @@ export function MFAChallengePage() {
   const [code, setCode] = useState('')
   const [trustDevice, setTrustDevice] = useState(true)
   const [error, setError] = useState<string | null>(presetError)
+  const [useWebAuthn, setUseWebAuthn] = useState(false)
+
+  // Try to fetch MFA status to determine available methods and preferred method
+  const { data: mfaStatus } = useQuery({
+    queryKey: ['mfaStatus'],
+    queryFn: getMFAStatus,
+    enabled: mode === 'web',
+    retry: false,
+    staleTime: 30_000,
+  })
+
+  // Determine which methods are available
+  const hasWebAuthn = mfaStatus?.methods?.some((m) => m.type === 'webauthn') ?? false
+  const hasTOTP = mfaStatus?.methods?.some((m) => m.type === 'totp') ?? false
+
+  // Set initial method based on available methods
+  // If user only has WebAuthn, default to that
+  // Otherwise default to TOTP (most common)
+  useEffect(() => {
+    if (mode === 'web' && mfaStatus && hasWebAuthn && !hasTOTP) {
+      setUseWebAuthn(true)
+    }
+  }, [mode, mfaStatus, hasWebAuthn, hasTOTP])
 
   useEffect(() => {
     if (mode === 'cli' && !state) {
@@ -153,6 +184,51 @@ export function MFAChallengePage() {
     },
   })
 
+  const webAuthnMutation = useMutation({
+    mutationFn: async ({ trustDevice: trustDevicePreference }: { trustDevice: boolean }) => {
+      // Start the WebAuthn assertion flow
+      const assertionStart = await startWebAuthnAssertion()
+
+      if (!assertionStart.options) {
+        throw new Error('No assertion options received from server')
+      }
+
+      // Convert server options to browser-compatible format
+      const credentialRequestOptions = prepareRequestOptions(assertionStart.options)
+
+      // Call the browser WebAuthn API to get an assertion
+      const credential = await navigator.credentials.get({
+        publicKey: credentialRequestOptions,
+      })
+
+      if (!credential) {
+        throw new Error('No credential received from authenticator')
+      }
+
+      // Serialize the assertion response for the backend
+      const assertionResponse = serializeAssertionCredential(credential as PublicKeyCredential)
+
+      // Send the assertion to the backend
+      await verifyWebAuthnAssertion({
+        session_data: assertionStart.session_data ?? '',
+        assertion_response: JSON.stringify(assertionResponse),
+        trust_device: trustDevicePreference,
+      })
+
+      return null
+    },
+    onSuccess: () => {
+      const defaultDestination = redirectTarget
+        ? WebRoute(redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget)
+        : DEFAULT_WEB_ROUTE
+
+      window.location.assign(defaultDestination)
+    },
+    onError: (err) => {
+      setError(mapServerError(mode, err))
+    },
+  })
+
   const handleVerify = () => {
     if (code.trim().length < 6) {
       setError('Enter the code from your authenticator app.')
@@ -164,6 +240,11 @@ export function MFAChallengePage() {
     }
     setError(null)
     mutation.mutate({ code: code.replace(/\s+/g, ''), trustDevice })
+  }
+
+  const handleWebAuthn = () => {
+    setError(null)
+    webAuthnMutation.mutate({ trustDevice })
   }
 
   const handleLogout = () => {
@@ -179,12 +260,19 @@ export function MFAChallengePage() {
   }
 
   const disableVerify = code.trim().length < 6 || mutation.isPending || (mode === 'cli' && !state)
+  const disableWebAuthn = webAuthnMutation.isPending || mutation.isPending
 
   const title = mode === 'cli' ? 'Approve CLI Login' : 'Multi-Factor Authentication Required'
-  const description =
-    mode === 'cli'
-      ? 'Enter the 6-digit code from your authenticator app to approve this CLI login request.'
-      : 'Enter the 6-digit code from your authenticator app to finish signing in.'
+
+  let description: string
+  if (mode === 'cli') {
+    description =
+      'Enter the 6-digit code from your authenticator app to approve this CLI login request.'
+  } else if (useWebAuthn) {
+    description = 'Use your security key, Touch ID, or Windows Hello to sign in.'
+  } else {
+    description = 'Enter the 6-digit code from your authenticator app to finish signing in.'
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
@@ -200,39 +288,98 @@ export function MFAChallengePage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="mfa-code">Verification code</Label>
-            <MFAInput
-              autoFocus
-              id="mfa-code"
-              maxLength={12}
-              onChange={(event) => {
-                setError(null)
-                setCode(event.target.value)
-              }}
-              placeholder="123456"
-              value={code}
-            />
-          </div>
-          {mode === 'web' ? (
-            <div className="flex items-start gap-3 text-sm">
-              <input
-                checked={trustDevice}
-                className="mt-1 h-4 w-4 rounded border border-input"
-                id="trust-device"
-                onChange={(event) => setTrustDevice(event.target.checked)}
-                type="checkbox"
-              />
-              <label className="leading-tight" htmlFor="trust-device">
-                Trust this device for 30 days
-              </label>
-            </div>
-          ) : null}
+          {mode === 'web' && useWebAuthn ? (
+            <>
+              <div className="space-y-4">
+                <p className="text-muted-foreground text-sm">
+                  Click the button below to authenticate with your security key or biometric device.
+                </p>
+                <Button className="w-full" disabled={disableWebAuthn} onClick={handleWebAuthn}>
+                  {webAuthnMutation.isPending ? (
+                    <LoadingSpinner className="size-4" />
+                  ) : (
+                    'Authenticate with Security Key'
+                  )}
+                </Button>
+              </div>
+              <div className="flex items-start gap-3 text-sm">
+                <input
+                  checked={trustDevice}
+                  className="mt-1 h-4 w-4 rounded border border-input"
+                  id="trust-device"
+                  onChange={(event) => setTrustDevice(event.target.checked)}
+                  type="checkbox"
+                />
+                <label className="leading-tight" htmlFor="trust-device">
+                  Trust this device for 30 days
+                </label>
+              </div>
+              {hasTOTP && (
+                <div className="border-t pt-4">
+                  <Button
+                    className="w-full"
+                    onClick={() => setUseWebAuthn(false)}
+                    type="button"
+                    variant="outline"
+                  >
+                    Use authenticator app instead
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="mfa-code">Verification code</Label>
+                <MFAInput
+                  autoFocus
+                  id="mfa-code"
+                  maxLength={12}
+                  onChange={(event) => {
+                    setError(null)
+                    setCode(event.target.value)
+                  }}
+                  placeholder="123456"
+                  value={code}
+                />
+              </div>
+              {mode === 'web' ? (
+                <>
+                  <div className="flex items-start gap-3 text-sm">
+                    <input
+                      checked={trustDevice}
+                      className="mt-1 h-4 w-4 rounded border border-input"
+                      id="trust-device"
+                      onChange={(event) => setTrustDevice(event.target.checked)}
+                      type="checkbox"
+                    />
+                    <label className="leading-tight" htmlFor="trust-device">
+                      Trust this device for 30 days
+                    </label>
+                  </div>
+                  {hasWebAuthn && (
+                    <div className="border-t pt-4">
+                      <Button
+                        className="w-full"
+                        onClick={() => setUseWebAuthn(true)}
+                        type="button"
+                        variant="outline"
+                      >
+                        Use security key instead
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-4">
-          <Button className="w-full sm:w-auto" disabled={disableVerify} onClick={handleVerify}>
-            {mutation.isPending ? <LoadingSpinner className="size-4" /> : 'Verify and Continue'}
-          </Button>
+          {!useWebAuthn || mode === 'cli' ? (
+            <Button className="w-full sm:w-auto" disabled={disableVerify} onClick={handleVerify}>
+              {mutation.isPending ? <LoadingSpinner className="size-4" /> : 'Verify and Continue'}
+            </Button>
+          ) : null}
           {mode === 'web' ? (
             <Button
               className="w-full sm:w-auto"

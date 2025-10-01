@@ -70,7 +70,7 @@ const ToastTitle = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ToastPrimitiveTitle>
 >(({ className, ...props }, ref) => (
   <ToastPrimitiveTitle
-    className={cn('font-semibold text-sm sm:text-base', className)}
+    className={cn('select-text font-semibold text-sm sm:text-base', className)}
     ref={ref}
     {...props}
   />
@@ -81,7 +81,11 @@ const ToastDescription = React.forwardRef<
   React.ElementRef<typeof ToastPrimitiveDescription>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitiveDescription>
 >(({ className, ...props }, ref) => (
-  <ToastPrimitiveDescription className={cn('text-xs sm:text-sm', className)} ref={ref} {...props} />
+  <ToastPrimitiveDescription
+    className={cn('select-text text-xs sm:text-sm', className)}
+    ref={ref}
+    {...props}
+  />
 ))
 ToastDescription.displayName = ToastPrimitiveDescription.displayName
 
@@ -91,7 +95,7 @@ const ToastClose = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <ToastPrimitiveClose
     className={cn(
-      'absolute top-3 right-3 rounded-full p-1 text-current opacity-70 transition hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring',
+      'absolute top-3 right-3 cursor-pointer rounded-full p-1 text-current opacity-70 transition hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring',
       className
     )}
     ref={ref}

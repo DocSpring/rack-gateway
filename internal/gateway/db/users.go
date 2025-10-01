@@ -13,9 +13,9 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 	var rolesJSON string
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at FROM users WHERE id = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -37,9 +37,9 @@ func (d *Database) GetUser(email string) (*User, error) {
 	var rolesJSON string
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at FROM users WHERE email = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method FROM users WHERE email = ?",
 		email,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -221,6 +221,18 @@ func (d *Database) UpdateUserEmail(oldEmail, newEmail string) error {
 	_, err = d.exec("UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", newEmail, user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update user email: %w", err)
+	}
+	return nil
+}
+
+// UpdatePreferredMFAMethod updates a user's preferred MFA method
+func (d *Database) UpdatePreferredMFAMethod(userID int64, method *string) error {
+	if method != nil && *method != "totp" && *method != "webauthn" {
+		return fmt.Errorf("invalid MFA method: %s", *method)
+	}
+	_, err := d.exec("UPDATE users SET preferred_mfa_method = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", method, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update preferred MFA method: %w", err)
 	}
 	return nil
 }

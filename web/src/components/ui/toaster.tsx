@@ -39,16 +39,23 @@ function ToastViewportContainer() {
             key={id}
             {...rest}
             onOpenChange={(open) => {
-              if (!open) dismiss(id)
+              if (!open) {
+                // Don't dismiss if user has text selected
+                const selection = window.getSelection()
+                if (selection && selection.toString().length > 0) {
+                  return
+                }
+                dismiss(id)
+              }
             }}
           >
             <div className="flex w-full items-start gap-3">
-              {Icon ? <div className="mt-1 text-current">{Icon}</div> : null}
-              <div className="grid flex-1 gap-1">
+              {Icon ? <div className="mt-1 shrink-0 text-current">{Icon}</div> : null}
+              <div className="grid flex-1 gap-1 overflow-hidden pr-6">
                 {title ? <ToastTitle>{title}</ToastTitle> : null}
                 {description ? <ToastDescription>{description}</ToastDescription> : null}
               </div>
-              <ToastClose className="text-current">
+              <ToastClose className="shrink-0 text-current">
                 {CloseIcon}
                 <span className="sr-only">Close</span>
               </ToastClose>

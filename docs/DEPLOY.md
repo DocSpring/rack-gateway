@@ -68,23 +68,11 @@ convox env set \
   LOG_RETENTION_DAYS=2557
 ```
 
-### 2.4 (Optional) Enable WebAuthn/FIDO2 Support
+### 2.4 WebAuthn/FIDO2 Support (Automatic)
 
-To enable WebAuthn for MFA (security keys, Touch ID, Windows Hello), set:
+WebAuthn (security keys, Touch ID, Windows Hello) is **automatically enabled** when `DOMAIN` is set. No additional configuration needed!
 
-```bash
-convox env set \
-  WEBAUTHN_RP_DISPLAY_NAME="Your Company Gateway" \
-  WEBAUTHN_RP_ID=gateway.example.com \
-  WEBAUTHN_RP_ORIGIN=https://gateway.example.com
-```
-
-**Important:**
-- `WEBAUTHN_RP_ID` must match the domain where users access the gateway (without protocol or port)
-- `WEBAUTHN_RP_ORIGIN` must be the full URL including `https://`
-- If these variables are not set, WebAuthn will be disabled and users will only see TOTP as an MFA option
-
-See docs/CONFIGURATION.md for all options.
+The gateway automatically configures itself and displays "Convox Gateway (Rack Name)" to users during authentication.
 
 ## 3) Domains
 
@@ -95,8 +83,10 @@ Provide domains via environment or CI vars so Convox substitutes them in `convox
 
 ## 4) Deploy
 
-```
+````
+
 convox deploy -a convox-gateway
+
 ```
 
 This builds:
@@ -107,7 +97,9 @@ This builds:
 ## 5) Verify
 
 ```
+
 curl -s https://$DOMAIN/.gateway/api/health
+
 ```
 
 Open https://$WEB_DOMAIN and sign in.
@@ -115,9 +107,13 @@ Open https://$WEB_DOMAIN and sign in.
 ## 6) CI/CD
 
 ```
+
 convox apps create convox-gateway || true
 convox env set ...
 convox deploy
+
 ```
 
 Use gateway-issued API tokens for your app deploys to run `convox` via the gateway.
+```
+````

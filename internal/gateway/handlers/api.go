@@ -212,6 +212,7 @@ func (h *APIHandler) GetMe(c *gin.Context) {
 			response.Name = dbUser.Name
 		}
 		response.MFAEnrolled = dbUser.MFAEnrolled
+		response.PreferredMFAMethod = dbUser.PreferredMFAMethod
 	}
 	if shouldEnforceMFA(h.mfaSettings, dbUser) {
 		response.MFARequired = true

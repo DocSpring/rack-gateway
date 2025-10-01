@@ -73,12 +73,28 @@ func (a *App) initializeServices() error {
 	webAuthnRPID := strings.TrimSpace(os.Getenv("WEBAUTHN_RP_ID"))
 	webAuthnOrigin := strings.TrimSpace(os.Getenv("WEBAUTHN_ORIGIN"))
 	if webAuthnRPID == "" && a.Config.Domain != "" {
-		// Auto-derive RP ID from domain
+		// Auto-derive RP ID from domain (never include port)
 		webAuthnRPID = a.Config.Domain
 	}
-	if webAuthnOrigin == "" && a.Config.Domain != "" {
-		// Auto-derive origin from domain
-		webAuthnOrigin = fmt.Sprintf("https://%s", a.Config.Domain)
+	if webAuthnOrigin == "" {
+		// In dev mode with localhost, include the port in the origin
+		if a.Config.DevMode && (a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:")) {
+			webAuthnOrigin = fmt.Sprintf("http://localhost:%s", a.Config.Port)
+		} else if a.Config.Domain != "" {
+			// Auto-derive origin from domain (use http for localhost, https otherwise)
+			scheme := "https"
+			if a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:") {
+				scheme = "http"
+			}
+			webAuthnOrigin = fmt.Sprintf("%s://%s", scheme, a.Config.Domain)
+		}
+	}
+
+	// Log WebAuthn configuration for debugging
+	if webAuthnRPID != "" && webAuthnOrigin != "" {
+		log.Printf("WebAuthn enabled: rpid=%s origin=%s", webAuthnRPID, webAuthnOrigin)
+	} else {
+		log.Printf("WebAuthn disabled (no RP ID or origin configured)")
 	}
 
 	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin)

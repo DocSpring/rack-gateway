@@ -2440,6 +2440,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/mfa/preferred-method": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update preferred MFA method
+         * @description Sets the user's preferred MFA method for sign-in (totp or webauthn)
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Preferred method */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.UpdatePreferredMFAMethodRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StatusResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/mfa/status": {
         parameters: {
             query?: never;
@@ -3547,6 +3609,7 @@ export interface components {
             mfa_enforced_at?: string;
             mfa_enrolled?: boolean;
             name?: string;
+            preferred_mfa_method?: string;
             roles?: string[];
             suspended?: boolean;
             updated_at?: string;
@@ -3611,6 +3674,7 @@ export interface components {
             mfa_required?: boolean;
             name?: string;
             permissions?: string[];
+            preferred_mfa_method?: string;
             rack?: components["schemas"]["handlers.RackSummary"];
             recent_step_up_expires_at?: string;
             roles?: string[];
@@ -3764,6 +3828,10 @@ export interface components {
         };
         "handlers.UpdateMFASettingsRequest": {
             require_all_users?: boolean;
+        };
+        "handlers.UpdatePreferredMFAMethodRequest": {
+            /** @description "totp", "webauthn", or null to clear */
+            preferred_method?: string;
         };
         "handlers.UpdateProtectedEnvVarsRequest": {
             protected_env_vars?: string[];

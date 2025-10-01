@@ -14,18 +14,19 @@ type Database struct {
 
 // User represents a user in the system
 type User struct {
-	ID              int64      `json:"id"`
-	Email           string     `json:"email"`
-	Name            string     `json:"name"`
-	Roles           []string   `json:"roles"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	Suspended       bool       `json:"suspended"`
-	MFAEnrolled     bool       `json:"mfa_enrolled"`
-	MFAEnforcedAt   *time.Time `json:"mfa_enforced_at,omitempty"`
-	CreatedByUserID *int64     `json:"created_by_user_id,omitempty"`
-	CreatedByEmail  string     `json:"created_by_email,omitempty"`
-	CreatedByName   string     `json:"created_by_name,omitempty"`
+	ID                 int64      `json:"id"`
+	Email              string     `json:"email"`
+	Name               string     `json:"name"`
+	Roles              []string   `json:"roles"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	Suspended          bool       `json:"suspended"`
+	MFAEnrolled        bool       `json:"mfa_enrolled"`
+	MFAEnforcedAt      *time.Time `json:"mfa_enforced_at,omitempty"`
+	PreferredMFAMethod *string    `json:"preferred_mfa_method,omitempty"`
+	CreatedByUserID    *int64     `json:"created_by_user_id,omitempty"`
+	CreatedByEmail     string     `json:"created_by_email,omitempty"`
+	CreatedByName      string     `json:"created_by_name,omitempty"`
 }
 
 // APIToken represents an API token for CI/CD

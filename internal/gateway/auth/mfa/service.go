@@ -390,10 +390,26 @@ func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 		for _, t := range method.Transports {
 			transports = append(transports, protocol.AuthenticatorTransport(t))
 		}
+
+		// Restore credential flags from metadata (required for assertion validation)
+		var flags webauthn.CredentialFlags
+		if method.Metadata != nil {
+			var metadata map[string]interface{}
+			if err := json.Unmarshal(method.Metadata, &metadata); err == nil {
+				if flagsData, ok := metadata["flags"]; ok {
+					// Re-marshal and unmarshal to convert map to struct
+					if flagsJSON, err := json.Marshal(flagsData); err == nil {
+						_ = json.Unmarshal(flagsJSON, &flags)
+					}
+				}
+			}
+		}
+
 		creds = append(creds, webauthn.Credential{
 			ID:        method.CredentialID,
 			PublicKey: method.PublicKey,
 			Transport: transports,
+			Flags:     flags,
 		})
 	}
 	return creds
@@ -508,7 +524,12 @@ func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, sessionDataJSON []byt
 		label = "Security Key"
 	}
 
-	method, err := s.db.CreateMFAMethod(user.ID, "webauthn", label, "", credential.ID, credential.PublicKey, transports, nil)
+	// Store credential flags in metadata (required for assertion validation)
+	metadata := map[string]interface{}{
+		"flags": credential.Flags,
+	}
+
+	method, err := s.db.CreateMFAMethod(user.ID, "webauthn", label, "", credential.ID, credential.PublicKey, transports, metadata)
 	if err != nil {
 		return 0, err
 	}

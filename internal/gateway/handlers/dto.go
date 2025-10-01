@@ -139,6 +139,7 @@ type CurrentUserResponse struct {
 	Rack                   *RackSummary `json:"rack,omitempty"`
 	MFAEnrolled            bool         `json:"mfa_enrolled"`
 	MFARequired            bool         `json:"mfa_required"`
+	PreferredMFAMethod     *string      `json:"preferred_mfa_method,omitempty"`
 	RecentStepUpExpiresAt  *time.Time   `json:"recent_step_up_expires_at,omitempty"`
 	HasTrustedDevice       bool         `json:"has_trusted_device"`
 	DeployApprovalsEnabled bool         `json:"deploy_approvals_enabled"`
@@ -299,6 +300,11 @@ type UpdateAllowDestructiveActionsRequest struct {
 // UpdateMFASettingsRequest defines the payload for updating MFA enforcement defaults.
 type UpdateMFASettingsRequest struct {
 	RequireAllUsers bool `json:"require_all_users"`
+}
+
+// UpdatePreferredMFAMethodRequest defines the payload for updating user's preferred MFA method.
+type UpdatePreferredMFAMethodRequest struct {
+	PreferredMethod *string `json:"preferred_method"` // "totp", "webauthn", or null to clear
 }
 
 // CreateDeployApprovalRequestRequest represents the payload to open a deploy approval request.

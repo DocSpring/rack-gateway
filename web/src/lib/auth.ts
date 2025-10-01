@@ -12,6 +12,7 @@ export type User = {
   rack?: { name: string; alias?: string; host: string }
   mfaEnrolled?: boolean
   mfaRequired?: boolean
+  preferred_mfa_method?: string | null
   recentStepUpExpiresAt?: string | null
   has_trusted_device?: boolean
   deploy_approvals_enabled?: boolean

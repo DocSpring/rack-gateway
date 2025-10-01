@@ -97,6 +97,7 @@ const { apiMocks } = vi.hoisted(() => ({
     revokeTrustedDevice: vi.fn(),
     regenerateBackupCodes: vi.fn(),
     verifyMFA: vi.fn(),
+    updatePreferredMFAMethod: vi.fn(),
   } satisfies Record<string, (...args: any[]) => unknown>,
 }))
 

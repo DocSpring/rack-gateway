@@ -1417,7 +1417,16 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	// Debug: log what we're returning
+	optionsJSON, _ := json.Marshal(result.PublicKeyOptions)
+	log.Printf("WebAuthn enrollment start - MethodID: %d, PublicKeyOptions JSON: %s", result.MethodID, string(optionsJSON))
+
+	response := StartWebAuthnEnrollmentResponse{
+		MethodID:         result.MethodID,
+		PublicKeyOptions: result.PublicKeyOptions,
+		BackupCodes:      result.BackupCodes,
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // ConfirmWebAuthnEnrollment godoc
@@ -1784,4 +1793,53 @@ func (h *AuthHandler) trustedDeviceMaxAge() int {
 		ttl = time.Duration(h.mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
 	}
 	return int(ttl.Seconds())
+}
+
+// UpdatePreferredMFAMethod godoc
+// @Summary Update preferred MFA method
+// @Description Sets the user's preferred MFA method for sign-in (totp or webauthn)
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body UpdatePreferredMFAMethodRequest true "Preferred method"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/preferred-method [put]
+func (h *AuthHandler) UpdatePreferredMFAMethod(c *gin.Context) {
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "user session required"})
+		return
+	}
+
+	var req UpdatePreferredMFAMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Validate method if provided
+	if req.PreferredMethod != nil {
+		method := *req.PreferredMethod
+		if method != "totp" && method != "webauthn" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "preferred_method must be 'totp' or 'webauthn'"})
+			return
+		}
+	}
+
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	if err := h.database.UpdatePreferredMFAMethod(userRecord.ID, req.PreferredMethod); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update preferred method"})
+		return
+	}
+
+	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }

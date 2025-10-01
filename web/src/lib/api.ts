@@ -33,12 +33,15 @@ import type {
   HandlersTrustedDeviceResponse,
   HandlersUpdateAPITokenRequest,
   HandlersUpdateDeployApprovalRequestStatusRequest,
+  HandlersUpdatePreferredMFAMethodRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
   HandlersUserSessionResponse,
   HandlersUserSummary,
   HandlersVerifyMFARequest,
   HandlersVerifyMFAResponse,
+  HandlersVerifyWebAuthnAssertionRequest,
+  HandlersWebAuthnAssertionStartResponse,
 } from '@/api/schemas'
 
 const API_PREFIX = '/.gateway/api'
@@ -284,8 +287,23 @@ export const verifyCliMfa = (payload: {
 export const verifyMFA = (payload: VerifyMFARequest): Promise<VerifyMFAResponse> =>
   post<VerifyMFAResponse>('/auth/mfa/verify', payload)
 
+export const startWebAuthnAssertion = (): Promise<HandlersWebAuthnAssertionStartResponse> =>
+  post<HandlersWebAuthnAssertionStartResponse>('/auth/mfa/webauthn/assertion/start')
+
+export const verifyWebAuthnAssertion = (
+  payload: HandlersVerifyWebAuthnAssertionRequest
+): Promise<HandlersVerifyMFAResponse> =>
+  post<HandlersVerifyMFAResponse>('/auth/mfa/webauthn/assertion/verify', payload)
+
 export const regenerateBackupCodes = (): Promise<BackupCodesResponse> =>
   post<BackupCodesResponse>('/auth/mfa/backup-codes/regenerate')
+
+export const updatePreferredMFAMethod = (
+  payload: HandlersUpdatePreferredMFAMethodRequest
+): Promise<HandlersStatusResponse> =>
+  gatewayAxios
+    .put<HandlersStatusResponse>('/auth/mfa/preferred-method', payload)
+    .then((res) => res.data)
 
 export const post = <T = unknown>(
   path: string,
