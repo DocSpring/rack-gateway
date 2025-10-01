@@ -34,11 +34,6 @@ async function completeStepUp(page: Page, secret: string) {
   const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   await expect(dialog).toBeVisible()
 
-  const trustCheckbox = dialog.getByLabel('Trust this browser for 30 days')
-  if (await trustCheckbox.isChecked()) {
-    await trustCheckbox.uncheck()
-  }
-
   const code = authenticator.generate(secret)
   await dialog.getByLabel('Verification code').fill(code)
   await dialog.getByRole('button', { name: /^Verify$/ }).click()
@@ -181,12 +176,17 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+    // Wait for method selector and choose TOTP
+    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
+
     const reEnrollResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/enroll/totp/start') &&
         response.request().method() === 'POST'
     )
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
     const reEnrollResponse = await reEnrollResponsePromise
     const reEnroll = (await reEnrollResponse.json()) as { secret: string }
 
@@ -222,12 +222,17 @@ test.describe('Account security', () => {
     const mfaCard = cardByTitle(page, 'Multi-Factor Authentication').first()
     await expect(mfaCard).toBeVisible()
 
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+    // Wait for method selector and choose TOTP
+    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
+
     const enrollmentResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/enroll/totp/start') &&
         response.request().method() === 'POST'
     )
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
     const enrollmentResponse = await enrollmentResponsePromise
     const enrollment = (await enrollmentResponse.json()) as { secret: string }
     const secret = enrollment.secret
@@ -273,10 +278,6 @@ test.describe('Account security', () => {
     await expect(stepUpDialog.getByText('Multi-Factor Authentication Required')).toBeVisible({
       timeout: 15_000,
     })
-    const trustStepUp = stepUpDialog.getByLabel('Trust this browser for 30 days')
-    if (await trustStepUp.isChecked()) {
-      await trustStepUp.uncheck()
-    }
     await stepUpDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
     await stepUpDialog.getByRole('button', { name: /^Verify$/ }).click()
     await expect(stepUpDialog).toBeHidden({ timeout: 5000 })
