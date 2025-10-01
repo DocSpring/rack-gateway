@@ -124,10 +124,10 @@ export function MFAChallengePage() {
   const [useWebAuthn, setUseWebAuthn] = useState(false)
 
   // Try to fetch MFA status to determine available methods and preferred method
+  // Enable for both web and CLI modes
   const { data: mfaStatus } = useQuery({
     queryKey: ['mfaStatus'],
     queryFn: getMFAStatus,
-    enabled: mode === 'web',
     retry: false,
     staleTime: 30_000,
   })
@@ -140,16 +140,31 @@ export function MFAChallengePage() {
   // If user only has WebAuthn, default to that
   // Otherwise default to TOTP (most common)
   useEffect(() => {
-    if (mode === 'web' && mfaStatus && hasWebAuthn && !hasTOTP) {
+    if (mfaStatus && hasWebAuthn && !hasTOTP) {
       setUseWebAuthn(true)
     }
-  }, [mode, mfaStatus, hasWebAuthn, hasTOTP])
+  }, [mfaStatus, hasWebAuthn, hasTOTP])
 
   useEffect(() => {
     if (mode === 'cli' && !state) {
       setError(mapQueryError('missing_state'))
     }
   }, [mode, state])
+
+  // Auto-trigger WebAuthn authentication when using WebAuthn method
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only run when useWebAuthn becomes true, not when handleWebAuthn/mode/mutations change
+  useEffect(() => {
+    if (
+      mode === 'web' &&
+      useWebAuthn &&
+      !webAuthnMutation.isPending &&
+      !webAuthnMutation.isSuccess
+    ) {
+      handleWebAuthn()
+    }
+    // Only run once when useWebAuthn becomes true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useWebAuthn])
 
   const mutation = useMutation<CLICompletion | null, unknown, MutationPayload>({
     mutationFn: async ({ code: submittedCode, trustDevice: trustDevicePreference }) => {
@@ -288,7 +303,7 @@ export function MFAChallengePage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
-          {mode === 'web' && useWebAuthn ? (
+          {useWebAuthn ? (
             <>
               <div className="space-y-4">
                 <p className="text-muted-foreground text-sm">
@@ -338,6 +353,9 @@ export function MFAChallengePage() {
                   onChange={(event) => {
                     setError(null)
                     setCode(event.target.value)
+                  }}
+                  onComplete={() => {
+                    handleVerify()
                   }}
                   placeholder="123456"
                   value={code}

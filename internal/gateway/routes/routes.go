@@ -163,6 +163,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				mfaStepUp := mfaGroup.Group("")
 				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				mfaStepUp.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
+				mfaStepUp.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
 				mfaStepUp.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
 				mfaStepUp.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
 			}

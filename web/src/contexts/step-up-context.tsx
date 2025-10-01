@@ -76,6 +76,18 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     }
   }, [mfaStatus, hasTOTP, hasWebAuthn, isOpen])
 
+  // Auto-trigger WebAuthn when dialog opens with WebAuthn selected
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only run when dialog opens or method changes, not when handleWebAuthn/isVerifying/mfaStatus change
+  useEffect(() => {
+    if (isOpen && useWebAuthn && !isVerifying && mfaStatus) {
+      handleWebAuthn().catch(() => {
+        /* errors handled in handler */
+      })
+    }
+    // Only run when dialog opens with WebAuthn
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, useWebAuthn])
+
   const resetForm = useCallback(() => {
     setVerificationCode('')
     setTrustDevice(true)
@@ -311,6 +323,11 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
                   id="step-up-code"
                   maxLength={6}
                   onChange={(event) => setVerificationCode(event.target.value.trim())}
+                  onComplete={() => {
+                    handleVerify().catch(() => {
+                      /* errors handled in handler */
+                    })
+                  }}
                   placeholder="123456"
                   required
                   value={verificationCode}

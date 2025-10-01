@@ -52,6 +52,7 @@ import type {
   HandlersUpdateDeployApprovalRequestStatusRequest,
   HandlersUpdateEnvValuesRequest,
   HandlersUpdateEnvValuesResponse,
+  HandlersUpdateMFAMethodRequest,
   HandlersUpdateMFASettingsRequest,
   HandlersUpdatePreferredMFAMethodRequest,
   HandlersUpdateProtectedEnvVarsRequest,
@@ -679,6 +680,26 @@ export const getConvoxGatewayAPI = () => {
   };
 
   /**
+   * Updates the label of an MFA method
+   * @summary Update MFA method label
+   */
+  const putAuthMfaMethodsMethodID = (
+    methodID: number,
+    handlersUpdateMFAMethodRequest: HandlersUpdateMFAMethodRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/auth/mfa/methods/${methodID}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateMFAMethodRequest,
+      },
+      options,
+    );
+  };
+
+  /**
    * Removes an existing MFA method for the current user.
    * @summary Delete an MFA method
    */
@@ -981,6 +1002,7 @@ export const getConvoxGatewayAPI = () => {
     postAuthMfaEnrollWebauthnConfirm,
     postAuthMfaEnrollWebauthnStart,
     postAuthMfaEnrollYubiotpStart,
+    putAuthMfaMethodsMethodID,
     deleteAuthMfaMethodsMethodID,
     putAuthMfaPreferredMethod,
     getAuthMfaStatus,
@@ -1222,6 +1244,13 @@ export type PostAuthMfaEnrollYubiotpStartResult = NonNullable<
   Awaited<
     ReturnType<
       ReturnType<typeof getConvoxGatewayAPI>['postAuthMfaEnrollYubiotpStart']
+    >
+  >
+>;
+export type PutAuthMfaMethodsMethodIDResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['putAuthMfaMethodsMethodID']
     >
   >
 >;

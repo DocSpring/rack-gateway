@@ -211,6 +211,66 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
   })
 
+  test('user can edit MFA method labels', async ({ page }) => {
+    await login(page, { autoEnrollMfa: false })
+
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Enable MFA
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
+
+    const enrollmentResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/enroll/totp/start') &&
+        response.request().method() === 'POST'
+    )
+    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
+    const enrollmentResponse = await enrollmentResponsePromise
+    const enrollment = (await enrollmentResponse.json()) as { secret: string }
+    const secret = enrollment.secret
+
+    await expect(page.getByText(/Finish MFA Enrollment/i)).toBeVisible()
+    await page.getByLabel(/Enter the 6-digit code to confirm/i).fill(authenticator.generate(secret))
+    await page.getByRole('button', { name: /^Confirm$/ }).click()
+    await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
+
+    // Verify method was added
+    const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
+    await expect(methodsCard).toBeVisible()
+    const methodsTable = methodsCard.locator('table').first()
+    await expect(methodsTable.locator('tbody tr')).toHaveCount(1)
+
+    // Find and click the edit button (pencil icon)
+    const editButton = methodsTable.locator('tbody tr').first().getByRole('button').first()
+    await editButton.click()
+
+    // Verify edit dialog appears
+    const editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
+    await expect(editDialog).toBeVisible()
+    await expect(editDialog.getByLabel('Label')).toHaveValue('Authenticator App')
+
+    // Change the label
+    await editDialog.getByLabel('Label').fill('My Personal Authenticator')
+
+    // Save the changes
+    const updateResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/methods/') && response.request().method() === 'PUT'
+    )
+    await editDialog.getByRole('button', { name: /^Save$/ }).click()
+    await updateResponsePromise
+
+    // Verify dialog closes
+    await expect(editDialog).toBeHidden({ timeout: 4000 })
+
+    // Verify the label was updated in the table
+    await expect(
+      methodsTable.locator('tbody tr').first().getByText('My Personal Authenticator')
+    ).toBeVisible()
+  })
+
   test('revoking trusted device forces MFA challenge on next login', async ({ page }) => {
     await resetMfaFor(ADMIN_EMAIL)
 

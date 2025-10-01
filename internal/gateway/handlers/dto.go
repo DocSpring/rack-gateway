@@ -70,6 +70,10 @@ type VerifyWebAuthnAssertionRequest struct {
 	TrustDevice       bool   `json:"trust_device"`
 }
 
+type UpdateMFAMethodRequest struct {
+	Label string `json:"label" binding:"required,max=150"`
+}
+
 type BackupCodesResponse struct {
 	BackupCodes []string `json:"backup_codes"`
 }

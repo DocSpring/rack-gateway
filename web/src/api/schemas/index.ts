@@ -65,6 +65,7 @@ export * from './handlersUpdateEnvValuesRequest';
 export * from './handlersUpdateEnvValuesRequestSet';
 export * from './handlersUpdateEnvValuesResponse';
 export * from './handlersUpdateEnvValuesResponseEnv';
+export * from './handlersUpdateMFAMethodRequest';
 export * from './handlersUpdateMFASettingsRequest';
 export * from './handlersUpdatePreferredMFAMethodRequest';
 export * from './handlersUpdateProtectedEnvVarsRequest';

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { ShieldAlert } from 'lucide-react'
+import { Pencil, ShieldAlert, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
@@ -10,6 +10,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -29,6 +37,7 @@ import {
   type StartWebAuthnEnrollmentResponse,
   startTOTPEnrollment,
   startWebAuthnEnrollment,
+  updateMFAMethod,
   updatePreferredMFAMethod,
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -76,6 +85,8 @@ export function AccountSecurityPage() {
   const [disableDialogOpen, setDisableDialogOpen] = useState(false)
   const [disableAllPending, setDisableAllPending] = useState(false)
   const [autoPrompted, setAutoPrompted] = useState(false)
+  const [editingMethod, setEditingMethod] = useState<{ id: number; label: string } | null>(null)
+  const [editLabel, setEditLabel] = useState('')
 
   const searchParams = useMemo(() => new URLSearchParams(location.search ?? ''), [location.search])
   const promptMfa = searchParams.get('mfa') === 'verify'
@@ -247,6 +258,20 @@ export function AccountSecurityPage() {
       refreshUser().catch(() => {
         /* noop */
       })
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+    },
+  })
+
+  const updateMethodMutation = useMutation({
+    mutationFn: ({ methodId, label }: { methodId: number; label: string }) =>
+      updateMFAMethod(methodId, { label }),
+    onSuccess: () => {
+      toast.success('MFA method updated')
+      invalidateStatus()
+      setEditingMethod(null)
+      setEditLabel('')
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
@@ -814,20 +839,40 @@ export function AccountSecurityPage() {
                         {method.last_used_at ? <TimeAgo date={method.last_used_at} /> : 'Never'}
                       </td>
                       <td className="py-2 text-right">
-                        <Button
-                          onClick={() => {
-                            if (!method.id) {
-                              toast.error('Unable to determine method identifier')
-                              return
-                            }
-                            runWithStepUp(async () => {
-                              await deleteMethodMutation.mutateAsync(method.id as number)
-                            })
-                          }}
-                          variant="destructive"
-                        >
-                          Remove
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            onClick={() => {
+                              if (!method.id) {
+                                toast.error('Unable to determine method identifier')
+                                return
+                              }
+                              setEditingMethod({
+                                id: method.id as number,
+                                label: method.label ?? DEFAULT_MFA_LABEL,
+                              })
+                              setEditLabel(method.label ?? DEFAULT_MFA_LABEL)
+                            }}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              if (!method.id) {
+                                toast.error('Unable to determine method identifier')
+                                return
+                              }
+                              runWithStepUp(async () => {
+                                await deleteMethodMutation.mutateAsync(method.id as number)
+                              })
+                            }}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -932,6 +977,64 @@ export function AccountSecurityPage() {
         open={disableDialogOpen}
         title="Disable MFA"
       />
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingMethod(null)
+            setEditLabel('')
+          }
+        }}
+        open={!!editingMethod}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit MFA Method Label</DialogTitle>
+            <DialogDescription>Update the label for this MFA method.</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (editingMethod) {
+                updateMethodMutation.mutate({
+                  methodId: editingMethod.id,
+                  label: editLabel.trim(),
+                })
+              }
+            }}
+          >
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-label">Label</Label>
+                <Input
+                  autoFocus
+                  id="edit-label"
+                  maxLength={150}
+                  onChange={(event) => setEditLabel(event.target.value)}
+                  placeholder="My Security Key"
+                  required
+                  value={editLabel}
+                />
+              </div>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button
+                onClick={() => {
+                  setEditingMethod(null)
+                  setEditLabel('')
+                }}
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button disabled={updateMethodMutation.isPending || !editLabel.trim()} type="submit">
+                {updateMethodMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {isBusy ? (
         <p className="text-muted-foreground text-sm">Loading latest security information…</p>

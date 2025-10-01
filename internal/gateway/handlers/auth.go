@@ -270,26 +270,39 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
 }
 
+// CLILoginMFASubmit handles both TOTP and WebAuthn verification for CLI login
 func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	if h.database == nil || h.mfaService == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service_unavailable"})
 		return
 	}
 
-	var payload struct {
-		State string `json:"state"`
-		Code  string `json:"code"`
+	var req struct {
+		State             string `json:"state"`
+		Method            string `json:"method"`             // "totp" or "webauthn" (optional, defaults to totp)
+		Code              string `json:"code"`               // For TOTP
+		SessionData       string `json:"session_data"`       // For WebAuthn
+		AssertionResponse string `json:"assertion_response"` // For WebAuthn
 	}
 
-	if err := c.ShouldBindJSON(&payload); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
 
-	state := strings.TrimSpace(payload.State)
-	code := strings.TrimSpace(payload.Code)
-	if state == "" || code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "state_and_code_required"})
+	method := strings.ToLower(strings.TrimSpace(req.Method))
+	if method == "" {
+		method = "totp" // Default for backwards compatibility
+	}
+
+	state := strings.TrimSpace(req.State)
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state_required"})
+		return
+	}
+
+	if method == "totp" && strings.TrimSpace(req.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code_required"})
 		return
 	}
 
@@ -332,9 +345,19 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	verification, err := h.mfaService.VerifyTOTP(userRecord, code)
+	// Verify with appropriate method
+	var verification *mfa.VerificationResult
+	switch method {
+	case "totp":
+		verification, err = h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code))
+	case "webauthn":
+		verification, err = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse))
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_method"})
+		return
+	}
+
 	if err != nil {
-		// Notify about failed CLI MFA attempt
 		if h.securityNotifier != nil {
 			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
 		}
@@ -1342,6 +1365,97 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 		log.Printf("failed to list remaining mfa methods: %v", err)
 	}
 	c.JSON(http.StatusOK, StatusResponse{Status: "deleted"})
+}
+
+// UpdateMFAMethod godoc
+// @Summary Update MFA method label
+// @Description Updates the label of an MFA method
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param methodID path int true "MFA Method ID"
+// @Param request body UpdateMFAMethodRequest true "Update request"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/mfa/methods/{methodID} [put]
+func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+	if userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+	methodIDParam := strings.TrimSpace(c.Param("methodID"))
+	if methodIDParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "method id required"})
+		return
+	}
+	methodID, err := strconv.ParseInt(methodIDParam, 10, 64)
+	if err != nil || methodID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid method id"})
+		return
+	}
+	method, err := h.database.GetMFAMethodByID(methodID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load mfa method"})
+		return
+	}
+	if method == nil || method.UserID != userRecord.ID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "mfa method not found"})
+		return
+	}
+
+	var req UpdateMFAMethodRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Update only the label
+	if err := h.database.UpdateMFAMethodLabel(method.ID, req.Label); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update mfa method"})
+		return
+	}
+
+	// Audit log
+	if h.database != nil {
+		details, _ := json.Marshal(map[string]interface{}{
+			"method_id": method.ID,
+			"label":     req.Label,
+		})
+		if err := audit.LogDB(h.database, &db.AuditLog{
+			UserEmail:    userRecord.Email,
+			UserName:     userRecord.Name,
+			ActionType:   "auth",
+			Action:       "mfa.update",
+			ResourceType: "mfa_method",
+			Resource:     fmt.Sprintf("%d", method.ID),
+			Details:      string(details),
+			Status:       "success",
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.Request.UserAgent(),
+		}); err != nil {
+			log.Printf("failed to log mfa update audit: %v", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }
 
 // StartYubiOTPEnrollment godoc

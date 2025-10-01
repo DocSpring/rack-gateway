@@ -251,6 +251,11 @@ export const getMFAStatus = (): Promise<MFAStatusResponse> => unwrap(gateway.get
 export const deleteMFAMethod = (methodId: number): Promise<StatusResponse> =>
   unwrap(gateway.deleteAuthMfaMethodsMethodID(methodId))
 
+export const updateMFAMethod = (
+  methodId: number,
+  data: { label: string }
+): Promise<StatusResponse> => unwrap(gateway.putAuthMfaMethodsMethodID(methodId, data))
+
 export const revokeTrustedDevice = (deviceId: number): Promise<StatusResponse> =>
   unwrap(gateway.deleteAuthMfaTrustedDevicesDeviceID(deviceId))
 
@@ -276,7 +281,10 @@ export const confirmWebAuthnEnrollment = (
 
 export const verifyCliMfa = (payload: {
   state: string
-  code: string
+  method?: string
+  code?: string
+  session_data?: string
+  assertion_response?: string
 }): Promise<{ redirect: string }> =>
   gatewayAxios
     .post<{ redirect: string }>('/auth/cli/mfa', payload, {
