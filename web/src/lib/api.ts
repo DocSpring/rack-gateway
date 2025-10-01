@@ -250,6 +250,19 @@ export const confirmTOTPEnrollment = (
   payload: ConfirmTOTPEnrollmentRequest
 ): Promise<VerifyMFAResponse> => post<VerifyMFAResponse>('/auth/mfa/enroll/totp/confirm', payload)
 
+export const startYubiOTPEnrollment = (
+  payload: StartYubiOTPEnrollmentRequest
+): Promise<StartYubiOTPEnrollmentResponse> =>
+  post<StartYubiOTPEnrollmentResponse>('/auth/mfa/enroll/yubiotp/start', payload)
+
+export const startWebAuthnEnrollment = (): Promise<StartWebAuthnEnrollmentResponse> =>
+  post<StartWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/start')
+
+export const confirmWebAuthnEnrollment = (
+  payload: ConfirmWebAuthnEnrollmentRequest
+): Promise<VerifyMFAResponse> =>
+  post<VerifyMFAResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
+
 export const verifyCliMfa = (payload: {
   state: string
   code: string

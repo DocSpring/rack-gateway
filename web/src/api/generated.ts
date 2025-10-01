@@ -48,6 +48,7 @@ import type {
   HandlersTokenPermissionMetadata,
   HandlersUpdateAPITokenRequest,
   HandlersUpdateAllowDestructiveActionsRequest,
+  HandlersUpdateApprovedCommandsRequest,
   HandlersUpdateDeployApprovalRequestStatusRequest,
   HandlersUpdateEnvValuesRequest,
   HandlersUpdateEnvValuesResponse,
@@ -218,6 +219,25 @@ export const getConvoxGatewayAPI = () => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         data: handlersUpdateAllowDestructiveActionsRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the list of approved commands that CI/CD tokens can execute in processes.
+   * @summary Update approved commands for CI/CD exec
+   */
+  const putAdminSettingsApprovedCommands = (
+    handlersUpdateApprovedCommandsRequest: HandlersUpdateApprovedCommandsRequest,
+    options?: SecondParameter<typeof createGatewayClient>,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/approved_commands`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateApprovedCommandsRequest,
       },
       options,
     );
@@ -879,6 +899,7 @@ export const getConvoxGatewayAPI = () => {
     getAdminRoles,
     getAdminSettings,
     putAdminSettingsAllowDestructiveActions,
+    putAdminSettingsApprovedCommands,
     putAdminSettingsMfa,
     putAdminSettingsProtectedEnvVars,
     postAdminSettingsRackTlsCertRefresh,
@@ -976,6 +997,13 @@ export type PutAdminSettingsAllowDestructiveActionsResult = NonNullable<
       ReturnType<
         typeof getConvoxGatewayAPI
       >['putAdminSettingsAllowDestructiveActions']
+    >
+  >
+>;
+export type PutAdminSettingsApprovedCommandsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getConvoxGatewayAPI>['putAdminSettingsApprovedCommands']
     >
   >
 >;

@@ -59,6 +59,7 @@ export * from './handlersTokenPermissionMetadata';
 export * from './handlersTrustedDeviceResponse';
 export * from './handlersUpdateAPITokenRequest';
 export * from './handlersUpdateAllowDestructiveActionsRequest';
+export * from './handlersUpdateApprovedCommandsRequest';
 export * from './handlersUpdateDeployApprovalRequestStatusRequest';
 export * from './handlersUpdateEnvValuesRequest';
 export * from './handlersUpdateEnvValuesRequestSet';

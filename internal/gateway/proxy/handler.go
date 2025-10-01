@@ -327,6 +327,22 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Additional gating for process exec and terminate (approval-based permissions)
+	if resource == "process" && action == "exec" {
+		if ok, message := h.checkProcessExec(r, authUser, path, approvalTracker); !ok {
+			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process exec denied: %s", message))
+			http.Error(w, message, http.StatusForbidden)
+			return
+		}
+	}
+	if resource == "process" && action == "terminate" {
+		if ok, message := h.checkProcessTerminate(r, authUser, path); !ok {
+			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process terminate denied: %s", message))
+			http.Error(w, message, http.StatusForbidden)
+			return
+		}
+	}
+
 	// Block destructive actions when not allowed by settings
 	if !h.allowDestructive {
 		if isDestructive(methodForRBAC, resource, action) {
@@ -1238,6 +1254,13 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			}
 		}
 	}
+
+	// Track process creation
+	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
+		if id := extractJSONString(obj["id"]); id != "" {
+			h.trackProcessCreation(r, path, id, email)
+		}
+	}
 }
 
 func extractJSONString(v interface{}) string {
@@ -1793,4 +1816,179 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message st
 	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
 		log.Printf("proxy: failed to encode error response: %v", err)
 	}
+}
+
+// trackProcessCreation records a process created via the gateway.
+func (h *Handler) trackProcessCreation(r *http.Request, path, processID, email string) {
+	if h.database == nil {
+		return
+	}
+
+	// Extract app name from path: /apps/{app}/services/{service}/processes
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 {
+		return
+	}
+	app := parts[1]
+
+	// Get creator info
+	authUser, ok := auth.GetAuthUser(r.Context())
+	if !ok {
+		return
+	}
+
+	var userID, tokenID *int64
+	if authUser.IsAPIToken {
+		tokenID = authUser.TokenID
+	} else {
+		if user, err := h.rbacManager.GetUserWithID(email); err == nil && user != nil {
+			userID = &user.ID
+		}
+	}
+
+	// Create process record (no release ID or command yet)
+	if err := h.database.CreateProcess(processID, app, "", userID, tokenID); err != nil {
+		log.Printf(`{"level":"error","event":"process_tracking_failed","process_id":%q,"error":%q}`, processID, err.Error())
+	}
+}
+
+// checkProcessExec gates process exec with command allowlist and approval checks.
+// Returns (allowed, error message).
+func (h *Handler) checkProcessExec(r *http.Request, authUser *auth.AuthUser, path string, approvalTracker *deployApprovalTracker) (bool, string) {
+	if h.database == nil {
+		return true, "" // No database, no gating
+	}
+
+	// Extract process ID from path: /apps/{app}/processes/{pid}/exec
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 4 {
+		return false, "invalid process path"
+	}
+	processID := parts[3]
+
+	// Get command from header (this is where Convox passes the exec command)
+	command := strings.TrimSpace(r.Header.Get("Command"))
+	if command == "" {
+		return false, "no command specified"
+	}
+
+	// Check if process exists and was created by this user/token
+	process, err := h.database.GetProcess(processID)
+	if err != nil {
+		log.Printf(`{"level":"error","event":"process_lookup_failed","process_id":%q,"error":%q}`, processID, err.Error())
+		return false, "failed to verify process ownership"
+	}
+	if process == nil {
+		// Process not tracked - allow for regular users but deny for API tokens with -with-approval permission
+		// (This handles processes created outside the gateway, like existing app processes)
+		if authUser.IsAPIToken {
+			// Check if they have the gated permission (exec-with-approval)
+			if allowed, _ := h.rbacManager.Enforce(authUser.Email, "process", "exec-with-approval"); allowed {
+				return false, "cannot exec into untracked processes (not created via gateway)"
+			}
+		}
+		// Regular users or tokens without -with-approval can exec into any process
+		return true, ""
+	}
+
+	// Verify ownership
+	var isOwner bool
+	if authUser.IsAPIToken && authUser.TokenID != nil {
+		isOwner = process.CreatedByAPITokenID != nil && *process.CreatedByAPITokenID == *authUser.TokenID
+	} else {
+		if user, err := h.rbacManager.GetUserWithID(authUser.Email); err == nil && user != nil {
+			isOwner = process.CreatedByUserID != nil && *process.CreatedByUserID == user.ID
+		}
+	}
+
+	if !isOwner {
+		return false, "can only exec into processes you created"
+	}
+
+	// Check command against allowlist
+	approvedCommands, err := h.database.GetApprovedCommands()
+	if err != nil {
+		log.Printf(`{"level":"error","event":"approved_commands_lookup_failed","error":%q}`, err.Error())
+		return false, "failed to check command allowlist"
+	}
+
+	commandAllowed := false
+	for _, approved := range approvedCommands {
+		if command == approved {
+			commandAllowed = true
+			break
+		}
+	}
+
+	if !commandAllowed {
+		return false, fmt.Sprintf("command %q not in approved commands list", command)
+	}
+
+	// Check deploy approval if required
+	if approvalTracker == nil {
+		return false, "exec requires an approved deploy approval request"
+	}
+
+	// Update process with command and approval request ID
+	if err := h.database.UpdateProcessCommand(processID, command, &approvalTracker.request.ID); err != nil {
+		log.Printf(`{"level":"error","event":"process_command_update_failed","process_id":%q,"error":%q}`, processID, err.Error())
+		// Don't fail the request if we can't update the tracking
+	}
+
+	return true, ""
+}
+
+// checkProcessTerminate gates process termination to only processes created by the requester.
+// Returns (allowed, error message).
+func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser, path string) (bool, string) {
+	if h.database == nil {
+		return true, "" // No database, no gating
+	}
+
+	// Extract process ID from path: /apps/{app}/processes/{pid}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 4 {
+		return false, "invalid process path"
+	}
+	processID := parts[3]
+
+	// Get process
+	process, err := h.database.GetProcess(processID)
+	if err != nil {
+		log.Printf(`{"level":"error","event":"process_lookup_failed","process_id":%q,"error":%q}`, processID, err.Error())
+		return false, "failed to verify process ownership"
+	}
+	if process == nil {
+		// Process not tracked - allow for regular users but deny for API tokens with -with-approval permission
+		if authUser.IsAPIToken {
+			// Check if they have the gated permission (terminate-with-approval)
+			if allowed, _ := h.rbacManager.Enforce(authUser.Email, "process", "terminate-with-approval"); allowed {
+				return false, "cannot terminate untracked processes (not created via gateway)"
+			}
+		}
+		// Regular users or tokens without -with-approval can terminate any process
+		return true, ""
+	}
+
+	// Verify ownership
+	var isOwner bool
+	if authUser.IsAPIToken && authUser.TokenID != nil {
+		isOwner = process.CreatedByAPITokenID != nil && *process.CreatedByAPITokenID == *authUser.TokenID
+	} else {
+		if user, err := h.rbacManager.GetUserWithID(authUser.Email); err == nil && user != nil {
+			isOwner = process.CreatedByUserID != nil && *process.CreatedByUserID == user.ID
+		}
+	}
+
+	if !isOwner {
+		return false, "can only terminate processes you created"
+	}
+
+	// Mark process as terminated
+	if err := h.database.MarkProcessTerminated(processID); err != nil {
+		log.Printf(`{"level":"error","event":"process_termination_tracking_failed","process_id":%q,"error":%q}`, processID, err.Error())
+		// Don't fail the request if we can't update the tracking
+	}
+
+	return true, ""
 }

@@ -32,6 +32,7 @@ type MFASettings = {
 
 type SettingsResponse = {
   protected_env_vars: string[]
+  approved_commands: string[]
   allow_destructive_actions: boolean
   rack_tls_pinning_enabled?: boolean
   rack_tls_cert?: RackTLSCert | null
@@ -70,7 +71,9 @@ export function SettingsPage() {
   })
 
   const [newVar, setNewVar] = useState('')
+  const [newCommand, setNewCommand] = useState('')
   const envVars = data?.protected_env_vars ?? []
+  const approvedCommands = data?.approved_commands ?? []
   const allowDestructive = data?.allow_destructive_actions ?? false
   const requireAllUsers = data?.mfa?.require_all_users ?? false
   const cert = data?.rack_tls_cert ?? null
@@ -90,6 +93,21 @@ export function SettingsPage() {
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
       toast.error(message || 'Failed to update protected env vars')
+    },
+  })
+
+  const saveCommandsMutation = useMutation({
+    mutationFn: async (commands: string[]) =>
+      api.put('/.gateway/api/admin/settings/approved_commands', {
+        approved_commands: commands,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      toast.success('Approved commands updated')
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to update approved commands')
     },
   })
 
@@ -228,6 +246,27 @@ export function SettingsPage() {
     saveEnvMutation.mutate(next)
   }
 
+  const addCommand = () => {
+    const trimmed = newCommand.trim()
+    if (!trimmed) {
+      toast.error('Command cannot be empty')
+      return
+    }
+
+    if (approvedCommands.includes(trimmed)) {
+      setNewCommand('')
+      return
+    }
+
+    saveCommandsMutation.mutate([...approvedCommands, trimmed])
+    setNewCommand('')
+  }
+
+  const removeCommand = (cmd: string) => {
+    const next = approvedCommands.filter((x) => x !== cmd)
+    saveCommandsMutation.mutate(next)
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -297,6 +336,70 @@ export function SettingsPage() {
                       className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-background"
                       disabled={!isAdmin || saveEnvMutation.isPending}
                       onClick={() => removeEnvVar(v)}
+                      type="button"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Approved Commands for CI/CD</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-muted-foreground text-sm">
+              Commands listed here can be executed by CI/CD tokens during deployments. Uses exact
+              string matching.
+            </p>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Label className="mb-4" htmlFor="new-command">
+                  Add Command
+                </Label>
+                <Input
+                  disabled={!isAdmin || isLoading || saveCommandsMutation.isPending}
+                  id="new-command"
+                  onChange={(e) => setNewCommand(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addCommand()
+                    }
+                  }}
+                  placeholder="e.g. bin/pre_release"
+                  value={newCommand}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  disabled={!isAdmin || isLoading || saveCommandsMutation.isPending}
+                  onClick={addCommand}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+            <Separator className="my-4" />
+            <div className="flex flex-wrap gap-2">
+              {(approvedCommands || []).length === 0 ? (
+                <span className="text-muted-foreground text-sm">No approved commands set</span>
+              ) : (
+                approvedCommands.map((cmd) => (
+                  <span
+                    className="inline-flex items-center gap-2 rounded-md border bg-muted px-2 py-1 font-mono text-xs"
+                    key={cmd}
+                  >
+                    {cmd}
+                    <button
+                      aria-label={`Remove ${cmd}`}
+                      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-background"
+                      disabled={!isAdmin || saveCommandsMutation.isPending}
+                      onClick={() => removeCommand(cmd)}
                       type="button"
                     >
                       <X className="h-4 w-4" />

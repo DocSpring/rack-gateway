@@ -45,6 +45,44 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
+# Check for WebAuthn/FIDO2 system dependencies (Linux only)
+if [[ "$(uname)" == "Linux" ]]; then
+  missing_libs=()
+
+  # Check for libudev (needed for USB device management)
+  if ! pkg-config --exists libudev 2>/dev/null; then
+    missing_libs+=("libudev-dev")
+  fi
+
+  # Check for libusb-1.0 (needed for USB communication)
+  if ! pkg-config --exists libusb-1.0 2>/dev/null; then
+    missing_libs+=("libusb-1.0-0-dev")
+  fi
+
+  if [[ ${#missing_libs[@]} -gt 0 ]]; then
+    echo "WebAuthn/FIDO2 support requires system libraries: ${missing_libs[*]}" >&2
+    echo "" >&2
+    if command -v apt-get >/dev/null 2>&1; then
+      echo "Install with: sudo apt-get install ${missing_libs[*]}" >&2
+    elif command -v yum >/dev/null 2>&1; then
+      echo "Install with: sudo yum install libudev-devel libusb-devel" >&2
+    elif command -v dnf >/dev/null 2>&1; then
+      echo "Install with: sudo dnf install libudev-devel libusb-devel" >&2
+    else
+      echo "Please install the equivalent packages for your distribution." >&2
+    fi
+    echo "" >&2
+    echo "Without these libraries, WebAuthn authentication in the CLI will not work." >&2
+    echo "You can still use TOTP for MFA." >&2
+    echo "" >&2
+    read -p "Continue anyway? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      exit 1
+    fi
+  fi
+fi
+
 echo "Installing convox-gateway CLI to: $INSTALL_DIR"
 
 # Resolve repo root relative to this script

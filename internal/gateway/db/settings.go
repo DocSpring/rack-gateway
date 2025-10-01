@@ -165,3 +165,32 @@ func (d *Database) UpsertMFASettings(settings *MFASettings, updatedByUserID *int
 	}
 	return d.UpsertSetting("mfa", settings, updatedByUserID)
 }
+
+// ApprovedCommandsSettings contains the list of commands allowed for CI/CD exec.
+type ApprovedCommandsSettings struct {
+	Commands []string `json:"commands"`
+}
+
+// GetApprovedCommands returns the list of approved commands for CI/CD exec.
+func (d *Database) GetApprovedCommands() ([]string, error) {
+	raw, ok, err := d.GetSettingRaw("approved_commands")
+	if err != nil {
+		return []string{}, err
+	}
+	if !ok || len(raw) == 0 {
+		return []string{}, nil
+	}
+
+	var settings ApprovedCommandsSettings
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return []string{}, fmt.Errorf("invalid approved_commands setting: %w", err)
+	}
+
+	return settings.Commands, nil
+}
+
+// UpdateApprovedCommands sets the list of approved commands.
+func (d *Database) UpdateApprovedCommands(commands []string, updatedByUserID *int64) error {
+	settings := &ApprovedCommandsSettings{Commands: commands}
+	return d.UpsertSetting("approved_commands", settings, updatedByUserID)
+}

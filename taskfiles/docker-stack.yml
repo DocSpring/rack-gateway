@@ -18,9 +18,9 @@ tasks:
     cmds:
       - |
         {{- if .DEPENDENCY_SERVICES -}}
-        docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.DEPENDENCY_SERVICES}}
+        docker compose up -d {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.DEPENDENCY_SERVICES}}
         {{- end -}}
-      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.SERVICES}}
+      - docker compose up -d {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.SERVICES}}
       - |
         if docker ps --format '{{"{{.Names}}"}}' | grep -q '^convox-gateway-postgres-1$'; then
           for _ in $(seq 1 20); do
@@ -40,14 +40,14 @@ tasks:
   up:gateway:
     desc: Up {{.STACK}} gateway
     cmds:
-      - docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.GATEWAY_SERVICE}}
+      - docker compose up -d {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.GATEWAY_SERVICE}}
 
   up:web:
     desc: Up {{.STACK}} web frontend
     cmds:
       - |
         {{- if .WEB_SERVICE -}}
-        docker compose up -d --pull never {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.WEB_SERVICE}}
+        docker compose up -d {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.WEB_SERVICE}}
         {{- else -}}
         echo "No web service defined for stack {{.STACK}}, skipping."
         {{- end -}}

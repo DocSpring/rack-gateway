@@ -147,7 +147,7 @@ EOF
         case "$host" in
             ''|localhost|127.0.0.*)
                 if [ "${port:-}" = "55432" ]; then
-                    docker compose up -d --pull never postgres >/dev/null 2>&1 || true
+                    docker compose up -d postgres >/dev/null 2>&1 || true
                     for _ in $(seq 1 20); do
                         if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
                             use_docker=true

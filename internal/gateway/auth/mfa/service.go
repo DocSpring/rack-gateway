@@ -519,7 +519,83 @@ func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, sessionDataJSON []byt
 	return method.ID, nil
 }
 
-// VerifyWebAuthn validates a WebAuthn assertion during login or step-up.
+// StartWebAuthnAssertion begins a WebAuthn assertion (login) ceremony.
+// Returns the challenge options and session data that must be stored for verification.
+func (s *Service) StartWebAuthnAssertion(user *db.User) (*protocol.CredentialAssertion, []byte, error) {
+	if user == nil {
+		return nil, nil, fmt.Errorf("user required")
+	}
+	if s.webAuthn == nil {
+		return nil, nil, fmt.Errorf("WebAuthn not configured")
+	}
+
+	methods, err := s.db.ListMFAMethods(user.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	waUser := &webAuthnUser{user: user, methods: methods}
+	options, session, err := s.webAuthn.BeginLogin(waUser)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to begin login: %w", err)
+	}
+
+	// Serialize session data for storage
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal session: %w", err)
+	}
+
+	return options, sessionJSON, nil
+}
+
+// VerifyWebAuthnAssertion validates a WebAuthn assertion response using stored session data.
+func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, credentialJSON []byte) (*VerificationResult, error) {
+	if user == nil {
+		return nil, fmt.Errorf("user required")
+	}
+	if s.webAuthn == nil {
+		return nil, fmt.Errorf("WebAuthn not configured")
+	}
+
+	methods, err := s.db.ListMFAMethods(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var session webauthn.SessionData
+	if err := json.Unmarshal(sessionJSON, &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
+	}
+
+	waUser := &webAuthnUser{user: user, methods: methods}
+
+	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(strings.NewReader(string(credentialJSON)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse assertion: %w", err)
+	}
+
+	credential, err := s.webAuthn.ValidateLogin(waUser, session, parsedResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate assertion: %w", err)
+	}
+
+	// Find matching method
+	for _, method := range methods {
+		if method.Type == "webauthn" && string(method.CredentialID) == string(credential.ID) {
+			now := time.Now()
+			if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
+				return nil, err
+			}
+			return &VerificationResult{MethodID: method.ID}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("credential not found")
+}
+
+// VerifyWebAuthn validates a WebAuthn assertion during login or step-up (legacy, for web UI).
+// Deprecated: Use StartWebAuthnAssertion + VerifyWebAuthnAssertion for better session management.
 func (s *Service) VerifyWebAuthn(user *db.User, credentialJSON []byte) (*VerificationResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")

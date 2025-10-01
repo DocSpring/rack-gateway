@@ -59,6 +59,17 @@ type VerifyMFAResponse struct {
 	TrustedDeviceCookie   bool      `json:"trusted_device_cookie"`
 }
 
+type WebAuthnAssertionStartResponse struct {
+	Options     interface{} `json:"options"`      // protocol.CredentialAssertion
+	SessionData string      `json:"session_data"` // Serialized session to send back with verification
+}
+
+type VerifyWebAuthnAssertionRequest struct {
+	SessionData       string `json:"session_data" binding:"required"`
+	AssertionResponse string `json:"assertion_response" binding:"required"`
+	TrustDevice       bool   `json:"trust_device"`
+}
+
 type BackupCodesResponse struct {
 	BackupCodes []string `json:"backup_codes"`
 }
@@ -272,6 +283,11 @@ type RevokeAllSessionsResponse struct {
 // UpdateProtectedEnvVarsRequest defines the payload for updating protected environment variables.
 type UpdateProtectedEnvVarsRequest struct {
 	ProtectedEnvVars []string `json:"protected_env_vars"`
+}
+
+// UpdateApprovedCommandsRequest defines the payload for updating approved commands for CI/CD exec.
+type UpdateApprovedCommandsRequest struct {
+	ApprovedCommands []string `json:"approved_commands"`
 }
 
 // UpdateAllowDestructiveActionsRequest defines the payload for toggling destructive actions.

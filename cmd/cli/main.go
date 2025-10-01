@@ -837,6 +837,9 @@ func performMFAVerification(gatewayURL string, resp *LoginResponse) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: Check for WebAuthn methods and try WebAuthn first if available
+	// For now, use TOTP/backup code verification
 	for attempts := 0; attempts < 5; attempts++ {
 		code, err := promptMFACode()
 		if err != nil {

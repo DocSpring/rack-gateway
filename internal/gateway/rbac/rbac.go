@@ -114,9 +114,9 @@ var roleConfigs = map[string]roleConfig{
 			"convox:release:promote-with-approval",
 			"convox:process:list",
 			"convox:process:read",
-			"convox:process:start",
-			"convox:process:exec",
-			"convox:process:terminate",
+			"convox:process:start",                   // Allowed - just creates blank process
+			"convox:process:exec-with-approval",      // Gated - checks command allowlist + approval
+			"convox:process:terminate-with-approval", // Gated - only tracked process IDs
 			"convox:instance:list",
 			"convox:instance:read",
 			"convox:rack:read",

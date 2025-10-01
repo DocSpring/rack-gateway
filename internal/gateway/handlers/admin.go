@@ -1214,12 +1214,18 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		} else {
 			resp["allow_destructive_actions"] = false
 		}
+		if arr, err := h.database.GetApprovedCommands(); err == nil {
+			resp["approved_commands"] = arr
+		} else {
+			resp["approved_commands"] = []string{}
+		}
 		if settings, err := h.database.GetMFASettings(); err == nil && settings != nil {
 			h.mfaSettings = settings
 		}
 	} else {
 		resp["protected_env_vars"] = []string{}
 		resp["allow_destructive_actions"] = false
+		resp["approved_commands"] = []string{}
 	}
 
 	if h.mfaSettings != nil {
@@ -1302,6 +1308,64 @@ func (h *AdminHandler) UpdateProtectedEnvVars(c *gin.Context) {
 		}
 
 		h.notifySettingsChanged(c, "protected_env_vars", strings.Join(out, ", "))
+	}
+
+	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
+}
+
+// UpdateApprovedCommands godoc
+// @Summary Update approved commands for CI/CD exec
+// @Description Replaces the list of approved commands that CI/CD tokens can execute in processes.
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param request body UpdateApprovedCommandsRequest true "Approved commands"
+// @Success 200 {object} StatusResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/settings/approved_commands [put]
+func (h *AdminHandler) UpdateApprovedCommands(c *gin.Context) {
+	email := c.GetString("user_email")
+
+	var payload UpdateApprovedCommandsRequest
+
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Trim and de-dup
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(payload.ApprovedCommands))
+	for _, cmd := range payload.ApprovedCommands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
+		if _, ok := seen[cmd]; ok {
+			continue
+		}
+		seen[cmd] = struct{}{}
+		out = append(out, cmd)
+	}
+
+	// Determine updating user id if available
+	var uid *int64
+	if h.rbac != nil {
+		if u, err := h.rbac.GetUserWithID(email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+
+	if h.database != nil {
+		if err := h.database.UpdateApprovedCommands(out, uid); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save approved commands"})
+			return
+		}
+
+		h.notifySettingsChanged(c, "approved_commands", fmt.Sprintf("%d commands", len(out)))
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})

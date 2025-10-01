@@ -595,6 +595,60 @@
                 }
             }
         },
+        "/admin/settings/approved_commands": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Replaces the list of approved commands that CI/CD tokens can execute in processes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update approved commands for CI/CD exec",
+                "parameters": [
+                    {
+                        "description": "Approved commands",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateApprovedCommandsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/settings/mfa": {
             "put": {
                 "security": [
@@ -2188,6 +2242,100 @@
                 }
             }
         },
+        "/auth/mfa/webauthn/assertion/start": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start WebAuthn assertion for MFA",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WebAuthnAssertionStartResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/mfa/webauthn/assertion/verify": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Completes the WebAuthn assertion ceremony by validating the signed response.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Verify WebAuthn assertion for MFA",
+                "parameters": [
+                    {
+                        "description": "Assertion response and session data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.VerifyWebAuthnAssertionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.VerifyMFAResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/web/callback": {
             "get": {
                 "description": "Validates the OAuth callback, issues a session cookie, and redirects to the SPA.",
@@ -3529,6 +3677,17 @@
                 }
             }
         },
+        "handlers.UpdateApprovedCommandsRequest": {
+            "type": "object",
+            "properties": {
+                "approved_commands": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "handlers.UpdateDeployApprovalRequestStatusRequest": {
             "type": "object",
             "properties": {
@@ -3688,6 +3847,36 @@
                 },
                 "trusted_device_cookie": {
                     "type": "boolean"
+                }
+            }
+        },
+        "handlers.VerifyWebAuthnAssertionRequest": {
+            "type": "object",
+            "required": [
+                "assertion_response",
+                "session_data"
+            ],
+            "properties": {
+                "assertion_response": {
+                    "type": "string"
+                },
+                "session_data": {
+                    "type": "string"
+                },
+                "trust_device": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.WebAuthnAssertionStartResponse": {
+            "type": "object",
+            "properties": {
+                "options": {
+                    "description": "protocol.CredentialAssertion"
+                },
+                "session_data": {
+                    "description": "Serialized session to send back with verification",
+                    "type": "string"
                 }
             }
         }

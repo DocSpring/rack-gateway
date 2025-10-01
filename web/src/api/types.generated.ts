@@ -639,6 +639,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/settings/approved_commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update approved commands for CI/CD exec
+         * @description Replaces the list of approved commands that CI/CD tokens can execute in processes.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Approved commands */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.UpdateApprovedCommandsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.StatusResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/settings/mfa": {
         parameters: {
             query?: never;
@@ -3551,6 +3613,9 @@ export interface components {
         };
         "handlers.UpdateAllowDestructiveActionsRequest": {
             allow_destructive_actions?: boolean;
+        };
+        "handlers.UpdateApprovedCommandsRequest": {
+            approved_commands?: string[];
         };
         "handlers.UpdateDeployApprovalRequestStatusRequest": {
             notes?: string;

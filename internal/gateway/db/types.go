@@ -188,3 +188,16 @@ type TrustedDevice struct {
 	RevokedReason string          `json:"revoked_reason,omitempty"`
 	Metadata      json.RawMessage `json:"metadata,omitempty"`
 }
+
+// Process tracks processes created via the gateway for authorization purposes.
+type Process struct {
+	ID                      string     `json:"id"`
+	App                     string     `json:"app"`
+	ReleaseID               string     `json:"release_id,omitempty"`
+	Command                 string     `json:"command,omitempty"`
+	CreatedByUserID         *int64     `json:"created_by_user_id,omitempty"`
+	CreatedByAPITokenID     *int64     `json:"created_by_api_token_id,omitempty"`
+	DeployApprovalRequestID *int64     `json:"deploy_approval_request_id,omitempty"`
+	CreatedAt               time.Time  `json:"created_at" ts_type:"string"`
+	TerminatedAt            *time.Time `json:"terminated_at,omitempty" ts_type:"string | null"`
+}

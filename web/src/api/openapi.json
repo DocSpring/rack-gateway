@@ -723,6 +723,66 @@
                 }
             }
         },
+        "/admin/settings/approved_commands": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Replaces the list of approved commands that CI/CD tokens can execute in processes.",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update approved commands for CI/CD exec",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.UpdateApprovedCommandsRequest"
+                            }
+                        }
+                    },
+                    "description": "Approved commands",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.StatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/admin/settings/mfa": {
             "put": {
                 "security": [
@@ -4183,6 +4243,17 @@
                 "properties": {
                     "allow_destructive_actions": {
                         "type": "boolean"
+                    }
+                }
+            },
+            "handlers.UpdateApprovedCommandsRequest": {
+                "type": "object",
+                "properties": {
+                    "approved_commands": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 }
             },
