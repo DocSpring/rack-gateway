@@ -130,9 +130,9 @@ export function serializeAssertionCredential(
  * Call navigator.credentials.get with E2E test mode support
  * In E2E mode, returns a mock credential to prevent triggering real hardware
  */
-export async function getCredential(options: CredentialRequestOptions): Promise<Credential | null> {
+export function getCredential(options: CredentialRequestOptions): Promise<Credential | null> {
+  // biome-ignore lint/suspicious/noExplicitAny: window.__e2e_test_mode__ is set by test environment
   if ((window as any).__e2e_test_mode__) {
-    // console.log('[E2E] Returning mock credential for navigator.credentials.get')
     // Return a mock PublicKeyCredential that will pass serialization
     const mockCredential = {
       id: 'mock-credential-id',
@@ -145,7 +145,7 @@ export async function getCredential(options: CredentialRequestOptions): Promise<
         userHandle: null,
       },
     } as unknown as Credential
-    return mockCredential
+    return Promise.resolve(mockCredential)
   }
   return navigator.credentials.get(options)
 }
@@ -154,11 +154,9 @@ export async function getCredential(options: CredentialRequestOptions): Promise<
  * Call navigator.credentials.create with E2E test mode support
  * In E2E mode, returns a mock credential to prevent triggering real hardware
  */
-export async function createCredential(
-  options: CredentialCreationOptions
-): Promise<Credential | null> {
+export function createCredential(options: CredentialCreationOptions): Promise<Credential | null> {
+  // biome-ignore lint/suspicious/noExplicitAny: window.__e2e_test_mode__ is set by test environment
   if ((window as any).__e2e_test_mode__) {
-    // console.log('[E2E] Returning mock credential for navigator.credentials.create')
     // Return a mock PublicKeyCredential that will pass serialization
     const mockCredential = {
       id: 'mock-credential-id',
@@ -169,7 +167,7 @@ export async function createCredential(
         attestationObject: new Uint8Array([9, 10, 11, 12]).buffer,
       },
     } as unknown as Credential
-    return mockCredential
+    return Promise.resolve(mockCredential)
   }
   return navigator.credentials.create(options)
 }

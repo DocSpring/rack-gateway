@@ -141,7 +141,20 @@ export async function ensureMfaEnrollment(page: Page) {
     )
   }
 
-  await page.reload({ waitUntil: 'networkidle' })
+  // Wait a bit for any navigation to settle before reloading
+  await page.waitForLoadState('domcontentloaded').catch(() => {})
+  await page.waitForTimeout(500)
+
+  try {
+    await page.reload({ waitUntil: 'networkidle' })
+  } catch (err) {
+    // If reload fails due to navigation, wait for it to complete
+    if (err instanceof Error && err.message.includes('ERR_ABORTED')) {
+      await page.waitForLoadState('networkidle')
+    } else {
+      throw err
+    }
+  }
 
   await expect
     .poll(async () => {

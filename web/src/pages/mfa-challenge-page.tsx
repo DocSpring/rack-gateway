@@ -276,6 +276,7 @@ export function MFAChallengePage() {
   }
 
   // Auto-trigger WebAuthn for web mode when it's the selected/only method
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on useWebAuthn/mode change
   useEffect(() => {
     if (
       mode === 'web' &&
@@ -286,7 +287,6 @@ export function MFAChallengePage() {
     ) {
       handleWebAuthn()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useWebAuthn, mode])
 
   const handleLogout = () => {

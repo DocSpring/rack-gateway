@@ -56,7 +56,7 @@ test('current user footer link opens profile page', async ({ page }) => {
 
   // Ensure layout loaded before interacting with footer link
   await page.goto(WebRoute('rack'))
-  await expect(page.getByRole('heading', { name: /Rack/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Rack', exact: true })).toBeVisible()
 
   const footerLink = page.getByRole('link', { name: /Admin User\s+admin@example.com/i })
   await expect(footerLink).toBeVisible()

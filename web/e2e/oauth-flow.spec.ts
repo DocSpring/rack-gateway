@@ -38,7 +38,9 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
 
   // Navigate to the Rack page now that enrollment is complete
   await page.goto(WebRoute('rack'))
-  await expect(page.getByRole('heading', { name: /Rack/i })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('heading', { name: 'Rack', exact: true })).toBeVisible({
+    timeout: 10_000,
+  })
 
   // Navigate to Users and ensure it renders without crashing
   await page.getByRole('link', { name: /Users/i }).click()

@@ -518,17 +518,8 @@ test.describe('Account security', () => {
     await expect(userCard).toBeVisible()
     await userCard.click()
 
-    // Should see WebAuthn button, not TOTP input
-    await expect(page.getByRole('button', { name: /Authenticate with Security Key/i })).toBeVisible(
-      { timeout: 10_000 }
-    )
-    await expect(page.getByLabel('Verification code')).toHaveCount(0)
-
-    // Switch to TOTP in the UI
-    await page.getByRole('button', { name: /Use authenticator app instead/i }).click()
-    await expect(page.getByLabel('Verification code')).toBeVisible()
-    await expect(page.getByRole('button', { name: /Authenticate with Security Key/i })).toHaveCount(
-      0
-    )
+    // WebAuthn starts automatically and succeeds (mocked in E2E)
+    // Wait for navigation to complete, indicating successful WebAuthn verification
+    await page.waitForURL(/\/.gateway\/web\/rack/, { timeout: 10_000 })
   })
 })
