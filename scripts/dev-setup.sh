@@ -40,8 +40,19 @@ install_pnpm() {
   echo "- pnpm version: $(pnpm -v || echo 'not found')"
 }
 
+install_air() {
+  if have air; then
+    echo "- air already installed: $(air -v 2>&1 | head -n1)"
+    return
+  fi
+  echo "- Installing air (live reload for Go)..."
+  go install github.com/air-verse/air@latest
+  echo "- air installed: $(air -v 2>&1 | head -n1)"
+}
+
 install_task
 install_pnpm
+install_air
 
 echo "==> Done"
 echo "Run: task dev   # start the dev stack"

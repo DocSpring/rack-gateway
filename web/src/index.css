@@ -129,6 +129,11 @@
     background-color: var(--primary);
     color: #fff;
   }
+  /* Cursor pointer for interactive elements */
+  input[type="checkbox"],
+  label {
+    @apply cursor-pointer;
+  }
 }
 #root :where(.rdp-root),
 .rdp-root {

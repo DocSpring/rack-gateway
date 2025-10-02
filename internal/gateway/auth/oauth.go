@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -46,10 +48,35 @@ type LoginResponse struct {
 func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string, jwtManager *JWTManager) (*OAuthHandler, error) {
 	ctx := context.Background()
 
-	// Use vetted OIDC provider discovery
-	provider, err := oidc.NewProvider(ctx, issuerURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+	// Use vetted OIDC provider discovery with exponential backoff retry
+	var provider *oidc.Provider
+	var err error
+
+	maxDuration := 20 * time.Second
+	startTime := time.Now()
+	backoff := 100 * time.Millisecond
+	attempt := 1
+
+	for {
+		provider, err = oidc.NewProvider(ctx, issuerURL)
+		if err == nil {
+			if attempt > 1 {
+				log.Printf("Successfully connected to OIDC provider after %d attempts", attempt)
+			}
+			break
+		}
+
+		elapsed := time.Since(startTime)
+		if elapsed >= maxDuration {
+			return nil, fmt.Errorf("failed to create OIDC provider after %v: %w", elapsed, err)
+		}
+
+		log.Printf("OIDC provider not ready (attempt %d), retrying in %v: %v", attempt, backoff, err)
+		time.Sleep(backoff)
+
+		// Exponential backoff with max 2 second delay
+		backoff = time.Duration(math.Min(float64(backoff*2), float64(2*time.Second)))
+		attempt++
 	}
 
 	// Derive redirects from provided value (accept base or full web callback)

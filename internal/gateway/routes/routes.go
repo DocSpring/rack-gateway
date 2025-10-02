@@ -70,7 +70,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
 	router.Use(gin.Recovery())
-	router.Use(middleware.RequestLogger(cfg.AuditLogger, cfg.DefaultRack))
+	router.Use(middleware.RequestLogger(cfg.AuditLogger, cfg.DefaultRack, cfg.Config.DevMode))
 
 	// CORS configuration - allow requests from the configured domain
 	// In production this is set via DOMAIN env var
@@ -160,10 +160,10 @@ func Setup(router *gin.Engine, cfg *Config) {
 				mfaGroup.POST("/webauthn/assertion/start", authHandler.StartWebAuthnAssertion)
 				mfaGroup.POST("/webauthn/assertion/verify", authHandler.VerifyWebAuthnAssertion)
 				mfaGroup.PUT("/preferred-method", authHandler.UpdatePreferredMFAMethod)
+				mfaGroup.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
 				mfaStepUp := mfaGroup.Group("")
 				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				mfaStepUp.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
-				mfaStepUp.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
 				mfaStepUp.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
 				mfaStepUp.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
 			}

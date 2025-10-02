@@ -3814,6 +3814,7 @@ export interface components {
             backup_codes?: components["schemas"]["handlers.MFABackupCodesSummary"];
             enrolled?: boolean;
             methods?: components["schemas"]["handlers.MFAMethodResponse"][];
+            preferred_method?: string;
             recent_step_up_expires_at?: string;
             required?: boolean;
             trusted_devices?: components["schemas"]["handlers.TrustedDeviceResponse"][];

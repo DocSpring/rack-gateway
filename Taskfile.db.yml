@@ -4,28 +4,19 @@ tasks:
   ensure:
     desc: Ensure the gateway_dev database exists
     cmds:
-      - |
-        # Start postgres if not running
-        docker compose up -d postgres
-        # Wait for postgres to be ready
-        for i in {1..30}; do
-          if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
-            echo "Postgres is ready"
-            break
-          fi
-          echo "Waiting for Postgres..."
-          sleep 1
-        done
-        # Create gateway_dev database if it doesn't exist
-        docker compose exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'gateway_dev'" | grep -q 1 || \
-          docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE gateway_dev;"
+      - ./scripts/ensure-dev-db.sh
+    sources:
+      - ./scripts/ensure-dev-db.sh
+      - docker-compose.yml
 
   migrate:dev:
     aliases: [migrate]
     desc: Apply database migrations to dev database
-    deps: [":docker:dev:up:gateway"]
+    deps: [ensure]
     cmds:
-      - docker compose exec -T gateway-api-dev ./rack-gateway-api migrate
+      - go run ./cmd/gateway migrate
+    sources:
+      - internal/gateway/db/migrations/**/*.sql
 
   migrate:test:
     desc: Apply database migrations to test database

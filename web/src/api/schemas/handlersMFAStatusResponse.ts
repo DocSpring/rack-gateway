@@ -13,6 +13,7 @@ export interface HandlersMFAStatusResponse {
   backup_codes?: HandlersMFABackupCodesSummary;
   enrolled?: boolean;
   methods?: HandlersMFAMethodResponse[];
+  preferred_method?: string;
   recent_step_up_expires_at?: string;
   required?: boolean;
   trusted_devices?: HandlersTrustedDeviceResponse[];

@@ -1,6 +1,6 @@
-import hotToast from 'react-hot-toast'
 import { Check, CircleAlert, Info, TriangleAlert } from 'lucide-react'
 import { createElement } from 'react'
+import hotToast from 'react-hot-toast'
 
 type ToastOptions = {
   description?: string
@@ -28,7 +28,10 @@ const toast = Object.assign(toastFn as ToastHandlers, {
   success: (title: string, options?: ToastOptions) =>
     hotToast.success(title, { ...options, icon: createElement(Check, { className: 'h-6 w-6' }) }),
   error: (title: string, options?: ToastOptions) =>
-    hotToast.error(title, { ...options, icon: createElement(CircleAlert, { className: 'h-6 w-6' }) }),
+    hotToast.error(title, {
+      ...options,
+      icon: createElement(CircleAlert, { className: 'h-6 w-6' }),
+    }),
   warning: (title: string, options?: ToastOptions) =>
     hotToast(title, { ...options, icon: createElement(TriangleAlert, { className: 'h-6 w-6' }) }),
   info: (title: string, options?: ToastOptions) =>

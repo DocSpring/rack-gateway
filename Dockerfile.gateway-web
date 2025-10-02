@@ -3,12 +3,10 @@ FROM node:20-alpine AS webbuild
 
 WORKDIR /app/web
 
-# Use a persistent pnpm store for better layer caching
-ENV PNPM_STORE_DIR=/pnpm-store
-
 # Copy web package and lockfile first to maximize cache hits
 COPY web/package.json web/pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    corepack enable && pnpm install --frozen-lockfile
 
 # Copy web source and build
 COPY web/ ./

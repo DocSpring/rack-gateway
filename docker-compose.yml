@@ -72,6 +72,7 @@ services:
       context: ./mock-oauth
     environment:
       PORT: ${TEST_MOCK_OAUTH_PORT:-9345}
+      MOCK_OAUTH_PORT: ${TEST_MOCK_OAUTH_PORT:-9345}
       NODE_ENV: test
       OAUTH_ISSUER: http://mock-oauth-test:${TEST_MOCK_OAUTH_PORT:-9345}
       OAUTH_BROWSER_BASE: http://localhost:${TEST_MOCK_OAUTH_PORT:-9345}

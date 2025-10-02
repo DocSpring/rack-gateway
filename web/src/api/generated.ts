@@ -1066,9 +1066,7 @@ export type GetAdminRolesResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminRoles']>>
 >;
 export type GetAdminSettingsResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettings']>
-  >
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettings']>>
 >;
 export type PutAdminSettingsAllowDestructiveActionsResult = NonNullable<
   Awaited<
@@ -1132,9 +1130,7 @@ export type PutAdminTokensTokenIDResult = NonNullable<
 >;
 export type DeleteAdminTokensTokenIDResult = NonNullable<
   Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['deleteAdminTokensTokenID']
-    >
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminTokensTokenID']>
   >
 >;
 export type GetAdminUsersResult = NonNullable<
@@ -1160,9 +1156,7 @@ export type DeleteAdminUsersEmailResult = NonNullable<
 >;
 export type PutAdminUsersEmailRolesResult = NonNullable<
   Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['putAdminUsersEmailRoles']
-    >
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminUsersEmailRoles']>
   >
 >;
 export type GetAdminUsersEmailSessionsResult = NonNullable<
@@ -1201,9 +1195,7 @@ export type PostAuthCliCompleteResult = NonNullable<
   >
 >;
 export type PostAuthCliStartResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliStart']>
-  >
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliStart']>>
 >;
 export type PostAuthMfaBackupCodesRegenerateResult = NonNullable<
   Awaited<
@@ -1269,9 +1261,7 @@ export type PutAuthMfaPreferredMethodResult = NonNullable<
   >
 >;
 export type GetAuthMfaStatusResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthMfaStatus']>
-  >
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthMfaStatus']>>
 >;
 export type DeleteAuthMfaTrustedDevicesDeviceIDResult = NonNullable<
   Awaited<
@@ -1283,25 +1273,19 @@ export type DeleteAuthMfaTrustedDevicesDeviceIDResult = NonNullable<
   >
 >;
 export type PostAuthMfaVerifyResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthMfaVerify']>
-  >
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthMfaVerify']>>
 >;
 export type PostAuthMfaWebauthnAssertionStartResult = NonNullable<
   Awaited<
     ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAuthMfaWebauthnAssertionStart']
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaWebauthnAssertionStart']
     >
   >
 >;
 export type PostAuthMfaWebauthnAssertionVerifyResult = NonNullable<
   Awaited<
     ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAuthMfaWebauthnAssertionVerify']
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaWebauthnAssertionVerify']
     >
   >
 >;
@@ -1314,9 +1298,7 @@ export type GetAuthWebLoginResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthWebLogin']>>
 >;
 export type GetAuthWebLogoutResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthWebLogout']>
-  >
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthWebLogout']>>
 >;
 export type GetCreatedByResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getCreatedBy']>>

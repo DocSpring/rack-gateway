@@ -482,4 +482,57 @@ test.describe('Account security', () => {
     await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).toBeChecked()
     await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).not.toBeChecked()
   })
+
+  test('login flow respects preferred MFA method', async ({ page }) => {
+    // Set up user with both TOTP and WebAuthn, with WebAuthn as preferred
+    await setupBothMfaMethods(ADMIN_EMAIL)
+    await login(page, { autoEnrollMfa: false })
+
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Set WebAuthn as preferred
+    const webauthnRadio = page.getByRole('radio', { name: /WebAuthn.*Security Key/i })
+    await expect(webauthnRadio).toBeVisible({ timeout: 10_000 })
+
+    const updatePreferredPromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/preferred-method') &&
+        response.request().method() === 'PUT'
+    )
+    await webauthnRadio.click()
+    await updatePreferredPromise
+
+    // Enforce MFA and logout
+    await enforceMfaFor(ADMIN_EMAIL)
+    await page.getByRole('button', { name: /^Logout$/ }).click()
+    await page.waitForURL(/\.gateway\/web\/login$/)
+
+    // Login and verify WebAuthn method is shown (not TOTP input)
+    const btn = page
+      .getByTestId('login-cta')
+      .or(page.getByRole('button', { name: /Continue with/i }))
+      .or(page.getByRole('link', { name: /Continue with/i }))
+    await expect(btn).toBeVisible({ timeout: 5000 })
+    const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
+    await btn.click()
+    await navPromise
+
+    const userCard = page.locator('text=Admin User').first()
+    await expect(userCard).toBeVisible()
+    await userCard.click()
+
+    // Should see WebAuthn button, not TOTP input
+    await expect(page.getByRole('button', { name: /Authenticate with Security Key/i })).toBeVisible(
+      { timeout: 10_000 }
+    )
+    await expect(page.getByLabel('Verification code')).toHaveCount(0)
+
+    // Switch to TOTP in the UI
+    await page.getByRole('button', { name: /Use authenticator app instead/i }).click()
+    await expect(page.getByLabel('Verification code')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Authenticate with Security Key/i })).toHaveCount(
+      0
+    )
+  })
 })

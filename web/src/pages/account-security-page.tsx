@@ -148,12 +148,9 @@ export function AccountSecurityPage() {
 
   useEffect(() => {
     if (enrollmentRequiredFlag && enrollmentChannel === 'cli') {
-      toast({
-        variant: 'warning',
-        title: 'CLI login blocked until MFA enrollment completes',
-        description:
-          'Finish setting up multi-factor authentication on this page, then rerun the CLI login command.',
-      })
+      toast.warning(
+        'CLI login blocked until MFA enrollment completes. Finish setting up multi-factor authentication on this page, then rerun the CLI login command.'
+      )
     }
   }, [enrollmentChannel, enrollmentRequiredFlag])
 
@@ -209,7 +206,7 @@ export function AccountSecurityPage() {
         setRecentBackupCodes(data.backup_codes ?? null)
         setShowMethodSelector(false)
         toast.success('WebAuthn enrollment completed')
-        invalidateStatus()
+        await invalidateStatus()
         refreshUser().catch(() => {
           /* noop */
         })
@@ -254,7 +251,7 @@ export function AccountSecurityPage() {
 
   const confirmEnrollmentMutation = useMutation({
     mutationFn: confirmTOTPEnrollment,
-    onSuccess: () => {
+    onSuccess: async () => {
       const methodId = enrollment?.method_id ?? 0
       const label = enrollmentLabel.trim() || DEFAULT_MFA_LABEL
 
@@ -264,7 +261,7 @@ export function AccountSecurityPage() {
       setQrDataUrl(null)
       setVerificationCode('')
       setTrustEnrollmentDevice(true)
-      invalidateStatus()
+      await invalidateStatus()
       refreshUser().catch(() => {
         /* noop */
       })
@@ -540,7 +537,7 @@ export function AccountSecurityPage() {
             )}
 
             {status?.enrolled && hasBothMethods ? (
-              <div className="space-y-3">
+              <div className="space-y-5">
                 <Label>Preferred sign-in method</Label>
                 <RadioGroup
                   disabled={updatePreferredMethodMutation.isPending}

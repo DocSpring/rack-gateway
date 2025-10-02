@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { AlertCircle } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -123,6 +123,12 @@ export function MFAChallengePage() {
   const [error, setError] = useState<string | null>(presetError)
   const [useWebAuthn, setUseWebAuthn] = useState(false)
 
+  // Use ref to always get latest trustDevice value, avoiding closure capture issues
+  const trustDeviceRef = useRef(trustDevice)
+  useEffect(() => {
+    trustDeviceRef.current = trustDevice
+  }, [trustDevice])
+
   // Try to fetch MFA status to determine available methods and preferred method
   // Enable for both web and CLI modes
   const { data: mfaStatus } = useQuery({
@@ -136,13 +142,28 @@ export function MFAChallengePage() {
   const hasWebAuthn = mfaStatus?.methods?.some((m) => m.type === 'webauthn') ?? false
   const hasTOTP = mfaStatus?.methods?.some((m) => m.type === 'totp') ?? false
 
-  // Set initial method based on available methods
-  // If user only has WebAuthn, default to that
-  // Otherwise default to TOTP (most common)
+  // Set initial method based on preferred method or available methods
   useEffect(() => {
-    if (mfaStatus && hasWebAuthn && !hasTOTP) {
+    if (!mfaStatus) return
+
+    // Use preferred method if set
+    if (mfaStatus.preferred_method === 'webauthn' && hasWebAuthn) {
       setUseWebAuthn(true)
+      return
     }
+    if (mfaStatus.preferred_method === 'totp' && hasTOTP) {
+      setUseWebAuthn(false)
+      return
+    }
+
+    // Fallback: If user only has WebAuthn, default to that
+    if (hasWebAuthn && !hasTOTP) {
+      setUseWebAuthn(true)
+      return
+    }
+
+    // Otherwise default to TOTP (most common)
+    setUseWebAuthn(false)
   }, [mfaStatus, hasWebAuthn, hasTOTP])
 
   useEffect(() => {
@@ -150,21 +171,6 @@ export function MFAChallengePage() {
       setError(mapQueryError('missing_state'))
     }
   }, [mode, state])
-
-  // Auto-trigger WebAuthn authentication when using WebAuthn method
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only run when useWebAuthn becomes true, not when handleWebAuthn/mode/mutations change
-  useEffect(() => {
-    if (
-      mode === 'web' &&
-      useWebAuthn &&
-      !webAuthnMutation.isPending &&
-      !webAuthnMutation.isSuccess
-    ) {
-      handleWebAuthn()
-    }
-    // Only run once when useWebAuthn becomes true
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useWebAuthn])
 
   const mutation = useMutation<CLICompletion | null, unknown, MutationPayload>({
     mutationFn: async ({ code: submittedCode, trustDevice: trustDevicePreference }) => {
@@ -200,7 +206,7 @@ export function MFAChallengePage() {
   })
 
   const webAuthnMutation = useMutation({
-    mutationFn: async ({ trustDevice: trustDevicePreference }: { trustDevice: boolean }) => {
+    mutationFn: async () => {
       // Start the WebAuthn assertion flow
       const assertionStart = await startWebAuthnAssertion()
 
@@ -223,11 +229,14 @@ export function MFAChallengePage() {
       // Serialize the assertion response for the backend
       const assertionResponse = serializeAssertionCredential(credential as PublicKeyCredential)
 
-      // Send the assertion to the backend
+      // Read trustDevice from ref AFTER WebAuthn completes
+      // The ref ensures we get the current value, not a stale closure capture
+      // This way the user's final choice is used, even if they changed the checkbox
+      // while the browser WebAuthn prompt was showing
       await verifyWebAuthnAssertion({
         session_data: assertionStart.session_data ?? '',
         assertion_response: JSON.stringify(assertionResponse),
-        trust_device: trustDevicePreference,
+        trust_device: trustDeviceRef.current,
       })
 
       return null
@@ -259,8 +268,22 @@ export function MFAChallengePage() {
 
   const handleWebAuthn = () => {
     setError(null)
-    webAuthnMutation.mutate({ trustDevice })
+    webAuthnMutation.mutate()
   }
+
+  // Auto-trigger WebAuthn for web mode when it's the selected/only method
+  useEffect(() => {
+    if (
+      mode === 'web' &&
+      useWebAuthn &&
+      !webAuthnMutation.isPending &&
+      !webAuthnMutation.isSuccess &&
+      !error
+    ) {
+      handleWebAuthn()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useWebAuthn, mode])
 
   const handleLogout = () => {
     authService.logout()
@@ -317,10 +340,10 @@ export function MFAChallengePage() {
                   )}
                 </Button>
               </div>
-              <div className="flex items-start gap-3 text-sm">
+              <div className="flex gap-3 align-center text-sm">
                 <input
                   checked={trustDevice}
-                  className="mt-1 h-4 w-4 rounded border border-input"
+                  className="h-4 w-4 rounded border border-input"
                   id="trust-device"
                   onChange={(event) => setTrustDevice(event.target.checked)}
                   type="checkbox"
@@ -363,10 +386,10 @@ export function MFAChallengePage() {
               </div>
               {mode === 'web' ? (
                 <>
-                  <div className="flex items-start gap-3 text-sm">
+                  <div className="flex items-center gap-3 text-sm">
                     <input
                       checked={trustDevice}
-                      className="mt-1 h-4 w-4 rounded border border-input"
+                      className="h-4 w-4 rounded border border-input"
                       id="trust-device"
                       onChange={(event) => setTrustDevice(event.target.checked)}
                       type="checkbox"

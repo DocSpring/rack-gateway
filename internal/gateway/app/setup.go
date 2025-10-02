@@ -236,12 +236,8 @@ func (a *App) initializeServices() error {
 
 // setupRouter configures the Gin router with all routes and middleware
 func (a *App) setupRouter() {
-	// Set Gin mode based on environment
-	if a.Config.DevMode {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	// Always use release mode to suppress route list printing
+	gin.SetMode(gin.ReleaseMode)
 
 	// Create router without default middleware (we'll add our own)
 	router := gin.New()

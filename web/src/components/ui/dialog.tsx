@@ -66,7 +66,8 @@ function DialogContent({
         onInteractOutside={(e) => {
           const target = e.target as Element
           // Check for react-hot-toast
-          const isToast = target?.closest('[data-hot-toast-root]') || target?.closest('[role="status"]')
+          const isToast =
+            target?.closest('[data-hot-toast-root]') || target?.closest('[role="status"]')
           if (isToast) {
             e.preventDefault()
             return

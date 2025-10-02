@@ -87,7 +87,7 @@ const AUTH_CODE_TTL = 10 * ONE_MINUTE_IN_MS;
 
 const showHelp = (): void => {
   console.log(
-    "Mock OAuth Server\n\nUsage: node dist/server.js [options]\n\nOptions:\n  --help, -h       Show this help message and exit.\n\nConfiguration:\n  PORT               Port the HTTP server listens on (default: 3001).\n  OAUTH_ISSUER       Internal issuer URL override.\n  OAUTH_BROWSER_BASE Browser-facing base URL override.\n"
+    "Mock OAuth Server\n\nUsage: node dist/server.js [options]\n\nOptions:\n  --help, -h       Show this help message and exit.\n\nConfiguration:\n  MOCK_OAUTH_PORT    Port the HTTP server listens on (default: 3345).\n  PORT               Fallback port if MOCK_OAUTH_PORT not set.\n  OAUTH_ISSUER       Internal issuer URL override.\n  OAUTH_BROWSER_BASE Browser-facing base URL override.\n"
   );
 };
 
@@ -98,7 +98,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
 }
 
 const app = express();
-const PORT = Number.parseInt(process.env.PORT ?? "3001", 10);
+const PORT = Number.parseInt(process.env.MOCK_OAUTH_PORT ?? process.env.PORT ?? "3345", 10);
 
 app.use(cors());
 app.use(express.json());

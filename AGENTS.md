@@ -83,7 +83,9 @@ The `fetch-github-actions-logs` script downloads logs for all failing jobs to `t
 
 ### 🧪 Integration Tests
 
-- `./dev.sh` - Development environment starts successfully
+**IMPORTANT: AI must NEVER run `task dev` - this is strictly for humans only**
+
+- `task dev` - Development environment starts successfully (uses Procfile.dev with overmind, NOT Docker)
 - `curl http://localhost:8447/.gateway/api/health` - Gateway health check passes
 - `curl http://localhost:3345/health` - Mock OAuth health check passes
 - `curl http://localhost:5443/health` - Mock Convox health check passes

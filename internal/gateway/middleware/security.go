@@ -32,6 +32,10 @@ const StyleNonceContextKey ctxKey = "cgw-style-nonce"
 var defaultStyleHashes = []string{
 	"'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='",
 	"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
+	"'sha256-7Ri/I+PfhgtpcL7hT4A0VJKI6g3pK0ZvIN09RQV4ZhI='", // react-hot-toast
+	"'sha256-D6zmPl9SPOA5yA8xbXKrLL0cVKn8FB4+jrOuJzlq4sI='", // react-hot-toast
+	"'sha256-S8WvDsuOheuw1pqhp6E2vrGq69NN3WOkq+WnT/Xdyy4='", // react-hot-toast
+	"'sha256-+sRv+5ZP+JjjyOwy5QD3ySS+npOAVIsOLsfJV6wyaM0='", // react-hot-toast
 }
 
 // SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
@@ -421,7 +425,7 @@ func clientIPFromRequest(r *http.Request) string {
 	return strings.TrimSpace(r.RemoteAddr)
 }
 
-func RequestLogger(logger *audit.Logger, defaultRack string) gin.HandlerFunc {
+func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
@@ -431,6 +435,14 @@ func RequestLogger(logger *audit.Logger, defaultRack string) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		if path == "/.gateway/api/health" {
 			return
+		}
+		// Skip noisy Vite dev server requests in development (static assets)
+		if devMode && strings.HasPrefix(path, "/.gateway/web/") {
+			remainder := path[len("/.gateway/web/"):]
+			// Skip if path contains a file extension or @ (for @vite, @fs, etc.)
+			if strings.Contains(remainder, ".") || strings.Contains(remainder, "@") {
+				return
+			}
 		}
 		if audit.RequestAlreadyLogged(c.Request) {
 			return

@@ -4292,6 +4292,9 @@
                             "$ref": "#/components/schemas/handlers.MFAMethodResponse"
                         }
                     },
+                    "preferred_method": {
+                        "type": "string"
+                    },
                     "recent_step_up_expires_at": {
                         "type": "string"
                     },

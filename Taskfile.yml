@@ -59,9 +59,16 @@ tasks:
     desc: Build web + gateway + cli + mock binaries
     deps: [web:build, go:build, mock-oauth:build]
 
-  # Convenience alias for local dev stack (delegates to docker tasks)
+  # Local development (Procfile-based, only Postgres in Docker)
   dev:
-    desc: Start dev stack and follow logs
+    desc: Start Postgres in Docker, then run all services locally via overmind
+    deps: [db:migrate]
+    cmds:
+      - overmind start -f Procfile.dev
+
+  # Docker-based development stack (everything in containers)
+  dev:docker:
+    desc: Start full dev stack in Docker and follow logs
     deps: [docker:dev:start]
 
   logs:
