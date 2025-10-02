@@ -203,7 +203,8 @@ test.describe('Account security', () => {
     )
     methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
     await expect(methodsCard).toBeVisible()
-    const removeButton = methodsCard.getByRole('button', { name: /^Remove$/ }).first()
+    // Click the delete button (second button in the actions column - first is edit/pencil, second is delete/trash)
+    const removeButton = methodsCard.locator('tbody tr').first().getByRole('button').nth(1)
     await removeButton.click()
     await completeStepUp(page, reEnroll.secret)
     await removeResponsePromise
