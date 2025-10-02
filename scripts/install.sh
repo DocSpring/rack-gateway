@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# convox-gateway CLI installer
-# - Builds ./cmd/cli and installs the binary as "convox-gateway"
+# rack-gateway CLI installer
+# - Builds ./cmd/cli and installs the binary as "rack-gateway"
 # - Default install dir: /usr/local/bin (override with INSTALL_DIR or --dir)
 
 usage() {
@@ -15,7 +15,7 @@ Options:
 Environment:
   INSTALL_DIR  Same as --dir (takes precedence if set)
 
-This script builds the CLI from source and installs it as "convox-gateway".
+This script builds the CLI from source and installs it as "rack-gateway".
 Examples:
   scripts/install.sh                      # installs to /usr/local/bin
   INSTALL_DIR=$HOME/.local/bin scripts/install.sh
@@ -83,7 +83,7 @@ if [[ "$(uname)" == "Linux" ]]; then
   fi
 fi
 
-echo "Installing convox-gateway CLI to: $INSTALL_DIR"
+echo "Installing rack-gateway CLI to: $INSTALL_DIR"
 
 # Resolve repo root relative to this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -104,14 +104,14 @@ LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILDTIME}"
 echo "Building CLI (version: $VERSION)..."
 GOFLAGS=${GOFLAGS:-}
 # Note: CGO is required for WebAuthn/FIDO2 support (HID device access)
-CGO_ENABLED=1 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/convox-gateway ./cmd/cli
+CGO_ENABLED=1 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/rack-gateway ./cmd/cli
 
 popd >/dev/null
 
 # Ensure destination exists
 mkdir -p "$INSTALL_DIR"
 
-DEST="$INSTALL_DIR/convox-gateway"
+DEST="$INSTALL_DIR/rack-gateway"
 
 copy_with_sudo() {
   local src="$1" dest="$2"
@@ -128,7 +128,7 @@ copy_with_sudo() {
   fi
 }
 
-copy_with_sudo "$REPO_ROOT/bin/convox-gateway" "$DEST"
+copy_with_sudo "$REPO_ROOT/bin/rack-gateway" "$DEST"
 chmod +x "$DEST" || true
 
 echo "✅ Installed: $DEST"
@@ -136,9 +136,9 @@ echo "✅ Installed: $DEST"
 # Offer shell completion hints
 echo
 echo "Add shell completions (optional):"
-echo "  Bash:       source <(convox-gateway completion bash)"
-echo "  Zsh:        source <(convox-gateway completion zsh)"
-echo "  Fish:       convox-gateway completion fish | source"
+echo "  Bash:       source <(rack-gateway completion bash)"
+echo "  Zsh:        source <(rack-gateway completion zsh)"
+echo "  Fish:       rack-gateway completion fish | source"
 
 # Detect ports and CLI config dir from mise.toml (single source of truth)
 MiseFile="$REPO_ROOT/mise.toml"
@@ -163,27 +163,27 @@ RACK_P="${MOCK_CONVOX_PORT:-}"
 CLI_DIR="${GATEWAY_CLI_CONFIG_DIR:-}"
 
 [[ -z "$GATEWAY_PORT" ]]   && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"
-[[ -z "$CLI_DIR" ]]   && CLI_DIR="$(toml_get GATEWAY_CLI_CONFIG_DIR "$MiseFile" || echo "$HOME/.config/convox-gateway")"
+[[ -z "$CLI_DIR" ]]   && CLI_DIR="$(toml_get GATEWAY_CLI_CONFIG_DIR "$MiseFile" || echo "$HOME/.config/rack-gateway")"
 
 echo
 echo "Authenticate with the gateway:"
 echo "  Production example:"
-echo "    convox-gateway login staging https://gateway.example.com"
+echo "    rack-gateway login staging https://gateway.example.com"
 echo
 echo "  Local dev example:"
-echo "    convox-gateway login local http://localhost:${GATEWAY_PORT}"
+echo "    rack-gateway login local http://localhost:${GATEWAY_PORT}"
 
 echo
 echo "After login (examples):"
-echo "  convox-gateway rack                # Show current rack"
-echo "  convox-gateway convox apps         # Run convox through the gateway"
-echo "  convox-gateway switch <rack>       # Switch racks later"
+echo "  rack-gateway rack                # Show current rack"
+echo "  rack-gateway convox apps         # Run convox through the gateway"
+echo "  rack-gateway switch <rack>       # Switch racks later"
 echo
 echo "Config location:"
 echo "  ${CLI_DIR}   # override with GATEWAY_CLI_CONFIG_DIR"
 
 echo
 echo "Use CLI against dev gateway:"
-echo "  convox-gateway login local http://localhost:${GATEWAY_PORT}"
-echo "  convox-gateway convox rack"
-echo "  convox-gateway convox apps"
+echo "  rack-gateway login local http://localhost:${GATEWAY_PORT}"
+echo "  rack-gateway convox rack"
+echo "  rack-gateway convox apps"

@@ -7,7 +7,7 @@ const SECRET_VALUE = 'super-secret-key-12345'
 test('app environment management: reveal secret and save change', async ({ page }) => {
   await login(page)
 
-  await page.goto(WebRoute('apps/convox-gateway/env'))
+  await page.goto(WebRoute('apps/rack-gateway/env'))
   const envTitle = page.locator('[data-slot="card-title"]', { hasText: /^Environment$/ })
   await expect(envTitle).toBeVisible()
   await expect(page.getByText(/Loading environment…/i)).toBeHidden()

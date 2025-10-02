@@ -40,7 +40,7 @@ export function LoginPage() {
       </div>
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="mb-2 font-bold text-4xl text-foreground tracking-tight">Convox Gateway</h1>
+          <h1 className="mb-2 font-bold text-4xl text-foreground tracking-tight">Rack Gateway</h1>
           <p className="text-muted-foreground">Secure access management for your Convox rack</p>
         </div>
 

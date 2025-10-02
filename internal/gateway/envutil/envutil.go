@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 )
 
 const MaskedSecret = "********************"

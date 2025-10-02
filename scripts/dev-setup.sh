@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "==> Convox Gateway Dev Setup"
+echo "==> Rack Gateway Dev Setup"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 

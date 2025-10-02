@@ -10,26 +10,26 @@ The following Convox repositories are available for reference in `./reference/`:
 - `reference/convox_rack/` - The Convox Rack API server (github.com/convox/rack)
 - `reference/convox_racks_terraform/` - Our Terraform configurations for self-hosted racks
 
-## Convox Gateway Architecture
+## Rack Gateway Architecture
 
 ### Overview
 
-The Convox Gateway acts as an authentication and authorization proxy between developers and self-hosted Convox racks:
+The Rack Gateway acts as an authentication and authorization proxy between developers and self-hosted Convox racks:
 
 ```
-Developer → convox-gateway CLI → Gateway API Server → Convox Rack
+Developer → rack-gateway CLI → Gateway API Server → Convox Rack
 ```
 
 ### Developer Setup
 
-1. **Install CLI**: Binary installed at `/usr/local/bin/convox-gateway`
-2. **Login to Rack**: `convox-gateway login staging https://convox-gateway.example.com`
-3. **Configuration**: Stored in `~/.config/convox-gateway/config.json`
+1. **Install CLI**: Binary installed at `/usr/local/bin/rack-gateway`
+2. **Login to Rack**: `rack-gateway login staging https://rack-gateway.example.com`
+3. **Configuration**: Stored in `~/.config/rack-gateway/config.json`
    ```json
    {
      "gateways": {
        "staging": {
-         "url": "https://convox-gateway.example.com"
+         "url": "https://rack-gateway.example.com"
        }
      },
      "tokens": {
@@ -58,10 +58,10 @@ The gateway server (run by admins) needs:
 
 ### CLI Wrapper Functionality
 
-The `convox-gateway` CLI wraps the real `convox` CLI:
+The `rack-gateway` CLI wraps the real `convox` CLI:
 
-1. Developer runs: `convox-gateway apps`
-2. CLI loads gateway URL and JWT token from `~/.config/convox-gateway/config.json`
+1. Developer runs: `rack-gateway apps`
+2. CLI loads gateway URL and JWT token from `~/.config/rack-gateway/config.json`
 3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.example.com`
 4. CLI executes: `convox apps` with the RACK_URL environment variable
 5. Real convox CLI connects to gateway using JWT as password
@@ -82,7 +82,7 @@ export RACK_URL="https://convox:<jwt-token>@gateway.example.com"
 convox apps  # Uses native convox CLI directly
 ```
 
-The convox-gateway CLI wrapper simply provides convenience features:
+The rack-gateway CLI wrapper simply provides convenience features:
 
 - Manages multiple rack configurations
 - Handles JWT token storage
@@ -214,19 +214,19 @@ The CLI checks in this order (from `pkg/rack/rack.go`):
 
 ## CLI Wrapper Strategy
 
-Instead of reimplementing all Convox commands, `convox-gateway` acts as a wrapper:
+Instead of reimplementing all Convox commands, `rack-gateway` acts as a wrapper:
 
 1. **Handles authentication**:
 
    ```bash
-   convox-gateway login staging
+   rack-gateway login staging
    # Performs OAuth, stores JWT
    ```
 
 2. **Wraps standard Convox CLI**:
 
    ```bash
-   convox-gateway apps
+   rack-gateway apps
    # Sets RACK_URL with JWT
    # Executes: convox apps
    ```
@@ -284,7 +284,7 @@ These should only be done by infrastructure team with direct terraform access.
 2. **Create test user** in RBAC system
 3. **Login via OAuth**:
    ```bash
-   convox-gateway login staging
+   rack-gateway login staging
    ```
 4. **Test standard commands**:
    ```bash

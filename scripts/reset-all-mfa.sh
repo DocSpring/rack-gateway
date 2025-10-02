@@ -8,7 +8,7 @@ psql_exec() {
   local sql="$1"
   local output
   set +e
-  output=$(docker exec -i convox-gateway-postgres-1 psql -U postgres -d gateway -At -F $'\t' -c "$sql" 2>&1)
+  output=$(docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway -At -F $'\t' -c "$sql" 2>&1)
   local status=$?
   set -e
   if [[ $status -ne 0 ]]; then
@@ -18,7 +18,7 @@ psql_exec() {
 }
 
 reset_all_mfa_state() {
-  if ! docker ps --format '{{.Names}}' | grep -q '^convox-gateway-postgres-1$'; then
+  if ! docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
     return 0
   fi
 

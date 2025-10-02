@@ -4,10 +4,10 @@
 
 set -e
 
-echo "🚀 Starting Convox Gateway development environment..."
+echo "🚀 Starting Rack Gateway development environment..."
 echo ""
 echo "This will start:"
-echo "- Backend services in Docker (Gateway API, Mock OAuth, Mock Convox)"  
+echo "- Backend services in Docker (Gateway API, Mock OAuth, Mock Convox)"
 echo "- Frontend locally with hot reload"
 echo ""
 

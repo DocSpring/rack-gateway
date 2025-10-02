@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/cli/webauthn"
+	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -180,40 +180,40 @@ func silenceOnError(fn func(cmd *cobra.Command, args []string) error) func(*cobr
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:           "convox-gateway",
+		Use:           "rack-gateway",
 		Short:         "API gateway for Convox with authentication and RBAC",
 		SilenceErrors: true,
-		Long: `Convox Gateway provides secure authenticated access to Convox racks
+		Long: `Rack Gateway provides secure authenticated access to Convox racks
 with SSO authentication, role-based access control, and audit logging.
 
 To run convox commands through the gateway:
-  convox-gateway convox apps
-  convox-gateway convox ps
-  convox-gateway convox deploy
+  rack-gateway convox apps
+  rack-gateway convox ps
+  rack-gateway convox deploy
 
 Recommended aliases for your shell:
-  alias cx="convox-gateway convox"   # cx apps, cx ps, cx deploy
-  alias cg="convox-gateway"          # cg login, cg switch, cg rack
+  alias cx="rack-gateway convox"   # cx apps, cx ps, cx deploy
+  alias cg="rack-gateway"          # cg login, cg switch, cg rack
 
 Rack management:
-  convox-gateway rack                # Show current rack
-  convox-gateway racks               # List all racks
-  convox-gateway switch <rack>       # Switch to a different rack
-  convox-gateway login <rack> <url>  # Login to a new rack`,
+  rack-gateway rack                # Show current rack
+  rack-gateway racks               # List all racks
+  rack-gateway switch <rack>       # Switch to a different rack
+  rack-gateway login <rack> <url>  # Login to a new rack`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If no subcommand is specified, show help
 			return cmd.Help()
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&apiTokenFlag, "api-token", "", "API token to use for CLI requests (overrides CONVOX_GATEWAY_API_TOKEN)")
+	rootCmd.PersistentFlags().StringVar(&apiTokenFlag, "api-token", "", "API token to use for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
 
 	var noOpen bool
 	var authFile string
 	loginCmd := &cobra.Command{
 		Use:   "login [rack] [gateway-url]",
 		Short: "Login to a Convox rack via OAuth",
-		Long:  "Authenticate with SSO provider and store token for the specified rack.\n\nExample: convox-gateway login staging https://convox-gateway.example.com",
+		Long:  "Authenticate with SSO provider and store token for the specified rack.\n\nExample: rack-gateway login staging https://rack-gateway.example.com",
 		Args:  cobra.ExactArgs(2),
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			return loginCommandWithFlags(args, noOpen, authFile)
@@ -231,7 +231,7 @@ Rack management:
 		SilenceErrors:      true, // We'll handle error printing ourselves
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				// If just "convox-gateway convox" is run, show convox help
+				// If just "rack-gateway convox" is run, show convox help
 				convoxCmd := exec.Command("convox", "help")
 				convoxCmd.Stdout = os.Stdout
 				convoxCmd.Stderr = os.Stderr
@@ -261,7 +261,7 @@ Rack management:
 			}
 			rack, err := getCurrentRack()
 			if err != nil || rack == "" {
-				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+				return fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url>")
 			}
 			gatewayURL, err := loadGatewayURL(rack)
 			if err != nil {
@@ -296,7 +296,7 @@ Rack management:
 			}
 			rack, err := getCurrentRack()
 			if err != nil || rack == "" {
-				return fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+				return fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url>")
 			}
 			gatewayURL, err := loadGatewayURL(rack)
 			if err != nil {
@@ -369,7 +369,7 @@ Rack management:
 				return err
 			}
 			if !exists {
-				return fmt.Errorf("no configuration found. Run: convox-gateway login <rack> <gateway-url>")
+				return fmt.Errorf("no configuration found. Run: rack-gateway login <rack> <gateway-url>")
 			}
 
 			current := strings.TrimSpace(config.Current)
@@ -394,15 +394,15 @@ Rack management:
 
 	versionCmd := &cobra.Command{
 		Use:   "version",
-		Short: "Show convox-gateway version",
+		Short: "Show rack-gateway version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("convox-gateway version %s (built %s)\n", Version, BuildTime)
+			fmt.Printf("rack-gateway version %s (built %s)\n", Version, BuildTime)
 		},
 	}
 
 	webCmd := &cobra.Command{
 		Use:   "web [rack]",
-		Short: "Open the Convox Gateway web UI",
+		Short: "Open the Rack Gateway web UI",
 		Args:  cobra.RangeArgs(0, 1),
 		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
 			var rack string
@@ -412,13 +412,13 @@ Rack management:
 				var err error
 				rack, err = getCurrentRack()
 				if err != nil || rack == "" {
-					return fmt.Errorf("no rack selected. Specify a rack: convox-gateway web <rack>")
+					return fmt.Errorf("no rack selected. Specify a rack: rack-gateway web <rack>")
 				}
 			}
 
 			gatewayURL, err := loadGatewayURL(rack)
 			if err != nil {
-				return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+				return fmt.Errorf("rack %s not configured. Run: rack-gateway login %s <gateway-url>", rack, rack)
 			}
 			url := gatewayURL
 			if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
@@ -442,7 +442,7 @@ Rack management:
 				var err error
 				rack, err = getCurrentRack()
 				if err != nil || rack == "" {
-					return fmt.Errorf("no rack selected. Specify a rack: convox-gateway logout <rack>")
+					return fmt.Errorf("no rack selected. Specify a rack: rack-gateway logout <rack>")
 				}
 			}
 
@@ -474,7 +474,7 @@ Rack management:
 
 			// Verify the rack exists in our config
 			if _, err := loadGatewayURL(rack); err != nil {
-				return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+				return fmt.Errorf("rack %s not configured. Run: rack-gateway login %s <gateway-url>", rack, rack)
 			}
 
 			if err := setCurrentRack(rack); err != nil {
@@ -489,32 +489,32 @@ Rack management:
 	completionCmd := &cobra.Command{
 		Use:   "completion [bash|zsh|fish|powershell]",
 		Short: "Generate shell completion script",
-		Long: `Generate shell completion script for convox-gateway.
+		Long: `Generate shell completion script for rack-gateway.
 
 To load completions:
 
 Bash:
-  $ source <(convox-gateway completion bash)
+  $ source <(rack-gateway completion bash)
   # To load completions for each session, execute once:
   # Linux:
-  $ convox-gateway completion bash > /etc/bash_completion.d/convox-gateway
+  $ rack-gateway completion bash > /etc/bash_completion.d/rack-gateway
   # macOS:
-  $ convox-gateway completion bash > $(brew --prefix)/etc/bash_completion.d/convox-gateway
+  $ rack-gateway completion bash > $(brew --prefix)/etc/bash_completion.d/rack-gateway
 
 Zsh:
-  $ source <(convox-gateway completion zsh)
+  $ source <(rack-gateway completion zsh)
   # To load completions for each session, execute once:
-  $ convox-gateway completion zsh > "${fpath[1]}/_convox-gateway"
+  $ rack-gateway completion zsh > "${fpath[1]}/_rack-gateway"
 
 Fish:
-  $ convox-gateway completion fish | source
+  $ rack-gateway completion fish | source
   # To load completions for each session, execute once:
-  $ convox-gateway completion fish > ~/.config/fish/completions/convox-gateway.fish
+  $ rack-gateway completion fish > ~/.config/fish/completions/rack-gateway.fish
 
 PowerShell:
-  PS> convox-gateway completion powershell | Out-String | Invoke-Expression
+  PS> rack-gateway completion powershell | Out-String | Invoke-Expression
   # To load completions for every new session, run:
-  PS> convox-gateway completion powershell > convox-gateway.ps1
+  PS> rack-gateway completion powershell > rack-gateway.ps1
   # and source this file from your PowerShell profile.
 `,
 		DisableFlagsInUseLine: true,
@@ -596,7 +596,7 @@ PowerShell:
 	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, envCmd, newAPITokenCommand(), newDeployApprovalCommand())
 
 	// Allow config path to be set via environment variable or flag
-	defaultConfigPath := getEnv("GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "convox-gateway"))
+	defaultConfigPath := getEnv("GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "rack-gateway"))
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", defaultConfigPath, "Config directory")
 
 	// Add --rack flag as a global flag for rack selection
@@ -689,7 +689,7 @@ func wrapConvoxCommand(args []string) error {
 	// Detect the subcommand sequence "rack uninstall" anywhere in the args list
 	for i := 0; i+1 < len(args); i++ {
 		if strings.EqualFold(args[i], "rack") && strings.EqualFold(args[i+1], "uninstall") {
-			return fmt.Errorf("'convox rack uninstall' is disabled in convox-gateway. Use the official Convox CLI directly with a local rack token")
+			return fmt.Errorf("'convox rack uninstall' is disabled in rack-gateway. Use the official Convox CLI directly with a local rack token")
 		}
 	}
 
@@ -699,12 +699,12 @@ func wrapConvoxCommand(args []string) error {
 	}
 
 	// Load gateway config and token for the rack
-	gatewayURL := os.Getenv("CONVOX_GATEWAY_URL")
+	gatewayURL := os.Getenv("RACK_GATEWAY_URL")
 	if strings.TrimSpace(gatewayURL) == "" {
 		var err error
 		gatewayURL, err = loadGatewayURL(rack)
 		if err != nil {
-			return fmt.Errorf("rack %s not configured. Run: convox-gateway login %s <gateway-url>", rack, rack)
+			return fmt.Errorf("rack %s not configured. Run: rack-gateway login %s <gateway-url>", rack, rack)
 		}
 	}
 
@@ -713,14 +713,14 @@ func wrapConvoxCommand(args []string) error {
 		return err
 	}
 
-	password := os.Getenv("CONVOX_GATEWAY_API_TOKEN")
+	password := os.Getenv("RACK_GATEWAY_API_TOKEN")
 	if password == "" {
 		token, err := loadToken(rack)
 		if err != nil {
-			return fmt.Errorf("not logged in to rack %s. Run: convox-gateway login %s %s", rack, rack, gatewayURL)
+			return fmt.Errorf("not logged in to rack %s. Run: rack-gateway login %s %s", rack, rack, gatewayURL)
 		}
 		if time.Now().After(token.ExpiresAt) {
-			return fmt.Errorf("token expired for rack %s. Run: convox-gateway login %s %s", rack, rack, gatewayURL)
+			return fmt.Errorf("token expired for rack %s. Run: rack-gateway login %s %s", rack, rack, gatewayURL)
 		}
 		password = token.Token
 	}
@@ -1399,18 +1399,18 @@ func resolveRackStatus(now time.Time) (*rackStatus, error) {
 		}
 	}
 
-	envURL := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_URL"))
+	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
 	if envURL == "" {
-		return nil, fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url>")
+		return nil, fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url>")
 	}
 
-	label := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_RACK"))
-	tokenEnv := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_API_TOKEN"))
+	label := strings.TrimSpace(os.Getenv("RACK_GATEWAY_RACK"))
+	tokenEnv := strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
 	if label == "" {
 		if tokenEnv == "" {
-			return nil, fmt.Errorf("CONVOX_GATEWAY_API_TOKEN must be set when relying on CONVOX_GATEWAY_URL without a rack name")
+			return nil, fmt.Errorf("RACK_GATEWAY_API_TOKEN must be set when relying on RACK_GATEWAY_URL without a rack name")
 		}
-		label = "Using CONVOX_GATEWAY_API_TOKEN from environment"
+		label = "Using RACK_GATEWAY_API_TOKEN from environment"
 	}
 
 	status := &rackStatus{
@@ -1419,7 +1419,7 @@ func resolveRackStatus(now time.Time) (*rackStatus, error) {
 	}
 
 	if tokenEnv == "" {
-		status.StatusLines = append(status.StatusLines, "Status: CONVOX_GATEWAY_API_TOKEN not set in environment")
+		status.StatusLines = append(status.StatusLines, "Status: RACK_GATEWAY_API_TOKEN not set in environment")
 	}
 
 	return status, nil
@@ -1429,21 +1429,21 @@ func selectedRack() (string, error) {
 	if rackFlag != "" {
 		return rackFlag, nil
 	}
-	if env := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_RACK")); env != "" {
+	if env := strings.TrimSpace(os.Getenv("RACK_GATEWAY_RACK")); env != "" {
 		return env, nil
 	}
-	if url := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_URL")); url != "" {
-		if label := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_RACK")); label != "" {
+	if url := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL")); url != "" {
+		if label := strings.TrimSpace(os.Getenv("RACK_GATEWAY_RACK")); label != "" {
 			return label, nil
 		}
 		return "(from environment)", nil
 	}
 	rack, err := getCurrentRack()
 	if err != nil {
-		return "", fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url> or use --rack flag")
+		return "", fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url> or use --rack flag")
 	}
 	if strings.TrimSpace(rack) == "" {
-		return "", fmt.Errorf("no rack selected. Run: convox-gateway login <rack> <gateway-url> or use --rack flag")
+		return "", fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url> or use --rack flag")
 	}
 	return rack, nil
 }

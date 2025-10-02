@@ -1,6 +1,6 @@
 package handlers
 
-import "github.com/DocSpring/convox-gateway/internal/gateway/db"
+import "github.com/DocSpring/rack-gateway/internal/gateway/db"
 
 // shouldEnforceMFA returns true when the user is subject to MFA enforcement
 // (e.g. require_all_users policy or a per-user enforcement flag).

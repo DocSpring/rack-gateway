@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
 

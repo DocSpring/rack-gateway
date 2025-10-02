@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
-	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/golang-jwt/jwt/v5"
 )
 

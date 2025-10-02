@@ -33,28 +33,28 @@
 # CLI
 
 ```bash
-❯ convox-gateway
-Convox Gateway provides secure authenticated access to Convox racks
+❯ rack-gateway
+Rack Gateway provides secure authenticated access to Convox racks
 with SSO authentication, role-based access control, and audit logging.
 
 To run convox commands through the gateway:
-  convox-gateway convox apps
-  convox-gateway convox ps
-  convox-gateway convox deploy
+  rack-gateway convox apps
+  rack-gateway convox ps
+  rack-gateway convox deploy
 
 Recommended aliases for your shell:
-  alias cx="convox-gateway convox"   # cx apps, cx ps, cx deploy
-  alias cg="convox-gateway"          # cg login, cg switch, cg rack
+  alias cx="rack-gateway convox"   # cx apps, cx ps, cx deploy
+  alias cg="rack-gateway"          # cg login, cg switch, cg rack
 
 Rack management:
-  convox-gateway rack                # Show current rack
-  convox-gateway racks               # List all racks
-  convox-gateway switch <rack>       # Switch to a different rack
-  convox-gateway login <rack> <url>  # Login to a new rack
+  rack-gateway rack                # Show current rack
+  rack-gateway racks               # List all racks
+  rack-gateway switch <rack>       # Switch to a different rack
+  rack-gateway login <rack> <url>  # Login to a new rack
 
 Usage:
-  convox-gateway [flags]
-  convox-gateway [command]
+  rack-gateway [flags]
+  rack-gateway [command]
 
 Available Commands:
   api-token   Manage API tokens for the current gateway
@@ -67,13 +67,13 @@ Available Commands:
   rack        Show current rack and gateway information
   racks       List all configured racks
   switch      Switch to a different rack
-  version     Show convox-gateway version
-  web         Open the Convox Gateway web UI
+  version     Show rack-gateway version
+  web         Open the Rack Gateway web UI
 
 Flags:
-      --config string   Config directory (default "/Users/ndbroadbent/.config/convox-gateway")
-  -h, --help            help for convox-gateway
+      --config string   Config directory (default "/Users/ndbroadbent/.config/rack-gateway")
+  -h, --help            help for rack-gateway
       --rack string     Rack to use (overrides current rack)
 
-Use "convox-gateway [command] --help" for more information about a command.
+Use "rack-gateway [command] --help" for more information about a command.
 ```

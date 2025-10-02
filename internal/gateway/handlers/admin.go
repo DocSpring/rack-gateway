@@ -11,16 +11,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/email"
-	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
-	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	sentry "github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
@@ -485,11 +485,11 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 	base := h.publicBaseURL(c)
 	recipient := strings.TrimSpace(req.Email)
 	if recipient != "" {
-		subjectUser := fmt.Sprintf("Convox Gateway (%s): You've been granted access", rack)
+		subjectUser := fmt.Sprintf("Rack Gateway (%s): You've been granted access", rack)
 		textUser, htmlUser, err := emailtemplates.RenderWelcome(rack, recipient, inviterEmail, base, base)
 		if err != nil || (textUser == "" && htmlUser == "") {
 			roles := strings.Join(req.Roles, ", ")
-			textUser = fmt.Sprintf("You've been granted access to the Convox Gateway (%s) with roles: %s.", rack, roles)
+			textUser = fmt.Sprintf("You've been granted access to the Rack Gateway (%s) with roles: %s.", rack, roles)
 		}
 		_ = h.emailSender.Send(recipient, subjectUser, textUser, htmlUser)
 	}
@@ -514,7 +514,7 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 	if creator == "" {
 		creator = "an administrator"
 	}
-	subjectAdmin := fmt.Sprintf("Convox Gateway (%s): %s added %s (%s)", rack, creator, req.Email, req.Name)
+	subjectAdmin := fmt.Sprintf("Rack Gateway (%s): %s added %s (%s)", rack, creator, req.Email, req.Name)
 	textAdmin, htmlAdmin, err := emailtemplates.RenderUserAddedAdmin(rack, creator, req.Email, req.Name, req.Roles)
 	if err != nil || (textAdmin == "" && htmlAdmin == "") {
 		textAdmin = fmt.Sprintf("%s added new user %s (%s) with roles: %s.", creator, req.Email, req.Name, strings.Join(req.Roles, ", "))
@@ -545,7 +545,7 @@ func (h *AdminHandler) notifySettingsChanged(c *gin.Context, key, value string) 
 	sort.Strings(admins)
 	recipients := prioritiseInviterFirst(admins, actorEmail)
 	rack := h.rackDisplay()
-	subject := fmt.Sprintf("Convox Gateway (%s): %s changed the %s setting", rack, actorLabel, key)
+	subject := fmt.Sprintf("Rack Gateway (%s): %s changed the %s setting", rack, actorLabel, key)
 	text, html, err := emailtemplates.RenderSettingsChanged(rack, actorLabel, key, value)
 	if err != nil || (text == "" && html == "") {
 		text = fmt.Sprintf("%s changed %s to %s.", actorLabel, key, value)
@@ -1612,7 +1612,7 @@ func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenNa
 	if creatorLabel == "" {
 		creatorLabel = "an administrator"
 	}
-	subjectOwner := fmt.Sprintf("Convox Gateway (%s): New API token created", rack)
+	subjectOwner := fmt.Sprintf("Rack Gateway (%s): New API token created", rack)
 	textOwner, htmlOwner, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
 	if err != nil || (textOwner == "" && htmlOwner == "") {
 		textOwner = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
@@ -1635,7 +1635,7 @@ func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenNa
 	}
 	sort.Strings(filtered)
 	recipients := prioritiseInviterFirst(filtered, creatorEmail)
-	subjectAdmin := fmt.Sprintf("Convox Gateway (%s): API token created for %s", rack, ownerEmail)
+	subjectAdmin := fmt.Sprintf("Rack Gateway (%s): API token created for %s", rack, ownerEmail)
 	textAdmin, htmlAdmin, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
 	if err != nil || (textAdmin == "" && htmlAdmin == "") {
 		textAdmin = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)

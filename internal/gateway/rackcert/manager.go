@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 var (

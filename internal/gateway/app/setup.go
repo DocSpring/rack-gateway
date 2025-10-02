@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/email"
-	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/convox-gateway/internal/gateway/routes"
-	"github.com/DocSpring/convox-gateway/internal/gateway/security"
-	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/routes"
+	"github.com/DocSpring/rack-gateway/internal/gateway/security"
+	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,13 +54,13 @@ func (a *App) initializeServices() error {
 	}
 	a.MFASettings = mfaSettings
 
-	issuer := "Convox Gateway"
+	issuer := "Rack Gateway"
 	enforcedRackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
 	if enforcedRackAlias == "" {
 		enforcedRackAlias = strings.TrimSpace(os.Getenv("RACK"))
 	}
 	if enforcedRackAlias != "" {
-		issuer = fmt.Sprintf("Convox Gateway (%s)", enforcedRackAlias)
+		issuer = fmt.Sprintf("Rack Gateway (%s)", enforcedRackAlias)
 	}
 	trustedDeviceTTL := time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
 	stepUpWindow := time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to help set up Google OAuth credentials for the Convox Gateway
+# Script to help set up Google OAuth credentials for the Rack Gateway
 
 set -e
 
@@ -11,9 +11,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Convox Gateway OAuth Setup ===${NC}"
+echo -e "${BLUE}=== Rack Gateway OAuth Setup ===${NC}"
 echo ""
-echo "This script will help you set up Google OAuth for the Convox Gateway."
+echo "This script will help you set up Google OAuth for the Rack Gateway."
 echo ""
 
 echo -e "${GREEN}Step 1: Create a Google Cloud Project${NC}"
@@ -29,7 +29,7 @@ echo "1. Go to APIs & Services > Credentials"
 echo "2. Click '+ CREATE CREDENTIALS' > 'OAuth client ID'"
 echo "3. If prompted, configure the OAuth consent screen:"
 echo "   - User Type: Internal (for Google Workspace)"
-echo "   - App name: Convox Gateway"
+echo "   - App name: Rack Gateway"
 echo "   - User support email: Your email"
 echo "   - Authorized domains: Your company domain (e.g., example.com)"
 echo ""
@@ -38,7 +38,7 @@ read -p "Press Enter when consent screen is configured..."
 echo ""
 echo -e "${GREEN}Step 3: Create OAuth 2.0 Client ID${NC}"
 echo "1. Application type: Web application"
-echo "2. Name: Convox Gateway"
+echo "2. Name: Rack Gateway"
 echo "3. Authorized JavaScript origins:"
 echo "   - http://localhost:8447 (for development)"
 echo "   - https://your-gateway-domain.com (for production)"

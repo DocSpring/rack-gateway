@@ -3,7 +3,7 @@ package handlers
 import (
 	"strings"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/proxy"
+	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
 	"github.com/gin-gonic/gin"
 )
 

@@ -5,8 +5,8 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "API for the Convox Gateway administration and proxy services.",
-        "title": "Convox Gateway API",
+        "description": "API for the Rack Gateway administration and proxy services.",
+        "title": "Rack Gateway API",
         "contact": {},
         "version": "1.0"
     },

@@ -398,7 +398,7 @@ func gatewayRequest(rack, method, path string, body interface{}, out interface{}
 }
 
 func gatewayAuthInfo(rack string) (string, string, error) {
-	gatewayURL := strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_URL"))
+	gatewayURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
 	if gatewayURL == "" {
 		var err error
 		gatewayURL, err = loadGatewayURL(rack)
@@ -414,7 +414,7 @@ func gatewayAuthInfo(rack string) (string, string, error) {
 
 	bearer := strings.TrimSpace(apiTokenFlag)
 	if bearer == "" {
-		bearer = strings.TrimSpace(os.Getenv("CONVOX_GATEWAY_API_TOKEN"))
+		bearer = strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
 	}
 	if bearer == "" {
 		token, err := loadToken(rack)

@@ -1,4 +1,4 @@
-# Convox Gateway - Technical Details
+# Rack Gateway - Technical Details
 
 IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
 
@@ -136,7 +136,7 @@ Staging Rack:
   Convox API (port 5443) <-> Gateway (port 8447)
 
 Developer CLI:
-  ~/.config/convox-gateway/config.json stores:
+  ~/.config/rack-gateway/config.json stores:
     - production: https://gateway-prod.example.com (JWT token)
     - staging: https://gateway-staging.example.com (JWT token)
 ```
@@ -150,8 +150,8 @@ Developer Machine -> Gateway Server (per rack) -> Convox Rack API
                   Audit Logs -> CloudWatch
 
 Flow:
-1. Developer runs: convox-gateway apps --rack staging
-2. CLI loads JWT from ~/.config/convox-gateway/config.json
+1. Developer runs: rack-gateway apps --rack staging
+2. CLI loads JWT from ~/.config/rack-gateway/config.json
 3. CLI sets RACK_URL with JWT and calls real convox CLI
 4. Request goes to Gateway API Server with JWT auth
 5. Gateway validates JWT and checks RBAC permissions
@@ -174,20 +174,20 @@ Flow:
 
 **Developer CLI (User-installed, multi-rack aware):**
 
-- Installed as binary at `/usr/local/bin/convox-gateway`
+- Installed as binary at `/usr/local/bin/rack-gateway`
 - Wraps the real `convox` CLI
-- Stores config for multiple racks in `~/.config/convox-gateway/config.json`
+- Stores config for multiple racks in `~/.config/rack-gateway/config.json`
 - Uses `--rack` flag to switch between gateways
 - Never has direct access to Convox rack tokens
 
 ### Authentication Flow
 
-1. User runs `convox-gateway login staging https://convox-gateway.example.com`
+1. User runs `rack-gateway login staging https://rack-gateway.example.com`
 2. CLI opens browser for Google OAuth (PKCE flow)
 3. User authenticates with Google Workspace account
 4. Gateway validates domain (@example.com)
 5. Gateway issues JWT token (30 day TTL)
-6. CLI stores gateway URL and token in `~/.config/convox-gateway/config.json`
+6. CLI stores gateway URL and token in `~/.config/rack-gateway/config.json`
 
 ### Authorization (RBAC)
 
@@ -203,7 +203,7 @@ Flow:
 **Development environment:**
 - Database: `gateway_dev`
 - Connection: `postgres://postgres:postgres@postgres:5432/gateway_dev?sslmode=disable`
-- Docker container: `convox-gateway-postgres-1`
+- Docker container: `rack-gateway-postgres-1`
 - Host port: `55432` (to avoid conflicts with local Postgres)
 
 **Test environment:**
@@ -212,12 +212,12 @@ Flow:
 
 **Querying the dev database:**
 ```bash
-docker exec convox-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT ..."
+docker exec rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT ..."
 ```
 
 **Querying the test database:**
 ```bash
-docker exec convox-gateway-postgres-1 psql -U postgres -d gateway_test -c "SELECT ..."
+docker exec rack-gateway-postgres-1 psql -U postgres -d gateway_test -c "SELECT ..."
 ```
 
 ### Proxy Behavior
@@ -232,7 +232,7 @@ docker exec convox-gateway-postgres-1 psql -U postgres -d gateway_test -c "SELEC
 
 [... omitted for brevity ...]
 
-- `~/.config/convox-gateway/config.json` - Gateway URLs and JWT tokens per rack
+- `~/.config/rack-gateway/config.json` - Gateway URLs and JWT tokens per rack
 
 ## Environment Variables
 
@@ -469,9 +469,9 @@ go tool cover -html=coverage.out
 
 ## Database Maintenance
 
-- `convox-gateway migrate` applies pending migrations without starting the API server; DSNs are sourced from standard env vars.
+- `rack-gateway migrate` applies pending migrations without starting the API server; DSNs are sourced from standard env vars.
 - `task docker:db:migrate` mirrors the above inside the dev Docker stack (runs against the `gateway-api-dev` container).
-- `convox-gateway reset-db` drops and recreates all tables; requires `RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA` and either `DEV_MODE=true` **or** `DISABLE_DATABASE_ENVIRONMENT_CHECK=1` for non-development resets.
+- `rack-gateway reset-db` drops and recreates all tables; requires `RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA` and either `DEV_MODE=true` **or** `DISABLE_DATABASE_ENVIRONMENT_CHECK=1` for non-development resets.
 - `task docker:db:reset` wraps the destructive reset for the dev Docker stack; export `DISABLE_DATABASE_ENVIRONMENT_CHECK=1` beforehand if you need to bypass the prod guard.
 - Full details and examples live in `docs/DATABASE_MAINTENANCE.md`; keep that document updated if new maintenance commands are added.
 

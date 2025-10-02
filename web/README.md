@@ -1,6 +1,6 @@
-# Convox Gateway Web UI
+# Rack Gateway Web UI
 
-Admin UI and client for Convox Gateway. Provides user management, API token management, and audit viewing.
+Admin UI and client for Rack Gateway. Provides user management, API token management, and audit viewing.
 
 ## Development
 

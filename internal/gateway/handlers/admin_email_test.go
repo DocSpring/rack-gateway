@@ -8,14 +8,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	emailpkg "github.com/DocSpring/convox-gateway/internal/gateway/email"
-	"github.com/DocSpring/convox-gateway/internal/gateway/handlers"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
-	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	emailpkg "github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
 )
 

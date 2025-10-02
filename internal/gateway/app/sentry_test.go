@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
 func TestBuildSentryOptionsDisabledWithoutDSN(t *testing.T) {

@@ -1,8 +1,8 @@
-# Convox Gateway MFA & Step-Up Authentication Plan
+# Rack Gateway MFA & Step-Up Authentication Plan
 
 ## Background
 
-Convox Gateway currently relies on Google OAuth to authenticate developers. Once a user obtains a JWT, both the web UI and the CLI operate without any second factor. Sessions are short-lived only for the browser; the CLI stores a long-lived JWT locally. To meet the new security requirements (mandatory 2FA, trusted devices, step-up controls, and unified auditing) we are introducing first-class MFA across web and CLI.
+Rack Gateway currently relies on Google OAuth to authenticate developers. Once a user obtains a JWT, both the web UI and the CLI operate without any second factor. Sessions are short-lived only for the browser; the CLI stores a long-lived JWT locally. To meet the new security requirements (mandatory 2FA, trusted devices, step-up controls, and unified auditing) we are introducing first-class MFA across web and CLI.
 
 The in-progress implementation already adds database support for MFA methods, backup codes, trusted devices, and richer session metadata. The CLI now exchanges the OAuth result for an opaque server-managed session token rather than a JWT, and the server accepts those tokens on both Bearer and Basic channels. This document captures the remaining work to complete the feature end-to-end.
 
@@ -35,9 +35,9 @@ The in-progress implementation already adds database support for MFA methods, ba
 
 2. **CLI Flow**
 
-   - `convox-gateway login` starts OAuth as today, then completes login by exchanging the authorization code for a session token bound to the machine ID.
+   - `rack-gateway login` starts OAuth as today, then completes login by exchanging the authorization code for a session token bound to the machine ID.
    - CLI stores `session_token`, session ID, channel, device metadata in `config.json`. All subsequent commands send `Authorization: Bearer <session_token>`.
-   - Provide `convox-gateway mfa verify` (or `--mfa`) to refresh the step-up window proactively.
+   - Provide `rack-gateway mfa verify` (or `--mfa`) to refresh the step-up window proactively.
 
 3. **Step-Up Enforcement**
 

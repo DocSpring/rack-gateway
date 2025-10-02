@@ -24,6 +24,6 @@ test.describe('Configure CLI dialog', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Configure CLI' })
     await expect(dialog).toBeVisible()
-    await expect(dialog).toContainText(`convox-gateway login ${rackAlias}`)
+    await expect(dialog).toContainText(`rack-gateway login ${rackAlias}`)
   })
 })

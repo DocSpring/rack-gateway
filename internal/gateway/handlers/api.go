@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
-	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 )
 

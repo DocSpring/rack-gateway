@@ -18,7 +18,7 @@ psql_exec() {
   local sql="$1"
   local output
   set +e
-  output=$(docker exec -i convox-gateway-postgres-1 psql -U postgres -d "$E2E_DATABASE_NAME" -At -F $'\t' -c "$sql" 2>&1)
+  output=$(docker exec -i rack-gateway-postgres-1 psql -U postgres -d "$E2E_DATABASE_NAME" -At -F $'\t' -c "$sql" 2>&1)
   local status=$?
   set -e
   if [[ $status -ne 0 ]]; then
@@ -61,7 +61,7 @@ SQL
 }
 
 reset_all_test_state() {
-  if ! docker ps --format '{{.Names}}' | grep -q '^convox-gateway-postgres-1$'; then
+  if ! docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
     return 0
   fi
 
@@ -171,7 +171,7 @@ login_cli_as() {
 
   echo "  - Running CLI login (no-open) and writing auth params to $AUTH_FILE ..."
   set -m
-  ./bin/convox-gateway login "${rack_name}" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$HTML_FILE" 2>&1 &
+  ./bin/rack-gateway login "${rack_name}" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$HTML_FILE" 2>&1 &
   local CLI_PID=$!
   for _i in $(seq 1 50); do
     [[ -s "$AUTH_FILE" ]] && break
@@ -209,7 +209,7 @@ login_cli_as() {
 
 function verify_command_status_and_output() {
   command="$1" expected_status="$2" expected_output=("${@:3}")
-  local shell_cmd="${WRAPPER_CMD:-./bin/convox-gateway} $command"
+  local shell_cmd="${WRAPPER_CMD:-./bin/rack-gateway} $command"
 
   echo -e "${BLUE}Running: $shell_cmd...${NC}"
   set +e
@@ -281,7 +281,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   OUTPUT_FILE="$(mktemp)"
   COOKIE_FILE="$(mktemp)"
   set -m
-  ./bin/convox-gateway login "e2e" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$OUTPUT_FILE" 2>&1 &
+  ./bin/rack-gateway login "e2e" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$OUTPUT_FILE" 2>&1 &
   CLI_PID=$!
   for _i in $(seq 1 50); do
     [[ -s "$AUTH_FILE" ]] && break
@@ -333,20 +333,20 @@ fi
 if [ -z "$SKIP_ADMIN_TESTS" ]; then
   verify_cgw_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
   verify_cgw_command "convox rack" "mock-rack" "mock-rack.example.com"
-  verify_cgw_command "convox apps" "convox-gateway" "RAPI123456"
+  verify_cgw_command "convox apps" "rack-gateway" "RAPI123456"
   verify_cgw_command "convox apps info" \
-    "Name        convox-gateway" "Status      running"
+    "Name        rack-gateway" "Status      running"
   verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
 
   verify_cgw_command "convox run web 'echo hello'" \
-    'Connected to mock exec for app=convox-gateway pid=proc-123456' \
+    'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello' \
     'hello' \
     'Exit code: 0' \
     'Session closed.'
 
   verify_cgw_command "convox exec p-worker-1 'echo hello'" \
-    'Connected to mock exec for app=convox-gateway pid=p-worker-1' \
+    'Connected to mock exec for app=rack-gateway pid=p-worker-1' \
     '$ echo hello' \
     'hello' \
     'Exit code: 0' \
@@ -379,7 +379,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     "OK"
 
   # Check logs via websockets (this stream is long-lived; kill after 3s)
-  WRAPPER_CMD="timeout 3s ./bin/convox-gateway" verify_command_status_and_output "convox logs" \
+  WRAPPER_CMD="timeout 3s ./bin/rack-gateway" verify_command_status_and_output "convox logs" \
     "124" \
     "Promoting release" \
     "Release promoted successfully."
@@ -393,7 +393,7 @@ fi
 if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # Create a CI/CD API token and exercise pipeline-style commands using the raw token
   echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
-  API_TOKEN_JSON=$(./bin/convox-gateway api-token create \
+  API_TOKEN_JSON=$(./bin/rack-gateway api-token create \
     --name "E2E CLI API Token ${E2E_TS}" \
     --role cicd \
     --output json)
@@ -412,9 +412,9 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # Log out admin before switching to API token
   logout_cli
 
-  export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
-  export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
-  export CONVOX_GATEWAY_RACK="Test"
+  export RACK_GATEWAY_API_TOKEN="$API_TOKEN"
+  export RACK_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  export RACK_GATEWAY_RACK="Test"
 
   echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
 
@@ -426,23 +426,23 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # Show processes via API token
   verify_cgw_command \
-    "convox ps --app convox-gateway" \
+    "convox ps --app rack-gateway" \
     "p-web-1"
 
   # No commands allowed
   verify_cgw_command_failure \
-    "convox run web --app convox-gateway 'delete everything'" \
+    "convox run web --app rack-gateway 'delete everything'" \
     "ERROR:"
 
   # Not even approved commands
   verify_cgw_command_failure \
-    "convox run web --app convox-gateway 'echo hello'" \
+    "convox run web --app rack-gateway 'echo hello'" \
     "ERROR:"
 
 
   # Create build and capture release identifier
   set +e
-  build_output=$(./bin/convox-gateway convox build --app convox-gateway --description "cli-e2e" --id 2>&1)
+  build_output=$(./bin/rack-gateway convox build --app rack-gateway --description "cli-e2e" --id 2>&1)
   build_status=$?
   set -e
   if [[ $build_status -ne 0 ]]; then
@@ -461,7 +461,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # Request approval as API token
   echo -e "${YELLOW}API token requesting deploy approval...${NC}"
   set +e
-  approval_output=$(./bin/convox-gateway deploy-approval request convox-gateway "$RELEASE_ID" "Pipeline deployment ${E2E_TS}" 2>&1)
+  approval_output=$(./bin/rack-gateway deploy-approval request rack-gateway "$RELEASE_ID" "Pipeline deployment ${E2E_TS}" 2>&1)
   approval_status=$?
   set -e
   if [[ $approval_status -ne 0 ]]; then
@@ -478,9 +478,9 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${GREEN}Created approval request: $REQUEST_ID${NC}"
 
   # Unset API token temporarily to log in as admin for approval
-  unset CONVOX_GATEWAY_API_TOKEN
-  unset CONVOX_GATEWAY_URL
-  unset CONVOX_GATEWAY_RACK
+  unset RACK_GATEWAY_API_TOKEN
+  unset RACK_GATEWAY_URL
+  unset RACK_GATEWAY_RACK
 
   # Log in as admin to approve the request
   login_cli_as "admin@example.com" "e2e"
@@ -493,30 +493,30 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # Log out admin and switch back to API token
   logout_cli
 
-  export CONVOX_GATEWAY_API_TOKEN="$API_TOKEN"
-  export CONVOX_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
-  export CONVOX_GATEWAY_RACK="Test"
+  export RACK_GATEWAY_API_TOKEN="$API_TOKEN"
+  export RACK_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  export RACK_GATEWAY_RACK="Test"
 
 
   # No unapproved commands allowed
   verify_cgw_command_failure \
-    "convox run web --app convox-gateway 'delete everything'" \
+    "convox run web --app rack-gateway 'delete everything'" \
     "ERROR:"
 
   # But now an approved command is allowed to be run
   verify_cgw_command "convox run web 'echo hello'" \
-    'Connected to mock exec for app=convox-gateway pid=proc-123456' \
+    'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello'
 
 
   # Run mock migration command on the new release
   verify_cgw_command \
-    "convox run web --app convox-gateway --release $RELEASE_ID 'echo migrate'" \
+    "convox run web --app rack-gateway --release $RELEASE_ID 'echo migrate'" \
     "migrate"
 
   # Promote the release
   verify_cgw_command \
-    "convox releases promote $RELEASE_ID --app convox-gateway" \
+    "convox releases promote $RELEASE_ID --app rack-gateway" \
     "OK"
 
   # Deploy approval request has been consumed. No more commands allowed
@@ -525,9 +525,9 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     "ERROR:"
 
   # Clean up the API token now that the pipeline simulation is complete
-  unset CONVOX_GATEWAY_API_TOKEN
-  unset CONVOX_GATEWAY_URL
-  unset CONVOX_GATEWAY_RACK
+  unset RACK_GATEWAY_API_TOKEN
+  unset RACK_GATEWAY_URL
+  unset RACK_GATEWAY_RACK
 
   # Delete via admin login to validate token deletion flow
   login_cli_as "admin@example.com" "e2e"
@@ -554,7 +554,7 @@ if [ -z "$SKIP_DEPLOYER_TESTS" ]; then
   # (env set tests removed for deployer; protected env policy preservation)
 
   # Should not be able to delete apps
-  verify_cgw_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
+  verify_cgw_command_failure "convox apps delete rack-gateway" "ERROR: permission denied"
 
   logout_cli
 fi
@@ -577,7 +577,7 @@ if [ -z "$SKIP_VIEWER_TESTS" ]; then
 
   # Viewer should not be able to set env or delete apps
   verify_cgw_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
-  verify_cgw_command_failure "convox apps delete convox-gateway" "ERROR: permission denied"
+  verify_cgw_command_failure "convox apps delete rack-gateway" "ERROR: permission denied"
 fi
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"

@@ -25,19 +25,19 @@ tasks:
     desc: Apply database migrations to dev database
     deps: [":docker:dev:up:gateway"]
     cmds:
-      - docker compose exec -T gateway-api-dev ./convox-gateway-api migrate
+      - docker compose exec -T gateway-api-dev ./rack-gateway-api migrate
 
   migrate:test:
     desc: Apply database migrations to test database
     deps: [":docker:test:up", ":docker:test:wait"]
     cmds:
-      - docker compose exec -T gateway-api-test ./convox-gateway-api migrate
+      - docker compose exec -T gateway-api-test ./rack-gateway-api migrate
 
   migrate:preview:
     desc: Apply database migrations to preview database
     deps: [":docker:preview:up", ":docker:preview:wait"]
     cmds:
-      - docker compose exec -T gateway-api-preview ./convox-gateway-api migrate
+      - docker compose exec -T gateway-api-preview ./rack-gateway-api migrate
 
   reset:
     aliases: [reset:all]

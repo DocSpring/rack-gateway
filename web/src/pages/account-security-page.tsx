@@ -61,7 +61,7 @@ const DEFAULT_MFA_LABEL = 'Authenticator App'
 
 function formatCodeForDownload(codes: string[]): string {
   const header = [
-    'Your Convox Gateway backup codes',
+    'Your Rack Gateway backup codes',
     '',
     'Each code can be used once. Store them securely.',
     '',
@@ -378,7 +378,7 @@ export function AccountSecurityPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'convox-gateway-backup-codes.txt'
+    link.download = 'rack-gateway-backup-codes.txt'
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -507,8 +507,8 @@ export function AccountSecurityPage() {
           <div className="pl-7 font-semibold">MFA enrollment required for CLI login</div>
           <AlertDescription>
             Complete your authenticator setup and click “Disable” only if you intend to remove MFA.
-            Once enrollment is finished, rerun{' '}
-            <span className="font-mono">convox-gateway login</span> in your terminal.
+            Once enrollment is finished, rerun <span className="font-mono">rack-gateway login</span>{' '}
+            in your terminal.
           </AlertDescription>
         </Alert>
       ) : null}

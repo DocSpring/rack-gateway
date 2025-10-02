@@ -12,7 +12,7 @@
 ### Scenario 1: Approve Specific Request (by ID)
 
 ```bash
-convox-gateway deploy-approval approve <uuid>
+rack-gateway deploy-approval approve <uuid>
 ```
 
 **Flow:**
@@ -27,7 +27,7 @@ convox-gateway deploy-approval approve <uuid>
 ### Scenario 2: Interactive Approval (no ID specified)
 
 ```bash
-convox-gateway deploy-approval approve
+rack-gateway deploy-approval approve
 ```
 
 **Flow:**
@@ -313,8 +313,8 @@ go get github.com/charmbracelet/bubbles
 
 ## Future Enhancements
 
-- Add `convox-gateway deploy-approval reject <uuid>` with same UX
-- Add `convox-gateway deploy-approval list --status pending|approved|rejected`
+- Add `rack-gateway deploy-approval reject <uuid>` with same UX
+- Add `rack-gateway deploy-approval list --status pending|approved|rejected`
 - Show diff/changes in the request details
 - Add colors and better formatting with lipgloss
 - Auto-refresh when new requests come in

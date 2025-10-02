@@ -18,17 +18,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/email"
-	emailtemplates "github.com/DocSpring/convox-gateway/internal/gateway/email/templates"
-	"github.com/DocSpring/convox-gateway/internal/gateway/envutil"
-	"github.com/DocSpring/convox-gateway/internal/gateway/httpclient"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rackcert"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/convox-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
+	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
+	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -580,7 +580,7 @@ func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes
 		}
 		fmt.Fprintf(&b, "%s: %s -> %s", c.Key, c.Old, c.New)
 	}
-	subject := fmt.Sprintf("Convox Gateway (%s): %s changed rack parameters", h.rackDisplay(), actor)
+	subject := fmt.Sprintf("Rack Gateway (%s): %s changed rack parameters", h.rackDisplay(), actor)
 	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, b.String())
 	_ = h.emailer.SendMany(admins, subject, text, html)
 }

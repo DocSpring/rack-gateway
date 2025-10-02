@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 func TestUpdateSessionMetadata(t *testing.T) {

@@ -10,14 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/app"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/app"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/getsentry/sentry-go"
 )
 
-// @title Convox Gateway API
+// @title Rack Gateway API
 // @version 1.0
-// @description API for the Convox Gateway administration and proxy services.
+// @description API for the Rack Gateway administration and proxy services.
 // @BasePath /.gateway/api
 // @schemes http https
 // @securityDefinitions.apiKey SessionCookie
@@ -52,7 +52,7 @@ func main() {
 			fmt.Println("Database reset complete")
 			return
 		case "help", "--help", "-h":
-			fmt.Println("convox-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (requires env guards)")
+			fmt.Println("rack-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (requires env guards)")
 			return
 		}
 	}

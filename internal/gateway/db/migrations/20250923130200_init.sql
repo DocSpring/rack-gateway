@@ -1,4 +1,4 @@
--- Core schema for Convox Gateway
+-- Core schema for Rack Gateway
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

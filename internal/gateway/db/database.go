@@ -163,8 +163,8 @@ func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
 // environment guards from process environment variables so callers do not need
 // to pass context explicitly.
 func (d *Database) ResetDatabase() error {
-	if os.Getenv("RESET_CONVOX_GATEWAY_DATABASE") != "DELETE_ALL_DATA" {
-		return fmt.Errorf("refusing to reset database: set RESET_CONVOX_GATEWAY_DATABASE=DELETE_ALL_DATA to proceed")
+	if os.Getenv("RESET_RACK_GATEWAY_DATABASE") != "DELETE_ALL_DATA" {
+		return fmt.Errorf("refusing to reset database: set RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA to proceed")
 	}
 	devMode := os.Getenv("DEV_MODE") == "true"
 	disableEnvCheck := strings.TrimSpace(os.Getenv("DISABLE_DATABASE_ENVIRONMENT_CHECK")) != ""

@@ -55,7 +55,7 @@ for i in "${!DATABASES[@]}"; do
   dbname="${DATABASES[$i]}"
   service="${SERVICES[$i]}"
   echo "Running migrations on ${dbname}..."
-  docker compose exec -T "$service" ./convox-gateway-api migrate
+  docker compose exec -T "$service" ./rack-gateway-api migrate
 done
 
 echo "Database reset complete with migrations applied."

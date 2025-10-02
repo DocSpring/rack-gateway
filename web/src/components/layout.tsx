@@ -167,7 +167,7 @@ export function Layout() {
             src="/.gateway/web/logo.svg"
             width={32}
           />
-          <h1 className="font-semibold text-xl">Convox Gateway</h1>
+          <h1 className="font-semibold text-xl">Rack Gateway</h1>
         </div>
 
         <Separator />
@@ -287,32 +287,32 @@ export function Layout() {
           <DialogHeader>
             <DialogTitle>Configure CLI</DialogTitle>
             <DialogDescription>
-              Follow these steps to install and authenticate the Convox gateway CLI.
+              Follow these steps to install and authenticate the Rack gateway CLI.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 text-sm">
             <p>Clone the repository and install the CLI:</p>
             <div className="rounded-md border bg-muted p-3 font-mono text-xs">
-              <div>git clone git@github.com:DocSpring/convox-gateway.git</div>
-              <div className="mt-1">cd convox-gateway</div>
+              <div>git clone git@github.com:DocSpring/rack-gateway.git</div>
+              <div className="mt-1">cd rack-gateway</div>
               <div className="mt-1">./scripts/install.sh</div>
             </div>
 
             <p className="pt-1">Authenticate the CLI against this gateway:</p>
             <div className="rounded-md border bg-muted p-3 font-mono text-xs">
               <div>
-                convox-gateway login {rackAlias} {gatewayOrigin}
+                rack-gateway login {rackAlias} {gatewayOrigin}
               </div>
             </div>
             <p className="text-muted-foreground">
               After logging in, you can run Convox commands via the gateway using{' '}
-              <span className="font-mono">convox-gateway convox …</span>
+              <span className="font-mono">rack-gateway convox …</span>
             </p>
             <p className="text-muted-foreground">
               See the{' '}
               <a
                 className="underline hover:no-underline"
-                href="https://github.com/DocSpring/convox-gateway/blob/main/README.md"
+                href="https://github.com/DocSpring/rack-gateway/blob/main/README.md"
                 rel="noreferrer noopener"
                 target="_blank"
               >

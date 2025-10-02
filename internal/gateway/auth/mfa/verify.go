@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // VerifyCode attempts to verify any supported MFA code type.

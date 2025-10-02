@@ -10,7 +10,7 @@ Deploy the gateway and UI using the `convox.yml` in this repo — no separate ma
 ## 1) Create the app
 
 ```
-convox apps create convox-gateway
+convox apps create rack-gateway
 ```
 
 ## 2) Set environment
@@ -72,7 +72,7 @@ convox env set \
 
 WebAuthn (security keys, Touch ID, Windows Hello) is **automatically enabled** when `DOMAIN` is set. No additional configuration needed!
 
-The gateway automatically configures itself and displays "Convox Gateway (Rack Name)" to users during authentication.
+The gateway automatically configures itself and displays "Rack Gateway (Rack Name)" to users during authentication.
 
 ## 3) Domains
 
@@ -85,7 +85,7 @@ Provide domains via environment or CI vars so Convox substitutes them in `convox
 
 ````
 
-convox deploy -a convox-gateway
+convox deploy -a rack-gateway
 
 ```
 
@@ -108,7 +108,7 @@ Open https://$WEB_DOMAIN and sign in.
 
 ```
 
-convox apps create convox-gateway || true
+convox apps create rack-gateway || true
 convox env set ...
 convox deploy
 

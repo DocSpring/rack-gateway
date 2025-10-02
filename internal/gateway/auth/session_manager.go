@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 const (

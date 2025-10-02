@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/audit"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/ratelimit"
-	"github.com/DocSpring/convox-gateway/internal/gateway/security"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/ratelimit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/security"
 	securemw "github.com/gin-contrib/secure"
 	"github.com/gin-gonic/gin"
 )

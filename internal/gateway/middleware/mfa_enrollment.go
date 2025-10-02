@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -42,7 +42,7 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 		}
 
 		if shouldEnforceMFAForMiddleware(settings, user) && !user.MFAEnrolled {
-			message := "You must set up multi-factor authentication before you can continue using the CLI. Please run convox-gateway login and finish MFA enrollment."
+			message := "You must set up multi-factor authentication before you can continue using the CLI. Please run rack-gateway login and finish MFA enrollment."
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "mfa_enrollment_required",
 				"message": message,

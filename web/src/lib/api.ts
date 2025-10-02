@@ -1,6 +1,6 @@
 import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 
-import { getConvoxGatewayAPI } from '@/api/generated'
+import { getRackGatewayAPI } from '@/api/generated'
 import { gatewayAxios } from '@/api/http-client'
 import type {
   DbAPIToken,
@@ -46,7 +46,7 @@ import type {
 
 const API_PREFIX = '/.gateway/api'
 
-const gateway = getConvoxGatewayAPI()
+const gateway = getRackGatewayAPI()
 
 type GatewayResponse<T> = Promise<AxiosResponse<T>>
 

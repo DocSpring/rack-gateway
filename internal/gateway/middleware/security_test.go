@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/gin-gonic/gin"
 )
 

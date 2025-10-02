@@ -5,7 +5,7 @@ set -euo pipefail
 # Prereqs: convox, docker, minikube >=1.29, terraform
 
 RACK_NAME=${RACK_NAME:-local}
-APP_NAME=${APP_NAME:-convox-gateway}
+APP_NAME=${APP_NAME:-rack-gateway}
 TIMEOUT_SECS=${TIMEOUT_SECS:-600}
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1"; exit 1; }; }

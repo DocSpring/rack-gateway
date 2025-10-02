@@ -109,7 +109,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gateway-web
-    image: ${GATEWAY_IMAGE:-convox-gateway-api:local}
+    image: ${GATEWAY_IMAGE:-rack-gateway-api:local}
     environment:
       <<: *gateway_common_env
       DOMAIN: localhost
@@ -140,7 +140,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gateway-web
-    image: ${GATEWAY_TEST_IMAGE:-convox-gateway-api:test}
+    image: ${GATEWAY_TEST_IMAGE:-rack-gateway-api:test}
     environment:
       <<: *gateway_common_env
       RACK: Test

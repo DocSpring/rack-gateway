@@ -20,37 +20,37 @@ func TestApps_ListAndInfo(t *testing.T) {
 	var apps []App
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &apps))
 	require.GreaterOrEqual(t, len(apps), 1)
-	assert.Equal(t, "convox-gateway", apps[0].Name)
+	assert.Equal(t, "rack-gateway", apps[0].Name)
 	assert.Equal(t, "RAPP123456", apps[0].Release)
 
 	// App info
 	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/apps/convox-gateway", nil)
-	req = mux.SetURLVars(req, map[string]string{"app": "convox-gateway"})
+	req = httptest.NewRequest(http.MethodGet, "/apps/rack-gateway", nil)
+	req = mux.SetURLVars(req, map[string]string{"app": "rack-gateway"})
 	getApp(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	var app App
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &app))
-	assert.Equal(t, "convox-gateway", app.Name)
+	assert.Equal(t, "rack-gateway", app.Name)
 	assert.Equal(t, "RAPP123456", app.Release)
 }
 
 func TestReleases_List_Get_Create(t *testing.T) {
 	// List
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/apps/convox-gateway/releases", nil)
-	req = mux.SetURLVars(req, map[string]string{"app": "convox-gateway"})
+	req := httptest.NewRequest(http.MethodGet, "/apps/rack-gateway/releases", nil)
+	req = mux.SetURLVars(req, map[string]string{"app": "rack-gateway"})
 	handleReleases(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	var rels []Release
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &rels))
 	require.GreaterOrEqual(t, len(rels), 1)
-	assert.Equal(t, "convox-gateway", rels[0].App)
+	assert.Equal(t, "rack-gateway", rels[0].App)
 
 	// Get
 	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/apps/convox-gateway/releases/RAPI123456", nil)
-	req = mux.SetURLVars(req, map[string]string{"app": "convox-gateway", "id": "RAPI123456"})
+	req = httptest.NewRequest(http.MethodGet, "/apps/rack-gateway/releases/RAPI123456", nil)
+	req = mux.SetURLVars(req, map[string]string{"app": "rack-gateway", "id": "RAPI123456"})
 	getRelease(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	var rel Release
@@ -60,14 +60,14 @@ func TestReleases_List_Get_Create(t *testing.T) {
 
 	// Create (POST to /releases) must return a single Release object
 	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/apps/convox-gateway/releases", nil)
-	req = mux.SetURLVars(req, map[string]string{"app": "convox-gateway"})
+	req = httptest.NewRequest(http.MethodPost, "/apps/rack-gateway/releases", nil)
+	req = mux.SetURLVars(req, map[string]string{"app": "rack-gateway"})
 	handleReleases(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	rel = Release{}
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &rel))
 	assert.NotEmpty(t, rel.ID)
-	assert.Equal(t, "convox-gateway", rel.App)
+	assert.Equal(t, "rack-gateway", rel.App)
 	assert.Contains(t, rel.Env, "PORT=3000")
 }
 

@@ -129,8 +129,8 @@ func TestRackSelectionPriority(t *testing.T) {
 func TestSelectedRackEnvOverride(t *testing.T) {
 	configPath = t.TempDir()
 	rackFlag = ""
-	t.Setenv("CONVOX_GATEWAY_RACK", "env-rack")
-	t.Setenv("CONVOX_GATEWAY_URL", "")
+	t.Setenv("RACK_GATEWAY_RACK", "env-rack")
+	t.Setenv("RACK_GATEWAY_URL", "")
 
 	rack, err := selectedRack()
 	require.NoError(t, err)
@@ -140,8 +140,8 @@ func TestSelectedRackEnvOverride(t *testing.T) {
 func TestSelectedRackFallsBackToURL(t *testing.T) {
 	configPath = t.TempDir()
 	rackFlag = ""
-	t.Setenv("CONVOX_GATEWAY_URL", "https://gateway.example.com")
-	t.Setenv("CONVOX_GATEWAY_RACK", "")
+	t.Setenv("RACK_GATEWAY_URL", "https://gateway.example.com")
+	t.Setenv("RACK_GATEWAY_RACK", "")
 
 	rack, err := selectedRack()
 	require.NoError(t, err)
@@ -211,8 +211,8 @@ func TestSetCurrentRackCreatesDirectory(t *testing.T) {
 func TestResolveRackStatusPrefersConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath = tmpDir
-	t.Setenv("CONVOX_GATEWAY_URL", "")
-	t.Setenv("CONVOX_GATEWAY_API_TOKEN", "")
+	t.Setenv("RACK_GATEWAY_URL", "")
+	t.Setenv("RACK_GATEWAY_API_TOKEN", "")
 
 	require.NoError(t, saveConfig(&Config{
 		Current: "staging",
@@ -237,25 +237,25 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 
 func TestResolveRackStatusFallsBackToEnv(t *testing.T) {
 	configPath = t.TempDir()
-	t.Setenv("CONVOX_GATEWAY_RACK", "")
-	t.Setenv("CONVOX_GATEWAY_URL", "https://env-gateway.example.com")
-	t.Setenv("CONVOX_GATEWAY_API_TOKEN", "token-from-env")
+	t.Setenv("RACK_GATEWAY_RACK", "")
+	t.Setenv("RACK_GATEWAY_URL", "https://env-gateway.example.com")
+	t.Setenv("RACK_GATEWAY_API_TOKEN", "token-from-env")
 
 	status, err := resolveRackStatus(time.Now())
 	require.NoError(t, err)
-	assert.Equal(t, "Using CONVOX_GATEWAY_API_TOKEN from environment", status.Rack)
+	assert.Equal(t, "Using RACK_GATEWAY_API_TOKEN from environment", status.Rack)
 	assert.Equal(t, "https://env-gateway.example.com", status.GatewayURL)
 	assert.Len(t, status.StatusLines, 0)
 }
 
 func TestResolveRackStatusEnvRequiresToken(t *testing.T) {
 	configPath = t.TempDir()
-	t.Setenv("CONVOX_GATEWAY_RACK", "")
-	t.Setenv("CONVOX_GATEWAY_URL", "https://env-gateway.example.com")
+	t.Setenv("RACK_GATEWAY_RACK", "")
+	t.Setenv("RACK_GATEWAY_URL", "https://env-gateway.example.com")
 
 	_, err := resolveRackStatus(time.Now())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CONVOX_GATEWAY_API_TOKEN")
+	assert.Contains(t, err.Error(), "RACK_GATEWAY_API_TOKEN")
 }
 
 func TestRenderGatewayError(t *testing.T) {

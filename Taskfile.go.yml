@@ -20,7 +20,7 @@ tasks:
 
   install:
     aliases: [":install"]
-    desc: Install Convox Gateway CLI
+    desc: Install Rack Gateway CLI
     deps: [deps]
     cmds:
       - ./scripts/install.sh
@@ -64,7 +64,7 @@ tasks:
     deps: [build:gateway, build:cli, build:mock]
 
   build:gateway:
-    desc: Build gateway API server -> bin/convox-gateway-api
+    desc: Build gateway API server -> bin/rack-gateway-api
     deps: [deps]
     sources:
       - go.*
@@ -72,12 +72,12 @@ tasks:
       - cmd/gateway/**/*.go
       - internal/**/*.go
     generates:
-      - bin/convox-gateway-api
+      - bin/rack-gateway-api
     cmds:
-      - go build -o bin/convox-gateway-api ./cmd/gateway/
+      - go build -o bin/rack-gateway-api ./cmd/gateway/
 
   build:cli:
-    desc: Build gateway CLI -> bin/convox-gateway
+    desc: Build gateway CLI -> bin/rack-gateway
     deps: [deps]
     sources:
       - go.*
@@ -85,9 +85,9 @@ tasks:
       - cmd/cli/**/*.go
       - internal/**/*.go
     generates:
-      - bin/convox-gateway
+      - bin/rack-gateway
     cmds:
-      - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/convox-gateway ./cmd/cli/
+      - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway ./cmd/cli/
 
   build:mock:
     desc: Build mock Convox server -> bin/mock-convox

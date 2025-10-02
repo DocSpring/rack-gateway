@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/getsentry/sentry-go"
 	"github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"

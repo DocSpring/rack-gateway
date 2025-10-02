@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This policy governs how sessions, authentication, and deployments are handled for the Convox Gateway. It ensures the protection of critical AWS infrastructure, aligns with SOC 2 requirements, and enforces bank-grade security practices.
+This policy governs how sessions, authentication, and deployments are handled for the Rack Gateway. It ensures the protection of critical AWS infrastructure, aligns with SOC 2 requirements, and enforces bank-grade security practices.
 
 ---
 

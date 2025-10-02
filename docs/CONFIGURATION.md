@@ -1,6 +1,6 @@
 # Configuration
 
-This document describes all configuration options for Convox Gateway, grouped by concern.
+This document describes all configuration options for Rack Gateway, grouped by concern.
 
 If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
 
@@ -146,9 +146,9 @@ Email events:
 ## CLI Wrapper
 
 - `GATEWAY_RACK` (optional)
-  - Selects the rack for `convox-gateway convox …` when not using `--rack` or the stored current rack in config.json.
+  - Selects the rack for `rack-gateway convox …` when not using `--rack` or the stored current rack in config.json.
 - `GATEWAY_CLI_CONFIG_DIR` (dev/testing)
-  - Override the CLI config directory (defaults to `~/.config/convox-gateway`).
+  - Override the CLI config directory (defaults to `~/.config/rack-gateway`).
 - `FORCE_CSP_IN_DEV` (dev/testing)
   - When set to `true` alongside `DEV_MODE=true`, emit production CSP headers for local testing.
 

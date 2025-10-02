@@ -1,8 +1,8 @@
-// Package main contains the Convox Gateway HTTP server.
+// Package main contains the Rack Gateway HTTP server.
 //
-// @title Convox Gateway API
+// @title Rack Gateway API
 // @version 1.0
-// @description API for the Convox Gateway administration and proxy services.
+// @description API for the Rack Gateway administration and proxy services.
 // @BasePath /.gateway/api
 // @schemes http https
 // @securityDefinitions.apiKey SessionCookie

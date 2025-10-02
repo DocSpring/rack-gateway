@@ -8,7 +8,7 @@ import (
 	texttmpl "text/template"
 )
 
-const readmeURL = "https://github.com/DocSpring/convox-gateway/blob/main/README.md"
+const readmeURL = "https://github.com/DocSpring/rack-gateway/blob/main/README.md"
 
 func WebURL(base string) string {
 	b := strings.TrimRight(base, "/")
@@ -17,20 +17,20 @@ func WebURL(base string) string {
 
 // Welcome (new user)
 var welcomeText = texttmpl.Must(texttmpl.New("welcome_text").Parse(
-	"Convox Gateway ({{.Rack}})\n\n" +
+	"Rack Gateway ({{.Rack}})\n\n" +
 		"Hi {{.Invitee}},\n\n" +
-		"You’ve been granted access to the Convox Gateway for the {{.Rack}} rack.\n\n" +
+		"You’ve been granted access to the Rack Gateway for the {{.Rack}} rack.\n\n" +
 		"Access the Web UI\n" +
 		"{{.WebURL}}\n\n" +
-		"Configure Convox Gateway CLI\n" +
+		"Configure Rack Gateway CLI\n" +
 		"------------------------------------------\n" +
 		"Clone the repository and install the CLI:\n\n" +
-		"git clone git@github.com:DocSpring/convox-gateway.git\n" +
-		"cd convox-gateway\n" +
+		"git clone git@github.com:DocSpring/rack-gateway.git\n" +
+		"cd rack-gateway\n" +
 		"./scripts/install.sh\n\n" +
 		"Authenticate the CLI against this gateway:\n\n" +
-		"$ convox-gateway login {{.Rack}} {{.CLIBase}}\n\n" +
-		"After logging in, you can run Convox commands via the gateway using convox-gateway convox …\n\n" +
+		"$ rack-gateway login {{.Rack}} {{.CLIBase}}\n\n" +
+		"After logging in, you can run Convox commands via the gateway using rack-gateway convox …\n\n" +
 		"See the README for more information:\n" +
 		readmeURL + "\n\n" +
 		"Added by {{.Inviter}}\n",
@@ -38,17 +38,17 @@ var welcomeText = texttmpl.Must(texttmpl.New("welcome_text").Parse(
 
 var welcomeHTML = template.Must(template.New("welcome_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
-		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p>Hi {{.Invitee}},</p>" +
-		"<p>You’ve been granted access to the Convox Gateway for the <strong>{{.Rack}}</strong> rack.</p>" +
+		"<p>You’ve been granted access to the Rack Gateway for the <strong>{{.Rack}}</strong> rack.</p>" +
 		"<h3 style=\"margin:20px 0 8px;\">Access the Web UI</h3>" +
 		"<p><a href=\"{{.WebURL}}\" style=\"color:#0b5fff;text-decoration:none;\">{{.WebURL}}</a></p>" +
-		"<h3 style=\"margin:20px 0 8px;\">Configure Convox Gateway CLI</h3>" +
+		"<h3 style=\"margin:20px 0 8px;\">Configure Rack Gateway CLI</h3>" +
 		"<p>Clone the repository and install the CLI:</p>" +
-		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">git clone git@github.com:DocSpring/convox-gateway.git\ncd convox-gateway\n./scripts/install.sh</pre>" +
+		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">git clone git@github.com:DocSpring/rack-gateway.git\ncd rack-gateway\n./scripts/install.sh</pre>" +
 		"<p>Authenticate the CLI against this gateway:</p>" +
-		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">$ convox-gateway login {{.Rack}} {{.CLIBase}}</pre>" +
-		"<p>After logging in, you can run Convox commands via the gateway using <code>convox-gateway convox …</code></p>" +
+		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">$ rack-gateway login {{.Rack}} {{.CLIBase}}</pre>" +
+		"<p>After logging in, you can run Convox commands via the gateway using <code>rack-gateway convox …</code></p>" +
 		fmt.Sprintf("<p>See the README for more information:<br/><a href=\"%s\" style=\"color:#0b5fff;text-decoration:none;\">%s</a></p>", readmeURL, readmeURL) +
 		"<hr style=\"border:none;border-top:1px solid #e5e5e5;margin:24px 0;\"/>" +
 		"<p style=\"font-size:12px;color:#555;\">Added by {{.Inviter}}</p>" +
@@ -75,14 +75,14 @@ func RenderWelcome(rack, invitee, inviter, webBase, cliBase string) (text string
 
 // Settings changed
 var settingsText = texttmpl.Must(texttmpl.New("settings_text").Parse(
-	"Convox Gateway ({{.Rack}})\n\n" +
+	"Rack Gateway ({{.Rack}})\n\n" +
 		"{{.Actor}} updated the {{.Key}} setting.\n\n" +
 		"New value:\n{{.Value}}\n",
 ))
 
 var settingsHTML = template.Must(template.New("settings_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
-		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p><strong>{{.Actor}}</strong> updated the <code>{{.Key}}</code> setting.</p>" +
 		"<p>New value:</p>" +
 		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">{{.Value}}</pre>" +
@@ -103,14 +103,14 @@ func RenderSettingsChanged(rack, actor, key, value string) (string, string, erro
 
 // Rack parameters changed
 var rackParamsText = texttmpl.Must(texttmpl.New("rack_params_text").Parse(
-	"Convox Gateway ({{.Rack}})\n\n" +
+	"Rack Gateway ({{.Rack}})\n\n" +
 		"{{.Actor}} changed rack parameters:\n\n" +
 		"{{.Changes}}\n",
 ))
 
 var rackParamsHTML = template.Must(template.New("rack_params_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
-		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p><strong>{{.Actor}}</strong> changed rack parameters:</p>" +
 		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">{{.Changes}}</pre>" +
 		"</body></html>",
@@ -130,14 +130,14 @@ func RenderRackParamsChanged(rack, actor, changes string) (string, string, error
 
 // Token created
 var tokenOwnerText = texttmpl.Must(texttmpl.New("token_owner_text").Parse(
-	"Convox Gateway ({{.Rack}})\n\n" +
+	"Rack Gateway ({{.Rack}})\n\n" +
 		"A new API token '{{.Name}}' was created for your account.\n" +
 		"Created by: {{.Creator}}\n\n" +
 		"If this wasn't expected, please contact an admin.\n",
 ))
 var tokenOwnerHTML = template.Must(template.New("token_owner_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
-		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p>A new API token '<strong>{{.Name}}</strong>' was created for your account.</p>" +
 		"<p>Created by: {{.Creator}}</p>" +
 		"<p>If this wasn't expected, please contact an admin.</p>" +
@@ -157,13 +157,13 @@ func RenderTokenCreatedOwner(rack, name, creator string) (string, string, error)
 }
 
 var tokenAdminText = texttmpl.Must(texttmpl.New("token_admin_text").Parse(
-	"Convox Gateway ({{.Rack}})\n\n" +
+	"Rack Gateway ({{.Rack}})\n\n" +
 		"An API token '{{.Name}}' was created for {{.Owner}}.\n" +
 		"Created by: {{.Creator}}\n",
 ))
 var tokenAdminHTML = template.Must(template.New("token_admin_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
-		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p>An API token '<strong>{{.Name}}</strong>' was created for {{.Owner}}.</p>" +
 		"<p>Created by: {{.Creator}}</p>" +
 		"</body></html>",
@@ -183,12 +183,12 @@ func RenderTokenCreatedAdmin(rack, name, owner, creator string) (string, string,
 
 // User added (admin notice)
 var userAddedAdminText = texttmpl.Must(texttmpl.New("user_added_admin_text").Parse(
-	"Convox Gateway ({{.Rack}})\n\n" +
+	"Rack Gateway ({{.Rack}})\n\n" +
 		"{{.Actor}} added new user {{.Email}} ({{.Name}}) with roles: {{.Roles}}.\n",
 ))
 var userAddedAdminHTML = template.Must(template.New("user_added_admin_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
-		"<h2 style=\"margin:0 0 12px 0;\">Convox Gateway ({{.Rack}})</h2>" +
+		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p>{{.Actor}} added new user <strong>{{.Email}}</strong> ({{.Name}}) with roles: {{.Roles}}.</p>" +
 		"</body></html>",
 ))

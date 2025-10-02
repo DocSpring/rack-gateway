@@ -28,8 +28,8 @@ COPY internal ./internal
 COPY cmd/gateway ./cmd/gateway
 
 # Build the gateway binary directly in this stage
-RUN CGO_ENABLED=1 go build -o /out/convox-gateway-api ./cmd/gateway \
-    && /out/convox-gateway-api help
+RUN CGO_ENABLED=1 go build -o /out/rack-gateway-api ./cmd/gateway \
+    && /out/rack-gateway-api help
 
 FROM alpine:latest
 
@@ -37,10 +37,10 @@ RUN apk --no-cache add ca-certificates curl
 
 WORKDIR /root/
 
-COPY --from=builder /out/convox-gateway-api .
+COPY --from=builder /out/rack-gateway-api .
 COPY config ./config
 COPY --from=webbuilder /webapp/dist ./web/dist
 
 EXPOSE 8080
 
-CMD ["./convox-gateway-api"]
+CMD ["./rack-gateway-api"]

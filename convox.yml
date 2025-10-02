@@ -39,7 +39,7 @@ services:
     build:
       path: .
       manifest: Dockerfile
-    command: ./convox-gateway-api
+    command: ./rack-gateway-api
     domain: ${DOMAIN}
     environment:
       - PORT=8080

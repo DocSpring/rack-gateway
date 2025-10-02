@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/middleware"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rickb777/servefiles/v3/gin_adapter"
 )
@@ -35,7 +35,7 @@ func RootRedirect(c *gin.Context) {
 
 	// Return JSON for CLI/API clients
 	c.JSON(http.StatusOK, gin.H{
-		"service": "convox-gateway",
+		"service": "rack-gateway",
 		"version": "1.0.0",
 	})
 }

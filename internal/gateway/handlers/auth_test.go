@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth"
-	"github.com/DocSpring/convox-gateway/internal/gateway/auth/mfa"
-	"github.com/DocSpring/convox-gateway/internal/gateway/config"
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/gin-gonic/gin"
 )
 
@@ -91,7 +91,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 	}
 
 	pepper := []byte("mfa-pepper-for-tests")
-	mfaService, err := mfa.NewService(database, "Convox Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "")
+	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "")
 	if err != nil {
 		t.Fatalf("failed to init mfa service: %v", err)
 	}

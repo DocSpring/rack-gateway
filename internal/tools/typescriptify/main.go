@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
-	"github.com/DocSpring/convox-gateway/internal/gateway/handlers"
-	"github.com/DocSpring/convox-gateway/internal/gateway/token"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
+	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/tkrajina/typescriptify-golang-structs/typescriptify"
 )
 

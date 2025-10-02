@@ -6,7 +6,7 @@ This guide explains how the deploy-approval gate works, which roles can interact
 
 Deploy approvals add a manual checkpoint in front of sensitive Convox actions (build, object upload, release promote) when a user or API token only has the `*-with-approval` permissions. The flow is deliberately simple:
 
-1. A CI/CD bot (or human) asks the gateway for approval via `convox-gateway deploy-approval request "<message>"`.
+1. A CI/CD bot (or human) asks the gateway for approval via `rack-gateway deploy-approval request "<message>"`.
 2. The request lands in the `deploy_approval_requests` table with status `pending` and is visible in the admin UI at **Deploy Approval Requests**.
 3. An administrator reviews the request, optionally adds notes, and either approves or rejects it.
 4. When approved, the request stays valid for `DEPLOY_APPROVAL_WINDOW` (15 minutes by default). The first Convox action that requires approval (build/object/release) consumes the record and stores the relevant IDs so it cannot be reused.
@@ -44,13 +44,13 @@ If a user/token already has the direct permission (for example `convox:build:cre
 ## CLI Request Flow
 
 ```bash
-# Request approval for a deploy using the authenticated API token (from CONVOX_GATEWAY_API_TOKEN or --api-token)
-CONVOX_GATEWAY_API_TOKEN=... ./bin/convox-gateway deploy-approval request "Deploy 1234abcd to Production" --wait --timeout 20m
+# Request approval for a deploy using the authenticated API token (from RACK_GATEWAY_API_TOKEN or --api-token)
+RACK_GATEWAY_API_TOKEN=... ./bin/rack-gateway deploy-approval request "Deploy 1234abcd to Production" --wait --timeout 20m
 ```
 
 Flags:
 
-- `--api-token` – optional override for the API token used to authenticate (otherwise read from `CONVOX_GATEWAY_API_TOKEN` or stored config).
+- `--api-token` – optional override for the API token used to authenticate (otherwise read from `RACK_GATEWAY_API_TOKEN` or stored config).
 - `--rack` – selects which gateway to talk to (from CLI's multi-rack config). Each gateway is single-tenant.
 - `--wait` – blocks until the request is approved/rejected (with optional `--poll-interval` and `--timeout`).
 
@@ -61,7 +61,7 @@ If MFA step-up is required, the CLI automatically prompts before retrying the re
 Administrators can pre-stage an approval for a CI token without waiting for the pipeline to request it:
 
 ```bash
-./bin/convox-gateway deploy-approval pre-approve \
+./bin/rack-gateway deploy-approval pre-approve \
   01234567-89ab-cdef-0123-456789abcdef \
   "Deploy demo release" \
   --mfa-code 123456
@@ -113,7 +113,7 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 3. **Log in as an admin** (uses seeded credentials from the test fixtures)
 
    ```bash
-   ./bin/convox-gateway login test http://localhost:9447 --no-open
+   ./bin/rack-gateway login test http://localhost:9447 --no-open
    ```
 
    Open the printed URL in a browser, choose `admin@example.com`, and enter the displayed MFA code (or reuse the seeded secret `JBSWY3DPEHPK3PXP`).
@@ -121,7 +121,7 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 4. **Submit an approval request**
 
    ```bash
-   ./bin/convox-gateway deploy-approval request "Deploy demo release" --wait
+   ./bin/rack-gateway deploy-approval request "Deploy demo release" --wait
    ```
 
    The command blocks until a reviewer acts.
@@ -134,14 +134,14 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 6. **Pre-approve via CLI (optional)**
 
    ```bash
-   ./bin/convox-gateway deploy-approval pre-approve "Deploy demo release" --target-api-token-id <token-uuid> --mfa-code <code>
+   ./bin/rack-gateway deploy-approval pre-approve "Deploy demo release" --target-api-token-id <token-uuid> --mfa-code <code>
    ```
 
    This is useful when teeing up an approval before the pipeline runs.
 
 7. **Trigger a guarded action** (optional)
 
-   - Run a build via `convox-gateway convox builds create ...` using the same token to see the approval consumed.
+   - Run a build via `rack-gateway convox builds create ...` using the same token to see the approval consumed.
 
 8. **Shut down services**
    ```bash
@@ -156,7 +156,7 @@ The page lists pending, approved, rejected and consumed requests, with filters o
 
 ## CI Integration Notes
 
-- The CI job should call `convox-gateway deploy-approval request ... --wait` early in the pipeline and proceed with build/object/release steps only after the command exits successfully. Pipelines with a pre-approved token can skip this step and go straight into guarded actions.
+- The CI job should call `rack-gateway deploy-approval request ... --wait` early in the pipeline and proceed with build/object/release steps only after the command exits successfully. Pipelines with a pre-approved token can skip this step and go straight into guarded actions.
 - Approvals are single-use: once a build/object/release is recorded, a new request must be created for the next deploy.
 - When automating rollback flows, request a fresh approval to avoid failing the approval-consumption guard.
 

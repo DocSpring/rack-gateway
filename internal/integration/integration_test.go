@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/convox-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +44,7 @@ func TestIntegration(t *testing.T) {
 
 	// Check if convox CLI is installed - this is a required dependency
 	if _, err := exec.LookPath("convox"); err != nil {
-		t.Fatal("CRITICAL: Convox CLI is not installed. The convox-gateway requires the convox CLI to be installed. Install it from https://docs.convox.com/installation/cli/")
+		t.Fatal("CRITICAL: Convox CLI is not installed. The rack-gateway requires the convox CLI to be installed. Install it from https://docs.convox.com/installation/cli/")
 	}
 
 	// Check that binaries exist (should be built by task build before running tests)
@@ -108,8 +108,8 @@ func TestIntegration(t *testing.T) {
 func checkBinariesExist() error {
 	binaries := []string{
 		"../../bin/mock-convox",
-		"../../bin/convox-gateway-api",
-		"../../bin/convox-gateway",
+		"../../bin/rack-gateway-api",
+		"../../bin/rack-gateway",
 	}
 	for _, binary := range binaries {
 		if _, err := os.Stat(binary); err != nil {
@@ -144,7 +144,7 @@ func (s *TestServers) startGateway(t *testing.T) {
 		t.Fatalf("Failed to initialize test database: %v", err)
 	}
 
-	s.gatewayCmd = exec.Command("../../bin/convox-gateway-api")
+	s.gatewayCmd = exec.Command("../../bin/rack-gateway-api")
 	s.gatewayCmd.Env = append(os.Environ(),
 		"PORT="+gatewayPort,
 		"PORT="+gatewayPort,
@@ -434,19 +434,19 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 
 	// Test version command shows gateway version
 	t.Run("version", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "version")
+		cmd := exec.Command("../../bin/rack-gateway", "version")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, _ := cmd.CombinedOutput()
-		// Should show convox-gateway version
-		assert.Contains(t, string(output), "convox-gateway version")
+		// Should show rack-gateway version
+		assert.Contains(t, string(output), "rack-gateway version")
 	})
 
 	// Test convox command passes through to real convox CLI
 	t.Run("convox", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "help")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "help")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
@@ -459,7 +459,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 
 	// Test rack command shows current rack
 	t.Run("rack", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "rack")
+		cmd := exec.Command("../../bin/rack-gateway", "rack")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
@@ -472,7 +472,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 
 	// Test racks command lists configured racks
 	t.Run("racks", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "racks")
+		cmd := exec.Command("../../bin/rack-gateway", "racks")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
@@ -511,7 +511,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	require.NoError(t, os.WriteFile(tokenFile, configData, 0600))
 
 	// Try to run a command with invalid token
-	cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+	cmd := exec.Command("../../bin/rack-gateway", "convox", "apps")
 	cmd.Env = append(os.Environ(),
 		"GATEWAY_CLI_CONFIG_DIR="+configDir,
 	)
@@ -554,7 +554,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 
 	// Test 1: convox ps (lists processes)
 	t.Run("convox_ps", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
@@ -572,7 +572,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 
 	// Test 2: convox rack (shows rack info)
 	t.Run("convox_rack", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "rack")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "rack")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
@@ -589,7 +589,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 
 	// Test 3: convox apps (lists applications)
 	t.Run("convox_apps", func(t *testing.T) {
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "apps")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
@@ -654,7 +654,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		configDir := createUserConfig(t, "viewer@example.com", "viewer")
 
 		// Try to create an app (should be blocked)
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "apps", "create", "newapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
@@ -663,7 +663,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "permission denied") // Forbidden
 
 		// Try to delete a process (should be blocked)
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "stop", "web-123", "-a", "myapp")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "ps", "stop", "web-123", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
@@ -677,7 +677,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		configDir := createUserConfig(t, "ops@example.com", "ops")
 
 		// Try to deploy (should be blocked)
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "deploy", "-a", "myapp")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "deploy", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
@@ -687,7 +687,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.True(t, strings.Contains(msg, "You don't have permission to deploy releases.") || strings.Contains(msg, "permission denied"))
 
 		// Try to create an app (should be blocked)
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "apps", "create", "newapp")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "apps", "create", "newapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
@@ -696,7 +696,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "permission denied")
 
 		// Try to update environment variables (should be blocked)
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "env", "set", "KEY=value", "-a", "myapp")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "env", "set", "KEY=value", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
@@ -710,7 +710,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		configDir := createUserConfig(t, "unknown@example.com", "")
 
 		// Try to list apps (should be blocked)
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "apps")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
@@ -720,7 +720,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "user not found")
 
 		// Try to view processes (should be blocked)
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
@@ -729,7 +729,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "user not found")
 
 		// Try to get rack info (should be blocked)
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "rack")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "rack")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()
@@ -743,7 +743,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		// Viewer can read but not write
 		viewerConfig := createUserConfig(t, "viewer@example.com", "viewer")
 
-		cmd := exec.Command("../../bin/convox-gateway", "convox", "apps")
+		cmd := exec.Command("../../bin/rack-gateway", "convox", "apps")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+viewerConfig)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -755,7 +755,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		// Ops can manage processes but not deploy
 		opsConfig := createUserConfig(t, "ops@example.com", "ops")
 
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "ps", "-a", "myapp")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+opsConfig)
 		output, err = cmd.CombinedOutput()
 		if err != nil {
@@ -767,7 +767,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		// Deployer can deploy but not delete
 		deployerConfig := createUserConfig(t, "deployer@example.com", "deployer")
 
-		cmd = exec.Command("../../bin/convox-gateway", "convox", "builds", "-a", "myapp")
+		cmd = exec.Command("../../bin/rack-gateway", "convox", "builds", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+deployerConfig)
 		output, err = cmd.CombinedOutput()
 		require.NoError(t, err, "deployer should be able to list builds")

@@ -151,12 +151,12 @@ type System struct {
 var (
 	idCounter           atomic.Uint64
 	currentReleaseByApp = map[string]string{
-		"convox-gateway": "RAPP123456",
+		"rack-gateway": "RAPP123456",
 	}
 	releasesByApp = map[string][]Release{
-		"convox-gateway": {
-			{ID: "RAPI123456", App: "convox-gateway", Build: "BAPI123456", Description: "Deployed by mock", Version: 10, Created: time.Now().Add(-24 * time.Hour), Env: envString()},
-			{ID: "RAPI123455", App: "convox-gateway", Build: "BAPI123455", Description: "Deployed by mock", Version: 9, Created: time.Now().Add(-48 * time.Hour), Env: envString()},
+		"rack-gateway": {
+			{ID: "RAPI123456", App: "rack-gateway", Build: "BAPI123456", Description: "Deployed by mock", Version: 10, Created: time.Now().Add(-24 * time.Hour), Env: envString()},
+			{ID: "RAPI123455", App: "rack-gateway", Build: "BAPI123455", Description: "Deployed by mock", Version: 9, Created: time.Now().Add(-48 * time.Hour), Env: envString()},
 		},
 	}
 
@@ -281,7 +281,7 @@ Endpoints:
   GET  /health                                  # server health
   GET  /system                                  # rack info
 
-  GET  /apps                                    # list apps (convox-gateway, api, web)
+  GET  /apps                                    # list apps (rack-gateway, api, web)
   GET  /apps/{app}                              # app info
 
   GET  /apps/{app}/processes                    # list processes
@@ -451,10 +451,10 @@ func getBoolEnv(name string, defaultVal bool) bool {
 func getApps(w http.ResponseWriter, r *http.Request) {
 	apps := []App{
 		{
-			Name:       "convox-gateway",
+			Name:       "rack-gateway",
 			Status:     "running",
 			Generation: "3",
-			Release:    currentReleaseByApp["convox-gateway"],
+			Release:    currentReleaseByApp["rack-gateway"],
 			CreatedAt:  time.Now().Add(-720 * time.Hour),
 			UpdatedAt:  time.Now().Add(-24 * time.Hour),
 		},

@@ -1,4 +1,4 @@
-module github.com/DocSpring/convox-gateway
+module github.com/DocSpring/rack-gateway
 
 go 1.24.1
 

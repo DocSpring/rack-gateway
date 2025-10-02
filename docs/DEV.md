@@ -1,6 +1,6 @@
 # Development Setup Guide
 
-Complete guide for setting up the Convox Gateway development environment.
+Complete guide for setting up the Rack Gateway development environment.
 
 ## Prerequisites
 
@@ -14,8 +14,8 @@ Complete guide for setting up the Convox Gateway development environment.
 
 ```bash
 # Clone the repository
-git clone https://github.com/DocSpring/convox-gateway.git
-cd convox-gateway
+git clone https://github.com/DocSpring/rack-gateway.git
+cd rack-gateway
 
 # Install dependencies
 go mod download
@@ -54,16 +54,16 @@ task dev
 
 ```bash
 task go:build:cli
-./bin/convox-gateway login local http://localhost:$PORT
+./bin/rack-gateway login local http://localhost:$PORT
 # Browser opens (mock OAuth). Complete login, then CLI stores token locally.
 ```
 
 4. Try proxied Convox commands via gateway
 
 ```bash
-./bin/convox-gateway convox rack
-./bin/convox-gateway convox apps
-./bin/convox-gateway convox ps -a myapp
+./bin/rack-gateway convox rack
+./bin/rack-gateway convox apps
+./bin/rack-gateway convox ps -a myapp
 ```
 
 5. Admin UI
@@ -80,13 +80,13 @@ task dev:logs   # view logs
 
 ## Architecture Overview
 
-The Convox Gateway is split into multiple components:
+The Rack Gateway is split into multiple components:
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │  CLI (Client)   │───▶│  Gateway Server  │───▶│  Convox Rack    │
 │  ~/.config/     │    │  Admin-managed   │    │  Real API       │
-│  convox-gateway │    │  OAuth + RBAC    │    │                 │
+│  rack-gateway │    │  OAuth + RBAC    │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                               │
                               ▼
@@ -104,7 +104,7 @@ The Convox Gateway is split into multiple components:
 - Has access to real Convox rack tokens via environment variables
 - Runs OAuth authentication and audit logging
 
-**CLI Client** (`config/cli/` in dev, `~/.config/convox-gateway/` in production):
+**CLI Client** (`config/cli/` in dev, `~/.config/rack-gateway/` in production):
 
 - Stores `config.json` with JWT tokens per rack
 - Never has direct access to Convox rack credentials
@@ -165,7 +165,7 @@ The database stores:
 1. Go to "APIs & Services" → "OAuth consent screen"
 2. Choose "Internal" for Google Workspace users only
 3. Fill in required fields:
-   - App name: "Convox Gateway"
+   - App name: "Rack Gateway"
    - User support email: your email
    - Developer contact: your email
 4. Add scopes: `openid`, `email`, `profile`
@@ -199,11 +199,11 @@ The gateway automatically restricts access to users from your Google Workspace d
 task build
 
 # Run gateway server directly (useful for debugging)
-./bin/convox-gateway-api
+./bin/rack-gateway-api
 
 # Run CLI commands
-./bin/convox-gateway login staging http://localhost:8447
-./bin/convox-gateway convox apps
+./bin/rack-gateway login staging http://localhost:8447
+./bin/rack-gateway convox apps
 ```
 
 ### Using Docker Compose
@@ -239,10 +239,10 @@ task dev:down
 3. **Test CLI authentication**:
 
    ```bash
-   ./bin/convox-gateway login staging http://localhost:8447
+   ./bin/rack-gateway login staging http://localhost:8447
    # This opens browser for OAuth
 
-   ./bin/convox-gateway convox apps
+   ./bin/rack-gateway convox apps
    # Should proxy to mock Convox server
    ```
 
@@ -306,7 +306,7 @@ LOG_LEVEL = "debug"
 **CLI config issues**: The CLI stores config in different locations:
 
 - Development: `./config/cli/` (set by `GATEWAY_CLI_CONFIG_DIR`)
-- Production: `~/.config/convox-gateway/`
+- Production: `~/.config/rack-gateway/`
 
 ## File Structure
 
@@ -340,7 +340,7 @@ web/                   # React/TypeScript web UI
 1. Set up your Google OAuth application
 2. Add your OAuth credentials to `mise.local.toml`
 3. Run `task dev` and test the full authentication flow
-4. Try CLI commands: `./bin/convox-gateway login staging http://localhost:8447`
+4. Try CLI commands: `./bin/rack-gateway login staging http://localhost:8447`
 
 ## Production Deployment
 

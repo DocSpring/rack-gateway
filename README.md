@@ -4,7 +4,7 @@ It’s an independent, open source, community-maintained tool that works with Co
 
 ---
 
-# Convox Gateway
+# Rack Gateway
 
 API proxy for Convox racks with SSO, RBAC, and audit logging. SOC2 compliant.
 
@@ -20,12 +20,12 @@ The Convox source code is available on GitHub: https://github.com/convox/convox
 Convox Console is a closed-source, paid service that provides a web interface for
 managing your rack, including user management, RBAC, audit logging, workflows, and more.
 
-Convox Gateway can be thought of as a "community edition" for the hosted Convox Console.
+Rack Gateway can be thought of as a "community edition" for the hosted Convox Console.
 It is an open source, self-hosted interface for managing your rack with OAuth login, RBAC,
 audit logs, and secret redaction in env vars. We provide everything you need
 for SOC2 compliance on your own self-hosted infrastructure.
 
-**Convox Gateway is provided without any warranty or support. Use at your own risk.**
+**Rack Gateway is provided without any warranty or support. Use at your own risk.**
 
 Sign up for the official Convox Console or inquire about their enterprise license
 if you need more features or paid support. Convox Console provides many more advanced features
@@ -65,8 +65,8 @@ Get everything running locally with mock services - no Google OAuth setup requir
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/DocSpring/convox-gateway.git
-cd convox-gateway
+git clone https://github.com/DocSpring/rack-gateway.git
+cd rack-gateway
 go mod download
 cd web && pnpm install && cd ..
 
@@ -87,11 +87,11 @@ task dev
 
 ```bash
 # Login (opens mock OAuth in browser)
-./bin/convox-gateway login staging http://localhost:8447
+./bin/rack-gateway login staging http://localhost:8447
 
 # Run convox commands through the gateway
-./bin/convox-gateway convox apps
-./bin/convox-gateway convox ps
+./bin/rack-gateway convox apps
+./bin/rack-gateway convox ps
 ```
 
 ### Prerequisites
@@ -121,8 +121,8 @@ sh scripts/dev-setup.sh
 task build
 
 # Individual targets
-task go:build:gateway # Build gateway API server -> bin/convox-gateway-api
-task go:build:cli     # Build gateway CLI -> bin/convox-gateway
+task go:build:gateway # Build gateway API server -> bin/rack-gateway-api
+task go:build:cli     # Build gateway CLI -> bin/rack-gateway
 task docker     # Build Docker image
 task test       # Run all tests
 ```
@@ -170,21 +170,21 @@ export RACK_URL="https://convox:<jwt-token>@gateway.example.com"
 convox apps  # Uses standard convox CLI directly
 ```
 
-#### Option 2: convox-gateway CLI Wrapper (Convenience)
+#### Option 2: rack-gateway CLI Wrapper (Convenience)
 
 ```bash
 # Use our wrapper for easier multi-rack management
-convox-gateway login staging https://gateway.example.com
-convox-gateway convox apps  # Automatically sets RACK_URL with stored token
+rack-gateway login staging https://gateway.example.com
+rack-gateway convox apps  # Automatically sets RACK_URL with stored token
 
 # Set up convenient shell alias
-alias cx="convox-gateway convox"
+alias cx="rack-gateway convox"
 cx apps
 cx ps
 cx deploy
 ```
 
-The `convox-gateway` CLI wrapper is optional - it just provides:
+The `rack-gateway` CLI wrapper is optional - it just provides:
 
 - Automatic token management
 - Multi-rack configuration
@@ -197,18 +197,18 @@ The `convox-gateway` CLI wrapper is optional - it just provides:
 
 ```bash
 # Login to a rack (sets it as current)
-convox-gateway login staging https://gateway.example.com
+rack-gateway login staging https://gateway.example.com
 # Opens browser for Google OAuth
-# Stores configuration in ~/.config/convox-gateway/config.json
+# Stores configuration in ~/.config/rack-gateway/config.json
 ```
 
 ### Running Convox Commands
 
 ```bash
-# All convox commands go through "convox-gateway convox"
-convox-gateway convox apps
-convox-gateway convox ps
-convox-gateway convox deploy
+# All convox commands go through "rack-gateway convox"
+rack-gateway convox apps
+rack-gateway convox ps
+rack-gateway convox deploy
 
 # With the cx alias:
 cx apps
@@ -221,13 +221,13 @@ cx logs -f
 
 ```bash
 # Show current rack and status
-convox-gateway rack
+rack-gateway rack
 
 # List all configured racks
-convox-gateway racks
+rack-gateway racks
 
 # Switch to a different rack
-convox-gateway switch production
+rack-gateway switch production
 
 # With the cg alias:
 cg rack
@@ -239,21 +239,21 @@ cg switch eu-west
 
 The CLI determines which rack to use in this order:
 
-1. `--rack` flag: `convox-gateway --rack production convox apps`
-2. Environment variable: `CONVOX_GATEWAY_RACK=production cx apps`
-3. Current rack stored in `~/.config/convox-gateway/config.json`
+1. `--rack` flag: `rack-gateway --rack production convox apps`
+2. Environment variable: `RACK_GATEWAY_RACK=production cx apps`
+3. Current rack stored in `~/.config/rack-gateway/config.json`
 
 ### Generate shell completions:
 
 ```bash
 # Bash
-source <(./bin/convox-gateway completion bash)
+source <(./bin/rack-gateway completion bash)
 
 # Zsh
-source <(./bin/convox-gateway completion zsh)
+source <(./bin/rack-gateway completion zsh)
 
 # Fish
-./bin/convox-gateway completion fish | source
+./bin/rack-gateway completion fish | source
 ```
 
 ## Configuration
@@ -272,7 +272,7 @@ The database is automatically initialized on first run with an admin user from t
 
 The CLI stores its configuration separately:
 
-- `~/.config/convox-gateway/config.json`: Local CLI configuration (per developer)
+- `~/.config/rack-gateway/config.json`: Local CLI configuration (per developer)
 
 ## RBAC Model
 
@@ -331,16 +331,16 @@ docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
   -e GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET \
   -e RACK_TOKEN=$RACK_TOKEN \
-  convox-gateway-api:latest
+  rack-gateway-api:latest
 ```
 
 ### Convox
 
 ```bash
-convox apps create convox-gateway
-convox env set GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID -a convox-gateway
-convox env set GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET -a convox-gateway
-convox deploy -a convox-gateway
+convox apps create rack-gateway
+convox env set GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID -a rack-gateway
+convox env set GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET -a rack-gateway
+convox deploy -a rack-gateway
 ```
 
 ## CloudWatch Configuration
@@ -349,7 +349,7 @@ Set log retention:
 
 ```bash
 aws logs put-retention-policy \
-  --log-group-name /convox/your-rack/convox-gateway \
+  --log-group-name /convox/your-rack/rack-gateway \
   --retention-in-days 90
 ```
 
@@ -357,7 +357,7 @@ Create metric filters for security monitoring:
 
 ```bash
 aws logs put-metric-filter \
-  --log-group-name /convox/your-rack/convox-gateway \
+  --log-group-name /convox/your-rack/rack-gateway \
   --filter-name rbac-denies \
   --filter-pattern '[..., rbac_decision="deny", ...]' \
   --metric-transformations \

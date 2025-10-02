@@ -24,6 +24,6 @@ func NewHealthHandler() *HealthHandler {
 func (h *HealthHandler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{
 		Status:  "ok",
-		Service: "convox-gateway",
+		Service: "rack-gateway",
 	})
 }
