@@ -1,82 +1,42 @@
-import { Check, CircleAlert, Info, TriangleAlert, X } from 'lucide-react'
-import React from 'react'
+import { Toaster as HotToaster } from 'react-hot-toast'
 
-import {
-  Toast,
-  ToastAction,
-  ToastClose,
-  ToastDescription,
-  ToastProvider,
-  ToastTitle,
-  ToastViewport,
-} from '@/components/ui/toast'
-
-import { useToast } from '@/components/ui/use-toast'
-
-type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'info'
-type ToastIconKey = Exclude<ToastVariant, 'default'>
-
-const variantIcons: Partial<Record<ToastIconKey, React.ReactNode>> = {
-  success: <Check aria-hidden="true" className="h-5 w-5" />,
-  error: <CircleAlert aria-hidden="true" className="h-5 w-5" />,
-  warning: <TriangleAlert aria-hidden="true" className="h-5 w-5" />,
-  info: <Info aria-hidden="true" className="h-5 w-5" />,
-}
-
-const CloseIcon = <X aria-hidden="true" className="h-4 w-4" />
-
-function ToastViewportContainer() {
-  const { toasts, dismiss } = useToast()
-
+const Toaster = () => {
   return (
-    <ToastProvider swipeDirection="right">
-      {toasts.map(({ id, title, description, action, ...rest }) => {
-        const variant = rest.variant ?? 'default'
-        const Icon = variant !== 'default' ? variantIcons[variant as ToastIconKey] : undefined
-
-        return (
-          <Toast
-            key={id}
-            {...rest}
-            onOpenChange={(open) => {
-              if (!open) {
-                // Don't dismiss if user has text selected
-                const selection = window.getSelection()
-                if (selection && selection.toString().length > 0) {
-                  return
-                }
-                dismiss(id)
-              }
-            }}
-          >
-            <div className="flex w-full items-start gap-3">
-              {Icon ? <div className="mt-1 shrink-0 text-current">{Icon}</div> : null}
-              <div className="grid flex-1 gap-1 overflow-hidden pr-6">
-                {title ? <ToastTitle>{title}</ToastTitle> : null}
-                {description ? <ToastDescription>{description}</ToastDescription> : null}
-              </div>
-              <ToastClose className="shrink-0 text-current">
-                {CloseIcon}
-                <span className="sr-only">Close</span>
-              </ToastClose>
-            </div>
-            {action ? (
-              <div className="mt-2 flex justify-end">
-                {React.isValidElement(action) ? (
-                  action
-                ) : (
-                  <ToastAction altText="Toast action">{action}</ToastAction>
-                )}
-              </div>
-            ) : null}
-          </Toast>
-        )
-      })}
-      <ToastViewport />
-    </ToastProvider>
+    <HotToaster
+      position="bottom-right"
+      containerStyle={{
+        zIndex: 99999,
+      }}
+      containerClassName="select-text"
+      toastOptions={{
+        duration: 5000,
+        className: 'select-text',
+        style: {
+          background: 'var(--color-background)',
+          color: 'var(--color-foreground)',
+          border: '1px solid var(--color-border)',
+          borderRadius: '0.5rem',
+          padding: '1rem',
+          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+          userSelect: 'text',
+        },
+        success: {
+          style: {
+            background: 'rgb(5 150 105)',
+            color: 'white',
+            border: '1px solid rgb(6 95 70 / 0.4)',
+          },
+        },
+        error: {
+          style: {
+            background: 'var(--color-destructive)',
+            color: 'var(--color-destructive-foreground)',
+            border: '1px solid var(--color-destructive)',
+          },
+        },
+      }}
+    />
   )
 }
-
-const Toaster: React.FC = () => <ToastViewportContainer />
 
 export { Toaster }

@@ -49,6 +49,7 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogContentPrimitive> & {
   showCloseButton?: boolean
@@ -62,6 +63,16 @@ function DialogContent({
           className
         )}
         data-slot="dialog-content"
+        onInteractOutside={(e) => {
+          const target = e.target as Element
+          // Check for react-hot-toast
+          const isToast = target?.closest('[data-hot-toast-root]') || target?.closest('[role="status"]')
+          if (isToast) {
+            e.preventDefault()
+            return
+          }
+          onInteractOutside?.(e)
+        }}
         {...props}
       >
         {children}
