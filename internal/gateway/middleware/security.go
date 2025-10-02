@@ -32,10 +32,6 @@ const StyleNonceContextKey ctxKey = "cgw-style-nonce"
 var defaultStyleHashes = []string{
 	"'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='",
 	"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
-	"'sha256-7Ri/I+PfhgtpcL7hT4A0VJKI6g3pK0ZvIN09RQV4ZhI='", // react-hot-toast
-	"'sha256-D6zmPl9SPOA5yA8xbXKrLL0cVKn8FB4+jrOuJzlq4sI='", // react-hot-toast
-	"'sha256-S8WvDsuOheuw1pqhp6E2vrGq69NN3WOkq+WnT/Xdyy4='", // react-hot-toast
-	"'sha256-+sRv+5ZP+JjjyOwy5QD3ySS+npOAVIsOLsfJV6wyaM0='", // react-hot-toast
 }
 
 // SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
@@ -83,16 +79,18 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 		}
 		imgSrc := "img-src " + strings.Join(imageDirectives, " ")
 
-		scriptSrc := "script-src 'self'"
+		scriptDirectives := []string{"'self'"}
 		styleDirectives := []string{"'self'"}
 		if nonce != "" {
+			scriptDirectives = append(scriptDirectives, fmt.Sprintf("'nonce-%s'", nonce))
 			styleDirectives = append(styleDirectives, fmt.Sprintf("'nonce-%s'", nonce))
 		}
 		styleDirectives = append(styleDirectives, defaultStyleHashes...)
 		if !isProdLike {
-			scriptSrc += " 'unsafe-inline'"
+			scriptDirectives = append(scriptDirectives, "'unsafe-inline'")
 			styleDirectives = append(styleDirectives, "'unsafe-inline'")
 		}
+		scriptSrc := "script-src " + strings.Join(scriptDirectives, " ")
 		styleSrc := "style-src " + strings.Join(styleDirectives, " ")
 
 		cspParts := []string{

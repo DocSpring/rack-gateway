@@ -125,3 +125,51 @@ export function serializeAssertionCredential(
     },
   }
 }
+
+/**
+ * Call navigator.credentials.get with E2E test mode support
+ * In E2E mode, returns a mock credential to prevent triggering real hardware
+ */
+export async function getCredential(options: CredentialRequestOptions): Promise<Credential | null> {
+  if ((window as any).__e2e_test_mode__) {
+    // console.log('[E2E] Returning mock credential for navigator.credentials.get')
+    // Return a mock PublicKeyCredential that will pass serialization
+    const mockCredential = {
+      id: 'mock-credential-id',
+      type: 'public-key',
+      rawId: new Uint8Array([1, 2, 3, 4]).buffer,
+      response: {
+        clientDataJSON: new Uint8Array([5, 6, 7, 8]).buffer,
+        authenticatorData: new Uint8Array([9, 10, 11, 12]).buffer,
+        signature: new Uint8Array([13, 14, 15, 16]).buffer,
+        userHandle: null,
+      },
+    } as unknown as Credential
+    return mockCredential
+  }
+  return navigator.credentials.get(options)
+}
+
+/**
+ * Call navigator.credentials.create with E2E test mode support
+ * In E2E mode, returns a mock credential to prevent triggering real hardware
+ */
+export async function createCredential(
+  options: CredentialCreationOptions
+): Promise<Credential | null> {
+  if ((window as any).__e2e_test_mode__) {
+    // console.log('[E2E] Returning mock credential for navigator.credentials.create')
+    // Return a mock PublicKeyCredential that will pass serialization
+    const mockCredential = {
+      id: 'mock-credential-id',
+      type: 'public-key',
+      rawId: new Uint8Array([1, 2, 3, 4]).buffer,
+      response: {
+        clientDataJSON: new Uint8Array([5, 6, 7, 8]).buffer,
+        attestationObject: new Uint8Array([9, 10, 11, 12]).buffer,
+      },
+    } as unknown as Credential
+    return mockCredential
+  }
+  return navigator.credentials.create(options)
+}

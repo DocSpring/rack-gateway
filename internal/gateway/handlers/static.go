@@ -196,7 +196,14 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 	result := content
 
 	if nonce := middleware.StyleNonceFromContext(r.Context()); nonce != "" {
-		result = replacePlaceholder(result, "CGW_STYLE_NONCE", nonce)
+		// Build script block with nonce
+		isE2E := os.Getenv("E2E_TEST_MODE") == "true"
+		e2eScript := ""
+		if isE2E {
+			e2eScript = "window.__e2e_test_mode__=true;"
+		}
+		scriptBlock := fmt.Sprintf(`<script nonce="%s">window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, e2eScript)
+		result = bytes.ReplaceAll(result, []byte("{{CGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
 	}
 
 	if h.sessions != nil {

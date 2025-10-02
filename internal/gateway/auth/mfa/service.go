@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -589,6 +590,22 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 		return nil, err
 	}
 
+	// E2E test mode: skip WebAuthn validation and use first webauthn method
+	if os.Getenv("E2E_TEST_MODE") == "true" {
+		for _, method := range methods {
+			if method.Type == "webauthn" {
+				now := time.Now()
+				if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
+					return nil, err
+				}
+				return &VerificationResult{
+					MethodID: method.ID,
+				}, nil
+			}
+		}
+		return nil, fmt.Errorf("no WebAuthn method found for E2E test")
+	}
+
 	var session webauthn.SessionData
 	if err := json.Unmarshal(sessionJSON, &session); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
@@ -633,6 +650,22 @@ func (s *Service) VerifyWebAuthn(user *db.User, credentialJSON []byte) (*Verific
 	methods, err := s.db.ListMFAMethods(user.ID)
 	if err != nil {
 		return nil, err
+	}
+
+	// E2E test mode: skip WebAuthn validation and use first webauthn method
+	if os.Getenv("E2E_TEST_MODE") == "true" {
+		for _, method := range methods {
+			if method.Type == "webauthn" {
+				now := time.Now()
+				if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
+					return nil, err
+				}
+				return &VerificationResult{
+					MethodID: method.ID,
+				}, nil
+			}
+		}
+		return nil, fmt.Errorf("no WebAuthn method found for E2E test")
 	}
 
 	waUser := &webAuthnUser{user: user, methods: methods}

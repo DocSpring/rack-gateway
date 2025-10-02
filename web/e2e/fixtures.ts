@@ -52,8 +52,16 @@ export const test = base.extend({
       )
         return
 
-      // Always print console logs for diagnosis (after suppression checks)
-      console.log('console:', msg.type(), text)
+      // For CSP violations, print full error with stack trace
+      if (msg.type() === 'error' && /Content Security Policy|CSP/i.test(text)) {
+        console.log('console:', msg.type(), text)
+        const loc = msg.location()
+        console.log(`  at ${loc.url}:${loc.lineNumber}:${loc.columnNumber}`)
+      } else {
+        // Always print console logs for diagnosis (after suppression checks)
+        console.log('console:', msg.type(), text)
+      }
+
       if (msg.type() === 'error') {
         // Ignore all 401/Unauthorized console errors (expected before login)
         const is401 = /\b401\b/i.test(text) || /Unauthorized/i.test(text)

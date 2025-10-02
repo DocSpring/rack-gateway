@@ -40,7 +40,7 @@ function resolveSslConfig() {
 
 async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise<T> {
   const connectionString = resolveConnectionString()
-  console.log(`[withDbClient] Using connection string: ${connectionString}`)
+  // console.log(`[withDbClient] Using connection string: ${connectionString}`)
 
   const client = new Client({
     connectionString,

@@ -17,7 +17,11 @@ import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { getMFAStatus, startWebAuthnAssertion, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
-import { prepareRequestOptions, serializeAssertionCredential } from '@/lib/webauthn-utils'
+import {
+  getCredential,
+  prepareRequestOptions,
+  serializeAssertionCredential,
+} from '@/lib/webauthn-utils'
 
 type StepUpAction = (() => Promise<void>) | (() => void) | null
 
@@ -187,7 +191,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       }
 
       const credentialRequestOptions = prepareRequestOptions(assertionStart.options)
-      const credential = await navigator.credentials.get({
+      const credential = await getCredential({
         publicKey: credentialRequestOptions,
       })
 

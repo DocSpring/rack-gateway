@@ -151,6 +151,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_test?sslmode=disable
       GOOGLE_OAUTH_BASE_URL: http://mock-oauth-test:${TEST_MOCK_OAUTH_PORT:-9345}
       DEV_MODE: "true"
+      E2E_TEST_MODE: "true"
       FORCE_CSP_IN_DEV: "true"
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}

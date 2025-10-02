@@ -86,9 +86,7 @@ test.describe('Account security', () => {
   test.describe.configure({ mode: 'serial' })
 
   test.beforeEach(async () => {
-    console.log('[beforeEach] Resetting MFA for', ADMIN_EMAIL)
     await resetMfaFor(ADMIN_EMAIL)
-    console.log('[beforeEach] MFA reset complete')
   })
 
   test('user can manage MFA enrollment, backup codes, trusted devices, and removal flows', async ({
@@ -420,9 +418,7 @@ test.describe('Account security', () => {
     // Set up user with both TOTP and WebAuthn methods via database
     // Note: This runs AFTER beforeEach which resets MFA
     await setupBothMfaMethods(ADMIN_EMAIL)
-    console.log('[test] Setup complete, starting login')
     await login(page, { autoEnrollMfa: false })
-    console.log('[test] Login complete, navigating to security page')
 
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()

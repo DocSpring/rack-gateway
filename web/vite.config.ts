@@ -30,11 +30,11 @@ export default defineConfig(() => {
     ],
     build: {
       manifest: true,
+      minify: false,
+      sourcemap: true,
       ...(fastBuild
         ? {
-            minify: false,
             cssMinify: false,
-            sourcemap: false,
             target: 'esnext',
             modulePreload: false,
           }

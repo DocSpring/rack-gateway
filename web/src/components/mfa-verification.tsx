@@ -15,7 +15,11 @@ import {
   verifyWebAuthnAssertion,
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
-import { prepareRequestOptions, serializeAssertionCredential } from '@/lib/webauthn-utils'
+import {
+  getCredential,
+  prepareRequestOptions,
+  serializeAssertionCredential,
+} from '@/lib/webauthn-utils'
 
 type MFAVerificationProps = {
   mode: 'web' | 'cli' | 'step-up'
@@ -101,7 +105,7 @@ export function MFAVerification({
       }
 
       const credentialRequestOptions = prepareRequestOptions(assertionStart.options)
-      const credential = await navigator.credentials.get({
+      const credential = await getCredential({
         publicKey: credentialRequestOptions,
       })
 

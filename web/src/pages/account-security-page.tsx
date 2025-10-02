@@ -43,7 +43,11 @@ import {
 import { getErrorMessage } from '@/lib/error-utils'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { WebRoute } from '@/lib/routes'
-import { prepareCreationOptions, serializeRegistrationCredential } from '@/lib/webauthn-utils'
+import {
+  createCredential,
+  prepareCreationOptions,
+  serializeRegistrationCredential,
+} from '@/lib/webauthn-utils'
 
 type EnrollmentState = (StartTOTPEnrollmentResponse | StartWebAuthnEnrollmentResponse) & {
   qrDataUrl?: string | null
@@ -183,7 +187,7 @@ export function AccountSecurityPage() {
         const webAuthnOptions = prepareCreationOptions(data.public_key_options)
 
         // Call the browser WebAuthn API to create a credential
-        const credential = await navigator.credentials.create({
+        const credential = await createCredential({
           publicKey: webAuthnOptions,
         })
 

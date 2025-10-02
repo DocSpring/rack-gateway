@@ -18,7 +18,11 @@ import {
 import { authService } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
 import { DEFAULT_WEB_ROUTE, WebRoute } from '@/lib/routes'
-import { prepareRequestOptions, serializeAssertionCredential } from '@/lib/webauthn-utils'
+import {
+  getCredential,
+  prepareRequestOptions,
+  serializeAssertionCredential,
+} from '@/lib/webauthn-utils'
 
 type ChallengeMode = 'cli' | 'web'
 
@@ -218,7 +222,7 @@ export function MFAChallengePage() {
       const credentialRequestOptions = prepareRequestOptions(assertionStart.options)
 
       // Call the browser WebAuthn API to get an assertion
-      const credential = await navigator.credentials.get({
+      const credential = await getCredential({
         publicKey: credentialRequestOptions,
       })
 
