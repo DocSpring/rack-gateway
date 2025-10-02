@@ -39,9 +39,16 @@ export function LoginPage() {
         <ModeToggle />
       </div>
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <h1 className="mb-2 font-bold text-4xl text-foreground tracking-tight">Rack Gateway</h1>
-          <p className="text-muted-foreground">Secure access management for your Convox rack</p>
+        <div className="mb-16 text-center">
+          <div className="mb-4 flex flex-col items-center justify-center">
+            {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
+            <img alt="Rack Gateway Logo" width={52} height={52} aria-hidden className="-ml-1 mb-4" src="/.gateway/web/logo.svg" />
+            <h1 className="font-bold text-4xl text-foreground tracking-tight">Rack Gateway</h1>
+          </div>
+
+          <p className="text-muted-foreground text-sm">
+            Secure access management for your Convox rack
+          </p>
         </div>
 
         <Card>

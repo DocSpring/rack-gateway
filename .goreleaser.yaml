@@ -1,6 +1,6 @@
 version: 2
 
-project_name: convox-gateway
+project_name: rack-gateway
 
 before:
   hooks:
@@ -27,7 +27,7 @@ builds:
 
   - id: cli
     main: ./cmd/cli
-    binary: convox-gateway
+    binary: rack-gateway
     env:
       - CGO_ENABLED=0
     goos:
