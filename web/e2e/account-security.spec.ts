@@ -2,7 +2,13 @@ import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { clearStepUpSessions, enforceMfaFor, login, resetMfaFor } from './helpers'
+import {
+  clearStepUpSessions,
+  enforceMfaFor,
+  login,
+  resetMfaFor,
+  setupBothMfaMethods,
+} from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -80,7 +86,9 @@ test.describe('Account security', () => {
   test.describe.configure({ mode: 'serial' })
 
   test.beforeEach(async () => {
+    console.log('[beforeEach] Resetting MFA for', ADMIN_EMAIL)
     await resetMfaFor(ADMIN_EMAIL)
+    console.log('[beforeEach] MFA reset complete')
   })
 
   test('user can manage MFA enrollment, backup codes, trusted devices, and removal flows', async ({
@@ -99,18 +107,26 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
-    // Click Enable MFA button
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
-
-    // Wait for method selector to appear and choose TOTP
-    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
-
+    // Set up response listener BEFORE clicking Enable MFA
     const enrollmentResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/enroll/totp/start') &&
         response.request().method() === 'POST'
     )
-    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
+
+    // Click Enable MFA button - may show method selector or auto-start TOTP
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+    // Check if method selector appeared (WebAuthn available)
+    const methodSelector = cardByTitle(page, 'Choose MFA Method')
+    const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
+
+    if (methodSelectorVisible) {
+      // Method selector shown - click TOTP option
+      await methodSelector.getByRole('button', { name: /TOTP Authenticator/ }).click()
+    }
+
+    // Wait for enrollment response (from either auto-start or after clicking TOTP)
     const enrollmentResponse = await enrollmentResponsePromise
     const enrollment = (await enrollmentResponse.json()) as { secret: string }
 
@@ -123,6 +139,13 @@ test.describe('Account security', () => {
     await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
 
     await expect(mfaCard.getByText('Enabled', { exact: true })).toBeVisible()
+
+    // Close the auto-opened edit modal (QOL feature opens edit dialog after enrollment)
+    const editModal = page.getByText('Edit MFA Method Label')
+    if (await editModal.isVisible().catch(() => false)) {
+      await page.keyboard.press('Escape')
+      await expect(editModal).toHaveCount(0)
+    }
 
     let methodsCard: Locator = cardByTitle(page, 'Registered MFA Methods').first()
     await expect(methodsCard).toBeVisible()
@@ -218,16 +241,26 @@ test.describe('Account security', () => {
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-    // Enable MFA
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
-    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
-
+    // Set up response listener BEFORE clicking Enable MFA
     const enrollmentResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/enroll/totp/start') &&
         response.request().method() === 'POST'
     )
-    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
+
+    // Click Enable MFA button - may show method selector or auto-start TOTP
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+    // Check if method selector appeared (WebAuthn available)
+    const methodSelector = cardByTitle(page, 'Choose MFA Method')
+    const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
+
+    if (methodSelectorVisible) {
+      // Method selector shown - click TOTP option
+      await methodSelector.getByRole('button', { name: /TOTP Authenticator/ }).click()
+    }
+
+    // Wait for enrollment response (from either auto-start or after clicking TOTP)
     const enrollmentResponse = await enrollmentResponsePromise
     const enrollment = (await enrollmentResponse.json()) as { secret: string }
     const secret = enrollment.secret
@@ -243,11 +276,7 @@ test.describe('Account security', () => {
     const methodsTable = methodsCard.locator('table').first()
     await expect(methodsTable.locator('tbody tr')).toHaveCount(1)
 
-    // Find and click the edit button (pencil icon)
-    const editButton = methodsTable.locator('tbody tr').first().getByRole('button').first()
-    await editButton.click()
-
-    // Verify edit dialog appears
+    // The edit dialog is auto-opened after enrollment (QOL feature)
     const editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
     await expect(editDialog).toBeVisible()
     await expect(editDialog.getByLabel('Label')).toHaveValue('Authenticator App')
@@ -283,17 +312,26 @@ test.describe('Account security', () => {
     const mfaCard = cardByTitle(page, 'Multi-Factor Authentication').first()
     await expect(mfaCard).toBeVisible()
 
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
-
-    // Wait for method selector and choose TOTP
-    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
-
+    // Set up response listener BEFORE clicking Enable MFA
     const enrollmentResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/enroll/totp/start') &&
         response.request().method() === 'POST'
     )
-    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
+
+    // Click Enable MFA button - may show method selector or auto-start TOTP
+    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+    // Check if method selector appeared (WebAuthn available)
+    const methodSelector = cardByTitle(page, 'Choose MFA Method')
+    const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
+
+    if (methodSelectorVisible) {
+      // Method selector shown - click TOTP option
+      await methodSelector.getByRole('button', { name: /TOTP Authenticator/ }).click()
+    }
+
+    // Wait for enrollment response (from either auto-start or after clicking TOTP)
     const enrollmentResponse = await enrollmentResponsePromise
     const enrollment = (await enrollmentResponse.json()) as { secret: string }
     const secret = enrollment.secret
@@ -306,6 +344,13 @@ test.describe('Account security', () => {
     }
     await page.getByRole('button', { name: /^Confirm$/ }).click()
     await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
+
+    // Close the auto-opened edit modal (QOL feature opens edit dialog after enrollment)
+    const editModal = page.getByText('Edit MFA Method Label')
+    if (await editModal.isVisible().catch(() => false)) {
+      await page.keyboard.press('Escape')
+      await expect(editModal).toHaveCount(0)
+    }
 
     await enforceMfaFor(ADMIN_EMAIL)
 
@@ -369,5 +414,72 @@ test.describe('Account security', () => {
     await expect(page.getByText('Multi-Factor Authentication Required')).toBeVisible({
       timeout: 15_000,
     })
+  })
+
+  test('user can set and persist preferred MFA method', async ({ page }) => {
+    // Set up user with both TOTP and WebAuthn methods via database
+    // Note: This runs AFTER beforeEach which resets MFA
+    await setupBothMfaMethods(ADMIN_EMAIL)
+    console.log('[test] Setup complete, starting login')
+    await login(page, { autoEnrollMfa: false })
+    console.log('[test] Login complete, navigating to security page')
+
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Wait for MFA status to load and verify both methods are shown
+    const methodsCard = cardByTitle(page, 'Registered MFA Methods')
+    await expect(methodsCard).toBeVisible({ timeout: 10_000 })
+
+    // Verify we have the preferred method selector
+    const preferredMethodSection = page.getByText('Preferred sign-in method')
+    await expect(preferredMethodSection).toBeVisible()
+
+    // Default should be TOTP (first in database)
+    const totpRadio = page.getByRole('radio', { name: /TOTP Authenticator/i })
+    const webauthnRadio = page.getByRole('radio', { name: /WebAuthn.*Security Key/i })
+
+    await expect(totpRadio).toBeChecked()
+    await expect(webauthnRadio).not.toBeChecked()
+
+    // Switch to WebAuthn
+    const updatePreferredPromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/preferred-method') &&
+        response.request().method() === 'PUT'
+    )
+    await webauthnRadio.click()
+    await updatePreferredPromise
+
+    // Verify selection changed
+    await expect(webauthnRadio).toBeChecked()
+    await expect(totpRadio).not.toBeChecked()
+
+    // Reload the page and verify the preference persisted
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // WebAuthn should still be selected after reload
+    await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).toBeChecked()
+    await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).not.toBeChecked()
+
+    // Switch back to TOTP
+    const updateBackPromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/preferred-method') &&
+        response.request().method() === 'PUT'
+    )
+    await page.getByRole('radio', { name: /TOTP Authenticator/i }).click()
+    await updateBackPromise
+
+    // Verify it switched back
+    await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).toBeChecked()
+    await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).not.toBeChecked()
+
+    // Final reload to confirm persistence
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+    await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).toBeChecked()
+    await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).not.toBeChecked()
   })
 })

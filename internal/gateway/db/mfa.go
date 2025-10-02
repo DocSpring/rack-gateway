@@ -124,15 +124,19 @@ func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 	for rows.Next() {
 		var method MFAMethod
 		var label sql.NullString
+		var secret sql.NullString
 		var transports sql.NullString
 		var metadata sql.NullString
 		var confirmed sql.NullTime
 		var lastUsed sql.NullTime
-		if err := rows.Scan(&method.ID, &method.UserID, &method.Type, &label, &method.Secret, &method.CredentialID, &method.PublicKey, &transports, &metadata, &method.CreatedAt, &confirmed, &lastUsed); err != nil {
+		if err := rows.Scan(&method.ID, &method.UserID, &method.Type, &label, &secret, &method.CredentialID, &method.PublicKey, &transports, &metadata, &method.CreatedAt, &confirmed, &lastUsed); err != nil {
 			return nil, fmt.Errorf("failed to scan MFA method: %w", err)
 		}
 		if label.Valid {
 			method.Label = label.String
+		}
+		if secret.Valid {
+			method.Secret = secret.String
 		}
 		if transports.Valid {
 			var arr []string
@@ -174,15 +178,19 @@ func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
 	for rows.Next() {
 		var method MFAMethod
 		var label sql.NullString
+		var secret sql.NullString
 		var transports sql.NullString
 		var metadata sql.NullString
 		var confirmed sql.NullTime
 		var lastUsed sql.NullTime
-		if err := rows.Scan(&method.ID, &method.UserID, &method.Type, &label, &method.Secret, &method.CredentialID, &method.PublicKey, &transports, &metadata, &method.CreatedAt, &confirmed, &lastUsed); err != nil {
+		if err := rows.Scan(&method.ID, &method.UserID, &method.Type, &label, &secret, &method.CredentialID, &method.PublicKey, &transports, &metadata, &method.CreatedAt, &confirmed, &lastUsed); err != nil {
 			return nil, fmt.Errorf("failed to scan MFA method: %w", err)
 		}
 		if label.Valid {
 			method.Label = label.String
+		}
+		if secret.Valid {
+			method.Secret = secret.String
 		}
 		if transports.Valid {
 			var arr []string

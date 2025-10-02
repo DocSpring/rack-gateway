@@ -40,6 +40,7 @@ function resolveSslConfig() {
 
 async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise<T> {
   const connectionString = resolveConnectionString()
+  console.log(`[withDbClient] Using connection string: ${connectionString}`)
 
   const client = new Client({
     connectionString,
@@ -130,5 +131,82 @@ export async function resetMfaForUser(email: string) {
 export async function enforceMfaForUser(email: string) {
   await withDbClient(async (client) => {
     await client.query('UPDATE users SET mfa_enforced_at = NOW() WHERE email = $1;', [email])
+  })
+}
+
+export async function setupBothMfaMethodsForUser(email: string) {
+  await withDbClient(async (client) => {
+    // First reset any existing MFA state
+    await client.query(
+      'DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = $1);',
+      [email]
+    )
+    await client.query(
+      'DELETE FROM mfa_backup_codes WHERE user_id = (SELECT id FROM users WHERE email = $1);',
+      [email]
+    )
+
+    // Insert TOTP method (using real secret from dev database)
+    await client.query(
+      `INSERT INTO mfa_methods (user_id, type, secret, label, created_at, confirmed_at, last_used_at)
+       VALUES (
+         (SELECT id FROM users WHERE email = $1),
+         'totp',
+         'K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU',
+         'Authenticator App',
+         NOW(),
+         NOW(),
+         NULL
+       );`,
+      [email]
+    )
+
+    // Insert WebAuthn method (using real Yubikey credential from dev database)
+    await client.query(
+      `INSERT INTO mfa_methods (user_id, type, credential_id, public_key, label, created_at, confirmed_at, last_used_at)
+       VALUES (
+         (SELECT id FROM users WHERE email = $1),
+         'webauthn',
+         decode('b08fa0de532b22a9537c63309329c7cad86d8f4c72dc3f05f94e9f7d2d8acfe9e5a9d9a88794e2a8f4bd3de69371ed17ae2e0229e4ed9f37896381a322a1016f', 'hex'),
+         decode('a5010203262001215820debc463a75d894212b5b9717110b10c330217872751093370c2cf78a3fd25d7b2258208f4e7ecfdc836e2984883b666666b54306151e9f785b0935e9415d9cd3baeea6', 'hex'),
+         'Security Key',
+         NOW(),
+         NOW(),
+         NULL
+       );`,
+      [email]
+    )
+
+    // Generate backup codes
+    const backupCodes = [
+      'BACKUP01',
+      'BACKUP02',
+      'BACKUP03',
+      'BACKUP04',
+      'BACKUP05',
+      'BACKUP06',
+      'BACKUP07',
+      'BACKUP08',
+      'BACKUP09',
+      'BACKUP10',
+    ]
+    for (const code of backupCodes) {
+      await client.query(
+        `INSERT INTO mfa_backup_codes (user_id, code_hash, used_at, created_at)
+         VALUES (
+           (SELECT id FROM users WHERE email = $1),
+           $2,
+           NULL,
+           NOW()
+         );`,
+        [email, code]
+      )
+    }
+
+    // Mark user as MFA enrolled and set default preferred method to TOTP
+    await client.query(
+      'UPDATE users SET mfa_enrolled = TRUE, preferred_mfa_method = $2 WHERE email = $1;',
+      [email, 'totp']
+    )
   })
 }

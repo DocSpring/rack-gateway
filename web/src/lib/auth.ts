@@ -77,6 +77,7 @@ class AuthService {
         rack,
         mfaEnrolled: Boolean(payload.mfa_enrolled),
         mfaRequired: Boolean(payload.mfa_required),
+        preferred_mfa_method: payload.preferred_mfa_method ?? null,
         recentStepUpExpiresAt: payload.recent_step_up_expires_at ?? null,
         has_trusted_device: Boolean(payload.has_trusted_device),
         deploy_approvals_enabled: payload.deploy_approvals_enabled ?? true,

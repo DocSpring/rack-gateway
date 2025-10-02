@@ -213,6 +213,13 @@ export function AccountSecurityPage() {
         refreshUser().catch(() => {
           /* noop */
         })
+
+        // Automatically open the edit dialog so user can customize the label
+        setEditingMethod({
+          id: data.method_id ?? 0,
+          label: 'Security Key',
+        })
+        setEditLabel('Security Key')
       } catch (error) {
         const msg = getErrorMessage(error)
         toast.error(`WebAuthn enrollment failed: ${msg}`)
@@ -248,6 +255,9 @@ export function AccountSecurityPage() {
   const confirmEnrollmentMutation = useMutation({
     mutationFn: confirmTOTPEnrollment,
     onSuccess: () => {
+      const methodId = enrollment?.method_id ?? 0
+      const label = enrollmentLabel.trim() || DEFAULT_MFA_LABEL
+
       toast.success('Multi-factor authentication enabled')
       setEnrollment(null)
       setEnrollmentLabel(DEFAULT_MFA_LABEL)
@@ -258,6 +268,13 @@ export function AccountSecurityPage() {
       refreshUser().catch(() => {
         /* noop */
       })
+
+      // Automatically open the edit dialog so user can customize the label
+      setEditingMethod({
+        id: methodId,
+        label,
+      })
+      setEditLabel(label)
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
@@ -318,11 +335,11 @@ export function AccountSecurityPage() {
 
   const updatePreferredMethodMutation = useMutation({
     mutationFn: updatePreferredMFAMethod,
-    onSuccess: () => {
-      toast.success('Preferred MFA method updated')
-      refreshUser().catch(() => {
+    onSuccess: async () => {
+      await refreshUser().catch(() => {
         /* noop */
       })
+      toast.success('Preferred MFA method updated')
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))

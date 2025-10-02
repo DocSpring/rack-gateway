@@ -1,7 +1,12 @@
 import type { Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { APIRoute, WebRoute } from '@/lib/routes'
-import { enforceMfaForUser, expireStepUpForAllSessions, resetMfaForUser } from './db'
+import {
+  enforceMfaForUser,
+  expireStepUpForAllSessions,
+  resetMfaForUser,
+  setupBothMfaMethodsForUser,
+} from './db'
 import { expect } from './fixtures'
 
 export type LoginOptions = {
@@ -66,6 +71,10 @@ export async function enforceMfaFor(email: string) {
 
 export async function clearStepUpSessions() {
   await expireStepUpForAllSessions()
+}
+
+export async function setupBothMfaMethods(email: string) {
+  await setupBothMfaMethodsForUser(email)
 }
 
 export async function ensureMfaEnrollment(page: Page) {
