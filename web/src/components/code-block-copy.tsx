@@ -24,9 +24,9 @@ export function CodeBlockCopy({ children, code }: CodeBlockCopyProps) {
     // biome-ignore lint/a11y/noStaticElementInteractions: Hover detection for showing copy button
     <div
       className="group relative"
-      role="presentation"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      role="presentation"
     >
       {children}
       {isHovered && (
