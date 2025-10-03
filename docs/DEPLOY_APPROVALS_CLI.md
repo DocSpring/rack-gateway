@@ -16,6 +16,7 @@ rack-gateway deploy-approval approve <uuid>
 ```
 
 **Flow:**
+
 1. Fetch request details by UUID
 2. Display request info (API token name, app, release, message, etc.)
 3. Prompt for MFA:
@@ -31,11 +32,14 @@ rack-gateway deploy-approval approve
 ```
 
 **Flow:**
+
 1. Fetch all pending requests
 2. **If zero requests:**
+
    ```
    No pending deploy approval requests.
    ```
+
    Exit 0
 
 3. **If one request:**
@@ -43,6 +47,7 @@ rack-gateway deploy-approval approve
 
 4. **If multiple requests:**
    Show interactive selector (fzf-style):
+
    ```
    Select deploy approval request (type to filter, ↑↓ to navigate, Enter to select):
 
@@ -52,6 +57,7 @@ rack-gateway deploy-approval approve
    ```
 
 5. **Show request details:**
+
    ```
    Deploy Approval Request: req_abc123
 
@@ -65,15 +71,18 @@ rack-gateway deploy-approval approve
    ```
 
 6. **Prompt for approval:**
+
    ```
    Approve this request? [y/N]: y
    ```
 
 7. **MFA verification:**
+
    - If WebAuthn: `Touch your security key to approve...` (auto-detects device)
    - If TOTP: `Enter your MFA code: ______`
 
 8. **Optional notes:**
+
    ```
    Add approval notes (optional, press Enter to skip): Approved after verifying tests passed
    ```
@@ -109,6 +118,7 @@ CREATE INDEX idx_deploy_approval_requests_public_id
 ```
 
 **Update model:** `internal/gateway/db/types.go`
+
 ```go
 type DeployApprovalRequest struct {
     ID       int64  `json:"-"`  // Hide internal ID
@@ -120,6 +130,7 @@ type DeployApprovalRequest struct {
 ### 2. Update Gateway API to use UUIDs
 
 **Files to modify:**
+
 - `internal/gateway/handlers/deploy_approvals.go` - Accept UUID in routes
 - `internal/gateway/routes/routes.go` - Change routes from `/id/:id` to `/id/:public_id`
 - `internal/gateway/db/deploy_approvals.go` - Add `GetByPublicID()` method
@@ -156,6 +167,7 @@ func Select(items []Item, prompt string) (*Item, error) {
 ```
 
 **Example usage:**
+
 ```go
 items := make([]selector.Item, len(requests))
 for i, req := range requests {
@@ -176,16 +188,18 @@ if err != nil {
 
 ### 4. Update CLI Approve Command
 
-**File:** `cmd/cli/deploy_approvals.go`
+**File:** `cmd/rack-gateway/deploy_approvals.go`
 
 **Current function:** `approveDeployApproval(id int64, notes string)`
 
 **New function signature:**
+
 ```go
 func approveDeployApproval(publicID string, notes string) error
 ```
 
 **Logic:**
+
 ```go
 func approveCommand(args []string) error {
     var selectedID string
@@ -293,6 +307,7 @@ go get github.com/manifoldco/promptui
 ```
 
 Alternative (more features, larger):
+
 ```bash
 go get github.com/charmbracelet/bubbletea
 go get github.com/charmbracelet/bubbles

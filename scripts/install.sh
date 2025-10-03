@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # rack-gateway CLI installer
-# - Builds ./cmd/cli and installs the binary as "rack-gateway"
+# - Builds ./cmd/rack-gateway and installs the binary as "rack-gateway"
 # - Default install dir: /usr/local/bin (override with INSTALL_DIR or --dir)
 
 usage() {
@@ -104,7 +104,7 @@ LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILDTIME}"
 echo "Building CLI (version: $VERSION)..."
 GOFLAGS=${GOFLAGS:-}
 # Note: CGO is required for WebAuthn/FIDO2 support (HID device access)
-CGO_ENABLED=1 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/rack-gateway ./cmd/cli
+CGO_ENABLED=1 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/rack-gateway ./cmd/rack-gateway
 
 popd >/dev/null
 

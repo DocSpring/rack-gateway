@@ -3,6 +3,7 @@
 ## Current State
 
 ✅ **Completed:**
+
 - Removed Yubico OTP from UI (requires cloud validation or self-hosted server)
 - Selected `github.com/go-ctap/ctaphid` for FIDO2/CTAP2 client library
 - Added system library checks to `scripts/install.sh` for Linux (libudev-dev, libusb-1.0-0-dev)
@@ -18,7 +19,7 @@
   - `VerifyWebAuthnAssertionRequest` - Accepts assertion response and session data
 - **CLI WebAuthn integration:**
   - Created `internal/cli/webauthn` package with `GetAssertion()` and `CheckAvailability()` functions
-  - Integrated into CLI login flow at `cmd/cli/main.go:performMFAVerification()`
+  - Integrated into CLI login flow at `cmd/rack-gateway/main.go:performMFAVerification()`
   - Calls MFA status endpoint to detect WebAuthn enrollment
   - Attempts WebAuthn first if available, falls back to TOTP if it fails or no device found
   - Properly handles origin, challenge, and assertion flow
@@ -43,6 +44,7 @@
 ## Architecture Notes
 
 **Library Choice: `go-ctap/ctaphid`**
+
 - Pure Go FIDO2/CTAP2 protocol implementation
 - CGO only for macOS HID transport
 - Linux requires: libudev-dev, libusb-1.0-0-dev
@@ -50,6 +52,7 @@
 - Windows: not yet tested
 
 **Flow:**
+
 1. CLI calls MFA status endpoint → knows what methods user has
 2. If WebAuthn available → CLI calls assertion start endpoint → gets challenge
 3. CLI uses `internal/cli/webauthn.GetAssertion()` → prompts user to touch device
@@ -58,6 +61,7 @@
 6. On WebAuthn failure → CLI falls back to TOTP prompt
 
 **Alternative Considered:**
+
 - `github.com/keys-pub/go-libfido2` - wraps Yubico's libfido2 C library
 - Rejected because it requires libfido2 system library on all platforms
 - go-ctap/ctaphid only needs system libs on Linux, macOS works natively
@@ -65,7 +69,7 @@
 ## Related Files
 
 - `internal/cli/webauthn/webauthn.go` - WebAuthn client implementation
-- `cmd/cli/main.go` - CLI login flow (performMFAVerification function)
+- `cmd/rack-gateway/main.go` - CLI login flow (performMFAVerification function)
 - `scripts/install.sh` - System dependency checks
 - `internal/gateway/handlers/auth.go` - Gateway MFA handlers
 - `internal/gateway/auth/mfa/service.go` - MFA service with WebAuthn support

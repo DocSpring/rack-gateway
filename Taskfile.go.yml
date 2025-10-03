@@ -82,12 +82,12 @@ tasks:
     sources:
       - go.*
       - Taskfile.go.yml
-      - cmd/cli/**/*.go
+      - cmd/rack-gateway/**/*.go
       - internal/**/*.go
     generates:
       - bin/rack-gateway
     cmds:
-      - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway ./cmd/cli/
+      - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway ./cmd/rack-gateway/
 
   build:mock:
     desc: Build mock Convox server -> bin/mock-convox
@@ -115,7 +115,7 @@ tasks:
       - internal/**/*.go
       - scripts/**/*.sh
     cmds:
-      - ./scripts/safe-test.sh -v -race -short -timeout 30s ./cmd/gateway/... ./cmd/cli/... ./cmd/mock-convox/... ./internal/gateway/... ./internal/integration/...
+      - ./scripts/safe-test.sh -v -race -short -timeout 30s ./cmd/gateway/... ./cmd/rack-gateway/... ./cmd/mock-convox/... ./internal/gateway/... ./internal/integration/...
       - ./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
 
   format:
