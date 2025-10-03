@@ -57,6 +57,7 @@ less tmp/ci-logs/<run-id>_<job-name>.log
 The `fetch-github-actions-logs` script downloads logs for all failing jobs to `tmp/ci-logs/` where you can analyze them with `rg`, `grep`, or any text tools. The `tmp/` directory is gitignored.
 
 **Workflow:**
+
 1. Push changes and run `wait-for-github-actions` to monitor the CI run
 2. If CI fails, run `fetch-github-actions-logs` to download failure logs
 3. Use `rg` to search for the actual error messages
@@ -203,21 +204,25 @@ Flow:
 **This project uses PostgreSQL, NOT SQLite.**
 
 **Development environment:**
+
 - Database: `gateway_dev`
 - Connection: `postgres://postgres:postgres@postgres:5432/gateway_dev?sslmode=disable`
 - Docker container: `rack-gateway-postgres-1`
 - Host port: `55432` (to avoid conflicts with local Postgres)
 
 **Test environment:**
+
 - Database: `gateway_test`
 - Connection: `postgres://postgres:postgres@postgres:5432/gateway_test?sslmode=disable`
 
 **Querying the dev database:**
+
 ```bash
 docker exec rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT ..."
 ```
 
 **Querying the test database:**
+
 ```bash
 docker exec rack-gateway-postgres-1 psql -U postgres -d gateway_test -c "SELECT ..."
 ```
@@ -372,13 +377,13 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 
 ### 🌐 Web Development
 
-| Command                   | Description                   |
-| ------------------------- | ----------------------------- |
-| `task web:build`          | Build web SPA                 |
+| Command                   | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `task web:build`          | Build web SPA                                         |
 | `task web:lint:fix`       | Auto-fix web linting issues (preferred over web:lint) |
-| `task web:test`           | Run Vitest unit tests         |
-| `task web:e2e`            | Run Playwright E2E tests      |
-| `task web:lint:typecheck` | TypeScript type checking only |
+| `task web:test`           | Run Vitest unit tests                                 |
+| `task web:e2e`            | Run Playwright E2E tests                              |
+| `task web:lint:typecheck` | TypeScript type checking only                         |
 
 ### 🧪 E2E Testing
 
@@ -503,3 +508,7 @@ Don't leave old code lying around. When you see it, tidy it.
 - We never maintain backwards-compatibility shims or legacy fallbacks.
 
 And ALWAYS run `task ci` before claiming that any work is complete!
+
+---
+
+Always start by running: git ls-files -- ':!web/src/api/schemas/\*\*'

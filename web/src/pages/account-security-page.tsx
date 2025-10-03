@@ -256,9 +256,6 @@ export function AccountSecurityPage() {
   const confirmEnrollmentMutation = useMutation({
     mutationFn: confirmTOTPEnrollment,
     onSuccess: async () => {
-      const methodId = enrollment?.method_id ?? 0
-      const label = enrollmentLabel.trim() || DEFAULT_MFA_LABEL
-
       toast.success('Multi-factor authentication enabled')
       setEnrollment(null)
       setEnrollmentLabel(DEFAULT_MFA_LABEL)
@@ -269,13 +266,6 @@ export function AccountSecurityPage() {
       refreshUser().catch(() => {
         /* noop */
       })
-
-      // Automatically open the edit dialog so user can customize the label
-      setEditingMethod({
-        id: methodId,
-        label,
-      })
-      setEditLabel(label)
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
