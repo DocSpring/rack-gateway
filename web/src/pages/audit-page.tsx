@@ -3,19 +3,13 @@ import { format } from 'date-fns'
 import { Calendar as CalendarIcon, Download, RefreshCw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Calendar } from '@/components/ui/calendar'
+import { NativeSelect } from '@/components/ui/native-select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { type AuditLogRecord, AuditLogsPane } from '../components/audit-logs-pane'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 
@@ -766,114 +760,99 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="action-type">Action Type</Label>
-              <Select
-                onValueChange={(value) => {
-                  setActionTypeFilter(value)
+              <NativeSelect
+                className="min-w-[200px]"
+                id="action-type"
+                onChange={(event) => {
+                  setActionTypeFilter(event.target.value)
                   setPage(1)
                 }}
                 value={actionTypeFilter}
               >
-                <SelectTrigger className="min-w-[200px]" id="action-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(ACTION_TYPES).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {Object.entries(ACTION_TYPES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="resource-type">Resource Type</Label>
-              <Select
-                onValueChange={(value) => {
-                  setResourceTypeFilter(value)
+              <NativeSelect
+                className="min-w-[180px]"
+                id="resource-type"
+                onChange={(event) => {
+                  setResourceTypeFilter(event.target.value)
                   setPage(1)
                 }}
                 value={resourceTypeFilter}
               >
-                <SelectTrigger className="min-w-[180px]" id="resource-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(RESOURCE_TYPES).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {Object.entries(RESOURCE_TYPES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select
-                onValueChange={(value) => {
-                  setStatusFilter(value)
+              <NativeSelect
+                className="min-w-[180px]"
+                id="status"
+                onChange={(event) => {
+                  setStatusFilter(event.target.value)
                   setPage(1)
                 }}
                 value={statusFilter}
               >
-                <SelectTrigger className="min-w-[180px]" id="status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(STATUS_TYPES).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {Object.entries(STATUS_TYPES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
 
             <div className="mx-4 flex flex-col space-y-2">
               <Label htmlFor="date-range">Date Range</Label>
-              <Select
-                onValueChange={(value) => {
-                  setDateRange(value)
+              <NativeSelect
+                className="min-w-[180px]"
+                id="date-range"
+                onChange={(event) => {
+                  setDateRange(event.target.value)
                   setPage(1)
                 }}
                 value={dateRange}
               >
-                <SelectTrigger className="min-w-[180px]" id="date-range">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15m">Last 15 Minutes</SelectItem>
-                  <SelectItem value="1h">Last Hour</SelectItem>
-                  <SelectItem value="24h">Last 24 Hours</SelectItem>
-                  <SelectItem value="7d">Last 7 Days</SelectItem>
-                  <SelectItem value="30d">Last 30 Days</SelectItem>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="custom">Custom…</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="15m">Last 15 Minutes</option>
+                <option value="1h">Last Hour</option>
+                <option value="24h">Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="all">All Time</option>
+                <option value="custom">Custom…</option>
+              </NativeSelect>
             </div>
 
             <div className="mx-6 mr-0 flex flex-col space-y-2">
               <Label htmlFor="per-page">Per Page</Label>
-              <Select
-                onValueChange={(v) => {
-                  setPerPage(Number(v))
+              <NativeSelect
+                className="min-w-[80px]"
+                id="per-page"
+                onChange={(event) => {
+                  setPerPage(Number(event.target.value))
                   setPage(1)
                 }}
                 value={String(perPage)}
               >
-                <SelectTrigger className="min-w-[80px]" id="per-page">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                  <SelectItem value="200">200</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </NativeSelect>
             </div>
           </div>
 

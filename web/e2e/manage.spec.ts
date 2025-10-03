@@ -227,12 +227,10 @@ test('audit logs: view and filter', async ({ page }) => {
   await expect(table).toBeVisible()
 
   // Filter by Action Type: Token Management
-  await page.locator('#action-type').click()
-  await page.getByRole('option', { name: /Token Management/i }).click()
+  await page.selectOption('#action-type', 'tokens')
 
   // Filter by Status: Success
-  await page.locator('#status').click()
-  await page.getByRole('option', { name: /Success/i }).click()
+  await page.selectOption('#status', 'success')
 
   // Search for the created token name
   await page.getByLabel('Search').fill(tokenName)

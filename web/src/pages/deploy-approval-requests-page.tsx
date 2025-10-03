@@ -18,13 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { NativeSelect } from '@/components/ui/native-select'
 import {
   Table,
   TableBody,
@@ -238,24 +232,20 @@ export function DeployApprovalRequestsPage() {
           error={isError ? error : null}
           headerRight={
             <div className="flex items-center gap-2">
-              <Select
-                onValueChange={(value) => {
-                  setStatusFilter(value as StatusFilter)
+              <NativeSelect
+                className="h-9 w-40"
+                onChange={(event) => {
+                  setStatusFilter(event.target.value as StatusFilter)
                   setPage(1)
                 }}
                 value={statusFilter}
               >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Filter status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
             </div>
           }
           loading={isLoading}
