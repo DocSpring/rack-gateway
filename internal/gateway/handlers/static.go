@@ -202,7 +202,7 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 		if isE2E {
 			e2eScript = "window.__e2e_test_mode__=true;"
 		}
-		scriptBlock := fmt.Sprintf(`<script nonce="%s">window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, e2eScript)
+		scriptBlock := fmt.Sprintf(`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, nonce, e2eScript)
 		result = bytes.ReplaceAll(result, []byte("{{CGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
 	}
 
