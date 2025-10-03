@@ -94,6 +94,42 @@ function resolveMode(channelParam: string | null, state: string | null): Challen
   return state ? 'cli' : 'web'
 }
 
+async function handleWebAuthnCLI(
+  state: string | null,
+  sessionData: string,
+  assertionResponse: string
+): Promise<string> {
+  if (!state) {
+    throw new Error(
+      'Missing login session information. Close this window and try again from the CLI.'
+    )
+  }
+  const result = await verifyCliMfa({
+    state,
+    method: 'webauthn',
+    session_data: sessionData,
+    assertion_response: assertionResponse,
+  })
+  const target = result?.redirect?.trim()
+  return target && target !== '' ? target : WebRoute('cli/auth/success')
+}
+
+async function handleWebAuthnWeb(
+  sessionData: string,
+  assertionResponse: string,
+  trustDevice: boolean,
+  redirectTarget: string | null
+): Promise<string> {
+  await verifyWebAuthnAssertion({
+    session_data: sessionData,
+    assertion_response: assertionResponse,
+    trust_device: trustDevice,
+  })
+  return redirectTarget
+    ? WebRoute(redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget)
+    : DEFAULT_WEB_ROUTE
+}
+
 export function MFAChallengePage() {
   const search = useMemo(() => new URLSearchParams(window.location.search), [])
   const state = extractParam(search, 'state')
@@ -177,22 +213,20 @@ export function MFAChallengePage() {
             onVerify={async (params) => {
               if (params.method === 'totp') {
                 await mutation.mutateAsync({ code: params.code, trust_device: params.trust_device })
-              } else {
-                // WebAuthn
-                await verifyWebAuthnAssertion({
-                  session_data: params.session_data,
-                  assertion_response: params.assertion_response,
-                  trust_device: params.trust_device,
-                })
-
-                // Navigate on success
-                const defaultDestination = redirectTarget
-                  ? WebRoute(
-                      redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget
-                    )
-                  : DEFAULT_WEB_ROUTE
-                window.location.assign(defaultDestination)
+                return
               }
+
+              // WebAuthn
+              const destination =
+                mode === 'cli'
+                  ? await handleWebAuthnCLI(state, params.session_data, params.assertion_response)
+                  : await handleWebAuthnWeb(
+                      params.session_data,
+                      params.assertion_response,
+                      params.trust_device,
+                      redirectTarget
+                    )
+              window.location.assign(destination)
             }}
             showTrustDevice={mode === 'web'}
           >
