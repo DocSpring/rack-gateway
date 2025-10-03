@@ -76,6 +76,16 @@
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.623 0.214 259.815);
+
+  /* react-hot-toast colors */
+  --rht-success-bg: #16a34a;
+  --rht-success-fg: #ffffff;
+  --rht-error-bg: var(--destructive);
+  --rht-error-fg: var(--destructive-foreground);
+  --rht-warning-bg: #ea580c;
+  --rht-warning-fg: #ffffff;
+  --rht-info-bg: var(--primary);
+  --rht-info-fg: var(--primary-foreground);
 }
 
 .dark {
@@ -111,6 +121,16 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
+
+  /* react-hot-toast colors for dark mode */
+  --rht-success-bg: #16a34a;
+  --rht-success-fg: #ffffff;
+  --rht-error-bg: var(--destructive);
+  --rht-error-fg: var(--destructive-foreground);
+  --rht-warning-bg: #ea580c;
+  --rht-warning-fg: #ffffff;
+  --rht-info-bg: var(--primary);
+  --rht-info-fg: var(--primary-foreground);
 }
 
 @layer base {

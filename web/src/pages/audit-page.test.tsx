@@ -306,16 +306,14 @@ describe('AuditPage', () => {
         expect(screen.getByText('admin@example.com')).toBeInTheDocument()
       })
 
-      // Find and click action type filter by its id
+      // Find and change action type filter by its id
       const actionTypeSelect = document.getElementById('action-type')
       if (!actionTypeSelect) {
         throw new Error('Action type select not found')
       }
-      fireEvent.click(actionTypeSelect)
 
-      // Select "Authentication"
-      const authOption = screen.getByText('Authentication')
-      fireEvent.click(authOption)
+      // Select "Authentication" (value is 'auth')
+      fireEvent.change(actionTypeSelect, { target: { value: 'auth' } })
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(expect.stringContaining('action_type=auth'))
@@ -335,16 +333,14 @@ describe('AuditPage', () => {
         expect(screen.getByText('admin@example.com')).toBeInTheDocument()
       })
 
-      // Find and click resource type filter by its id
+      // Find and change resource type filter by its id
       const rtSelect = document.getElementById('resource-type')
       if (!rtSelect) {
         throw new Error('Resource type select not found')
       }
-      fireEvent.click(rtSelect)
 
-      // Select a unique option to avoid header text collisions: "API Token"
-      const apiTokenOption = screen.getByRole('option', { name: 'API Token' })
-      fireEvent.click(apiTokenOption)
+      // Select "API Token" (value is 'api_token')
+      fireEvent.change(rtSelect, { target: { value: 'api_token' } })
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(expect.stringContaining('resource_type=api_token'))
@@ -364,16 +360,14 @@ describe('AuditPage', () => {
         expect(screen.getByText('admin@example.com')).toBeInTheDocument()
       })
 
-      // Find and click status filter by its id
+      // Find and change status filter by its id
       const statusSelect = document.getElementById('status')
       if (!statusSelect) {
         throw new Error('Status select not found')
       }
-      fireEvent.click(statusSelect)
 
-      // Select "Failed"
-      const failedOption = screen.getByText('Failed')
-      fireEvent.click(failedOption)
+      // Select "Failed" (value is 'failed')
+      fireEvent.change(statusSelect, { target: { value: 'failed' } })
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(expect.stringContaining('status=failed'))
@@ -393,16 +387,14 @@ describe('AuditPage', () => {
         expect(screen.getByText('admin@example.com')).toBeInTheDocument()
       })
 
-      // Find and click date range filter by its id
+      // Find and change date range filter by its id
       const dateRangeSelect = document.getElementById('date-range')
       if (!dateRangeSelect) {
         throw new Error('Date range select not found')
       }
-      fireEvent.click(dateRangeSelect)
 
-      // Select "Last 24 Hours"
-      const last24Option = screen.getByText('Last 24 Hours')
-      fireEvent.click(last24Option)
+      // Select "Last 24 Hours" (value is '24h')
+      fireEvent.change(dateRangeSelect, { target: { value: '24h' } })
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(expect.stringContaining('range=24h'))
@@ -498,8 +490,7 @@ describe('AuditPage', () => {
         if (!actionTypeSelect) {
           throw new Error('Action type select not found')
         }
-        fireEvent.click(actionTypeSelect)
-        fireEvent.click(screen.getByText('Authentication'))
+        fireEvent.change(actionTypeSelect, { target: { value: 'auth' } })
 
         await waitFor(() => {
           expect(window.location.search).toBe('?action_type=auth')
@@ -525,8 +516,7 @@ describe('AuditPage', () => {
       if (!dateRangeSelect) {
         throw new Error('Date range select not found')
       }
-      fireEvent.click(dateRangeSelect)
-      fireEvent.click(screen.getByText('Custom…'))
+      fireEvent.change(dateRangeSelect, { target: { value: 'custom' } })
 
       const startDateInput = screen.getByLabelText('Start') as HTMLInputElement
       const startTimeInput = screen.getByLabelText('Start time') as HTMLInputElement

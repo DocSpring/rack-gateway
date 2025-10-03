@@ -8,7 +8,7 @@ const baseClass =
 
 const NativeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
   ({ className, children, ...props }, ref) => (
-    <select ref={ref} className={cn(baseClass, className)} {...props}>
+    <select className={cn(baseClass, className)} ref={ref} {...props}>
       {children}
     </select>
   )

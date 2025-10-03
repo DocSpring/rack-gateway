@@ -28,11 +28,9 @@ type ctxKey string
 
 const StyleNonceContextKey ctxKey = "cgw-style-nonce"
 
-// Some inline styles injected by frameworks/runtime
-var defaultStyleHashes = []string{
-	"'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='",
-	"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
-}
+// Set any SHA-256 hashes if any libraries need to set inline styles or scripts.
+// (This used to be required for goober and react-hot-toast but is no longer needed.)
+var defaultStyleHashes = []string{}
 
 // SecurityHeaders configures secure default headers via gin-contrib/secure with project-specific tweaks.
 
