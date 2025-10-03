@@ -19,6 +19,7 @@ import {
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
+import { CodeBlockCopy } from './code-block-copy'
 import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
@@ -292,18 +293,26 @@ export function Layout() {
           </DialogHeader>
           <div className="space-y-4 text-sm">
             <p>Clone the repository and install the CLI:</p>
-            <div className="rounded-md border bg-muted p-3 font-mono text-xs">
-              <div>git clone git@github.com:DocSpring/rack-gateway.git</div>
-              <div className="mt-1">cd rack-gateway</div>
-              <div className="mt-1">./scripts/install.sh</div>
-            </div>
+            <CodeBlockCopy
+              code={
+                'git clone git@github.com:DocSpring/rack-gateway.git\ncd rack-gateway\n./scripts/install.sh'
+              }
+            >
+              <div className="rounded-md border bg-muted p-3 font-mono text-xs">
+                <div>git clone git@github.com:DocSpring/rack-gateway.git</div>
+                <div className="mt-1">cd rack-gateway</div>
+                <div className="mt-1">./scripts/install.sh</div>
+              </div>
+            </CodeBlockCopy>
 
             <p className="pt-1">Authenticate the CLI against this gateway:</p>
-            <div className="rounded-md border bg-muted p-3 font-mono text-xs">
-              <div>
-                rack-gateway login {rackAlias} {gatewayOrigin}
+            <CodeBlockCopy code={`rack-gateway login ${rackAlias} ${gatewayOrigin}`}>
+              <div className="rounded-md border bg-muted p-3 font-mono text-xs">
+                <div>
+                  rack-gateway login {rackAlias} {gatewayOrigin}
+                </div>
               </div>
-            </div>
+            </CodeBlockCopy>
             <p className="text-muted-foreground">
               After logging in, you can run Convox commands via the gateway using{' '}
               <span className="font-mono">rack-gateway convox …</span>

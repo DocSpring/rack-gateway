@@ -79,7 +79,7 @@ importers:
         version: 19.2.0(react@19.2.0)
       react-hot-toast:
         specifier: github:DocSpring/react-hot-toast#fix/csp-inline-styles-dist
-        version: https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/31d7febc351183fb01e7cad5898fbd8a1e5ac091(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        version: https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/57f8977e980492baf6b2da1b76092dceb8f74771(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.3.1
@@ -2354,9 +2354,8 @@ packages:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
     engines: {node: '>=10'}
 
-  goober@https://codeload.github.com/DocSpring/goober/tar.gz/cde88b876e91253305be40f03e1ca56fe0f591bb:
-    resolution: {tarball: https://codeload.github.com/DocSpring/goober/tar.gz/cde88b876e91253305be40f03e1ca56fe0f591bb}
-    version: 2.1.17
+  goober@2.1.18:
+    resolution: {integrity: sha512-2vFqsaDVIT9Gz7N6kAL++pLpp41l3PfDuusHcjnGLfR6+huZkl6ziX+zgVC3ZxpqWhzH6pyDdGrCeDhMIvwaxw==}
     peerDependencies:
       csstype: ^3.0.10
 
@@ -3158,8 +3157,8 @@ packages:
     peerDependencies:
       react: ^19.2.0
 
-  react-hot-toast@https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/31d7febc351183fb01e7cad5898fbd8a1e5ac091:
-    resolution: {tarball: https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/31d7febc351183fb01e7cad5898fbd8a1e5ac091}
+  react-hot-toast@https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/57f8977e980492baf6b2da1b76092dceb8f74771:
+    resolution: {tarball: https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/57f8977e980492baf6b2da1b76092dceb8f74771}
     version: 2.6.0
     engines: {node: '>=10'}
     peerDependencies:
@@ -6363,7 +6362,7 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
-  goober@https://codeload.github.com/DocSpring/goober/tar.gz/cde88b876e91253305be40f03e1ca56fe0f591bb(csstype@3.1.3):
+  goober@2.1.18(csstype@3.1.3):
     dependencies:
       csstype: 3.1.3
 
@@ -7131,10 +7130,10 @@ snapshots:
       react: 19.2.0
       scheduler: 0.27.0
 
-  react-hot-toast@https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/31d7febc351183fb01e7cad5898fbd8a1e5ac091(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  react-hot-toast@https://codeload.github.com/DocSpring/react-hot-toast/tar.gz/57f8977e980492baf6b2da1b76092dceb8f74771(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       csstype: 3.1.3
-      goober: https://codeload.github.com/DocSpring/goober/tar.gz/cde88b876e91253305be40f03e1ca56fe0f591bb(csstype@3.1.3)
+      goober: 2.1.18(csstype@3.1.3)
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
 
