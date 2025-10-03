@@ -17,25 +17,15 @@ tasks:
     desc: Up full {{.STACK}} stack
     cmds:
       - |
-        {{- if .DEPENDENCY_SERVICES -}}
-        docker compose up -d {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.DEPENDENCY_SERVICES}}
-        {{- end -}}
-      - docker compose up -d {{if not (eq .SKIP_BUILD "true")}}--build{{end}} {{.SERVICES}}
-      - |
-        if docker ps --format '{{"{{.Names}}"}}' | grep -q '^rack-gateway-postgres-1$'; then
-          for _ in $(seq 1 20); do
-            if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
-              for dbname in gateway_dev gateway_test; do
-                if ! docker compose exec -T postgres psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" | grep -q 1; then
-                  docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${dbname}\";"
-                fi
-              done
-              break
-            fi
-            sleep 1
-          done
-        fi
-        true
+        WAIT_GATEWAY_PORT={{.WAIT_GATEWAY_PORT}} \
+        WAIT_WEB_PORT={{.WAIT_WEB_PORT}} \
+        WAIT_MOCK_OAUTH_PORT={{.WAIT_MOCK_OAUTH_PORT}} \
+        SKIP_BUILD={{.SKIP_BUILD | default "false"}} \
+        DEPENDENCY_SERVICES="{{.DEPENDENCY_SERVICES}}" \
+        SERVICES="{{.SERVICES}}" \
+        STACK="{{.STACK}}" \
+        PROFILE="{{.PROFILE}}" \
+        bash scripts/docker-up.sh
 
   up:gateway:
     desc: Up {{.STACK}} gateway
@@ -55,7 +45,12 @@ tasks:
   wait:
     desc: Wait for {{.STACK}} stack readiness
     cmds:
-      - WEB_PORT={{if .WAIT_WEB_PORT}}{{.WAIT_WEB_PORT}}{{else}}{{.WAIT_GATEWAY_PORT}}{{end}} GATEWAY_PORT={{.WAIT_GATEWAY_PORT}} MOCK_OAUTH_PORT={{.WAIT_MOCK_OAUTH_PORT}} CHECK_VITE_PROXY={{.WAIT_CHECK_VITE_PROXY | default "false"}} bash scripts/wait-for-services.sh
+      - |
+        WEB_PORT={{if .WAIT_WEB_PORT}}{{.WAIT_WEB_PORT}}{{else}}{{.WAIT_GATEWAY_PORT}}{{end}} \
+        GATEWAY_PORT={{.WAIT_GATEWAY_PORT}} \
+        MOCK_OAUTH_PORT={{.WAIT_MOCK_OAUTH_PORT}} \
+        CHECK_VITE_PROXY={{.WAIT_CHECK_VITE_PROXY | default "false"}} \
+        bash scripts/wait-for-services.sh
 
   down:
     desc: Down full {{.STACK}} stack

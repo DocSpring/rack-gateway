@@ -76,6 +76,12 @@ export type MFAVerificationFormProps = {
   preferredMethod?: MFAMethod | 'auto'
 
   /**
+   * Auto-trigger WebAuthn verification when it's selected
+   * @default false
+   */
+  autoTriggerWebAuthn?: boolean
+
+  /**
    * Render function that receives state and components.
    * Allows full control over layout while reusing verification logic.
    */
@@ -155,6 +161,7 @@ export function MFAVerificationForm({
   trustDeviceDefault = true,
   allowMethodSwitch = true,
   preferredMethod = 'auto',
+  autoTriggerWebAuthn = false,
   children,
 }: MFAVerificationFormProps) {
   const [code, setCode] = useState('')
@@ -287,6 +294,23 @@ export function MFAVerificationForm({
       setIsVerifying(false)
     }
   }, [trustDevice, onVerify, onSuccess, onError])
+
+  // Auto-trigger WebAuthn verification when it's the user's preferred method
+  // Only triggers when server says preferred_method is webauthn, not when user manually switches
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on useWebAuthn change
+  useEffect(() => {
+    if (
+      autoTriggerWebAuthn &&
+      useWebAuthn &&
+      !isVerifying &&
+      !error &&
+      mfaStatus?.preferred_method === 'webauthn'
+    ) {
+      handleVerifyWebAuthn().catch(() => {
+        /* errors handled in handleVerifyWebAuthn */
+      })
+    }
+  }, [useWebAuthn, autoTriggerWebAuthn])
 
   // Pre-built components for convenience
   const TOTPInput = (

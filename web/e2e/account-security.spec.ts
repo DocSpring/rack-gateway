@@ -42,7 +42,7 @@ async function completeStepUp(page: Page, secret: string) {
 
   const code = authenticator.generate(secret)
   await dialog.getByLabel('Verification code').fill(code)
-  await dialog.getByRole('button', { name: /^Verify$/ }).click()
+  // Auto-submits on 6-digit code, no need to click Verify button
   await expect(dialog).toBeHidden({ timeout: 4000 })
 }
 
@@ -77,7 +77,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   }
 
   await mfaDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
-  await mfaDialog.getByRole('button', { name: /^Verify$/ }).click()
+  // Auto-submits on 6-digit code, no need to click Verify button
   await expect(mfaDialog).toBeHidden({ timeout: 5000 })
   await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
 }
@@ -274,7 +274,9 @@ test.describe('Account security', () => {
     const methodsTable = methodsCard.locator('table').first()
     await expect(methodsTable.locator('tbody tr')).toHaveCount(1)
 
-    // The edit dialog is auto-opened after enrollment (QOL feature)
+    // Click edit button (first button in actions column) to open the edit dialog
+    await methodsTable.locator('tbody tr').first().getByRole('button').first().click()
+
     const editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
     await expect(editDialog).toBeVisible()
     await expect(editDialog.getByLabel('Label')).toHaveValue('Authenticator App')
@@ -383,7 +385,7 @@ test.describe('Account security', () => {
       timeout: 15_000,
     })
     await stepUpDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
-    await stepUpDialog.getByRole('button', { name: /^Verify$/ }).click()
+    // Auto-submits on 6-digit code, no need to click Verify button
     await expect(stepUpDialog).toBeHidden({ timeout: 5000 })
 
     await revokeResponsePromise

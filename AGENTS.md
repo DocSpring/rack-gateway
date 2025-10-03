@@ -393,6 +393,33 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 | `task web:e2e` | Web E2E against dedicated test stack |
 | `task go:e2e`  | CLI E2E against dedicated test stack |
 
+**Running E2E tests manually:**
+
+You can run specific E2E tests directly with Playwright for faster iteration when **updating test files only**:
+
+```bash
+# Run specific test file
+cd web
+PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test e2e/account-security.spec.ts
+
+# Run specific test by name
+PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test --grep "user can manage MFA enrollment"
+```
+
+**CRITICAL: If you're updating application code (not just test files), you MUST rebuild first:**
+- `task web:e2e` automatically rebuilds the gateway and restarts containers
+- Running Playwright manually does NOT rebuild - you must run `task web:e2e` or `task docker:test:up` first
+
+**When to use manual Playwright commands:**
+- ✅ Iterating on test selectors or assertions
+- ✅ Debugging test failures (faster feedback loop)
+- ✅ Writing new test cases
+
+**When you MUST use `task web:e2e`:**
+- ✅ Testing changes to application code (components, pages, API handlers)
+- ✅ After modifying any `.tsx`, `.ts`, or `.go` files
+- ✅ Before marking work as complete
+
 ### 🎭 Mock Services
 
 | Command                 | Description             |

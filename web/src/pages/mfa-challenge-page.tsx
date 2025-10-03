@@ -172,6 +172,7 @@ export function MFAChallengePage() {
           ) : null}
 
           <MFAVerificationForm
+            autoTriggerWebAuthn={mode === 'web'}
             onError={(err) => setError(mapServerError(mode, err))}
             onVerify={async (params) => {
               if (params.method === 'totp') {
