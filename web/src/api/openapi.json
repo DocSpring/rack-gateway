@@ -1630,6 +1630,88 @@
                 }
             }
         },
+        "/admin/users/{email}/lock": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Locks a user account to prevent login",
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Lock a user account",
+                "parameters": [
+                    {
+                        "description": "User email",
+                        "name": "email",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.LockUserRequest"
+                            }
+                        }
+                    },
+                    "description": "Lock reason",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users/{email}/roles": {
             "put": {
                 "security": [
@@ -1893,6 +1975,77 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/handlers.RevokeSessionResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{email}/unlock": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Unlocks a previously locked user account",
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Unlock a user account",
+                "parameters": [
+                    {
+                        "description": "User email",
+                        "name": "email",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": true
                                 }
                             }
                         }
@@ -3863,6 +4016,15 @@
                     "id": {
                         "type": "integer"
                     },
+                    "locked_at": {
+                        "type": "string"
+                    },
+                    "locked_by_user_id": {
+                        "type": "integer"
+                    },
+                    "locked_reason": {
+                        "type": "string"
+                    },
                     "mfa_enforced_at": {
                         "type": "string"
                     },
@@ -3883,6 +4045,12 @@
                     },
                     "suspended": {
                         "type": "boolean"
+                    },
+                    "unlocked_at": {
+                        "type": "string"
+                    },
+                    "unlocked_by_user_id": {
+                        "type": "integer"
                     },
                     "updated_at": {
                         "type": "string"
@@ -4233,6 +4401,17 @@
                         "type": "string"
                     },
                     "status": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.LockUserRequest": {
+                "type": "object",
+                "required": [
+                    "reason"
+                ],
+                "properties": {
+                    "reason": {
                         "type": "string"
                     }
                 }

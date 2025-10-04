@@ -347,11 +347,13 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 
 	// Verify with appropriate method
 	var verification *mfa.VerificationResult
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
 	switch method {
 	case "totp":
-		verification, err = h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code))
+		verification, err = h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code), ipAddress, userAgent, nil)
 	case "webauthn":
-		verification, err = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse))
+		verification, err = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ipAddress, userAgent, nil)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_method"})
 		return
@@ -976,10 +978,16 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code)); err != nil {
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+	var sessionID *int64
+	if authUser.Session != nil {
+		sessionID = &authUser.Session.ID
+	}
+	if _, err := h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code), ipAddress, userAgent, sessionID); err != nil {
 		// Notify about failed MFA attempt
 		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, ipAddress, userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -1124,10 +1132,16 @@ func (h *AuthHandler) VerifyWebAuthnAssertion(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse)); err != nil {
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+	var sessionID *int64
+	if authUser.Session != nil {
+		sessionID = &authUser.Session.ID
+	}
+	if _, err := h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ipAddress, userAgent, sessionID); err != nil {
 		// Notify about failed MFA attempt
 		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, ipAddress, userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

@@ -220,6 +220,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.GET("/users/:email/sessions", adminHandler.ListUserSessions)
 				admin.POST("/users/:email/sessions/:sessionID/revoke", adminHandler.RevokeUserSession)
 				admin.POST("/users/:email/sessions/revoke_all", adminHandler.RevokeAllUserSessions)
+				admin.POST("/users/:email/lock", adminHandler.LockUser)
+				admin.POST("/users/:email/unlock", adminHandler.UnlockUser)
 
 				// Audit logs
 				admin.GET("/audit", adminHandler.ListAuditLogs)

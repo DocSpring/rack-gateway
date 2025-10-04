@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { APIRoute, WebRoute } from '@/lib/routes'
 import {
+  clearMfaAttempts,
   enforceMfaForUser,
   expireStepUpForAllSessions,
   resetMfaForUser,
@@ -25,6 +26,9 @@ export type LoginOptions = {
 
 export async function login(page: Page, options: LoginOptions = {}) {
   const { userCardText = 'Admin User', autoEnrollMfa = true } = options
+
+  // Clear MFA rate limit attempts before each login to prevent test pollution
+  await clearMfaAttempts()
 
   await page.goto(WebRoute('login'))
   const btn = page
@@ -71,6 +75,7 @@ export async function enforceMfaFor(email: string) {
 
 export async function clearStepUpSessions() {
   await expireStepUpForAllSessions()
+  await clearMfaAttempts()
 }
 
 export async function setupBothMfaMethods(email: string) {

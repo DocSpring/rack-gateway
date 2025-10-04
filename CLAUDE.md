@@ -75,22 +75,21 @@ The `fetch-github-actions-logs` script downloads logs for all failing jobs to `t
 
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
-**NEVER mark a task as "completed" unless ALL of these pass:**
+**NEVER mark a task as "completed" unless this passes:**
+
+### Run Full CI Suite
+
+```bash
+task ci
+```
+
+This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pass completely before marking work complete.**
 
 ### 🔧 Build Requirements
 
 **⛔ FORBIDDEN: Never use `go build` directly - creates unwanted binaries in root**
 
-- `task ci` - All linters, typechecks, unit tests, builds, and E2E tests pass
 - If CI fails remotely, use `fetch-github-actions-logs` to download and analyze failure logs
-
-### 📏 Code Quality
-
-- `go vet ./...` - No vet issues
-- `golangci-lint run` or equivalent linting passes
-- `cd web && pnpm lint` - Frontend linting passes
-- No TypeScript compilation errors
-- No unused imports or variables
 
 ### 🧪 Integration Tests
 

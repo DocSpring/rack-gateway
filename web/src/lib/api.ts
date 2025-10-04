@@ -165,6 +165,12 @@ export const revokeUserSession = (
 export const revokeAllUserSessions = (email: string): Promise<RevokeAllSessionsResponse> =>
   unwrap(gateway.postAdminUsersEmailSessionsRevokeAll(email))
 
+export const lockUser = (email: string, reason: string): Promise<UserSummary> =>
+  unwrap(gateway.postAdminUsersEmailLock(email, { reason }))
+
+export const unlockUser = (email: string): Promise<UserSummary> =>
+  unwrap(gateway.postAdminUsersEmailUnlock(email))
+
 export const listDeployApprovalRequests = (
   params?: GetAdminDeployApprovalRequestsParams
 ): Promise<DeployApprovalRequestList> => unwrap(gateway.getAdminDeployApprovalRequests(params))
@@ -377,6 +383,8 @@ export const api = {
   listUserSessions,
   revokeUserSession,
   revokeAllUserSessions,
+  lockUser,
+  unlockUser,
   getUserSessions: listUserSessions,
   listAuditLogs,
   exportAuditLogs,

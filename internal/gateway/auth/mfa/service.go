@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/GeertJohan/yubigo"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -41,6 +42,7 @@ type Service struct {
 	backupCodePepper []byte
 	yubiAuth         yubiAuthVerifier
 	webAuthn         *webauthn.WebAuthn
+	emailSender      email.Sender
 	timeFunc         func() time.Time // for testing
 }
 
@@ -92,7 +94,7 @@ type VerificationResult struct {
 }
 
 // NewService creates a new MFA service instance.
-func NewService(database *db.Database, issuer string, trustedDeviceTTL, stepUpWindow time.Duration, backupCodePepper []byte, yubiClientID string, yubiSecretKey string, webAuthnRPID string, webAuthnOrigin string) (*Service, error) {
+func NewService(database *db.Database, issuer string, trustedDeviceTTL, stepUpWindow time.Duration, backupCodePepper []byte, yubiClientID string, yubiSecretKey string, webAuthnRPID string, webAuthnOrigin string, emailSender email.Sender) (*Service, error) {
 	if len(backupCodePepper) == 0 {
 		return nil, fmt.Errorf("backup code pepper is required")
 	}
@@ -131,6 +133,7 @@ func NewService(database *db.Database, issuer string, trustedDeviceTTL, stepUpWi
 		backupCodePepper: backupCodePepper,
 		yubiAuth:         yubiAuth,
 		webAuthn:         webAuthnClient,
+		emailSender:      emailSender,
 	}, nil
 }
 
@@ -203,13 +206,51 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 
 // VerifyTOTP validates a TOTP or backup code during login or step-up.
 // Also supports Yubico OTP if the code looks like a Yubikey OTP.
-func (s *Service) VerifyTOTP(user *db.User, code string) (*VerificationResult, error) {
+// Includes replay protection, rate limiting, and automatic account locking.
+func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userAgent string, sessionID *int64) (*VerificationResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")
 	}
 	sanitized := strings.TrimSpace(code)
 	if sanitized == "" {
 		return nil, fmt.Errorf("code required")
+	}
+
+	// Check if account is locked
+	locked, err := s.db.IsUserLocked(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check account lock status: %w", err)
+	}
+	if locked {
+		return nil, fmt.Errorf("account locked - contact administrator")
+	}
+
+	// Rate limiting: 5 attempts per 5 minutes (strict)
+	recentAttempts, err := s.db.CountRecentTOTPAttempts(user.ID, 5)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check rate limit: %w", err)
+	}
+	if recentAttempts >= 5 {
+		// Log rate limit hit
+		_ = s.db.LogTOTPAttempt(user.ID, nil, hashTOTPCode(sanitized), false, "rate_limited", ipAddress, userAgent, sessionID)
+		return nil, fmt.Errorf("too many attempts - try again in 5 minutes")
+	}
+
+	// Check for replay attack (only for 6-digit codes)
+	if len(sanitized) == 6 {
+		codeHash := hashTOTPCode(sanitized)
+		replayed, err := s.db.CheckTOTPReplay(user.ID, codeHash, 2)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check replay: %w", err)
+		}
+		if replayed {
+			_ = s.db.LogTOTPAttempt(user.ID, nil, codeHash, false, "replay_detected", ipAddress, userAgent, sessionID)
+			// Count failed attempts for account locking
+			if err := s.checkAndLockAccount(user.ID); err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("code already used")
+		}
 	}
 
 	// Check if it's a Yubico OTP (44 characters)
@@ -231,6 +272,12 @@ func (s *Service) VerifyTOTP(user *db.User, code string) (*VerificationResult, e
 		}
 		if err := s.validateTOTPCode(method.Secret, user.Email, sanitized); err == nil {
 			now := time.Now()
+			// Log successful attempt
+			codeHash := hashTOTPCode(sanitized)
+			if err := s.db.LogTOTPAttempt(user.ID, &method.ID, codeHash, true, "", ipAddress, userAgent, sessionID); err != nil {
+				return nil, fmt.Errorf("failed to log attempt: %w", err)
+			}
+
 			if method.ConfirmedAt == nil {
 				if err := s.db.ConfirmMFAMethod(method.ID, now); err != nil {
 					return nil, err
@@ -251,10 +298,62 @@ func (s *Service) VerifyTOTP(user *db.User, code string) (*VerificationResult, e
 		return nil, err
 	}
 	if used {
+		// Log successful backup code usage
+		if err := s.db.LogTOTPAttempt(user.ID, nil, hash, true, "backup_code", ipAddress, userAgent, sessionID); err != nil {
+			return nil, fmt.Errorf("failed to log attempt: %w", err)
+		}
 		return &VerificationResult{MethodID: 0}, nil
 	}
 
+	// Log failed attempt
+	codeHash := hashTOTPCode(sanitized)
+	_ = s.db.LogTOTPAttempt(user.ID, nil, codeHash, false, "invalid_code", ipAddress, userAgent, sessionID)
+
+	// Check if we should lock the account (5 failures in 5 minutes)
+	if err := s.checkAndLockAccount(user.ID); err != nil {
+		return nil, err
+	}
+
 	return nil, fmt.Errorf("invalid code")
+}
+
+// checkAndLockAccount checks failed MFA attempts and locks account if threshold exceeded
+func (s *Service) checkAndLockAccount(userID int64) error {
+	failedAttempts, err := s.db.CountRecentFailedMFAAttempts(userID, 5)
+	if err != nil {
+		return fmt.Errorf("failed to count failed attempts: %w", err)
+	}
+	if failedAttempts >= 5 {
+		// Get user for email notification
+		user, err := s.db.GetUserByID(userID)
+		if err != nil {
+			return fmt.Errorf("failed to get user: %w", err)
+		}
+
+		if err := s.db.LockUser(userID, "Automatic lock: 5 failed MFA attempts in 5 minutes", nil); err != nil {
+			return fmt.Errorf("failed to lock account: %w", err)
+		}
+
+		// Send email notification to user
+		if s.emailSender != nil && user != nil {
+			subject := "Account Locked - Multiple Failed Login Attempts"
+			textBody := "Your account has been automatically locked due to multiple failed authentication attempts.\n\nReason: 5 failed MFA attempts in 5 minutes\n\nIf this was not you, please contact your administrator immediately.\n\nFor assistance, please contact your system administrator."
+			htmlBody := `<p><strong>Your account has been automatically locked</strong> due to multiple failed authentication attempts.</p>
+<p><strong>Reason:</strong> 5 failed MFA attempts in 5 minutes</p>
+<p><strong style="color: #d9534f;">If this was not you, please contact your administrator immediately.</strong></p>
+<p>For assistance, please contact your system administrator.</p>`
+			_ = s.emailSender.Send(user.Email, subject, textBody, htmlBody)
+		}
+
+		return fmt.Errorf("account locked due to multiple failed attempts - contact administrator")
+	}
+	return nil
+}
+
+// hashTOTPCode creates a SHA-256 hash of a TOTP code for replay detection
+func hashTOTPCode(code string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(code)))
+	return hex.EncodeToString(sum[:])
 }
 
 // StartYubiOTPEnrollment provisions a Yubico OTP method for the user.
@@ -577,12 +676,33 @@ func (s *Service) StartWebAuthnAssertion(user *db.User) (*protocol.CredentialAss
 }
 
 // VerifyWebAuthnAssertion validates a WebAuthn assertion response using stored session data.
-func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, credentialJSON []byte) (*VerificationResult, error) {
+// Includes rate limiting and automatic account locking.
+func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, credentialJSON []byte, ipAddress string, userAgent string, sessionID *int64) (*VerificationResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")
 	}
 	if s.webAuthn == nil {
 		return nil, fmt.Errorf("WebAuthn not configured")
+	}
+
+	// Check if account is locked
+	locked, err := s.db.IsUserLocked(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check account lock status: %w", err)
+	}
+	if locked {
+		return nil, fmt.Errorf("account locked - contact administrator")
+	}
+
+	// Rate limiting: 5 attempts per 5 minutes (strict)
+	recentAttempts, err := s.db.CountRecentWebAuthnAttempts(user.ID, 5)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check rate limit: %w", err)
+	}
+	if recentAttempts >= 5 {
+		// Log rate limit hit
+		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "rate_limited", ipAddress, userAgent, sessionID)
+		return nil, fmt.Errorf("too many attempts - try again in 5 minutes")
 	}
 
 	methods, err := s.db.ListMFAMethods(user.ID)
@@ -598,16 +718,22 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 				if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
 					return nil, err
 				}
+				// Log successful test attempt
+				_ = s.db.LogWebAuthnAttempt(user.ID, &method.ID, true, "e2e_test", ipAddress, userAgent, sessionID)
 				return &VerificationResult{
 					MethodID: method.ID,
 				}, nil
 			}
 		}
-		return nil, fmt.Errorf("no WebAuthn method found for E2E test")
+		// E2E mode but no WebAuthn method enrolled - fail gracefully
+		// Frontend will handle this error and fallback to TOTP
+		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "no_method_enrolled", ipAddress, userAgent, sessionID)
+		return nil, fmt.Errorf("WebAuthn not available")
 	}
 
 	var session webauthn.SessionData
 	if err := json.Unmarshal(sessionJSON, &session); err != nil {
+		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "invalid_session", ipAddress, userAgent, sessionID)
 		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
 	}
 
@@ -615,11 +741,18 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(strings.NewReader(string(credentialJSON)))
 	if err != nil {
+		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "invalid_credential", ipAddress, userAgent, sessionID)
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
 	}
 
 	credential, err := s.webAuthn.ValidateLogin(waUser, session, parsedResponse)
 	if err != nil {
+		// Log failed attempt
+		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "validation_failed", ipAddress, userAgent, sessionID)
+		// Check if we should lock the account
+		if lockErr := s.checkAndLockAccount(user.ID); lockErr != nil {
+			return nil, lockErr
+		}
 		return nil, fmt.Errorf("failed to validate assertion: %w", err)
 	}
 
@@ -630,10 +763,18 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 			if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
 				return nil, err
 			}
+			// Log successful attempt
+			_ = s.db.LogWebAuthnAttempt(user.ID, &method.ID, true, "", ipAddress, userAgent, sessionID)
 			return &VerificationResult{MethodID: method.ID}, nil
 		}
 	}
 
+	// Log failed attempt - credential not found
+	_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "credential_not_found", ipAddress, userAgent, sessionID)
+	// Check if we should lock the account
+	if err := s.checkAndLockAccount(user.ID); err != nil {
+		return nil, err
+	}
 	return nil, fmt.Errorf("credential not found")
 }
 

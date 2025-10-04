@@ -907,6 +907,154 @@ func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.revoke_all", email, start, details)
 }
 
+// LockUserRequest represents the payload for locking a user account
+type LockUserRequest struct {
+	Reason string `json:"reason" binding:"required"`
+}
+
+// LockUser godoc
+// @Summary Lock a user account
+// @Description Locks a user account to prevent login
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param email path string true "User email"
+// @Param request body LockUserRequest true "Lock reason"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email}/lock [post]
+func (h *AdminHandler) LockUser(c *gin.Context) {
+	start := time.Now()
+	email := strings.TrimSpace(c.Param("email"))
+	if email == "" {
+		h.respondAuditError(c, http.StatusBadRequest, "user.lock", email, "email is required", start, nil)
+		return
+	}
+
+	var req LockUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondAuditError(c, http.StatusBadRequest, "user.lock", email, "invalid request", start, nil)
+		return
+	}
+
+	user, err := h.database.GetUser(email)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.lock", email, "failed to load user", start, nil)
+		return
+	}
+	if user == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.lock", email, "user not found", start, nil)
+		return
+	}
+
+	// Get current admin user
+	authUser := h.currentAuthUser(c)
+	if authUser == nil {
+		h.respondAuditError(c, http.StatusUnauthorized, "user.lock", email, "unauthorized", start, nil)
+		return
+	}
+	adminUser, err := h.database.GetUser(authUser.Email)
+	if err != nil || adminUser == nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.lock", email, "failed to load admin user", start, nil)
+		return
+	}
+
+	// Lock the account
+	if err := h.database.LockUser(user.ID, req.Reason, &adminUser.ID); err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.lock", email, "failed to lock user", start, nil)
+		return
+	}
+
+	// Revoke all active sessions
+	if h.sessions != nil {
+		_, _ = h.sessions.RevokeAllForUser(user.ID, &adminUser.ID)
+	}
+
+	// Send email notification to user
+	if h.emailSender != nil {
+		subject := "Account Locked"
+		textBody := fmt.Sprintf("Your account has been locked by an administrator.\n\nReason: %s\n\nPlease contact your administrator for assistance.", req.Reason)
+		htmlBody := fmt.Sprintf("<p>Your account has been locked by an administrator.</p><p><strong>Reason:</strong> %s</p><p>Please contact your administrator for assistance.</p>", req.Reason)
+		_ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
+	}
+
+	details := map[string]interface{}{
+		"reason":      req.Reason,
+		"locked_by":   adminUser.Email,
+		"target_user": user.Email,
+	}
+	h.respondAuditSuccess(c, http.StatusOK, gin.H{"message": "user locked successfully"}, "user.lock", email, start, details)
+}
+
+// UnlockUser godoc
+// @Summary Unlock a user account
+// @Description Unlocks a previously locked user account
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param email path string true "User email"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/users/{email}/unlock [post]
+func (h *AdminHandler) UnlockUser(c *gin.Context) {
+	start := time.Now()
+	email := strings.TrimSpace(c.Param("email"))
+	if email == "" {
+		h.respondAuditError(c, http.StatusBadRequest, "user.unlock", email, "email is required", start, nil)
+		return
+	}
+
+	user, err := h.database.GetUser(email)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.unlock", email, "failed to load user", start, nil)
+		return
+	}
+	if user == nil {
+		h.respondAuditError(c, http.StatusNotFound, "user.unlock", email, "user not found", start, nil)
+		return
+	}
+
+	// Get current admin user
+	authUser := h.currentAuthUser(c)
+	if authUser == nil {
+		h.respondAuditError(c, http.StatusUnauthorized, "user.unlock", email, "unauthorized", start, nil)
+		return
+	}
+	adminUser, err := h.database.GetUser(authUser.Email)
+	if err != nil || adminUser == nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.unlock", email, "failed to load admin user", start, nil)
+		return
+	}
+
+	// Unlock the account
+	if err := h.database.UnlockUser(user.ID, adminUser.ID); err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "user.unlock", email, "failed to unlock user", start, nil)
+		return
+	}
+
+	// Send email notification to user
+	if h.emailSender != nil {
+		subject := "Account Unlocked"
+		textBody := "Your account has been unlocked by an administrator.\n\nYou can now log in again."
+		htmlBody := "<p>Your account has been unlocked by an administrator.</p><p>You can now log in again.</p>"
+		_ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
+	}
+
+	details := map[string]interface{}{
+		"unlocked_by": adminUser.Email,
+		"target_user": user.Email,
+	}
+	h.respondAuditSuccess(c, http.StatusOK, gin.H{"message": "user unlocked successfully"}, "user.unlock", email, start, details)
+}
+
 func (h *AdminHandler) sessionActorID(c *gin.Context) *int64 {
 	if h == nil || h.database == nil {
 		return nil

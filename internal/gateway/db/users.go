@@ -11,11 +11,12 @@ import (
 func (d *Database) GetUserByID(id int64) (*User, error) {
 	var user User
 	var rolesJSON string
+	var lockedReason sql.NullString
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method FROM users WHERE id = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id, unlocked_at, unlocked_by_user_id FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID, &user.UnlockedAt, &user.UnlockedByUserID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -26,6 +27,10 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 
 	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
+	}
+
+	if lockedReason.Valid {
+		user.LockedReason = lockedReason.String
 	}
 
 	return &user, nil
@@ -35,11 +40,12 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 func (d *Database) GetUser(email string) (*User, error) {
 	var user User
 	var rolesJSON string
+	var lockedReason sql.NullString
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method FROM users WHERE email = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id, unlocked_at, unlocked_by_user_id FROM users WHERE email = ?",
 		email,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID, &user.UnlockedAt, &user.UnlockedByUserID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -50,6 +56,10 @@ func (d *Database) GetUser(email string) (*User, error) {
 
 	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
+	}
+
+	if lockedReason.Valid {
+		user.LockedReason = lockedReason.String
 	}
 
 	return &user, nil

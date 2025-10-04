@@ -27,7 +27,7 @@ func TestYubiOTPEnrollment(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper-for-mfa")
-	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestYubiOTPEnrollment(t *testing.T) {
 	})
 
 	t.Run("rejects when Yubico OTP not configured", func(t *testing.T) {
-		serviceWithoutYubi, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+		serviceWithoutYubi, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 		_, err := serviceWithoutYubi.StartYubiOTPEnrollment(user, "ccccccbcgujhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
 		if err == nil {
 			t.Error("expected error when Yubico OTP not configured")
@@ -130,7 +130,7 @@ func TestYubiOTPVerification(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+	service, _ := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 
 	mockAuth := &mockYubiAuth{
 		verifyFunc: func(otp string) (*yubigo.YubiResponse, bool, error) {
@@ -195,7 +195,7 @@ func TestVerifyCodeAutoDetection(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+	service, _ := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 
 	// Mock Yubico auth
 	mockAuth := &mockYubiAuth{

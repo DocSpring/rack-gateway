@@ -18,7 +18,7 @@ func TestWebAuthnEnrollment(t *testing.T) {
 	pepper := []byte("test-pepper")
 
 	// Create service with WebAuthn configured
-	service, err := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "example.com", "https://example.com")
+	service, err := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "example.com", "https://example.com", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestWebAuthnEnrollment(t *testing.T) {
 	})
 
 	t.Run("fails when WebAuthn not configured", func(t *testing.T) {
-		serviceWithoutWebAuthn, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+		serviceWithoutWebAuthn, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 		_, _, err := serviceWithoutWebAuthn.StartWebAuthnEnrollment(user)
 		if err == nil {
 			t.Error("expected error when WebAuthn not configured")
@@ -178,7 +178,7 @@ func TestEnrollmentHelpers(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 
 	user, _ := database.CreateUser("helper@example.com", "Helper Test", []string{"ops"})
 
@@ -302,7 +302,7 @@ func TestTimeFunction(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 
 	pepper := []byte("test-pepper")
-	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "")
+	service, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 
 	t.Run("uses real time by default", func(t *testing.T) {
 		now := service.now()

@@ -75,7 +75,9 @@ export async function resetAllMfaState() {
               mfa_verified_at = NULL,
               recent_step_up_at = NULL;`
     )
-    await client.query('UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL;')
+    await client.query(
+      'UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL, preferred_mfa_method = NULL;'
+    )
     await client.query(
       `UPDATE settings
           SET value = jsonb_set(value, '{require_all_users}', 'false'::jsonb, true),
@@ -118,7 +120,7 @@ export async function resetMfaForUser(email: string) {
       [email]
     )
     await client.query(
-      'UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL WHERE email = $1;',
+      'UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL, preferred_mfa_method = NULL WHERE email = $1;',
       [email]
     )
     await client.query(
@@ -131,6 +133,13 @@ export async function resetMfaForUser(email: string) {
 export async function enforceMfaForUser(email: string) {
   await withDbClient(async (client) => {
     await client.query('UPDATE users SET mfa_enforced_at = NOW() WHERE email = $1;', [email])
+  })
+}
+
+export async function clearMfaAttempts() {
+  await withDbClient(async (client) => {
+    await client.query('DELETE FROM mfa_totp_attempts;')
+    await client.query('DELETE FROM mfa_webauthn_attempts;')
   })
 }
 

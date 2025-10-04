@@ -299,18 +299,23 @@ export function MFAVerificationForm({
   // Only triggers when server says preferred_method is webauthn, not when user manually switches
   // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on useWebAuthn change
   useEffect(() => {
+    // Don't auto-trigger until MFA status is loaded
+    if (!mfaStatus) return
+    // Don't auto-trigger if user doesn't have WebAuthn enrolled
+    if (!hasWebAuthn) return
+
     if (
       autoTriggerWebAuthn &&
       useWebAuthn &&
       !isVerifying &&
       !error &&
-      mfaStatus?.preferred_method === 'webauthn'
+      mfaStatus.preferred_method === 'webauthn'
     ) {
       handleVerifyWebAuthn().catch(() => {
         /* errors handled in handleVerifyWebAuthn */
       })
     }
-  }, [useWebAuthn, autoTriggerWebAuthn])
+  }, [useWebAuthn, autoTriggerWebAuthn, hasWebAuthn, mfaStatus])
 
   // Pre-built components for convenience
   const TOTPInput = (

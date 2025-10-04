@@ -524,4 +524,7 @@ test.describe('Account security', () => {
     // Wait for navigation to complete, indicating successful WebAuthn verification
     await page.waitForURL(/\/.gateway\/web\/rack/, { timeout: 10_000 })
   })
+
+  // NOTE: MFA rate limiting is tested in Go unit tests (TestVerifyTOTP_RateLimiting)
+  // E2E test was removed because it's complex to set up with the serial test mode and beforeEach cleanup
 })

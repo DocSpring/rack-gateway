@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Edit2, Eye, Plus, Trash2 } from 'lucide-react'
+import { Edit2, Eye, Lock, Plus, Trash2, Unlock } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
@@ -9,6 +9,15 @@ import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog'
+import { Label } from '../components/ui/label'
+import {
   Table,
   TableBody,
   TableCell,
@@ -16,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
+import { Textarea } from '../components/ui/textarea'
 import type { UserEditDialogMode, UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
 import { UserMetaCell } from '../components/user-meta-cell'
@@ -34,6 +44,11 @@ type User = {
   suspended: boolean
   created_by_email?: string
   created_by_name?: string
+  locked_at?: string
+  locked_reason?: string
+  locked_by_user_id?: number
+  unlocked_at?: string
+  unlocked_by_user_id?: number
 }
 
 // CI/CD role is intentionally omitted here; it is reserved for automation tokens only.
@@ -60,6 +75,90 @@ const AVAILABLE_ROLES = {
   },
 } as const
 
+function isUserLocked(user: User): boolean {
+  return !!user.locked_at
+}
+
+function canModifyUser(user: User, currentUserEmail?: string): boolean {
+  return user.email !== currentUserEmail
+}
+
+type UserActionsProps = {
+  user: User
+  currentUserEmail?: string
+  isUnlocking: boolean
+  onEdit: (user: User) => void
+  onLock: (user: User) => void
+  onUnlock: (user: User) => void
+  onDelete: (user: User) => void
+}
+
+function UserActions({
+  user,
+  currentUserEmail,
+  isUnlocking,
+  onEdit,
+  onLock,
+  onUnlock,
+  onDelete,
+}: UserActionsProps) {
+  const canModify = canModifyUser(user, currentUserEmail)
+  const locked = isUserLocked(user)
+
+  return (
+    <div className="flex justify-end gap-2">
+      <Button asChild size="sm" variant="ghost">
+        <Link
+          aria-label={`View details for ${user.email}`}
+          params={{ email: user.email }}
+          to="/users/$email"
+        >
+          <Eye className="h-4 w-4" />
+        </Link>
+      </Button>
+      <Button
+        aria-label={`Edit User ${user.email}`}
+        onClick={() => onEdit(user)}
+        size="sm"
+        variant="ghost"
+      >
+        <Edit2 className="h-4 w-4" />
+      </Button>
+      {locked ? (
+        <Button
+          aria-label={`Unlock User ${user.email}`}
+          disabled={isUnlocking}
+          onClick={() => onUnlock(user)}
+          size="sm"
+          variant="ghost"
+        >
+          <Unlock className="h-4 w-4 text-green-600" />
+        </Button>
+      ) : (
+        <Button
+          aria-label={`Lock User ${user.email}`}
+          disabled={!canModify}
+          onClick={() => onLock(user)}
+          size="sm"
+          variant="ghost"
+        >
+          <Lock className="h-4 w-4 text-orange-600" />
+        </Button>
+      )}
+      <Button
+        aria-label={`Delete User ${user.email}`}
+        disabled={!canModify}
+        onClick={() => onDelete(user)}
+        size="sm"
+        variant="ghost"
+      >
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
+  )
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Component manages user CRUD operations with lock/unlock functionality
 export function UsersPage() {
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
@@ -68,6 +167,9 @@ export function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [isLockDialogOpen, setIsLockDialogOpen] = useState(false)
+  const [userToLock, setUserToLock] = useState<User | null>(null)
+  const [lockReason, setLockReason] = useState('')
 
   // Check if current user is admin
   const isAdmin = !!currentUser?.roles?.includes('admin')
@@ -156,6 +258,39 @@ export function UsersPage() {
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
       toast.error(message || 'Failed to delete user')
+    },
+  })
+
+  // Lock user mutation
+  const lockUserMutation = useMutation({
+    mutationFn: async ({ email, reason }: { email: string; reason: string }) => {
+      await api.lockUser(email, reason)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
+      toast.success('User account locked successfully')
+      setIsLockDialogOpen(false)
+      setUserToLock(null)
+      setLockReason('')
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to lock user account')
+    },
+  })
+
+  // Unlock user mutation
+  const unlockUserMutation = useMutation({
+    mutationFn: async (email: string) => {
+      await api.unlockUser(email)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
+      toast.success('User account unlocked successfully')
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to unlock user account')
     },
   })
 
@@ -248,11 +383,10 @@ export function UsersPage() {
   }
 
   const handleRequestDeleteUser = (user: User) => {
-    if (user.email === currentUser?.email) {
+    if (!canModifyUser(user, currentUser?.email)) {
       toast.error("You can't delete your own account")
       return
     }
-
     setUserToDelete(user)
     setIsDeleteOpen(true)
   }
@@ -272,6 +406,43 @@ export function UsersPage() {
       await deleteUserMutation.mutateAsync(userToDelete.email)
     } catch (_err) {
       // Errors are surfaced via mutation onError toast; keep dialog open for retry.
+    }
+  }
+
+  const handleRequestLockUser = (user: User) => {
+    if (!canModifyUser(user, currentUser?.email)) {
+      toast.error("You can't lock your own account")
+      return
+    }
+    setUserToLock(user)
+    setIsLockDialogOpen(true)
+  }
+
+  const handleLockDialogOpenChange = (open: boolean) => {
+    setIsLockDialogOpen(open)
+    if (!open) {
+      setUserToLock(null)
+      setLockReason('')
+    }
+  }
+
+  const confirmLockUser = async () => {
+    if (!(userToLock && lockReason.trim())) {
+      toast.error('Lock reason is required')
+      return
+    }
+    try {
+      await lockUserMutation.mutateAsync({ email: userToLock.email, reason: lockReason })
+    } catch (_err) {
+      // Errors are surfaced via mutation onError toast; keep dialog open for retry.
+    }
+  }
+
+  const handleUnlockUser = async (user: User) => {
+    try {
+      await unlockUserMutation.mutateAsync(user.email)
+    } catch (_err) {
+      // Error is surfaced via mutation onError toast
     }
   }
 
@@ -366,7 +537,11 @@ export function UsersPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={'default'}>Active</Badge>
+                  {isUserLocked(user) ? (
+                    <Badge variant="destructive">Locked</Badge>
+                  ) : (
+                    <Badge variant={'default'}>Active</Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <UserMetaCell
@@ -379,34 +554,15 @@ export function UsersPage() {
                 </TableCell>
                 {isAdmin && (
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button asChild size="sm" variant="ghost">
-                        <Link
-                          aria-label={`View details for ${user.email}`}
-                          params={{ email: user.email }}
-                          to="/users/$email"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button
-                        aria-label={`Edit User ${user.email}`}
-                        onClick={() => handleEditUser(user)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        aria-label={`Delete User ${user.email}`}
-                        disabled={user.email === currentUser?.email}
-                        onClick={() => handleRequestDeleteUser(user)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
+                    <UserActions
+                      currentUserEmail={currentUser?.email}
+                      isUnlocking={unlockUserMutation.isPending}
+                      onDelete={handleRequestDeleteUser}
+                      onEdit={handleEditUser}
+                      onLock={handleRequestLockUser}
+                      onUnlock={handleUnlockUser}
+                      user={user}
+                    />
                   </TableCell>
                 )}
               </TableRow>
@@ -461,6 +617,44 @@ export function UsersPage() {
         open={isDeleteOpen}
         title="Delete User"
       />
+
+      <Dialog onOpenChange={handleLockDialogOpenChange} open={isLockDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lock User Account</DialogTitle>
+            <DialogDescription>
+              This will immediately lock "{userToLock?.email}" and revoke all active sessions. The
+              user will not be able to log in until unlocked.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Label htmlFor="lock-reason">Reason for locking (required)</Label>
+            <Textarea
+              id="lock-reason"
+              onChange={(e) => setLockReason(e.target.value)}
+              placeholder="e.g., Security incident, policy violation, etc."
+              rows={3}
+              value={lockReason}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={lockUserMutation.isPending}
+              onClick={() => handleLockDialogOpenChange(false)}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={lockUserMutation.isPending || !lockReason.trim()}
+              onClick={confirmLockUser}
+              variant="destructive"
+            >
+              {lockUserMutation.isPending ? 'Locking Account...' : 'Lock Account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

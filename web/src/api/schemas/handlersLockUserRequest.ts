@@ -6,8 +6,6 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface HandlersRackSummary {
-  alias?: string;
-  host?: string;
-  name?: string;
+export interface HandlersLockUserRequest {
+  reason: string;
 }

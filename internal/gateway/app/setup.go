@@ -97,12 +97,6 @@ func (a *App) initializeServices() error {
 		log.Printf("WebAuthn disabled (no RP ID or origin configured)")
 	}
 
-	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin)
-	if err != nil {
-		return fmt.Errorf("failed to initialize MFA service: %w", err)
-	}
-	a.MFAService = mfaService
-
 	// Initialize RBAC manager
 	allowedDomain := a.Config.GoogleAllowedDomain
 	rbacManager, err := rbac.NewDBManager(a.Database, allowedDomain)
@@ -180,6 +174,13 @@ func (a *App) initializeServices() error {
 	}
 	pmStream := os.Getenv("POSTMARK_STREAM")
 	a.EmailSender = email.NewSender(pmToken, from, pmStream)
+
+	// Initialize MFA service (after email sender)
+	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin, a.EmailSender)
+	if err != nil {
+		return fmt.Errorf("failed to initialize MFA service: %w", err)
+	}
+	a.MFAService = mfaService
 
 	// Collect admin emails for security notifications
 	adminEmails := []string{}

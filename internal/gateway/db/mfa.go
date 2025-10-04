@@ -524,3 +524,125 @@ func jsonStringArray(values []string) interface{} {
 	}
 	return string(b)
 }
+
+// LogTOTPAttempt records a TOTP verification attempt for replay protection, rate limiting, and audit
+func (d *Database) LogTOTPAttempt(userID int64, methodID *int64, codeHash string, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+	_, err := d.exec(`
+        INSERT INTO mfa_totp_attempts (user_id, method_id, code_hash, success, failure_reason, ip_address, user_agent, session_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, userID, methodID, codeHash, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to log TOTP attempt: %w", err)
+	}
+	return nil
+}
+
+// CountRecentTOTPAttempts counts TOTP attempts in the last N minutes
+func (d *Database) CountRecentTOTPAttempts(userID int64, minutes int) (int, error) {
+	var count int
+	query := `
+        SELECT COUNT(*) FROM mfa_totp_attempts
+        WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2
+    `
+	err := d.queryRow(query, userID, minutes).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count TOTP attempts: %w", err)
+	}
+	return count, nil
+}
+
+// CheckTOTPReplay checks if a code was successfully used in the last N minutes
+func (d *Database) CheckTOTPReplay(userID int64, codeHash string, minutes int) (bool, error) {
+	var exists bool
+	query := `
+        SELECT EXISTS(
+            SELECT 1 FROM mfa_totp_attempts
+            WHERE user_id = $1 AND code_hash = $2 AND attempted_at > NOW() - INTERVAL '1 minute' * $3 AND success = TRUE
+        )
+    `
+	err := d.queryRow(query, userID, codeHash, minutes).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check TOTP replay: %w", err)
+	}
+	return exists, nil
+}
+
+// LogWebAuthnAttempt records a WebAuthn verification attempt for rate limiting and audit
+func (d *Database) LogWebAuthnAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+	_, err := d.exec(`
+        INSERT INTO mfa_webauthn_attempts (user_id, method_id, success, failure_reason, ip_address, user_agent, session_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, userID, methodID, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to log WebAuthn attempt: %w", err)
+	}
+	return nil
+}
+
+// CountRecentWebAuthnAttempts counts WebAuthn attempts in the last N minutes
+func (d *Database) CountRecentWebAuthnAttempts(userID int64, minutes int) (int, error) {
+	var count int
+	query := `
+        SELECT COUNT(*) FROM mfa_webauthn_attempts
+        WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2
+    `
+	err := d.queryRow(query, userID, minutes).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count WebAuthn attempts: %w", err)
+	}
+	return count, nil
+}
+
+// CountRecentFailedMFAAttempts counts all failed MFA attempts (TOTP + WebAuthn) in the last N minutes
+func (d *Database) CountRecentFailedMFAAttempts(userID int64, minutes int) (int, error) {
+	var count int
+	query := `
+        SELECT
+            (SELECT COUNT(*) FROM mfa_totp_attempts WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2 AND success = FALSE) +
+            (SELECT COUNT(*) FROM mfa_webauthn_attempts WHERE user_id = $3 AND attempted_at > NOW() - INTERVAL '1 minute' * $4 AND success = FALSE)
+    `
+	err := d.queryRow(query, userID, minutes, userID, minutes).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count failed MFA attempts: %w", err)
+	}
+	return count, nil
+}
+
+// LockUser locks a user account
+func (d *Database) LockUser(userID int64, reason string, lockedByUserID *int64) error {
+	_, err := d.exec(`
+        UPDATE users
+        SET locked_at = NOW(), locked_reason = ?, locked_by_user_id = ?, updated_at = NOW()
+        WHERE id = ? AND locked_at IS NULL
+    `, nullableString(reason, 255), lockedByUserID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to lock user: %w", err)
+	}
+	return nil
+}
+
+// UnlockUser unlocks a user account
+func (d *Database) UnlockUser(userID int64, unlockedByUserID int64) error {
+	_, err := d.exec(`
+        UPDATE users
+        SET unlocked_at = NOW(), unlocked_by_user_id = ?, updated_at = NOW()
+        WHERE id = ?
+    `, unlockedByUserID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to unlock user: %w", err)
+	}
+	return nil
+}
+
+// IsUserLocked checks if a user account is currently locked
+func (d *Database) IsUserLocked(userID int64) (bool, error) {
+	var locked bool
+	err := d.queryRow(`
+        SELECT locked_at IS NOT NULL AND (unlocked_at IS NULL OR unlocked_at < locked_at)
+        FROM users WHERE id = ?
+    `, userID).Scan(&locked)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if user is locked: %w", err)
+	}
+	return locked, nil
+}

@@ -24,6 +24,11 @@ type User struct {
 	MFAEnrolled        bool       `json:"mfa_enrolled"`
 	MFAEnforcedAt      *time.Time `json:"mfa_enforced_at,omitempty"`
 	PreferredMFAMethod *string    `json:"preferred_mfa_method,omitempty"`
+	LockedAt           *time.Time `json:"locked_at,omitempty"`
+	LockedReason       string     `json:"locked_reason,omitempty"`
+	LockedByUserID     *int64     `json:"locked_by_user_id,omitempty"`
+	UnlockedAt         *time.Time `json:"unlocked_at,omitempty"`
+	UnlockedByUserID   *int64     `json:"unlocked_by_user_id,omitempty"`
 	CreatedByUserID    *int64     `json:"created_by_user_id,omitempty"`
 	CreatedByEmail     string     `json:"created_by_email,omitempty"`
 	CreatedByName      string     `json:"created_by_name,omitempty"`
@@ -201,4 +206,31 @@ type Process struct {
 	DeployApprovalRequestID *int64     `json:"deploy_approval_request_id,omitempty"`
 	CreatedAt               time.Time  `json:"created_at" ts_type:"string"`
 	TerminatedAt            *time.Time `json:"terminated_at,omitempty" ts_type:"string | null"`
+}
+
+// MFATOTPAttempt tracks all TOTP verification attempts for replay protection, rate limiting, and audit.
+type MFATOTPAttempt struct {
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"user_id"`
+	MethodID      *int64    `json:"method_id,omitempty"`
+	CodeHash      string    `json:"-"`
+	Success       bool      `json:"success"`
+	AttemptedAt   time.Time `json:"attempted_at"`
+	IPAddress     string    `json:"ip_address,omitempty"`
+	UserAgent     string    `json:"user_agent,omitempty"`
+	FailureReason string    `json:"failure_reason,omitempty"`
+	SessionID     *int64    `json:"session_id,omitempty"`
+}
+
+// MFAWebAuthnAttempt tracks all WebAuthn verification attempts for rate limiting and audit.
+type MFAWebAuthnAttempt struct {
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"user_id"`
+	MethodID      *int64    `json:"method_id,omitempty"`
+	Success       bool      `json:"success"`
+	AttemptedAt   time.Time `json:"attempted_at"`
+	IPAddress     string    `json:"ip_address,omitempty"`
+	UserAgent     string    `json:"user_agent,omitempty"`
+	FailureReason string    `json:"failure_reason,omitempty"`
+	SessionID     *int64    `json:"session_id,omitempty"`
 }

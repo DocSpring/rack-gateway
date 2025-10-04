@@ -1496,6 +1496,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/{email}/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lock a user account
+         * @description Locks a user account to prevent login
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description User email */
+                    email: string;
+                };
+                cookie?: never;
+            };
+            /** @description Lock reason */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["handlers.LockUserRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users/{email}/roles": {
         parameters: {
             query?: never;
@@ -1742,6 +1818,77 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["handlers.RevokeSessionResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{email}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock a user account
+         * @description Unlocks a previously locked user account
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description User email */
+                    email: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
                     };
                 };
                 /** @description Bad Request */
@@ -3682,12 +3829,17 @@ export interface components {
             created_by_user_id?: number;
             email?: string;
             id?: number;
+            locked_at?: string;
+            locked_by_user_id?: number;
+            locked_reason?: string;
             mfa_enforced_at?: string;
             mfa_enrolled?: boolean;
             name?: string;
             preferred_mfa_method?: string;
             roles?: string[];
             suspended?: boolean;
+            unlocked_at?: string;
+            unlocked_by_user_id?: number;
             updated_at?: string;
         };
         "handlers.AuditLogsResponse": {
@@ -3795,6 +3947,9 @@ export interface components {
         "handlers.HealthResponse": {
             service?: string;
             status?: string;
+        };
+        "handlers.LockUserRequest": {
+            reason: string;
         };
         "handlers.MFABackupCodesSummary": {
             last_generated_at?: string;
