@@ -1032,11 +1032,6 @@ func getInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSystem(w http.ResponseWriter, r *http.Request) {
-	// Return current in-memory state including any updates from PUT /system
-	params := make(map[string]string, len(mockSystemParameters))
-	for k, v := range mockSystemParameters {
-		params[k] = v
-	}
 	system := System{
 		Count:      2,
 		Domain:     "mock-rack.example.com",
@@ -1047,7 +1042,6 @@ func getSystem(w http.ResponseWriter, r *http.Request) {
 		Status:     "running",
 		Type:       "production",
 		Version:    "3.5.0",
-		Parameters: params,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
