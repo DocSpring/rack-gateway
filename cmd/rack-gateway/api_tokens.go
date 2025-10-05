@@ -83,7 +83,7 @@ func newAPITokenListCommand() *cobra.Command {
 				return err
 			}
 
-			tokens, err := fetchAPITokens(rack)
+			tokens, err := fetchAPITokens(cmd, rack)
 			if err != nil {
 				return err
 			}
@@ -132,7 +132,7 @@ func newAPITokenGetCommand() *cobra.Command {
 				return err
 			}
 
-			token, err := fetchAPITokenByID(rack, args[0])
+			token, err := fetchAPITokenByID(cmd, rack, args[0])
 			if err != nil {
 				return err
 			}
@@ -207,7 +207,7 @@ func newAPITokenCreateCommand() *cobra.Command {
 				return err
 			}
 
-			metadata, err := fetchTokenPermissionMetadata(rack)
+			metadata, err := fetchTokenPermissionMetadata(cmd, rack)
 			if err != nil {
 				return err
 			}
@@ -240,7 +240,7 @@ func newAPITokenCreateCommand() *cobra.Command {
 				expires = &parsed
 			}
 
-			resp, err := createAPIToken(rack, name, userEmail, permSet.list(), expires)
+			resp, err := createAPIToken(cmd, rack, name, userEmail, permSet.list(), expires)
 			if err != nil {
 				return err
 			}
@@ -291,7 +291,7 @@ func newAPITokenDeleteCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := deleteAPIToken(rack, args[0]); err != nil {
+			if err := deleteAPIToken(cmd, rack, args[0]); err != nil {
 				return err
 			}
 			return writef(cmd.OutOrStdout(), "Deleted token %s\n", args[0])
@@ -300,31 +300,31 @@ func newAPITokenDeleteCommand() *cobra.Command {
 	return cmd
 }
 
-func fetchAPITokens(rack string) ([]apiToken, error) {
+func fetchAPITokens(cmd *cobra.Command, rack string) ([]apiToken, error) {
 	var tokens []apiToken
-	if err := gatewayRequest(rack, http.MethodGet, "/admin/tokens", nil, &tokens); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/admin/tokens", nil, &tokens); err != nil {
 		return nil, err
 	}
 	return tokens, nil
 }
 
-func fetchAPITokenByID(rack, id string) (*apiToken, error) {
+func fetchAPITokenByID(cmd *cobra.Command, rack, id string) (*apiToken, error) {
 	var token apiToken
-	if err := gatewayRequest(rack, http.MethodGet, "/admin/tokens/"+url.PathEscape(id), nil, &token); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/admin/tokens/"+url.PathEscape(id), nil, &token); err != nil {
 		return nil, err
 	}
 	return &token, nil
 }
 
-func fetchTokenPermissionMetadata(rack string) (*tokenPermissionMetadata, error) {
+func fetchTokenPermissionMetadata(cmd *cobra.Command, rack string) (*tokenPermissionMetadata, error) {
 	var metadata tokenPermissionMetadata
-	if err := gatewayRequest(rack, http.MethodGet, "/admin/tokens/permissions", nil, &metadata); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/admin/tokens/permissions", nil, &metadata); err != nil {
 		return nil, err
 	}
 	return &metadata, nil
 }
 
-func createAPIToken(rack, name, userEmail string, permissions []string, expiresAt *time.Time) (*apiTokenResponse, error) {
+func createAPIToken(cmd *cobra.Command, rack, name, userEmail string, permissions []string, expiresAt *time.Time) (*apiTokenResponse, error) {
 	payload := map[string]interface{}{
 		"name":        name,
 		"permissions": permissions,
@@ -337,7 +337,7 @@ func createAPIToken(rack, name, userEmail string, permissions []string, expiresA
 	}
 
 	var resp apiTokenResponse
-	if err := gatewayRequest(rack, http.MethodPost, "/admin/tokens", payload, &resp); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodPost, "/admin/tokens", payload, &resp); err != nil {
 		return nil, err
 	}
 	if resp.APIToken == nil {
@@ -346,30 +346,72 @@ func createAPIToken(rack, name, userEmail string, permissions []string, expiresA
 	return &resp, nil
 }
 
-func deleteAPIToken(rack, id string) error {
-	return gatewayRequest(rack, http.MethodDelete, "/admin/tokens/"+url.PathEscape(id), nil, nil)
+func deleteAPIToken(cmd *cobra.Command, rack, id string) error {
+	return gatewayRequest(cmd, rack, http.MethodDelete, "/admin/tokens/"+url.PathEscape(id), nil, nil)
 }
 
-func gatewayRequest(rack, method, path string, body interface{}, out interface{}) error {
+func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interface{}, out interface{}) error {
 	gatewayURL, bearer, err := gatewayAuthInfo(rack)
 	if err != nil {
 		return err
 	}
 
+	// Try the request
+	statusCode, responseBody, err := doGatewayRequest(gatewayURL, bearer, method, path, body)
+	if err != nil {
+		return err
+	}
+
+	// Check for MFA step-up requirement
+	if statusCode == http.StatusUnauthorized {
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(responseBody, &errResp) == nil && errResp.Error == "mfa_step_up_required" {
+			// Perform MFA step-up
+			if err := performMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
+				return fmt.Errorf("MFA verification failed: %w", err)
+			}
+
+			// Retry the request with the same bearer (MFA sets cookie)
+			statusCode, responseBody, err = doGatewayRequest(gatewayURL, bearer, method, path, body)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Check for errors after potential retry
+	if statusCode >= 400 {
+		return fmt.Errorf("gateway request failed (%d): %s", statusCode, strings.TrimSpace(string(responseBody)))
+	}
+
+	// Decode response if output pointer provided
+	if out != nil {
+		if err := json.Unmarshal(responseBody, out); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// doGatewayRequest performs the actual HTTP request and returns status, body, and error
+func doGatewayRequest(gatewayURL, bearer, method, path string, body interface{}) (int, []byte, error) {
 	fullURL := gatewayURL + "/.gateway/api" + path
 
 	var payload io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
-			return err
+			return 0, nil, err
 		}
 		payload = bytes.NewReader(data)
 	}
 
 	req, err := http.NewRequest(method, fullURL, payload)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+bearer)
 	if body != nil {
@@ -380,21 +422,16 @@ func gatewayRequest(rack, method, path string, body interface{}, out interface{}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	defer resp.Body.Close() //nolint:errcheck // response cleanup
 
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, err
 	}
 
-	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			return err
-		}
-	}
-	return nil
+	return resp.StatusCode, responseBody, nil
 }
 
 func gatewayAuthInfo(rack string) (string, string, error) {
