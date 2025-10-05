@@ -9,21 +9,12 @@ import { TimeAgo } from '../components/time-ago'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu'
-import { Label } from '../components/ui/label'
 import {
   Table,
   TableBody,
@@ -32,9 +23,9 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
-import { Textarea } from '../components/ui/textarea'
 import type { UserEditDialogMode, UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
+import { UserLockDialog, useUnlockUser } from '../components/user-lock-dialog'
 import { UserMetaCell } from '../components/user-meta-cell'
 import { useAuth } from '../contexts/auth-context'
 import { api, type RoleName } from '../lib/api'
@@ -155,7 +146,6 @@ function UserActions({
   )
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Component manages user CRUD operations with lock/unlock functionality
 export function UsersPage() {
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
@@ -166,7 +156,6 @@ export function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [isLockDialogOpen, setIsLockDialogOpen] = useState(false)
   const [userToLock, setUserToLock] = useState<User | null>(null)
-  const [lockReason, setLockReason] = useState('')
 
   // Check if current user is admin
   const isAdmin = !!currentUser?.roles?.includes('admin')
@@ -258,38 +247,7 @@ export function UsersPage() {
     },
   })
 
-  // Lock user mutation
-  const lockUserMutation = useMutation({
-    mutationFn: async ({ email, reason }: { email: string; reason: string }) => {
-      await api.lockUser(email, reason)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
-      toast.success('User account locked successfully')
-      setIsLockDialogOpen(false)
-      setUserToLock(null)
-      setLockReason('')
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to lock user account')
-    },
-  })
-
-  // Unlock user mutation
-  const unlockUserMutation = useMutation({
-    mutationFn: async (email: string) => {
-      await api.unlockUser(email)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })
-      toast.success('User account unlocked successfully')
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to unlock user account')
-    },
-  })
+  const unlockUserMutation = useUnlockUser()
 
   const handleAddUser = () => {
     setEditingUser(null)
@@ -419,19 +377,6 @@ export function UsersPage() {
     setIsLockDialogOpen(open)
     if (!open) {
       setUserToLock(null)
-      setLockReason('')
-    }
-  }
-
-  const confirmLockUser = async () => {
-    if (!(userToLock && lockReason.trim())) {
-      toast.error('Lock reason is required')
-      return
-    }
-    try {
-      await lockUserMutation.mutateAsync({ email: userToLock.email, reason: lockReason })
-    } catch (_err) {
-      // Errors are surfaced via mutation onError toast; keep dialog open for retry.
     }
   }
 
@@ -492,11 +437,12 @@ export function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: no need to extract this */}
             {rows.map((user) => {
               const locked = isUserLocked(user)
               return (
-                <TableRow className={locked ? 'opacity-60' : ''} key={user.email}>
-                  <TableCell>
+                <TableRow key={user.email}>
+                  <TableCell className={locked ? 'opacity-60' : ''}>
                     <div>
                       <div className="font-medium">
                         <Link
@@ -524,7 +470,7 @@ export function UsersPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className={locked ? 'opacity-60' : ''}>
                     <div className="flex flex-wrap gap-1">
                       {user.roles.map((role) => {
                         const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
@@ -536,20 +482,20 @@ export function UsersPage() {
                       })}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className={locked ? 'opacity-60' : ''}>
                     {isUserLocked(user) ? (
                       <Badge variant="destructive">Locked</Badge>
                     ) : (
                       <Badge variant={'default'}>Active</Badge>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className={locked ? 'opacity-60' : ''}>
                     <UserMetaCell
                       email={user.created_by_email ?? undefined}
                       name={user.created_by_name ?? undefined}
                     />
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className={locked ? 'text-sm opacity-60' : 'text-sm'}>
                     <TimeAgo date={user.created_at} />
                   </TableCell>
                   {isAdmin && (
@@ -619,43 +565,13 @@ export function UsersPage() {
         title="Delete User"
       />
 
-      <Dialog onOpenChange={handleLockDialogOpenChange} open={isLockDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Lock User Account</DialogTitle>
-            <DialogDescription>
-              This will immediately lock "{userToLock?.email}" and revoke all active sessions. The
-              user will not be able to log in until unlocked.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Label htmlFor="lock-reason">Reason for locking (required)</Label>
-            <Textarea
-              id="lock-reason"
-              onChange={(e) => setLockReason(e.target.value)}
-              placeholder="e.g., Security incident, policy violation, etc."
-              rows={3}
-              value={lockReason}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={lockUserMutation.isPending}
-              onClick={() => handleLockDialogOpenChange(false)}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={lockUserMutation.isPending || !lockReason.trim()}
-              onClick={confirmLockUser}
-              variant="destructive"
-            >
-              {lockUserMutation.isPending ? 'Locking Account...' : 'Lock Account'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {userToLock && (
+        <UserLockDialog
+          onOpenChange={handleLockDialogOpenChange}
+          open={isLockDialogOpen}
+          userEmail={userToLock.email}
+        />
+      )}
     </div>
   )
 }

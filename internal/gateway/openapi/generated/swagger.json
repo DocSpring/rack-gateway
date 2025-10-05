@@ -3283,6 +3283,12 @@
                 "locked_at": {
                     "type": "string"
                 },
+                "locked_by_email": {
+                    "type": "string"
+                },
+                "locked_by_name": {
+                    "type": "string"
+                },
                 "locked_by_user_id": {
                     "type": "integer"
                 },
@@ -4084,6 +4090,9 @@
         "handlers.UserSessionResponse": {
             "type": "object",
             "properties": {
+                "channel": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },

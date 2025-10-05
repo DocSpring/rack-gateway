@@ -33,16 +33,18 @@ test('users: add, edit role, delete', async ({ page }) => {
     await expect(addedByCell).toHaveText(/.+/)
   }
 
-  // Edit role to admin
-  await row.getByRole('button', { name: /Edit User/i }).click()
+  // Edit role to admin - open dropdown and click Edit User
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByRole('menuitem', { name: 'Edit User' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('radio', { name: /^Admin\b/i }).check()
   await dialog.getByRole('button', { name: /Save Changes/i }).click()
   // Role badge should show Administrator
   await expect(row.getByText('Administrator')).toBeVisible()
 
-  // Delete user (confirm dialog)
-  await row.getByRole('button', { name: /Delete User/i }).click()
+  // Delete user (confirm dialog) - open dropdown and click Delete User
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByRole('menuitem', { name: 'Delete User' }).click()
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
@@ -133,8 +135,9 @@ test('users: add shows all fields and persists after refresh', async ({ page }) 
     await expect(addedByCell).toHaveText(/admin@/i)
   }
 
-  // Delete user to keep DB clean between runs
-  await row.getByRole('button', { name: /Delete User/i }).click()
+  // Delete user to keep DB clean between runs - open dropdown and click Delete User
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByRole('menuitem', { name: 'Delete User' }).click()
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')

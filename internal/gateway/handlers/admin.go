@@ -773,6 +773,7 @@ func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 			CreatedAt: sess.CreatedAt.UTC().Format(time.RFC3339),
 			LastSeen:  sess.LastSeenAt.UTC().Format(time.RFC3339),
 			ExpiresAt: sess.ExpiresAt.UTC().Format(time.RFC3339),
+			Channel:   sess.Channel,
 		}
 		if sess.IPAddress != "" {
 			entry.IPAddress = sess.IPAddress

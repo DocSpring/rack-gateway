@@ -64,7 +64,9 @@ test.describe('User Audit Logs', () => {
     await page.goto(WebRoute('users'))
     const cleanupRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
     await expect(cleanupRow).toBeVisible()
-    await cleanupRow.getByRole('button', { name: /Delete User/i }).click()
+    // Open dropdown and click Delete User
+    await cleanupRow.getByRole('button', { name: /Actions for/i }).click()
+    await page.getByRole('menuitem', { name: 'Delete User' }).click()
     const deleteDialog = page.getByRole('dialog')
     await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
     const waitForDelete = page.waitForResponse(

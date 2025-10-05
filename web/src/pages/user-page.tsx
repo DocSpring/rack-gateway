@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { Edit2, RefreshCw, Trash2 } from 'lucide-react'
+import { Edit2, Lock, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { type AuditLogRecord, AuditLogsPane } from '../components/audit-logs-pane'
@@ -19,6 +19,7 @@ import {
 } from '../components/ui/table'
 import type { UserEditDialogValues } from '../components/user-edit-dialog'
 import { UserEditDialog } from '../components/user-edit-dialog'
+import { UserLockDialog, useUnlockUser } from '../components/user-lock-dialog'
 import { useAuth } from '../contexts/auth-context'
 import type { AuditLogsResponse, GatewayUser, RoleName, UserSessionSummary } from '../lib/api'
 import { AVAILABLE_ROLES, api } from '../lib/api'
@@ -73,6 +74,7 @@ function SessionTable({
             <TableHead>Created</TableHead>
             <TableHead>Last Seen</TableHead>
             <TableHead>Expires</TableHead>
+            <TableHead>Client</TableHead>
             <TableHead>IP</TableHead>
             <TableHead>User Agent</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -92,6 +94,9 @@ function SessionTable({
                 </TableCell>
                 <TableCell className="text-sm">
                   <TimeAgo date={session.expires_at ?? null} />
+                </TableCell>
+                <TableCell className="text-sm">
+                  {session.channel === 'cli' ? 'CLI' : 'Browser'}
                 </TableCell>
                 <TableCell className="font-mono text-sm">{session.ip_address || '—'}</TableCell>
                 <TableCell className="max-w-[220px] truncate text-sm" title={session.user_agent}>
@@ -136,6 +141,7 @@ export function UserPage() {
   const [pendingSessionId, setPendingSessionId] = useState<SessionId | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [isLockDialogOpen, setIsLockDialogOpen] = useState(false)
 
   const {
     data: user,
@@ -395,6 +401,20 @@ export function UserPage() {
     },
   })
 
+  const unlockUserMutation = useUnlockUser()
+
+  const handleRequestLockUser = () => {
+    if (currentUser?.email === decodedEmail) {
+      toast.error("You can't lock your own account")
+      return
+    }
+    setIsLockDialogOpen(true)
+  }
+
+  const handleUnlockUser = async () => {
+    await unlockUserMutation.mutateAsync(decodedEmail)
+  }
+
   const deleteUserMutation = useMutation({
     mutationFn: () => api.delete(`/.gateway/api/admin/users/${encodeURIComponent(decodedEmail)}`),
     onSuccess: () => {
@@ -472,6 +492,29 @@ export function UserPage() {
           >
             <Edit2 className="mr-2 h-4 w-4" /> Edit
           </Button>
+          {user?.locked_at ? (
+            <Button
+              disabled={unlockUserMutation.isPending || userLoading}
+              onClick={handleUnlockUser}
+              variant="secondary"
+            >
+              {unlockUserMutation.isPending ? (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Unlock className="mr-2 h-4 w-4" />
+              )}
+              Unlock Account
+            </Button>
+          ) : (
+            <Button
+              disabled={userLoading || !user}
+              onClick={handleRequestLockUser}
+              variant="secondary"
+            >
+              <Lock className="mr-2 h-4 w-4" />
+              Lock Account
+            </Button>
+          )}
           <Button
             disabled={revokeAllMutation.isPending || userLoading || sessions.length === 0}
             onClick={() => revokeAllMutation.mutate()}
@@ -496,6 +539,33 @@ export function UserPage() {
       </div>
 
       <div className="space-y-6">
+        {user?.locked_at && (
+          <Card className="border-orange-500/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-orange-400">
+                <Lock className="h-5 w-5" />
+                Locked
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium">Locked at:</span> <TimeAgo date={user.locked_at} />
+              </div>
+              {user.locked_by_name && (
+                <div>
+                  <span className="font-medium">Locked by:</span> {user.locked_by_name}
+                  {user.locked_by_email && ` (${user.locked_by_email})`}
+                </div>
+              )}
+              {user.locked_reason && (
+                <div>
+                  <span className="font-medium">Reason:</span> {user.locked_reason}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card data-testid="user-sessions-card">
           <CardHeader>
             <CardTitle>Active Sessions</CardTitle>
@@ -552,6 +622,12 @@ export function UserPage() {
         onOpenChange={handleDeleteDialogOpenChange}
         open={isDeleteOpen}
         title="Delete User"
+      />
+
+      <UserLockDialog
+        onOpenChange={setIsLockDialogOpen}
+        open={isLockDialogOpen}
+        userEmail={decodedEmail}
       />
     </div>
   )

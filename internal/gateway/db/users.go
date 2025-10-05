@@ -41,11 +41,17 @@ func (d *Database) GetUser(email string) (*User, error) {
 	var user User
 	var rolesJSON string
 	var lockedReason sql.NullString
+	var lockedByEmail, lockedByName sql.NullString
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id FROM users WHERE email = ?",
+		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended, u.mfa_enrolled, u.mfa_enforced_at, u.preferred_mfa_method,
+			u.locked_at, u.locked_reason, u.locked_by_user_id,
+			lbu.email, lbu.name
+		FROM users u
+		LEFT JOIN users lbu ON lbu.id = u.locked_by_user_id
+		WHERE u.email = ?`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID, &lockedByEmail, &lockedByName)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -60,6 +66,12 @@ func (d *Database) GetUser(email string) (*User, error) {
 
 	if lockedReason.Valid {
 		user.LockedReason = lockedReason.String
+	}
+	if lockedByEmail.Valid {
+		user.LockedByEmail = lockedByEmail.String
+	}
+	if lockedByName.Valid {
+		user.LockedByName = lockedByName.String
 	}
 
 	return &user, nil

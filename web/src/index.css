@@ -149,10 +149,13 @@
     background-color: var(--primary);
     color: #fff;
   }
+
   /* Cursor pointer for interactive elements */
   input[type="checkbox"],
-  label {
-    @apply cursor-pointer;
+  label,
+  button:not([disabled]),
+  [role="button"]:not([disabled]) {
+    cursor: pointer;
   }
 }
 #root :where(.rdp-root),

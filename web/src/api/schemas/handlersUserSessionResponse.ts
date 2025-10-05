@@ -7,6 +7,7 @@
  */
 
 export interface HandlersUserSessionResponse {
+  channel?: string;
   created_at?: string;
   expires_at?: string;
   id?: number;

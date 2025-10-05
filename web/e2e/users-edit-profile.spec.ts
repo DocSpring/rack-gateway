@@ -23,8 +23,9 @@ test('users: edit name and email', async ({ page }) => {
   await expect(row).toBeVisible()
   await expect(row).toContainText(name1)
 
-  // Open edit dialog
-  await row.getByRole('button', { name: /Edit User/i }).click()
+  // Open edit dialog - open dropdown and click Edit User
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByRole('menuitem', { name: 'Edit User' }).click()
 
   // Change name and email
   const email2 = `e2e-edit-${Date.now()}-updated@example.com`
@@ -47,8 +48,9 @@ test('users: edit name and email', async ({ page }) => {
   await expect(row).toBeVisible()
   await expect(row).toContainText(name2)
 
-  // Cleanup: delete the user
-  await row.getByRole('button', { name: /Delete User/i }).click()
+  // Cleanup: delete the user - open dropdown and click Delete User
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByRole('menuitem', { name: 'Delete User' }).click()
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')

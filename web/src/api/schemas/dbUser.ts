@@ -14,6 +14,8 @@ export interface DbUser {
   email?: string;
   id?: number;
   locked_at?: string;
+  locked_by_email?: string;
+  locked_by_name?: string;
   locked_by_user_id?: number;
   locked_reason?: string;
   mfa_enforced_at?: string;
@@ -22,7 +24,5 @@ export interface DbUser {
   preferred_mfa_method?: string;
   roles?: string[];
   suspended?: boolean;
-  unlocked_at?: string;
-  unlocked_by_user_id?: number;
   updated_at?: string;
 }

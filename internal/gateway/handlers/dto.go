@@ -278,6 +278,7 @@ type UserSessionResponse struct {
 	CreatedAt string      `json:"created_at"`
 	LastSeen  string      `json:"last_seen_at"`
 	ExpiresAt string      `json:"expires_at"`
+	Channel   string      `json:"channel"`
 	IPAddress string      `json:"ip_address,omitempty"`
 	UserAgent string      `json:"user_agent,omitempty"`
 	Metadata  interface{} `json:"metadata,omitempty"`

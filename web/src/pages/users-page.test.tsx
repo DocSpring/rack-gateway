@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../contexts/auth-context'
@@ -194,13 +195,19 @@ describe('UsersPage', () => {
         throw new Error('Viewer row not found')
       }
 
-      // Find the edit button within that row (first button with Edit2 icon)
-      const buttons = within(viewerRow).getAllByRole('button')
-      const editButton = buttons[0] // First button is edit
-      fireEvent.click(editButton)
+      // Find the dropdown menu button within that row
+      const dropdownButton = within(viewerRow).getByRole('button', {
+        name: /actions for viewer@example.com/i,
+      })
+      const user = userEvent.setup()
+      await user.click(dropdownButton)
+
+      // Click "Edit User" from the dropdown
+      const editMenuItem = await screen.findByText('Edit User')
+      await user.click(editMenuItem)
 
       await waitFor(() => {
-        expect(screen.getByText('Edit User')).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Edit User' })).toBeInTheDocument()
       })
 
       // Select admin role via radio
@@ -241,13 +248,16 @@ describe('UsersPage', () => {
         throw new Error('Viewer row not found')
       }
 
-      // Find the delete button within that row (has Trash2 icon)
-      const buttons = within(viewerRow).getAllByRole('button')
-      const deleteButton = buttons.at(-1) // Last button is delete
-      if (!deleteButton) {
-        throw new Error('Delete button not found')
-      }
-      fireEvent.click(deleteButton)
+      // Open the dropdown menu
+      const dropdownButton = within(viewerRow).getByRole('button', {
+        name: /actions for viewer@example.com/i,
+      })
+      const user = userEvent.setup()
+      await user.click(dropdownButton)
+
+      // Click "Delete User" from the dropdown
+      const deleteMenuItem = await screen.findByText('Delete User')
+      await user.click(deleteMenuItem)
 
       const dialog = await screen.findByRole('dialog')
       const confirmationInput = within(dialog).getByLabelText(/confirmation/i)
@@ -271,12 +281,24 @@ describe('UsersPage', () => {
         expect(screen.getByText('Admin User')).toBeInTheDocument()
       })
 
-      // Find delete button for admin user (current user)
+      // Find dropdown menu for admin user (current user)
       const rows = screen.getAllByRole('row')
       const adminRow = rows.find((row) => row.textContent?.includes('admin@example.com'))
-      const deleteButton = adminRow?.querySelector('button[disabled]')
+      if (!adminRow) {
+        throw new Error('Admin row not found')
+      }
 
-      expect(deleteButton).toBeDisabled()
+      // Open the dropdown menu
+      const dropdownButton = within(adminRow).getByRole('button', {
+        name: /actions for admin@example.com/i,
+      })
+      const user = userEvent.setup()
+      await user.click(dropdownButton)
+
+      // Find the "Delete User" menu item and verify it's disabled
+      const deleteMenuItem = await screen.findByText('Delete User')
+      const menuItem = deleteMenuItem.closest('div[data-slot="dropdown-menu-item"]')
+      expect(menuItem).toHaveAttribute('data-disabled')
     })
 
     it('renders users without dates safely', async () => {
