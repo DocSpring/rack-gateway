@@ -107,7 +107,7 @@ tasks:
     env:
       TEST_DATABASE_URL: "{{.ENV.TEST_DATABASE_URL}}"
       DATABASE_URL: "{{if .ENV.TEST_DATABASE_URL}}{{.ENV.TEST_DATABASE_URL}}{{else}}{{.ENV.DATABASE_URL}}{{end}}"
-    deps: [deps, build]
+    deps: [deps, build, ":db:ensure:test"]
     sources:
       - Taskfile.go.yml
       - go.*

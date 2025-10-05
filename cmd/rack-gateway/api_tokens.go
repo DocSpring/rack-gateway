@@ -58,7 +58,7 @@ func writef(out io.Writer, format string, args ...any) error {
 	return err
 }
 
-func newAPITokenCommand() *cobra.Command {
+func apiTokenCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api-token",
 		Short: "Manage API tokens for the current gateway",

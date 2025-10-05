@@ -217,10 +217,8 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 	require.NoError(t, saveConfig(&Config{
 		Current: "staging",
 		Gateways: map[string]GatewayConfig{
-			"staging": {URL: "https://gateway-staging.example.com"},
-		},
-		Tokens: map[string]Token{
 			"staging": {
+				URL:       "https://gateway-staging.example.com",
 				Token:     "abc123",
 				Email:     "user@example.com",
 				ExpiresAt: time.Now().Add(24 * time.Hour).UTC(),

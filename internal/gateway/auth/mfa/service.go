@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -583,12 +584,22 @@ func (s *Service) StartWebAuthnEnrollment(user *db.User) (*StartWebAuthnEnrollme
 
 // ConfirmWebAuthnEnrollment finalizes WebAuthn registration.
 // sessionDataJSON is the WebAuthn session data returned from StartWebAuthnEnrollment.
-func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, sessionDataJSON []byte, credentialJSON []byte, label string) (int64, error) {
+// methodID is the placeholder method ID returned from StartWebAuthnEnrollment.
+func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, methodID int64, sessionDataJSON []byte, credentialJSON []byte, label string) (int64, error) {
 	if user == nil {
 		return 0, fmt.Errorf("user required")
 	}
 	if s.webAuthn == nil {
 		return 0, fmt.Errorf("WebAuthn not configured")
+	}
+
+	// Verify the placeholder method exists and belongs to this user
+	method, err := s.db.GetMFAMethodByID(methodID)
+	if err != nil || method == nil || method.UserID != user.ID {
+		return 0, fmt.Errorf("invalid method ID")
+	}
+	if method.Type != "webauthn_pending" {
+		return 0, fmt.Errorf("method is not pending confirmation")
 	}
 
 	var session webauthn.SessionData
@@ -614,7 +625,7 @@ func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, sessionDataJSON []byt
 		return 0, fmt.Errorf("failed to create credential: %w", err)
 	}
 
-	// Store credential
+	// Prepare credential data
 	var transports []string
 	for _, t := range credential.Transport {
 		transports = append(transports, string(t))
@@ -628,21 +639,22 @@ func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, sessionDataJSON []byt
 	metadata := map[string]interface{}{
 		"flags": credential.Flags,
 	}
-
-	method, err := s.db.CreateMFAMethod(user.ID, "webauthn", label, "", credential.ID, credential.PublicKey, transports, metadata)
+	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
+		return 0, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Update the placeholder method with actual credential data
+	if err := s.db.UpdateMFAMethodCredential(methodID, "webauthn", label, credential.ID, credential.PublicKey, transports, metadataJSON); err != nil {
 		return 0, err
 	}
 
 	// Finalize enrollment
-	if err := s.finalizeEnrollment(user.ID, method.ID); err != nil {
+	if err := s.finalizeEnrollment(user.ID, methodID); err != nil {
 		return 0, err
 	}
 
-	// Clean up any pending placeholder methods
-	_ = s.db.DeleteUnconfirmedMFAMethods(user.ID)
-
-	return method.ID, nil
+	return methodID, nil
 }
 
 // StartWebAuthnAssertion begins a WebAuthn assertion (login) ceremony.
@@ -661,10 +673,21 @@ func (s *Service) StartWebAuthnAssertion(user *db.User) (*protocol.CredentialAss
 	}
 
 	waUser := &webAuthnUser{user: user, methods: methods}
+
+	// Debug logging
+	log.Printf("[DEBUG] StartWebAuthnAssertion: user=%s methods_count=%d", user.Email, len(methods))
+	creds := waUser.WebAuthnCredentials()
+	log.Printf("[DEBUG] WebAuthnCredentials returned: %d credentials", len(creds))
+	for i, cred := range creds {
+		log.Printf("[DEBUG]   [%d] ID=%x...", i, cred.ID[:20])
+	}
+
 	options, session, err := s.webAuthn.BeginLogin(waUser)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin login: %w", err)
 	}
+
+	log.Printf("[DEBUG] BeginLogin returned: %d allowed credentials", len(options.Response.AllowedCredentials))
 
 	// Serialize session data for storage
 	sessionJSON, err := json.Marshal(session)
@@ -739,11 +762,15 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 
 	waUser := &webAuthnUser{user: user, methods: methods}
 
+	log.Printf("[DEBUG] VerifyWebAuthnAssertion: credentialJSON=%s", string(credentialJSON))
+
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(strings.NewReader(string(credentialJSON)))
 	if err != nil {
 		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "invalid_credential", ipAddress, userAgent, sessionID)
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
 	}
+
+	log.Printf("[DEBUG] ParsedResponse: ID=%x RawID=%x", parsedResponse.ID, parsedResponse.RawID)
 
 	credential, err := s.webAuthn.ValidateLogin(waUser, session, parsedResponse)
 	if err != nil {

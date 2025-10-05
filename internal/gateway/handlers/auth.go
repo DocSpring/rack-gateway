@@ -1593,7 +1593,7 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body ConfirmWebAuthnEnrollmentRequest true "WebAuthn credential"
-// @Success 200 {object} StatusResponse
+// @Success 200 {object} WebAuthnEnrollmentResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -1668,7 +1668,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		label = "Security Key"
 	}
 
-	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(userRecord, []byte(sessionDataStr), credentialJSON, label)
+	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(userRecord, req.MethodID, []byte(sessionDataStr), credentialJSON, label)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

@@ -2334,7 +2334,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
+                        "application/json": components["schemas"]["handlers.WebAuthnEnrollmentResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -4112,6 +4112,10 @@ export interface components {
             options?: unknown;
             /** @description Serialized session to send back with verification */
             session_data?: string;
+        };
+        "handlers.WebAuthnEnrollmentResponse": {
+            method_id?: number;
+            status?: string;
         };
     };
     responses: never;

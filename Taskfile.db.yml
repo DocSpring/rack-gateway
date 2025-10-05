@@ -18,6 +18,15 @@ tasks:
     sources:
       - internal/gateway/db/migrations/**/*.sql
 
+  ensure:test:
+    desc: Ensure the gateway_test database exists and is migrated
+    run: once
+    cmds:
+      - ./scripts/ensure-test-db.sh
+    sources:
+      - ./scripts/ensure-test-db.sh
+      - docker-compose.yml
+
   migrate:test:
     desc: Apply database migrations to test database
     deps: [":docker:test:up", ":docker:test:wait"]

@@ -200,7 +200,7 @@ export function AccountSecurityPage() {
           credential as PublicKeyCredential
         )
 
-        await confirmWebAuthnEnrollment({
+        const confirmResponse = await confirmWebAuthnEnrollment({
           method_id: data.method_id ?? 0,
           credential: credentialForBackend,
           label: 'Security Key',
@@ -216,8 +216,9 @@ export function AccountSecurityPage() {
         })
 
         // Automatically open the edit dialog so user can customize the label
+        // Use the method_id from the confirm response, not the start response
         setEditingMethod({
-          id: data.method_id ?? 0,
+          id: confirmResponse.method_id ?? 0,
           label: 'Security Key',
         })
         setEditLabel('Security Key')

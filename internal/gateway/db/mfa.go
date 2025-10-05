@@ -225,6 +225,19 @@ func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
 	return nil
 }
 
+func (d *Database) UpdateMFAMethodCredential(methodID int64, methodType string, label string, credentialID []byte, publicKey []byte, transports []string, metadata []byte) error {
+	query := `
+		UPDATE mfa_methods
+		SET type = ?, label = ?, credential_id = ?, public_key = ?, transports = ?, metadata = ?
+		WHERE id = ?
+	`
+	_, err := d.exec(query, methodType, nullableString(label, 150), credentialID, publicKey, jsonStringArray(transports), string(metadata), methodID)
+	if err != nil {
+		return fmt.Errorf("failed to update mfa method credential: %w", err)
+	}
+	return nil
+}
+
 func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at

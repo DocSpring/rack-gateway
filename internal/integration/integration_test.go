@@ -416,11 +416,7 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
-				"url": "http://localhost:" + gatewayPort,
-			},
-		},
-		"tokens": map[string]interface{}{
-			"staging": map[string]interface{}{
+				"url":        "http://localhost:" + gatewayPort,
 				"token":      "test-jwt-token",
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
@@ -494,11 +490,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
-				"url": "http://localhost:" + gatewayPort,
-			},
-		},
-		"tokens": map[string]interface{}{
-			"staging": map[string]interface{}{
+				"url":        "http://localhost:" + gatewayPort,
 				"token":      "invalid-jwt-token",
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
@@ -521,7 +513,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 	// Should fail with authentication error
 	require.Error(t, err, "Command should fail with invalid token")
 	assert.Contains(t, string(output), "ERROR")
-	assert.Contains(t, string(output), "invalid")
+	assert.Contains(t, string(output), "authentication failed")
 }
 
 // Test end-to-end proxy functionality with real commands
@@ -536,11 +528,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
-				"url": "http://localhost:" + gatewayPort,
-			},
-		},
-		"tokens": map[string]interface{}{
-			"staging": map[string]interface{}{
+				"url":        "http://localhost:" + gatewayPort,
 				"token":      validJWT,
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
@@ -630,11 +618,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 			"current": "staging",
 			"gateways": map[string]interface{}{
 				"staging": map[string]interface{}{
-					"url": "http://localhost:" + gatewayPort,
-				},
-			},
-			"tokens": map[string]interface{}{
-				"staging": map[string]interface{}{
+					"url":        "http://localhost:" + gatewayPort,
 					"token":      tokenString,
 					"email":      email,
 					"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),

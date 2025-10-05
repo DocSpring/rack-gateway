@@ -122,6 +122,12 @@ type StatusResponse struct {
 	Status string `json:"status"`
 }
 
+// WebAuthnEnrollmentResponse is returned after successful WebAuthn enrollment
+type WebAuthnEnrollmentResponse struct {
+	Status   string `json:"status"`
+	MethodID int64  `json:"method_id"`
+}
+
 // HealthResponse represents the health check payload.
 type HealthResponse struct {
 	Status  string `json:"status"`

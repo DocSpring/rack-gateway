@@ -78,5 +78,6 @@ export * from './handlersVerifyMFARequest';
 export * from './handlersVerifyMFAResponse';
 export * from './handlersVerifyWebAuthnAssertionRequest';
 export * from './handlersWebAuthnAssertionStartResponse';
+export * from './handlersWebAuthnEnrollmentResponse';
 export * from './postAdminUsersEmailLock200';
 export * from './postAdminUsersEmailUnlock200';

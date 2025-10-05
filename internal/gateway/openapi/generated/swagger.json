@@ -2017,7 +2017,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.StatusResponse"
+                            "$ref": "#/definitions/handlers.WebAuthnEnrollmentResponse"
                         }
                     },
                     "400": {
@@ -4185,6 +4185,17 @@
                 },
                 "session_data": {
                     "description": "Serialized session to send back with verification",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WebAuthnEnrollmentResponse": {
+            "type": "object",
+            "properties": {
+                "method_id": {
+                    "type": "integer"
+                },
+                "status": {
                     "type": "string"
                 }
             }

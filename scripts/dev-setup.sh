@@ -50,9 +50,47 @@ install_air() {
   echo "- air installed: $(air -v 2>&1 | head -n1)"
 }
 
+install_libfido2() {
+  echo "- Checking for libfido2..."
+
+  # Check if libfido2 is already installed
+  if pkg-config --exists libfido2 2>/dev/null; then
+    echo "  libfido2 already installed: $(pkg-config --modversion libfido2)"
+    return
+  fi
+
+  echo "- Installing libfido2 (required for WebAuthn CLI support)..."
+
+  if have brew; then
+    # macOS
+    brew install libfido2
+  elif have apt-get; then
+    # Ubuntu/Debian
+    echo "  Installing via apt (requires sudo)..."
+    sudo apt-get update
+    sudo apt-get install -y software-properties-common
+    sudo apt-add-repository -y ppa:yubico/stable
+    sudo apt-get update
+    sudo apt-get install -y libfido2-dev
+  else
+    echo "  Could not automatically install libfido2."
+    echo "  Please install manually:"
+    echo "    macOS: brew install libfido2"
+    echo "    Linux: sudo apt-add-repository ppa:yubico/stable && sudo apt install libfido2-dev"
+    return
+  fi
+
+  if pkg-config --exists libfido2 2>/dev/null; then
+    echo "  libfido2 installed: $(pkg-config --modversion libfido2)"
+  else
+    echo "  libfido2 installation may have failed"
+  fi
+}
+
 install_task
 install_pnpm
 install_air
+install_libfido2
 
 echo "==> Done"
 echo "Run: task dev   # start the dev stack"

@@ -179,7 +179,8 @@ func clientIPFromRequest(r *http.Request) string {
 func (a *AuthService) validateJWT(tokenString string) (*AuthUser, error) {
 	claims, err := a.jwtManager.ValidateToken(tokenString)
 	if err != nil {
-		return nil, fmt.Errorf("invalid JWT: %w", err)
+		// Don't expose JWT validation details - just return a generic error
+		return nil, fmt.Errorf("authentication failed")
 	}
 
 	// Get user roles from database

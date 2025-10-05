@@ -42,6 +42,7 @@ import type {
   HandlersVerifyMFAResponse,
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
+  HandlersWebAuthnEnrollmentResponse,
 } from '@/api/schemas'
 
 const API_PREFIX = '/.gateway/api'
@@ -282,8 +283,8 @@ export const startWebAuthnEnrollment = (): Promise<HandlersStartWebAuthnEnrollme
 
 export const confirmWebAuthnEnrollment = (
   payload: HandlersConfirmWebAuthnEnrollmentRequest
-): Promise<HandlersVerifyMFAResponse> =>
-  post<HandlersVerifyMFAResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
+): Promise<HandlersWebAuthnEnrollmentResponse> =>
+  post<HandlersWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
 
 export const verifyCliMfa = (payload: {
   state: string

@@ -35,7 +35,7 @@ func (e *deployApprovalRequestConflictError) Error() string {
 	return "deploy approval request already exists"
 }
 
-func newDeployApprovalCommand() *cobra.Command {
+func deployApprovalCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy-approval",
 		Short: "Manage deploy approvals",

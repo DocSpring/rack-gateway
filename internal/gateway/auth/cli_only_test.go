@@ -166,14 +166,14 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 			authHeader:     "Bearer invalid-token",
 			cookie:         nil,
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "invalid JWT",
+			expectedBody:   "authentication failed",
 		},
 		{
 			name:           "Expired token - blocked",
 			authHeader:     "Bearer " + generateExpiredToken(jwtSecret),
 			cookie:         nil,
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "invalid JWT",
+			expectedBody:   "authentication failed",
 		},
 	}
 

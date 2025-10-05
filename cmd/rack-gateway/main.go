@@ -23,27 +23,23 @@ import (
 )
 
 type Config struct {
-	Current        string                   `json:"current,omitempty"`
-	Gateways       map[string]GatewayConfig `json:"gateways"`
-	Tokens         map[string]Token         `json:"tokens"`
-	MachineID      string                   `json:"machine_id,omitempty"`
-	MFAPreference  string                   `json:"mfa_preference,omitempty"`  // "auto", "webauthn", "totp", "backup_code", or "prompt"
-	MFAPreferences map[string]string        `json:"mfa_preferences,omitempty"` // per-rack MFA preferences
+	Current       string                   `json:"current,omitempty"`
+	Gateways      map[string]GatewayConfig `json:"gateways"`
+	MachineID     string                   `json:"machine_id,omitempty"`
+	MFAPreference string                   `json:"mfa_preference,omitempty"` // Global default: "default", "webauthn", or "totp"
 }
 
 type GatewayConfig struct {
-	URL string `json:"url"`
-}
-
-type Token struct {
-	Token       string    `json:"token"`
-	Email       string    `json:"email"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	SessionID   int64     `json:"session_id"`
-	Channel     string    `json:"channel"`
-	DeviceID    string    `json:"device_id,omitempty"`
-	DeviceName  string    `json:"device_name,omitempty"`
-	MFAVerified bool      `json:"mfa_verified,omitempty"`
+	URL           string    `json:"url"`
+	Token         string    `json:"token,omitempty"`
+	Email         string    `json:"email,omitempty"`
+	ExpiresAt     time.Time `json:"expires_at,omitempty"`
+	SessionID     int64     `json:"session_id,omitempty"`
+	Channel       string    `json:"channel,omitempty"`
+	DeviceID      string    `json:"device_id,omitempty"`
+	DeviceName    string    `json:"device_name,omitempty"`
+	MFAVerified   bool      `json:"mfa_verified,omitempty"`
+	MFAPreference string    `json:"mfa_preference,omitempty"` // Per-rack override: "default", "webauthn", or "totp"
 }
 
 var ErrLoginPending = errors.New("login pending")
@@ -71,19 +67,13 @@ func loadConfig() (*Config, bool, error) {
 	if cfg.Gateways == nil {
 		cfg.Gateways = make(map[string]GatewayConfig)
 	}
-	if cfg.Tokens == nil {
-		cfg.Tokens = make(map[string]Token)
-	}
-	if cfg.MFAPreferences == nil {
-		cfg.MFAPreferences = make(map[string]string)
-	}
 	dirty := false
 	if strings.TrimSpace(cfg.MachineID) == "" {
 		cfg.MachineID = uuid.NewString()
 		dirty = true
 	}
 	if cfg.MFAPreference == "" {
-		cfg.MFAPreference = "auto" // Default to auto mode
+		cfg.MFAPreference = "default" // Default to user's profile preference
 		dirty = true
 	}
 	if dirty {
@@ -100,12 +90,6 @@ func saveConfig(cfg *Config) error {
 	}
 	if cfg.Gateways == nil {
 		cfg.Gateways = make(map[string]GatewayConfig)
-	}
-	if cfg.Tokens == nil {
-		cfg.Tokens = make(map[string]Token)
-	}
-	if cfg.MFAPreferences == nil {
-		cfg.MFAPreferences = make(map[string]string)
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -159,12 +143,13 @@ type DeviceInfo struct {
 }
 
 var (
-	configPath   string
-	rackFlag     string
-	apiTokenFlag string
-	Version      = "dev"
-	BuildTime    = "unknown"
-	httpClient   = &http.Client{Timeout: 30 * time.Second}
+	configPath    string
+	rackFlag      string
+	apiTokenFlag  string
+	mfaMethodFlag string
+	Version       = "dev"
+	BuildTime     = "unknown"
+	httpClient    = &http.Client{Timeout: 30 * time.Second}
 )
 
 func silenceOnError(fn func(cmd *cobra.Command, args []string) error) func(*cobra.Command, []string) error {
@@ -207,6 +192,7 @@ Rack management:
 	}
 
 	rootCmd.PersistentFlags().StringVar(&apiTokenFlag, "api-token", "", "API token to use for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
+	rootCmd.PersistentFlags().StringVar(&mfaMethodFlag, "mfa-method", "", "MFA method to use (totp or webauthn)")
 
 	var noOpen bool
 	var authFile string
@@ -593,7 +579,7 @@ PowerShell:
 
 	loginCmd.AddCommand(loginStartCmd, loginCompleteCmd)
 
-	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, envCmd, newAPITokenCommand(), newDeployApprovalCommand())
+	rootCmd.AddCommand(convoxCmd, loginCmd, switchCmd, rackCmd, racksCmd, versionCmd, logoutCmd, webCmd, completionCmd, envCmd, apiTokenCommand(), deployApprovalCommand(), testAuthCommand())
 
 	// Allow config path to be set via environment variable or flag
 	defaultConfigPath := getEnv("GATEWAY_CLI_CONFIG_DIR", filepath.Join(homeDir(), ".config", "rack-gateway"))
@@ -867,19 +853,29 @@ func performMFAVerification(gatewayURL string, resp *LoginResponse) error {
 	// Determine which method to use based on preference
 	cfg, _, err := loadConfig()
 	if err != nil {
-		cfg = &Config{MFAPreference: "auto"}
+		cfg = &Config{MFAPreference: "default"}
 	}
 
 	preference := cfg.MFAPreference
-	if rack != "" && cfg.MFAPreferences != nil {
-		if rackPref, ok := cfg.MFAPreferences[rack]; ok {
-			preference = rackPref
+	if rack != "" {
+		if gateway, ok := cfg.Gateways[rack]; ok && gateway.MFAPreference != "" {
+			preference = gateway.MFAPreference
 		}
 	}
 
 	// Try methods based on preference
-	if preference == "prompt" || (preference == "auto" && len(mfaStatus.Methods) > 1) {
-		// Let user select
+	if preference == "default" && len(mfaStatus.Methods) > 1 {
+		// Default mode with multiple methods - try in preference order
+		methods := filterMethodsByPreference(mfaStatus.Methods, preference)
+		for _, method := range methods {
+			if err := tryMFAMethod(normalized, resp.Token, method); err == nil {
+				fmt.Printf("MFA verified successfully with %s.\n", method.Type)
+				resp.MFAVerified = true
+				resp.MFARequired = false
+				return nil
+			}
+		}
+		// If all methods failed, prompt user to try manually
 		return promptAndVerifyMFAMethod(normalized, resp, mfaStatus.Methods)
 	}
 
@@ -930,7 +926,7 @@ func submitMFAVerification(baseURL, sessionToken, code string) error {
 func promptMFACode() (string, error) {
 	fd := int(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
-		fmt.Print("Enter MFA code (TOTP, Yubikey OTP, or backup code): ")
+		fmt.Print("Enter MFA code (TOTP or backup code): ")
 		codeBytes, err := term.ReadPassword(fd)
 		fmt.Println()
 		if err != nil {
@@ -948,9 +944,10 @@ func promptMFACode() (string, error) {
 }
 
 type mfaStatusResponse struct {
-	Enrolled bool                `json:"enrolled"`
-	Required bool                `json:"required"`
-	Methods  []mfaMethodResponse `json:"methods"`
+	Enrolled        bool                `json:"enrolled"`
+	Required        bool                `json:"required"`
+	Methods         []mfaMethodResponse `json:"methods"`
+	PreferredMethod *string             `json:"preferred_method,omitempty"`
 }
 
 type mfaMethodResponse struct {
@@ -1011,42 +1008,69 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 
 	var startResp struct {
 		Options struct {
-			Challenge        string `json:"challenge"`
-			Timeout          int    `json:"timeout"`
-			RPID             string `json:"rpId"`
-			AllowCredentials []struct {
-				ID   string `json:"id"`
-				Type string `json:"type"`
-			} `json:"allowCredentials"`
-			UserVerification string `json:"userVerification"`
+			PublicKey struct {
+				Challenge        string `json:"challenge"`
+				Timeout          int    `json:"timeout"`
+				RPID             string `json:"rpId"`
+				AllowCredentials []struct {
+					ID   string `json:"id"`
+					Type string `json:"type"`
+				} `json:"allowCredentials"`
+				UserVerification string `json:"userVerification"`
+			} `json:"publicKey"`
 		} `json:"options"`
 		SessionData string `json:"session_data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&startResp); err != nil {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	fmt.Printf("  [DEBUG] Server response: %s\n", string(bodyBytes))
+
+	if err := json.Unmarshal(bodyBytes, &startResp); err != nil {
 		return fmt.Errorf("failed to decode assertion start response: %w", err)
 	}
 
 	// Extract allowed credential IDs
 	var allowedCreds []string
-	for _, cred := range startResp.Options.AllowCredentials {
+	for _, cred := range startResp.Options.PublicKey.AllowCredentials {
 		allowedCreds = append(allowedCreds, cred.ID)
 	}
 
-	// Get origin from base URL
+	// Get origin and RPID from base URL
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse gateway URL: %w", err)
 	}
 	origin := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+	rpID := parsedURL.Hostname()
+
+	// Debug output
+	fmt.Printf("  [DEBUG] RPID: %s\n", rpID)
+	fmt.Printf("  [DEBUG] Origin: %s\n", origin)
+	fmt.Printf("  [DEBUG] Server RPID: %s\n", startResp.Options.PublicKey.RPID)
+	fmt.Printf("  [DEBUG] Allowed credentials: %d\n", len(allowedCreds))
+	for i, cred := range allowedCreds {
+		if len(cred) > 40 {
+			fmt.Printf("    [%d] %s...\n", i+1, cred[:40])
+		} else {
+			fmt.Printf("    [%d] %s\n", i+1, cred)
+		}
+	}
+
+	// Check if we have any credentials
+	if len(allowedCreds) == 0 {
+		return fmt.Errorf("no WebAuthn credentials found - please enroll a security key first")
+	}
 
 	// Perform WebAuthn assertion
 	assertionOpts := webauthn.AssertionOptions{
-		Challenge:        startResp.Options.Challenge,
-		RPID:             startResp.Options.RPID,
+		Challenge:        startResp.Options.PublicKey.Challenge,
+		RPID:             rpID, // Use hostname from gateway URL
 		AllowCredentials: allowedCreds,
-		Timeout:          startResp.Options.Timeout,
-		UserVerification: startResp.Options.UserVerification,
+		Timeout:          startResp.Options.PublicKey.Timeout,
+		UserVerification: startResp.Options.PublicKey.UserVerification,
 		Origin:           origin,
 	}
 
@@ -1055,11 +1079,26 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 		return fmt.Errorf("WebAuthn assertion failed: %w", err)
 	}
 
+	// Format assertion response in WebAuthn spec format
+	webauthnResponse := map[string]any{
+		"id":    assertion.CredentialID,
+		"rawId": assertion.CredentialID,
+		"response": map[string]string{
+			"authenticatorData": assertion.AuthenticatorData,
+			"clientDataJSON":    assertion.ClientDataJSON,
+			"signature":         assertion.Signature,
+			"userHandle":        assertion.UserHandle,
+		},
+		"type": "public-key",
+	}
+
 	// Serialize assertion response
-	assertionJSON, err := json.Marshal(assertion)
+	assertionJSON, err := json.Marshal(webauthnResponse)
 	if err != nil {
 		return fmt.Errorf("failed to marshal assertion: %w", err)
 	}
+
+	fmt.Printf("  [DEBUG] Sending assertion: %s\n", string(assertionJSON))
 
 	// Submit assertion to gateway
 	verifyEndpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
@@ -1095,13 +1134,25 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	return nil
 }
 
+// checkWebAuthnAvailability safely checks if WebAuthn is available, catching any panics
+func checkWebAuthnAvailability() bool {
+	defer func() {
+		if r := recover(); r != nil {
+			// Device check panicked, assume not available (intentionally swallowing panic)
+			_ = r
+		}
+	}()
+	return webauthn.CheckAvailability()
+}
+
 // filterMethodsByPreference returns methods sorted by preference
 func filterMethodsByPreference(methods []mfaMethodResponse, preference string) []mfaMethodResponse {
-	if preference == "auto" {
-		// Auto mode: try WebAuthn first if device available, then TOTP, then backup codes
+	if preference == "default" {
+		// Default mode: WebAuthn first, then TOTP, then backup codes
+		// Don't check availability - just try to use the device and handle errors
 		var ordered []mfaMethodResponse
 		for _, m := range methods {
-			if m.Type == "webauthn" && !m.IsEnrolling && webauthn.CheckAvailability() {
+			if m.Type == "webauthn" && !m.IsEnrolling {
 				ordered = append(ordered, m)
 			}
 		}
@@ -1302,20 +1353,23 @@ func saveToken(rack string, loginResp *LoginResponse) error {
 	if err != nil {
 		return err
 	}
-	cfg.Tokens[rack] = Token{
-		Token:       loginResp.Token,
-		Email:       loginResp.Email,
-		ExpiresAt:   loginResp.ExpiresAt,
-		SessionID:   loginResp.SessionID,
-		Channel:     loginResp.Channel,
-		DeviceID:    loginResp.DeviceID,
-		DeviceName:  loginResp.DeviceName,
-		MFAVerified: loginResp.MFAVerified,
+	gateway, ok := cfg.Gateways[rack]
+	if !ok {
+		return fmt.Errorf("gateway not configured for rack: %s", rack)
 	}
+	gateway.Token = loginResp.Token
+	gateway.Email = loginResp.Email
+	gateway.ExpiresAt = loginResp.ExpiresAt
+	gateway.SessionID = loginResp.SessionID
+	gateway.Channel = loginResp.Channel
+	gateway.DeviceID = loginResp.DeviceID
+	gateway.DeviceName = loginResp.DeviceName
+	gateway.MFAVerified = loginResp.MFAVerified
+	cfg.Gateways[rack] = gateway
 	return saveConfig(cfg)
 }
 
-func loadToken(rack string) (*Token, error) {
+func loadToken(rack string) (*GatewayConfig, error) {
 	cfg, exists, err := loadConfig()
 	if err != nil {
 		return nil, err
@@ -1323,16 +1377,19 @@ func loadToken(rack string) (*Token, error) {
 	if !exists {
 		return nil, fmt.Errorf("no configuration found")
 	}
-	token, ok := cfg.Tokens[rack]
+	gateway, ok := cfg.Gateways[rack]
 	if !ok {
+		return nil, fmt.Errorf("no gateway found for rack: %s", rack)
+	}
+	if gateway.Token == "" {
 		return nil, fmt.Errorf("no token found for rack: %s", rack)
 	}
 
-	if time.Now().After(token.ExpiresAt) {
+	if time.Now().After(gateway.ExpiresAt) {
 		return nil, fmt.Errorf("token expired")
 	}
 
-	return &token, nil
+	return &gateway, nil
 }
 
 func saveGatewayConfig(rack, gatewayURL string) error {
@@ -1378,21 +1435,20 @@ func resolveRackStatus(now time.Time) (*rackStatus, error) {
 				GatewayURL: gateway.URL,
 			}
 
-			token, ok := cfg.Tokens[rack]
-			if !ok {
+			if gateway.Token == "" {
 				status.StatusLines = append(status.StatusLines, "Status: Not logged in")
 				return status, nil
 			}
-			if now.After(token.ExpiresAt) {
+			if now.After(gateway.ExpiresAt) {
 				status.StatusLines = append(status.StatusLines, "Status: Token expired")
 				return status, nil
 			}
 
 			status.StatusLines = append(status.StatusLines,
-				fmt.Sprintf("Status: Logged in as %s", token.Email))
+				fmt.Sprintf("Status: Logged in as %s", gateway.Email))
 			status.StatusLines = append(status.StatusLines,
-				fmt.Sprintf("Token expires: %s", token.ExpiresAt.Format(time.RFC3339)))
-			if !token.MFAVerified {
+				fmt.Sprintf("Token expires: %s", gateway.ExpiresAt.Format(time.RFC3339)))
+			if !gateway.MFAVerified {
 				status.StatusLines = append(status.StatusLines, "MFA: verification required (run an interactive login)")
 			}
 			return status, nil
@@ -1460,8 +1516,8 @@ func normalizeGatewayURL(raw string) (string, error) {
 	return trimmed, nil
 }
 
-// removeRack deletes both the gateway config and token for a rack.
-// Returns true if the rack existed in either map, false if nothing changed.
+// removeRack deletes the gateway config for a rack.
+// Returns true if the rack existed, false if nothing changed.
 func removeRack(rack string) (bool, error) {
 	cfg, exists, err := loadConfig()
 	if err != nil {
@@ -1473,10 +1529,6 @@ func removeRack(rack string) (bool, error) {
 	changed := false
 	if _, ok := cfg.Gateways[rack]; ok {
 		delete(cfg.Gateways, rack)
-		changed = true
-	}
-	if _, ok := cfg.Tokens[rack]; ok {
-		delete(cfg.Tokens, rack)
 		changed = true
 	}
 	if cfg.Current == rack {

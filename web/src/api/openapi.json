@@ -2447,7 +2447,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/handlers.StatusResponse"
+                                    "$ref": "#/components/schemas/handlers.WebAuthnEnrollmentResponse"
                                 }
                             }
                         }
@@ -4921,6 +4921,17 @@
                     },
                     "session_data": {
                         "description": "Serialized session to send back with verification",
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.WebAuthnEnrollmentResponse": {
+                "type": "object",
+                "properties": {
+                    "method_id": {
+                        "type": "integer"
+                    },
+                    "status": {
                         "type": "string"
                     }
                 }

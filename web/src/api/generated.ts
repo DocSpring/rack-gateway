@@ -65,6 +65,7 @@ import type {
   HandlersVerifyMFAResponse,
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
+  HandlersWebAuthnEnrollmentResponse,
   PostAdminUsersEmailLock200,
   PostAdminUsersEmailUnlock200,
 } from './schemas';
@@ -710,10 +711,10 @@ export const getRackGatewayAPI = () => {
   const postAuthMfaEnrollWebauthnConfirm = (
     handlersConfirmWebAuthnEnrollmentRequest: HandlersConfirmWebAuthnEnrollmentRequest,
     options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
+      typeof createGatewayClient<HandlersWebAuthnEnrollmentResponse>
     >,
   ) => {
-    return createGatewayClient<HandlersStatusResponse>(
+    return createGatewayClient<HandlersWebAuthnEnrollmentResponse>(
       {
         url: `/auth/mfa/enroll/webauthn/confirm`,
         method: 'POST',
