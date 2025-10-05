@@ -2,16 +2,23 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
+
+//go:embed assets/notification.mp3
+var notificationSound []byte
 
 type deployApprovalRequest struct {
 	ID                 int64      `json:"id"`
@@ -44,7 +51,7 @@ func deployApprovalCommand() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(newDeployApprovalRequestCommand(), newDeployApprovalApproveCommand())
+	cmd.AddCommand(newDeployApprovalRequestCommand(), newDeployApprovalApproveCommand(), newDeployApprovalWaitCommand())
 
 	return cmd
 }
@@ -222,6 +229,232 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval")
 
 	return cmd
+}
+
+func newDeployApprovalWaitCommand() *cobra.Command {
+	var (
+		rackFlag        string
+		pollIntervalStr string
+		mfaCode         string
+		autoApprove     bool
+		notes           string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "wait",
+		Short: "Wait for and optionally approve pending deploy approval requests",
+		Args:  cobra.NoArgs,
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
+			rack, err := selectedRack()
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(rackFlag) != "" {
+				rack = strings.TrimSpace(rackFlag)
+			}
+
+			pollInterval := 1 * time.Second
+			if strings.TrimSpace(pollIntervalStr) != "" {
+				dur, err := time.ParseDuration(pollIntervalStr)
+				if err != nil {
+					return fmt.Errorf("invalid --poll-interval: %w", err)
+				}
+				if dur <= 0 {
+					return fmt.Errorf("--poll-interval must be positive")
+				}
+				pollInterval = dur
+			}
+
+			gatewayURL, bearer, err := gatewayAuthInfo(rack)
+			if err != nil {
+				return err
+			}
+
+			if err := writeLine(cmd.OutOrStdout(), "Waiting for pending deploy approval requests..."); err != nil {
+				return err
+			}
+
+			for {
+				// List pending deploy approval requests
+				resp, body, err := sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
+				if err != nil {
+					return err
+				}
+
+				if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
+					if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, &mfaCode); err != nil {
+						return err
+					}
+					resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
+					if err != nil {
+						return err
+					}
+				}
+
+				if resp.StatusCode >= 400 {
+					return fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+				}
+
+				var result struct {
+					Requests []deployApprovalRequest `json:"requests"`
+				}
+				if err := json.Unmarshal(body, &result); err != nil {
+					return fmt.Errorf("failed to parse deploy approval requests response: %w", err)
+				}
+
+				if len(result.Requests) > 0 {
+					// Found a pending request! Play sound and show details
+					cfg, _, _ := loadConfig()
+					if err := playNotificationSound(cfg, rack); err != nil {
+						// Don't fail the command if sound playback fails
+						_ = writef(cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)
+					}
+
+					req := result.Requests[0]
+					if err := writeLine(cmd.OutOrStdout(), "\n📋 Deploy Approval Request Found:"); err != nil {
+						return err
+					}
+					if err := writef(cmd.OutOrStdout(), "  ID: %d\n", req.ID); err != nil {
+						return err
+					}
+					if err := writef(cmd.OutOrStdout(), "  Message: %s\n", req.Message); err != nil {
+						return err
+					}
+					if err := writef(cmd.OutOrStdout(), "  Status: %s\n", req.Status); err != nil {
+						return err
+					}
+					if err := writef(cmd.OutOrStdout(), "  Token: %s\n", req.TargetAPITokenName); err != nil {
+						return err
+					}
+					if err := writef(cmd.OutOrStdout(), "  Created: %s\n", req.CreatedAt.Format(time.RFC3339)); err != nil {
+						return err
+					}
+
+					if autoApprove {
+						if err := writeLine(cmd.OutOrStdout(), "\n🔐 Multi-factor authentication required to approve."); err != nil {
+							return err
+						}
+
+						// Perform MFA step-up before approval
+						if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, &mfaCode); err != nil {
+							return err
+						}
+
+						// Now approve the request
+						approved, err := approveDeployRequest(cmd, gatewayURL, bearer, fmt.Sprintf("%d", req.ID), strings.TrimSpace(notes), &mfaCode)
+						if err != nil {
+							return err
+						}
+
+						statusLine := fmt.Sprintf("\n✅ Deploy approval request %d approved", approved.ID)
+						if approved.ApprovalExpiresAt != nil {
+							statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
+						}
+						if err := writeLine(cmd.OutOrStdout(), statusLine); err != nil {
+							return err
+						}
+						return nil
+					}
+
+					// Just display the details and exit
+					if err := writeLine(cmd.OutOrStdout(), "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."); err != nil {
+						return err
+					}
+					return nil
+				}
+
+				time.Sleep(pollInterval)
+			}
+		}),
+	}
+
+	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
+	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "1s", "Polling interval")
+	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
+	cmd.Flags().BoolVar(&autoApprove, "approve", false, "Automatically approve the first pending request found")
+	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval (only used with --approve)")
+
+	return cmd
+}
+
+func playNotificationSound(cfg *Config, rack string) error {
+	// Determine notification sound preference (per-rack overrides global)
+	soundPref := "default"
+	if cfg != nil {
+		// Check global setting
+		if cfg.NotificationSound != "" {
+			soundPref = cfg.NotificationSound
+		}
+		// Check per-rack override
+		if rack != "" {
+			if gwCfg, ok := cfg.Gateways[rack]; ok && gwCfg.NotificationSound != "" {
+				soundPref = gwCfg.NotificationSound
+			}
+		}
+	}
+
+	// If disabled, return early
+	if soundPref == "disabled" {
+		return nil
+	}
+
+	var soundFile string
+	var cleanupFile bool
+
+	if soundPref == "default" || soundPref == "" {
+		// Write embedded sound to temp file
+		tmpFile, err := os.CreateTemp("", "notification-*.mp3")
+		if err != nil {
+			return err
+		}
+		soundFile = tmpFile.Name()
+		cleanupFile = true
+		defer func() {
+			if cleanupFile {
+				_ = os.Remove(soundFile)
+			}
+		}()
+
+		if _, err := tmpFile.Write(notificationSound); err != nil {
+			_ = tmpFile.Close()
+			return err
+		}
+		if err := tmpFile.Close(); err != nil {
+			return err
+		}
+	} else {
+		// Use custom sound file path
+		soundFile = soundPref
+		if _, err := os.Stat(soundFile); err != nil {
+			return fmt.Errorf("notification sound file not found: %w", err)
+		}
+	}
+
+	// Play sound based on OS
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("afplay", soundFile)
+	case "linux":
+		// Try common Linux audio players in order of preference
+		for _, player := range []string{"paplay", "aplay", "ffplay", "mpg123"} {
+			if _, err := exec.LookPath(player); err == nil {
+				if player == "ffplay" {
+					cmd = exec.Command(player, "-nodisp", "-autoexit", soundFile)
+				} else {
+					cmd = exec.Command(player, soundFile)
+				}
+				break
+			}
+		}
+		if cmd == nil {
+			return fmt.Errorf("no audio player found (tried paplay, aplay, ffplay, mpg123)")
+		}
+	default:
+		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+
+	return cmd.Run()
 }
 
 func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, app, releaseID, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
