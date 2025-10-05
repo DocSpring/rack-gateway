@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { Pencil, ShieldAlert, Trash2 } from 'lucide-react'
+import { MoreVertical, Pencil, ShieldAlert, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
@@ -18,6 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -848,39 +855,52 @@ export function AccountSecurityPage() {
                         {method.last_used_at ? <TimeAgo date={method.last_used_at} /> : 'Never'}
                       </td>
                       <td className="py-2 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            onClick={() => {
-                              if (!method.id) {
-                                toast.error('Unable to determine method identifier')
-                                return
-                              }
-                              setEditingMethod({
-                                id: method.id as number,
-                                label: method.label ?? DEFAULT_MFA_LABEL,
-                              })
-                              setEditLabel(method.label ?? DEFAULT_MFA_LABEL)
-                            }}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              if (!method.id) {
-                                toast.error('Unable to determine method identifier')
-                                return
-                              }
-                              runWithStepUp(async () => {
-                                await deleteMethodMutation.mutateAsync(method.id as number)
-                              })
-                            }}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <Trash2 className="size-4 text-destructive" />
-                          </Button>
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                aria-label={`Actions for ${method.label ?? DEFAULT_MFA_LABEL}`}
+                                size="sm"
+                                variant="ghost"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (!method.id) {
+                                    toast.error('Unable to determine method identifier')
+                                    return
+                                  }
+                                  setEditingMethod({
+                                    id: method.id as number,
+                                    label: method.label ?? DEFAULT_MFA_LABEL,
+                                  })
+                                  setEditLabel(method.label ?? DEFAULT_MFA_LABEL)
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit Label
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (!method.id) {
+                                    toast.error('Unable to determine method identifier')
+                                    return
+                                  }
+                                  runWithStepUp(async () => {
+                                    await deleteMethodMutation.mutateAsync(method.id as number)
+                                  })
+                                }}
+                                variant="destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Remove Method
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </td>
                     </tr>

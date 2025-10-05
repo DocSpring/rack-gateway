@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Copy, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { toast } from '@/components/ui/use-toast'
@@ -15,6 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import {
@@ -224,24 +231,25 @@ function TokenRow({
       </TableCell>
       <TableCell className="text-right">
         {canEdit ? (
-          <div className="flex justify-end gap-2">
-            <Button
-              aria-label={`Delete Token ${token.name}`}
-              disabled={deletePending}
-              onClick={onDelete}
-              size="sm"
-              variant="ghost"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-            <Button
-              aria-label={`Edit Token ${token.name}`}
-              onClick={onEdit}
-              size="sm"
-              variant="ghost"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button aria-label={`Actions for ${token.name}`} size="sm" variant="ghost">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onEdit}>
+                  <Pencil className="h-4 w-4" />
+                  Edit Token
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={deletePending} onClick={onDelete} variant="destructive">
+                  <Trash2 className="h-4 w-4" />
+                  Delete Token
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ) : null}
       </TableCell>

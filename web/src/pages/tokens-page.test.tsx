@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { format } from 'date-fns'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -568,18 +569,25 @@ describe('TokensPage', () => {
       vi.mocked(api.delete).mockResolvedValueOnce({})
 
       const Wrapper = createWrapper()
+      const user = userEvent.setup()
       render(<TokensPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
         expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
       })
 
-      const deleteButton = screen.getByLabelText('Delete Token CI/CD Pipeline')
-      fireEvent.click(deleteButton)
+      // Open dropdown menu
+      const dropdownButton = screen.getByLabelText('Actions for CI/CD Pipeline')
+      await user.click(dropdownButton)
+
+      // Click delete menu item
+      const deleteMenuItem = await screen.findByText('Delete Token')
+      await user.click(deleteMenuItem)
+
       // Confirm modal: type DELETE and confirm
       const confirmInput = await screen.findByLabelText('Confirmation')
-      fireEvent.change(confirmInput, { target: { value: 'DELETE' } })
-      fireEvent.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
+      await user.type(confirmInput, 'DELETE')
+      await user.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/tok-1')
@@ -653,6 +661,7 @@ describe('TokensPage', () => {
       vi.mocked(api.delete).mockRejectedValueOnce(new Error('Deletion failed'))
 
       const Wrapper = createWrapper()
+      const user = userEvent.setup()
       render(<TokensPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
@@ -660,11 +669,17 @@ describe('TokensPage', () => {
       })
 
       // Try to delete token
-      const deleteButton = screen.getByLabelText('Delete Token CI/CD Pipeline')
-      fireEvent.click(deleteButton)
+      // Open dropdown menu
+      const dropdownButton = screen.getByLabelText('Actions for CI/CD Pipeline')
+      await user.click(dropdownButton)
+
+      // Click delete menu item
+      const deleteMenuItem = await screen.findByText('Delete Token')
+      await user.click(deleteMenuItem)
+
       const confirmInput = await screen.findByLabelText('Confirmation')
-      fireEvent.change(confirmInput, { target: { value: 'DELETE' } })
-      fireEvent.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
+      await user.type(confirmInput, 'DELETE')
+      await user.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
         expect(api.delete).toHaveBeenCalled()
@@ -688,20 +703,28 @@ describe('TokensPage', () => {
       vi.mocked(api.put).mockResolvedValueOnce(mockTokens[0])
 
       const Wrapper = createWrapper()
+      const user = userEvent.setup()
       render(<TokensPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
         expect(screen.getByText('CI/CD Pipeline')).toBeInTheDocument()
       })
 
-      fireEvent.click(screen.getByLabelText('Edit Token CI/CD Pipeline'))
+      // Open dropdown menu
+      const dropdownButton = screen.getByLabelText('Actions for CI/CD Pipeline')
+      await user.click(dropdownButton)
+
+      // Click edit menu item
+      const editMenuItem = await screen.findByText('Edit Token')
+      await user.click(editMenuItem)
 
       await waitFor(() => {
         expect(screen.getByText('Edit API Token')).toBeInTheDocument()
       })
 
       const nameInput = screen.getByLabelText('Token Name')
-      fireEvent.change(nameInput, { target: { value: 'Updated Token' } })
+      await user.clear(nameInput)
+      await user.type(nameInput, 'Updated Token')
 
       const restartOption = screen.getByText(APP_RESTART_REGEX)
       fireEvent.click(restartOption)

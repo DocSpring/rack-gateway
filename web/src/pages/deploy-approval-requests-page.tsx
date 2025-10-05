@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate } from '@tanstack/react-router'
 import type { VariantProps } from 'class-variance-authority'
-import { Check, Loader2, Timer, X } from 'lucide-react'
+import { Check, Eye, Loader2, MoreVertical, Timer, X } from 'lucide-react'
 import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
@@ -17,6 +17,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import {
@@ -450,6 +457,7 @@ type DeployApprovalRequestRowProps = {
   onSelect: (request: DeployApprovalRequest) => void
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Row component consolidates UI logic
 function DeployApprovalRequestRow({
   request,
   approveDisabled,
@@ -544,41 +552,64 @@ function DeployApprovalRequestRow({
         </div>
       </TableCell>
       <TableCell>
-        <div className="flex justify-end gap-2">
-          {canApprove && (
-            <Button
-              disabled={approveDisabled}
-              onClick={(event) => {
-                event.stopPropagation()
-                onApprove(id)
-              }}
-              variant="success"
-            >
-              {approvePending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="mr-2 h-4 w-4" />
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label={`Actions for request ${id}`}
+                onClick={(event) => event.stopPropagation()}
+                size="sm"
+                variant="ghost"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onSelect(request)
+                }}
+              >
+                <Eye className="h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
+              {(canApprove || canReject) && <DropdownMenuSeparator />}
+              {canApprove && (
+                <DropdownMenuItem
+                  disabled={approveDisabled}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onApprove(id)
+                  }}
+                >
+                  {approvePending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Approve
+                </DropdownMenuItem>
               )}
-              Approve
-            </Button>
-          )}
-          {canReject && (
-            <Button
-              disabled={rejectDisabled}
-              onClick={(event) => {
-                event.stopPropagation()
-                onReject(request)
-              }}
-              variant="destructive"
-            >
-              {rejectPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <X className="h-4 w-4" />
+              {canReject && (
+                <DropdownMenuItem
+                  disabled={rejectDisabled}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onReject(request)
+                  }}
+                  variant="destructive"
+                >
+                  {rejectPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                  Reject
+                </DropdownMenuItem>
               )}
-              Reject
-            </Button>
-          )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </TableCell>
     </TableRow>
