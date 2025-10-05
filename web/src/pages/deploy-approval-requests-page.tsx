@@ -235,7 +235,7 @@ export function DeployApprovalRequestsPage() {
       <div className="space-y-6">
         <TablePane
           empty={isEmpty}
-          emptyMessage={`No ${statusFilter} deploy approval requests found`}
+          emptyMessage={`No ${statusFilter === 'all' ? '' : `${statusFilter} `}deploy approval requests found.`}
           error={isError ? error : null}
           headerRight={
             <div className="flex items-center gap-2">

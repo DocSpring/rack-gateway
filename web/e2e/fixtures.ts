@@ -102,6 +102,9 @@ export const test = base.extend({
         /the server responded with a status of 401 \(Unauthorized\)\s*$/i.test(text) ||
         /\b401\b/i.test(text)
       if (isGeneric401) return
+      // Suppress generic 403 console noise (expected MFA/auth checks)
+      const isGeneric403 = /status of 403 \(Forbidden\)/i.test(text)
+      if (isGeneric403) return
       if (msg.type() === 'debug' && text.includes('[vite] connect')) return
       if (
         msg.type() === 'info' &&
@@ -124,8 +127,6 @@ export const test = base.extend({
         const is401 = /\b401\b/i.test(text) || /Unauthorized/i.test(text)
         if (is401) return
         if (/mfa_enrollment_required/i.test(text)) return
-        const isGeneric403 = /status of 403 \(Forbidden\)/i.test(text)
-        if (isGeneric403) return
         // Ignore generic 400 errors (likely from WebAuthn when no method enrolled in E2E mode)
         const isGeneric400 = /status of 400 \(Bad Request\)/i.test(text)
         if (isGeneric400) return

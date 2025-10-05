@@ -224,9 +224,11 @@ test.describe('Account security', () => {
     )
     methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
     await expect(methodsCard).toBeVisible()
-    // Click the delete button (second button in the actions column - first is edit/pencil, second is delete/trash)
-    const removeButton = methodsCard.locator('tbody tr').first().getByRole('button').nth(1)
-    await removeButton.click()
+    // Click the dropdown menu button and select "Remove Method"
+    const dropdownButton = methodsCard.locator('tbody tr').first().getByRole('button')
+    await dropdownButton.click()
+    const removeMenuItem = page.getByText('Remove Method')
+    await removeMenuItem.click()
     await completeStepUp(page, reEnroll.secret)
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
@@ -274,8 +276,11 @@ test.describe('Account security', () => {
     const methodsTable = methodsCard.locator('table').first()
     await expect(methodsTable.locator('tbody tr')).toHaveCount(1)
 
-    // Click edit button (first button in actions column) to open the edit dialog
-    await methodsTable.locator('tbody tr').first().getByRole('button').first().click()
+    // Click the dropdown menu button and select "Edit Label"
+    const dropdownButton = methodsTable.locator('tbody tr').first().getByRole('button')
+    await dropdownButton.click()
+    const editMenuItem = page.getByText('Edit Label')
+    await editMenuItem.click()
 
     const editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
     await expect(editDialog).toBeVisible()

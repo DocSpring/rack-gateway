@@ -167,17 +167,18 @@ test('tokens: create, rename, delete', async ({ page }) => {
   const row = page.locator('tr', { hasText: name1 })
   await expect(row).toBeVisible()
 
-  // Rename token with explicit aria label
-  await row.getByRole('button', { name: /Edit Token/i }).click()
+  // Rename token - click dropdown and select "Edit Token"
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByText('Edit Token').click()
   const name2 = `${name1} Renamed`
   await page.getByLabel('Token Name').fill(name2)
   await page.getByRole('button', { name: /^Save$/ }).click()
   await expect(page.locator('tr', { hasText: name2 })).toBeVisible()
 
-  // Delete token
+  // Delete token - click dropdown and select "Delete Token"
   const row2 = page.locator('tr', { hasText: name2 })
-  // Delete token using aria label
-  await row2.getByRole('button', { name: /Delete Token/i }).click()
+  await row2.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByText('Delete Token').click()
   // Confirm modal: type DELETE then confirm
   const confirmDialog = page.getByRole('dialog')
   await confirmDialog.getByLabel('Confirmation').fill('DELETE')
@@ -249,7 +250,8 @@ test('audit logs: view and filter', async ({ page }) => {
   await page.goto(WebRoute('api_tokens'))
   const row = page.locator('tr', { hasText: tokenName })
   await expect(row).toBeVisible()
-  await row.getByRole('button', { name: /Delete Token/i }).click()
+  await row.getByRole('button', { name: /Actions for/i }).click()
+  await page.getByText('Delete Token').click()
   const confirmDialog = page.getByRole('dialog')
   await confirmDialog.getByLabel('Confirmation').fill('DELETE')
   await confirmDialog.getByRole('button', { name: /Delete Token/i }).click()
