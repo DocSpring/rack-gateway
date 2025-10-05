@@ -472,6 +472,53 @@ Rack management:
 		}),
 	}
 
+	rackRenameCmd := &cobra.Command{
+		Use:   "rename <old-name> <new-name>",
+		Short: "Rename a rack configuration",
+		Args:  cobra.ExactArgs(2),
+		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
+			oldName := args[0]
+			newName := args[1]
+
+			cfg, exists, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return fmt.Errorf("no configuration found. Run: rack-gateway login <rack> <gateway-url>")
+			}
+
+			// Check if old rack exists
+			gateway, ok := cfg.Gateways[oldName]
+			if !ok {
+				return fmt.Errorf("rack %s not found", oldName)
+			}
+
+			// Check if new name is already in use
+			if _, exists := cfg.Gateways[newName]; exists {
+				return fmt.Errorf("rack %s already exists", newName)
+			}
+
+			// Rename the rack
+			cfg.Gateways[newName] = gateway
+			delete(cfg.Gateways, oldName)
+
+			// Update current rack if it was the old name
+			if cfg.Current == oldName {
+				cfg.Current = newName
+			}
+
+			if err := saveConfig(cfg); err != nil {
+				return fmt.Errorf("failed to save config: %w", err)
+			}
+
+			fmt.Printf("Renamed rack %s to %s\n", oldName, newName)
+			return nil
+		}),
+	}
+
+	rackCmd.AddCommand(rackRenameCmd)
+
 	completionCmd := &cobra.Command{
 		Use:   "completion [bash|zsh|fish|powershell]",
 		Short: "Generate shell completion script",
