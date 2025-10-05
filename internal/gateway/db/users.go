@@ -14,9 +14,9 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 	var lockedReason sql.NullString
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id, unlocked_at, unlocked_by_user_id FROM users WHERE id = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID, &user.UnlockedAt, &user.UnlockedByUserID)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -43,9 +43,9 @@ func (d *Database) GetUser(email string) (*User, error) {
 	var lockedReason sql.NullString
 
 	err := d.queryRow(
-		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id, unlocked_at, unlocked_by_user_id FROM users WHERE email = ?",
+		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id FROM users WHERE email = ?",
 		email,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID, &user.UnlockedAt, &user.UnlockedByUserID)
+	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -149,6 +149,7 @@ func (d *Database) DeleteUser(email string) error {
 func (d *Database) ListUsers() ([]*User, error) {
 	rows, err := d.query(
 		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended,
+			u.locked_at, u.locked_reason, u.locked_by_user_id,
 			cu.id, cu.email, cu.name
 		FROM users u
 		LEFT JOIN user_resources ur ON ur.resource_type = 'user' AND ur.resource_id = u.email
@@ -164,6 +165,7 @@ func (d *Database) ListUsers() ([]*User, error) {
 	for rows.Next() {
 		var user User
 		var rolesJSON string
+		var lockedReason sql.NullString
 		var creatorID sql.NullInt64
 		var creatorEmail sql.NullString
 		var creatorName sql.NullString
@@ -176,6 +178,9 @@ func (d *Database) ListUsers() ([]*User, error) {
 			&user.CreatedAt,
 			&user.UpdatedAt,
 			&user.Suspended,
+			&user.LockedAt,
+			&lockedReason,
+			&user.LockedByUserID,
 			&creatorID,
 			&creatorEmail,
 			&creatorName,
@@ -186,6 +191,10 @@ func (d *Database) ListUsers() ([]*User, error) {
 
 		if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
+		}
+
+		if lockedReason.Valid {
+			user.LockedReason = lockedReason.String
 		}
 
 		if creatorID.Valid {

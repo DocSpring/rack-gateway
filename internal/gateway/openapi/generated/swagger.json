@@ -3310,12 +3310,6 @@
                 "suspended": {
                     "type": "boolean"
                 },
-                "unlocked_at": {
-                    "type": "string"
-                },
-                "unlocked_by_user_id": {
-                    "type": "integer"
-                },
                 "updated_at": {
                     "type": "string"
                 }

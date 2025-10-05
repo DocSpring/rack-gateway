@@ -634,13 +634,13 @@ func (d *Database) LockUser(userID int64, reason string, lockedByUserID *int64) 
 	return nil
 }
 
-// UnlockUser unlocks a user account
+// UnlockUser unlocks a user account by clearing the lock fields
 func (d *Database) UnlockUser(userID int64, unlockedByUserID int64) error {
 	_, err := d.exec(`
         UPDATE users
-        SET unlocked_at = NOW(), unlocked_by_user_id = ?, updated_at = NOW()
+        SET locked_at = NULL, locked_reason = NULL, locked_by_user_id = NULL, updated_at = NOW()
         WHERE id = ?
-    `, unlockedByUserID, userID)
+    `, userID)
 	if err != nil {
 		return fmt.Errorf("failed to unlock user: %w", err)
 	}
@@ -651,7 +651,7 @@ func (d *Database) UnlockUser(userID int64, unlockedByUserID int64) error {
 func (d *Database) IsUserLocked(userID int64) (bool, error) {
 	var locked bool
 	err := d.queryRow(`
-        SELECT locked_at IS NOT NULL AND (unlocked_at IS NULL OR unlocked_at < locked_at)
+        SELECT locked_at IS NOT NULL
         FROM users WHERE id = ?
     `, userID).Scan(&locked)
 	if err != nil {

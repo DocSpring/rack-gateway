@@ -27,8 +27,6 @@ type User struct {
 	LockedAt           *time.Time `json:"locked_at,omitempty"`
 	LockedReason       string     `json:"locked_reason,omitempty"`
 	LockedByUserID     *int64     `json:"locked_by_user_id,omitempty"`
-	UnlockedAt         *time.Time `json:"unlocked_at,omitempty"`
-	UnlockedByUserID   *int64     `json:"unlocked_by_user_id,omitempty"`
 	CreatedByUserID    *int64     `json:"created_by_user_id,omitempty"`
 	CreatedByEmail     string     `json:"created_by_email,omitempty"`
 	CreatedByName      string     `json:"created_by_name,omitempty"`

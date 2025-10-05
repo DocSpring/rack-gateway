@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Edit2, Eye, Lock, Plus, Trash2, Unlock } from 'lucide-react'
+import { Edit2, Eye, Lock, MoreVertical, Plus, Trash2, Unlock } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
@@ -16,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu'
 import { Label } from '../components/ui/label'
 import {
   Table,
@@ -47,8 +54,6 @@ type User = {
   locked_at?: string
   locked_reason?: string
   locked_by_user_id?: number
-  unlocked_at?: string
-  unlocked_by_user_id?: number
 }
 
 // CI/CD role is intentionally omitted here; it is reserved for automation tokens only.
@@ -106,54 +111,46 @@ function UserActions({
   const locked = isUserLocked(user)
 
   return (
-    <div className="flex justify-end gap-2">
-      <Button asChild size="sm" variant="ghost">
-        <Link
-          aria-label={`View details for ${user.email}`}
-          params={{ email: user.email }}
-          to="/users/$email"
-        >
-          <Eye className="h-4 w-4" />
-        </Link>
-      </Button>
-      <Button
-        aria-label={`Edit User ${user.email}`}
-        onClick={() => onEdit(user)}
-        size="sm"
-        variant="ghost"
-      >
-        <Edit2 className="h-4 w-4" />
-      </Button>
-      {locked ? (
-        <Button
-          aria-label={`Unlock User ${user.email}`}
-          disabled={isUnlocking}
-          onClick={() => onUnlock(user)}
-          size="sm"
-          variant="ghost"
-        >
-          <Unlock className="h-4 w-4 text-green-600" />
-        </Button>
-      ) : (
-        <Button
-          aria-label={`Lock User ${user.email}`}
-          disabled={!canModify}
-          onClick={() => onLock(user)}
-          size="sm"
-          variant="ghost"
-        >
-          <Lock className="h-4 w-4 text-orange-600" />
-        </Button>
-      )}
-      <Button
-        aria-label={`Delete User ${user.email}`}
-        disabled={!canModify}
-        onClick={() => onDelete(user)}
-        size="sm"
-        variant="ghost"
-      >
-        <Trash2 className="h-4 w-4 text-destructive" />
-      </Button>
+    <div className="flex justify-end">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button aria-label={`Actions for ${user.email}`} size="sm" variant="ghost">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild>
+            <Link params={{ email: user.email }} to="/users/$email">
+              <Eye className="h-4 w-4" />
+              View Details
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onEdit(user)}>
+            <Edit2 className="h-4 w-4" />
+            Edit User
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {locked ? (
+            <DropdownMenuItem disabled={isUnlocking} onClick={() => onUnlock(user)}>
+              <Unlock className="h-4 w-4" />
+              Unlock Account
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem disabled={!canModify} onClick={() => onLock(user)}>
+              <Lock className="h-4 w-4" />
+              Lock Account
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            disabled={!canModify}
+            onClick={() => onDelete(user)}
+            variant="destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete User
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -495,78 +492,82 @@ export function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((user) => (
-              <TableRow key={user.email}>
-                <TableCell>
-                  <div>
-                    <div className="font-medium">
-                      <Link
-                        className="underline hover:no-underline"
-                        params={{ email: user.email }}
-                        to="/users/$email"
-                      >
-                        {user.name}
-                      </Link>
-                      {user.email === currentUser?.email && (
-                        <Badge className="ml-2" variant="outline">
-                          You
-                        </Badge>
-                      )}
+            {rows.map((user) => {
+              const locked = isUserLocked(user)
+              return (
+                <TableRow className={locked ? 'opacity-60' : ''} key={user.email}>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">
+                        <Link
+                          className="underline hover:no-underline"
+                          params={{ email: user.email }}
+                          to="/users/$email"
+                        >
+                          {user.name}
+                        </Link>
+                        {locked && <Lock className="ml-2 inline h-4 w-4" />}
+                        {user.email === currentUser?.email && (
+                          <Badge className="ml-2" variant="outline">
+                            You
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-muted-foreground text-sm">
+                        <Link
+                          className="underline hover:no-underline"
+                          params={{ email: user.email }}
+                          to="/users/$email"
+                        >
+                          {user.email}
+                        </Link>
+                      </div>
                     </div>
-                    <div className="text-muted-foreground text-sm">
-                      <Link
-                        className="underline hover:no-underline"
-                        params={{ email: user.email }}
-                        to="/users/$email"
-                      >
-                        {user.email}
-                      </Link>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles.map((role) => {
+                        const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
+                        return (
+                          <Badge className={cfg?.className} key={role} variant={'default'}>
+                            {cfg?.label || role}
+                          </Badge>
+                        )
+                      })}
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {user.roles.map((role) => {
-                      const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
-                      return (
-                        <Badge className={cfg?.className} key={role} variant={'default'}>
-                          {cfg?.label || role}
-                        </Badge>
-                      )
-                    })}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {isUserLocked(user) ? (
-                    <Badge variant="destructive">Locked</Badge>
-                  ) : (
-                    <Badge variant={'default'}>Active</Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <UserMetaCell
-                    email={user.created_by_email ?? undefined}
-                    name={user.created_by_name ?? undefined}
-                  />
-                </TableCell>
-                <TableCell className="text-sm">
-                  <TimeAgo date={user.created_at} />
-                </TableCell>
-                {isAdmin && (
-                  <TableCell className="text-right">
-                    <UserActions
-                      currentUserEmail={currentUser?.email}
-                      isUnlocking={unlockUserMutation.isPending}
-                      onDelete={handleRequestDeleteUser}
-                      onEdit={handleEditUser}
-                      onLock={handleRequestLockUser}
-                      onUnlock={handleUnlockUser}
-                      user={user}
+                  </TableCell>
+                  <TableCell>
+                    {isUserLocked(user) ? (
+                      <Badge variant="destructive">Locked</Badge>
+                    ) : (
+                      <Badge variant={'default'}>Active</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <UserMetaCell
+                      email={user.created_by_email ?? undefined}
+                      name={user.created_by_name ?? undefined}
                     />
                   </TableCell>
-                )}
-              </TableRow>
-            ))}
+                  <TableCell className="text-sm">
+                    <TimeAgo date={user.created_at} />
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      <UserActions
+                        currentUserEmail={currentUser?.email}
+                        isUnlocking={unlockUserMutation.isPending}
+                        onDelete={handleRequestDeleteUser}
+                        onEdit={handleEditUser}
+                        onLock={handleRequestLockUser}
+                        onUnlock={handleUnlockUser}
+                        user={user}
+                      />
+                    </TableCell>
+                  )}
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
         {total > 0 && (
