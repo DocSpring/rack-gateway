@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -675,19 +674,19 @@ func (s *Service) StartWebAuthnAssertion(user *db.User) (*protocol.CredentialAss
 	waUser := &webAuthnUser{user: user, methods: methods}
 
 	// Debug logging
-	log.Printf("[DEBUG] StartWebAuthnAssertion: user=%s methods_count=%d", user.Email, len(methods))
-	creds := waUser.WebAuthnCredentials()
-	log.Printf("[DEBUG] WebAuthnCredentials returned: %d credentials", len(creds))
-	for i, cred := range creds {
-		log.Printf("[DEBUG]   [%d] ID=%x...", i, cred.ID[:20])
-	}
+	// log.Printf("[DEBUG] StartWebAuthnAssertion: user=%s methods_count=%d", user.Email, len(methods))
+	// creds := waUser.WebAuthnCredentials()
+	// log.Printf("[DEBUG] WebAuthnCredentials returned: %d credentials", len(creds))
+	// for i, cred := range creds {
+	// 	log.Printf("[DEBUG]   [%d] ID=%x...", i, cred.ID[:20])
+	// }
 
 	options, session, err := s.webAuthn.BeginLogin(waUser)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin login: %w", err)
 	}
 
-	log.Printf("[DEBUG] BeginLogin returned: %d allowed credentials", len(options.Response.AllowedCredentials))
+	// log.Printf("[DEBUG] BeginLogin returned: %d allowed credentials", len(options.Response.AllowedCredentials))
 
 	// Serialize session data for storage
 	sessionJSON, err := json.Marshal(session)
@@ -762,7 +761,7 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 
 	waUser := &webAuthnUser{user: user, methods: methods}
 
-	log.Printf("[DEBUG] VerifyWebAuthnAssertion: credentialJSON=%s", string(credentialJSON))
+	// log.Printf("[DEBUG] VerifyWebAuthnAssertion: credentialJSON=%s", string(credentialJSON))
 
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(strings.NewReader(string(credentialJSON)))
 	if err != nil {
@@ -770,7 +769,7 @@ func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, cre
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
 	}
 
-	log.Printf("[DEBUG] ParsedResponse: ID=%x RawID=%x", parsedResponse.ID, parsedResponse.RawID)
+	// log.Printf("[DEBUG] ParsedResponse: ID=%x RawID=%x", parsedResponse.ID, parsedResponse.RawID)
 
 	credential, err := s.webAuthn.ValidateLogin(waUser, session, parsedResponse)
 	if err != nil {

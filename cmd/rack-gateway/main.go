@@ -1075,7 +1075,7 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
-	fmt.Printf("  [DEBUG] Server response: %s\n", string(bodyBytes))
+	// fmt.Printf("  [DEBUG] Server response: %s\n", string(bodyBytes))
 
 	if err := json.Unmarshal(bodyBytes, &startResp); err != nil {
 		return fmt.Errorf("failed to decode assertion start response: %w", err)
@@ -1096,10 +1096,10 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	rpID := parsedURL.Hostname()
 
 	// Debug output
-	fmt.Printf("  [DEBUG] RPID: %s\n", rpID)
-	fmt.Printf("  [DEBUG] Origin: %s\n", origin)
-	fmt.Printf("  [DEBUG] Server RPID: %s\n", startResp.Options.PublicKey.RPID)
-	fmt.Printf("  [DEBUG] Allowed credentials: %d\n", len(allowedCreds))
+	// fmt.Printf("  [DEBUG] RPID: %s\n", rpID)
+	// fmt.Printf("  [DEBUG] Origin: %s\n", origin)
+	// fmt.Printf("  [DEBUG] Server RPID: %s\n", startResp.Options.PublicKey.RPID)
+	// fmt.Printf("  [DEBUG] Allowed credentials: %d\n", len(allowedCreds))
 	for i, cred := range allowedCreds {
 		if len(cred) > 40 {
 			fmt.Printf("    [%d] %s...\n", i+1, cred[:40])
@@ -1147,7 +1147,7 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 		return fmt.Errorf("failed to marshal assertion: %w", err)
 	}
 
-	fmt.Printf("  [DEBUG] Sending assertion: %s\n", string(assertionJSON))
+	// fmt.Printf("  [DEBUG] Sending assertion: %s\n", string(assertionJSON))
 
 	// Submit assertion to gateway
 	verifyEndpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))

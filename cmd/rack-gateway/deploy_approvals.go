@@ -118,7 +118,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, gatewayURL, bearer, app, releaseID, message, "", nil)
+			created, err := createDeployApproval(cmd, gatewayURL, bearer, rack, app, releaseID, message, "", nil)
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) && conflict.request != nil {
@@ -140,7 +140,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 			}
 
 			if waitFlag {
-				final, err := waitForDeployApproval(cmd, gatewayURL, bearer, created.ID, pollInterval, timeout)
+				final, err := waitForDeployApproval(cmd, gatewayURL, bearer, rack, created.ID, pollInterval, timeout)
 				if err != nil {
 					return err
 				}
@@ -208,7 +208,7 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 				return err
 			}
 
-			approved, err := approveDeployRequest(cmd, gatewayURL, bearer, requestID, strings.TrimSpace(notes), &mfaCode)
+			approved, err := approveDeployRequest(cmd, gatewayURL, bearer, rack, requestID, strings.TrimSpace(notes), &mfaCode)
 			if err != nil {
 				return err
 			}
@@ -282,7 +282,7 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				}
 
 				if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-					if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, &mfaCode); err != nil {
+					if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack, &mfaCode); err != nil {
 						return err
 					}
 					resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
@@ -336,12 +336,12 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 						}
 
 						// Perform MFA step-up before approval
-						if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, &mfaCode); err != nil {
+						if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack, &mfaCode); err != nil {
 							return err
 						}
 
 						// Now approve the request
-						approved, err := approveDeployRequest(cmd, gatewayURL, bearer, fmt.Sprintf("%d", req.ID), strings.TrimSpace(notes), &mfaCode)
+						approved, err := approveDeployRequest(cmd, gatewayURL, bearer, rack, fmt.Sprintf("%d", req.ID), strings.TrimSpace(notes), &mfaCode)
 						if err != nil {
 							return err
 						}
@@ -457,7 +457,7 @@ func playNotificationSound(cfg *Config, rack string) error {
 	return cmd.Run()
 }
 
-func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, app, releaseID, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, app, releaseID, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message":    message,
 		"app":        app,
@@ -466,18 +466,18 @@ func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, app, releaseID
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, "/deploy-approval-requests", payload, mfaCode)
+	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, "/deploy-approval-requests", payload, mfaCode)
 }
 
-func approveDeployRequest(cmd *cobra.Command, gatewayURL, bearer, requestID, notes string, mfaCode *string) (*deployApprovalRequest, error) {
+func approveDeployRequest(cmd *cobra.Command, gatewayURL, bearer, rack, requestID, notes string, mfaCode *string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{}
 	if notes != "" {
 		payload["notes"] = notes
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload, mfaCode)
+	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload, mfaCode)
 }
 
-func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, path string, payload map[string]interface{}, mfaCode *string) (*deployApprovalRequest, error) {
+func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, path string, payload map[string]interface{}, mfaCode *string) (*deployApprovalRequest, error) {
 	fullPath := path
 	attempts := 0
 	for {
@@ -488,7 +488,7 @@ func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, path stri
 		}
 
 		if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-			if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, mfaCode); err != nil {
+			if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack, mfaCode); err != nil {
 				return nil, err
 			}
 			if attempts < 3 {
@@ -514,7 +514,8 @@ func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, path stri
 	}
 }
 
-func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer string, mfaCode *string) error {
+func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer, rack string, mfaCode *string) error {
+	// If mfa-code flag provided, try TOTP verification
 	if mfaCode != nil {
 		code := strings.TrimSpace(*mfaCode)
 		if code != "" {
@@ -528,10 +529,11 @@ func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer string, mfaCode *st
 			return nil
 		}
 	}
-	return promptAndVerifyMFA(cmd, gatewayURL, bearer)
+	// Use unified MFA module that respects preferences and --mfa-method flag
+	return performMFAStepUp(cmd, gatewayURL, bearer, rack)
 }
 
-func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer string, id int64, interval, timeout time.Duration) (*deployApprovalRequest, error) {
+func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, id int64, interval, timeout time.Duration) (*deployApprovalRequest, error) {
 	start := time.Now()
 	var lastStatus string
 	for {
@@ -541,7 +543,8 @@ func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer string, id int
 		}
 
 		if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-			if err := promptAndVerifyMFA(cmd, gatewayURL, bearer); err != nil {
+			// Use unified MFA module
+			if err := performMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
 				return nil, err
 			}
 			resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%d", id), nil)
@@ -626,33 +629,4 @@ func isMFAStepUpRequired(body []byte) bool {
 		return false
 	}
 	return strings.EqualFold(payload.Error, "mfa_step_up_required")
-}
-
-func promptAndVerifyMFA(cmd *cobra.Command, gatewayURL, bearer string) error {
-	if err := writeLine(cmd.OutOrStdout(), "Multi-factor authentication required."); err != nil {
-		return err
-	}
-	for attempts := 0; attempts < 5; attempts++ {
-		code, err := promptMFACode()
-		if err != nil {
-			return err
-		}
-		if code == "" {
-			if err := writeLine(cmd.OutOrStdout(), "MFA code cannot be empty."); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := submitMFAVerification(gatewayURL, bearer, code); err != nil {
-			if err := writef(cmd.OutOrStdout(), "MFA verification failed: %v\n", err); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := writeLine(cmd.OutOrStdout(), "MFA verified."); err != nil {
-			return err
-		}
-		return nil
-	}
-	return errors.New("failed to verify MFA after multiple attempts")
 }

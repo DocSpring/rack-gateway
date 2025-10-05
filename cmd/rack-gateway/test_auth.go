@@ -224,45 +224,8 @@ func testWebAuthnAuth(baseURL, bearer string, status *mfaStatusResponse) error {
 }
 
 func testMFAMethod(cmd *cobra.Command, baseURL, bearer string, method mfaMethodResponse, allMethods []mfaMethodResponse) error {
-	switch method.Type {
-	case "webauthn":
-		// Show hint about TOTP if available
-		if hasMethodType(allMethods, "totp") {
-			fmt.Println("Pass `--mfa-method totp` to use your authenticator app instead.")
-		}
-		// Note: Skip availability check due to go-hid bugs on macOS
-		// Just try to use the device directly
-		return tryWebAuthnVerification(baseURL, bearer)
-
-	case "totp":
-		// Show hint about WebAuthn if available
-		if hasMethodType(allMethods, "webauthn") {
-			fmt.Println("Pass `--mfa-method webauthn` to use your security key instead.")
-		}
-		code, err := promptMFACode()
-		if err != nil {
-			return err
-		}
-		if err := submitMFAVerification(baseURL, bearer, code); err != nil {
-			return err
-		}
-		fmt.Println("✓ TOTP verification successful")
-		return nil
-
-	case "backup_code":
-		code, err := promptMFACode()
-		if err != nil {
-			return err
-		}
-		if err := submitMFAVerification(baseURL, bearer, code); err != nil {
-			return err
-		}
-		fmt.Println("✓ Backup code verification successful")
-		return nil
-
-	default:
-		return fmt.Errorf("unsupported MFA method: %s", method.Type)
-	}
+	// Use unified MFA verification module
+	return verifyMFAMethod(cmd, baseURL, bearer, method, allMethods)
 }
 
 func hasMethodType(methods []mfaMethodResponse, methodType string) bool {
