@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/DocSpring/rack-gateway/internal/convox"
@@ -32,20 +33,56 @@ func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) 
 		return "", err
 	}
 
-	// Check if MFA is required
-	if convox.RequiresMFAAlways(convoxCmd.Permissions) {
-		// MFAAlways - prompt for MFA and return it in the auth string
-		return promptMFAForCommand(cmd, gatewayURL, bearer, rack)
-	} else if convox.RequiresMFAStepUp(convoxCmd.Permissions) {
-		// MFAStepUp - perform async step-up, no need to return MFA in auth
-		if err := performMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
-			return "", err
-		}
+	// Check if MFA is required for this command
+	mfaLevel := convox.GetMFALevel(convoxCmd.Permissions)
+	if mfaLevel == convox.MFANone {
+		// No MFA required
 		return "", nil
 	}
 
-	// No MFA required
-	return "", nil
+	// UNIFIED FLOW for both MFAStepUp and MFAAlways:
+	// 1. Make preflight request to check recent_step_up_expires_at
+	// 2. Determine if MFA is needed (expired or within 45s of expiration)
+	// 3. If needed, prompt and return inline MFA auth string
+	return checkAndPromptMFAIfNeeded(cmd, gatewayURL, bearer, rack, mfaLevel)
+}
+
+// checkAndPromptMFAIfNeeded performs a preflight check and prompts for MFA if needed
+// This is the unified flow for both MFAStepUp and MFAAlways
+func checkAndPromptMFAIfNeeded(cmd *cobra.Command, baseURL, bearer, rack string, mfaLevel convox.MFALevel) (string, error) {
+	// Preflight: Get MFA status to check recent_step_up_expires_at
+	mfaStatus, err := getMFAStatus(baseURL, bearer)
+	if err != nil {
+		return "", fmt.Errorf("failed to check MFA status: %w", err)
+	}
+
+	if !mfaStatus.Enrolled {
+		return "", fmt.Errorf("MFA not enrolled - this command requires MFA")
+	}
+
+	// Check if we need to prompt for MFA
+	needsMFA := true
+	if mfaStatus.RecentStepUpExpiresAt != nil {
+		expiresAt := *mfaStatus.RecentStepUpExpiresAt
+		now := time.Now()
+
+		// If the step-up is still valid and we have more than 45 seconds until expiration
+		if expiresAt.After(now) {
+			timeUntilExpiry := expiresAt.Sub(now)
+			if timeUntilExpiry > 45*time.Second {
+				// Still valid, no need to prompt
+				needsMFA = false
+			}
+		}
+	}
+
+	if !needsMFA {
+		// Recent step-up is still valid, no need to prompt
+		return "", nil
+	}
+
+	// Need MFA - prompt the user
+	return promptMFAForCommand(cmd, baseURL, bearer, rack)
 }
 
 // promptMFAForCommand prompts the user for MFA and returns the auth string

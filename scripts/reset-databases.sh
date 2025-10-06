@@ -41,21 +41,16 @@ done
 
 echo "Database(s) reset."
 
-# Start gateway services and run migrations
-echo "Starting gateway services..."
-for service in "${SERVICES[@]}"; do
-  docker compose up -d "$service"
-done
-
-echo "Waiting for services to be ready..."
-sleep 3
-
+# Run migrations using local binary
 echo "Running migrations..."
-for i in "${!DATABASES[@]}"; do
-  dbname="${DATABASES[$i]}"
-  service="${SERVICES[$i]}"
+for dbname in "${DATABASES[@]}"; do
   echo "Running migrations on ${dbname}..."
-  docker compose exec -T "$service" ./rack-gateway-api migrate
+  # Set DATABASE_URL for this specific database
+  if [ "$dbname" = "gateway_dev" ]; then
+    DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable" ./bin/rack-gateway-api migrate
+  elif [ "$dbname" = "gateway_test" ]; then
+    DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable" ./bin/rack-gateway-api migrate
+  fi
 done
 
 echo "Database reset complete with migrations applied."

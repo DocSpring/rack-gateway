@@ -31,22 +31,16 @@ services:
     build:
       context: ./mock-oauth
     environment:
-      PORT: ${MOCK_OAUTH_PORT:-3345}
+      PORT: 3346
       NODE_ENV: development
-      # Internal issuer (for gateway OIDC)
-      OAUTH_ISSUER: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
-      # Browser-facing base (for redirects)
-      OAUTH_BROWSER_BASE: http://localhost:${MOCK_OAUTH_PORT:-3345}
+      OAUTH_ISSUER: http://mock-oauth:3346
+      OAUTH_BROWSER_BASE: http://localhost:3346
     ports:
-      - "${MOCK_OAUTH_PORT:-3345}:${MOCK_OAUTH_PORT:-3345}"
+      - "3346:3346"
     networks:
       - gateway-net
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:${MOCK_OAUTH_PORT:-3345}/health || exit 1",
-        ]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3346/health || exit 1"]
       interval: 2s
       timeout: 5s
       retries: 30
@@ -56,13 +50,12 @@ services:
       context: .
       dockerfile: Dockerfile.mock-convox
     environment:
-      MOCK_CONVOX_PORT: ${MOCK_CONVOX_PORT:-5443}
-      # Mock logging toggles
+      MOCK_CONVOX_PORT: 5444
       MOCK_CONVOX_LOG_HEADERS: true
       MOCK_CONVOX_LOG_REQUEST_BODY: true
       MOCK_CONVOX_LOG_RESPONSE_BODY: true
     ports:
-      - "${MOCK_CONVOX_PORT:-5443}:${MOCK_CONVOX_PORT:-5443}"
+      - "5444:5444"
     networks:
       - gateway-net
 
@@ -197,13 +190,13 @@ services:
       target: dev
     environment:
       # In dev profile, proxy API requests to gateway-api-dev (same Compose network)
-      VITE_API_BASE_URL: http://gateway-api-dev:${GATEWAY_PORT:-8447}
+      VITE_API_BASE_URL: http://gateway-api-dev:8448
       VITE_DEBUG_PROXY: ${VITE_DEBUG_PROXY:-false}
       VITE_DISABLE_HMR: "true"
       WEB_PORT: "5173"
       CI: true # allows pnpm to recreate node_modules
     ports:
-      - "${WEB_PORT:-5223}:5173"
+      - "5224:5173"
     volumes:
       - ./web:/app
       - /app/node_modules
@@ -220,15 +213,16 @@ services:
     environment:
       <<: *gateway_common_env
       DOMAIN: localhost
-      PORT: ${GATEWAY_PORT:-8447}
-      GOOGLE_OAUTH_BASE_URL: http://mock-oauth:${MOCK_OAUTH_PORT:-3345}
+      PORT: 8448
+      RACK_HOST: http://mock-convox:5444
+      GOOGLE_OAUTH_BASE_URL: http://mock-oauth:3346
       DEV_MODE: "true"
       WEB_DEV_SERVER_URL: http://web-dev:5173
-      WEB_PORT: ${WEB_PORT:-5223}
+      WEB_PORT: 5224
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
     ports:
-      - "${GATEWAY_PORT:-8447}:${GATEWAY_PORT:-8447}"
+      - "8448:8448"
     depends_on:
       postgres:
         condition: service_healthy

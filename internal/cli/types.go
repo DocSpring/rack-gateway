@@ -75,10 +75,11 @@ type DeviceInfo struct {
 
 // MFAStatusResponse is the response from /.gateway/api/auth/mfa/status
 type MFAStatusResponse struct {
-	Enrolled        bool                `json:"enrolled"`
-	Required        bool                `json:"required"`
-	Methods         []MFAMethodResponse `json:"methods"`
-	PreferredMethod *string             `json:"preferred_method,omitempty"`
+	Enrolled              bool                `json:"enrolled"`
+	Required              bool                `json:"required"`
+	Methods               []MFAMethodResponse `json:"methods"`
+	PreferredMethod       *string             `json:"preferred_method,omitempty"`
+	RecentStepUpExpiresAt *time.Time          `json:"recent_step_up_expires_at,omitempty"`
 }
 
 // MFAMethodResponse represents a single MFA method

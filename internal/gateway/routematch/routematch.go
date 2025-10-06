@@ -40,6 +40,13 @@ func (r *RouteSpec) RequiresMFAAlways() bool {
 	return r.GetMFALevel() == convox.MFAAlways
 }
 
+// GetMFALevelForPermission returns the MFA level for a given permission string
+// Returns (MFALevel, true) if found, or (MFANone, false) if not found
+func GetMFALevelForPermission(permission string) (convox.MFALevel, bool) {
+	level, ok := convox.MFARequirements[permission]
+	return level, ok
+}
+
 var specs = []RouteSpec{
 	// Processes
 	{"GET", "/apps/{app}/processes", "process", "list"},

@@ -32,6 +32,8 @@ type AuthUser struct {
 	TokenID     *int64          `json:"token_id,omitempty"` // For API tokens
 	TokenName   string          `json:"token_name,omitempty"`
 	Session     *db.UserSession `json:"-"`
+	MFAType     string          `json:"-"` // "totp" or "webauthn" - inline MFA provided with request
+	MFAValue    string          `json:"-"` // The MFA verification data (TOTP code or WebAuthn assertion)
 }
 
 // NewAuthService creates a new authentication service
@@ -264,30 +266,57 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 	username := parts[0]
 	password := parts[1]
 
-	// If username is "convox", password may be a JWT, session token, or API token
+	// Parse password field for optional MFA data
+	// Format: JWT:mfa_type:mfa_value (e.g., "token123:totp:123456" or "token123:webauthn:base64data")
+	var authToken, mfaType, mfaValue string
+	passwordParts := strings.SplitN(password, ":", 3)
+	if len(passwordParts) == 3 {
+		// MFA data present
+		authToken = passwordParts[0]
+		mfaType = passwordParts[1]
+		mfaValue = passwordParts[2]
+	} else {
+		// No MFA data, just the token
+		authToken = password
+	}
+
+	var user *AuthUser
+
+	// If username is "convox", authToken may be a JWT, session token, or API token
 	if username == "convox" {
-		if strings.HasPrefix(password, "rgw_") {
-			return a.validateAPIToken(password)
-		}
-		if a.sessions != nil {
-			if user, err := a.validateSessionToken(password, r); err == nil {
-				return user, nil
+		if strings.HasPrefix(authToken, "rgw_") {
+			user, err = a.validateAPIToken(authToken)
+		} else if a.sessions != nil {
+			if user, err = a.validateSessionToken(authToken, r); err != nil {
+				user, err = a.validateJWT(authToken)
 			}
+		} else {
+			user, err = a.validateJWT(authToken)
 		}
-		return a.validateJWT(password)
+	} else {
+		// Otherwise, authToken could be an API token or session token tied to a specific account
+		if strings.HasPrefix(authToken, "rgw_") {
+			user, err = a.validateAPIToken(authToken)
+		} else if a.sessions != nil {
+			if user, err = a.validateSessionToken(authToken, r); err != nil {
+				return nil, fmt.Errorf("unsupported authentication method")
+			}
+		} else {
+			return nil, fmt.Errorf("unsupported authentication method")
+		}
 	}
 
-	// Otherwise, password could be an API token or session token tied to a specific account
-	if strings.HasPrefix(password, "rgw_") {
-		return a.validateAPIToken(password)
-	}
-	if a.sessions != nil {
-		if user, err := a.validateSessionToken(password, r); err == nil {
-			return user, nil
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("unsupported authentication method")
+	// Attach MFA data to the user if provided
+	if mfaType != "" && mfaValue != "" {
+		user.MFAType = mfaType
+		user.MFAValue = mfaValue
+	}
+
+	return user, nil
 }
 
 // GetAuthUser extracts the authenticated user from the request context

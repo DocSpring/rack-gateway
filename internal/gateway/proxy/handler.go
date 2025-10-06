@@ -18,8 +18,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
@@ -45,6 +47,8 @@ type Handler struct {
 	rackName         string
 	rackAlias        string
 	rackCertManager  *rackcert.Manager
+	mfaService       *mfa.Service
+	sessionManager   *auth.SessionManager
 }
 
 type deployApprovalTracker struct {
@@ -116,7 +120,7 @@ func (h *Handler) logAudit(r *http.Request, al *db.AuditLog) error {
 	return err
 }
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
@@ -129,6 +133,8 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 		rackName:         rackName,
 		rackAlias:        strings.TrimSpace(rackAlias),
 		rackCertManager:  rackCertManager,
+		mfaService:       mfaService,
+		sessionManager:   sessionManager,
 	}
 	// Load additional secret env var names from env (comma-separated)
 	if list := strings.TrimSpace(os.Getenv("CONVOX_SECRET_ENV_VARS")); list != "" {
@@ -303,6 +309,15 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if approvalTracker != nil {
 		ctx := context.WithValue(r.Context(), deployApprovalContextKey, approvalTracker)
 		r = r.WithContext(ctx)
+	}
+
+	// Check if MFA is required for this route and verify if provided
+	if !authUser.IsAPIToken {
+		mfaErr := h.verifyMFAIfRequired(r, w, authUser, resource, action, &rackConfig, start)
+		if mfaErr != nil {
+			// Error already logged and response sent
+			return
+		}
 	}
 
 	// Additional RBAC for release/environment set operations and body rewrite
@@ -2066,4 +2081,128 @@ func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser
 	}
 
 	return true, ""
+}
+
+// verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided
+func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, authUser *auth.AuthUser, resource, action string, rackConfig *config.RackConfig, start time.Time) error {
+	// Skip MFA verification if services are not configured (e.g., in tests)
+	if h.mfaService == nil || h.sessionManager == nil {
+		return nil
+	}
+
+	// Get the route's MFA requirement
+	permission := fmt.Sprintf("convox:%s:%s", resource, action)
+
+	// Look up the MFA level for this permission
+	mfaLevel, ok := routematch.GetMFALevelForPermission(permission)
+	if !ok {
+		// Permission not found - this should never happen since we already matched the route
+		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusInternalServerError, time.Since(start), fmt.Errorf("MFA level not found for permission: %s", permission))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return fmt.Errorf("MFA level not found")
+	}
+
+	// No MFA required
+	if mfaLevel == convox.MFANone {
+		return nil
+	}
+	
+	// Get user's session
+	if authUser.Session == nil {
+		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("session required for MFA verification"))
+		http.Error(w, "session required for MFA verification", http.StatusUnauthorized)
+		return fmt.Errorf("session required")
+	}
+	
+	// Check if MFA was provided inline
+	if authUser.MFAType != "" && authUser.MFAValue != "" {
+		// Verify the inline MFA
+		userRecord, err := h.database.GetUser(authUser.Email)
+		if err != nil {
+			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusInternalServerError, time.Since(start), fmt.Errorf("failed to get user: %w", err))
+			http.Error(w, "failed to verify MFA", http.StatusInternalServerError)
+			return fmt.Errorf("failed to get user")
+		}
+		
+		// Verify based on MFA type
+		var verifyErr error
+		switch authUser.MFAType {
+		case "totp":
+			if h.mfaService != nil {
+				_, verifyErr = h.mfaService.VerifyCode(userRecord, authUser.MFAValue)
+			} else {
+				verifyErr = fmt.Errorf("MFA service not available")
+			}
+		case "webauthn":
+			if h.mfaService != nil {
+				// Decode the base64-encoded assertion data
+				assertionJSON, err := base64.StdEncoding.DecodeString(authUser.MFAValue)
+				if err != nil {
+					verifyErr = fmt.Errorf("invalid webauthn assertion format: %w", err)
+				} else {
+					// Parse the assertion JSON
+					var assertionData struct {
+						SessionData string `json:"session_data"`
+						Assertion   struct {
+							CredentialID      string `json:"credential_id"`
+							AuthenticatorData string `json:"authenticator_data"`
+							ClientDataJSON    string `json:"client_data_json"`
+							Signature         string `json:"signature"`
+							UserHandle        string `json:"user_handle"`
+						} `json:"assertion"`
+					}
+					if err := json.Unmarshal(assertionJSON, &assertionData); err != nil {
+						verifyErr = fmt.Errorf("invalid webauthn assertion JSON: %w", err)
+					} else {
+						// Re-encode for VerifyWebAuthnAssertion
+						assertionResponse, _ := json.Marshal(assertionData.Assertion)
+						_, verifyErr = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(assertionData.SessionData), assertionResponse, clientIPFromRequest(r), r.UserAgent(), &authUser.Session.ID)
+					}
+				}
+			} else {
+				verifyErr = fmt.Errorf("MFA service not available")
+			}
+		default:
+			verifyErr = fmt.Errorf("unsupported MFA type: %s", authUser.MFAType)
+		}
+		
+		if verifyErr != nil {
+			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("MFA verification failed: %w", verifyErr))
+			http.Error(w, "MFA verification failed", http.StatusUnauthorized)
+			return verifyErr
+		}
+		
+		// MFA verified - update recent step-up timestamp
+		if h.sessionManager != nil {
+			now := time.Now()
+			if err := h.sessionManager.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
+				log.Printf("Warning: failed to update session step-up: %v", err)
+			}
+		}
+		
+		return nil
+	}
+	
+	// No inline MFA provided - check if step-up window is still valid
+	if authUser.Session.RecentStepUpAt != nil {
+		// Get step-up window duration from settings
+		stepUpWindow := 10 * time.Minute // Default
+		if h.database != nil {
+			if settings, err := h.database.GetMFASettings(); err == nil && settings != nil && settings.StepUpWindowMinutes > 0 {
+				stepUpWindow = time.Duration(settings.StepUpWindowMinutes) * time.Minute
+			}
+		}
+		
+		if time.Since(*authUser.Session.RecentStepUpAt) < stepUpWindow {
+			// Still within step-up window
+			return nil
+		}
+	}
+	
+	// MFA required but not provided or expired
+	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("MFA required for this action"))
+	w.Header().Set("X-MFA-Required", "true")
+	w.Header().Set("X-MFA-Level", mfaLevel.String())
+	http.Error(w, "Multi-factor authentication is required for this action", http.StatusUnauthorized)
+	return fmt.Errorf("MFA required")
 }

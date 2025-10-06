@@ -109,3 +109,17 @@ func RequiresMFAStepUp(permissions []string) bool {
 func RequiresMFAAlways(permissions []string) bool {
 	return GetMFALevel(permissions) == MFAAlways
 }
+
+// String returns the string representation of an MFALevel
+func (m MFALevel) String() string {
+	switch m {
+	case MFANone:
+		return "none"
+	case MFAStepUp:
+		return "step_up"
+	case MFAAlways:
+		return "always"
+	default:
+		return "unknown"
+	}
+}

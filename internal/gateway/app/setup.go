@@ -229,7 +229,7 @@ func (a *App) initializeServices() error {
 		pinnedMgr = nil
 	}
 
-	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, pinnedMgr)
+	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
 	a.DefaultRack = rackAlias
 
 	return nil
