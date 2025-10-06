@@ -80,7 +80,7 @@ func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, err
 	}
 
 	// Create the token string with prefix
-	token := "cgw_" + base64.URLEncoding.EncodeToString(tokenBytes)
+	token := "rgw_" + base64.URLEncoding.EncodeToString(tokenBytes)
 
 	// Hash the token for storage
 	hash := sha256.Sum256([]byte(token))
@@ -101,7 +101,7 @@ func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, err
 // ValidateAPIToken validates an API token and returns the associated user ID
 func (s *Service) ValidateAPIToken(token string) (*db.APIToken, error) {
 	// Check token format
-	if !strings.HasPrefix(token, "cgw_") {
+	if !strings.HasPrefix(token, "rgw_") {
 		return nil, fmt.Errorf("invalid token format")
 	}
 

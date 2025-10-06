@@ -113,7 +113,7 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		)
 		switch authType {
 		case "Bearer":
-			if strings.HasPrefix(credentials, "cgw_") {
+			if strings.HasPrefix(credentials, "rgw_") {
 				user, err = a.validateAPIToken(credentials)
 			} else if a.sessions != nil {
 				user, err = a.validateSessionToken(credentials, r)
@@ -266,7 +266,7 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 
 	// If username is "convox", password may be a JWT, session token, or API token
 	if username == "convox" {
-		if strings.HasPrefix(password, "cgw_") {
+		if strings.HasPrefix(password, "rgw_") {
 			return a.validateAPIToken(password)
 		}
 		if a.sessions != nil {
@@ -278,7 +278,7 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 	}
 
 	// Otherwise, password could be an API token or session token tied to a specific account
-	if strings.HasPrefix(password, "cgw_") {
+	if strings.HasPrefix(password, "rgw_") {
 		return a.validateAPIToken(password)
 	}
 	if a.sessions != nil {

@@ -51,10 +51,10 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     const csrfTokenHandle = await page.waitForFunction(
       () => {
         const value = document
-          .querySelector('meta[name="cgw-csrf-token"]')
+          .querySelector('meta[name="rgw-csrf-token"]')
           ?.getAttribute('content')
           ?.trim()
-        if (!value || value === 'CGW_CSRF_TOKEN') {
+        if (!value || value === 'RGW_CSRF_TOKEN') {
           return null
         }
         return value
@@ -86,7 +86,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
       token: string
       api_token: { id: number }
     }
-    expect(apiToken).toMatch(/^cgw_/)
+    expect(apiToken).toMatch(/^rgw_/)
 
     const cliContext = await request.newContext({
       baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8447',

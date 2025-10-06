@@ -216,7 +216,7 @@ export function SettingsPage() {
     }
     const script = document.createElement('script')
     script.type = 'text/javascript'
-    script.textContent = 'window.__cgwSentryCspTest = true'
+    script.textContent = 'window.__rgwSentryCspTest = true'
     script.dataset.test = 'sentry-csp'
     document.body.append(script)
     script.remove()

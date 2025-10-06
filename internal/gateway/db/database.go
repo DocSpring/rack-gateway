@@ -16,14 +16,14 @@ func New(dsn string) (*Database, error) {
 	source := strings.TrimSpace(dsn)
 	lower := strings.ToLower(source)
 	if source == "" || (!strings.HasPrefix(lower, "postgres://") && !strings.HasPrefix(lower, "postgresql://")) {
-		// Check CGW_DATABASE_URL first (new Convox automatic env var), then fall back to DATABASE_URL
-		source = os.Getenv("CGW_DATABASE_URL")
+		// Check RGW_DATABASE_URL first (new Convox automatic env var), then fall back to DATABASE_URL
+		source = os.Getenv("RGW_DATABASE_URL")
 		if source == "" {
 			source = os.Getenv("DATABASE_URL")
 		}
 	}
 	if source == "" {
-		return nil, fmt.Errorf("CGW_DATABASE_URL or DATABASE_URL is required")
+		return nil, fmt.Errorf("RGW_DATABASE_URL or DATABASE_URL is required")
 	}
 
 	// Ensure appropriate sslmode: require in non-dev unless explicitly set
@@ -45,7 +45,7 @@ func New(dsn string) (*Database, error) {
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
 func NewFromEnv() (*Database, error) {
 	// A few variations supported to support different Convox resource names
-	if dsn := os.Getenv("CGW_DATABASE_URL"); dsn != "" {
+	if dsn := os.Getenv("RGW_DATABASE_URL"); dsn != "" {
 		return New(dsn)
 	}
 	if dsn := os.Getenv("GATEWAY_DATABASE_URL"); dsn != "" {
@@ -200,7 +200,7 @@ func (d *Database) ResetDatabase() error {
 		"user_sessions",
 		"settings",
 		"users",
-		"cgw_internal_metadata",
+		"rgw_internal_metadata",
 	} {
 		if _, err := d.exec("DROP TABLE IF EXISTS " + table + " CASCADE"); err != nil {
 			return fmt.Errorf("failed to drop %s: %w", table, err)

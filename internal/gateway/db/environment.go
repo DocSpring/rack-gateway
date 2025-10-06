@@ -4,7 +4,7 @@ import "database/sql"
 
 // CurrentEnvironment returns the environment string stored in the metadata table, if present.
 func (d *Database) CurrentEnvironment() (string, error) {
-	row := d.queryRow(`SELECT environment FROM cgw_internal_metadata WHERE id = TRUE`)
+	row := d.queryRow(`SELECT environment FROM rgw_internal_metadata WHERE id = TRUE`)
 	var env sql.NullString
 	if err := row.Scan(&env); err != nil {
 		if err == sql.ErrNoRows {
@@ -25,7 +25,7 @@ func (d *Database) SetEnvironment(isDev bool) error {
 		env = "development"
 	}
 	_, err := d.exec(`
-		INSERT INTO cgw_internal_metadata (id, environment, updated_at)
+		INSERT INTO rgw_internal_metadata (id, environment, updated_at)
 		VALUES (TRUE, ?, NOW())
 		ON CONFLICT (id)
 		DO UPDATE SET environment = EXCLUDED.environment, updated_at = NOW()

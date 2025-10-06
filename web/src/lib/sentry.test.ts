@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@sentry/react', () => ({
   init: vi.fn(),
-  browserTracingIntegration: vi.fn(() => ({ name: 'browserTracingIntegration' })),
+  browserTracingIntegration: vi.fn(() => ({
+    name: 'browserTracingIntegration',
+  })),
   ErrorBoundary: vi.fn(),
 }))
 
@@ -38,10 +40,10 @@ beforeEach(() => {
   __resetSentryForTests()
   initMock.mockClear()
   browserTracingIntegrationMock.mockClear()
-  setEnv('cgw-sentry-dsn', undefined)
-  setEnv('cgw-sentry-environment', undefined)
-  setEnv('cgw-sentry-release', undefined)
-  setEnv('cgw-sentry-traces-sample-rate', undefined)
+  setEnv('rgw-sentry-dsn', undefined)
+  setEnv('rgw-sentry-environment', undefined)
+  setEnv('rgw-sentry-release', undefined)
+  setEnv('rgw-sentry-traces-sample-rate', undefined)
 })
 
 describe('initSentry', () => {
@@ -52,8 +54,8 @@ describe('initSentry', () => {
   })
 
   it('initializes sentry with sane defaults when DSN provided', () => {
-    setEnv('cgw-sentry-dsn', 'https://examplePublicKey@o0.ingest.sentry.io/0')
-    setEnv('cgw-sentry-environment', 'test')
+    setEnv('rgw-sentry-dsn', 'https://examplePublicKey@o0.ingest.sentry.io/0')
+    setEnv('rgw-sentry-environment', 'test')
 
     const enabled = initSentry()
 
@@ -68,8 +70,8 @@ describe('initSentry', () => {
   })
 
   it('passes release fallback through to sentry', () => {
-    setEnv('cgw-sentry-dsn', 'https://examplePublicKey@o0.ingest.sentry.io/0')
-    setEnv('cgw-sentry-release', 'v2024.01.01')
+    setEnv('rgw-sentry-dsn', 'https://examplePublicKey@o0.ingest.sentry.io/0')
+    setEnv('rgw-sentry-release', 'v2024.01.01')
 
     const enabled = initSentry()
 

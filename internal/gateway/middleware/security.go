@@ -26,7 +26,7 @@ import (
 
 type ctxKey string
 
-const StyleNonceContextKey ctxKey = "cgw-style-nonce"
+const StyleNonceContextKey ctxKey = "rgw-style-nonce"
 
 // Set any SHA-256 hashes if any libraries need to set inline styles or scripts.
 // (This used to be required for goober and react-hot-toast but is no longer needed.)
@@ -214,7 +214,7 @@ func buildSentrySecurityConfig(cfg *config.Config) (*sentrySecurityConfig, error
 	}
 	reportURL := baseURL + "?" + query.Encode()
 
-	group := "cgw-sentry-csp"
+	group := "rgw-sentry-csp"
 	payload := map[string]any{
 		"group":              group,
 		"max_age":            10886400,

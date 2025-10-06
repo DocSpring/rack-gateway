@@ -6,7 +6,7 @@ The `rack-gateway` binary has a set of maintenance subcommands for managing the 
 
 Use this command whenever you need to apply pending migrations without starting the API server. It:
 
-- Builds the Postgres DSN from the standard variables (`CGW_DATABASE_URL`, `GATEWAY_DATABASE_URL`, `DATABASE_URL`, or libpq-style `PG*`).
+- Builds the Postgres DSN from the standard variables (`RGW_DATABASE_URL`, `GATEWAY_DATABASE_URL`, `DATABASE_URL`, or libpq-style `PG*`).
 - Applies every migration in `internal/gateway/db/migrations/` exactly once via the `schema_migrations` ledger.
 - Leaves existing data untouched and is safe to run repeatedly; it will only bring the schema up to date.
 
@@ -25,7 +25,7 @@ This command **drops all gateway tables and recreates them from scratch**. Use i
 Safety guards enforced by the binary:
 
 - You must export `RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA` or the command aborts immediately.
-- The migration metadata (`cgw_internal_metadata`) must indicate a development database **or** you must set `DISABLE_DATABASE_ENVIRONMENT_CHECK`. This prevents accidental production wipes.
+- The migration metadata (`rgw_internal_metadata`) must indicate a development database **or** you must set `DISABLE_DATABASE_ENVIRONMENT_CHECK`. This prevents accidental production wipes.
 - When the database has never been initialized, you must run with `DEV_MODE=true` (or set the disable flag) so fresh installs default to development.
 - After the reset, the command reapplies the full migration set and writes the current environment flag based on `DEV_MODE`.
 

@@ -203,7 +203,7 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 			e2eScript = "window.__e2e_test_mode__=true;"
 		}
 		scriptBlock := fmt.Sprintf(`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, nonce, e2eScript)
-		result = bytes.ReplaceAll(result, []byte("{{CGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
+		result = bytes.ReplaceAll(result, []byte("{{RGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
 	}
 
 	if h.sessions != nil {
@@ -212,7 +212,7 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 			if sessionToken != "" {
 				if _, err := h.sessions.ValidateSession(sessionToken, clientIPFromRequest(r), r.UserAgent()); err == nil {
 					if csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken); err == nil && csrfToken != "" {
-						result = replacePlaceholder(result, "CGW_CSRF_TOKEN", csrfToken)
+						result = replacePlaceholder(result, "RGW_CSRF_TOKEN", csrfToken)
 					}
 				}
 			}
@@ -240,10 +240,10 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 		sample = strings.TrimSpace(h.cfg.SentryJSTracesRate)
 	}
 
-	result = replacePlaceholder(result, "CGW_SENTRY_DSN", dsn)
-	result = replacePlaceholder(result, "CGW_SENTRY_ENVIRONMENT", env)
-	result = replacePlaceholder(result, "CGW_SENTRY_RELEASE", release)
-	result = replacePlaceholder(result, "CGW_SENTRY_TRACES_SAMPLE_RATE", sample)
+	result = replacePlaceholder(result, "RGW_SENTRY_DSN", dsn)
+	result = replacePlaceholder(result, "RGW_SENTRY_ENVIRONMENT", env)
+	result = replacePlaceholder(result, "RGW_SENTRY_RELEASE", release)
+	result = replacePlaceholder(result, "RGW_SENTRY_TRACES_SAMPLE_RATE", sample)
 
 	return result
 }

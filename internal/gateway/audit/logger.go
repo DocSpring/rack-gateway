@@ -17,8 +17,8 @@ import (
 
 type contextKey string
 
-const requestLoggedKey contextKey = "cgw-request-logged"
-const auditLogCreatedKey contextKey = "cgw-audit-log-created"
+const requestLoggedKey contextKey = "rgw-request-logged"
+const auditLogCreatedKey contextKey = "rgw-audit-log-created"
 
 type Logger struct {
 	redactPatterns []*regexp.Regexp

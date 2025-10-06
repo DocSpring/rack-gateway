@@ -32,7 +32,7 @@ func TestTokenService(t *testing.T) {
 
 		assert.NotEmpty(t, resp.Token)
 		assert.True(t, len(resp.Token) > 10)
-		assert.True(t, resp.Token[:4] == "cgw_") // Check prefix
+		assert.True(t, resp.Token[:4] == "rgw_") // Check prefix
 		assert.Equal(t, req.Name, resp.APIToken.Name)
 		assert.Equal(t, req.UserID, resp.APIToken.UserID)
 		assert.Equal(t, req.Permissions, resp.APIToken.Permissions)
@@ -50,7 +50,7 @@ func TestTokenService(t *testing.T) {
 		assert.Error(t, err)
 
 		// Try valid format but non-existent token
-		_, err = service.ValidateAPIToken("cgw_fakefakefakefakefake")
+		_, err = service.ValidateAPIToken("rgw_fakefakefakefakefake")
 		assert.Error(t, err)
 	})
 

@@ -60,7 +60,7 @@ func resourcesExportCommand() *cobra.Command {
 	return cmd
 }
 
-func resourcesInfoCommand() *cobra.Command{
+func resourcesInfoCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "info <name>",
 		Short: "get information about a resource",

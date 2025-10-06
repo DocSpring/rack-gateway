@@ -86,9 +86,9 @@ export async function ensureMfaEnrollment(page: Page) {
   await page
     .waitForFunction(
       () => {
-        const meta = document.querySelector<HTMLMetaElement>('meta[name="cgw-csrf-token"]')
+        const meta = document.querySelector<HTMLMetaElement>('meta[name="rgw-csrf-token"]')
         const value = meta?.content?.trim()
-        return Boolean(value && value !== 'CGW_CSRF_TOKEN')
+        return Boolean(value && value !== 'RGW_CSRF_TOKEN')
       },
       undefined,
       { timeout: 5000 }
@@ -96,9 +96,9 @@ export async function ensureMfaEnrollment(page: Page) {
     .catch(() => {})
 
   const csrfToken = await page.evaluate(() => {
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="cgw-csrf-token"]')
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="rgw-csrf-token"]')
     const value = meta?.content?.trim()
-    if (!value || value === 'CGW_CSRF_TOKEN') {
+    if (!value || value === 'RGW_CSRF_TOKEN') {
       return ''
     }
     return value
@@ -124,7 +124,10 @@ export async function ensureMfaEnrollment(page: Page) {
     )
   }
 
-  const startData = (await startResp.json()) as { method_id: number; secret: string }
+  const startData = (await startResp.json()) as {
+    method_id: number
+    secret: string
+  }
   if (!(startData?.method_id && startData?.secret)) {
     return
   }

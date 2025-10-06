@@ -64,24 +64,24 @@ var MFARequirements = map[string]MFALevel{
 	"convox:instance:keyroll": MFAStepUp,
 
 	// READ-ONLY OPERATIONS - No MFA required beyond enrollment
-	"convox:app:list":         MFANone,
-	"convox:app:read":         MFANone,
-	"convox:build:list":       MFANone,
-	"convox:build:read":       MFANone,
-	"convox:release:list":     MFANone,
-	"convox:release:read":     MFANone,
-	"convox:process:list":     MFANone,
-	"convox:process:read":     MFANone,
-	"convox:env:read":         MFANone,
-	"convox:log:read":         MFANone,
-	"convox:rack:read":        MFANone,
-	"convox:resource:list":    MFANone,
-	"convox:resource:read":    MFANone,
-	"convox:instance:list":    MFANone,
-	"convox:instance:read":    MFANone,
-	"convox:cert:list":        MFANone,
-	"convox:registry:list":    MFANone,
-	"convox:object:create":    MFANone, // Object uploads for builds
+	"convox:app:list":      MFANone,
+	"convox:app:read":      MFANone,
+	"convox:build:list":    MFANone,
+	"convox:build:read":    MFANone,
+	"convox:release:list":  MFANone,
+	"convox:release:read":  MFANone,
+	"convox:process:list":  MFANone,
+	"convox:process:read":  MFANone,
+	"convox:env:read":      MFANone,
+	"convox:log:read":      MFANone,
+	"convox:rack:read":     MFANone,
+	"convox:resource:list": MFANone,
+	"convox:resource:read": MFANone,
+	"convox:instance:list": MFANone,
+	"convox:instance:read": MFANone,
+	"convox:cert:list":     MFANone,
+	"convox:registry:list": MFANone,
+	"convox:object:create": MFANone, // Object uploads for builds
 }
 
 // GetMFALevel returns the highest MFA level required by any of the given permissions

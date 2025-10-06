@@ -1,6 +1,6 @@
-const META_NAME = 'cgw-csrf-token'
+const META_NAME = 'rgw-csrf-token'
 const META_SELECTOR = `meta[name="${META_NAME}"]`
-const PLACEHOLDER = 'CGW_CSRF_TOKEN'
+const PLACEHOLDER = 'RGW_CSRF_TOKEN'
 const hasDOM = typeof document !== 'undefined'
 
 let csrfCache: string | null = null

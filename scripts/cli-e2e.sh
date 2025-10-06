@@ -240,17 +240,17 @@ function verify_command_status_and_output() {
   fi
 }
 
-function verify_cgw_command() {
+function verify_rgw_command() {
   verify_command_status_and_output "$1" "0" "${@:2}"
 }
 
-function verify_cgw_command_failure() {
+function verify_rgw_command_failure() {
   verify_command_status_and_output "$1" "1" "${@:2}"
 }
 
 function logout_cli() {
   echo -e "${YELLOW}Logging out...${NC}"
-  verify_cgw_command "logout" "Removed rack: e2e"
+  verify_rgw_command "logout" "Removed rack: e2e"
 }
 
 
@@ -331,21 +331,21 @@ if [ -z "$SKIP_ADMIN_TESTS" ] || [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 fi
 
 if [ -z "$SKIP_ADMIN_TESTS" ]; then
-  verify_cgw_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
-  verify_cgw_command "rack" "mock-rack" "mock-rack.example.com"
-  verify_cgw_command "apps" "rack-gateway" "RAPI123456"
-  verify_cgw_command "apps info" \
+  verify_rgw_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
+  verify_rgw_command "rack" "mock-rack" "mock-rack.example.com"
+  verify_rgw_command "apps" "rack-gateway" "RAPI123456"
+  verify_rgw_command "apps info" \
     "Name        rack-gateway" "Status      running"
-  verify_cgw_command "ps" "p-web-1" "p-worker-1"
+  verify_rgw_command "ps" "p-web-1" "p-worker-1"
 
-  verify_cgw_command "run web 'echo hello'" \
+  verify_rgw_command "run web 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello' \
     'hello' \
     'Exit code: 0' \
     'Session closed.'
 
-  verify_cgw_command "exec p-worker-1 'echo hello'" \
+  verify_rgw_command "exec p-worker-1 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=p-worker-1' \
     '$ echo hello' \
     'hello' \
@@ -353,24 +353,24 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     'Session closed.'
 
   # List environment for a known app
-  verify_cgw_command "env" \
+  verify_rgw_command "env" \
     "DATABASE_URL=********************" \
     "NODE_ENV=production" \
     "PORT=3000"
 
   # Fetch secret with --secrets flag
-  verify_cgw_command "env get DATABASE_URL --secrets" \
+  verify_rgw_command "env get DATABASE_URL --secrets" \
     "postgres://user:pass@localhost/db"
 
-  verify_cgw_command "env set FOO=bar" \
+  verify_rgw_command "env set FOO=bar" \
     "Setting FOO..." "Release:"
 
-  verify_cgw_command "restart" \
+  verify_rgw_command "restart" \
     "Restarting web... OK" \
     "Restarting worker... OK"
 
   # Test full build + release flow
-  verify_cgw_command "deploy" \
+  verify_rgw_command "deploy" \
     "Packaging source..." "Uploading source..." "Starting build..." \
     "Building app..." \
     "Step 1/1: mock build step" \
@@ -419,23 +419,23 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
 
   # Show rack info via API token
-  verify_cgw_command \
+  verify_rgw_command \
     "rack" \
     "Name" \
     "Status"
 
   # Show processes via API token
-  verify_cgw_command \
+  verify_rgw_command \
     "ps --app rack-gateway" \
     "p-web-1"
 
   # No commands allowed
-  verify_cgw_command_failure \
+  verify_rgw_command_failure \
     "run web --app rack-gateway 'delete everything'" \
     "ERROR:"
 
   # Not even approved commands
-  verify_cgw_command_failure \
+  verify_rgw_command_failure \
     "run web --app rack-gateway 'echo hello'" \
     "ERROR:"
 
@@ -486,7 +486,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   login_cli_as "admin@example.com" "e2e"
 
   APPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
-  verify_cgw_command \
+  verify_rgw_command \
     "deploy-approval approve $REQUEST_ID --notes 'Approved for E2E test' --mfa-code $APPROVE_CODE" \
     "Deploy approval request" "approved"
 
@@ -499,28 +499,28 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
 
   # No unapproved commands allowed
-  verify_cgw_command_failure \
+  verify_rgw_command_failure \
     "run web --app rack-gateway 'delete everything'" \
     "ERROR:"
 
   # But now an approved command is allowed to be run
-  verify_cgw_command "run web 'echo hello'" \
+  verify_rgw_command "run web 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello'
 
 
   # Run mock migration command on the new release
-  verify_cgw_command \
+  verify_rgw_command \
     "run web --app rack-gateway --release $RELEASE_ID 'echo migrate'" \
     "migrate"
 
   # Promote the release
-  verify_cgw_command \
+  verify_rgw_command \
     "releases promote $RELEASE_ID --app rack-gateway" \
     "OK"
 
   # Deploy approval request has been consumed. No more commands allowed
-  verify_cgw_command_failure \
+  verify_rgw_command_failure \
     "run web 'echo hello'" \
     "ERROR:"
 
@@ -531,7 +531,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # Delete via admin login to validate token deletion flow
   login_cli_as "admin@example.com" "e2e"
-  verify_cgw_command "api-token delete $API_TOKEN_PUBLIC_ID" "Deleted token $API_TOKEN_PUBLIC_ID"
+  verify_rgw_command "api-token delete $API_TOKEN_PUBLIC_ID" "Deleted token $API_TOKEN_PUBLIC_ID"
   logout_cli
 fi
 
@@ -541,20 +541,20 @@ if [ -z "$SKIP_DEPLOYER_TESTS" ]; then
   login_cli_as "deployer@example.com" "e2e"
 
   # Can list processes
-  verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
+  verify_rgw_command "ps" "p-web-1" "p-worker-1"
 
   # List environment for a known app
-  verify_cgw_command "convox env" \
+  verify_rgw_command "env" \
     "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
 
   # Cannot fetch secret
-  verify_cgw_command_failure "env get DATABASE_URL --secrets" \
+  verify_rgw_command_failure "env get DATABASE_URL --secrets" \
     "Error: failed to fetch env: You don't have permission to view secrets."
 
   # (env set tests removed for deployer; protected env policy preservation)
 
   # Should not be able to delete apps
-  verify_cgw_command_failure "convox apps delete rack-gateway" "ERROR: permission denied"
+  verify_rgw_command_failure "apps delete rack-gateway" "ERROR: permission denied"
 
   logout_cli
 fi
@@ -565,19 +565,19 @@ if [ -z "$SKIP_VIEWER_TESTS" ]; then
   login_cli_as "viewer@example.com" "e2e"
 
   # Viewer can list processes
-  verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
+  verify_rgw_command "ps" "p-web-1" "p-worker-1"
 
   # Cannot fetch env
-  verify_cgw_command_failure "convox env" \
+  verify_rgw_command_failure "env" \
     "ERROR: permission denied"
 
   # Cannot fetch secret
-  verify_cgw_command_failure "env get DATABASE_URL --secrets" \
+  verify_rgw_command_failure "env get DATABASE_URL --secrets" \
     "Error: failed to fetch env: You don't have permission to view environment variables."
 
   # Viewer should not be able to set env or delete apps
-  verify_cgw_command_failure "convox env set NOTALLOWED=1" "ERROR: permission denied"
-  verify_cgw_command_failure "convox apps delete rack-gateway" "ERROR: permission denied"
+  verify_rgw_command_failure "env set NOTALLOWED=1" "ERROR: permission denied"
+  verify_rgw_command_failure "apps delete rack-gateway" "ERROR: permission denied"
 fi
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"

@@ -160,7 +160,7 @@ func TestSecurityHeadersAddsSentryReporting(t *testing.T) {
 	if !strings.Contains(csp, "sentry_environment=prod") || !strings.Contains(csp, "sentry_release=v5.4.3") {
 		t.Fatalf("expected Sentry query parameters in CSP, got %q", csp)
 	}
-	if !strings.Contains(csp, "report-to cgw-sentry-csp") {
+	if !strings.Contains(csp, "report-to rgw-sentry-csp") {
 		t.Fatalf("expected report-to directive in CSP, got %q", csp)
 	}
 	if !strings.Contains(csp, "https://o75.ingest.us.sentry.io") {
@@ -171,12 +171,12 @@ func TestSecurityHeadersAddsSentryReporting(t *testing.T) {
 	}
 
 	reportTo := resp.Header().Get("Report-To")
-	if !strings.Contains(reportTo, "\"group\":\"cgw-sentry-csp\"") || !strings.Contains(reportTo, "https://o75.ingest.us.sentry.io/api/9001/security/") {
+	if !strings.Contains(reportTo, "\"group\":\"rgw-sentry-csp\"") || !strings.Contains(reportTo, "https://o75.ingest.us.sentry.io/api/9001/security/") {
 		t.Fatalf("expected Report-To header to include Sentry endpoint, got %q", reportTo)
 	}
 
 	reportingEndpoints := resp.Header().Get("Reporting-Endpoints")
-	if !strings.Contains(reportingEndpoints, "cgw-sentry-csp=") {
+	if !strings.Contains(reportingEndpoints, "rgw-sentry-csp=") {
 		t.Fatalf("expected Reporting-Endpoints header, got %q", reportingEndpoints)
 	}
 }

@@ -10,7 +10,7 @@ function resolveConnectionString() {
     process.env.E2E_DATABASE_URL,
     process.env.TEST_DATABASE_URL,
     process.env.DATABASE_URL,
-    process.env.CGW_DATABASE_URL,
+    process.env.RGW_DATABASE_URL,
     process.env.GATEWAY_DATABASE_URL,
   ]
     .map((value) => value?.trim())

@@ -112,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_user_resources_user ON user_resources(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_resources_type ON user_resources(resource_type);
 
 -- Internal metadata for environment tracking
-CREATE TABLE IF NOT EXISTS cgw_internal_metadata (
+CREATE TABLE IF NOT EXISTS rgw_internal_metadata (
   id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
   environment VARCHAR(32) NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

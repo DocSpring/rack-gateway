@@ -21,7 +21,7 @@ environment:
   # - RACK_USERNAME=convox # optional; defaults to convox
 
 resources:
-  cgw-database:
+  rgw-database:
     type: rds-postgres
     options:
       class: db.t3.micro
@@ -48,7 +48,7 @@ services:
     internal: false
     port: 8080
     resources:
-      - cgw-database
+      - rgw-database
     scale:
       count: 1
       cpu: 256

@@ -29,9 +29,9 @@ type OAuthProvider interface {
 	CompleteLogin(code, state, codeVerifier string) (*auth.LoginResponse, error)
 }
 
-const webOAuthStateCookie = "cgw_oauth_state"
+const webOAuthStateCookie = "rgw_oauth_state"
 const webOAuthStateTTL = 5 * time.Minute
-const trustedDeviceCookie = "cgw_trusted_device"
+const trustedDeviceCookie = "rgw_trusted_device"
 const cliEnrollmentErrorMessage = "You must set up multi-factor authentication before you can continue using the CLI."
 
 // AuthHandler handles authentication endpoints

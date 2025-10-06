@@ -28,20 +28,20 @@ function readMetaContent(name: string): string | undefined {
 export function initSentry(): boolean {
   if (sentryEnabled) return true
 
-  const dsn = readMetaContent('cgw-sentry-dsn')
+  const dsn = readMetaContent('rgw-sentry-dsn')
   if (!dsn) {
     return false
   }
 
   const environment =
-    readMetaContent('cgw-sentry-environment') ??
+    readMetaContent('rgw-sentry-environment') ??
     (import.meta.env.PROD ? 'production' : 'development')
 
   const release =
-    readMetaContent('cgw-sentry-release') ??
+    readMetaContent('rgw-sentry-release') ??
     normalizeEnv(import.meta.env.VITE_RELEASE as string | undefined)
 
-  const tracesSampleRate = parseSampleRate(readMetaContent('cgw-sentry-traces-sample-rate'), 0)
+  const tracesSampleRate = parseSampleRate(readMetaContent('rgw-sentry-traces-sample-rate'), 0)
 
   const integrations = [browserTracingIntegration()]
 

@@ -134,7 +134,7 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 
 	tmp := t.TempDir()
 	indexPath := filepath.Join(tmp, "index.html")
-	content := `<!doctype html><meta name="cgw-sentry-dsn" content="CGW_SENTRY_DSN"><meta name="cgw-sentry-environment" content="CGW_SENTRY_ENVIRONMENT"><meta name="cgw-sentry-release" content="CGW_SENTRY_RELEASE"><meta name="cgw-sentry-traces-sample-rate" content="CGW_SENTRY_TRACES_SAMPLE_RATE">`
+	content := `<!doctype html><meta name="rgw-sentry-dsn" content="RGW_SENTRY_DSN"><meta name="rgw-sentry-environment" content="RGW_SENTRY_ENVIRONMENT"><meta name="rgw-sentry-release" content="RGW_SENTRY_RELEASE"><meta name="rgw-sentry-traces-sample-rate" content="RGW_SENTRY_TRACES_SAMPLE_RATE">`
 	if err := os.WriteFile(indexPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write index: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 	handler.serveIndex(rec, req)
 
 	body := rec.Body.String()
-	if strings.Contains(body, "CGW_SENTRY_DSN") {
+	if strings.Contains(body, "RGW_SENTRY_DSN") {
 		t.Fatalf("expected DSN placeholder to be replaced, got %q", body)
 	}
 	if !strings.Contains(body, cfg.SentryJSDsn) {
