@@ -150,13 +150,19 @@ func HasAuditLogBeenCreated(ctx context.Context) bool {
 }
 
 func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
+	// Use original path if available (before prefix stripping)
+	path := r.Header.Get("X-Original-Path")
+	if path == "" {
+		path = r.URL.Path
+	}
+
 	// Log request to stdout for CloudWatch (all requests)
 	entry := &LogEntry{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		UserEmail:    userEmail,
 		Rack:         rack,
 		Method:       r.Method,
-		Path:         r.URL.Path,
+		Path:         path,
 		QueryParams:  r.URL.RawQuery,
 		Status:       status,
 		LatencyMs:    latency.Milliseconds(),

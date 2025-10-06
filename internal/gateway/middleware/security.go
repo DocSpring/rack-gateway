@@ -428,7 +428,11 @@ func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.H
 		if logger == nil {
 			return
 		}
-		path := c.Request.URL.Path
+		// Use original path if available (before prefix stripping)
+		path := c.Request.Header.Get("X-Original-Path")
+		if path == "" {
+			path = c.Request.URL.Path
+		}
 		if path == "/.gateway/api/health" {
 			return
 		}

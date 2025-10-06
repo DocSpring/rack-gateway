@@ -332,20 +332,20 @@ fi
 
 if [ -z "$SKIP_ADMIN_TESTS" ]; then
   verify_cgw_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
-  verify_cgw_command "convox rack" "mock-rack" "mock-rack.example.com"
-  verify_cgw_command "convox apps" "rack-gateway" "RAPI123456"
-  verify_cgw_command "convox apps info" \
+  verify_cgw_command "rack" "mock-rack" "mock-rack.example.com"
+  verify_cgw_command "apps" "rack-gateway" "RAPI123456"
+  verify_cgw_command "apps info" \
     "Name        rack-gateway" "Status      running"
-  verify_cgw_command "convox ps" "p-web-1" "p-worker-1"
+  verify_cgw_command "ps" "p-web-1" "p-worker-1"
 
-  verify_cgw_command "convox run web 'echo hello'" \
+  verify_cgw_command "run web 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello' \
     'hello' \
     'Exit code: 0' \
     'Session closed.'
 
-  verify_cgw_command "convox exec p-worker-1 'echo hello'" \
+  verify_cgw_command "exec p-worker-1 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=p-worker-1' \
     '$ echo hello' \
     'hello' \
@@ -353,7 +353,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     'Session closed.'
 
   # List environment for a known app
-  verify_cgw_command "convox env" \
+  verify_cgw_command "env" \
     "DATABASE_URL=********************" \
     "NODE_ENV=production" \
     "PORT=3000"
@@ -365,12 +365,12 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
   verify_cgw_command "env set FOO=bar" \
     "Setting FOO..." "Release:"
 
-  verify_cgw_command "convox restart" \
+  verify_cgw_command "restart" \
     "Restarting web... OK" \
     "Restarting worker... OK"
 
   # Test full build + release flow
-  verify_cgw_command "convox deploy" \
+  verify_cgw_command "deploy" \
     "Packaging source..." "Uploading source..." "Starting build..." \
     "Building app..." \
     "Step 1/1: mock build step" \
@@ -379,7 +379,7 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     "OK"
 
   # Check logs via websockets (this stream is long-lived; kill after 3s)
-  WRAPPER_CMD="timeout 3s ./bin/rack-gateway" verify_command_status_and_output "convox logs" \
+  WRAPPER_CMD="timeout 3s ./bin/rack-gateway" verify_command_status_and_output "logs" \
     "124" \
     "Promoting release" \
     "Release promoted successfully."
@@ -420,33 +420,33 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # Show rack info via API token
   verify_cgw_command \
-    "convox rack" \
+    "rack" \
     "Name" \
     "Status"
 
   # Show processes via API token
   verify_cgw_command \
-    "convox ps --app rack-gateway" \
+    "ps --app rack-gateway" \
     "p-web-1"
 
   # No commands allowed
   verify_cgw_command_failure \
-    "convox run web --app rack-gateway 'delete everything'" \
+    "run web --app rack-gateway 'delete everything'" \
     "ERROR:"
 
   # Not even approved commands
   verify_cgw_command_failure \
-    "convox run web --app rack-gateway 'echo hello'" \
+    "run web --app rack-gateway 'echo hello'" \
     "ERROR:"
 
 
   # Create build and capture release identifier
   set +e
-  build_output=$(./bin/rack-gateway convox build --app rack-gateway --description "cli-e2e" --id 2>&1)
+  build_output=$(./bin/rack-gateway build --app rack-gateway --description "cli-e2e" --id 2>&1)
   build_status=$?
   set -e
   if [[ $build_status -ne 0 ]]; then
-    echo -e "${RED}convox build failed:${NC}\n$build_output" >&2
+    echo -e "${RED}build failed:${NC}\n$build_output" >&2
     exit 1
   fi
   echo "$build_output"
@@ -500,28 +500,28 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # No unapproved commands allowed
   verify_cgw_command_failure \
-    "convox run web --app rack-gateway 'delete everything'" \
+    "run web --app rack-gateway 'delete everything'" \
     "ERROR:"
 
   # But now an approved command is allowed to be run
-  verify_cgw_command "convox run web 'echo hello'" \
+  verify_cgw_command "run web 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello'
 
 
   # Run mock migration command on the new release
   verify_cgw_command \
-    "convox run web --app rack-gateway --release $RELEASE_ID 'echo migrate'" \
+    "run web --app rack-gateway --release $RELEASE_ID 'echo migrate'" \
     "migrate"
 
   # Promote the release
   verify_cgw_command \
-    "convox releases promote $RELEASE_ID --app rack-gateway" \
+    "releases promote $RELEASE_ID --app rack-gateway" \
     "OK"
 
   # Deploy approval request has been consumed. No more commands allowed
   verify_cgw_command_failure \
-    "convox run web 'echo hello'" \
+    "run web 'echo hello'" \
     "ERROR:"
 
   # Clean up the API token now that the pipeline simulation is complete

@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"encoding/json"
@@ -15,22 +15,22 @@ import (
 func TestSetCurrentRack(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 
 	// Test setting current rack
-	err := setCurrentRack("staging")
+	err := SetCurrentRack("staging")
 	require.NoError(t, err)
 
-	cfg, exists, err := loadConfig()
+	cfg, exists, err := LoadConfig()
 	require.NoError(t, err)
 	assert.True(t, exists)
 	assert.Equal(t, "staging", cfg.Current)
 
 	// Test overwriting current rack
-	err = setCurrentRack("production")
+	err = SetCurrentRack("production")
 	require.NoError(t, err)
 
-	cfg, exists, err = loadConfig()
+	cfg, exists, err = LoadConfig()
 	require.NoError(t, err)
 	assert.True(t, exists)
 	assert.Equal(t, "production", cfg.Current)
@@ -39,24 +39,24 @@ func TestSetCurrentRack(t *testing.T) {
 func TestGetCurrentRack(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 
 	// Test when no current rack configured
-	_, err := getCurrentRack()
+	_, err := GetCurrentRack()
 	assert.Error(t, err)
 
 	// Write config with current rack
-	require.NoError(t, saveConfig(&Config{Current: "us-east"}))
+	require.NoError(t, SaveConfig(&Config{Current: "us-east"}))
 
 	// Test reading current rack
-	rack, err := getCurrentRack()
+	rack, err := GetCurrentRack()
 	require.NoError(t, err)
 	assert.Equal(t, "us-east", rack)
 
 	// Test with whitespace (should be trimmed)
-	require.NoError(t, saveConfig(&Config{Current: "  eu-west  \n"}))
+	require.NoError(t, SaveConfig(&Config{Current: "  eu-west  \n"}))
 
-	rack, err = getCurrentRack()
+	rack, err = GetCurrentRack()
 	require.NoError(t, err)
 	assert.Equal(t, "eu-west", rack)
 }
@@ -64,7 +64,7 @@ func TestGetCurrentRack(t *testing.T) {
 func TestSwitchCommand(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 
 	// Create a config.json with some racks
 	config := map[string]interface{}{
@@ -84,18 +84,18 @@ func TestSwitchCommand(t *testing.T) {
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
 
 	// Test switching to a valid rack
-	err = setCurrentRack("staging")
+	err = SetCurrentRack("staging")
 	require.NoError(t, err)
 
-	rack, err := getCurrentRack()
+	rack, err := GetCurrentRack()
 	require.NoError(t, err)
 	assert.Equal(t, "staging", rack)
 
 	// Test switching to another valid rack
-	err = setCurrentRack("production")
+	err = SetCurrentRack("production")
 	require.NoError(t, err)
 
-	rack, err = getCurrentRack()
+	rack, err = GetCurrentRack()
 	require.NoError(t, err)
 	assert.Equal(t, "production", rack)
 }
@@ -103,14 +103,14 @@ func TestSwitchCommand(t *testing.T) {
 func TestRackSelectionPriority(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 
 	// Set up initial current rack
-	err := setCurrentRack("staging")
+	err := SetCurrentRack("staging")
 	require.NoError(t, err)
 
 	// Test 1: Default from current file
-	rack, err := getCurrentRack()
+	rack, err := GetCurrentRack()
 	require.NoError(t, err)
 	assert.Equal(t, "staging", rack)
 
@@ -127,23 +127,23 @@ func TestRackSelectionPriority(t *testing.T) {
 }
 
 func TestSelectedRackEnvOverride(t *testing.T) {
-	configPath = t.TempDir()
-	rackFlag = ""
+	ConfigPath = t.TempDir()
+	RackFlag = ""
 	t.Setenv("RACK_GATEWAY_RACK", "env-rack")
 	t.Setenv("RACK_GATEWAY_URL", "")
 
-	rack, err := selectedRack()
+	rack, err := SelectedRack()
 	require.NoError(t, err)
 	assert.Equal(t, "env-rack", rack)
 }
 
 func TestSelectedRackFallsBackToURL(t *testing.T) {
-	configPath = t.TempDir()
-	rackFlag = ""
+	ConfigPath = t.TempDir()
+	RackFlag = ""
 	t.Setenv("RACK_GATEWAY_URL", "https://gateway.example.com")
 	t.Setenv("RACK_GATEWAY_RACK", "")
 
-	rack, err := selectedRack()
+	rack, err := SelectedRack()
 	require.NoError(t, err)
 	assert.Equal(t, "(from environment)", rack)
 }
@@ -151,7 +151,7 @@ func TestSelectedRackFallsBackToURL(t *testing.T) {
 func TestLoginSetsCurrentRack(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 
 	// Simulate what happens during login
 	rack := "us-west"
@@ -171,11 +171,11 @@ func TestLoginSetsCurrentRack(t *testing.T) {
 	require.NoError(t, os.WriteFile(configFile, configData, 0600))
 
 	// Login should set current rack
-	err = setCurrentRack(rack)
+	err = SetCurrentRack(rack)
 	require.NoError(t, err)
 
 	// Verify current rack was set
-	currentRack, err := getCurrentRack()
+	currentRack, err := GetCurrentRack()
 	require.NoError(t, err)
 	assert.Equal(t, "us-west", currentRack)
 }
@@ -183,10 +183,10 @@ func TestLoginSetsCurrentRack(t *testing.T) {
 func TestGetCurrentRackWithNoConfig(t *testing.T) {
 	// Create a temporary config directory
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 
 	// Test when no current rack is configured
-	_, err := getCurrentRack()
+	_, err := GetCurrentRack()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no current rack")
 }
@@ -194,15 +194,15 @@ func TestGetCurrentRackWithNoConfig(t *testing.T) {
 func TestSetCurrentRackCreatesDirectory(t *testing.T) {
 	// Use a nested path that doesn't exist
 	tmpDir := t.TempDir()
-	configPath = filepath.Join(tmpDir, "nested", "config", "dir")
+	ConfigPath = filepath.Join(tmpDir, "nested", "config", "dir")
 
-	// setCurrentRack should create the directory structure
-	err := setCurrentRack("staging")
+	// SetCurrentRack should create the directory structure
+	err := SetCurrentRack("staging")
 	require.NoError(t, err)
 
-	configFile := filepath.Join(configPath, "config.json")
+	configFile := filepath.Join(ConfigPath, "config.json")
 	assert.FileExists(t, configFile)
-	cfg, exists, err := loadConfig()
+	cfg, exists, err := LoadConfig()
 	require.NoError(t, err)
 	assert.True(t, exists)
 	assert.Equal(t, "staging", cfg.Current)
@@ -210,11 +210,11 @@ func TestSetCurrentRackCreatesDirectory(t *testing.T) {
 
 func TestResolveRackStatusPrefersConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath = tmpDir
+	ConfigPath = tmpDir
 	t.Setenv("RACK_GATEWAY_URL", "")
 	t.Setenv("RACK_GATEWAY_API_TOKEN", "")
 
-	require.NoError(t, saveConfig(&Config{
+	require.NoError(t, SaveConfig(&Config{
 		Current: "staging",
 		Gateways: map[string]GatewayConfig{
 			"staging": {
@@ -226,7 +226,7 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 		},
 	}))
 
-	status, err := resolveRackStatus(time.Now())
+	status, err := ResolveRackStatus(time.Now())
 	require.NoError(t, err)
 	assert.Equal(t, "staging", status.Rack)
 	assert.Equal(t, "https://gateway-staging.example.com", status.GatewayURL)
@@ -234,12 +234,12 @@ func TestResolveRackStatusPrefersConfig(t *testing.T) {
 }
 
 func TestResolveRackStatusFallsBackToEnv(t *testing.T) {
-	configPath = t.TempDir()
+	ConfigPath = t.TempDir()
 	t.Setenv("RACK_GATEWAY_RACK", "")
 	t.Setenv("RACK_GATEWAY_URL", "https://env-gateway.example.com")
 	t.Setenv("RACK_GATEWAY_API_TOKEN", "token-from-env")
 
-	status, err := resolveRackStatus(time.Now())
+	status, err := ResolveRackStatus(time.Now())
 	require.NoError(t, err)
 	assert.Equal(t, "Using RACK_GATEWAY_API_TOKEN from environment", status.Rack)
 	assert.Equal(t, "https://env-gateway.example.com", status.GatewayURL)
@@ -247,28 +247,28 @@ func TestResolveRackStatusFallsBackToEnv(t *testing.T) {
 }
 
 func TestResolveRackStatusEnvRequiresToken(t *testing.T) {
-	configPath = t.TempDir()
+	ConfigPath = t.TempDir()
 	t.Setenv("RACK_GATEWAY_RACK", "")
 	t.Setenv("RACK_GATEWAY_URL", "https://env-gateway.example.com")
 
-	_, err := resolveRackStatus(time.Now())
+	_, err := ResolveRackStatus(time.Now())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "RACK_GATEWAY_API_TOKEN")
 }
 
 func TestRenderGatewayError(t *testing.T) {
 	t.Run("json payload", func(t *testing.T) {
-		msg := renderGatewayError([]byte(`{"error":"You don't have permission"}`))
+		msg := RenderGatewayError([]byte(`{"error":"You don't have permission"}`))
 		assert.Equal(t, "You don't have permission", msg)
 	})
 
 	t.Run("empty body", func(t *testing.T) {
-		msg := renderGatewayError([]byte(""))
+		msg := RenderGatewayError([]byte(""))
 		assert.Equal(t, "forbidden", msg)
 	})
 
 	t.Run("plain text", func(t *testing.T) {
-		msg := renderGatewayError([]byte("permission denied"))
+		msg := RenderGatewayError([]byte("permission denied"))
 		assert.Equal(t, "permission denied", msg)
 	})
 }

@@ -249,6 +249,25 @@ func Setup(router *gin.Engine, cfg *Config) {
 		}
 	}
 
+	// New API v1 routes for CLI (JWT auth only, no cookies)
+	apiV1 := router.Group("/api/v1")
+	{
+		// Convox proxy for CLI
+		convoxCLI := apiV1.Group("/convox")
+		convoxCLI.Use(middleware.CLIOnly(cfg.AuthService))
+		convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.MFASettings))
+		{
+			// Proxy all methods to Convox rack, stripping /api/v1/convox prefix
+			convoxCLI.GET("/*path", proxyHandler.ProxyStripPrefix)
+			convoxCLI.POST("/*path", proxyHandler.ProxyStripPrefix)
+			convoxCLI.PUT("/*path", proxyHandler.ProxyStripPrefix)
+			convoxCLI.PATCH("/*path", proxyHandler.ProxyStripPrefix)
+			convoxCLI.DELETE("/*path", proxyHandler.ProxyStripPrefix)
+			convoxCLI.HEAD("/*path", proxyHandler.ProxyStripPrefix)
+			convoxCLI.OPTIONS("/*path", proxyHandler.ProxyStripPrefix)
+		}
+	}
+
 	// Catch-all: Proxy to Convox (CLI only, no cookie auth)
 	router.NoRoute(
 		middleware.CLIOnly(cfg.AuthService),

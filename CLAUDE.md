@@ -2,6 +2,25 @@
 
 IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
 
+## 🚨 PROJECT PHILOSOPHY - READ THIS FIRST
+
+**This is a greenfield project with ZERO active deployments.**
+
+- **NO legacy code support** - We delete old code, we don't maintain it
+- **NO backwards compatibility** - We break things freely to make them better
+- **NO migration paths** - There's nothing to migrate from
+- **NO "for compatibility" code** - Especially not for tests
+
+**When tests fail after a refactor:**
+- ✅ **CORRECT**: Update the tests to match the new code
+- ❌ **WRONG**: Add compatibility shims to make old tests pass
+
+**When code needs to change:**
+- ✅ **CORRECT**: Delete the old code, write the new code, update everything that breaks
+- ❌ **WRONG**: Keep the old code around "just in case" or "for backward compatibility"
+
+This project moves fast and breaks things. That's intentional. If you find yourself writing "backward compatibility" or "legacy support" code, **STOP** - you're doing it wrong.
+
 ## Documentation Structure
 
 This file contains high-level architecture and task commands. Component-specific details are in:

@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -42,7 +42,7 @@ func (e *deployApprovalRequestConflictError) Error() string {
 	return "deploy approval request already exists"
 }
 
-func deployApprovalCommand() *cobra.Command {
+func DeployApprovalCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy-approval",
 		Short: "Manage deploy approvals",
@@ -68,7 +68,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		Use:   "request <app> <release_id> <message>",
 		Short: "Request manual approval for CI/CD deploy",
 		Args:  cobra.ExactArgs(3),
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
 			app := strings.TrimSpace(args[0])
 			if app == "" {
 				return fmt.Errorf("app is required")
@@ -84,7 +84,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				return fmt.Errorf("message is required")
 			}
 
-			rack, err := selectedRack()
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -189,13 +189,13 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 		Use:   "approve <request_id>",
 		Short: "Approve a deploy approval request",
 		Args:  cobra.ExactArgs(1),
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
 			requestID := strings.TrimSpace(args[0])
 			if requestID == "" {
 				return fmt.Errorf("request_id is required")
 			}
 
-			rack, err := selectedRack()
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -244,8 +244,8 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		Use:   "wait",
 		Short: "Wait for and optionally approve pending deploy approval requests",
 		Args:  cobra.NoArgs,
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := selectedRack()
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -304,7 +304,7 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 
 				if len(result.Requests) > 0 {
 					// Found a pending request! Play sound and show details
-					cfg, _, _ := loadConfig()
+					cfg, _, _ := LoadConfig()
 					if err := playNotificationSound(cfg, rack); err != nil {
 						// Don't fail the command if sound playback fails
 						_ = writef(cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)

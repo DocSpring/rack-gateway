@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"os"
@@ -20,7 +20,7 @@ func chdir(t *testing.T, dir string) func() {
 }
 
 func TestResolveApp_FlagPrecedence(t *testing.T) {
-	app, err := resolveApp("from-flag")
+	app, err := ResolveApp("from-flag")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestResolveApp_FlagPrecedence(t *testing.T) {
 
 func TestResolveApp_EnvVar(t *testing.T) {
 	t.Setenv("CONVOX_APP", "from-env")
-	app, err := resolveApp("")
+	app, err := ResolveApp("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestResolveApp_DotConvoxFile_CurrentDir(t *testing.T) {
 	// Clear env to ensure file is used
 	t.Setenv("CONVOX_APP", "")
 
-	app, err := resolveApp("")
+	app, err := ResolveApp("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestResolveApp_DotConvoxFile_ParentDir(t *testing.T) {
 
 	t.Setenv("CONVOX_APP", "")
 
-	app, err := resolveApp("")
+	app, err := ResolveApp("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestResolveApp_FallbackBasename(t *testing.T) {
 
 	t.Setenv("CONVOX_APP", "")
 
-	app, err := resolveApp("")
+	app, err := ResolveApp("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

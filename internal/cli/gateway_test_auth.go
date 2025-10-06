@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func testAuthCommand() *cobra.Command {
+func TestAuthCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test-auth [mfa]",
 		Short: "Test authentication (optionally with MFA)",
@@ -18,8 +18,8 @@ Examples:
   rack-gateway test-auth mfa                        # Test auth + preferred MFA method
   rack-gateway test-auth mfa --mfa-method webauthn  # Override preferred method`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := selectedRack()
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -29,7 +29,7 @@ Examples:
 				return err
 			}
 
-			normalized, err := normalizeGatewayURL(gatewayURL)
+			normalized, err := NormalizeGatewayURL(gatewayURL)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ Examples:
 	return cmd
 }
 
-func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *mfaStatusResponse, rack string) error {
+func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *MFAStatusResponse, rack string) error {
 	if len(status.Methods) == 0 {
 		return fmt.Errorf("no MFA methods enrolled")
 	}
@@ -100,18 +100,18 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *mfaSta
 	fmt.Println("\nTesting preferred MFA method...")
 
 	// Check for --mfa-method flag override
-	if mfaMethodFlag != "" {
-		var overrideMethod *mfaMethodResponse
+	if MFAMethodFlag != "" {
+		var overrideMethod *MFAMethodResponse
 		for _, method := range status.Methods {
-			if method.Type == mfaMethodFlag && !method.IsEnrolling {
+			if method.Type == MFAMethodFlag && !method.IsEnrolling {
 				overrideMethod = &method
 				break
 			}
 		}
 		if overrideMethod == nil {
-			return fmt.Errorf("MFA method %q not found or not enrolled", mfaMethodFlag)
+			return fmt.Errorf("MFA method %q not found or not enrolled", MFAMethodFlag)
 		}
-		fmt.Printf("  Using --mfa-method override: %s\n", mfaMethodFlag)
+		fmt.Printf("  Using --mfa-method override: %s\n", MFAMethodFlag)
 		fmt.Printf("\nAttempting %s authentication...\n", overrideMethod.Type)
 		if err := testMFAMethod(cmd, baseURL, bearer, *overrideMethod, status.Methods); err != nil {
 			return fmt.Errorf("%s failed: %v", overrideMethod.Type, err)
@@ -121,7 +121,7 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *mfaSta
 	}
 
 	// Use server's preferred method if set
-	var preferredMethod *mfaMethodResponse
+	var preferredMethod *MFAMethodResponse
 	if status.PreferredMethod != nil && *status.PreferredMethod != "" {
 		for _, method := range status.Methods {
 			if method.Type == *status.PreferredMethod && !method.IsEnrolling {
@@ -143,7 +143,7 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *mfaSta
 	}
 
 	// Otherwise fall back to CLI preference
-	cfg, _, err := loadConfig()
+	cfg, _, err := LoadConfig()
 	if err != nil {
 		cfg = &Config{MFAPreference: "default"}
 	}
@@ -177,9 +177,9 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *mfaSta
 	return fmt.Errorf("all MFA methods failed")
 }
 
-func testOTPAuth(cmd *cobra.Command, baseURL, bearer string, status *mfaStatusResponse) error {
+func testOTPAuth(cmd *cobra.Command, baseURL, bearer string, status *MFAStatusResponse) error {
 	// Find TOTP method
-	var totpMethod *mfaMethodResponse
+	var totpMethod *MFAMethodResponse
 	for _, method := range status.Methods {
 		if method.Type == "totp" && !method.IsEnrolling {
 			totpMethod = &method
@@ -195,14 +195,14 @@ func testOTPAuth(cmd *cobra.Command, baseURL, bearer string, status *mfaStatusRe
 	return testMFAMethod(cmd, baseURL, bearer, *totpMethod, status.Methods)
 }
 
-func testWebAuthnAuth(baseURL, bearer string, status *mfaStatusResponse) error {
+func testWebAuthnAuth(baseURL, bearer string, status *MFAStatusResponse) error {
 	// Check WebAuthn availability
 	if !checkWebAuthnAvailability() {
 		return fmt.Errorf("no WebAuthn device detected")
 	}
 
 	// Find WebAuthn method
-	var webauthnMethod *mfaMethodResponse
+	var webauthnMethod *MFAMethodResponse
 	for _, method := range status.Methods {
 		if method.Type == "webauthn" && !method.IsEnrolling {
 			webauthnMethod = &method
@@ -223,12 +223,12 @@ func testWebAuthnAuth(baseURL, bearer string, status *mfaStatusResponse) error {
 	return nil
 }
 
-func testMFAMethod(cmd *cobra.Command, baseURL, bearer string, method mfaMethodResponse, allMethods []mfaMethodResponse) error {
+func testMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, allMethods []MFAMethodResponse) error {
 	// Use unified MFA verification module
 	return verifyMFAMethod(cmd, baseURL, bearer, method, allMethods)
 }
 
-func hasMethodType(methods []mfaMethodResponse, methodType string) bool {
+func hasMethodType(methods []MFAMethodResponse, methodType string) bool {
 	for _, m := range methods {
 		if m.Type == methodType && !m.IsEnrolling {
 			return true

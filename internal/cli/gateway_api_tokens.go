@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -58,7 +58,7 @@ func writef(out io.Writer, format string, args ...any) error {
 	return err
 }
 
-func apiTokenCommand() *cobra.Command {
+func APITokenCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api-token",
 		Short: "Manage API tokens for the current gateway",
@@ -77,8 +77,8 @@ func newAPITokenListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List API tokens",
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := selectedRack()
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -126,8 +126,8 @@ func newAPITokenGetCommand() *cobra.Command {
 		Use:   "get <token-id>",
 		Short: "Show details for an API token",
 		Args:  cobra.ExactArgs(1),
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := selectedRack()
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -197,12 +197,12 @@ func newAPITokenCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new API token",
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
 
-			rack, err := selectedRack()
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -286,8 +286,8 @@ func newAPITokenDeleteCommand() *cobra.Command {
 		Use:   "delete <token-id>",
 		Short: "Delete an API token",
 		Args:  cobra.ExactArgs(1),
-		RunE: silenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := selectedRack()
+		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+			rack, err := SelectedRack()
 			if err != nil {
 				return err
 			}
@@ -438,23 +438,23 @@ func gatewayAuthInfo(rack string) (string, string, error) {
 	gatewayURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
 	if gatewayURL == "" {
 		var err error
-		gatewayURL, err = loadGatewayURL(rack)
+		gatewayURL, err = LoadGatewayURL(rack)
 		if err != nil {
 			return "", "", err
 		}
 	}
 
-	normalized, err := normalizeGatewayURL(gatewayURL)
+	normalized, err := NormalizeGatewayURL(gatewayURL)
 	if err != nil {
 		return "", "", err
 	}
 
-	bearer := strings.TrimSpace(apiTokenFlag)
+	bearer := strings.TrimSpace(APITokenFlag)
 	if bearer == "" {
 		bearer = strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
 	}
 	if bearer == "" {
-		token, err := loadToken(rack)
+		token, err := LoadToken(rack)
 		if err != nil {
 			return "", "", err
 		}

@@ -440,17 +440,17 @@ func testCLIWrapsConvoxHelpAndVersionCommands(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "rack-gateway version")
 	})
 
-	// Test convox command passes through to real convox CLI
-	t.Run("convox", func(t *testing.T) {
-		cmd := exec.Command("../../bin/rack-gateway", "convox", "help")
+	// Test that rack-gateway help shows available commands
+	t.Run("help", func(t *testing.T) {
+		cmd := exec.Command("../../bin/rack-gateway", "help")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, _ := cmd.CombinedOutput()
-		// Should contain convox commands from real CLI
-		assert.Contains(t, string(output), "convox apps")
-		assert.Contains(t, string(output), "convox ps")
+		// Should contain direct convox command integration
+		assert.Contains(t, string(output), "ps")
+		assert.Contains(t, string(output), "apps")
 	})
 
 	// Test rack command shows current rack

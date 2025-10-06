@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/DocSpring/rack-gateway/internal/convox"
 )
 
 // RouteSpec defines a known Convox API route and the canonical resource/action it maps to.
@@ -15,6 +17,27 @@ type RouteSpec struct {
 	Pattern  string
 	Resource string
 	Action   string
+}
+
+// GetMFALevel returns the MFA level required for this route
+// Panics if the permission is not defined in MFARequirements
+func (r *RouteSpec) GetMFALevel() convox.MFALevel {
+	perm := fmt.Sprintf("convox:%s:%s", r.Resource, r.Action)
+	level, ok := convox.MFARequirements[perm]
+	if !ok {
+		panic(fmt.Sprintf("CRITICAL: Permission %q not found in MFARequirements - route %s %s", perm, r.Method, r.Pattern))
+	}
+	return level
+}
+
+// RequiresMFAStepUp returns true if this route requires MFA step-up (time window)
+func (r *RouteSpec) RequiresMFAStepUp() bool {
+	return r.GetMFALevel() >= convox.MFAStepUp
+}
+
+// RequiresMFAAlways returns true if this route requires immediate MFA
+func (r *RouteSpec) RequiresMFAAlways() bool {
+	return r.GetMFALevel() == convox.MFAAlways
 }
 
 var specs = []RouteSpec{
