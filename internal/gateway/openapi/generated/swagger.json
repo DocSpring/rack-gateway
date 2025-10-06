@@ -1833,7 +1833,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Generates a fresh set of backup codes. Existing codes are invalidated immediately.",
+                "description": "Generates a new set of MFA backup codes. All prior codes become invalid.",
                 "produces": [
                     "application/json"
                 ],
@@ -2378,7 +2378,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Revokes a trusted device token for the current user.",
+                "description": "Revokes a trusted device, requiring MFA on next login from that device.",
                 "tags": [
                     "Auth"
                 ],

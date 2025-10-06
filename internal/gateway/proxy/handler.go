@@ -2106,14 +2106,14 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 	if mfaLevel == convox.MFANone {
 		return nil
 	}
-	
+
 	// Get user's session
 	if authUser.Session == nil {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("session required for MFA verification"))
 		http.Error(w, "session required for MFA verification", http.StatusUnauthorized)
 		return fmt.Errorf("session required")
 	}
-	
+
 	// Check if MFA was provided inline
 	if authUser.MFAType != "" && authUser.MFAValue != "" {
 		// Verify the inline MFA
@@ -2123,7 +2123,7 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 			http.Error(w, "failed to verify MFA", http.StatusInternalServerError)
 			return fmt.Errorf("failed to get user")
 		}
-		
+
 		// Verify based on MFA type
 		var verifyErr error
 		switch authUser.MFAType {
@@ -2165,13 +2165,13 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 		default:
 			verifyErr = fmt.Errorf("unsupported MFA type: %s", authUser.MFAType)
 		}
-		
+
 		if verifyErr != nil {
 			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("MFA verification failed: %w", verifyErr))
 			http.Error(w, "MFA verification failed", http.StatusUnauthorized)
 			return verifyErr
 		}
-		
+
 		// MFA verified - update recent step-up timestamp
 		if h.sessionManager != nil {
 			now := time.Now()
@@ -2179,10 +2179,10 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 				log.Printf("Warning: failed to update session step-up: %v", err)
 			}
 		}
-		
+
 		return nil
 	}
-	
+
 	// No inline MFA provided - check if step-up window is still valid
 	if authUser.Session.RecentStepUpAt != nil {
 		// Get step-up window duration from settings
@@ -2192,13 +2192,13 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 				stepUpWindow = time.Duration(settings.StepUpWindowMinutes) * time.Minute
 			}
 		}
-		
+
 		if time.Since(*authUser.Session.RecentStepUpAt) < stepUpWindow {
 			// Still within step-up window
 			return nil
 		}
 	}
-	
+
 	// MFA required but not provided or expired
 	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("MFA required for this action"))
 	w.Header().Set("X-MFA-Required", "true")
