@@ -157,13 +157,6 @@ export function AccountSecurityPage() {
     [queryClient]
   )
 
-  useEffect(() => {
-    if (enrollmentRequiredFlag && enrollmentChannel === 'cli') {
-      toast.warning(
-        'CLI login blocked until MFA enrollment completes. Finish setting up multi-factor authentication on this page, then rerun the CLI login command.'
-      )
-    }
-  }, [enrollmentChannel, enrollmentRequiredFlag])
 
   const startTOTPMutation = useMutation({
     mutationFn: startTOTPEnrollment,
@@ -500,14 +493,13 @@ export function AccountSecurityPage() {
         </p>
       </div>
 
-      {enrollmentRequiredFlag && enrollmentChannel === 'cli' ? (
+      {enrollmentRequiredFlag && enrollmentChannel === 'cli' && !status?.enrolled ? (
         <Alert className="border-amber-500 bg-amber-500/10">
           <ShieldAlert className="size-4" />
           <div className="pl-7 font-semibold">MFA enrollment required for CLI login</div>
           <AlertDescription>
-            Complete your authenticator setup and click “Disable” only if you intend to remove MFA.
-            Once enrollment is finished, rerun <span className="font-mono">rack-gateway login</span>{' '}
-            in your terminal.
+            Set up multi-factor authentication below to continue. Once enrollment is complete, rerun{' '}
+            <span className="font-mono">rack-gateway login</span> in your terminal.
           </AlertDescription>
         </Alert>
       ) : null}

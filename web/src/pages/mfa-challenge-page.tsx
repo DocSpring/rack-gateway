@@ -141,6 +141,7 @@ export function MFAChallengePage() {
   const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
 
   const [error, setError] = useState<string | null>(presetError)
+  const [hasRedirected, setHasRedirected] = useState(false)
 
   const mutation = useMutation<
     CLICompletion | null,
@@ -210,6 +211,23 @@ export function MFAChallengePage() {
           <MFAVerificationForm
             autoTriggerWebAuthn={mode === 'web'}
             onError={(err) => setError(mapServerError(mode, err))}
+            onMFAStatusLoaded={(mfaStatus) => {
+              // If user has no MFA methods enrolled, redirect to account security
+              if (
+                !hasRedirected &&
+                mfaStatus &&
+                (!mfaStatus.methods || mfaStatus.methods.length === 0)
+              ) {
+                setHasRedirected(true)
+                const params = new URLSearchParams()
+                params.set('enrollment', 'required')
+                if (mode === 'cli' && state) {
+                  params.set('channel', 'cli')
+                  params.set('state', state)
+                }
+                window.location.assign(`${WebRoute('account/security')}?${params.toString()}`)
+              }
+            }}
             onVerify={async (params) => {
               if (params.method === 'totp') {
                 await mutation.mutateAsync({ code: params.code, trust_device: params.trust_device })

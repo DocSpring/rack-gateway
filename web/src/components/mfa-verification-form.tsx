@@ -46,6 +46,11 @@ export type MFAVerificationFormProps = {
   onError?: (error: unknown) => void
 
   /**
+   * Called when MFA status is loaded. Use to check enrollment state.
+   */
+  onMFAStatusLoaded?: (mfaStatus: Awaited<ReturnType<typeof getMFAStatus>>) => void
+
+  /**
    * Auto-focus the TOTP input when rendered
    * @default true
    */
@@ -156,6 +161,7 @@ export function MFAVerificationForm({
   onVerify,
   onSuccess,
   onError,
+  onMFAStatusLoaded,
   autoFocus = true,
   showTrustDevice = true,
   trustDeviceDefault = true,
@@ -177,6 +183,14 @@ export function MFAVerificationForm({
     retry: false,
     staleTime: 30_000,
   })
+
+  // Notify parent when MFA status is loaded
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger when mfaStatus changes
+  useEffect(() => {
+    if (mfaStatus && onMFAStatusLoaded) {
+      onMFAStatusLoaded(mfaStatus)
+    }
+  }, [mfaStatus])
 
   const hasWebAuthn = (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0
   const hasTOTP = (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0

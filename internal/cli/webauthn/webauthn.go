@@ -48,24 +48,72 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 		return nil, fmt.Errorf("failed to open FIDO2 device: %w", err)
 	}
 
-	// Check if PIN is required
+	// Decode allowed credentials first
+	var allowList [][]byte
+	for _, credID := range options.AllowCredentials {
+		credBytes, err := base64.RawURLEncoding.DecodeString(credID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode credential ID: %w", err)
+		}
+		allowList = append(allowList, credBytes)
+	}
+
+	// Check if device requires PIN and filter credentials if possible
+	// This requires credential management support (CTAP 2.1+)
 	pin := ""
 	info, err := device.Info()
 	if err == nil {
-		// Check if clientPin option is set
+		// Check if clientPin is required
+		pinRequired := false
 		for _, opt := range info.Options {
 			if opt.Name == "clientPin" && opt.Value == libfido2.True {
-				// Prompt for PIN
-				fmt.Print("Enter your security key PIN: ")
-				pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-				fmt.Println() // New line after password input
-				if err != nil {
-					return nil, fmt.Errorf("failed to read PIN: %w", err)
-				}
-				pin = string(pinBytes)
+				pinRequired = true
 				break
 			}
 		}
+
+		if pinRequired {
+			// Need PIN to enumerate credentials - ask for it now
+			fmt.Print("Enter your security key PIN: ")
+			pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Println() // New line after password input
+			if err != nil {
+				return nil, fmt.Errorf("failed to read PIN: %w", err)
+			}
+			pin = string(pinBytes)
+		}
+
+		// Try to enumerate credentials to filter the allowList
+		deviceCreds, err := device.Credentials(options.RPID, pin)
+		if err == nil {
+			if len(deviceCreds) == 0 {
+				// Device has no credentials for this RP - fail immediately
+				return nil, fmt.Errorf("this security key has no credentials registered for this service")
+			}
+
+			// Build map of device credential IDs
+			deviceCredMap := make(map[string]bool)
+			for _, cred := range deviceCreds {
+				deviceCredMap[base64.RawURLEncoding.EncodeToString(cred.ID)] = true
+			}
+
+			// Filter allowList to only credentials on this device
+			var filteredAllowList [][]byte
+			for _, credBytes := range allowList {
+				credID := base64.RawURLEncoding.EncodeToString(credBytes)
+				if deviceCredMap[credID] {
+					filteredAllowList = append(filteredAllowList, credBytes)
+				}
+			}
+
+			if len(filteredAllowList) == 0 {
+				return nil, fmt.Errorf("none of your registered credentials are on this device (device has %d credential(s) for this service, but none match)", len(deviceCreds))
+			}
+
+			allowList = filteredAllowList
+			fmt.Printf("Found %d matching credential(s) on this device\n", len(allowList))
+		}
+		// If credential enumeration fails, proceed with full allowList
 	}
 
 	// Build client data JSON
@@ -87,16 +135,6 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 	h := sha256.New()
 	h.Write(clientDataJSON)
 	clientDataHash := h.Sum(nil)
-
-	// Decode allowed credentials
-	var allowList [][]byte
-	for _, credID := range options.AllowCredentials {
-		credBytes, err := base64.RawURLEncoding.DecodeString(credID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode credential ID: %w", err)
-		}
-		allowList = append(allowList, credBytes)
-	}
 
 	// Set up options
 	var assertionOpts *libfido2.AssertionOpts

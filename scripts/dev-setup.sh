@@ -50,6 +50,16 @@ install_air() {
   echo "- air installed: $(air -v 2>&1 | head -n1)"
 }
 
+install_goimports() {
+  if have goimports; then
+    echo "- goimports already installed"
+    return
+  fi
+  echo "- Installing goimports (Go import formatter)..."
+  go install golang.org/x/tools/cmd/goimports@latest
+  echo "- goimports installed"
+}
+
 install_libfido2() {
   echo "- Checking for libfido2..."
 
@@ -90,6 +100,7 @@ install_libfido2() {
 install_task
 install_pnpm
 install_air
+install_goimports
 install_libfido2
 
 echo "==> Done"
