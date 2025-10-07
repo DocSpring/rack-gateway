@@ -12,10 +12,12 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 - **NO "for compatibility" code** - Especially not for tests
 
 **When tests fail after a refactor:**
+
 - ✅ **CORRECT**: Update the tests to match the new code
 - ❌ **WRONG**: Add compatibility shims to make old tests pass
 
 **When code needs to change:**
+
 - ✅ **CORRECT**: Delete the old code, write the new code, update everything that breaks
 - ❌ **WRONG**: Keep the old code around "just in case" or "for backward compatibility"
 
@@ -114,7 +116,23 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 
 **IMPORTANT: AI must NEVER run `task dev` - this is strictly for humans only**
 
-- `task dev` - Development environment starts successfully (uses Procfile.dev with overmind, NOT Docker)
+**Two development modes:**
+
+1. **Overmind dev mode (Procfile.dev)** - Used by `task dev`, runs locally with hot reload via air:
+   - Gateway API: `http://localhost:8447`
+   - Web UI: `http://localhost:5223`
+   - Mock OAuth: `http://localhost:3345`
+   - Mock Convox: `http://localhost:5443`
+   - Database: Docker container (rack-gateway-postgres-1) on port 55432
+
+2. **Docker dev mode** - Used by `task docker:up`, runs everything in Docker:
+   - Gateway API: `http://localhost:8448` (docker profile uses different port)
+   - Web UI: `http://localhost:5224`
+   - Mock OAuth: `http://localhost:3346`
+   - Mock Convox: `http://localhost:5444`
+   - Database: Docker container (rack-gateway-postgres-1) on port 55432
+
+**Health checks (Overmind mode):**
 - `curl http://localhost:8447/.gateway/api/health` - Gateway health check passes
 - `curl http://localhost:3345/health` - Mock OAuth health check passes
 - `curl http://localhost:5443/health` - Mock Convox health check passes
@@ -194,6 +212,7 @@ Flow:
 ## Key Implementation Details
 
 See component-specific CLAUDE.md files for detailed implementation information:
+
 - `internal/gateway/CLAUDE.md` - Auth, RBAC, proxy, audit logging
 - `cmd/rack-gateway/CLAUDE.md` - CLI OAuth flow, multi-rack config
 - `web/CLAUDE.md` - React SPA, CSP, testing
@@ -359,10 +378,43 @@ This runs:
 
 **If `task ci` doesn't pass completely, the task is NOT done.**
 
-
 ## Database Maintenance
 
 See `docs/DATABASE_MAINTENANCE.md` for complete database maintenance procedures including migrations and resets.
+
+### Running SQL Queries
+
+**Development database:**
+```bash
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "YOUR_SQL_QUERY"
+```
+
+**Test database:**
+```bash
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_test -c "YOUR_SQL_QUERY"
+```
+
+**Examples:**
+
+```bash
+# Check deploy approval requests
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT id, message, status, created_at FROM deploy_approval_requests ORDER BY created_at DESC LIMIT 5;"
+
+# Check users
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT id, email, role FROM users;"
+
+# Check API tokens
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT id, name, created_by_email, role FROM api_tokens WHERE deleted_at IS NULL;"
+
+# Check MFA methods for a user
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT id, user_id, type, created_at FROM mfa_methods WHERE user_id = 1;"
+
+# List all tables
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\dt"
+
+# Describe table structure
+docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\d+ deploy_approval_requests"
+```
 
 ## Important Instructions
 
@@ -375,9 +427,9 @@ See `docs/DATABASE_MAINTENANCE.md` for complete database maintenance procedures 
 ```
 .
 ├── cmd/                          # Go binaries
-│   ├── gateway/                  # Gateway API server entrypoint
-│   ├── mock-convox/              # Mock Convox API for testing
-│   └── rack-gateway/             # CLI client (see CLAUDE.md)
+│   ├── gateway/main.go           # Gateway API server entrypoint
+│   ├── mock-convox/main.go       # Mock Convox API for testing
+│   └── rack-gateway/main.go      # CLI client (see CLAUDE.md)
 ├── config/                       # Configuration files
 │   ├── cli/                      # CLI config templates
 │   └── cli-e2e/                  # E2E test configs
@@ -387,21 +439,27 @@ See `docs/DATABASE_MAINTENANCE.md` for complete database maintenance procedures 
 │   ├── DATABASE_MAINTENANCE.md   # Database operations
 │   └── images/                   # Documentation images
 ├── internal/                     # Go internal packages
-│   ├── cli/                      # CLI implementation
+│   ├── cli/                      # CLI implementation (all commands)
+│   │   ├── sdk/                  # SDK client
 │   │   └── webauthn/             # WebAuthn for CLI
+│   ├── convox/                   # Convox-specific utilities
 │   ├── gateway/                  # Gateway server (see CLAUDE.md)
 │   │   ├── app/                  # Application setup
 │   │   ├── audit/                # Audit logging
-│   │   ├── auth/                 # OAuth + JWT
+│   │   ├── auth/                 # OAuth + JWT + sessions + MFA
 │   │   ├── config/               # Configuration
-│   │   ├── db/                   # Database migrations
+│   │   ├── db/                   # Database layer and migrations
 │   │   ├── email/                # Email notifications
-│   │   ├── handlers/             # HTTP handlers
+│   │   ├── handlers/             # HTTP handlers (auth, API, MFA)
 │   │   ├── middleware/           # HTTP middleware
+│   │   ├── openapi/              # OpenAPI/Swagger generation
 │   │   ├── proxy/                # Convox API proxy
 │   │   ├── rbac/                 # Role-based access control
-│   │   └── routes/               # Route definitions
-│   └── integration/              # Integration tests
+│   │   ├── routes/               # Route definitions
+│   │   ├── security/             # Security notifications
+│   │   └── token/                # API token service
+│   ├── integration/              # Integration tests
+│   └── tools/                    # Code generation tools
 ├── mock-oauth/                   # Mock OAuth server (see CLAUDE.md)
 ├── scripts/                      # Utility scripts
 ├── taskfiles/                    # Task runner configs

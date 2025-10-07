@@ -233,11 +233,12 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 
 func newDeployApprovalWaitCommand() *cobra.Command {
 	var (
-		rackFlag        string
+		racksFlag       string
 		pollIntervalStr string
 		mfaCode         string
 		autoApprove     bool
 		notes           string
+		loop            bool
 	)
 
 	cmd := &cobra.Command{
@@ -245,12 +246,25 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		Short: "Wait for and optionally approve pending deploy approval requests",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
-			rack, err := SelectedRack()
-			if err != nil {
-				return err
+			// Parse racks list
+			var racks []string
+			if strings.TrimSpace(racksFlag) != "" {
+				for _, r := range strings.Split(racksFlag, ",") {
+					if r = strings.TrimSpace(r); r != "" {
+						racks = append(racks, r)
+					}
+				}
+			} else {
+				// Default to current rack
+				rack, err := SelectedRack()
+				if err != nil {
+					return err
+				}
+				racks = []string{rack}
 			}
-			if strings.TrimSpace(rackFlag) != "" {
-				rack = strings.TrimSpace(rackFlag)
+
+			if len(racks) == 0 {
+				return fmt.Errorf("no racks specified")
 			}
 
 			pollInterval := 1 * time.Second
@@ -265,27 +279,53 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				pollInterval = dur
 			}
 
-			gatewayURL, bearer, err := gatewayAuthInfo(rack)
-			if err != nil {
-				return err
+			// Prepare auth info for all racks
+			type rackInfo struct {
+				name       string
+				gatewayURL string
+				bearer     string
+			}
+			rackInfos := make([]rackInfo, 0, len(racks))
+			for _, rack := range racks {
+				gatewayURL, bearer, err := gatewayAuthInfo(rack)
+				if err != nil {
+					return fmt.Errorf("failed to get auth info for rack %s: %w", rack, err)
+				}
+				rackInfos = append(rackInfos, rackInfo{
+					name:       rack,
+					gatewayURL: gatewayURL,
+					bearer:     bearer,
+				})
 			}
 
-			if err := writeLine(cmd.OutOrStdout(), "Waiting for pending deploy approval requests..."); err != nil {
+			rackIndex := 0
+			printWaitingMessage := func() error {
+				if len(racks) == 1 {
+					return writef(cmd.OutOrStdout(), "Waiting for pending deploy approval requests on rack: %s\n", racks[0])
+				}
+				return writef(cmd.OutOrStdout(), "Waiting for pending deploy approval requests on %d racks: %s\n", len(racks), strings.Join(racks, ", "))
+			}
+
+			// Print initial waiting message
+			if err := printWaitingMessage(); err != nil {
 				return err
 			}
 
 			for {
+				// Round-robin through racks
+				info := rackInfos[rackIndex]
+				rackIndex = (rackIndex + 1) % len(rackInfos)
 				// List pending deploy approval requests
-				resp, body, err := sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
+				resp, body, err := sendDeployApprovalRequest(info.gatewayURL, info.bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
 				if err != nil {
 					return err
 				}
 
 				if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-					if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack, &mfaCode); err != nil {
+					if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name, &mfaCode); err != nil {
 						return err
 					}
-					resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
+					resp, body, err = sendDeployApprovalRequest(info.gatewayURL, info.bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
 					if err != nil {
 						return err
 					}
@@ -296,23 +336,38 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				}
 
 				var result struct {
-					Requests []deployApprovalRequest `json:"requests"`
+					Requests []deployApprovalRequest `json:"deploy_approval_requests"`
 				}
 				if err := json.Unmarshal(body, &result); err != nil {
 					return fmt.Errorf("failed to parse deploy approval requests response: %w", err)
 				}
 
+				// Verify the response structure - if Requests is nil (not just empty), the JSON field wasn't present
+				if result.Requests == nil {
+					return fmt.Errorf("unexpected API response format: missing 'deploy_approval_requests' field")
+				}
+
 				if len(result.Requests) > 0 {
-					// Found a pending request! Play sound and show details
+					// Found a pending request! Play sound asynchronously and show details
 					cfg, _, _ := LoadConfig()
-					if err := playNotificationSound(cfg, rack); err != nil {
-						// Don't fail the command if sound playback fails
-						_ = writef(cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)
-					}
+					soundDone := make(chan struct{})
+					go func() {
+						defer close(soundDone)
+						if err := playNotificationSound(cfg, info.name); err != nil {
+							// Don't fail the command if sound playback fails
+							_ = writef(cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)
+						}
+					}()
 
 					req := result.Requests[0]
-					if err := writeLine(cmd.OutOrStdout(), "\n📋 Deploy Approval Request Found:"); err != nil {
-						return err
+					if len(rackInfos) > 1 {
+						if err := writef(cmd.OutOrStdout(), "\n📋 Deploy Approval Request Found on rack '%s':\n", info.name); err != nil {
+							return err
+						}
+					} else {
+						if err := writeLine(cmd.OutOrStdout(), "\n📋 Deploy Approval Request Found:"); err != nil {
+							return err
+						}
 					}
 					if err := writef(cmd.OutOrStdout(), "  ID: %d\n", req.ID); err != nil {
 						return err
@@ -336,12 +391,12 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 						}
 
 						// Perform MFA step-up before approval
-						if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack, &mfaCode); err != nil {
+						if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name, &mfaCode); err != nil {
 							return err
 						}
 
 						// Now approve the request
-						approved, err := approveDeployRequest(cmd, gatewayURL, bearer, rack, fmt.Sprintf("%d", req.ID), strings.TrimSpace(notes), &mfaCode)
+						approved, err := approveDeployRequest(cmd, info.gatewayURL, info.bearer, info.name, fmt.Sprintf("%d", req.ID), strings.TrimSpace(notes), &mfaCode)
 						if err != nil {
 							return err
 						}
@@ -353,14 +408,28 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 						if err := writeLine(cmd.OutOrStdout(), statusLine); err != nil {
 							return err
 						}
+					} else {
+						// Just display the details
+						if err := writeLine(cmd.OutOrStdout(), "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."); err != nil {
+							return err
+						}
+					}
+
+					// Wait for sound to finish playing
+					<-soundDone
+
+					// If --loop is set, continue polling for more requests
+					if !loop {
 						return nil
 					}
 
-					// Just display the details and exit
-					if err := writeLine(cmd.OutOrStdout(), "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."); err != nil {
+					// Print waiting message before next loop
+					if err := printWaitingMessage(); err != nil {
 						return err
 					}
-					return nil
+
+					// Continue polling after a brief pause
+					time.Sleep(pollInterval)
 				}
 
 				time.Sleep(pollInterval)
@@ -368,11 +437,12 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
+	cmd.Flags().StringVar(&racksFlag, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "1s", "Polling interval")
 	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
 	cmd.Flags().BoolVar(&autoApprove, "approve", false, "Automatically approve the first pending request found")
 	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval (only used with --approve)")
+	cmd.Flags().BoolVar(&loop, "loop", false, "Continue polling for more requests after displaying or approving one")
 
 	return cmd
 }

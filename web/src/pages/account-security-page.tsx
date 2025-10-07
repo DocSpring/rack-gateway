@@ -157,7 +157,6 @@ export function AccountSecurityPage() {
     [queryClient]
   )
 
-
   const startTOTPMutation = useMutation({
     mutationFn: startTOTPEnrollment,
     onSuccess: (data) => {
