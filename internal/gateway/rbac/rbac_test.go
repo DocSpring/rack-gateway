@@ -22,33 +22,33 @@ func TestEnforceDeployerPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Deployer: denied create, allowed update, denied delete
-	ok, err := mgr.Enforce("deployer@test.com", "app", "create")
+	ok, err := mgr.Enforce("deployer@test.com", ScopeConvox, ResourceApp, ActionCreate)
 	require.NoError(t, err)
 	require.False(t, ok, "deployer should NOT be allowed to create apps")
 
-	ok, err = mgr.Enforce("deployer@test.com", "app", "update")
+	ok, err = mgr.Enforce("deployer@test.com", ScopeConvox, ResourceApp, ActionUpdate)
 	require.NoError(t, err)
 	require.True(t, ok, "deployer should be allowed to update apps")
 
-	ok, err = mgr.Enforce("deployer@test.com", "app", "delete")
+	ok, err = mgr.Enforce("deployer@test.com", ScopeConvox, ResourceApp, ActionDelete)
 	require.NoError(t, err)
 	require.False(t, ok, "deployer should NOT be allowed to delete apps")
 
 	// Deploy approval permissions
-	ok, err = mgr.Enforce("deployer@test.com", "gateway:deploy-approval-request", "create")
+	ok, err = mgr.Enforce("deployer@test.com", ScopeGateway, ResourceDeployApprovalRequest, ActionCreate)
 	require.NoError(t, err)
 	require.True(t, ok, "deployer should be allowed to request deploy approval")
 
-	ok, err = mgr.Enforce("deployer@test.com", "gateway:deploy-approval-request", "approve")
+	ok, err = mgr.Enforce("deployer@test.com", ScopeGateway, ResourceDeployApprovalRequest, ActionApprove)
 	require.NoError(t, err)
 	require.False(t, ok, "deployer should NOT be allowed to approve deploy approval requests")
 
 	// Admin: allowed delete
-	ok, err = mgr.Enforce("admin@test.com", "app", "delete")
+	ok, err = mgr.Enforce("admin@test.com", ScopeConvox, ResourceApp, ActionDelete)
 	require.NoError(t, err)
 	require.True(t, ok, "admin should be allowed to delete apps")
 
-	ok, err = mgr.Enforce("admin@test.com", "gateway:deploy-approval-request", "approve")
+	ok, err = mgr.Enforce("admin@test.com", ScopeGateway, ResourceDeployApprovalRequest, ActionApprove)
 	require.NoError(t, err)
 	require.True(t, ok, "admin should be allowed to approve deploy approval requests")
 }

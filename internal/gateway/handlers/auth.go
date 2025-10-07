@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
@@ -24,10 +25,11 @@ type AuthHandler struct {
 	mfaService       *mfa.Service
 	mfaSettings      *db.MFASettings
 	securityNotifier *security.Notifier
+	auditLogger      *audit.Logger
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager, mfaService *mfa.Service, mfaSettings *db.MFASettings, securityNotifier *security.Notifier) *AuthHandler {
+func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager, mfaService *mfa.Service, mfaSettings *db.MFASettings, securityNotifier *security.Notifier, auditLogger *audit.Logger) *AuthHandler {
 	return &AuthHandler{
 		oauth:            oauth,
 		database:         database,
@@ -36,5 +38,6 @@ func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Conf
 		mfaService:       mfaService,
 		mfaSettings:      mfaSettings,
 		securityNotifier: securityNotifier,
+		auditLogger:      auditLogger,
 	}
 }

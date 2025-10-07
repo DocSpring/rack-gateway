@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
@@ -100,7 +99,7 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		return
 	}
 
-	if err := audit.LogDB(h.database, &db.AuditLog{
+	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		ActionType:   "auth",
 		Action:       "login.start",
 		ResourceType: "auth",

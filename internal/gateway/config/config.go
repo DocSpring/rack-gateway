@@ -26,6 +26,8 @@ type Config struct {
 	GoogleClientSecret      string
 	GoogleAllowedDomain     string
 	GoogleOAuthBaseURL      string
+	SlackClientID           string
+	SlackClientSecret       string
 	AdminUsers              []string
 	ViewerUsers             []string
 	DeployerUsers           []string
@@ -89,6 +91,8 @@ func Load() (*Config, error) {
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", ""),
 		GoogleOAuthBaseURL:  getEnv("GOOGLE_OAUTH_BASE_URL", ""),
+		SlackClientID:       getEnv("SLACK_CLIENT_ID", ""),
+		SlackClientSecret:   getEnv("SLACK_CLIENT_SECRET", ""),
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),
 		LogResponseBodies:   getEnv("LOG_RESPONSE_BODIES", "false") == "true",

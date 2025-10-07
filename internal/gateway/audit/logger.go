@@ -23,6 +23,12 @@ const auditLogCreatedKey contextKey = "rgw-audit-log-created"
 type Logger struct {
 	redactPatterns []*regexp.Regexp
 	database       *db.Database
+	slackNotifier  SlackNotifier
+}
+
+// SlackNotifier interface for sending audit events to Slack
+type SlackNotifier interface {
+	NotifyAuditEvent(auditLog *db.AuditLog) error
 }
 
 type LogEntry struct {
@@ -56,12 +62,32 @@ func NewLogger(database *db.Database) *Logger {
 	return &Logger{
 		redactPatterns: compiled,
 		database:       database,
+		slackNotifier:  nil, // Set externally via SetSlackNotifier if needed
 	}
+}
+
+// SetSlackNotifier sets the Slack notifier for this logger
+func (l *Logger) SetSlackNotifier(notifier SlackNotifier) {
+	l.slackNotifier = notifier
 }
 
 // LogDBEntry persists a DB-style audit log entry using this logger's database.
 func (l *Logger) LogDBEntry(al *db.AuditLog) error {
-	return LogDB(l.database, al)
+	err := LogDB(l.database, al)
+	if err == nil && l.slackNotifier != nil {
+		// Send to Slack asynchronously (don't block on Slack errors)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Fprintf(os.Stderr, "Slack notification panicked: %v\n", r)
+				}
+			}()
+			if slackErr := l.slackNotifier.NotifyAuditEvent(al); slackErr != nil {
+				fmt.Fprintf(os.Stderr, "Slack notification failed: %v\n", slackErr)
+			}
+		}()
+	}
+	return err
 }
 
 // LogDBEntryWithContext persists a DB-style audit log entry and marks the context as having an audit log.
@@ -70,6 +96,19 @@ func (l *Logger) LogDBEntryWithContext(ctx context.Context, al *db.AuditLog) (co
 	err := LogDB(l.database, al)
 	if err == nil {
 		ctx = MarkAuditLogCreated(ctx)
+		// Send to Slack asynchronously (don't block on Slack errors)
+		if l.slackNotifier != nil {
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Fprintf(os.Stderr, "Slack notification panicked: %v\n", r)
+					}
+				}()
+				if slackErr := l.slackNotifier.NotifyAuditEvent(al); slackErr != nil {
+					fmt.Fprintf(os.Stderr, "Slack notification failed: %v\n", slackErr)
+				}
+			}()
+		}
 	}
 	return ctx, err
 }
@@ -305,7 +344,7 @@ func (l *Logger) ParseConvoxAction(path, method string) (action, resource string
 		}
 	}
 	if ok {
-		return res + "." + act, resourceInstance(path, res, act)
+		return res.String() + "." + act.String(), resourceInstance(path, res.String(), act.String())
 	}
 	return "unknown", "unknown"
 }

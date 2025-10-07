@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
@@ -277,7 +276,7 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 			"method_id": method.ID,
 			"label":     req.Label,
 		})
-		if err := audit.LogDB(h.database, &db.AuditLog{
+		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",

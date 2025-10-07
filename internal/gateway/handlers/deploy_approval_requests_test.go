@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -33,7 +34,7 @@ func newAllowAllRBAC(users ...*db.User) *allowAllRBAC {
 	return &allowAllRBAC{users: m}
 }
 
-func (a *allowAllRBAC) Enforce(userEmail, resource, action string) (bool, error) {
+func (a *allowAllRBAC) Enforce(userEmail string, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
 	return true, nil
 }
 
@@ -115,9 +116,11 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 	require.NoError(t, err)
 	require.NotEmpty(t, token.PublicID)
 
+	auditLogger := audit.NewLogger(database)
 	handler := &APIHandler{
-		rbac:     newAllowAllRBAC(user),
-		database: database,
+		rbac:        newAllowAllRBAC(user),
+		database:    database,
+		auditLogger: auditLogger,
 		config: &config.Config{Racks: map[string]config.RackConfig{
 			"default": {Name: "staging", Enabled: true},
 		}},

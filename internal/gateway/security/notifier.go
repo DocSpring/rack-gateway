@@ -113,7 +113,7 @@ func (n *Notifier) shouldSendEmail(recipient, subject, eventType string) bool {
 func (n *Notifier) FailedMFAAttempt(userEmail, userName, ipAddress, userAgent string) {
 	// Audit log
 	if n.database != nil {
-		if err := audit.LogDB(n.database, &db.AuditLog{
+		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "auth",
@@ -159,7 +159,7 @@ func (n *Notifier) LoginAttempt(userEmail, userName, channel, status, ipAddress,
 		}
 
 		action := fmt.Sprintf("login.%s", status)
-		if err := audit.LogDB(n.database, &db.AuditLog{
+		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "auth",
@@ -201,7 +201,7 @@ This is an automated security notification.`, time.Now().UTC().Format(time.RFC33
 func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userAgent string) {
 	// Audit log
 	if n.database != nil {
-		if err := audit.LogDB(n.database, &db.AuditLog{
+		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "security",
@@ -269,7 +269,7 @@ This is an automated security notification.`, time.Now().UTC().Format(time.RFC33
 func (n *Notifier) SuspiciousActivity(userEmail, userName, reason, ipAddress, userAgent string, details map[string]string) {
 	// Audit log
 	if n.database != nil {
-		if err := audit.LogDB(n.database, &db.AuditLog{
+		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "security",

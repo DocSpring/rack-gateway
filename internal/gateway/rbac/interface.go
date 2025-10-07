@@ -10,7 +10,7 @@ type UserWithID struct {
 // RBACManager defines the interface for RBAC operations
 type RBACManager interface {
 	// Enforce checks if a user has permission to perform an action
-	Enforce(userEmail, resource, action string) (bool, error)
+	Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error)
 
 	// GetAllowedDomain returns the configured domain
 	GetAllowedDomain() string

@@ -42,17 +42,14 @@ func TestPathToResourceActionMatchesRouteSpecs(t *testing.T) {
 	h := &Handler{}
 
 	for _, spec := range routematch.Specs() {
-		if spec.Action == "*" {
-			continue
-		}
 		path := routematch.ExamplePath(spec)
 		method := spec.Method
 		if method == "SOCKET" {
 			method = http.MethodGet
 		}
 		res, act := h.pathToResourceAction(path, method)
-		require.Equalf(t, spec.Resource, res, "pattern %s %s", spec.Method, spec.Pattern)
-		require.Equalf(t, spec.Action, act, "pattern %s %s", spec.Method, spec.Pattern)
+		require.Equalf(t, spec.Resource.String(), res, "pattern %s %s", spec.Method, spec.Pattern)
+		require.Equalf(t, spec.Action.String(), act, "pattern %s %s", spec.Method, spec.Pattern)
 	}
 }
 
@@ -61,17 +58,17 @@ func TestAPITokenPermission_Check(t *testing.T) {
 	u := &auth.AuthUser{Permissions: []string{"convox:app:create", "convox:build:create"}, IsAPIToken: true}
 
 	// Exact match
-	allowed := h.hasAPITokenPermission(u, "app", "create")
+	allowed := h.hasAPITokenPermission(u, rbac.ResourceApp, rbac.ActionCreate)
 	require.True(t, allowed)
 
 	// Not granted
-	allowed = h.hasAPITokenPermission(u, "app", "delete")
+	allowed = h.hasAPITokenPermission(u, rbac.ResourceApp, rbac.ActionDelete)
 	require.False(t, allowed)
 
 	// Wildcard matches
 	u2 := &auth.AuthUser{Permissions: []string{"convox:app:*"}, IsAPIToken: true}
-	require.True(t, h.hasAPITokenPermission(u2, "app", "update"))
-	require.True(t, h.hasAPITokenPermission(u2, "app", "delete"))
+	require.True(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionUpdate))
+	require.True(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionDelete))
 }
 
 func TestCaptureResourceCreatorStoresMappings(t *testing.T) {

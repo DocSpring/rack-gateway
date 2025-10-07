@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -42,7 +43,8 @@ func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handle
 		},
 	}
 
-	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil)
+	auditLogger := audit.NewLogger(database)
+	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil, auditLogger)
 	return handler, rbacManager
 }
 

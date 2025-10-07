@@ -11,6 +11,7 @@ import {
   LogOut,
   Logs,
   type LucideIcon,
+  Puzzle,
   Server,
   Settings,
   TerminalSquare,
@@ -97,11 +98,19 @@ export function Layout() {
     ]
 
     if (user?.roles?.includes('admin') && user?.deploy_approvals_enabled) {
-      nav.push({ name: 'Deploy Approvals', href: '/deploy_approval_requests', icon: ListChecks })
+      nav.push({
+        name: 'Deploy Approvals',
+        href: '/deploy_approval_requests',
+        icon: ListChecks,
+      })
     }
 
     nav.push({ name: 'Audit Logs', href: '/audit_logs', icon: Logs })
-    nav.push({ name: 'Account Security', href: '/account/security', icon: Lock })
+    nav.push({
+      name: 'Account Security',
+      href: '/account/security',
+      icon: Lock,
+    })
 
     nav.push({
       name: 'Configure CLI',
@@ -110,6 +119,7 @@ export function Layout() {
     })
 
     if (user?.roles?.includes('admin')) {
+      nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
     }
 

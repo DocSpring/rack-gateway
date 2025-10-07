@@ -36,6 +36,7 @@ type AdminHandler struct {
 	rackCertMgr  *rackcert.Manager
 	sessions     *auth.SessionManager
 	mfaSettings  *db.MFASettings
+	auditLogger  *audit.Logger
 }
 
 func cloneDetails(details map[string]interface{}) map[string]interface{} {
@@ -218,7 +219,7 @@ var (
 )
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager, sessions *auth.SessionManager, mfaSettings *db.MFASettings) *AdminHandler {
+func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager, sessions *auth.SessionManager, mfaSettings *db.MFASettings, auditLogger *audit.Logger) *AdminHandler {
 	return &AdminHandler{
 		rbac:         rbac,
 		database:     database,
@@ -228,6 +229,7 @@ func NewAdminHandler(rbac rbac.RBACManager, database *db.Database, tokenService 
 		rackCertMgr:  rackCertMgr,
 		sessions:     sessions,
 		mfaSettings:  mfaSettings,
+		auditLogger:  auditLogger,
 	}
 }
 
@@ -302,7 +304,7 @@ func (h *AdminHandler) auditAdminAction(c *gin.Context, action, resource, status
 		entry.RBACDecision = "allow"
 	}
 
-	_ = audit.LogDB(h.database, entry)
+	_ = h.auditLogger.LogDBEntry(entry)
 }
 
 func (h *AdminHandler) respondAudit(c *gin.Context, statusCode int, payload interface{}, action, resource, auditStatus string, start time.Time, details map[string]interface{}) {

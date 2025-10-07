@@ -29,37 +29,34 @@ func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
 
 	type tc struct {
 		name          string
-		resource      string
-		action        string
+		scope         rbac.Scope
+		resource      rbac.Resource
+		action        rbac.Action
 		deployerAllow bool
 		adminAllow    bool
 	}
 
 	cases := []tc{
-		{"apps create denied for deployer", "app", "create", false, true},
-		{"apps update allowed for deployer", "app", "update", true, true},
-		{"apps delete denied for deployer", "app", "delete", false, true},
-		{"apps restart allowed for deployer", "app", "restart", true, true},
-		{"releases promote allowed for deployer", "release", "promote", true, true},
-		{"releases create allowed for deployer", "release", "create", true, true},
-		{"instances delete denied for deployer", "rack", "terminate", false, true},
-		{"registries create denied for deployer", "registry", "create", false, true},
-		{"registries delete denied for deployer", "registry", "delete", false, true},
-		{"system update denied for deployer", "rack", "update", false, true},
-		{"system jwt token denied for deployer", "system", "jwt_token", false, true},
+		{"apps create denied for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionCreate, false, true},
+		{"apps update allowed for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionUpdate, true, true},
+		{"apps delete denied for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionDelete, false, true},
+		{"apps restart allowed for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionRestart, true, true},
+		{"releases promote allowed for deployer", rbac.ScopeConvox, rbac.ResourceRelease, rbac.ActionPromote, true, true},
+		{"releases create allowed for deployer", rbac.ScopeConvox, rbac.ResourceRelease, rbac.ActionCreate, true, true},
+		{"rack update denied for deployer", rbac.ScopeConvox, rbac.ResourceRack, rbac.ActionUpdate, false, true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			// Deployer
-			ok, err := mgr.Enforce("deployer@test.com", c.resource, c.action)
+			ok, err := mgr.Enforce("deployer@test.com", c.scope, c.resource, c.action)
 			require.NoError(t, err)
-			require.Equal(t, c.deployerAllow, ok, "deployer mismatch for %s:%s", c.resource, c.action)
+			require.Equal(t, c.deployerAllow, ok, "deployer mismatch for %s:%s:%s", c.scope, c.resource, c.action)
 
 			// Admin
-			ok, err = mgr.Enforce("admin@test.com", c.resource, c.action)
+			ok, err = mgr.Enforce("admin@test.com", c.scope, c.resource, c.action)
 			require.NoError(t, err)
-			require.Equal(t, c.adminAllow, ok, "admin mismatch for %s:%s", c.resource, c.action)
+			require.Equal(t, c.adminAllow, ok, "admin mismatch for %s:%s:%s", c.scope, c.resource, c.action)
 		})
 	}
 }

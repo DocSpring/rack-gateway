@@ -270,6 +270,16 @@ func (d *Database) CreateDeployApprovalRequest(message, app, releaseID string, c
 		tgtUser,
 	).Scan(&id)
 	if err != nil {
+		// Check for unique constraint violation (race condition between check and insert)
+		if strings.Contains(err.Error(), "idx_deploy_approval_requests_active_release") ||
+			strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			// Try to fetch the conflicting record
+			existing, fetchErr := d.ActiveDeployApprovalRequestByTokenAndRelease(targetAPITokenID, app, releaseID)
+			if fetchErr == nil && existing != nil {
+				return nil, &DeployApprovalRequestConflictError{Request: existing}
+			}
+			return nil, ErrDeployApprovalRequestActive
+		}
 		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
 	}
 	return d.GetDeployApprovalRequest(id)

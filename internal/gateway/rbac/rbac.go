@@ -58,72 +58,75 @@ var roleMetadata = map[string]RoleMetadata{
 var roleConfigs = map[string]roleConfig{
 	"viewer": {
 		Permissions: []string{
-			"convox:app:list",
-			"convox:app:read",
-			"convox:process:list",
-			"convox:process:read",
-			"convox:instance:list",
-			"convox:instance:read",
-			"convox:log:read",
-			"convox:build:list",
-			"convox:build:read",
-			"convox:rack:read",
+			Convox(ResourceApp, ActionList),
+			Convox(ResourceApp, ActionRead),
+			Convox(ResourceProcess, ActionList),
+			Convox(ResourceProcess, ActionRead),
+			Convox(ResourceInstance, ActionList),
+			Convox(ResourceInstance, ActionRead),
+			Convox(ResourceLog, ActionRead),
+			Convox(ResourceBuild, ActionList),
+			Convox(ResourceBuild, ActionRead),
+			Convox(ResourceRack, ActionRead),
 		},
 	},
 	"ops": {
 		Permissions: []string{
-			"convox:app:restart",
-			"convox:process:start",
-			"convox:process:exec",
-			"convox:process:terminate",
-			"convox:release:list",
-			"convox:env:read",
+			Convox(ResourceApp, ActionRestart),
+			Convox(ResourceProcess, ActionStart),
+			Convox(ResourceProcess, ActionExec),
+			Convox(ResourceProcess, ActionTerminate),
+			Convox(ResourceRelease, ActionList),
+			Convox(ResourceEnv, ActionRead),
 		},
 		Parents: []string{"viewer"},
 	},
 	"deployer": {
 		Permissions: []string{
-			"convox:app:restart",
-			"convox:build:create",
-			"convox:object:create",
-			"convox:release:create",
-			"convox:release:read",
-			"convox:release:promote",
-			"convox:env:read",
-			"convox:env:set",
-			"convox:app:update",
-			"gateway:deploy-approval-request:create",
-			"gateway:deploy-approval-request:view",
+			Convox(ResourceApp, ActionRestart),
+			Convox(ResourceBuild, ActionCreate),
+			Convox(ResourceObject, ActionCreate),
+			Convox(ResourceRelease, ActionCreate),
+			Convox(ResourceRelease, ActionRead),
+			Convox(ResourceRelease, ActionPromote),
+			Convox(ResourceEnv, ActionRead),
+			Convox(ResourceEnv, ActionSet),
+			Convox(ResourceApp, ActionUpdate),
+			Gateway(ResourceDeployApprovalRequest, ActionCreate),
+			Gateway(ResourceDeployApprovalRequest, ActionRead),
 		},
 		Parents: []string{"ops"},
 	},
 	// Only specific permissions that CI/CD pipelines need for deployments
 	"cicd": {
 		Permissions: []string{
-			"convox:app:list",
-			"convox:app:read",
-			"gateway:deploy-approval-request:create",
-			"gateway:deploy-approval-request:view",
-			"convox:build:create",
-			"convox:build:list",
-			"convox:build:read",
-			"convox:log:read",
-			"convox:object:create",
-			"convox:release:create",
-			"convox:release:list",
-			"convox:release:promote-with-approval",
-			"convox:process:list",
-			"convox:process:read",
-			"convox:process:start",                   // Allowed - just creates blank process
-			"convox:process:exec-with-approval",      // Gated - checks command allowlist + approval
-			"convox:process:terminate-with-approval", // Gated - only tracked process IDs
-			"convox:instance:list",
-			"convox:instance:read",
-			"convox:rack:read",
+			Convox(ResourceApp, ActionList),
+			Convox(ResourceApp, ActionRead),
+			Gateway(ResourceDeployApprovalRequest, ActionCreate),
+			Gateway(ResourceDeployApprovalRequest, ActionRead),
+			Convox(ResourceBuild, ActionCreate),
+			Convox(ResourceBuild, ActionList),
+			Convox(ResourceBuild, ActionRead),
+			Convox(ResourceLog, ActionRead),
+			Convox(ResourceObject, ActionCreate),
+			Convox(ResourceRelease, ActionCreate),
+			Convox(ResourceRelease, ActionList),
+			Convox(ResourceRelease, ActionPromote), // Note: gated by approval system
+			Convox(ResourceProcess, ActionList),
+			Convox(ResourceProcess, ActionRead),
+			Convox(ResourceProcess, ActionStart),
+			Convox(ResourceProcess, ActionExec),      // Note: gated by approval system + command allowlist
+			Convox(ResourceProcess, ActionTerminate), // Note: gated by approval system + tracked PIDs
+			Convox(ResourceInstance, ActionList),
+			Convox(ResourceInstance, ActionRead),
+			Convox(ResourceRack, ActionRead),
 		},
 	},
 	"admin": {
-		Permissions: []string{"convox:*:*", "gateway:*:*"},
+		Permissions: []string{
+			"convox:*:*",  // Wildcard - can't be represented by enums
+			"gateway:*:*", // Wildcard - can't be represented by enums
+		},
 	},
 }
 
@@ -293,7 +296,7 @@ func (m *DBManager) syncUsersFromDB() error {
 }
 
 // Enforce checks if a user has permission to perform an action
-func (m *DBManager) Enforce(userEmail, resource, action string) (bool, error) {
+func (m *DBManager) Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -309,11 +312,8 @@ func (m *DBManager) Enforce(userEmail, resource, action string) (bool, error) {
 		return false, nil // User is suspended
 	}
 
-	// Format permission; support non-Convox namespaces (e.g., gateway:deploy-approval-request)
-	permission := fmt.Sprintf("convox:%s:%s", resource, action)
-	if strings.Contains(resource, ":") {
-		permission = fmt.Sprintf("%s:%s", resource, action)
-	}
+	// Build permission string from enum types
+	permission := Permission(scope, resource, action)
 
 	// Check permission using Casbin with 3 parameters (sub, obj, act)
 	// The third parameter is "*" as we don't use it in our model

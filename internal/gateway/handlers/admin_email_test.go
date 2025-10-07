@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -66,7 +67,8 @@ func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandl
 	}
 
 	mfaSettings, _ := database.GetMFASettings()
-	handler := handlers.NewAdminHandler(rbacManager, database, tokenService, sender, cfg, nil, nil, mfaSettings)
+	auditLogger := audit.NewLogger(database)
+	handler := handlers.NewAdminHandler(rbacManager, database, tokenService, sender, cfg, nil, nil, mfaSettings, auditLogger)
 	return handler, database, rbacManager
 }
 

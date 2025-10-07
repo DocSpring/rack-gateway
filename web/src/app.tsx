@@ -25,6 +25,7 @@ import { CallbackPage } from './pages/callback-page'
 import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
 import { DeployApprovalRequestsPage } from './pages/deploy-approval-requests-page'
 import { InstancesPage } from './pages/instances-page'
+import { IntegrationsPage } from './pages/integrations-page'
 import { LoginErrorPage } from './pages/login-error-page'
 import { LoginPage } from './pages/login-page'
 import { MFAChallengePage } from './pages/mfa-challenge-page'
@@ -132,6 +133,12 @@ function buildRouteTree() {
     component: SettingsPage,
   })
 
+  const integrationsRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'integrations',
+    component: IntegrationsPage,
+  })
+
   const rackRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: 'rack',
@@ -206,6 +213,7 @@ function buildRouteTree() {
     deployApprovalRequestsRoute,
     auditRoute,
     settingsRoute,
+    integrationsRoute,
     accountSecurityRoute,
   ]
 

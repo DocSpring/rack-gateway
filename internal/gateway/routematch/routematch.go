@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/convox"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // RouteSpec defines a known Convox API route and the canonical resource/action it maps to.
@@ -15,8 +16,8 @@ import (
 type RouteSpec struct {
 	Method   string
 	Pattern  string
-	Resource string
-	Action   string
+	Resource rbac.Resource
+	Action   rbac.Action
 }
 
 // GetMFALevel returns the MFA level required for this route
@@ -49,75 +50,75 @@ func GetMFALevelForPermission(permission string) (convox.MFALevel, bool) {
 
 var specs = []RouteSpec{
 	// Processes
-	{"GET", "/apps/{app}/processes", "process", "list"},
-	{"GET", "/apps/{app}/processes/{pid}", "process", "read"},
-	{"DELETE", "/apps/{app}/processes/{pid}", "process", "terminate"},
-	{"SOCKET", "/apps/{app}/processes/{pid}/exec", "process", "exec"},
-	{"GET", "/apps/{app}/processes/{pid}/exec", "process", "exec"},
-	{"POST", "/apps/{app}/services/{service}/processes", "process", "start"},
+	{"GET", "/apps/{app}/processes", rbac.ResourceProcess, rbac.ActionList},
+	{"GET", "/apps/{app}/processes/{pid}", rbac.ResourceProcess, rbac.ActionRead},
+	{"DELETE", "/apps/{app}/processes/{pid}", rbac.ResourceProcess, rbac.ActionTerminate},
+	{"SOCKET", "/apps/{app}/processes/{pid}/exec", rbac.ResourceProcess, rbac.ActionExec},
+	{"GET", "/apps/{app}/processes/{pid}/exec", rbac.ResourceProcess, rbac.ActionExec},
+	{"POST", "/apps/{app}/services/{service}/processes", rbac.ResourceProcess, rbac.ActionStart},
 
 	// Logs (app/system/build)
-	{"SOCKET", "/apps/{app}/processes/{pid}/logs", "log", "read"},
-	{"SOCKET", "/apps/{app}/builds/{id}/logs", "log", "read"},
-	{"SOCKET", "/apps/{app}/logs", "log", "read"},
-	{"SOCKET", "/system/logs", "log", "read"},
+	{"SOCKET", "/apps/{app}/processes/{pid}/logs", rbac.ResourceLog, rbac.ActionRead},
+	{"SOCKET", "/apps/{app}/builds/{id}/logs", rbac.ResourceLog, rbac.ActionRead},
+	{"SOCKET", "/apps/{app}/logs", rbac.ResourceLog, rbac.ActionRead},
+	{"SOCKET", "/system/logs", rbac.ResourceLog, rbac.ActionRead},
 	// Also allow audit mapping for GET (WS upgrades are GETs)
-	{"GET", "/apps/{app}/processes/{pid}/logs", "log", "read"},
-	{"GET", "/apps/{app}/builds/{id}/logs", "log", "read"},
-	{"GET", "/apps/{app}/logs", "log", "read"},
-	{"GET", "/system/logs", "log", "read"},
+	{"GET", "/apps/{app}/processes/{pid}/logs", rbac.ResourceLog, rbac.ActionRead},
+	{"GET", "/apps/{app}/builds/{id}/logs", rbac.ResourceLog, rbac.ActionRead},
+	{"GET", "/apps/{app}/logs", rbac.ResourceLog, rbac.ActionRead},
+	{"GET", "/system/logs", rbac.ResourceLog, rbac.ActionRead},
 
 	// Builds
-	{"GET", "/apps/{app}/builds", "build", "list"},
-	{"GET", "/apps/{app}/builds/{id}", "build", "read"},
-	{"GET", "/apps/{app}/builds/{id}.tgz", "build", "read"},
-	{"POST", "/apps/{app}/builds", "build", "create"},
-	{"POST", "/apps/{app}/builds/import", "build", "create"},
-	{"PUT", "/apps/{app}/builds/{id}", "build", "update"},
+	{"GET", "/apps/{app}/builds", rbac.ResourceBuild, rbac.ActionList},
+	{"GET", "/apps/{app}/builds/{id}", rbac.ResourceBuild, rbac.ActionRead},
+	{"GET", "/apps/{app}/builds/{id}.tgz", rbac.ResourceBuild, rbac.ActionRead},
+	{"POST", "/apps/{app}/builds", rbac.ResourceBuild, rbac.ActionCreate},
+	{"POST", "/apps/{app}/builds/import", rbac.ResourceBuild, rbac.ActionCreate},
+	{"PUT", "/apps/{app}/builds/{id}", rbac.ResourceBuild, rbac.ActionUpdate},
 
 	// Releases
-	{"GET", "/apps/{app}/releases", "release", "list"},
-	{"GET", "/apps/{app}/releases/{id}", "release", "read"},
-	{"POST", "/apps/{app}/releases", "release", "create"},
-	{"POST", "/apps/{app}/releases/{id}/promote", "release", "promote"},
+	{"GET", "/apps/{app}/releases", rbac.ResourceRelease, rbac.ActionList},
+	{"GET", "/apps/{app}/releases/{id}", rbac.ResourceRelease, rbac.ActionRead},
+	{"POST", "/apps/{app}/releases", rbac.ResourceRelease, rbac.ActionCreate},
+	{"POST", "/apps/{app}/releases/{id}/promote", rbac.ResourceRelease, rbac.ActionPromote},
 
 	// Objects (deploy bundle upload)
-	{"POST", "/apps/{app}/objects/tmp/{name}", "object", "create"},
+	{"POST", "/apps/{app}/objects/tmp/{name}", rbac.ResourceObject, rbac.ActionCreate},
 
 	// Apps
-	{"GET", "/apps", "app", "list"},
-	{"GET", "/apps/{name}", "app", "read"},
-	{"POST", "/apps", "app", "create"},
-	{"PUT", "/apps/{name}", "app", "update"},
-	{"POST", "/apps/{app}/restart", "app", "restart"},
-	{"DELETE", "/apps/{name}", "app", "delete"},
+	{"GET", "/apps", rbac.ResourceApp, rbac.ActionList},
+	{"GET", "/apps/{name}", rbac.ResourceApp, rbac.ActionRead},
+	{"POST", "/apps", rbac.ResourceApp, rbac.ActionCreate},
+	{"PUT", "/apps/{name}", rbac.ResourceApp, rbac.ActionUpdate},
+	{"POST", "/apps/{app}/restart", rbac.ResourceApp, rbac.ActionRestart},
+	{"DELETE", "/apps/{name}", rbac.ResourceApp, rbac.ActionDelete},
 
 	// Services
-	{"PUT", "/apps/{app}/services/{name}", "app", "update"},
-	{"GET", "/apps/{app}/services", "app", "read"},
-	{"POST", "/apps/{app}/services/{service}/restart", "process", "start"},
+	{"PUT", "/apps/{app}/services/{name}", rbac.ResourceApp, rbac.ActionUpdate},
+	{"GET", "/apps/{app}/services", rbac.ResourceApp, rbac.ActionRead},
+	{"POST", "/apps/{app}/services/{service}/restart", rbac.ResourceProcess, rbac.ActionStart},
 
 	// Instances
-	{"GET", "/instances", "instance", "list"},
-	{"GET", "/instances/{id}", "instance", "read"},
+	{"GET", "/instances", rbac.ResourceInstance, rbac.ActionList},
+	{"GET", "/instances/{id}", rbac.ResourceInstance, rbac.ActionRead},
 
 	// System
-	{"GET", "/system", "rack", "read"},
-	{"PUT", "/system", "rack", "update"},
-	{"GET", "/system/capacity", "rack", "read"},
-	{"GET", "/system/metrics", "rack", "read"},
-	{"GET", "/system/processes", "rack", "read"},
-	{"GET", "/system/releases", "rack", "read"},
+	{"GET", "/system", rbac.ResourceRack, rbac.ActionRead},
+	{"PUT", "/system", rbac.ResourceRack, rbac.ActionUpdate},
+	{"GET", "/system/capacity", rbac.ResourceRack, rbac.ActionRead},
+	{"GET", "/system/metrics", rbac.ResourceRack, rbac.ActionRead},
+	{"GET", "/system/processes", rbac.ResourceRack, rbac.ActionRead},
+	{"GET", "/system/releases", rbac.ResourceRack, rbac.ActionRead},
 }
 
 // Match returns the resource/action for a given method and path. If not matched, ok=false.
-func Match(method, path string) (string, string, bool) {
+func Match(method, path string) (rbac.Resource, rbac.Action, bool) {
 	for _, s := range specs {
 		if s.Method == method && KeyMatch3(path, s.Pattern) {
 			return s.Resource, s.Action, true
 		}
 	}
-	return "", "", false
+	return 0, 0, false
 }
 
 // AllPermissions returns the list of known convox:<resource>:<action> strings derived from route specs.

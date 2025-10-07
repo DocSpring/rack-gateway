@@ -94,9 +94,9 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings)
-	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings)
+	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier, cfg.AuditLogger)
+	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings, cfg.AuditLogger)
+	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
 	staticHandler := handlers.NewStaticHandler(cfg.Config, cfg.SessionManager)
 	healthHandler := handlers.NewHealthHandler()
@@ -245,6 +245,16 @@ func Setup(router *gin.Engine, cfg *Config) {
 				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
+
+				// Slack integration
+				integrations := admin.Group("/integrations")
+				integrations.GET("/slack", adminHandler.GetSlackIntegrationHandler)
+				integrations.POST("/slack/oauth/authorize", adminHandler.SlackOAuthAuthorizeHandler)
+				integrations.GET("/slack/oauth/callback", adminHandler.SlackOAuthCallbackHandler)
+				integrations.PUT("/slack/channels", adminHandler.UpdateSlackChannelsHandler)
+				integrations.DELETE("/slack", adminHandler.DeleteSlackIntegrationHandler)
+				integrations.GET("/slack/channels/list", adminHandler.ListSlackChannelsHandler)
+				integrations.POST("/slack/test", adminHandler.TestSlackNotificationHandler)
 			}
 		}
 	}

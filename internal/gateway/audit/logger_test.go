@@ -19,9 +19,6 @@ func TestAuditLogger(t *testing.T) {
 
 	t.Run("ParseConvoxAction", func(t *testing.T) {
 		for _, spec := range routematch.Specs() {
-			if spec.Action == "*" {
-				continue
-			}
 			path := routematch.ExamplePath(spec)
 			method := spec.Method
 			if method == "SOCKET" {
@@ -29,7 +26,7 @@ func TestAuditLogger(t *testing.T) {
 			}
 			action, resource := logger.ParseConvoxAction(path, method)
 			expectedAction := fmt.Sprintf("%s.%s", spec.Resource, spec.Action)
-			expectedResource := resourceInstance(path, spec.Resource, spec.Action)
+			expectedResource := resourceInstance(path, spec.Resource.String(), spec.Action.String())
 			assert.Equal(t, expectedAction, action, "pattern %s %s", spec.Method, spec.Pattern)
 			assert.Equal(t, expectedResource, resource, "pattern %s %s", spec.Method, spec.Pattern)
 		}

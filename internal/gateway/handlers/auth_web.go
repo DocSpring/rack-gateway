@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
@@ -133,7 +132,7 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 
 	// Audit logout
 	if h.database != nil {
-		if err := audit.LogDB(h.database, &db.AuditLog{
+		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 			ActionType:   "auth",
 			Action:       "logout",
 			ResourceType: "auth",

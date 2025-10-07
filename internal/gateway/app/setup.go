@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/routes"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
+	slackpkg "github.com/DocSpring/rack-gateway/internal/gateway/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
 )
@@ -153,6 +154,10 @@ func (a *App) initializeServices() error {
 	// Initialize audit logger
 	auditLogger := audit.NewLogger(a.Database)
 	a.AuditLogger = auditLogger
+
+	// Initialize Slack notifier (optional, won't fail if not configured)
+	slackNotifier := slackpkg.NewNotifier(a.Database)
+	auditLogger.SetSlackNotifier(slackNotifier)
 
 	// Rack TLS certificate manager
 	if a.Config.RackTLSPinningEnabled {

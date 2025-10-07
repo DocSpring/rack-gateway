@@ -60,7 +60,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "create")
+	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionCreate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -96,6 +96,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	dbUser, err := h.database.GetUser(userEmail)
 	if err != nil {
+		fmt.Printf("CreateDeployApprovalRequest: Failed to load user %s: %v\n", userEmail, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
 		return
 	}
@@ -116,6 +117,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		case errors.Is(err, errDeployApprovalRequestTargetMissing):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
+			fmt.Printf("CreateDeployApprovalRequest: Failed to resolve API token: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
 		}
 		return
@@ -147,6 +149,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 			}
 			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token and release"})
 		default:
+			fmt.Printf("CreateDeployApprovalRequest: Failed to create deploy approval request: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
 		}
 		return
@@ -159,15 +162,15 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		"message":    message,
 	})
 
-	if err := audit.LogDB(h.database, &db.AuditLog{
+	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
-		ActionType:   "gateway",
-		Action:       "deploy-approval-request.create",
-		ResourceType: "deploy-approval-request",
+		ActionType:   audit.ActionTypeGateway,
+		Action:       audit.ActionDeployApprovalRequestCreate,
+		ResourceType: audit.ResourceTypeDeployApprovalRequest,
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
-		Status:       "success",
+		Status:       audit.StatusSuccess,
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
 	}); err != nil {
@@ -222,7 +225,7 @@ func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.RBACM
 	}
 
 	if token.UserID != user.ID {
-		allowedAdmin, err := rbacSvc.Enforce(user.Email, "gateway:deploy-approval-request", "approve")
+		allowedAdmin, err := rbacSvc.Enforce(user.Email, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check admin permission: %w", err)
 		}
@@ -286,7 +289,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	allowedAdmin, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
+	allowedAdmin, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -331,7 +334,7 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 		return
 	}
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -422,7 +425,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -472,7 +475,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		"message":    strings.TrimSpace(record.Message),
 	})
 
-	_ = audit.LogDB(h.database, &db.AuditLog{
+	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
@@ -517,7 +520,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, "gateway:deploy-approval-request", "approve")
+	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return
@@ -560,7 +563,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		"message": strings.TrimSpace(record.Message),
 	})
 
-	_ = audit.LogDB(h.database, &db.AuditLog{
+	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",

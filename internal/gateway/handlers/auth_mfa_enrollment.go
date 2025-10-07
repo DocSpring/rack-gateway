@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
@@ -170,7 +169,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		details, _ := json.Marshal(map[string]interface{}{
 			"label": methodLabel,
 		})
-		if err := audit.LogDB(h.database, &db.AuditLog{
+		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
@@ -407,7 +406,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		details, _ := json.Marshal(map[string]interface{}{
 			"label": label,
 		})
-		if err := audit.LogDB(h.database, &db.AuditLog{
+		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",

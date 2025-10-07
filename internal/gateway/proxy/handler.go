@@ -112,7 +112,7 @@ func (l *logAccumulator) Bytes() []byte {
 
 // logAudit is a helper to log audit entries and mark the request context
 func (h *Handler) logAudit(r *http.Request, al *db.AuditLog) error {
-	err := audit.LogDB(h.database, al)
+	err := h.auditLogger.LogDBEntry(al)
 	if err == nil && r != nil {
 		ctx := audit.MarkAuditLogCreated(r.Context())
 		*r = *r.WithContext(ctx)
@@ -288,21 +288,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// For exec/terminate actions, accept either standard or -with-approval permission
-		if resource == "process" && (action == "exec" || action == "terminate") {
-			allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action)
-			if err != nil || !allowed {
-				// Try the -with-approval variant
-				allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action+"-with-approval")
-				if err != nil {
-					allowed = false
-				}
-			}
-		} else {
-			allowed, err = h.rbacManager.Enforce(authUser.Email, resource, action)
-			if err != nil {
-				allowed = false
-			}
+		// All permissions are now direct - no more "-with-approval" suffix
+		// Gating logic is handled separately in the deploy approval system
+		allowed, err = h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
+		if err != nil {
+			allowed = false
 		}
 	}
 
@@ -355,14 +345,14 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Additional gating for process exec and terminate (approval-based permissions)
-	if resource == "process" && action == "exec" {
+	if resource == rbac.ResourceProcess && action == rbac.ActionExec {
 		if ok, message := h.checkProcessExec(r, authUser, path, approvalTracker); !ok {
 			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process exec denied: %s", message))
 			http.Error(w, message, http.StatusForbidden)
 			return
 		}
 	}
-	if resource == "process" && action == "terminate" {
+	if resource == rbac.ResourceProcess && action == rbac.ActionTerminate {
 		if ok, message := h.checkProcessTerminate(r, authUser, path); !ok {
 			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process terminate denied: %s", message))
 			http.Error(w, message, http.StatusForbidden)
@@ -660,12 +650,12 @@ func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
 		return true
 	}
 	// Require env:set for any env changes
-	canEnvSet, _ := h.rbacManager.Enforce(email, "env", "set")
+	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
 	if !canEnvSet {
 		return false
 	}
 	// For secret keys, require secrets:set
-	canSecretsSet, _ := h.rbacManager.Enforce(email, "secrets", "set")
+	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
 	if !canSecretsSet {
 		for _, k := range keys {
 			if h.isSecretKey(k) {
@@ -758,7 +748,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	}
 
 	// If attempting to set secret values without permission, deny early (no need to fetch base)
-	canSecretsSet, _ := h.rbacManager.Enforce(email, "secrets", "set")
+	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
 	if !canSecretsSet {
 		offending := make([]string, 0)
 		for _, k := range order {
@@ -830,8 +820,8 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	}
 
 	// Permissions
-	canEnvSet, _ := h.rbacManager.Enforce(email, "env", "set")
-	canSecretsSet, _ = h.rbacManager.Enforce(email, "secrets", "set")
+	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
+	canSecretsSet, _ = h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
 	if !canEnvSet {
 		// Log denied env.set entries for submitted keys
 		userName := r.Header.Get("X-User-Name")
@@ -1303,7 +1293,7 @@ func extractJSONString(v interface{}) string {
 // filterReleaseEnvForUser redacts or removes env field(s) in release JSON payloads based on RBAC permissions.
 func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
 	// Determine permissions
-	canEnvView, _ := h.rbacManager.Enforce(email, "env", "read")
+	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
 	// Note: For native release responses, ALWAYS mask secrets regardless of secrets:read.
 
 	// If no environment view, mask all env values (do not strip, to avoid accidental clears)
@@ -1408,15 +1398,15 @@ func (h *Handler) isProtectedKey(key string) bool {
 }
 
 // isDestructive returns true for destructive actions (delete, terminate, uninstall equivalents)
-func isDestructive(method, resource, action string) bool {
-	if resource == "process" && (action == "terminate" || action == "stop") {
+func isDestructive(method string, resource rbac.Resource, action rbac.Action) bool {
+	if resource == rbac.ResourceProcess && (action == rbac.ActionTerminate || action == rbac.ActionStop) {
 		return false
 	}
 	if strings.EqualFold(method, http.MethodDelete) {
 		return true
 	}
 	// known destructive mappings
-	if resource == "app" && action == "delete" {
+	if resource == rbac.ResourceApp && action == rbac.ActionDelete {
 		return true
 	}
 	return false
@@ -1598,7 +1588,7 @@ func (h *Handler) pathToResourceAction(path, method string) (string, string) {
 	if !ok {
 		return "", ""
 	}
-	return res, act
+	return res.String(), act.String()
 }
 
 func extractReleaseIDFromPath(path string) string {
@@ -1611,29 +1601,29 @@ func extractReleaseIDFromPath(path string) string {
 	return ""
 }
 
-func forbiddenMessage(resource, action string) string {
+func forbiddenMessage(resource rbac.Resource, action rbac.Action) string {
 	switch resource {
-	case "secrets":
+	case rbac.ResourceSecret:
 		switch action {
-		case "view":
+		case rbac.ActionRead:
 			return "You don't have permission to view secrets."
-		case "set", "unset":
+		case rbac.ActionSet:
 			return "You don't have permission to modify secrets."
 		}
-	case "env":
-		if action == "view" {
+	case rbac.ResourceEnv:
+		if action == rbac.ActionRead {
 			return "You don't have permission to view environment variables."
 		}
-	case "process":
+	case rbac.ResourceProcess:
 		switch action {
-		case "start", "run", "exec":
+		case rbac.ActionStart, rbac.ActionExec:
 			return "You don't have permission to run processes."
-		case "terminate", "stop":
+		case rbac.ActionTerminate, rbac.ActionStop:
 			return "You don't have permission to stop processes."
 		}
-	case "release":
+	case rbac.ResourceRelease:
 		switch action {
-		case "create", "promote":
+		case rbac.ActionCreate, rbac.ActionPromote:
 			return "You don't have permission to deploy releases."
 		}
 	}
@@ -1641,8 +1631,10 @@ func forbiddenMessage(resource, action string) string {
 }
 
 // hasAPITokenPermission checks if an API token has the required permission
-func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource, action string) bool {
-	permission := fmt.Sprintf("convox:%s:%s", resource, action)
+func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource rbac.Resource, action rbac.Action) bool {
+	resourceStr := resource.String()
+	actionStr := action.String()
+	permission := fmt.Sprintf("convox:%s:%s", resourceStr, actionStr)
 
 	for _, perm := range authUser.Permissions {
 		// Check for exact match
@@ -1650,7 +1642,7 @@ func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource, actio
 			return true
 		}
 		// Check for wildcard matches
-		if perm == "convox:*:*" || perm == fmt.Sprintf("convox:%s:*", resource) {
+		if perm == "convox:*:*" || perm == fmt.Sprintf("convox:%s:*", resourceStr) {
 			return true
 		}
 	}
@@ -1674,7 +1666,7 @@ func tokenHasPermission(perms []string, target string) bool {
 	return false
 }
 
-func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.AuthUser, rack config.RackConfig, resource, action string) (bool, *deployApprovalTracker, error) {
+func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.AuthUser, rack config.RackConfig, resource rbac.Resource, action rbac.Action) (bool, *deployApprovalTracker, error) {
 	if authUser == nil || authUser.TokenID == nil {
 		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 	}
@@ -1685,16 +1677,16 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	}
 
 	// Check if token has -with-approval permission variant
-	withApprovalPerm := fmt.Sprintf("convox:%s:%s-with-approval", resource, action)
+	withApprovalPerm := fmt.Sprintf("convox:%s:%s-with-approval", resource.String(), action.String())
 	hasWithApproval := tokenHasPermission(authUser.Permissions, withApprovalPerm)
 
 	// For process:exec and process:terminate, need to check for active deploy approval
-	if resource == "process" && (action == "exec" || action == "terminate") {
+	if resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate) {
 		if !hasWithApproval {
 			return false, nil, nil
 		}
 		// Fall through to deploy approval check below
-	} else if resource == "release" && action == "promote" {
+	} else if resource == rbac.ResourceRelease && action == rbac.ActionPromote {
 		// For release:promote, check deploy approval status
 		if !hasWithApproval {
 			return false, nil, nil
@@ -1725,7 +1717,7 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 
 	// For process actions, look up approval by token+app (any active approval for the app)
 	// For release actions, require specific release approval
-	if resource == "process" && (action == "exec" || action == "terminate") {
+	if resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate) {
 		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
 		if err != nil {
 			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
@@ -1942,7 +1934,7 @@ func (h *Handler) checkProcessExec(r *http.Request, authUser *auth.AuthUser, pat
 		// (This handles processes created outside the gateway, like existing app processes)
 		if authUser.IsAPIToken {
 			// Check if they have the gated permission (exec-with-approval)
-			if allowed, _ := h.rbacManager.Enforce(authUser.Email, "process", "exec-with-approval"); allowed {
+			if allowed, _ := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, rbac.ResourceProcess, rbac.ActionExec); allowed {
 				return false, "cannot exec into untracked processes (not created via gateway)"
 			}
 		}
@@ -1970,11 +1962,11 @@ func (h *Handler) checkProcessExec(r *http.Request, authUser *auth.AuthUser, pat
 	// For users, check RBAC
 	var hasStandardExec, hasExecWithApproval bool
 	if authUser.IsAPIToken {
-		hasStandardExec = h.hasAPITokenPermission(authUser, "process", "exec")
+		hasStandardExec = h.hasAPITokenPermission(authUser, rbac.ResourceProcess, rbac.ActionExec)
 		hasExecWithApproval = tokenHasPermission(authUser.Permissions, "convox:process:exec-with-approval")
 	} else {
-		hasStandardExec, _ = h.rbacManager.Enforce(authUser.Email, "process", "exec")
-		hasExecWithApproval, _ = h.rbacManager.Enforce(authUser.Email, "process", "exec-with-approval")
+		hasStandardExec, _ = h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, rbac.ResourceProcess, rbac.ActionExec)
+		hasExecWithApproval, _ = h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, rbac.ResourceProcess, rbac.ActionExec)
 	}
 
 	// Check if user has standard exec permission - if so, allow immediately
@@ -2052,7 +2044,7 @@ func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser
 		// Process not tracked - allow for regular users but deny for API tokens with -with-approval permission
 		if authUser.IsAPIToken {
 			// Check if they have the gated permission (terminate-with-approval)
-			if allowed, _ := h.rbacManager.Enforce(authUser.Email, "process", "terminate-with-approval"); allowed {
+			if allowed, _ := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, rbac.ResourceProcess, rbac.ActionTerminate); allowed {
 				return false, "cannot terminate untracked processes (not created via gateway)"
 			}
 		}
@@ -2084,14 +2076,14 @@ func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser
 }
 
 // verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided
-func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, authUser *auth.AuthUser, resource, action string, rackConfig *config.RackConfig, start time.Time) error {
+func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, authUser *auth.AuthUser, resource rbac.Resource, action rbac.Action, rackConfig *config.RackConfig, start time.Time) error {
 	// Skip MFA verification if services are not configured (e.g., in tests)
 	if h.mfaService == nil || h.sessionManager == nil {
 		return nil
 	}
 
 	// Get the route's MFA requirement
-	permission := fmt.Sprintf("convox:%s:%s", resource, action)
+	permission := fmt.Sprintf("convox:%s:%s", resource.String(), action.String())
 
 	// Look up the MFA level for this permission
 	mfaLevel, ok := routematch.GetMFALevelForPermission(permission)

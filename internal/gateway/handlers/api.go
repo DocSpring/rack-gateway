@@ -31,6 +31,7 @@ type APIHandler struct {
 	config          *config.Config
 	rackCertManager *rackcert.Manager
 	mfaSettings     *db.MFASettings
+	auditLogger     *audit.Logger
 }
 
 var (
@@ -39,13 +40,14 @@ var (
 )
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager, mfaSettings *db.MFASettings) *APIHandler {
+func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager, mfaSettings *db.MFASettings, auditLogger *audit.Logger) *APIHandler {
 	return &APIHandler{
 		rbac:            rbac,
 		database:        database,
 		config:          config,
 		rackCertManager: rackCertManager,
 		mfaSettings:     mfaSettings,
+		auditLogger:     auditLogger,
 	}
 }
 
@@ -156,7 +158,7 @@ func (h *APIHandler) logEnvUpdateDiffs(c *gin.Context, app, email, name string, 
 		detailPayload := map[string]string{"old": oldVal, "new": newVal}
 		detailsJSON, _ := json.Marshal(detailPayload)
 
-		_ = audit.LogDB(h.database, &db.AuditLog{
+		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:      email,
 			UserName:       name,
 			ActionType:     "convox",
@@ -432,14 +434,14 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	name := c.GetString("user_name")
 
 	// Enforce env:read
-	if ok, _ := h.rbac.Enforce(email, "env", "read"); !ok {
+	if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead); !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view environment variables."})
 		return
 	}
 
 	allowedSecrets := false
 	if wantSecrets {
-		if ok, _ := h.rbac.Enforce(email, "secrets", "read"); !ok {
+		if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead); !ok {
 			res := app
 			if key != "" {
 				res = fmt.Sprintf("%s/%s", app, key)
@@ -449,7 +451,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 				details["key"] = key
 			}
 			detailsJSON, _ := json.Marshal(details)
-			_ = audit.LogDB(h.database, &db.AuditLog{
+			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 				UserEmail:      email,
 				UserName:       name,
 				ActionType:     "convox",
@@ -530,7 +532,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		action = "secrets.read"
 		resourceType = "secret"
 	}
-	_ = audit.LogDB(h.database, &db.AuditLog{
+	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:      email,
 		UserName:       name,
 		ActionType:     "convox",
@@ -581,7 +583,7 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 	email := c.GetString("user_email")
 	name := c.GetString("user_name")
 
-	if ok, _ := h.rbac.Enforce(email, "env", "set"); !ok {
+	if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet); !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify environment variables."})
 		return
 	}
@@ -616,8 +618,8 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 	}
 
 	extraSecrets, protectedSet := h.secretAndProtectedKeys()
-	allowSecrets, _ := h.rbac.Enforce(email, "secrets", "set")
-	canViewSecrets, _ := h.rbac.Enforce(email, "secrets", "view")
+	allowSecrets, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	canViewSecrets, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead)
 
 	merged, diffs, mergeErr := envutil.MergeEnv(
 		baseEnv,
@@ -653,7 +655,7 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 		ms := int(time.Since(start).Milliseconds())
 		ip := c.ClientIP()
 		ua := c.GetHeader("User-Agent")
-		_ = audit.LogDB(h.database, &db.AuditLog{
+		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:      email,
 			UserName:       name,
 			ActionType:     "convox",
