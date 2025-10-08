@@ -16,11 +16,11 @@ const (
 	DeployApprovalRequestStatusPending  = "pending"
 	DeployApprovalRequestStatusApproved = "approved"
 	DeployApprovalRequestStatusRejected = "rejected"
-	DeployApprovalRequestStatusConsumed = "consumed"
+	DeployApprovalRequestStatusExpired  = "expired"
 )
 
 var (
-	ErrDeployApprovalRequestActive   = errors.New("a deploy approval request is already pending or approved for this token and release")
+	ErrDeployApprovalRequestActive   = errors.New("a deploy approval request is already pending or approved for this token and git commit")
 	ErrDeployApprovalRequestNotFound = errors.New("deploy approval request not found")
 	ErrDeployApprovalMissing         = errors.New("deployment approval required")
 	ErrDeployApprovalRequestExpired  = errors.New("deploy approval expired")
@@ -65,7 +65,13 @@ SELECT
     rejected_user.name,
     dr.rejected_at,
     dr.approval_notes,
+    dr.git_commit_hash,
+    dr.git_branch,
+    dr.pipeline_url,
+    dr.ci_provider,
+    dr.ci_metadata,
     dr.app,
+    dr.build_id,
     dr.release_id,
     dr.release_created_at,
     dr.release_promoted_at,
@@ -100,8 +106,13 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		rejectedByName     sql.NullString
 		rejectedAt         sql.NullTime
 		approvalNotes      sql.NullString
-		app                string
-		releaseID          string
+		gitBranch          sql.NullString
+		pipelineURL        sql.NullString
+		ciProvider         sql.NullString
+		ciMetadata         []byte
+		app                sql.NullString
+		buildID            sql.NullString
+		releaseID          sql.NullString
 		releaseCreatedAt   sql.NullTime
 		releasePromotedAt  sql.NullTime
 		releasePromotedBy  sql.NullInt64
@@ -133,7 +144,13 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		&rejectedByName,
 		&rejectedAt,
 		&approvalNotes,
+		&dr.GitCommitHash,
+		&gitBranch,
+		&pipelineURL,
+		&ciProvider,
+		&ciMetadata,
 		&app,
+		&buildID,
 		&releaseID,
 		&releaseCreatedAt,
 		&releasePromotedAt,
@@ -205,8 +222,27 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	if approvalNotes.Valid {
 		dr.ApprovalNotes = approvalNotes.String
 	}
-	dr.App = app
-	dr.ReleaseID = releaseID
+	if gitBranch.Valid {
+		dr.GitBranch = gitBranch.String
+	}
+	if pipelineURL.Valid {
+		dr.PipelineURL = pipelineURL.String
+	}
+	if ciProvider.Valid {
+		dr.CIProvider = ciProvider.String
+	}
+	if len(ciMetadata) > 0 {
+		dr.CIMetadata = ciMetadata
+	}
+	if app.Valid {
+		dr.App = app.String
+	}
+	if buildID.Valid {
+		dr.BuildID = buildID.String
+	}
+	if releaseID.Valid {
+		dr.ReleaseID = releaseID.String
+	}
 	if releaseCreatedAt.Valid {
 		t := releaseCreatedAt.Time
 		dr.ReleaseCreatedAt = &t
@@ -221,25 +257,21 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	return &dr, nil
 }
 
-func (d *Database) CreateDeployApprovalRequest(message, app, releaseID string, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
+func (d *Database) CreateDeployApprovalRequest(message, gitCommitHash, gitBranch, pipelineURL, ciProvider string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil, fmt.Errorf("message is required")
 	}
-	app = strings.TrimSpace(app)
-	if app == "" {
-		return nil, fmt.Errorf("app is required")
-	}
-	releaseID = strings.TrimSpace(releaseID)
-	if releaseID == "" {
-		return nil, fmt.Errorf("release_id is required")
+	gitCommitHash = strings.TrimSpace(gitCommitHash)
+	if gitCommitHash == "" {
+		return nil, fmt.Errorf("git_commit_hash is required")
 	}
 	if targetAPITokenID <= 0 {
 		return nil, fmt.Errorf("target api token required")
 	}
 
-	// Check for existing approval with same (app, token, release_id) triple
-	existing, err := d.ActiveDeployApprovalRequestByTokenAndRelease(targetAPITokenID, app, releaseID)
+	// Check for existing approval with same (git_commit_hash, token) pair
+	existing, err := d.ActiveDeployApprovalRequestByTokenAndCommit(targetAPITokenID, gitCommitHash)
 	if err == nil && existing != nil {
 		return nil, &DeployApprovalRequestConflictError{Request: existing}
 	}
@@ -255,14 +287,29 @@ func (d *Database) CreateDeployApprovalRequest(message, app, releaseID string, c
 	if targetUserID != nil {
 		tgtUser = sql.NullInt64{Int64: *targetUserID, Valid: true}
 	}
+	var gitBranchNull sql.NullString
+	if trimmed := strings.TrimSpace(gitBranch); trimmed != "" {
+		gitBranchNull = sql.NullString{String: trimmed, Valid: true}
+	}
+	var pipelineURLNull sql.NullString
+	if trimmed := strings.TrimSpace(pipelineURL); trimmed != "" {
+		pipelineURLNull = sql.NullString{String: trimmed, Valid: true}
+	}
+	var ciProviderNull sql.NullString
+	if trimmed := strings.TrimSpace(ciProvider); trimmed != "" {
+		ciProviderNull = sql.NullString{String: trimmed, Valid: true}
+	}
 
 	var id int64
 	err = d.queryRow(
-		`INSERT INTO deploy_approval_requests (message, app, release_id, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		`INSERT INTO deploy_approval_requests (message, git_commit_hash, git_branch, pipeline_url, ci_provider, ci_metadata, status, created_by_user_id, created_by_api_token_id, target_api_token_id, target_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		message,
-		app,
-		releaseID,
+		gitCommitHash,
+		gitBranchNull,
+		pipelineURLNull,
+		ciProviderNull,
+		ciMetadata,
 		DeployApprovalRequestStatusPending,
 		createdByUserID,
 		createdAPIToken,
@@ -271,10 +318,10 @@ func (d *Database) CreateDeployApprovalRequest(message, app, releaseID string, c
 	).Scan(&id)
 	if err != nil {
 		// Check for unique constraint violation (race condition between check and insert)
-		if strings.Contains(err.Error(), "idx_deploy_approval_requests_active_release") ||
+		if strings.Contains(err.Error(), "idx_deploy_approval_requests_active_commit") ||
 			strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			// Try to fetch the conflicting record
-			existing, fetchErr := d.ActiveDeployApprovalRequestByTokenAndRelease(targetAPITokenID, app, releaseID)
+			existing, fetchErr := d.ActiveDeployApprovalRequestByTokenAndCommit(targetAPITokenID, gitCommitHash)
 			if fetchErr == nil && existing != nil {
 				return nil, &DeployApprovalRequestConflictError{Request: existing}
 			}
@@ -290,23 +337,11 @@ func (d *Database) GetDeployApprovalRequest(id int64) (*DeployApprovalRequest, e
 	return scanDeployApprovalRequest(row)
 }
 
-func (d *Database) ActiveDeployApprovalRequestByTokenAndRelease(tokenID int64, app, releaseID string) (*DeployApprovalRequest, error) {
+func (d *Database) ActiveDeployApprovalRequestByTokenAndCommit(tokenID int64, gitCommitHash string) (*DeployApprovalRequest, error) {
 	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.app = ? AND dr.release_id = ? AND dr.status IN ('pending','approved') AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.created_at DESC LIMIT 1`,
+		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.git_commit_hash = ? AND dr.status IN ('pending','approved') AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.created_at DESC LIMIT 1`,
 		tokenID,
-		app,
-		releaseID,
-	)
-	return scanDeployApprovalRequest(row)
-}
-
-// ActiveDeployApprovalRequestByTokenAndApp returns the most recent active (pending or approved, non-expired)
-// deploy approval request for the given token+app, regardless of release.
-func (d *Database) ActiveDeployApprovalRequestByTokenAndApp(tokenID int64, app string) (*DeployApprovalRequest, error) {
-	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.app = ? AND dr.status IN ('pending','approved') AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.created_at DESC LIMIT 1`,
-		tokenID,
-		app,
+		gitCommitHash,
 	)
 	return scanDeployApprovalRequest(row)
 }
@@ -424,15 +459,14 @@ func (d *Database) MarkDeployApprovalRequestPromoted(id int64, app, releaseID st
 	}
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
-         SET release_promoted_at = ?, release_promoted_by_api_token_id = ?, status = ?, updated_at = NOW()
-         WHERE id = ? AND status = ? AND app = ? AND release_id = ? AND release_promoted_at IS NULL`,
-		when,
-		tokenID,
-		DeployApprovalRequestStatusConsumed,
-		id,
-		DeployApprovalRequestStatusApproved,
+         SET app = ?, release_id = ?, release_promoted_at = ?, release_promoted_by_api_token_id = ?, updated_at = NOW()
+         WHERE id = ? AND status = ? AND release_promoted_at IS NULL`,
 		app,
 		releaseID,
+		when,
+		tokenID,
+		id,
+		DeployApprovalRequestStatusApproved,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to mark release promotion: %w", err)

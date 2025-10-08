@@ -21,17 +21,22 @@ import (
 var notificationSound []byte
 
 type deployApprovalRequest struct {
-	ID                 int64      `json:"id"`
-	Message            string     `json:"message"`
-	Status             string     `json:"status"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
-	TargetAPITokenID   string     `json:"target_api_token_id"`
-	TargetAPITokenName string     `json:"target_api_token_name,omitempty"`
-	ApprovedAt         *time.Time `json:"approved_at,omitempty"`
-	ApprovalExpiresAt  *time.Time `json:"approval_expires_at,omitempty"`
-	RejectedAt         *time.Time `json:"rejected_at,omitempty"`
-	ApprovalNotes      string     `json:"approval_notes,omitempty"`
+	ID                 int64                  `json:"id"`
+	Message            string                 `json:"message"`
+	Status             string                 `json:"status"`
+	CreatedAt          time.Time              `json:"created_at"`
+	UpdatedAt          time.Time              `json:"updated_at"`
+	TargetAPITokenID   string                 `json:"target_api_token_id"`
+	TargetAPITokenName string                 `json:"target_api_token_name,omitempty"`
+	ApprovedAt         *time.Time             `json:"approved_at,omitempty"`
+	ApprovalExpiresAt  *time.Time             `json:"approval_expires_at,omitempty"`
+	RejectedAt         *time.Time             `json:"rejected_at,omitempty"`
+	ApprovalNotes      string                 `json:"approval_notes,omitempty"`
+	GitCommitHash      string                 `json:"git_commit_hash"`
+	GitBranch          string                 `json:"git_branch,omitempty"`
+	PipelineURL        string                 `json:"pipeline_url,omitempty"`
+	CIProvider         string                 `json:"ci_provider,omitempty"`
+	CIMetadata         map[string]interface{} `json:"ci_metadata,omitempty"`
 }
 
 type deployApprovalRequestConflictError struct {
@@ -62,26 +67,26 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		waitFlag        bool
 		pollIntervalStr string
 		timeoutStr      string
+		gitCommitHash   string
+		gitBranch       string
+		pipelineURL     string
+		ciProvider      string
+		message         string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "request <app> <release_id> <message>",
+		Use:   "request",
 		Short: "Request manual approval for CI/CD deploy",
-		Args:  cobra.ExactArgs(3),
 		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
-			app := strings.TrimSpace(args[0])
-			if app == "" {
-				return fmt.Errorf("app is required")
+			// Validate required flags
+			gitCommitHash = strings.TrimSpace(gitCommitHash)
+			if gitCommitHash == "" {
+				return fmt.Errorf("--git-commit is required")
 			}
 
-			releaseID := strings.TrimSpace(args[1])
-			if releaseID == "" {
-				return fmt.Errorf("release_id is required")
-			}
-
-			message := strings.TrimSpace(args[2])
+			message = strings.TrimSpace(message)
 			if message == "" {
-				return fmt.Errorf("message is required")
+				return fmt.Errorf("--message is required")
 			}
 
 			rack, err := SelectedRack()
@@ -118,7 +123,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, gatewayURL, bearer, rack, app, releaseID, message, "", nil)
+			created, err := createDeployApproval(cmd, gatewayURL, bearer, rack, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, "", nil)
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) && conflict.request != nil {
@@ -145,7 +150,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 					return err
 				}
 				switch strings.ToLower(final.Status) {
-				case "approved", "consumed":
+				case "approved", "expired":
 					if err := writef(cmd.OutOrStdout(), "Deploy approval request %d approved.\n", final.ID); err != nil {
 						return err
 					}
@@ -174,6 +179,14 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		"20m",
 		"Maximum time to wait before giving up (set to 0 to wait indefinitely)",
 	)
+	cmd.Flags().StringVar(&gitCommitHash, "git-commit", "", "Git commit SHA (required)")
+	cmd.Flags().StringVar(&gitBranch, "branch", "", "Git branch name")
+	cmd.Flags().StringVar(&pipelineURL, "pipeline-url", "", "CI pipeline URL (e.g., CircleCI build URL)")
+	cmd.Flags().StringVar(&ciProvider, "ci-provider", "", "CI provider (circleci, github, buildkite, jenkins, etc.)")
+	cmd.Flags().StringVar(&message, "message", "", "Deploy approval message (required)")
+
+	_ = cmd.MarkFlagRequired("git-commit")
+	_ = cmd.MarkFlagRequired("message")
 
 	return cmd
 }
@@ -527,11 +540,19 @@ func playNotificationSound(cfg *Config, rack string) error {
 	return cmd.Run()
 }
 
-func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, app, releaseID, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
-		"message":    message,
-		"app":        app,
-		"release_id": releaseID,
+		"message":         message,
+		"git_commit_hash": gitCommitHash,
+	}
+	if trimmed := strings.TrimSpace(gitBranch); trimmed != "" {
+		payload["git_branch"] = trimmed
+	}
+	if trimmed := strings.TrimSpace(pipelineURL); trimmed != "" {
+		payload["pipeline_url"] = trimmed
+	}
+	if trimmed := strings.TrimSpace(ciProvider); trimmed != "" {
+		payload["ci_provider"] = trimmed
 	}
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed
@@ -633,7 +654,7 @@ func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, 
 		}
 
 		statusLower := strings.ToLower(result.Status)
-		if statusLower == "approved" || statusLower == "rejected" || statusLower == "consumed" {
+		if statusLower == "approved" || statusLower == "rejected" || statusLower == "expired" {
 			return &result, nil
 		}
 

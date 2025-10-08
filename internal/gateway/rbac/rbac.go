@@ -97,29 +97,18 @@ var roleConfigs = map[string]roleConfig{
 		},
 		Parents: []string{"ops"},
 	},
-	// Only specific permissions that CI/CD pipelines need for deployments
-	// Uses -with-approval variants for sensitive operations that require active deploy approval
+	// CI/CD role for automated deployments
+	// Uses single deploy-with-approval permission that grants all deployment actions when an active approval exists
 	"cicd": {
 		Permissions: []string{
 			Convox(ResourceApp, ActionList),
 			Convox(ResourceApp, ActionRead),
 			Gateway(ResourceDeployApprovalRequest, ActionCreate),
 			Gateway(ResourceDeployApprovalRequest, ActionRead),
-			Convox(ResourceBuild, ActionCreate),
-			Convox(ResourceBuild, ActionList),
-			Convox(ResourceBuild, ActionRead),
-			Convox(ResourceLog, ActionRead),
-			Convox(ResourceObject, ActionCreate),
-			Convox(ResourceRelease, ActionCreate),
-			Convox(ResourceRelease, ActionList),
-			Convox(ResourceRelease, ActionPromoteWithApproval), // Requires active approved deploy for this release
-			Convox(ResourceProcess, ActionList),
-			Convox(ResourceProcess, ActionRead),
-			Convox(ResourceProcess, ActionStartWithApproval),     // Requires active approved deploy + command in allowlist
-			Convox(ResourceProcess, ActionExecWithApproval),      // Requires active approved deploy + command in allowlist
-			Convox(ResourceProcess, ActionTerminateWithApproval), // Requires active approved deploy + tracked process
+			Convox(ResourceDeploy, ActionDeployWithApproval), // Grants build, release, process ops when approval exists
 			Convox(ResourceInstance, ActionList),
 			Convox(ResourceInstance, ActionRead),
+			Convox(ResourceLog, ActionRead),
 			Convox(ResourceRack, ActionRead),
 		},
 	},

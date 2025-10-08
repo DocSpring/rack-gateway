@@ -93,6 +93,7 @@ const (
 	ResourceRack
 	ResourceEnv
 	ResourceSecret
+	ResourceDeploy
 	// Gateway resources
 	ResourceDeployApprovalRequest
 	ResourceAPIToken
@@ -115,6 +116,7 @@ var resourceToString = [...]string{
 	"rack",
 	"env",
 	"secret",
+	"deploy",
 	"deploy-approval-request",
 	"api-token",
 	"user",
@@ -192,10 +194,7 @@ const (
 	ActionApprove
 	ActionManage
 	ActionSet
-	ActionPromoteWithApproval
-	ActionStartWithApproval
-	ActionExecWithApproval
-	ActionTerminateWithApproval
+	ActionDeployWithApproval
 )
 
 var actionToString = [...]string{
@@ -213,10 +212,7 @@ var actionToString = [...]string{
 	"approve",
 	"manage",
 	"set",
-	"promote-with-approval",
-	"start-with-approval",
-	"exec-with-approval",
-	"terminate-with-approval",
+	"deploy-with-approval",
 }
 
 func (a Action) String() string {
@@ -226,7 +222,7 @@ func (a Action) String() string {
 	return fmt.Sprintf("Action(%d)", a)
 }
 
-func (a Action) IsValid() bool { return a <= ActionTerminateWithApproval }
+func (a Action) IsValid() bool { return a <= ActionDeployWithApproval }
 
 func ParseAction(v string) (Action, error) {
 	for i, s := range actionToString {

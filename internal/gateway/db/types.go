@@ -120,36 +120,42 @@ type CreatorInfo struct {
 
 // DeployApprovalRequest tracks manual approval requirements for CI/CD actions.
 type DeployApprovalRequest struct {
-	ID                          int64      `json:"id"`
-	Message                     string     `json:"message"`
-	Status                      string     `json:"status"`
-	CreatedAt                   time.Time  `json:"created_at" ts_type:"string"`
-	UpdatedAt                   time.Time  `json:"updated_at" ts_type:"string"`
-	CreatedByUserID             *int64     `json:"created_by_user_id,omitempty"`
-	CreatedByEmail              string     `json:"created_by_email,omitempty"`
-	CreatedByName               string     `json:"created_by_name,omitempty"`
-	CreatedByAPITokenID         *int64     `json:"created_by_api_token_id,omitempty"`
-	CreatedByAPITokenPublicID   string     `json:"created_by_api_token_public_id,omitempty"`
-	CreatedByAPITokenName       string     `json:"created_by_api_token_name,omitempty"`
-	TargetAPITokenID            int64      `json:"target_api_token_id"`
-	TargetAPITokenPublicID      string     `json:"target_api_token_public_id"`
-	TargetAPITokenName          string     `json:"target_api_token_name,omitempty"`
-	TargetUserID                *int64     `json:"target_user_id,omitempty"`
-	ApprovedByUserID            *int64     `json:"approved_by_user_id,omitempty"`
-	ApprovedByEmail             string     `json:"approved_by_email,omitempty"`
-	ApprovedByName              string     `json:"approved_by_name,omitempty"`
-	ApprovedAt                  *time.Time `json:"approved_at,omitempty" ts_type:"string | null"`
-	ApprovalExpiresAt           *time.Time `json:"approval_expires_at,omitempty" ts_type:"string | null"`
-	RejectedByUserID            *int64     `json:"rejected_by_user_id,omitempty"`
-	RejectedByEmail             string     `json:"rejected_by_email,omitempty"`
-	RejectedByName              string     `json:"rejected_by_name,omitempty"`
-	RejectedAt                  *time.Time `json:"rejected_at,omitempty" ts_type:"string | null"`
-	ApprovalNotes               string     `json:"approval_notes,omitempty"`
-	App                         string     `json:"app"`
-	ReleaseID                   string     `json:"release_id"`
-	ReleaseCreatedAt            *time.Time `json:"release_created_at,omitempty" ts_type:"string | null"`
-	ReleasePromotedAt           *time.Time `json:"release_promoted_at,omitempty" ts_type:"string | null"`
-	ReleasePromotedByAPITokenID *int64     `json:"release_promoted_by_api_token_id,omitempty"`
+	ID                          int64           `json:"id"`
+	Message                     string          `json:"message"`
+	Status                      string          `json:"status"`
+	CreatedAt                   time.Time       `json:"created_at" ts_type:"string"`
+	UpdatedAt                   time.Time       `json:"updated_at" ts_type:"string"`
+	CreatedByUserID             *int64          `json:"created_by_user_id,omitempty"`
+	CreatedByEmail              string          `json:"created_by_email,omitempty"`
+	CreatedByName               string          `json:"created_by_name,omitempty"`
+	CreatedByAPITokenID         *int64          `json:"created_by_api_token_id,omitempty"`
+	CreatedByAPITokenPublicID   string          `json:"created_by_api_token_public_id,omitempty"`
+	CreatedByAPITokenName       string          `json:"created_by_api_token_name,omitempty"`
+	TargetAPITokenID            int64           `json:"target_api_token_id"`
+	TargetAPITokenPublicID      string          `json:"target_api_token_public_id"`
+	TargetAPITokenName          string          `json:"target_api_token_name,omitempty"`
+	TargetUserID                *int64          `json:"target_user_id,omitempty"`
+	ApprovedByUserID            *int64          `json:"approved_by_user_id,omitempty"`
+	ApprovedByEmail             string          `json:"approved_by_email,omitempty"`
+	ApprovedByName              string          `json:"approved_by_name,omitempty"`
+	ApprovedAt                  *time.Time      `json:"approved_at,omitempty" ts_type:"string | null"`
+	ApprovalExpiresAt           *time.Time      `json:"approval_expires_at,omitempty" ts_type:"string | null"`
+	RejectedByUserID            *int64          `json:"rejected_by_user_id,omitempty"`
+	RejectedByEmail             string          `json:"rejected_by_email,omitempty"`
+	RejectedByName              string          `json:"rejected_by_name,omitempty"`
+	RejectedAt                  *time.Time      `json:"rejected_at,omitempty" ts_type:"string | null"`
+	ApprovalNotes               string          `json:"approval_notes,omitempty"`
+	GitCommitHash               string          `json:"git_commit_hash"`
+	GitBranch                   string          `json:"git_branch,omitempty"`
+	PipelineURL                 string          `json:"pipeline_url,omitempty"`
+	CIProvider                  string          `json:"ci_provider,omitempty"`
+	CIMetadata                  json.RawMessage `json:"ci_metadata,omitempty"`
+	App                         string          `json:"app,omitempty"`
+	BuildID                     string          `json:"build_id,omitempty"`
+	ReleaseID                   string          `json:"release_id,omitempty"`
+	ReleaseCreatedAt            *time.Time      `json:"release_created_at,omitempty" ts_type:"string | null"`
+	ReleasePromotedAt           *time.Time      `json:"release_promoted_at,omitempty" ts_type:"string | null"`
+	ReleasePromotedByAPITokenID *int64          `json:"release_promoted_by_api_token_id,omitempty"`
 }
 
 // MFAMethod represents a configured MFA factor for a user.

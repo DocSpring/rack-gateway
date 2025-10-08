@@ -82,15 +82,9 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	app := strings.TrimSpace(req.App)
-	if app == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
-		return
-	}
-
-	releaseID := strings.TrimSpace(req.ReleaseID)
-	if releaseID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "release_id is required"})
+	gitCommitHash := strings.TrimSpace(req.GitCommitHash)
+	if gitCommitHash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash is required"})
 		return
 	}
 
@@ -138,7 +132,29 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		createdByAPITokenID = authUser.TokenID
 	}
 
-	record, err := h.database.CreateDeployApprovalRequest(message, app, releaseID, dbUser.ID, createdByAPITokenID, token.ID, targetUserID)
+	// Marshal CI metadata to JSON bytes
+	var ciMetadata []byte
+	if req.CIMetadata != nil && len(req.CIMetadata) > 0 {
+		var err error
+		ciMetadata, err = json.Marshal(req.CIMetadata)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ci_metadata"})
+			return
+		}
+	}
+
+	record, err := h.database.CreateDeployApprovalRequest(
+		message,
+		gitCommitHash,
+		req.GitBranch,
+		req.PipelineURL,
+		req.CIProvider,
+		ciMetadata,
+		dbUser.ID,
+		createdByAPITokenID,
+		token.ID,
+		targetUserID,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, db.ErrDeployApprovalRequestActive):
@@ -147,7 +163,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 				c.JSON(http.StatusConflict, toDeployApprovalRequestResponse(conflict.Request))
 				return
 			}
-			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token and release"})
+			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token and git commit"})
 		default:
 			fmt.Printf("CreateDeployApprovalRequest: Failed to create deploy approval request: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
@@ -156,10 +172,11 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	}
 
 	details := auditDetails(map[string]string{
-		"token_uuid": token.PublicID,
-		"app":        app,
-		"release_id": releaseID,
-		"message":    message,
+		"token_uuid":      token.PublicID,
+		"git_commit_hash": gitCommitHash,
+		"git_branch":      req.GitBranch,
+		"pipeline_url":    req.PipelineURL,
+		"message":         message,
 	})
 
 	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
@@ -600,8 +617,20 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		ApprovalNotes:             dr.ApprovalNotes,
 		RejectedByEmail:           dr.RejectedByEmail,
 		RejectedByName:            dr.RejectedByName,
+		GitCommitHash:             dr.GitCommitHash,
+		GitBranch:                 dr.GitBranch,
+		PipelineURL:               dr.PipelineURL,
+		CIProvider:                dr.CIProvider,
 		App:                       dr.App,
+		BuildID:                   dr.BuildID,
 		ReleaseID:                 dr.ReleaseID,
+	}
+	// Unmarshal CI metadata
+	if len(dr.CIMetadata) > 0 {
+		var metadata map[string]interface{}
+		if err := json.Unmarshal(dr.CIMetadata, &metadata); err == nil {
+			resp.CIMetadata = metadata
+		}
 	}
 	if dr.ApprovedAt != nil {
 		resp.ApprovedAt = dr.ApprovedAt
