@@ -8,9 +8,9 @@
 import type { DbAPIToken } from './dbAPIToken';
 
 export interface HandlersCreateAPITokenResponse {
-  api_token?: DbAPIToken;
-  id?: number;
-  name?: string;
-  permissions?: string[];
-  token?: string;
+  api_token: DbAPIToken;
+  id: number;
+  name: string;
+  permissions: string[];
+  token: string;
 }

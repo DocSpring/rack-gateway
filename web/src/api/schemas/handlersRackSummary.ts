@@ -7,7 +7,7 @@
  */
 
 export interface HandlersRackSummary {
-  alias?: string;
-  host?: string;
-  name?: string;
+  alias: string;
+  host: string;
+  name: string;
 }

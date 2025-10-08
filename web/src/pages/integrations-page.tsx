@@ -67,6 +67,7 @@ type CircleCISettings = {
   org_slug?: string
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Page component with multiple integration handlers
 export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const queryClient = useQueryClient()
@@ -299,7 +300,9 @@ export function IntegrationsPage() {
     <div className="container mx-auto p-6">
       <div className="mb-6">
         <h1 className="font-bold text-3xl">Integrations</h1>
-        <p className="text-muted-foreground">Connect external services to receive notifications and automate workflows</p>
+        <p className="text-muted-foreground">
+          Connect external services to receive notifications and automate workflows
+        </p>
       </div>
 
       <div className="space-y-4">
@@ -338,20 +341,24 @@ export function IntegrationsPage() {
                 <Alert>
                   <CheckCircle2 className="size-4" />
                   <AlertDescription>
-                    CircleCI integration is enabled. When a deploy approval is granted, the gateway will
-                    automatically approve the corresponding CircleCI job.
+                    CircleCI integration is enabled. When a deploy approval is granted, the gateway
+                    will automatically approve the corresponding CircleCI job.
                   </AlertDescription>
                 </Alert>
                 <div className="rounded border bg-muted p-4">
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">Approval Job Name:</span>
-                      <code className="rounded bg-background px-2 py-1">{circleCISettings.approval_job_name}</code>
+                      <code className="rounded bg-background px-2 py-1">
+                        {circleCISettings?.approval_job_name}
+                      </code>
                     </div>
-                    {circleCISettings.org_slug && (
+                    {circleCISettings?.org_slug && (
                       <div className="flex justify-between text-sm">
                         <span className="font-medium">Organization:</span>
-                        <code className="rounded bg-background px-2 py-1">{circleCISettings.org_slug}</code>
+                        <code className="rounded bg-background px-2 py-1">
+                          {circleCISettings?.org_slug}
+                        </code>
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
@@ -363,18 +370,23 @@ export function IntegrationsPage() {
                 <p className="text-muted-foreground text-xs">
                   Configuration is managed via environment variables:
                   <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLE_CI_API_TOKEN</code>,
-                  <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLE_CI_APPROVAL_JOB_NAME</code>
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5">
+                    CIRCLE_CI_APPROVAL_JOB_NAME
+                  </code>
                 </p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-4 py-8">
                 <p className="text-center text-muted-foreground text-sm">
-                  CircleCI integration is not configured. Set the following environment variables to enable:
+                  CircleCI integration is not configured. Set the following environment variables to
+                  enable:
                 </p>
                 <div className="w-full max-w-md space-y-2 rounded border bg-muted p-4 font-mono text-sm">
                   <div>CIRCLE_CI_API_TOKEN=your-api-token</div>
                   <div>CIRCLE_CI_APPROVAL_JOB_NAME=approve_deploy_staging</div>
-                  <div className="text-muted-foreground">CIRCLE_CI_ORG_SLUG=gh/YourOrg (optional)</div>
+                  <div className="text-muted-foreground">
+                    CIRCLE_CI_ORG_SLUG=gh/YourOrg (optional)
+                  </div>
                 </div>
               </div>
             )}
@@ -383,98 +395,98 @@ export function IntegrationsPage() {
 
         {/* Slack Card */}
         {slackConfigured ? (
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <svg className="size-6" fill="currentColor" viewBox="0 0 24 24">
-                    <title>Slack logo</title>
-                    <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
-                  </svg>
-                  Slack
-                </CardTitle>
-                {integration && (
-                  <CardDescription>
-                    Connected to <strong>{integration.workspace_name}</strong>
-                  </CardDescription>
-                )}
-              </div>
-              {integration ? (
-                <Button
-                  disabled={disconnectMutation.isPending}
-                  onClick={handleDisconnect}
-                  size="sm"
-                  variant="destructive"
-                >
-                  {disconnectMutation.isPending ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 size-4" />
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <svg className="size-6" fill="currentColor" viewBox="0 0 24 24">
+                      <title>Slack logo</title>
+                      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
+                    </svg>
+                    Slack
+                  </CardTitle>
+                  {integration && (
+                    <CardDescription>
+                      Connected to <strong>{integration.workspace_name}</strong>
+                    </CardDescription>
                   )}
-                  Disconnect
-                </Button>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {integration ? (
-              <div className="space-y-6">
-                <Alert>
-                  <CheckCircle2 className="size-4" />
-                  <AlertDescription>
-                    Slack is connected. Configure which channels receive notifications below.
-                  </AlertDescription>
-                </Alert>
+                </div>
+                {integration ? (
+                  <Button
+                    disabled={disconnectMutation.isPending}
+                    onClick={handleDisconnect}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    {disconnectMutation.isPending ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-2 size-4" />
+                    )}
+                    Disconnect
+                  </Button>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {integration ? (
+                <div className="space-y-6">
+                  <Alert>
+                    <CheckCircle2 className="size-4" />
+                    <AlertDescription>
+                      Slack is connected. Configure which channels receive notifications below.
+                    </AlertDescription>
+                  </Alert>
 
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-lg">Channel Configuration</h3>
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-lg">Channel Configuration</h3>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {Object.entries(integration.channel_actions).map(([key, config]) => (
-                      <ChannelConfigCard
-                        channels={channelsData || []}
-                        config={config as ChannelConfig}
-                        configKey={key}
-                        isTesting={testMutation.isPending}
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {Object.entries(integration.channel_actions).map(([key, config]) => (
+                        <ChannelConfigCard
+                          channels={channelsData || []}
+                          config={config as ChannelConfig}
+                          configKey={key}
+                          isTesting={testMutation.isPending}
+                          isUpdating={updateChannelsMutation.isPending}
+                          key={key}
+                          onAddAction={handleAddAction}
+                          onRemoveAction={handleRemoveAction}
+                          onRemoveChannel={handleRemoveChannel}
+                          onTestNotification={handleTestNotification}
+                          onUpdateChannel={handleUpdateChannel}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="mt-6 flex justify-end">
+                      <AddChannelButton
                         isUpdating={updateChannelsMutation.isPending}
-                        key={key}
-                        onAddAction={handleAddAction}
-                        onRemoveAction={handleRemoveAction}
-                        onRemoveChannel={handleRemoveChannel}
-                        onTestNotification={handleTestNotification}
-                        onUpdateChannel={handleUpdateChannel}
+                        onAdd={handleAddChannel}
                       />
-                    ))}
-                  </div>
-
-                  <div className="mt-6 flex justify-end">
-                    <AddChannelButton
-                      isUpdating={updateChannelsMutation.isPending}
-                      onAdd={handleAddChannel}
-                    />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4 py-8">
-                <p className="text-center text-muted-foreground text-sm">
-                  Connect your Slack workspace to receive notifications for security events and
-                  deploy approvals.
-                </p>
-                <Button
-                  disabled={isConnecting || connectMutation.isPending}
-                  onClick={handleConnect}
-                >
-                  {isConnecting || connectMutation.isPending ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : null}
-                  Connect to Slack
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-8">
+                  <p className="text-center text-muted-foreground text-sm">
+                    Connect your Slack workspace to receive notifications for security events and
+                    deploy approvals.
+                  </p>
+                  <Button
+                    disabled={isConnecting || connectMutation.isPending}
+                    onClick={handleConnect}
+                  >
+                    {isConnecting || connectMutation.isPending ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : null}
+                    Connect to Slack
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ) : null}
       </div>
     </div>

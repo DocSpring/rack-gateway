@@ -7,6 +7,6 @@
  */
 
 export interface HandlersWebAuthnEnrollmentResponse {
-  method_id?: number;
-  status?: string;
+  method_id: number;
+  status: string;
 }

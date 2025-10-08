@@ -197,8 +197,8 @@ func (d *Database) UpdateApprovedCommands(commands []string, updatedByUserID *in
 
 // CircleCISettings contains CircleCI integration configuration.
 type CircleCISettings struct {
-	APIToken        string `json:"api_token"`
-	ApprovalJobName string `json:"approval_job_name"`
+	APIToken        string `json:"api_token" validate:"required"`
+	ApprovalJobName string `json:"approval_job_name" validate:"required"`
 	OrgSlug         string `json:"org_slug,omitempty"`
 }
 

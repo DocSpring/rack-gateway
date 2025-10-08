@@ -7,5 +7,5 @@
  */
 
 export interface HandlersStatusResponse {
-  status?: string;
+  status: string;
 }

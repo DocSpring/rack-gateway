@@ -8,6 +8,6 @@
 import type { HandlersUpdateEnvValuesResponseEnv } from './handlersUpdateEnvValuesResponseEnv';
 
 export interface HandlersUpdateEnvValuesResponse {
-  env?: HandlersUpdateEnvValuesResponseEnv;
+  env: HandlersUpdateEnvValuesResponseEnv;
   release_id?: string;
 }

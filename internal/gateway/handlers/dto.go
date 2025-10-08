@@ -8,15 +8,15 @@ import (
 
 // ErrorResponse represents a standard error payload.
 type ErrorResponse struct {
-	Error string `json:"error"`
+	Error string `json:"error" validate:"required"`
 }
 
 // MFA enrollment and verification payloads.
 type StartTOTPEnrollmentResponse struct {
-	MethodID    int64    `json:"method_id"`
-	Secret      string   `json:"secret"`
-	URI         string   `json:"uri"`
-	BackupCodes []string `json:"backup_codes"`
+	MethodID    int64    `json:"method_id" validate:"required"`
+	Secret      string   `json:"secret" validate:"required"`
+	URI         string   `json:"uri" validate:"required"`
+	BackupCodes []string `json:"backup_codes" validate:"required"`
 }
 
 type ConfirmTOTPEnrollmentRequest struct {
@@ -32,13 +32,13 @@ type StartYubiOTPEnrollmentRequest struct {
 }
 
 type StartYubiOTPEnrollmentResponse struct {
-	MethodID    int64    `json:"method_id"`
+	MethodID    int64    `json:"method_id" validate:"required"`
 	BackupCodes []string `json:"backup_codes,omitempty"`
 }
 
 type StartWebAuthnEnrollmentResponse struct {
-	MethodID         int64       `json:"method_id"`
-	PublicKeyOptions interface{} `json:"public_key_options"`
+	MethodID         int64       `json:"method_id" validate:"required"`
+	PublicKeyOptions interface{} `json:"public_key_options" validate:"required"`
 	BackupCodes      []string    `json:"backup_codes,omitempty"`
 }
 
@@ -54,14 +54,14 @@ type VerifyMFARequest struct {
 }
 
 type VerifyMFAResponse struct {
-	MFAVerifiedAt         time.Time `json:"mfa_verified_at"`
-	RecentStepUpExpiresAt time.Time `json:"recent_step_up_expires_at"`
-	TrustedDeviceCookie   bool      `json:"trusted_device_cookie"`
+	MFAVerifiedAt         time.Time `json:"mfa_verified_at" validate:"required"`
+	RecentStepUpExpiresAt time.Time `json:"recent_step_up_expires_at" validate:"required"`
+	TrustedDeviceCookie   bool      `json:"trusted_device_cookie" validate:"required"`
 }
 
 type WebAuthnAssertionStartResponse struct {
-	Options     interface{} `json:"options"`      // protocol.CredentialAssertion
-	SessionData string      `json:"session_data"` // Serialized session to send back with verification
+	Options     interface{} `json:"options" validate:"required"`      // protocol.CredentialAssertion
+	SessionData string      `json:"session_data" validate:"required"` // Serialized session to send back with verification
 }
 
 type VerifyWebAuthnAssertionRequest struct {
@@ -75,24 +75,24 @@ type UpdateMFAMethodRequest struct {
 }
 
 type BackupCodesResponse struct {
-	BackupCodes []string `json:"backup_codes"`
+	BackupCodes []string `json:"backup_codes" validate:"required"`
 }
 
 type MFAMethodResponse struct {
-	ID          int64      `json:"id"`
-	Type        string     `json:"type"`
+	ID          int64      `json:"id" validate:"required"`
+	Type        string     `json:"type" validate:"required"`
 	Label       string     `json:"label,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	CreatedAt   time.Time  `json:"created_at" validate:"required"`
 	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 }
 
 type TrustedDeviceResponse struct {
-	ID            int64      `json:"id"`
-	Label         string     `json:"label"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID            int64      `json:"id" validate:"required"`
+	Label         string     `json:"label" validate:"required"`
+	CreatedAt     time.Time  `json:"created_at" validate:"required"`
 	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt     time.Time  `json:"expires_at"`
+	ExpiresAt     time.Time  `json:"expires_at" validate:"required"`
 	IPAddress     string     `json:"ip_address,omitempty"`
 	UserAgent     string     `json:"user_agent,omitempty"`
 	RevokedAt     *time.Time `json:"revoked_at,omitempty"`
@@ -100,65 +100,65 @@ type TrustedDeviceResponse struct {
 }
 
 type MFABackupCodesSummary struct {
-	Total           int        `json:"total"`
-	Unused          int        `json:"unused"`
+	Total           int        `json:"total" validate:"required"`
+	Unused          int        `json:"unused" validate:"required"`
 	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
 	LastGeneratedAt *time.Time `json:"last_generated_at,omitempty"`
 }
 
 type MFAStatusResponse struct {
-	Enrolled              bool                    `json:"enrolled"`
-	Required              bool                    `json:"required"`
-	Methods               []MFAMethodResponse     `json:"methods"`
-	TrustedDevices        []TrustedDeviceResponse `json:"trusted_devices"`
-	BackupCodes           MFABackupCodesSummary   `json:"backup_codes"`
+	Enrolled              bool                    `json:"enrolled" validate:"required"`
+	Required              bool                    `json:"required" validate:"required"`
+	Methods               []MFAMethodResponse     `json:"methods" validate:"required"`
+	TrustedDevices        []TrustedDeviceResponse `json:"trusted_devices" validate:"required"`
+	BackupCodes           MFABackupCodesSummary   `json:"backup_codes" validate:"required"`
 	RecentStepUpExpiresAt *time.Time              `json:"recent_step_up_expires_at,omitempty"`
 	PreferredMethod       *string                 `json:"preferred_method,omitempty"`
-	WebAuthnAvailable     bool                    `json:"webauthn_available"`
+	WebAuthnAvailable     bool                    `json:"webauthn_available" validate:"required"`
 }
 
 // StatusResponse is returned for simple acknowledgment payloads.
 type StatusResponse struct {
-	Status string `json:"status"`
+	Status string `json:"status" validate:"required"`
 }
 
 // WebAuthnEnrollmentResponse is returned after successful WebAuthn enrollment
 type WebAuthnEnrollmentResponse struct {
-	Status   string `json:"status"`
-	MethodID int64  `json:"method_id"`
+	Status   string `json:"status" validate:"required"`
+	MethodID int64  `json:"method_id" validate:"required"`
 }
 
 // HealthResponse represents the health check payload.
 type HealthResponse struct {
-	Status  string `json:"status"`
-	Service string `json:"service"`
+	Status  string `json:"status" validate:"required"`
+	Service string `json:"service" validate:"required"`
 }
 
 // RackSummary describes the default rack available to the current user.
 type RackSummary struct {
-	Name  string `json:"name"`
-	Alias string `json:"alias"`
-	Host  string `json:"host"`
+	Name  string `json:"name" validate:"required"`
+	Alias string `json:"alias" validate:"required"`
+	Host  string `json:"host" validate:"required"`
 }
 
 // CurrentUserResponse describes the authenticated user's profile and permissions.
 type CurrentUserResponse struct {
-	Email                  string       `json:"email"`
-	Name                   string       `json:"name"`
-	Roles                  []string     `json:"roles"`
-	Permissions            []string     `json:"permissions"`
+	Email                  string       `json:"email" validate:"required"`
+	Name                   string       `json:"name" validate:"required"`
+	Roles                  []string     `json:"roles" validate:"required"`
+	Permissions            []string     `json:"permissions" validate:"required"`
 	Rack                   *RackSummary `json:"rack,omitempty"`
-	MFAEnrolled            bool         `json:"mfa_enrolled"`
-	MFARequired            bool         `json:"mfa_required"`
+	MFAEnrolled            bool         `json:"mfa_enrolled" validate:"required"`
+	MFARequired            bool         `json:"mfa_required" validate:"required"`
 	PreferredMFAMethod     *string      `json:"preferred_mfa_method,omitempty"`
 	RecentStepUpExpiresAt  *time.Time   `json:"recent_step_up_expires_at,omitempty"`
-	HasTrustedDevice       bool         `json:"has_trusted_device"`
-	DeployApprovalsEnabled bool         `json:"deploy_approvals_enabled"`
+	HasTrustedDevice       bool         `json:"has_trusted_device" validate:"required"`
+	DeployApprovalsEnabled bool         `json:"deploy_approvals_enabled" validate:"required"`
 }
 
 // EnvValuesResponse wraps environment variable key/value pairs.
 type EnvValuesResponse struct {
-	Env map[string]string `json:"env"`
+	Env map[string]string `json:"env" validate:"required"`
 }
 
 // UpdateEnvValuesRequest defines the payload for updating environment variables.
@@ -170,7 +170,7 @@ type UpdateEnvValuesRequest struct {
 
 // UpdateEnvValuesResponse is returned after successfully creating a new release with updated env vars.
 type UpdateEnvValuesResponse struct {
-	Env       map[string]string `json:"env"`
+	Env       map[string]string `json:"env" validate:"required"`
 	ReleaseID string            `json:"release_id,omitempty"`
 }
 
@@ -201,9 +201,9 @@ type CLILoginResponse struct {
 
 // UserSummary represents the minimal user payload returned by admin endpoints.
 type UserSummary struct {
-	Email          string   `json:"email"`
-	Name           string   `json:"name"`
-	Roles          []string `json:"roles"`
+	Email          string   `json:"email" validate:"required"`
+	Name           string   `json:"name" validate:"required"`
+	Roles          []string `json:"roles" validate:"required"`
 	CreatedByEmail string   `json:"created_by_email,omitempty"`
 }
 
@@ -234,11 +234,11 @@ type CreateAPITokenRequest struct {
 
 // CreateAPITokenResponse represents the response body for API token creation.
 type CreateAPITokenResponse struct {
-	Token       string      `json:"token"`
-	ID          int64       `json:"id"`
-	Name        string      `json:"name"`
-	Permissions []string    `json:"permissions"`
-	APIToken    db.APIToken `json:"api_token"`
+	Token       string      `json:"token" validate:"required"`
+	ID          int64       `json:"id" validate:"required"`
+	Name        string      `json:"name" validate:"required"`
+	Permissions []string    `json:"permissions" validate:"required"`
+	APIToken    db.APIToken `json:"api_token" validate:"required"`
 }
 
 // UpdateAPITokenRequest defines the payload for updating API token metadata.
@@ -249,36 +249,36 @@ type UpdateAPITokenRequest struct {
 
 // TokenPermissionMetadata includes the permission catalog for API tokens.
 type TokenPermissionMetadata struct {
-	Permissions        []string         `json:"permissions"`
-	Roles              []RoleDescriptor `json:"roles"`
-	UserRoles          []string         `json:"user_roles"`
-	UserPermissions    []string         `json:"user_permissions"`
-	DefaultPermissions []string         `json:"default_permissions"`
+	Permissions        []string         `json:"permissions" validate:"required"`
+	Roles              []RoleDescriptor `json:"roles" validate:"required"`
+	UserRoles          []string         `json:"user_roles" validate:"required"`
+	UserPermissions    []string         `json:"user_permissions" validate:"required"`
+	DefaultPermissions []string         `json:"default_permissions" validate:"required"`
 }
 
 // RoleDescriptor describes an RBAC role exposed via the admin API.
 type RoleDescriptor struct {
-	Name        string   `json:"name"`
-	Label       string   `json:"label"`
-	Description string   `json:"description"`
-	Permissions []string `json:"permissions"`
+	Name        string   `json:"name" validate:"required"`
+	Label       string   `json:"label" validate:"required"`
+	Description string   `json:"description" validate:"required"`
+	Permissions []string `json:"permissions" validate:"required"`
 }
 
 // AuditLogsResponse wraps paginated audit logs.
 type AuditLogsResponse struct {
-	Logs  []*db.AuditLog `json:"logs"`
-	Total int            `json:"total"`
-	Page  int            `json:"page"`
-	Limit int            `json:"limit"`
+	Logs  []*db.AuditLog `json:"logs" validate:"required"`
+	Total int            `json:"total" validate:"required"`
+	Page  int            `json:"page" validate:"required"`
+	Limit int            `json:"limit" validate:"required"`
 }
 
 // UserSessionResponse describes an individual active user session.
 type UserSessionResponse struct {
-	ID        int64       `json:"id"`
-	CreatedAt string      `json:"created_at"`
-	LastSeen  string      `json:"last_seen_at"`
-	ExpiresAt string      `json:"expires_at"`
-	Channel   string      `json:"channel"`
+	ID        int64       `json:"id" validate:"required"`
+	CreatedAt string      `json:"created_at" validate:"required"`
+	LastSeen  string      `json:"last_seen_at" validate:"required"`
+	ExpiresAt string      `json:"expires_at" validate:"required"`
+	Channel   string      `json:"channel" validate:"required"`
 	IPAddress string      `json:"ip_address,omitempty"`
 	UserAgent string      `json:"user_agent,omitempty"`
 	Metadata  interface{} `json:"metadata,omitempty"`
@@ -286,12 +286,12 @@ type UserSessionResponse struct {
 
 // RevokeSessionResponse reports the outcome of a single-session revocation.
 type RevokeSessionResponse struct {
-	Revoked bool `json:"revoked"`
+	Revoked bool `json:"revoked" validate:"required"`
 }
 
 // RevokeAllSessionsResponse reports the number of sessions revoked in bulk.
 type RevokeAllSessionsResponse struct {
-	RevokedCount int64 `json:"revoked_count"`
+	RevokedCount int64 `json:"revoked_count" validate:"required"`
 }
 
 // UpdateProtectedEnvVarsRequest defines the payload for updating protected environment variables.
@@ -338,16 +338,16 @@ type UpdateDeployApprovalRequestStatusRequest struct {
 
 // DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
 type DeployApprovalRequestResponse struct {
-	PublicID                  string                 `json:"public_id"`
-	Message                   string                 `json:"message"`
-	Status                    string                 `json:"status"`
-	CreatedAt                 time.Time              `json:"created_at" ts_type:"string"`
-	UpdatedAt                 time.Time              `json:"updated_at" ts_type:"string"`
+	PublicID                  string                 `json:"public_id" validate:"required"`
+	Message                   string                 `json:"message" validate:"required"`
+	Status                    string                 `json:"status" validate:"required"`
+	CreatedAt                 time.Time              `json:"created_at" ts_type:"string" validate:"required"`
+	UpdatedAt                 time.Time              `json:"updated_at" ts_type:"string" validate:"required"`
 	CreatedByEmail            string                 `json:"created_by_email,omitempty"`
 	CreatedByName             string                 `json:"created_by_name,omitempty"`
 	CreatedByAPITokenPublicID string                 `json:"created_by_api_token_id,omitempty"`
 	CreatedByAPITokenName     string                 `json:"created_by_api_token_name,omitempty"`
-	TargetAPITokenID          string                 `json:"target_api_token_id"`
+	TargetAPITokenID          string                 `json:"target_api_token_id" validate:"required"`
 	TargetAPITokenName        string                 `json:"target_api_token_name,omitempty"`
 	ApprovedByEmail           string                 `json:"approved_by_email,omitempty"`
 	ApprovedByName            string                 `json:"approved_by_name,omitempty"`
@@ -357,7 +357,7 @@ type DeployApprovalRequestResponse struct {
 	RejectedByName            string                 `json:"rejected_by_name,omitempty"`
 	RejectedAt                *time.Time             `json:"rejected_at,omitempty" ts_type:"string"`
 	ApprovalNotes             string                 `json:"approval_notes,omitempty"`
-	GitCommitHash             string                 `json:"git_commit_hash"`
+	GitCommitHash             string                 `json:"git_commit_hash" validate:"required"`
 	GitBranch                 string                 `json:"git_branch,omitempty"`
 	PipelineURL               string                 `json:"pipeline_url,omitempty"`
 	CIProvider                string                 `json:"ci_provider,omitempty"`
@@ -371,5 +371,5 @@ type DeployApprovalRequestResponse struct {
 }
 
 type DeployApprovalRequestList struct {
-	DeployApprovalRequests []DeployApprovalRequestResponse `json:"deploy_approval_requests"`
+	DeployApprovalRequests []DeployApprovalRequestResponse `json:"deploy_approval_requests" validate:"required"`
 }

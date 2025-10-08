@@ -7,8 +7,8 @@
  */
 
 export interface HandlersStartTOTPEnrollmentResponse {
-  backup_codes?: string[];
-  method_id?: number;
-  secret?: string;
-  uri?: string;
+  backup_codes: string[];
+  method_id: number;
+  secret: string;
+  uri: string;
 }

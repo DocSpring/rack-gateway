@@ -7,7 +7,7 @@
  */
 
 export interface AuthLoginStartResponse {
-  auth_url?: string;
-  code_verifier?: string;
-  state?: string;
+  auth_url: string;
+  code_verifier: string;
+  state: string;
 }

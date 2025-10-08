@@ -1426,8 +1426,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/handlers.StatusResponse"
                         }
                     },
                     "400": {
@@ -1724,8 +1723,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/handlers.StatusResponse"
                         }
                     },
                     "400": {
@@ -3131,6 +3129,12 @@
     "definitions": {
         "auth.LoginResponse": {
             "type": "object",
+            "required": [
+                "email",
+                "expires_at",
+                "name",
+                "token"
+            ],
             "properties": {
                 "email": {
                     "type": "string"
@@ -3148,6 +3152,11 @@
         },
         "auth.LoginStartResponse": {
             "type": "object",
+            "required": [
+                "auth_url",
+                "code_verifier",
+                "state"
+            ],
             "properties": {
                 "auth_url": {
                     "type": "string"
@@ -3205,7 +3214,7 @@
             "type": "object",
             "properties": {
                 "action": {
-                    "description": "e.g., \"env.read\", \"user.create\", \"auth.failed\"",
+                    "description": "e.g., \"env.read\", \"user.create\", \"login.oauth_failed\"",
                     "type": "string"
                 },
                 "action_type": {
@@ -3270,6 +3279,10 @@
         },
         "db.CircleCISettings": {
             "type": "object",
+            "required": [
+                "api_token",
+                "approval_job_name"
+            ],
             "properties": {
                 "api_token": {
                     "type": "string"
@@ -3374,6 +3387,12 @@
         },
         "handlers.AuditLogsResponse": {
             "type": "object",
+            "required": [
+                "limit",
+                "logs",
+                "page",
+                "total"
+            ],
             "properties": {
                 "limit": {
                     "type": "integer"
@@ -3394,6 +3413,9 @@
         },
         "handlers.BackupCodesResponse": {
             "type": "object",
+            "required": [
+                "backup_codes"
+            ],
             "properties": {
                 "backup_codes": {
                     "type": "array",
@@ -3489,6 +3511,13 @@
         },
         "handlers.CreateAPITokenResponse": {
             "type": "object",
+            "required": [
+                "api_token",
+                "id",
+                "name",
+                "permissions",
+                "token"
+            ],
             "properties": {
                 "api_token": {
                     "$ref": "#/definitions/db.APIToken"
@@ -3569,6 +3598,16 @@
         },
         "handlers.CurrentUserResponse": {
             "type": "object",
+            "required": [
+                "deploy_approvals_enabled",
+                "email",
+                "has_trusted_device",
+                "mfa_enrolled",
+                "mfa_required",
+                "name",
+                "permissions",
+                "roles"
+            ],
             "properties": {
                 "deploy_approvals_enabled": {
                     "type": "boolean"
@@ -3613,6 +3652,9 @@
         },
         "handlers.DeployApprovalRequestList": {
             "type": "object",
+            "required": [
+                "deploy_approval_requests"
+            ],
             "properties": {
                 "deploy_approval_requests": {
                     "type": "array",
@@ -3624,6 +3666,15 @@
         },
         "handlers.DeployApprovalRequestResponse": {
             "type": "object",
+            "required": [
+                "created_at",
+                "git_commit_hash",
+                "message",
+                "public_id",
+                "status",
+                "target_api_token_id",
+                "updated_at"
+            ],
             "properties": {
                 "app": {
                     "type": "string"
@@ -3720,6 +3771,9 @@
         },
         "handlers.EnvValuesResponse": {
             "type": "object",
+            "required": [
+                "env"
+            ],
             "properties": {
                 "env": {
                     "type": "object",
@@ -3731,6 +3785,9 @@
         },
         "handlers.ErrorResponse": {
             "type": "object",
+            "required": [
+                "error"
+            ],
             "properties": {
                 "error": {
                     "type": "string"
@@ -3739,6 +3796,10 @@
         },
         "handlers.HealthResponse": {
             "type": "object",
+            "required": [
+                "service",
+                "status"
+            ],
             "properties": {
                 "service": {
                     "type": "string"
@@ -3761,6 +3822,10 @@
         },
         "handlers.MFABackupCodesSummary": {
             "type": "object",
+            "required": [
+                "total",
+                "unused"
+            ],
             "properties": {
                 "last_generated_at": {
                     "type": "string"
@@ -3778,6 +3843,11 @@
         },
         "handlers.MFAMethodResponse": {
             "type": "object",
+            "required": [
+                "created_at",
+                "id",
+                "type"
+            ],
             "properties": {
                 "confirmed_at": {
                     "type": "string"
@@ -3801,6 +3871,14 @@
         },
         "handlers.MFAStatusResponse": {
             "type": "object",
+            "required": [
+                "backup_codes",
+                "enrolled",
+                "methods",
+                "required",
+                "trusted_devices",
+                "webauthn_available"
+            ],
             "properties": {
                 "backup_codes": {
                     "$ref": "#/definitions/handlers.MFABackupCodesSummary"
@@ -3836,6 +3914,11 @@
         },
         "handlers.RackSummary": {
             "type": "object",
+            "required": [
+                "alias",
+                "host",
+                "name"
+            ],
             "properties": {
                 "alias": {
                     "type": "string"
@@ -3850,6 +3933,9 @@
         },
         "handlers.RevokeAllSessionsResponse": {
             "type": "object",
+            "required": [
+                "revoked_count"
+            ],
             "properties": {
                 "revoked_count": {
                     "type": "integer"
@@ -3858,6 +3944,9 @@
         },
         "handlers.RevokeSessionResponse": {
             "type": "object",
+            "required": [
+                "revoked"
+            ],
             "properties": {
                 "revoked": {
                     "type": "boolean"
@@ -3866,6 +3955,12 @@
         },
         "handlers.RoleDescriptor": {
             "type": "object",
+            "required": [
+                "description",
+                "label",
+                "name",
+                "permissions"
+            ],
             "properties": {
                 "description": {
                     "type": "string"
@@ -3886,6 +3981,12 @@
         },
         "handlers.StartTOTPEnrollmentResponse": {
             "type": "object",
+            "required": [
+                "backup_codes",
+                "method_id",
+                "secret",
+                "uri"
+            ],
             "properties": {
                 "backup_codes": {
                     "type": "array",
@@ -3906,6 +4007,10 @@
         },
         "handlers.StartWebAuthnEnrollmentResponse": {
             "type": "object",
+            "required": [
+                "method_id",
+                "public_key_options"
+            ],
             "properties": {
                 "backup_codes": {
                     "type": "array",
@@ -3935,6 +4040,9 @@
         },
         "handlers.StartYubiOTPEnrollmentResponse": {
             "type": "object",
+            "required": [
+                "method_id"
+            ],
             "properties": {
                 "backup_codes": {
                     "type": "array",
@@ -3949,6 +4057,9 @@
         },
         "handlers.StatusResponse": {
             "type": "object",
+            "required": [
+                "status"
+            ],
             "properties": {
                 "status": {
                     "type": "string"
@@ -3957,6 +4068,13 @@
         },
         "handlers.TokenPermissionMetadata": {
             "type": "object",
+            "required": [
+                "default_permissions",
+                "permissions",
+                "roles",
+                "user_permissions",
+                "user_roles"
+            ],
             "properties": {
                 "default_permissions": {
                     "type": "array",
@@ -3992,6 +4110,12 @@
         },
         "handlers.TrustedDeviceResponse": {
             "type": "object",
+            "required": [
+                "created_at",
+                "expires_at",
+                "id",
+                "label"
+            ],
             "properties": {
                 "created_at": {
                     "type": "string"
@@ -4088,6 +4212,9 @@
         },
         "handlers.UpdateEnvValuesResponse": {
             "type": "object",
+            "required": [
+                "env"
+            ],
             "properties": {
                 "env": {
                     "type": "object",
@@ -4168,6 +4295,13 @@
         },
         "handlers.UserSessionResponse": {
             "type": "object",
+            "required": [
+                "channel",
+                "created_at",
+                "expires_at",
+                "id",
+                "last_seen_at"
+            ],
             "properties": {
                 "channel": {
                     "type": "string"
@@ -4195,6 +4329,11 @@
         },
         "handlers.UserSummary": {
             "type": "object",
+            "required": [
+                "email",
+                "name",
+                "roles"
+            ],
             "properties": {
                 "created_by_email": {
                     "type": "string"
@@ -4229,6 +4368,11 @@
         },
         "handlers.VerifyMFAResponse": {
             "type": "object",
+            "required": [
+                "mfa_verified_at",
+                "recent_step_up_expires_at",
+                "trusted_device_cookie"
+            ],
             "properties": {
                 "mfa_verified_at": {
                     "type": "string"
@@ -4261,6 +4405,10 @@
         },
         "handlers.WebAuthnAssertionStartResponse": {
             "type": "object",
+            "required": [
+                "options",
+                "session_data"
+            ],
             "properties": {
                 "options": {
                     "description": "protocol.CredentialAssertion"
@@ -4273,6 +4421,10 @@
         },
         "handlers.WebAuthnEnrollmentResponse": {
             "type": "object",
+            "required": [
+                "method_id",
+                "status"
+            ],
             "properties": {
                 "method_id": {
                     "type": "integer"

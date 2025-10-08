@@ -10,12 +10,12 @@ import type { HandlersMFAMethodResponse } from './handlersMFAMethodResponse';
 import type { HandlersTrustedDeviceResponse } from './handlersTrustedDeviceResponse';
 
 export interface HandlersMFAStatusResponse {
-  backup_codes?: HandlersMFABackupCodesSummary;
-  enrolled?: boolean;
-  methods?: HandlersMFAMethodResponse[];
+  backup_codes: HandlersMFABackupCodesSummary;
+  enrolled: boolean;
+  methods: HandlersMFAMethodResponse[];
   preferred_method?: string;
   recent_step_up_expires_at?: string;
-  required?: boolean;
-  trusted_devices?: HandlersTrustedDeviceResponse[];
-  webauthn_available?: boolean;
+  required: boolean;
+  trusted_devices: HandlersTrustedDeviceResponse[];
+  webauthn_available: boolean;
 }

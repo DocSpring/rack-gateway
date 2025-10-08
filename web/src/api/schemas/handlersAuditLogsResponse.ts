@@ -8,8 +8,8 @@
 import type { DbAuditLog } from './dbAuditLog';
 
 export interface HandlersAuditLogsResponse {
-  limit?: number;
-  logs?: DbAuditLog[];
-  page?: number;
-  total?: number;
+  limit: number;
+  logs: DbAuditLog[];
+  page: number;
+  total: number;
 }

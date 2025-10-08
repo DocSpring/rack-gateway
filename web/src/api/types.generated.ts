@@ -1589,9 +1589,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            [key: string]: unknown;
-                        };
+                        "application/json": components["schemas"]["handlers.StatusResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -1943,9 +1941,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            [key: string]: unknown;
-                        };
+                        "application/json": components["schemas"]["handlers.StatusResponse"];
                     };
                 };
                 /** @description Bad Request */
@@ -3820,15 +3816,15 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         "auth.LoginResponse": {
-            email?: string;
-            expires_at?: string;
-            name?: string;
-            token?: string;
+            email: string;
+            expires_at: string;
+            name: string;
+            token: string;
         };
         "auth.LoginStartResponse": {
-            auth_url?: string;
-            code_verifier?: string;
-            state?: string;
+            auth_url: string;
+            code_verifier: string;
+            state: string;
         };
         "db.APIToken": {
             created_at?: string;
@@ -3844,7 +3840,7 @@ export interface components {
             user_id?: number;
         };
         "db.AuditLog": {
-            /** @description e.g., "env.read", "user.create", "auth.failed" */
+            /** @description e.g., "env.read", "user.create", "login.oauth_failed" */
             action?: string;
             /** @description "convox", "users", "auth" */
             action_type?: string;
@@ -3870,8 +3866,8 @@ export interface components {
             user_name?: string;
         };
         "db.CircleCISettings": {
-            api_token?: string;
-            approval_job_name?: string;
+            api_token: string;
+            approval_job_name: string;
             org_slug?: string;
         };
         "db.CreatorInfo": {
@@ -3905,13 +3901,13 @@ export interface components {
             updated_at?: string;
         };
         "handlers.AuditLogsResponse": {
-            limit?: number;
-            logs?: components["schemas"]["db.AuditLog"][];
-            page?: number;
-            total?: number;
+            limit: number;
+            logs: components["schemas"]["db.AuditLog"][];
+            page: number;
+            total: number;
         };
         "handlers.BackupCodesResponse": {
-            backup_codes?: string[];
+            backup_codes: string[];
         };
         "handlers.CLILoginCompleteRequest": {
             client_version?: string;
@@ -3938,11 +3934,11 @@ export interface components {
             user_email?: string;
         };
         "handlers.CreateAPITokenResponse": {
-            api_token?: components["schemas"]["db.APIToken"];
-            id?: number;
-            name?: string;
-            permissions?: string[];
-            token?: string;
+            api_token: components["schemas"]["db.APIToken"];
+            id: number;
+            name: string;
+            permissions: string[];
+            token: string;
         };
         "handlers.CreateDeployApprovalRequestRequest": {
             ci_metadata?: {
@@ -3962,20 +3958,20 @@ export interface components {
             roles: string[];
         };
         "handlers.CurrentUserResponse": {
-            deploy_approvals_enabled?: boolean;
-            email?: string;
-            has_trusted_device?: boolean;
-            mfa_enrolled?: boolean;
-            mfa_required?: boolean;
-            name?: string;
-            permissions?: string[];
+            deploy_approvals_enabled: boolean;
+            email: string;
+            has_trusted_device: boolean;
+            mfa_enrolled: boolean;
+            mfa_required: boolean;
+            name: string;
+            permissions: string[];
             preferred_mfa_method?: string;
             rack?: components["schemas"]["handlers.RackSummary"];
             recent_step_up_expires_at?: string;
-            roles?: string[];
+            roles: string[];
         };
         "handlers.DeployApprovalRequestList": {
-            deploy_approval_requests?: components["schemas"]["handlers.DeployApprovalRequestResponse"][];
+            deploy_approval_requests: components["schemas"]["handlers.DeployApprovalRequestResponse"][];
         };
         "handlers.DeployApprovalRequestResponse": {
             app?: string;
@@ -3989,16 +3985,16 @@ export interface components {
                 [key: string]: unknown;
             };
             ci_provider?: string;
-            created_at?: string;
+            created_at: string;
             created_by_api_token_id?: string;
             created_by_api_token_name?: string;
             created_by_email?: string;
             created_by_name?: string;
             git_branch?: string;
-            git_commit_hash?: string;
-            message?: string;
+            git_commit_hash: string;
+            message: string;
             pipeline_url?: string;
-            public_id?: string;
+            public_id: string;
             rejected_at?: string;
             rejected_by_email?: string;
             rejected_by_name?: string;
@@ -4006,22 +4002,22 @@ export interface components {
             release_id?: string;
             release_promoted_at?: string;
             release_promoted_by_api_token_id?: number;
-            status?: string;
-            target_api_token_id?: string;
+            status: string;
+            target_api_token_id: string;
             target_api_token_name?: string;
-            updated_at?: string;
+            updated_at: string;
         };
         "handlers.EnvValuesResponse": {
-            env?: {
+            env: {
                 [key: string]: string;
             };
         };
         "handlers.ErrorResponse": {
-            error?: string;
+            error: string;
         };
         "handlers.HealthResponse": {
-            service?: string;
-            status?: string;
+            service: string;
+            status: string;
         };
         "handlers.LockUserRequest": {
             reason: string;
@@ -4029,54 +4025,54 @@ export interface components {
         "handlers.MFABackupCodesSummary": {
             last_generated_at?: string;
             last_used_at?: string;
-            total?: number;
-            unused?: number;
+            total: number;
+            unused: number;
         };
         "handlers.MFAMethodResponse": {
             confirmed_at?: string;
-            created_at?: string;
-            id?: number;
+            created_at: string;
+            id: number;
             label?: string;
             last_used_at?: string;
-            type?: string;
+            type: string;
         };
         "handlers.MFAStatusResponse": {
-            backup_codes?: components["schemas"]["handlers.MFABackupCodesSummary"];
-            enrolled?: boolean;
-            methods?: components["schemas"]["handlers.MFAMethodResponse"][];
+            backup_codes: components["schemas"]["handlers.MFABackupCodesSummary"];
+            enrolled: boolean;
+            methods: components["schemas"]["handlers.MFAMethodResponse"][];
             preferred_method?: string;
             recent_step_up_expires_at?: string;
-            required?: boolean;
-            trusted_devices?: components["schemas"]["handlers.TrustedDeviceResponse"][];
-            webauthn_available?: boolean;
+            required: boolean;
+            trusted_devices: components["schemas"]["handlers.TrustedDeviceResponse"][];
+            webauthn_available: boolean;
         };
         "handlers.RackSummary": {
-            alias?: string;
-            host?: string;
-            name?: string;
+            alias: string;
+            host: string;
+            name: string;
         };
         "handlers.RevokeAllSessionsResponse": {
-            revoked_count?: number;
+            revoked_count: number;
         };
         "handlers.RevokeSessionResponse": {
-            revoked?: boolean;
+            revoked: boolean;
         };
         "handlers.RoleDescriptor": {
-            description?: string;
-            label?: string;
-            name?: string;
-            permissions?: string[];
+            description: string;
+            label: string;
+            name: string;
+            permissions: string[];
         };
         "handlers.StartTOTPEnrollmentResponse": {
-            backup_codes?: string[];
-            method_id?: number;
-            secret?: string;
-            uri?: string;
+            backup_codes: string[];
+            method_id: number;
+            secret: string;
+            uri: string;
         };
         "handlers.StartWebAuthnEnrollmentResponse": {
             backup_codes?: string[];
-            method_id?: number;
-            public_key_options?: unknown;
+            method_id: number;
+            public_key_options: unknown;
         };
         "handlers.StartYubiOTPEnrollmentRequest": {
             label?: string;
@@ -4084,24 +4080,24 @@ export interface components {
         };
         "handlers.StartYubiOTPEnrollmentResponse": {
             backup_codes?: string[];
-            method_id?: number;
+            method_id: number;
         };
         "handlers.StatusResponse": {
-            status?: string;
+            status: string;
         };
         "handlers.TokenPermissionMetadata": {
-            default_permissions?: string[];
-            permissions?: string[];
-            roles?: components["schemas"]["handlers.RoleDescriptor"][];
-            user_permissions?: string[];
-            user_roles?: string[];
+            default_permissions: string[];
+            permissions: string[];
+            roles: components["schemas"]["handlers.RoleDescriptor"][];
+            user_permissions: string[];
+            user_roles: string[];
         };
         "handlers.TrustedDeviceResponse": {
-            created_at?: string;
-            expires_at?: string;
-            id?: number;
+            created_at: string;
+            expires_at: string;
+            id: number;
             ip_address?: string;
-            label?: string;
+            label: string;
             last_used_at?: string;
             revoked_at?: string;
             revoked_reason?: string;
@@ -4128,7 +4124,7 @@ export interface components {
             };
         };
         "handlers.UpdateEnvValuesResponse": {
-            env?: {
+            env: {
                 [key: string]: string;
             };
             release_id?: string;
@@ -4154,29 +4150,29 @@ export interface components {
             roles: string[];
         };
         "handlers.UserSessionResponse": {
-            channel?: string;
-            created_at?: string;
-            expires_at?: string;
-            id?: number;
+            channel: string;
+            created_at: string;
+            expires_at: string;
+            id: number;
             ip_address?: string;
-            last_seen_at?: string;
+            last_seen_at: string;
             metadata?: unknown;
             user_agent?: string;
         };
         "handlers.UserSummary": {
             created_by_email?: string;
-            email?: string;
-            name?: string;
-            roles?: string[];
+            email: string;
+            name: string;
+            roles: string[];
         };
         "handlers.VerifyMFARequest": {
             code: string;
             trust_device?: boolean;
         };
         "handlers.VerifyMFAResponse": {
-            mfa_verified_at?: string;
-            recent_step_up_expires_at?: string;
-            trusted_device_cookie?: boolean;
+            mfa_verified_at: string;
+            recent_step_up_expires_at: string;
+            trusted_device_cookie: boolean;
         };
         "handlers.VerifyWebAuthnAssertionRequest": {
             assertion_response: string;
@@ -4185,13 +4181,13 @@ export interface components {
         };
         "handlers.WebAuthnAssertionStartResponse": {
             /** @description protocol.CredentialAssertion */
-            options?: unknown;
+            options: unknown;
             /** @description Serialized session to send back with verification */
-            session_data?: string;
+            session_data: string;
         };
         "handlers.WebAuthnEnrollmentResponse": {
-            method_id?: number;
-            status?: string;
+            method_id: number;
+            status: string;
         };
     };
     responses: never;

@@ -8,5 +8,5 @@
 
 export interface HandlersStartYubiOTPEnrollmentResponse {
   backup_codes?: string[];
-  method_id?: number;
+  method_id: number;
 }

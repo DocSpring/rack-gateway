@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
-import { UuidCell } from '@/components/uuid-cell'
 import { Badge, type badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 import { UserMetaCell } from '@/components/user-meta-cell'
+import { UuidCell } from '@/components/uuid-cell'
 import { useAuth } from '@/contexts/auth-context'
 import { useStepUp } from '@/contexts/step-up-context'
 import {
@@ -319,7 +319,8 @@ export function DeployApprovalRequestsPage() {
           <DialogHeader>
             <DialogTitle>Reject deploy approval request</DialogTitle>
             <DialogDescription>
-              Provide an optional reason for rejecting request {rejectRequest?.public_id ?? '—'}.
+              Provide an optional reason for rejecting request{' '}
+              {rejectRequest ? rejectRequest.public_id : '—'}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -341,7 +342,7 @@ export function DeployApprovalRequestsPage() {
             <Button
               disabled={rejectMutation.isPending}
               onClick={() => {
-                if (!rejectRequest || !rejectRequest.public_id) {
+                if (!rejectRequest) {
                   return
                 }
                 submitRejection(rejectRequest.public_id, rejectNotes).catch(() => {
@@ -444,8 +445,20 @@ export function DeployApprovalRequestsPage() {
               <DetailRow label="Reviewer Notes" value={selectedRequest.approval_notes ?? '—'} />
 
               {selectedRequest.app && <DetailRow label="App" value={selectedRequest.app} />}
-              {selectedRequest.build_id && <DetailRow label="Build ID" value={selectedRequest.build_id} valueClassName="font-mono" />}
-              {selectedRequest.release_id && <DetailRow label="Release ID" value={selectedRequest.release_id} valueClassName="font-mono" />}
+              {selectedRequest.build_id && (
+                <DetailRow
+                  label="Build ID"
+                  value={selectedRequest.build_id}
+                  valueClassName="font-mono"
+                />
+              )}
+              {selectedRequest.release_id && (
+                <DetailRow
+                  label="Release ID"
+                  value={selectedRequest.release_id}
+                  valueClassName="font-mono"
+                />
+              )}
             </div>
           )}
           <div className="mt-2 flex justify-end">
@@ -470,7 +483,6 @@ type DeployApprovalRequestRowProps = {
   onSelect: (request: DeployApprovalRequest) => void
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Row component consolidates UI logic
 function DeployApprovalRequestRow({
   request,
   approveDisabled,
@@ -482,9 +494,9 @@ function DeployApprovalRequestRow({
   onSelect,
 }: DeployApprovalRequestRowProps) {
   const publicId = request.public_id
-  const message = request.message ?? '(no message provided)'
+  const message = request.message
   const tokenName = request.target_api_token_name ?? 'Unknown token'
-  const tokenId = request.target_api_token_id ?? undefined
+  const tokenId = request.target_api_token_id
   const status = request.status ?? 'unknown'
   const normalizedStatus = status.toLowerCase()
   const canApprove = normalizedStatus === 'pending'
@@ -515,7 +527,7 @@ function DeployApprovalRequestRow({
     }
   }
 
-  const shortCommit = request.git_commit_hash?.substring(0, 7) ?? '—'
+  const shortCommit = request.git_commit_hash.substring(0, 7)
   const gitBranch = request.git_branch ?? '—'
 
   return (
@@ -528,12 +540,12 @@ function DeployApprovalRequestRow({
       tabIndex={0}
     >
       <TableCell>
-        <UuidCell uuid={publicId} label="Request ID" />
+        <UuidCell label="Request ID" uuid={publicId} />
       </TableCell>
       <TableCell className="max-w-xs truncate" title={message}>
         {message}
       </TableCell>
-      <TableCell className="font-mono text-sm" title={request.git_commit_hash ?? undefined}>
+      <TableCell className="font-mono text-sm" title={request.git_commit_hash}>
         {shortCommit}
       </TableCell>
       <TableCell className="font-mono text-sm">{gitBranch}</TableCell>

@@ -7,5 +7,5 @@
  */
 
 export interface HandlersErrorResponse {
-  error?: string;
+  error: string;
 }

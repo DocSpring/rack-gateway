@@ -7,5 +7,5 @@
  */
 
 export interface HandlersRevokeAllSessionsResponse {
-  revoked_count?: number;
+  revoked_count: number;
 }

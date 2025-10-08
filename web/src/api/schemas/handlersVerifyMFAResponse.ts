@@ -7,7 +7,7 @@
  */
 
 export interface HandlersVerifyMFAResponse {
-  mfa_verified_at?: string;
-  recent_step_up_expires_at?: string;
-  trusted_device_cookie?: boolean;
+  mfa_verified_at: string;
+  recent_step_up_expires_at: string;
+  trusted_device_cookie: boolean;
 }

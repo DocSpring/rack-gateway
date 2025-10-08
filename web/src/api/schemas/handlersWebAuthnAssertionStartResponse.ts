@@ -8,7 +8,7 @@
 
 export interface HandlersWebAuthnAssertionStartResponse {
   /** protocol.CredentialAssertion */
-  options?: unknown;
+  options: unknown;
   /** Serialized session to send back with verification */
-  session_data?: string;
+  session_data: string;
 }

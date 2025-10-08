@@ -3,7 +3,6 @@ import { Copy, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { toast } from '@/components/ui/use-toast'
-import { UuidCell } from '../components/uuid-cell'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
@@ -34,6 +33,7 @@ import {
   TableRow,
 } from '../components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
+import { UuidCell } from '../components/uuid-cell'
 import { useAuth } from '../contexts/auth-context'
 import { useStepUp } from '../contexts/step-up-context'
 import { api } from '../lib/api'
@@ -192,14 +192,12 @@ function TokenRow({
   deletePending,
   onDelete,
   onEdit,
-  onCopyId,
   canEdit,
 }: {
   token: APIToken
   deletePending: boolean
   onDelete: () => void
   onEdit: () => void
-  onCopyId: (publicId: string) => void
   canEdit: boolean
 }) {
   const exp = token.expires_at ? new Date(token.expires_at) : null
@@ -207,7 +205,7 @@ function TokenRow({
   return (
     <TableRow key={token.id}>
       <TableCell>
-        <UuidCell uuid={token.public_id} label="Token ID" />
+        <UuidCell label="Token ID" uuid={token.public_id} />
       </TableCell>
       <TableCell className="font-medium">{token.name}</TableCell>
       <TableCell>
@@ -706,7 +704,6 @@ function TokensPageInner() {
                   canEdit={canEdit}
                   deletePending={deleteTokenMutation.isPending}
                   key={token.id}
-                  onCopyId={(value) => copyToClipboard(value, 'Token ID copied to clipboard')}
                   onDelete={() => {
                     if (!canEdit) {
                       return

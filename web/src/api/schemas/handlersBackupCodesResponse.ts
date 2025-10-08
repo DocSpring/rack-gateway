@@ -7,5 +7,5 @@
  */
 
 export interface HandlersBackupCodesResponse {
-  backup_codes?: string[];
+  backup_codes: string[];
 }

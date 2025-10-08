@@ -8,5 +8,5 @@
 import type { HandlersDeployApprovalRequestResponse } from './handlersDeployApprovalRequestResponse';
 
 export interface HandlersDeployApprovalRequestList {
-  deploy_approval_requests?: HandlersDeployApprovalRequestResponse[];
+  deploy_approval_requests: HandlersDeployApprovalRequestResponse[];
 }

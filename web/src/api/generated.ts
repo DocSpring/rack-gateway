@@ -67,8 +67,6 @@ import type {
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
-  PostAdminUsersEmailLock200,
-  PostAdminUsersEmailUnlock200,
 } from './schemas';
 
 import { createGatewayClient } from './http-client';
@@ -517,10 +515,10 @@ export const getRackGatewayAPI = () => {
     email: string,
     handlersLockUserRequest: HandlersLockUserRequest,
     options?: SecondParameter<
-      typeof createGatewayClient<PostAdminUsersEmailLock200>
+      typeof createGatewayClient<HandlersStatusResponse>
     >,
   ) => {
-    return createGatewayClient<PostAdminUsersEmailLock200>(
+    return createGatewayClient<HandlersStatusResponse>(
       {
         url: `/admin/users/${email}/lock`,
         method: 'POST',
@@ -610,10 +608,10 @@ export const getRackGatewayAPI = () => {
   const postAdminUsersEmailUnlock = (
     email: string,
     options?: SecondParameter<
-      typeof createGatewayClient<PostAdminUsersEmailUnlock200>
+      typeof createGatewayClient<HandlersStatusResponse>
     >,
   ) => {
-    return createGatewayClient<PostAdminUsersEmailUnlock200>(
+    return createGatewayClient<HandlersStatusResponse>(
       { url: `/admin/users/${email}/unlock`, method: 'POST' },
       options,
     );

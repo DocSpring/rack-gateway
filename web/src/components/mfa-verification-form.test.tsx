@@ -43,6 +43,8 @@ describe('MFAVerificationForm', () => {
       required: false,
       methods: [{ id: 1, type: 'totp', label: 'Authenticator', created_at: '2024-01-01' }],
       trusted_devices: [],
+      backup_codes: { total: 0, unused: 0 },
+      webauthn_available: false,
     })
   })
 
@@ -264,6 +266,8 @@ describe('MFAVerificationForm', () => {
         required: false,
         methods: [{ id: 1, type: 'totp', label: 'Authenticator', created_at: '2024-01-01' }],
         trusted_devices: [],
+        backup_codes: { total: 0, unused: 0 },
+        webauthn_available: false,
       })
 
       const onVerify = vi.fn()
@@ -295,6 +299,8 @@ describe('MFAVerificationForm', () => {
         required: false,
         methods: [{ id: 1, type: 'webauthn', label: 'Security Key', created_at: '2024-01-01' }],
         trusted_devices: [],
+        backup_codes: { total: 0, unused: 0 },
+        webauthn_available: true,
       })
 
       const onVerify = vi.fn()
@@ -329,6 +335,8 @@ describe('MFAVerificationForm', () => {
           { id: 2, type: 'webauthn', label: 'Security Key', created_at: '2024-01-01' },
         ],
         trusted_devices: [],
+        backup_codes: { total: 0, unused: 0 },
+        webauthn_available: true,
       })
 
       const onVerify = vi.fn()
@@ -360,6 +368,8 @@ describe('MFAVerificationForm', () => {
           { id: 2, type: 'webauthn', label: 'Security Key', created_at: '2024-01-01' },
         ],
         trusted_devices: [],
+        backup_codes: { total: 0, unused: 0 },
+        webauthn_available: true,
       })
 
       const onVerify = vi.fn()

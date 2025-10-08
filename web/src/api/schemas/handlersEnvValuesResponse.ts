@@ -8,5 +8,5 @@
 import type { HandlersEnvValuesResponseEnv } from './handlersEnvValuesResponseEnv';
 
 export interface HandlersEnvValuesResponse {
-  env?: HandlersEnvValuesResponseEnv;
+  env: HandlersEnvValuesResponseEnv;
 }

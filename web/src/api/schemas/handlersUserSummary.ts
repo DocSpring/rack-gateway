@@ -8,7 +8,7 @@
 
 export interface HandlersUserSummary {
   created_by_email?: string;
-  email?: string;
-  name?: string;
-  roles?: string[];
+  email: string;
+  name: string;
+  roles: string[];
 }

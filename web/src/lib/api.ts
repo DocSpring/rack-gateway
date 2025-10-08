@@ -166,24 +166,24 @@ export const revokeUserSession = (
 export const revokeAllUserSessions = (email: string): Promise<RevokeAllSessionsResponse> =>
   unwrap(gateway.postAdminUsersEmailSessionsRevokeAll(email))
 
-export const lockUser = (email: string, reason: string): Promise<UserSummary> =>
-  unwrap(gateway.postAdminUsersEmailLock(email, { reason }))
+export const lockUser = (email: string, reason: string): Promise<StatusResponse> =>
+  unwrap(gateway.postAdminUsersEmailLock(email, { reason })) as Promise<StatusResponse>
 
-export const unlockUser = (email: string): Promise<UserSummary> =>
-  unwrap(gateway.postAdminUsersEmailUnlock(email))
+export const unlockUser = (email: string): Promise<StatusResponse> =>
+  unwrap(gateway.postAdminUsersEmailUnlock(email)) as Promise<StatusResponse>
 
 export const listDeployApprovalRequests = (
   params?: GetAdminDeployApprovalRequestsParams
 ): Promise<DeployApprovalRequestList> => unwrap(gateway.getAdminDeployApprovalRequests(params))
 
 export const approveDeployApprovalRequest = (
-  id: number,
+  id: string,
   payload?: UpdateDeployApprovalRequestStatusRequest
 ): Promise<DeployApprovalRequest> =>
   unwrap(gateway.postAdminDeployApprovalRequestsIdApprove(id, payload ?? {}))
 
 export const rejectDeployApprovalRequest = (
-  id: number,
+  id: string,
   payload?: UpdateDeployApprovalRequestStatusRequest
 ): Promise<DeployApprovalRequest> =>
   unwrap(gateway.postAdminDeployApprovalRequestsIdReject(id, payload ?? {}))

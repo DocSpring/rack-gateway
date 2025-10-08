@@ -8,6 +8,6 @@
 
 export interface HandlersStartWebAuthnEnrollmentResponse {
   backup_codes?: string[];
-  method_id?: number;
-  public_key_options?: unknown;
+  method_id: number;
+  public_key_options: unknown;
 }

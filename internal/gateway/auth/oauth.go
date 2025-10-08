@@ -40,17 +40,17 @@ type OAuthHandler struct {
 
 // LoginStartResponse for CLI OAuth flow
 type LoginStartResponse struct {
-	AuthURL      string `json:"auth_url"`
-	State        string `json:"state"`
-	CodeVerifier string `json:"code_verifier"`
+	AuthURL      string `json:"auth_url" validate:"required"`
+	State        string `json:"state" validate:"required"`
+	CodeVerifier string `json:"code_verifier" validate:"required"`
 }
 
 // LoginResponse for successful OAuth completion
 type LoginResponse struct {
-	Token     string    `json:"token"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token     string    `json:"token" validate:"required"`
+	Email     string    `json:"email" validate:"required"`
+	Name      string    `json:"name" validate:"required"`
+	ExpiresAt time.Time `json:"expires_at" validate:"required"`
 }
 
 // NewOAuthHandler creates a new OAuth handler using vetted OIDC libraries

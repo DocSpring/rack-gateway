@@ -7,5 +7,5 @@
  */
 
 export interface HandlersRevokeSessionResponse {
-  revoked?: boolean;
+  revoked: boolean;
 }

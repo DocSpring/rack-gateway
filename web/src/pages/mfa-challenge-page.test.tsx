@@ -39,6 +39,8 @@ describe('MFAChallengePage', () => {
       required: false,
       methods: [{ id: 1, type: 'totp', label: 'Authenticator', created_at: '2024-01-01' }],
       trusted_devices: [],
+      backup_codes: { total: 0, unused: 0 },
+      webauthn_available: false,
     })
 
     // Mock window.location.assign
@@ -154,7 +156,11 @@ describe('MFAChallengePage', () => {
     })
 
     it('should auto-submit for web mode', async () => {
-      vi.mocked(verifyMFA).mockResolvedValue({})
+      vi.mocked(verifyMFA).mockResolvedValue({
+        mfa_verified_at: '2024-01-01T00:00:00Z',
+        recent_step_up_expires_at: '2024-01-01T00:15:00Z',
+        trusted_device_cookie: false,
+      })
 
       const Wrapper = createWrapper()
       render(<MFAChallengePage />, { wrapper: Wrapper })

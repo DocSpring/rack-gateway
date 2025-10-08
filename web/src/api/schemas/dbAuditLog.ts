@@ -7,7 +7,7 @@
  */
 
 export interface DbAuditLog {
-  /** e.g., "env.read", "user.create", "auth.failed" */
+  /** e.g., "env.read", "user.create", "login.oauth_failed" */
   action?: string;
   /** "convox", "users", "auth" */
   action_type?: string;

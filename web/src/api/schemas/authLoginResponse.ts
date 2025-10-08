@@ -7,8 +7,8 @@
  */
 
 export interface AuthLoginResponse {
-  email?: string;
-  expires_at?: string;
-  name?: string;
-  token?: string;
+  email: string;
+  expires_at: string;
+  name: string;
+  token: string;
 }

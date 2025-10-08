@@ -7,7 +7,7 @@
  */
 
 export interface DbCircleCISettings {
-  api_token?: string;
-  approval_job_name?: string;
+  api_token: string;
+  approval_job_name: string;
   org_slug?: string;
 }

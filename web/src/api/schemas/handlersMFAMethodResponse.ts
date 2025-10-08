@@ -8,9 +8,9 @@
 
 export interface HandlersMFAMethodResponse {
   confirmed_at?: string;
-  created_at?: string;
-  id?: number;
+  created_at: string;
+  id: number;
   label?: string;
   last_used_at?: string;
-  type?: string;
+  type: string;
 }

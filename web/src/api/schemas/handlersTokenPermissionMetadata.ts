@@ -8,9 +8,9 @@
 import type { HandlersRoleDescriptor } from './handlersRoleDescriptor';
 
 export interface HandlersTokenPermissionMetadata {
-  default_permissions?: string[];
-  permissions?: string[];
-  roles?: HandlersRoleDescriptor[];
-  user_permissions?: string[];
-  user_roles?: string[];
+  default_permissions: string[];
+  permissions: string[];
+  roles: HandlersRoleDescriptor[];
+  user_permissions: string[];
+  user_roles: string[];
 }

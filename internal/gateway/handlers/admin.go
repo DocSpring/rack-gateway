@@ -923,7 +923,7 @@ type LockUserRequest struct {
 // @Produce json
 // @Param email path string true "User email"
 // @Param request body LockUserRequest true "Lock reason"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} StatusResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -1000,7 +1000,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param email path string true "User email"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} StatusResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse

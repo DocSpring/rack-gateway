@@ -9,6 +9,6 @@
 export interface HandlersMFABackupCodesSummary {
   last_generated_at?: string;
   last_used_at?: string;
-  total?: number;
-  unused?: number;
+  total: number;
+  unused: number;
 }

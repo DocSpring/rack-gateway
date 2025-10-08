@@ -17,16 +17,16 @@ export interface HandlersDeployApprovalRequestResponse {
   build_id?: string;
   ci_metadata?: HandlersDeployApprovalRequestResponseCiMetadata;
   ci_provider?: string;
-  created_at?: string;
+  created_at: string;
   created_by_api_token_id?: string;
   created_by_api_token_name?: string;
   created_by_email?: string;
   created_by_name?: string;
   git_branch?: string;
-  git_commit_hash?: string;
-  message?: string;
+  git_commit_hash: string;
+  message: string;
   pipeline_url?: string;
-  public_id?: string;
+  public_id: string;
   rejected_at?: string;
   rejected_by_email?: string;
   rejected_by_name?: string;
@@ -34,8 +34,8 @@ export interface HandlersDeployApprovalRequestResponse {
   release_id?: string;
   release_promoted_at?: string;
   release_promoted_by_api_token_id?: number;
-  status?: string;
-  target_api_token_id?: string;
+  status: string;
+  target_api_token_id: string;
   target_api_token_name?: string;
-  updated_at?: string;
+  updated_at: string;
 }

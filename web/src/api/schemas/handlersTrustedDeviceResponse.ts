@@ -7,11 +7,11 @@
  */
 
 export interface HandlersTrustedDeviceResponse {
-  created_at?: string;
-  expires_at?: string;
-  id?: number;
+  created_at: string;
+  expires_at: string;
+  id: number;
   ip_address?: string;
-  label?: string;
+  label: string;
   last_used_at?: string;
   revoked_at?: string;
   revoked_reason?: string;

@@ -7,12 +7,12 @@
  */
 
 export interface HandlersUserSessionResponse {
-  channel?: string;
-  created_at?: string;
-  expires_at?: string;
-  id?: number;
+  channel: string;
+  created_at: string;
+  expires_at: string;
+  id: number;
   ip_address?: string;
-  last_seen_at?: string;
+  last_seen_at: string;
   metadata?: unknown;
   user_agent?: string;
 }

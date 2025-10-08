@@ -7,8 +7,8 @@
  */
 
 export interface HandlersRoleDescriptor {
-  description?: string;
-  label?: string;
-  name?: string;
-  permissions?: string[];
+  description: string;
+  label: string;
+  name: string;
+  permissions: string[];
 }

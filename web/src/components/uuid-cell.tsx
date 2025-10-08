@@ -2,7 +2,7 @@ import { Copy } from 'lucide-react'
 import { Button } from './ui/button'
 import { toast } from './ui/use-toast'
 
-interface UuidCellProps {
+type UuidCellProps = {
   uuid: string
   label: string
 }
@@ -20,12 +20,7 @@ export function UuidCell({ uuid, label }: UuidCellProps) {
   return (
     <div className="flex items-center gap-2">
       <span className="font-mono text-xs">{uuid}</span>
-      <Button
-        aria-label={`Copy ${label}`}
-        onClick={handleCopy}
-        size="icon"
-        variant="ghost"
-      >
+      <Button aria-label={`Copy ${label}`} onClick={handleCopy} size="icon" variant="ghost">
         <Copy className="h-4 w-4" />
       </Button>
     </div>
