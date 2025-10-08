@@ -98,6 +98,7 @@ var roleConfigs = map[string]roleConfig{
 		Parents: []string{"ops"},
 	},
 	// Only specific permissions that CI/CD pipelines need for deployments
+	// Uses -with-approval variants for sensitive operations that require active deploy approval
 	"cicd": {
 		Permissions: []string{
 			Convox(ResourceApp, ActionList),
@@ -111,12 +112,12 @@ var roleConfigs = map[string]roleConfig{
 			Convox(ResourceObject, ActionCreate),
 			Convox(ResourceRelease, ActionCreate),
 			Convox(ResourceRelease, ActionList),
-			Convox(ResourceRelease, ActionPromote), // Note: gated by approval system
+			Convox(ResourceRelease, ActionPromoteWithApproval), // Requires active approved deploy for this release
 			Convox(ResourceProcess, ActionList),
 			Convox(ResourceProcess, ActionRead),
-			Convox(ResourceProcess, ActionStart),
-			Convox(ResourceProcess, ActionExec),      // Note: gated by approval system + command allowlist
-			Convox(ResourceProcess, ActionTerminate), // Note: gated by approval system + tracked PIDs
+			Convox(ResourceProcess, ActionStartWithApproval),     // Requires active approved deploy + command in allowlist
+			Convox(ResourceProcess, ActionExecWithApproval),      // Requires active approved deploy + command in allowlist
+			Convox(ResourceProcess, ActionTerminateWithApproval), // Requires active approved deploy + tracked process
 			Convox(ResourceInstance, ActionList),
 			Convox(ResourceInstance, ActionRead),
 			Convox(ResourceRack, ActionRead),

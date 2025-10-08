@@ -288,8 +288,8 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// All permissions are now direct - no more "-with-approval" suffix
-		// Gating logic is handled separately in the deploy approval system
+		// For regular users (not API tokens), check direct permissions
+		// API tokens use -with-approval variants that are gated by the deploy approval system
 		allowed, err = h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
 		if err != nil {
 			allowed = false
@@ -353,7 +353,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if resource == rbac.ResourceProcess && action == rbac.ActionTerminate {
-		if ok, message := h.checkProcessTerminate(r, authUser, path); !ok {
+		if ok, message := h.checkProcessTerminate(r, authUser, path, approvalTracker); !ok {
 			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process terminate denied: %s", message))
 			http.Error(w, message, http.StatusForbidden)
 			return
@@ -942,9 +942,11 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 }
 
 func extractAppFromPath(p string) string {
+	// Strip /api/v1/convox prefix if present
+	p = strings.TrimPrefix(p, "/api/v1/convox")
 	parts := strings.Split(strings.Trim(p, "/"), "/")
-	// expect apps/{app}/releases or apps/{app}/processes
-	if len(parts) >= 3 && parts[0] == "apps" && (parts[2] == "releases" || parts[2] == "processes") {
+	// Handle: /apps/{app}/releases/..., /apps/{app}/processes/..., /apps/{app}/services/{service}/processes
+	if len(parts) >= 2 && parts[0] == "apps" {
 		return parts[1]
 	}
 	return ""
@@ -1680,8 +1682,8 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	withApprovalPerm := fmt.Sprintf("convox:%s:%s-with-approval", resource.String(), action.String())
 	hasWithApproval := tokenHasPermission(authUser.Permissions, withApprovalPerm)
 
-	// For process:exec and process:terminate, need to check for active deploy approval
-	if resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate) {
+	// For process:start/exec/terminate, need to check for active deploy approval
+	if resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
 		if !hasWithApproval {
 			return false, nil, nil
 		}
@@ -1709,7 +1711,7 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	// Extract app from URL path (e.g., /apps/{app}/releases/RXXX/promote or /apps/{app}/processes/PID/exec)
 	app := extractAppFromPath(r.URL.Path)
 	if app == "" {
-		return false, nil, &deployApprovalError{status: http.StatusBadRequest, message: "app not found in request"}
+		return false, nil, &deployApprovalError{status: http.StatusBadRequest, message: "app not found in deploy approval request"}
 	}
 
 	var req *db.DeployApprovalRequest
@@ -1717,7 +1719,7 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 
 	// For process actions, look up approval by token+app (any active approval for the app)
 	// For release actions, require specific release approval
-	if resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate) {
+	if resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
 		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
 		if err != nil {
 			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
@@ -1892,8 +1894,23 @@ func (h *Handler) trackProcessCreation(r *http.Request, path, processID, email s
 		}
 	}
 
-	// Create process record (no release ID or command yet)
-	if err := h.database.CreateProcess(processID, app, "", userID, tokenID); err != nil {
+	// Extract release ID from "Release" header (Convox API convention)
+	releaseID := strings.TrimSpace(r.Header.Get("Release"))
+
+	// Get approval tracker from context (if this was approved)
+	approvalTracker := getDeployApprovalTracker(r.Context())
+	if approvalTracker != nil && releaseID != "" {
+		// Validate that the release ID matches the approved deployment
+		if approvalTracker.releaseID != "" && approvalTracker.releaseID != releaseID {
+			log.Printf(`{"level":"warn","event":"process_start_release_mismatch","process_id":%q,"approved_release":%q,"requested_release":%q}`,
+				processID, approvalTracker.releaseID, releaseID)
+			// Don't track this process since it's not for the approved release
+			return
+		}
+	}
+
+	// Create process record with release ID
+	if err := h.database.CreateProcess(processID, app, releaseID, userID, tokenID); err != nil {
 		log.Printf(`{"level":"error","event":"process_tracking_failed","process_id":%q,"error":%q}`, processID, err.Error())
 	}
 }
@@ -1934,7 +1951,7 @@ func (h *Handler) checkProcessExec(r *http.Request, authUser *auth.AuthUser, pat
 		// (This handles processes created outside the gateway, like existing app processes)
 		if authUser.IsAPIToken {
 			// Check if they have the gated permission (exec-with-approval)
-			if allowed, _ := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, rbac.ResourceProcess, rbac.ActionExec); allowed {
+			if tokenHasPermission(authUser.Permissions, "convox:process:exec-with-approval") {
 				return false, "cannot exec into untracked processes (not created via gateway)"
 			}
 		}
@@ -2005,6 +2022,15 @@ func (h *Handler) checkProcessExec(r *http.Request, authUser *auth.AuthUser, pat
 			return false, "exec requires an approved deploy approval request"
 		}
 
+		// Verify process release ID matches the approved release ID
+		if process != nil && process.ReleaseID != "" {
+			if approvalTracker.releaseID != "" && process.ReleaseID != approvalTracker.releaseID {
+				log.Printf(`{"level":"warn","event":"checkProcessExec_release_mismatch","process_id":%q,"process_release":%q,"approved_release":%q}`,
+					processID, process.ReleaseID, approvalTracker.releaseID)
+				return false, fmt.Sprintf("process release %s does not match approved release %s", process.ReleaseID, approvalTracker.releaseID)
+			}
+		}
+
 		// Update process with command and approval request ID
 		if err := h.database.UpdateProcessCommand(processID, command, &approvalTracker.request.ID); err != nil {
 			log.Printf(`{"level":"error","event":"process_command_update_failed","process_id":%q,"error":%q}`, processID, err.Error())
@@ -2022,7 +2048,7 @@ func (h *Handler) checkProcessExec(r *http.Request, authUser *auth.AuthUser, pat
 
 // checkProcessTerminate gates process termination to only processes created by the requester.
 // Returns (allowed, error message).
-func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser, path string) (bool, string) {
+func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser, path string, approvalTracker *deployApprovalTracker) (bool, string) {
 	if h.database == nil {
 		return true, "" // No database, no gating
 	}
@@ -2064,6 +2090,15 @@ func (h *Handler) checkProcessTerminate(r *http.Request, authUser *auth.AuthUser
 
 	if !isOwner {
 		return false, "can only terminate processes you created"
+	}
+
+	// If using -with-approval permission, verify process release ID matches approved release
+	if approvalTracker != nil && process.ReleaseID != "" {
+		if approvalTracker.releaseID != "" && process.ReleaseID != approvalTracker.releaseID {
+			log.Printf(`{"level":"warn","event":"checkProcessTerminate_release_mismatch","process_id":%q,"process_release":%q,"approved_release":%q}`,
+				processID, process.ReleaseID, approvalTracker.releaseID)
+			return false, fmt.Sprintf("process release %s does not match approved release %s", process.ReleaseID, approvalTracker.releaseID)
+		}
 	}
 
 	// Mark process as terminated

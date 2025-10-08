@@ -87,9 +87,9 @@ func appsDeleteCommand() *cobra.Command {
 
 func appsInfoCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "info <name>",
+		Use:   "info [app]",
 		Short: "get information about an app",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "apps info")
 			if err != nil {
@@ -103,6 +103,8 @@ func appsInfoCommand() *cobra.Command {
 			return cli.AppsInfo(client, ctx)
 		}),
 	}
+
+	cmd.Flags().StringP("app", "a", "", "app name")
 
 	return cmd
 }

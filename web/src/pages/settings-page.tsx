@@ -349,12 +349,14 @@ export function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Approved Commands for CI/CD</CardTitle>
+            <CardTitle>Approved Commands for Deployment Approval</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-muted-foreground text-sm">
-              Commands listed here can be executed by CI/CD tokens during deployments. Uses exact
-              string matching.
+              Commands that can be executed during an active deployment approval window. These are
+              gated by tokens or users with *-with-approval permissions (e.g.,
+              convox:process:exec-with-approval) and can only run while an approved deployment
+              request is active. Uses exact string matching.
             </p>
             <div className="flex gap-2">
               <div className="flex-1">

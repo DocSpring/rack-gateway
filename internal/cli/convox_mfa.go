@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
@@ -15,6 +16,11 @@ import (
 // checkMFAAndGetAuth checks if the command requires MFA and returns the auth string
 // Returns: mfaAuth string in format "totp:code" or "webauthn:assertion" or "" for no MFA
 func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) {
+	// API tokens bypass all MFA checks (for CI/CD automation)
+	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+		return "", nil
+	}
+
 	// Look up the command to get its permissions
 	convoxCmd, ok := convox.LookupCommand(commandName)
 	if !ok {

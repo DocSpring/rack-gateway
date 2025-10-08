@@ -192,6 +192,10 @@ const (
 	ActionApprove
 	ActionManage
 	ActionSet
+	ActionPromoteWithApproval
+	ActionStartWithApproval
+	ActionExecWithApproval
+	ActionTerminateWithApproval
 )
 
 var actionToString = [...]string{
@@ -209,6 +213,10 @@ var actionToString = [...]string{
 	"approve",
 	"manage",
 	"set",
+	"promote-with-approval",
+	"start-with-approval",
+	"exec-with-approval",
+	"terminate-with-approval",
 }
 
 func (a Action) String() string {
@@ -218,7 +226,7 @@ func (a Action) String() string {
 	return fmt.Sprintf("Action(%d)", a)
 }
 
-func (a Action) IsValid() bool { return a <= ActionSet }
+func (a Action) IsValid() bool { return a <= ActionTerminateWithApproval }
 
 func ParseAction(v string) (Action, error) {
 	for i, s := range actionToString {

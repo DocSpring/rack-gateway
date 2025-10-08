@@ -101,7 +101,12 @@ func ExecCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return cli.Exec(client, ctx)
+			err = cli.Exec(client, ctx)
+			// Convox CLI returns "exit 0" as an error for successful commands
+			if err != nil && err.Error() == "exit 0" {
+				return nil
+			}
+			return err
 		}),
 	}
 
@@ -127,7 +132,12 @@ func RunCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return cli.Run(client, ctx)
+			err = cli.Run(client, ctx)
+			// Convox CLI returns "exit 0" as an error for successful commands
+			if err != nil && err.Error() == "exit 0" {
+				return nil
+			}
+			return err
 		}),
 	}
 

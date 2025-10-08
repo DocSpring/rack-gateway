@@ -250,7 +250,7 @@ function verify_rgw_command_failure() {
 
 function logout_cli() {
   echo -e "${YELLOW}Logging out...${NC}"
-  verify_rgw_command "logout" "Removed rack: e2e"
+  verify_rgw_command "logout" "Logged out from e2e"
 }
 
 
@@ -332,7 +332,7 @@ fi
 
 if [ -z "$SKIP_ADMIN_TESTS" ]; then
   verify_rgw_command "rack" "Current rack: e2e" "Logged in as admin@example.com"
-  verify_rgw_command "rack" "mock-rack" "mock-rack.example.com"
+  verify_rgw_command "rack info" "mock-rack" "mock-rack.example.com"
   verify_rgw_command "apps" "rack-gateway" "RAPI123456"
   verify_rgw_command "apps info" \
     "Name        rack-gateway" "Status      running"
@@ -358,8 +358,8 @@ if [ -z "$SKIP_ADMIN_TESTS" ]; then
     "NODE_ENV=production" \
     "PORT=3000"
 
-  # Fetch secret with --secrets flag
-  verify_rgw_command "env get DATABASE_URL --secrets" \
+  # Fetch secret with --unmask flag
+  verify_rgw_command "env get DATABASE_URL --unmask" \
     "postgres://user:pass@localhost/db"
 
   verify_rgw_command "env set FOO=bar" \
@@ -419,8 +419,11 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${YELLOW}Simulating CircleCI deploy workflow with API token permissions...${NC}"
 
   # Show rack info via API token
-  verify_rgw_command \
-    "rack" \
+  verify_rgw_command "rack" \
+    "Current rack: Test" \
+    "Gateway URL: http://127.0.0.1:9447"
+
+  verify_rgw_command "rack info" \
     "Name" \
     "Status"
 
@@ -432,17 +435,18 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # No commands allowed
   verify_rgw_command_failure \
     "run web --app rack-gateway 'delete everything'" \
-    "ERROR:"
+    "Error: deployment approval required"
 
   # Not even approved commands
   verify_rgw_command_failure \
     "run web --app rack-gateway 'echo hello'" \
-    "ERROR:"
+    "Error: deployment approval required"
 
 
   # Create build and capture release identifier
+  echo -e "${BLUE}Running build...${NC}"
   set +e
-  build_output=$(./bin/rack-gateway build --app rack-gateway --description "cli-e2e" --id 2>&1)
+  build_output=$(./bin/rack-gateway build --app rack-gateway --description "cli-e2e" 2>&1)
   build_status=$?
   set -e
   if [[ $build_status -ne 0 ]]; then
@@ -450,9 +454,18 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     exit 1
   fi
   echo "$build_output"
-  RELEASE_ID=$(echo "$build_output" | tail -n1 | tr -d '[:space:]')
+
+  # Extract release ID from "Release: RXXX" line
+  RELEASE_ID=$(echo "$build_output" | grep "^Release:" | awk '{print $2}')
+
   if [[ -z "$RELEASE_ID" ]]; then
     echo -e "${RED}Failed to parse release id from build output${NC}" >&2
+    exit 1
+  fi
+
+  # Verify release ID format (starts with R, followed by alphanumeric)
+  if ! [[ "$RELEASE_ID" =~ ^R[A-Z0-9-]+$ ]]; then
+    echo -e "${RED}Release ID has unexpected format: '$RELEASE_ID'${NC}" >&2
     exit 1
   fi
 
@@ -501,13 +514,12 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # No unapproved commands allowed
   verify_rgw_command_failure \
     "run web --app rack-gateway 'delete everything'" \
-    "ERROR:"
+    "Error: websocket: bad handshake"
 
-  # But now an approved command is allowed to be run
-  verify_rgw_command "run web 'echo hello'" \
+  # But now an approved command is allowed to be run for that release ID
+  verify_rgw_command "run web --app rack-gateway --release $RELEASE_ID 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello'
-
 
   # Run mock migration command on the new release
   verify_rgw_command \
@@ -548,7 +560,7 @@ if [ -z "$SKIP_DEPLOYER_TESTS" ]; then
     "DATABASE_URL=********************" "NODE_ENV=production" "PORT=3000"
 
   # Cannot fetch secret
-  verify_rgw_command_failure "env get DATABASE_URL --secrets" \
+  verify_rgw_command_failure "env get DATABASE_URL --unmask" \
     "Error: failed to fetch env: You don't have permission to view secrets."
 
   # (env set tests removed for deployer; protected env policy preservation)
@@ -572,7 +584,7 @@ if [ -z "$SKIP_VIEWER_TESTS" ]; then
     "ERROR: permission denied"
 
   # Cannot fetch secret
-  verify_rgw_command_failure "env get DATABASE_URL --secrets" \
+  verify_rgw_command_failure "env get DATABASE_URL --unmask" \
     "Error: failed to fetch env: You don't have permission to view environment variables."
 
   # Viewer should not be able to set env or delete apps

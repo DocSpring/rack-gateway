@@ -161,6 +161,11 @@ func LoadRackAuth(rack string) (string, string, error) {
 		return "", "", err
 	}
 
+	// Check for API token from environment (for CI/CD)
+	if apiToken := os.Getenv("RACK_GATEWAY_API_TOKEN"); apiToken != "" {
+		return normalized, apiToken, nil
+	}
+
 	tokenData, err := LoadToken(rack)
 	if err != nil {
 		return "", "", err

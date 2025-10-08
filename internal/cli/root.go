@@ -77,7 +77,7 @@ Rack management:
 
 		// Logs and System
 		LogsCommand(),
-		RackCommand(), // Note: RackCommand is both a CLI command (current rack) and system command (rack info)
+		RackCommand(),
 		InstancesCommand(),
 
 		// Resources

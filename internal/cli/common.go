@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"unsafe"
@@ -66,8 +67,33 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 
 	// Create stdcli engine
 	engine := stdcli.New("rack-gateway", Version)
-	engine.Writer.Stdout = cobraCmd.OutOrStdout()
-	engine.Writer.Stderr = cobraCmd.ErrOrStderr()
+
+	// Create a new Writer with custom tags to avoid modifying the global DefaultWriter
+	stdout := cobraCmd.OutOrStdout()
+	isTerminal := false
+	if f, ok := stdout.(*os.File); ok {
+		isTerminal = stdcli.IsTerminal(f)
+	}
+	engine.Writer = &stdcli.Writer{
+		Color:  isTerminal,
+		Stdout: stdout,
+		Stderr: cobraCmd.ErrOrStderr(),
+		Tags: map[string]stdcli.Renderer{
+			"error":   stdcli.DefaultWriter.Tags["error"],
+			"header":  stdcli.RenderColors(242),
+			"h1":      stdcli.RenderColors(244),
+			"h2":      stdcli.RenderColors(241),
+			"id":      stdcli.RenderColors(247),
+			"info":    stdcli.RenderColors(247),
+			"ok":      stdcli.RenderColors(46),
+			"start":   stdcli.RenderColors(247),
+			"u":       stdcli.RenderUnderline(),
+			"value":   stdcli.RenderColors(251),
+			"service": stdcli.RenderColors(251), // Same as "value"
+			"release": stdcli.RenderColors(247), // Same as "id"
+			"build":   stdcli.RenderColors(247), // Same as "id"
+		},
+	}
 
 	// Build flags - convert specified cobra flags to stdcli flags
 	var flags []*stdcli.Flag

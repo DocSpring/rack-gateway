@@ -16,7 +16,11 @@ func LoginCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login [rack] [gateway-url]",
 		Short: "Login to a Convox rack via OAuth",
-		Args:  cobra.ExactArgs(2),
+		Long: `Login to a Convox rack via OAuth.
+
+If no arguments are provided, re-authenticates with the current rack.
+Otherwise, provide both rack name and gateway URL to login to a new rack.`,
+		Args: cobra.RangeArgs(0, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return loginCommandWithFlags(args, noOpen, authFile)
 		},
@@ -29,12 +33,29 @@ func LoginCommand() *cobra.Command {
 }
 
 func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
-	rack := args[0]
-	gatewayURL := args[1]
+	var rack, gatewayURL string
+	var err error
 
-	// Save gateway URL for this rack
-	if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
-		return fmt.Errorf("failed to save gateway config: %w", err)
+	switch len(args) {
+	case 0:
+		// Re-authenticate with current rack
+		rack, err = SelectedRack()
+		if err != nil {
+			return fmt.Errorf("no current rack selected: %w. Run: rack-gateway login <rack> <gateway-url>", err)
+		}
+		gatewayURL, _, err = LoadRackAuth(rack)
+		if err != nil {
+			return fmt.Errorf("rack %s not configured: %w. Run: rack-gateway login <rack> <gateway-url>", rack, err)
+		}
+	case 1:
+		return fmt.Errorf("both rack name and gateway URL are required")
+	case 2:
+		rack = args[0]
+		gatewayURL = args[1]
+		// Save gateway URL for this rack
+		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
+			return fmt.Errorf("failed to save gateway config: %w", err)
+		}
 	}
 
 	fmt.Printf("Starting login for rack: %s via gateway: %s\n", rack, gatewayURL)

@@ -20,9 +20,11 @@ New RBAC scopes introduced with this feature:
 
 - `gateway:deploy-approval-request:create` – allows an actor to call the deploy-approval-request creation endpoint (the CLI uses this under the hood).
 - `gateway:deploy-approval-request:approve` – surfaces the Deploy Approval Requests admin page and enables approve/reject actions.
-- `convox:build:create-with-approval`, `convox:object:create-with-approval`, `convox:release:create-with-approval`, `convox:release:promote-with-approval` – grant the ability to perform the action only when an approval record exists.
+- `convox:process:start-with-approval`, `convox:process:exec-with-approval`, `convox:process:terminate-with-approval`, `convox:release:promote-with-approval` – grant the ability to perform the action only when an active approval record exists for that release.
 
-If a user/token already has the direct permission (for example `convox:build:create`), the gateway skips the approval lookup.
+Build/object/release creation permissions (`convox:build:create`, `convox:object:create`, `convox:release:create`) are granted directly to CI/CD tokens since they must create the release before requesting approval.
+
+If a user/token already has the direct permission (for example `convox:process:exec`), the gateway skips the approval lookup.
 
 ### Database schema
 
