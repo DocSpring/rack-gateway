@@ -443,10 +443,58 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     "Error: deployment approval required"
 
 
-  # Create build and capture release identifier
-  echo -e "${BLUE}Running build...${NC}"
+  # Request approval as API token (BEFORE building - git commit-based flow)
+  echo -e "${YELLOW}API token requesting deploy approval for git commit...${NC}"
+  GIT_COMMIT_HASH="abc123def456"  # Mock git commit hash for E2E test
+  GIT_BRANCH="main"
+  PIPELINE_URL="https://circleci.com/gh/example/repo/123"
+
   set +e
-  build_output=$(./bin/rack-gateway build --app rack-gateway --description "cli-e2e" 2>&1)
+  approval_output=$(./bin/rack-gateway deploy-approval request \
+    --git-commit "$GIT_COMMIT_HASH" \
+    --branch "$GIT_BRANCH" \
+    --pipeline-url "$PIPELINE_URL" \
+    --ci-provider "circleci" \
+    --message "Pipeline deployment ${E2E_TS}" 2>&1)
+  approval_status=$?
+  set -e
+  if [[ $approval_status -ne 0 ]]; then
+    echo -e "${RED}deploy-approval request failed:${NC}\n$approval_output" >&2
+    exit 1
+  fi
+  echo "$approval_output"
+  REQUEST_ID=$(echo "$approval_output" | grep -oE 'request [0-9]+' | grep -oE '[0-9]+' | head -n1)
+  if [[ -z "$REQUEST_ID" ]]; then
+    echo -e "${RED}Failed to parse request ID from approval output${NC}" >&2
+    exit 1
+  fi
+
+  echo -e "${GREEN}Created approval request: $REQUEST_ID for commit $GIT_COMMIT_HASH${NC}"
+
+  # Unset API token temporarily to log in as admin for approval
+  unset RACK_GATEWAY_API_TOKEN
+  unset RACK_GATEWAY_URL
+  unset RACK_GATEWAY_RACK
+
+  # Log in as admin to approve the request
+  login_cli_as "admin@example.com" "e2e"
+
+  APPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
+  verify_rgw_command \
+    "deploy-approval approve $REQUEST_ID --notes 'Approved for E2E test' --mfa-code $APPROVE_CODE" \
+    "Deploy approval request" "approved"
+
+  # Log out admin and switch back to API token
+  logout_cli
+
+  export RACK_GATEWAY_API_TOKEN="$API_TOKEN"
+  export RACK_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
+  export RACK_GATEWAY_RACK="Test"
+
+  # Now build with the approved commit
+  echo -e "${BLUE}Running build after approval...${NC}"
+  set +e
+  build_output=$(./bin/rack-gateway build --app rack-gateway --description "cli-e2e build for commit $GIT_COMMIT_HASH" 2>&1)
   build_status=$?
   set -e
   if [[ $build_status -ne 0 ]]; then
@@ -470,45 +518,6 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   fi
 
   echo -e "${GREEN}Build created release: $RELEASE_ID${NC}"
-
-  # Request approval as API token
-  echo -e "${YELLOW}API token requesting deploy approval...${NC}"
-  set +e
-  approval_output=$(./bin/rack-gateway deploy-approval request rack-gateway "$RELEASE_ID" "Pipeline deployment ${E2E_TS}" 2>&1)
-  approval_status=$?
-  set -e
-  if [[ $approval_status -ne 0 ]]; then
-    echo -e "${RED}deploy-approval request failed:${NC}\n$approval_output" >&2
-    exit 1
-  fi
-  echo "$approval_output"
-  REQUEST_ID=$(echo "$approval_output" | grep -oE 'request [0-9]+' | grep -oE '[0-9]+' | head -n1)
-  if [[ -z "$REQUEST_ID" ]]; then
-    echo -e "${RED}Failed to parse request ID from approval output${NC}" >&2
-    exit 1
-  fi
-
-  echo -e "${GREEN}Created approval request: $REQUEST_ID${NC}"
-
-  # Unset API token temporarily to log in as admin for approval
-  unset RACK_GATEWAY_API_TOKEN
-  unset RACK_GATEWAY_URL
-  unset RACK_GATEWAY_RACK
-
-  # Log in as admin to approve the request
-  login_cli_as "admin@example.com" "e2e"
-
-  APPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
-  verify_rgw_command \
-    "deploy-approval approve $REQUEST_ID --notes 'Approved for E2E test' --mfa-code $APPROVE_CODE" \
-    "Deploy approval request" "approved"
-
-  # Log out admin and switch back to API token
-  logout_cli
-
-  export RACK_GATEWAY_API_TOKEN="$API_TOKEN"
-  export RACK_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
-  export RACK_GATEWAY_RACK="Test"
 
 
   # No unapproved commands allowed

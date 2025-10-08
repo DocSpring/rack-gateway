@@ -9,6 +9,7 @@ import type {
   AuthLoginResponse,
   AuthLoginStartResponse,
   DbAPIToken,
+  DbCircleCISettings,
   DbRackTLSCert,
   DbUser,
   GetAdminAuditExportParams,
@@ -156,7 +157,7 @@ export const getRackGatewayAPI = () => {
    * @summary Approve deploy approval request
    */
   const postAdminDeployApprovalRequestsIdApprove = (
-    id: number,
+    id: string,
     handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
     options?: SecondParameter<
       typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
@@ -178,7 +179,7 @@ export const getRackGatewayAPI = () => {
    * @summary Reject deploy approval request
    */
   const postAdminDeployApprovalRequestsIdReject = (
-    id: number,
+    id: string,
     handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
     options?: SecondParameter<
       typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
@@ -259,6 +260,19 @@ export const getRackGatewayAPI = () => {
         headers: { 'Content-Type': 'application/json' },
         data: handlersUpdateApprovedCommandsRequest,
       },
+      options,
+    );
+  };
+
+  /**
+   * Returns CircleCI integration configuration including API token and approval job name.
+   * @summary Get CircleCI integration settings
+   */
+  const getAdminSettingsCircleci = (
+    options?: SecondParameter<typeof createGatewayClient<DbCircleCISettings>>,
+  ) => {
+    return createGatewayClient<DbCircleCISettings>(
+      { url: `/admin/settings/circleci`, method: 'GET' },
       options,
     );
   };
@@ -654,7 +668,7 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Generates a fresh set of backup codes. Existing codes are invalidated immediately.
+   * Generates a new set of MFA backup codes. All prior codes become invalid.
    * @summary Regenerate backup codes
    */
   const postAuthMfaBackupCodesRegenerate = (
@@ -836,7 +850,7 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Revokes a trusted device token for the current user.
+   * Revokes a trusted device, requiring MFA on next login from that device.
    * @summary Revoke a trusted device
    */
   const deleteAuthMfaTrustedDevicesDeviceID = (
@@ -988,7 +1002,7 @@ export const getRackGatewayAPI = () => {
    * @summary Get deploy approval
    */
   const getDeployApprovalRequestsId = (
-    id: number,
+    id: string,
     options?: SecondParameter<
       typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
     >,
@@ -1091,6 +1105,7 @@ export const getRackGatewayAPI = () => {
     getAdminSettings,
     putAdminSettingsAllowDestructiveActions,
     putAdminSettingsApprovedCommands,
+    getAdminSettingsCircleci,
     putAdminSettingsMfa,
     putAdminSettingsProtectedEnvVars,
     postAdminSettingsRackTlsCertRefresh,
@@ -1200,6 +1215,11 @@ export type PutAdminSettingsApprovedCommandsResult = NonNullable<
     ReturnType<
       ReturnType<typeof getRackGatewayAPI>['putAdminSettingsApprovedCommands']
     >
+  >
+>;
+export type GetAdminSettingsCircleciResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettingsCircleci']>
   >
 >;
 export type PutAdminSettingsMfaResult = NonNullable<

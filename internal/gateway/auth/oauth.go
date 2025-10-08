@@ -16,6 +16,16 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// DomainNotAllowedError is returned when a user's email domain is not allowed
+type DomainNotAllowedError struct {
+	Email string
+	Name  string
+}
+
+func (e *DomainNotAllowedError) Error() string {
+	return fmt.Sprintf("email domain not allowed: %s", e.Email)
+}
+
 // OAuthHandler handles OAuth flows using vetted libraries
 // Supports separate web and CLI flows with proper OIDC/OAuth2 primitives
 type OAuthHandler struct {
@@ -206,7 +216,10 @@ func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginRe
 
 	// Verify email domain if required
 	if h.allowedDomain != "" && !h.isAllowedDomain(claims.Email) {
-		return nil, fmt.Errorf("email domain not allowed: %s", claims.Email)
+		return nil, &DomainNotAllowedError{
+			Email: claims.Email,
+			Name:  claims.Name,
+		}
 	}
 
 	// Create JWT token using existing JWT manager

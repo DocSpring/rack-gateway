@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
@@ -39,18 +41,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 	if h.config != nil && h.config.DeployApprovalsDisabled {
-		// When deploy approvals are disabled, return an auto-approved response
-		// so CI pipelines can use the same code across all environments
-		c.JSON(http.StatusCreated, DeployApprovalRequestResponse{
-			ID:                0,
-			Message:           "deploy approvals disabled - auto-approved",
-			Status:            "approved",
-			CreatedAt:         time.Now(),
-			UpdatedAt:         time.Now(),
-			ApprovedAt:        ptrTime(time.Now()),
-			ApprovalExpiresAt: ptrTime(time.Now().Add(24 * time.Hour)),
-			ApprovalNotes:     "deploy approvals feature disabled",
-		})
+		c.JSON(http.StatusNotFound, gin.H{"error": "deploy approvals feature is disabled"})
 		return
 	}
 
@@ -259,7 +250,7 @@ func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.RBACM
 // @Description Returns the status of a deploy approval request.
 // @Tags DeployApprovalRequests
 // @Produce json
-// @Param id path int true "Deploy approval request ID"
+// @Param id path string true "Deploy approval request public ID (UUID)"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
@@ -274,8 +265,8 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 {
+	publicID := strings.TrimSpace(c.Param("id"))
+	if publicID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
 		return
 	}
@@ -296,7 +287,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	record, err := h.database.GetDeployApprovalRequest(id)
+	record, err := h.database.GetDeployApprovalRequestByPublicID(publicID)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
@@ -389,6 +380,7 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 
 	records, err := h.database.ListDeployApprovalRequests(opts)
 	if err != nil {
+		log.Printf("ERROR: failed to list deploy approval requests: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list deploy approval requests"})
 		return
 	}
@@ -419,7 +411,7 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 // @Tags DeployApprovalRequests
 // @Accept json
 // @Produce json
-// @Param id path int true "Deploy approval request ID"
+// @Param id path string true "Deploy approval request public ID (UUID)"
 // @Param request body UpdateDeployApprovalRequestStatusRequest false "Approval notes"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 400 {object} ErrorResponse
@@ -452,8 +444,8 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 {
+	publicID := strings.TrimSpace(c.Param("id"))
+	if publicID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
 		return
 	}
@@ -476,7 +468,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	}
 
 	expiresAt := time.Now().Add(window)
-	record, err := h.database.ApproveDeployApprovalRequest(id, approver.ID, expiresAt, payload.Notes)
+	record, err := h.database.ApproveDeployApprovalRequestByPublicID(publicID, approver.ID, expiresAt, payload.Notes)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
@@ -484,6 +476,17 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve deploy approval request"})
 		return
+	}
+
+	// Trigger CircleCI approval if integration is enabled and metadata is present
+	if record.CIProvider == "circleci" && len(record.CIMetadata) > 0 {
+		go func() {
+			if err := h.approveCircleCIJob(record); err != nil {
+				fmt.Printf("Failed to approve CircleCI job for request %d: %v\n", record.ID, err)
+			} else {
+				fmt.Printf("Successfully approved CircleCI job for request %d\n", record.ID)
+			}
+		}()
 	}
 
 	details := auditDetails(map[string]string{
@@ -514,7 +517,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 // @Tags DeployApprovalRequests
 // @Accept json
 // @Produce json
-// @Param id path int true "Deploy approval request ID"
+// @Param id path string true "Deploy approval request public ID (UUID)"
 // @Param request body UpdateDeployApprovalRequestStatusRequest false "Rejection notes"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 400 {object} ErrorResponse
@@ -547,8 +550,8 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || id <= 0 {
+	publicID := strings.TrimSpace(c.Param("id"))
+	if publicID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
 		return
 	}
@@ -565,7 +568,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	record, err := h.database.RejectDeployApprovalRequest(id, approver.ID, payload.Notes)
+	record, err := h.database.RejectDeployApprovalRequestByPublicID(publicID, approver.ID, payload.Notes)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
@@ -601,7 +604,7 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		return DeployApprovalRequestResponse{}
 	}
 	resp := DeployApprovalRequestResponse{
-		ID:                        dr.ID,
+		PublicID:                  dr.PublicID,
 		Message:                   dr.Message,
 		Status:                    dr.Status,
 		CreatedAt:                 dr.CreatedAt,
@@ -675,4 +678,46 @@ func auditDetails(values map[string]string) string {
 
 func ptrTime(t time.Time) *time.Time {
 	return &t
+}
+
+func (h *AdminHandler) approveCircleCIJob(record *db.DeployApprovalRequest) error {
+	// Check if CircleCI integration is enabled
+	enabled, err := h.database.CircleCIEnabled()
+	if err != nil {
+		return fmt.Errorf("failed to check circleci enabled: %w", err)
+	}
+	if !enabled {
+		return fmt.Errorf("circleci integration not enabled")
+	}
+
+	// Get CircleCI settings
+	settings, err := h.database.GetCircleCISettings()
+	if err != nil {
+		return fmt.Errorf("failed to get circleci settings: %w", err)
+	}
+
+	// Parse CI metadata
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
+		return fmt.Errorf("failed to parse ci_metadata: %w", err)
+	}
+
+	// Validate metadata
+	if err := circleci.ValidateMetadata(metadata); err != nil {
+		return fmt.Errorf("invalid circleci metadata: %w", err)
+	}
+
+	// Parse metadata
+	approvalMeta, err := circleci.ParseMetadata(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	// Create CircleCI client and approve the job
+	client := circleci.NewClient(settings.APIToken)
+	if err := client.ApproveJob(approvalMeta.WorkflowID, approvalMeta.ApprovalJobName); err != nil {
+		return fmt.Errorf("failed to approve circleci job: %w", err)
+	}
+
+	return nil
 }

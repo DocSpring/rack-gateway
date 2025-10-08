@@ -5,11 +5,15 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
+import type { HandlersCreateDeployApprovalRequestRequestCiMetadata } from './handlersCreateDeployApprovalRequestRequestCiMetadata';
 
 export interface HandlersCreateDeployApprovalRequestRequest {
-  app: string;
+  ci_metadata?: HandlersCreateDeployApprovalRequestRequestCiMetadata;
+  ci_provider?: string;
+  git_branch?: string;
+  git_commit_hash: string;
   message: string;
-  release_id: string;
+  pipeline_url?: string;
   target_api_token?: string;
   target_api_token_id?: string;
 }

@@ -89,7 +89,7 @@ type AuditLog struct {
 	APITokenID     *int64    `json:"api_token_id,omitempty"`
 	APITokenName   string    `json:"api_token_name,omitempty"`
 	ActionType     string    `json:"action_type"` // "convox", "users", "auth"
-	Action         string    `json:"action"`      // e.g., "env.read", "user.create", "auth.failed"
+	Action         string    `json:"action"`      // e.g., "env.read", "user.create", "login.oauth_failed"
 	Command        string    `json:"command,omitempty"`
 	Resource       string    `json:"resource,omitempty"`
 	ResourceType   string    `json:"resource_type,omitempty"`
@@ -121,6 +121,7 @@ type CreatorInfo struct {
 // DeployApprovalRequest tracks manual approval requirements for CI/CD actions.
 type DeployApprovalRequest struct {
 	ID                          int64           `json:"id"`
+	PublicID                    string          `json:"public_id"`
 	Message                     string          `json:"message"`
 	Status                      string          `json:"status"`
 	CreatedAt                   time.Time       `json:"created_at" ts_type:"string"`

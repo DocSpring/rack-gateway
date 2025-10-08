@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate } from '@tanstack/react-router'
 import type { VariantProps } from 'class-variance-authority'
-import { Check, Eye, Loader2, MoreVertical, Timer, X } from 'lucide-react'
+import { Check, Loader2, Timer, X } from 'lucide-react'
 import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
+import { UuidCell } from '@/components/uuid-cell'
 import { Badge, type badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,13 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import {
@@ -35,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 import { UserMetaCell } from '@/components/user-meta-cell'
 import { useAuth } from '@/contexts/auth-context'
@@ -145,7 +140,7 @@ export function DeployApprovalRequestsPage() {
   })
 
   const approveMutation = useMutation({
-    mutationFn: (id: number) => approveDeployApprovalRequest(id, {}),
+    mutationFn: (id: string) => approveDeployApprovalRequest(id, {}),
     onSuccess: (_data, id) => {
       toast.success(`Request ${id} was approved`)
       queryClient.invalidateQueries({ queryKey })
@@ -153,7 +148,7 @@ export function DeployApprovalRequestsPage() {
   })
 
   const rejectMutation = useMutation({
-    mutationFn: ({ id, notes }: { id: number; notes: string }) =>
+    mutationFn: ({ id, notes }: { id: string; notes: string }) =>
       rejectDeployApprovalRequest(id, toNotesPayload(notes)),
     onSuccess: (_data, { id }) => {
       toast.success(`Request ${id} was rejected`)
@@ -181,7 +176,7 @@ export function DeployApprovalRequestsPage() {
   const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
 
   const approveRequest = useCallback(
-    async (id: number) => {
+    async (id: string) => {
       try {
         await approveMutation.mutateAsync(id)
       } catch (err) {
@@ -196,7 +191,7 @@ export function DeployApprovalRequestsPage() {
   )
 
   const submitRejection = useCallback(
-    async (id: number, notes: string) => {
+    async (id: string, notes: string) => {
       try {
         await rejectMutation.mutateAsync({ id, notes })
       } catch (err) {
@@ -211,7 +206,7 @@ export function DeployApprovalRequestsPage() {
   )
 
   const handleApprove = useCallback(
-    (id: number) => {
+    (id: string) => {
       approveRequest(id).catch(() => {
         /* errors handled within approveRequest */
       })
@@ -263,8 +258,9 @@ export function DeployApprovalRequestsPage() {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>Message</TableHead>
-                <TableHead>App</TableHead>
-                <TableHead>Target Token</TableHead>
+                <TableHead>Git Commit</TableHead>
+                <TableHead>Branch</TableHead>
+                <TableHead>API Token</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Decided By</TableHead>
                 <TableHead>Created</TableHead>
@@ -274,21 +270,19 @@ export function DeployApprovalRequestsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleRequests.map((request) =>
-                request.id == null ? null : (
-                  <DeployApprovalRequestRow
-                    approveDisabled={approveDisabled}
-                    approvePending={approveMutation.isPending}
-                    key={request.id}
-                    onApprove={handleApprove}
-                    onReject={handleRejectClick}
-                    onSelect={setSelectedRequest}
-                    rejectDisabled={rejectDisabled}
-                    rejectPending={rejectMutation.isPending}
-                    request={request}
-                  />
-                )
-              )}
+              {visibleRequests.map((request) => (
+                <DeployApprovalRequestRow
+                  approveDisabled={approveDisabled}
+                  approvePending={approveMutation.isPending}
+                  key={request.public_id}
+                  onApprove={handleApprove}
+                  onReject={handleRejectClick}
+                  onSelect={setSelectedRequest}
+                  rejectDisabled={rejectDisabled}
+                  rejectPending={rejectMutation.isPending}
+                  request={request}
+                />
+              ))}
             </TableBody>
           </Table>
           {total > 0 && (
@@ -325,7 +319,7 @@ export function DeployApprovalRequestsPage() {
           <DialogHeader>
             <DialogTitle>Reject deploy approval request</DialogTitle>
             <DialogDescription>
-              Provide an optional reason for rejecting request {rejectRequest?.id ?? '—'}.
+              Provide an optional reason for rejecting request {rejectRequest?.public_id ?? '—'}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -347,10 +341,10 @@ export function DeployApprovalRequestsPage() {
             <Button
               disabled={rejectMutation.isPending}
               onClick={() => {
-                if (!rejectRequest || rejectRequest.id == null) {
+                if (!rejectRequest || !rejectRequest.public_id) {
                   return
                 }
-                submitRejection(rejectRequest.id, rejectNotes).catch(() => {
+                submitRejection(rejectRequest.public_id, rejectNotes).catch(() => {
                   /* errors handled within submitRejection */
                 })
               }}
@@ -382,6 +376,36 @@ export function DeployApprovalRequestsPage() {
             <div className="space-y-3 text-sm">
               <DetailRow label="Message" value={selectedRequest.message ?? '—'} />
               <DetailRow label="Status" value={selectedRequest.status ?? '—'} />
+
+              <DetailRow
+                label="Git Commit"
+                value={selectedRequest.git_commit_hash ?? '—'}
+                valueClassName="font-mono"
+              />
+              <DetailRow
+                label="Branch"
+                value={selectedRequest.git_branch ?? '—'}
+                valueClassName="font-mono"
+              />
+              {selectedRequest.pipeline_url && (
+                <DetailRow
+                  label="Pipeline URL"
+                  value={
+                    <a
+                      className="text-primary hover:underline"
+                      href={selectedRequest.pipeline_url}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {selectedRequest.pipeline_url}
+                    </a>
+                  }
+                />
+              )}
+              {selectedRequest.ci_provider && (
+                <DetailRow label="CI Provider" value={selectedRequest.ci_provider} />
+              )}
+
               <DetailRow
                 label="Target Token"
                 value={
@@ -394,10 +418,6 @@ export function DeployApprovalRequestsPage() {
               <DetailRow label="Updated" value={renderTime(selectedRequest.updated_at)} />
               <DetailRow label="Expires" value={renderTime(selectedRequest.approval_expires_at)} />
 
-              <DetailRow
-                label="Promoted By Token"
-                value={selectedRequest.release_promoted_by_api_token_id ?? '—'}
-              />
               <DetailRow
                 label="Created By"
                 value={
@@ -423,16 +443,9 @@ export function DeployApprovalRequestsPage() {
               <DetailRow label="Rejected At" value={renderTime(selectedRequest.rejected_at)} />
               <DetailRow label="Reviewer Notes" value={selectedRequest.approval_notes ?? '—'} />
 
-              <DetailRow label="App" value={selectedRequest.app ?? '—'} />
-              <DetailRow label="Release ID" value={selectedRequest.release_id ?? '—'} />
-              <DetailRow
-                label="Release Created"
-                value={renderTime(selectedRequest.release_created_at)}
-              />
-              <DetailRow
-                label="Release Promoted"
-                value={renderTime(selectedRequest.release_promoted_at)}
-              />
+              {selectedRequest.app && <DetailRow label="App" value={selectedRequest.app} />}
+              {selectedRequest.build_id && <DetailRow label="Build ID" value={selectedRequest.build_id} valueClassName="font-mono" />}
+              {selectedRequest.release_id && <DetailRow label="Release ID" value={selectedRequest.release_id} valueClassName="font-mono" />}
             </div>
           )}
           <div className="mt-2 flex justify-end">
@@ -452,7 +465,7 @@ type DeployApprovalRequestRowProps = {
   approvePending: boolean
   rejectDisabled: boolean
   rejectPending: boolean
-  onApprove: (id: number) => void
+  onApprove: (id: string) => void
   onReject: (request: DeployApprovalRequest) => void
   onSelect: (request: DeployApprovalRequest) => void
 }
@@ -468,16 +481,10 @@ function DeployApprovalRequestRow({
   onReject,
   onSelect,
 }: DeployApprovalRequestRowProps) {
-  const id = request.id
-  if (id == null) {
-    return null
-  }
-
+  const publicId = request.public_id
   const message = request.message ?? '(no message provided)'
-  const tokenLabel =
-    request.target_api_token_name ??
-    (request.target_api_token_id != null ? `Token ${request.target_api_token_id}` : 'Unknown token')
-  const tokenIdLabel = request.target_api_token_id ?? '—'
+  const tokenName = request.target_api_token_name ?? 'Unknown token'
+  const tokenId = request.target_api_token_id ?? undefined
   const status = request.status ?? 'unknown'
   const normalizedStatus = status.toLowerCase()
   const canApprove = normalizedStatus === 'pending'
@@ -508,25 +515,43 @@ function DeployApprovalRequestRow({
     }
   }
 
+  const shortCommit = request.git_commit_hash?.substring(0, 7) ?? '—'
+  const gitBranch = request.git_branch ?? '—'
+
   return (
     <TableRow
       className="cursor-pointer hover:bg-muted/40"
-      key={id}
+      key={publicId}
       onClick={handleRowClick}
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
     >
-      <TableCell className="font-mono text-sm">{id}</TableCell>
+      <TableCell>
+        <UuidCell uuid={publicId} label="Request ID" />
+      </TableCell>
       <TableCell className="max-w-xs truncate" title={message}>
         {message}
       </TableCell>
-      <TableCell className="font-mono text-sm">{request.app ?? '—'}</TableCell>
+      <TableCell className="font-mono text-sm" title={request.git_commit_hash ?? undefined}>
+        {shortCommit}
+      </TableCell>
+      <TableCell className="font-mono text-sm">{gitBranch}</TableCell>
       <TableCell>
-        <div className="flex flex-col text-sm">
-          <span>{tokenLabel}</span>
-          <span className="text-muted-foreground text-sm">ID {tokenIdLabel}</span>
-        </div>
+        {tokenId ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help text-sm">{tokenName}</span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <span className="font-mono">{tokenId}</span>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <span className="text-sm">{tokenName}</span>
+        )}
       </TableCell>
       <TableCell>{statusBadge(status)}</TableCell>
       <TableCell>
@@ -552,64 +577,43 @@ function DeployApprovalRequestRow({
         </div>
       </TableCell>
       <TableCell>
-        <div className="flex justify-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={`Actions for request ${id}`}
-                onClick={(event) => event.stopPropagation()}
-                size="sm"
-                variant="ghost"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onSelect(request)
-                }}
-              >
-                <Eye className="h-4 w-4" />
-                View Details
-              </DropdownMenuItem>
-              {(canApprove || canReject) && <DropdownMenuSeparator />}
-              {canApprove && (
-                <DropdownMenuItem
-                  disabled={approveDisabled}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onApprove(id)
-                  }}
-                >
-                  {approvePending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  Approve
-                </DropdownMenuItem>
+        <div className="flex justify-end gap-1">
+          {canApprove && (
+            <Button
+              aria-label={`Approve request ${publicId}`}
+              disabled={approveDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onApprove(publicId)
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              {approvePending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 text-green-600" />
               )}
-              {canReject && (
-                <DropdownMenuItem
-                  disabled={rejectDisabled}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onReject(request)
-                  }}
-                  variant="destructive"
-                >
-                  {rejectPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <X className="h-4 w-4" />
-                  )}
-                  Reject
-                </DropdownMenuItem>
+            </Button>
+          )}
+          {canReject && (
+            <Button
+              aria-label={`Reject request ${publicId}`}
+              disabled={rejectDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onReject(request)
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              {rejectPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <X className="h-4 w-4 text-red-600" />
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -619,6 +623,7 @@ function DeployApprovalRequestRow({
 type DetailRowProps = {
   label: string
   value: ReactNode
+  valueClassName?: string
 }
 
 function renderTime(value?: string | null): ReactNode {
@@ -632,10 +637,11 @@ function formatUser(name?: string | null, email?: string | null): string {
   return name ?? email ?? '—'
 }
 
-function DetailRow({ label, value }: DetailRowProps) {
+function DetailRow({ label, value, valueClassName }: DetailRowProps) {
   return (
     <div className="break-words text-sm">
-      <span className="text-muted-foreground">{label}:</span> {value ?? '—'}
+      <span className="text-muted-foreground">{label}:</span>{' '}
+      <span className={valueClassName}>{value ?? '—'}</span>
     </div>
   )
 }

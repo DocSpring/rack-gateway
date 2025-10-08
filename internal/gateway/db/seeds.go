@@ -62,6 +62,28 @@ func (d *Database) SeedDatabase(cfg *SeedConfig) error {
 		}
 	}
 
+	// Seed CircleCI settings from environment variables
+	circleCIAPIToken := strings.TrimSpace(os.Getenv("CIRCLE_CI_API_TOKEN"))
+	circleCIApprovalJobName := strings.TrimSpace(os.Getenv("CIRCLE_CI_APPROVAL_JOB_NAME"))
+	circleCIOrgSlug := strings.TrimSpace(os.Getenv("CIRCLE_CI_ORG_SLUG"))
+
+	if circleCIAPIToken != "" || circleCIApprovalJobName != "" {
+		raw, ok, err := d.GetSettingRaw("circleci")
+		if err != nil {
+			return fmt.Errorf("failed to read circleci setting: %w", err)
+		}
+		if !ok || len(raw) == 0 {
+			settings := &CircleCISettings{
+				APIToken:        circleCIAPIToken,
+				ApprovalJobName: circleCIApprovalJobName,
+				OrgSlug:         circleCIOrgSlug,
+			}
+			if err := d.UpsertCircleCISettings(settings, nil); err != nil {
+				return fmt.Errorf("failed to seed circleci settings: %w", err)
+			}
+		}
+	}
+
 	return nil
 }
 

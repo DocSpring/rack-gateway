@@ -5,6 +5,7 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
+import type { HandlersDeployApprovalRequestResponseCiMetadata } from './handlersDeployApprovalRequestResponseCiMetadata';
 
 export interface HandlersDeployApprovalRequestResponse {
   app?: string;
@@ -13,13 +14,19 @@ export interface HandlersDeployApprovalRequestResponse {
   approved_at?: string;
   approved_by_email?: string;
   approved_by_name?: string;
+  build_id?: string;
+  ci_metadata?: HandlersDeployApprovalRequestResponseCiMetadata;
+  ci_provider?: string;
   created_at?: string;
   created_by_api_token_id?: string;
   created_by_api_token_name?: string;
   created_by_email?: string;
   created_by_name?: string;
-  id?: number;
+  git_branch?: string;
+  git_commit_hash?: string;
   message?: string;
+  pipeline_url?: string;
+  public_id?: string;
   rejected_at?: string;
   rejected_by_email?: string;
   rejected_by_name?: string;

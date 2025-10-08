@@ -17,10 +17,10 @@ const buttonVariants = cva(
           'bg-destructive text-white shadow-sm hover:bg-destructive/90 disabled:text-white/50',
         success: 'bg-green-600 text-white shadow-sm hover:bg-green-700 disabled:text-white/50',
         outline:
-          'border border-gray-500 bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground',
-        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
+          'border border-gray-500 bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
+        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 disabled:opacity-50',
+        ghost: 'hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
+        link: 'text-primary underline-offset-4 hover:underline disabled:opacity-50',
       },
       size: {
         default: 'h-9 px-4 py-2',

@@ -24,7 +24,7 @@ export interface APITokenResponse {
     api_token?: APIToken;
 }
 export interface DeployApprovalRequestResponse {
-    id: number;
+    public_id: string;
     message: string;
     status: string;
     created_at: string;
@@ -43,8 +43,14 @@ export interface DeployApprovalRequestResponse {
     rejected_by_name?: string;
     rejected_at?: string;
     approval_notes?: string;
-    app: string;
-    release_id: string;
+    git_commit_hash: string;
+    git_branch?: string;
+    pipeline_url?: string;
+    ci_provider?: string;
+    ci_metadata?: {[key: string]: any};
+    app?: string;
+    build_id?: string;
+    release_id?: string;
     release_created_at?: string;
     release_promoted_at?: string;
     release_promoted_by_api_token_id?: number;

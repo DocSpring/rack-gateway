@@ -338,7 +338,7 @@ type UpdateDeployApprovalRequestStatusRequest struct {
 
 // DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
 type DeployApprovalRequestResponse struct {
-	ID                        int64                  `json:"id"`
+	PublicID                  string                 `json:"public_id"`
 	Message                   string                 `json:"message"`
 	Status                    string                 `json:"status"`
 	CreatedAt                 time.Time              `json:"created_at" ts_type:"string"`

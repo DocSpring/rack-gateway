@@ -20,10 +20,9 @@ import {
 import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/auth-context'
 import { cn } from '../lib/utils'
-import { CodeBlockCopy } from './code-block-copy'
+import { CliSetupDialog } from './cli-setup-dialog'
 import { ThemeToggle } from './theme-toggle'
 import { Button } from './ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 
 type NavigationItem = {
@@ -293,55 +292,12 @@ export function Layout() {
       </div>
 
       {/* Configure CLI Dialog */}
-      <Dialog onOpenChange={setShowCliDialog} open={showCliDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Configure CLI</DialogTitle>
-            <DialogDescription>
-              Follow these steps to install and authenticate the Rack gateway CLI.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 text-sm">
-            <p>Clone the repository and install the CLI:</p>
-            <CodeBlockCopy
-              code={
-                'git clone git@github.com:DocSpring/rack-gateway.git\ncd rack-gateway\n./scripts/install.sh'
-              }
-            >
-              <div className="rounded-md border bg-muted p-3 font-mono text-xs">
-                <div>git clone git@github.com:DocSpring/rack-gateway.git</div>
-                <div className="mt-1">cd rack-gateway</div>
-                <div className="mt-1">./scripts/install.sh</div>
-              </div>
-            </CodeBlockCopy>
-
-            <p className="pt-1">Authenticate the CLI against this gateway:</p>
-            <CodeBlockCopy code={`rack-gateway login ${rackAlias} ${gatewayOrigin}`}>
-              <div className="rounded-md border bg-muted p-3 font-mono text-xs">
-                <div>
-                  rack-gateway login {rackAlias} {gatewayOrigin}
-                </div>
-              </div>
-            </CodeBlockCopy>
-            <p className="text-muted-foreground">
-              After logging in, you can run Convox commands via the gateway using{' '}
-              <span className="font-mono">rack-gateway convox …</span>
-            </p>
-            <p className="text-muted-foreground">
-              See the{' '}
-              <a
-                className="underline hover:no-underline"
-                href="https://github.com/DocSpring/rack-gateway/blob/main/README.md"
-                rel="noreferrer noopener"
-                target="_blank"
-              >
-                README
-              </a>{' '}
-              for more information.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CliSetupDialog
+        gatewayOrigin={gatewayOrigin}
+        onOpenChange={setShowCliDialog}
+        open={showCliDialog}
+        rackAlias={rackAlias}
+      />
     </div>
   )
 }

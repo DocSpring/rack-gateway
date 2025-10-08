@@ -170,6 +170,10 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 	if database == nil {
 		return nil
 	}
+	// Set timestamp if not already set
+	if al.Timestamp.IsZero() {
+		al.Timestamp = time.Now().UTC()
+	}
 	return database.CreateAuditLog(al)
 }
 

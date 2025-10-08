@@ -194,3 +194,45 @@ func (d *Database) UpdateApprovedCommands(commands []string, updatedByUserID *in
 	settings := &ApprovedCommandsSettings{Commands: commands}
 	return d.UpsertSetting("approved_commands", settings, updatedByUserID)
 }
+
+// CircleCISettings contains CircleCI integration configuration.
+type CircleCISettings struct {
+	APIToken        string `json:"api_token"`
+	ApprovalJobName string `json:"approval_job_name"`
+	OrgSlug         string `json:"org_slug,omitempty"`
+}
+
+// GetCircleCISettings returns CircleCI integration settings.
+func (d *Database) GetCircleCISettings() (*CircleCISettings, error) {
+	raw, ok, err := d.GetSettingRaw("circleci")
+	if err != nil {
+		return nil, err
+	}
+	if !ok || len(raw) == 0 {
+		return &CircleCISettings{}, nil
+	}
+
+	var settings CircleCISettings
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return nil, fmt.Errorf("invalid circleci settings: %w", err)
+	}
+
+	return &settings, nil
+}
+
+// UpsertCircleCISettings stores CircleCI integration settings.
+func (d *Database) UpsertCircleCISettings(settings *CircleCISettings, updatedByUserID *int64) error {
+	if settings == nil {
+		return fmt.Errorf("circleci settings cannot be nil")
+	}
+	return d.UpsertSetting("circleci", settings, updatedByUserID)
+}
+
+// CircleCIEnabled returns true if CircleCI integration is configured.
+func (d *Database) CircleCIEnabled() (bool, error) {
+	settings, err := d.GetCircleCISettings()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(settings.APIToken) != "" && strings.TrimSpace(settings.ApprovalJobName) != "", nil
+}

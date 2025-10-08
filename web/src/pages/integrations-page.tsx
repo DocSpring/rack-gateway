@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Loader2, Plus, Trash2, X } from 'lucide-react'
+import { CheckCircle2, Circle, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
@@ -61,6 +61,12 @@ type SlackConfig = {
   configured: boolean
 }
 
+type CircleCISettings = {
+  api_token: string
+  approval_job_name: string
+  org_slug?: string
+}
+
 export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const queryClient = useQueryClient()
@@ -77,6 +83,22 @@ export function IntegrationsPage() {
           return { configured: false }
         }
         return { configured: true }
+      }
+    },
+  })
+
+  // Fetch CircleCI settings
+  const { data: circleCISettings } = useQuery<CircleCISettings | null>({
+    queryKey: ['circleci-settings'],
+    queryFn: async (): Promise<CircleCISettings | null> => {
+      try {
+        const response = await api.get<CircleCISettings>('/.gateway/api/admin/settings/circleci')
+        return response
+      } catch (error: unknown) {
+        if (hasStatus(error, 404)) {
+          return null
+        }
+        throw error
       }
     },
   })
@@ -269,15 +291,98 @@ export function IntegrationsPage() {
   }
 
   const slackConfigured = slackConfig?.configured !== false
+  const circleCIEnabled = !!(
+    circleCISettings?.api_token?.trim() && circleCISettings?.approval_job_name?.trim()
+  )
 
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
         <h1 className="font-bold text-3xl">Integrations</h1>
-        <p className="text-muted-foreground">Connect external services to receive notifications</p>
+        <p className="text-muted-foreground">Connect external services to receive notifications and automate workflows</p>
       </div>
 
-      {slackConfigured ? (
+      <div className="space-y-4">
+        {/* CircleCI Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <svg className="size-6" fill="currentColor" viewBox="0 0 24 24">
+                    <title>CircleCI logo</title>
+                    <circle cx="12" cy="12" fill="currentColor" r="10.5" />
+                    <circle cx="12" cy="12" fill="white" r="4" />
+                  </svg>
+                  CircleCI
+                </CardTitle>
+                <CardDescription>
+                  Automatically approve CircleCI jobs after deploy approval
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {circleCIEnabled ? (
+                  <CheckCircle2 className="size-5 text-green-600" />
+                ) : (
+                  <Circle className="size-5 text-muted-foreground" />
+                )}
+                <span className="text-muted-foreground text-sm">
+                  {circleCIEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {circleCIEnabled ? (
+              <div className="space-y-3">
+                <Alert>
+                  <CheckCircle2 className="size-4" />
+                  <AlertDescription>
+                    CircleCI integration is enabled. When a deploy approval is granted, the gateway will
+                    automatically approve the corresponding CircleCI job.
+                  </AlertDescription>
+                </Alert>
+                <div className="rounded border bg-muted p-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Approval Job Name:</span>
+                      <code className="rounded bg-background px-2 py-1">{circleCISettings.approval_job_name}</code>
+                    </div>
+                    {circleCISettings.org_slug && (
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">Organization:</span>
+                        <code className="rounded bg-background px-2 py-1">{circleCISettings.org_slug}</code>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">API Token:</span>
+                      <span className="text-muted-foreground">Configured</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Configuration is managed via environment variables:
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLE_CI_API_TOKEN</code>,
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLE_CI_APPROVAL_JOB_NAME</code>
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4 py-8">
+                <p className="text-center text-muted-foreground text-sm">
+                  CircleCI integration is not configured. Set the following environment variables to enable:
+                </p>
+                <div className="w-full max-w-md space-y-2 rounded border bg-muted p-4 font-mono text-sm">
+                  <div>CIRCLE_CI_API_TOKEN=your-api-token</div>
+                  <div>CIRCLE_CI_APPROVAL_JOB_NAME=approve_deploy_staging</div>
+                  <div className="text-muted-foreground">CIRCLE_CI_ORG_SLUG=gh/YourOrg (optional)</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Slack Card */}
+        {slackConfigured ? (
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between">
@@ -370,13 +475,8 @@ export function IntegrationsPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12">
-            <p className="text-center text-muted-foreground text-sm">No integrations configured.</p>
-          </CardContent>
-        </Card>
-      )}
+        ) : null}
+      </div>
     </div>
   )
 }

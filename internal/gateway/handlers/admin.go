@@ -1655,6 +1655,41 @@ func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
 	c.JSON(http.StatusOK, cert)
 }
 
+// GetCircleCISettings godoc
+// @Summary Get CircleCI integration settings
+// @Description Returns CircleCI integration configuration including API token and approval job name.
+// @Tags Settings
+// @Produce json
+// @Success 200 {object} db.CircleCISettings
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /admin/settings/circleci [get]
+func (h *AdminHandler) GetCircleCISettings(c *gin.Context) {
+	if h.database == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database unavailable"})
+		return
+	}
+
+	enabled, err := h.database.CircleCIEnabled()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check circleci status"})
+		return
+	}
+	if !enabled {
+		c.JSON(http.StatusNotFound, gin.H{"error": "circleci integration not configured"})
+		return
+	}
+
+	settings, err := h.database.GetCircleCISettings()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get circleci settings"})
+		return
+	}
+
+	c.JSON(http.StatusOK, settings)
+}
+
 // Token management
 
 // CreateAPIToken godoc

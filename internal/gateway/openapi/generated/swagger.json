@@ -354,8 +354,8 @@
                 "summary": "Approve deploy approval request",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Deploy approval request ID",
+                        "type": "string",
+                        "description": "Deploy approval request public ID (UUID)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -432,8 +432,8 @@
                 "summary": "Reject deploy approval request",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Deploy approval request ID",
+                        "type": "string",
+                        "description": "Deploy approval request public ID (UUID)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -636,6 +636,43 @@
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/circleci": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns CircleCI integration configuration including API token and approval job name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get CircleCI integration settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/db.CircleCISettings"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2823,8 +2860,8 @@
                 "summary": "Get deploy approval",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Deploy approval request ID",
+                        "type": "string",
+                        "description": "Deploy approval request public ID (UUID)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -3231,6 +3268,20 @@
                 }
             }
         },
+        "db.CircleCISettings": {
+            "type": "object",
+            "properties": {
+                "api_token": {
+                    "type": "string"
+                },
+                "approval_job_name": {
+                    "type": "string"
+                },
+                "org_slug": {
+                    "type": "string"
+                }
+            }
+        },
         "db.CreatorInfo": {
             "type": "object",
             "properties": {
@@ -3462,18 +3513,27 @@
         "handlers.CreateDeployApprovalRequestRequest": {
             "type": "object",
             "required": [
-                "app",
-                "message",
-                "release_id"
+                "git_commit_hash",
+                "message"
             ],
             "properties": {
-                "app": {
+                "ci_metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "ci_provider": {
+                    "type": "string"
+                },
+                "git_branch": {
+                    "type": "string"
+                },
+                "git_commit_hash": {
                     "type": "string"
                 },
                 "message": {
                     "type": "string"
                 },
-                "release_id": {
+                "pipeline_url": {
                     "type": "string"
                 },
                 "target_api_token": {
@@ -3583,6 +3643,16 @@
                 "approved_by_name": {
                     "type": "string"
                 },
+                "build_id": {
+                    "type": "string"
+                },
+                "ci_metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "ci_provider": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -3598,10 +3668,19 @@
                 "created_by_name": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "integer"
+                "git_branch": {
+                    "type": "string"
+                },
+                "git_commit_hash": {
+                    "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                },
+                "pipeline_url": {
+                    "type": "string"
+                },
+                "public_id": {
                     "type": "string"
                 },
                 "rejected_at": {

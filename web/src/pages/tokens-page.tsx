@@ -3,6 +3,7 @@ import { Copy, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { toast } from '@/components/ui/use-toast'
+import { UuidCell } from '../components/uuid-cell'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
@@ -206,17 +207,7 @@ function TokenRow({
   return (
     <TableRow key={token.id}>
       <TableCell>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs">{token.public_id}</span>
-          <Button
-            aria-label={`Copy token ID for ${token.name}`}
-            onClick={() => onCopyId(token.public_id)}
-            size="icon"
-            variant="ghost"
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-        </div>
+        <UuidCell uuid={token.public_id} label="Token ID" />
       </TableCell>
       <TableCell className="font-medium">{token.name}</TableCell>
       <TableCell>

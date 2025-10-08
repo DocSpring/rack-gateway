@@ -14,7 +14,6 @@ const (
 	ActionAuthLoginComplete     = "login.complete"
 	ActionAuthLoginMFA          = "login.mfa"
 	ActionAuthLogout            = "logout"
-	ActionAuthFailed            = "auth.failed"
 	ActionAuthTokenValidate     = "token.validate"
 	ActionMFAEnroll             = "mfa.enroll"
 	ActionMFAVerify             = "mfa.verify"

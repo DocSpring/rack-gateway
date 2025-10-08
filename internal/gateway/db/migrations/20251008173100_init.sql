@@ -268,6 +268,7 @@ CREATE INDEX idx_mfa_webauthn_attempts_failures
 -- Deploy approval requests for git commit-based approval flows
 CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   id BIGSERIAL PRIMARY KEY,
+  public_id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
 
   -- Git commit metadata (required at creation)
   git_commit_hash VARCHAR(40) NOT NULL,
@@ -306,6 +307,7 @@ CREATE TABLE IF NOT EXISTS deploy_approval_requests (
 );
 
 -- Indexes for deploy approval requests
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_public_id ON deploy_approval_requests(public_id);
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_token ON deploy_approval_requests(target_api_token_id);
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_status ON deploy_approval_requests(status);
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_commit ON deploy_approval_requests(git_commit_hash);

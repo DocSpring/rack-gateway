@@ -162,17 +162,17 @@ func TestFormatAuditLogMessage(t *testing.T) {
 			expectInBlock: []string{"Test User", "success", "TOTP enrolled"},
 		},
 		{
-			name: "Auth failed",
+			name: "OAuth failed",
 			auditLog: &db.AuditLog{
-				Action:    "auth.failed",
+				Action:    "login.oauth_failed",
 				UserEmail: "hacker@example.com",
-				Status:    "denied",
+				Status:    "failed",
 				IPAddress: "192.168.1.1",
 				Timestamp: time.Now(),
 			},
 			expectEmoji:   "🚨",
-			expectInText:  []string{"auth.failed", "hacker@example.com"},
-			expectInBlock: []string{"denied", "192.168.1.1"},
+			expectInText:  []string{"login.oauth_failed", "hacker@example.com"},
+			expectInBlock: []string{"failed", "192.168.1.1"},
 		},
 		{
 			name: "Deploy approval request",

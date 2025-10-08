@@ -329,8 +329,8 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy approval request ID */
-                    id: number;
+                    /** @description Deploy approval request public ID (UUID) */
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -421,8 +421,8 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy approval request ID */
-                    id: number;
+                    /** @description Deploy approval request public ID (UUID) */
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -694,6 +694,63 @@ export interface paths {
                 };
             };
         };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/settings/circleci": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get CircleCI integration settings
+         * @description Returns CircleCI integration configuration including API token and approval job name.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["db.CircleCISettings"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2100,7 +2157,7 @@ export interface paths {
         put?: never;
         /**
          * Regenerate backup codes
-         * @description Generates a fresh set of backup codes. Existing codes are invalidated immediately.
+         * @description Generates a new set of MFA backup codes. All prior codes become invalid.
          */
         post: {
             parameters: {
@@ -2794,7 +2851,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke a trusted device
-         * @description Revokes a trusted device token for the current user.
+         * @description Revokes a trusted device, requiring MFA on next login from that device.
          */
         delete: {
             parameters: {
@@ -3395,8 +3452,8 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy approval request ID */
-                    id: number;
+                    /** @description Deploy approval request public ID (UUID) */
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -3812,6 +3869,11 @@ export interface components {
             user_email?: string;
             user_name?: string;
         };
+        "db.CircleCISettings": {
+            api_token?: string;
+            approval_job_name?: string;
+            org_slug?: string;
+        };
         "db.CreatorInfo": {
             email?: string;
             name?: string;
@@ -3883,9 +3945,14 @@ export interface components {
             token?: string;
         };
         "handlers.CreateDeployApprovalRequestRequest": {
-            app: string;
+            ci_metadata?: {
+                [key: string]: unknown;
+            };
+            ci_provider?: string;
+            git_branch?: string;
+            git_commit_hash: string;
             message: string;
-            release_id: string;
+            pipeline_url?: string;
             target_api_token?: string;
             target_api_token_id?: string;
         };
@@ -3917,13 +3984,21 @@ export interface components {
             approved_at?: string;
             approved_by_email?: string;
             approved_by_name?: string;
+            build_id?: string;
+            ci_metadata?: {
+                [key: string]: unknown;
+            };
+            ci_provider?: string;
             created_at?: string;
             created_by_api_token_id?: string;
             created_by_api_token_name?: string;
             created_by_email?: string;
             created_by_name?: string;
-            id?: number;
+            git_branch?: string;
+            git_commit_hash?: string;
             message?: string;
+            pipeline_url?: string;
+            public_id?: string;
             rejected_at?: string;
             rejected_by_email?: string;
             rejected_by_name?: string;

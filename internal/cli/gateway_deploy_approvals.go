@@ -21,7 +21,7 @@ import (
 var notificationSound []byte
 
 type deployApprovalRequest struct {
-	ID                 int64                  `json:"id"`
+	PublicID           string                 `json:"public_id"`
 	Message            string                 `json:"message"`
 	Status             string                 `json:"status"`
 	CreatedAt          time.Time              `json:"created_at"`
@@ -128,14 +128,14 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) && conflict.request != nil {
 					created = conflict.request
-					if err := writef(cmd.OutOrStdout(), "Deploy approval request %d already exists (status: %s)\n", created.ID, created.Status); err != nil {
+					if err := writef(cmd.OutOrStdout(), "Deploy approval request %s already exists (status: %s)\n", created.PublicID, created.Status); err != nil {
 						return err
 					}
 				} else {
 					return err
 				}
 			} else {
-				if err := writef(cmd.OutOrStdout(), "Deploy approval request %d created (status: %s)\n", created.ID, created.Status); err != nil {
+				if err := writef(cmd.OutOrStdout(), "Deploy approval request %s created (status: %s)\n", created.PublicID, created.Status); err != nil {
 					return err
 				}
 			}
@@ -145,24 +145,24 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 			}
 
 			if waitFlag {
-				final, err := waitForDeployApproval(cmd, gatewayURL, bearer, rack, created.ID, pollInterval, timeout)
+				final, err := waitForDeployApproval(cmd, gatewayURL, bearer, rack, created.PublicID, pollInterval, timeout)
 				if err != nil {
 					return err
 				}
 				switch strings.ToLower(final.Status) {
 				case "approved", "expired":
-					if err := writef(cmd.OutOrStdout(), "Deploy approval request %d approved.\n", final.ID); err != nil {
+					if err := writef(cmd.OutOrStdout(), "Deploy approval request %s approved.\n", final.PublicID); err != nil {
 						return err
 					}
 					return nil
 				case "rejected":
 					note := strings.TrimSpace(final.ApprovalNotes)
 					if note != "" {
-						return fmt.Errorf("deploy approval request %d rejected: %s", final.ID, note)
+						return fmt.Errorf("deploy approval request %s rejected: %s", final.PublicID, note)
 					}
-					return fmt.Errorf("deploy approval request %d rejected", final.ID)
+					return fmt.Errorf("deploy approval request %s rejected", final.PublicID)
 				default:
-					return fmt.Errorf("deploy approval request %d finished with status: %s", final.ID, final.Status)
+					return fmt.Errorf("deploy approval request %s finished with status: %s", final.PublicID, final.Status)
 				}
 			}
 
@@ -226,7 +226,7 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 				return err
 			}
 
-			statusLine := fmt.Sprintf("Deploy approval request %d approved", approved.ID)
+			statusLine := fmt.Sprintf("Deploy approval request %s approved", approved.PublicID)
 			if approved.ApprovalExpiresAt != nil {
 				statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
 			}
@@ -382,7 +382,7 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 							return err
 						}
 					}
-					if err := writef(cmd.OutOrStdout(), "  ID: %d\n", req.ID); err != nil {
+					if err := writef(cmd.OutOrStdout(), "  ID: %s\n", req.PublicID); err != nil {
 						return err
 					}
 					if err := writef(cmd.OutOrStdout(), "  Message: %s\n", req.Message); err != nil {
@@ -409,12 +409,12 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 						}
 
 						// Now approve the request
-						approved, err := approveDeployRequest(cmd, info.gatewayURL, info.bearer, info.name, fmt.Sprintf("%d", req.ID), strings.TrimSpace(notes), &mfaCode)
+						approved, err := approveDeployRequest(cmd, info.gatewayURL, info.bearer, info.name, req.PublicID, strings.TrimSpace(notes), &mfaCode)
 						if err != nil {
 							return err
 						}
 
-						statusLine := fmt.Sprintf("\n✅ Deploy approval request %d approved", approved.ID)
+						statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
 						if approved.ApprovalExpiresAt != nil {
 							statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
 						}
@@ -590,7 +590,7 @@ func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, pat
 		if resp.StatusCode >= 400 {
 			if resp.StatusCode == http.StatusConflict {
 				var existing deployApprovalRequest
-				if len(body) > 0 && json.Unmarshal(body, &existing) == nil && existing.ID > 0 {
+				if len(body) > 0 && json.Unmarshal(body, &existing) == nil && existing.PublicID != "" {
 					return &existing, &deployApprovalRequestConflictError{request: &existing}
 				}
 			}
@@ -624,11 +624,11 @@ func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer, rack string, mfaCo
 	return performMFAStepUp(cmd, gatewayURL, bearer, rack)
 }
 
-func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, id int64, interval, timeout time.Duration) (*deployApprovalRequest, error) {
+func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, publicID string, interval, timeout time.Duration) (*deployApprovalRequest, error) {
 	start := time.Now()
 	var lastStatus string
 	for {
-		resp, body, err := sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%d", id), nil)
+		resp, body, err := sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%s", publicID), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -638,7 +638,7 @@ func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, 
 			if err := performMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
 				return nil, err
 			}
-			resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%d", id), nil)
+			resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%s", publicID), nil)
 			if err != nil {
 				return nil, err
 			}

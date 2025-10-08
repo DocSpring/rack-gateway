@@ -19,10 +19,11 @@ var defaultChannelActions = map[string]interface{}{
 		"id":   nil,
 		"name": "#security",
 		"actions": []string{
+			"login.complete",
+			"login.*_failed",
 			"mfa.*",
 			"user.role.*",
 			"api-token.*",
-			"auth.failed",
 		},
 	},
 	"infrastructure": map[string]interface{}{

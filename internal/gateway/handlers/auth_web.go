@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
@@ -36,37 +38,65 @@ func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 // @Failure 500 {string} string "Authentication failure"
 // @Router /auth/web/callback [get]
 func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
+	// Check for OAuth error response (user cancelled or other OAuth error)
+	if oauthError := c.Query("error"); oauthError != "" {
+		errorDesc := c.Query("error_description")
+		if errorDesc == "" {
+			errorDesc = "Authentication was cancelled or failed"
+		}
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorDesc))
+		c.Redirect(http.StatusFound, errorURL)
+		return
+	}
+
 	code := c.Query("code")
 	state := c.Query("state")
 	if code == "" || state == "" {
-		c.String(http.StatusBadRequest, "Missing authorization code or state")
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Missing authorization code or state"))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 
 	cookie, err := c.Request.Cookie(webOAuthStateCookie)
 	if err != nil || cookie == nil || cookie.Value == "" {
-		c.String(http.StatusBadRequest, "Invalid OAuth state")
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Invalid OAuth state"))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 	defer h.clearWebOAuthStateCookie(c)
 	if subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) != 1 {
-		c.String(http.StatusBadRequest, "Invalid OAuth state")
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Invalid OAuth state"))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 
 	// Web flow doesn't use PKCE (code_verifier is empty)
 	resp, err := h.oauth.CompleteLogin(code, state, "")
 	if err != nil {
-		// Notify about failed login
-		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt("", "", "web", "oauth_failed", c.ClientIP(), c.GetHeader("User-Agent"), false)
+		// Extract user info from error if available
+		var domainErr *auth.DomainNotAllowedError
+		email := ""
+		name := ""
+		errorMsg := "Authentication failed. Please try again."
+
+		if errors.As(err, &domainErr) {
+			email = domainErr.Email
+			name = domainErr.Name
+			errorMsg = "You are not authorized to access this application. Please contact your administrator."
 		}
-		c.String(http.StatusInternalServerError, "Authentication failed")
+
+		// Notify about failed login (with email/name if available)
+		if h.securityNotifier != nil {
+			h.securityNotifier.LoginAttempt(email, name, "web", "oauth_failed", c.ClientIP(), c.GetHeader("User-Agent"), false)
+		}
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorMsg))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 
 	if h.sessions == nil {
-		c.String(http.StatusInternalServerError, "Session manager not available")
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Session manager not available"))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 
@@ -76,13 +106,16 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		if h.securityNotifier != nil {
 			h.securityNotifier.LoginAttempt(resp.Email, resp.Name, "web", "user_not_authorized", c.ClientIP(), c.GetHeader("User-Agent"), false)
 		}
-		c.String(http.StatusUnauthorized, "User not authorized")
+		errorMsg := "You are not authorized to access this application. Please contact your administrator."
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorMsg))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 
 	session, err := h.createLoginSession(c, userRecord, "web")
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Failed to create session")
+		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Failed to create session. Please try again."))
+		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
 

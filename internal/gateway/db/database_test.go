@@ -103,8 +103,8 @@ func TestDatabase(t *testing.T) {
 		log3 := &gwdb.AuditLog{
 			UserEmail:      "attacker@evil.com",
 			ActionType:     "auth",
-			Action:         "auth.failed",
-			Status:         "blocked",
+			Action:         "login.oauth_failed",
+			Status:         "failed",
 			ResponseTimeMs: 5,
 		}
 

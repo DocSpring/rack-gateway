@@ -69,6 +69,13 @@ const mockUsers: Record<string, MockUser> = {
     picture: "https://via.placeholder.com/128",
     verified_email: true,
   },
+  "unauthorized@wrongdomain.com": {
+    id: "999",
+    email: "unauthorized@wrongdomain.com",
+    name: "Unauthorized User",
+    picture: "https://via.placeholder.com/128",
+    verified_email: true,
+  },
 };
 
 const authCodes = new Map<string, AuthorizationCodePayload>();
@@ -358,6 +365,20 @@ app.get(
           p.sub { margin: 0 0 12px; }
           h3 { margin: 0 0 4px; font-size: 16px; }
           p.email { font-size: 13px; color: #a1a1aa; margin: 0; }
+          .cancel-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #27272a;
+            color: #a1a1aa;
+            border: 1px solid #3f3f46;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color .15s ease, border-color .15s ease;
+          }
+          .cancel-btn:hover { background: #3f3f46; color: #fafafa; }
         </style>
       </head>
       <body>
@@ -365,6 +386,7 @@ app.get(
           <h1>Mock Google OAuth – Select User</h1>
           <p class="sub muted">Choose which user to authenticate as:</p>
           ${cardsHtml}
+          <button class="cancel-btn" id="cancel-btn">Cancel</button>
         </div>
         <script>
           const params = new URLSearchParams(${JSON.stringify(queryParams.toString())});
@@ -376,6 +398,20 @@ app.get(
               sessionStorage.setItem('selectedUser', email);
               window.location.href = '/oauth2/v2/auth?' + params.toString();
             });
+          });
+
+          document.getElementById('cancel-btn')?.addEventListener('click', () => {
+            const redirectUri = params.get('redirect_uri');
+            const state = params.get('state');
+            if (redirectUri) {
+              const cancelUrl = new URL(redirectUri);
+              cancelUrl.searchParams.set('error', 'access_denied');
+              cancelUrl.searchParams.set('error_description', 'User cancelled the authorization request');
+              if (state) {
+                cancelUrl.searchParams.set('state', state);
+              }
+              window.location.href = cancelUrl.toString();
+            }
           });
         </script>
       </body>

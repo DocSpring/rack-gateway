@@ -206,6 +206,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.PUT("/settings/approved_commands", adminHandler.UpdateApprovedCommands)
 				admin.PUT("/settings/allow_destructive_actions", adminHandler.UpdateAllowDestructiveActions)
 				admin.PUT("/settings/mfa", adminHandler.UpdateMFASettings)
+				admin.GET("/settings/circleci", adminHandler.GetCircleCISettings)
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
 
