@@ -8,6 +8,9 @@ data
 *.log
 .DS_Store
 .overmind.sock
+tmp
+.task
+.renamify
 
 # other repos checked out for reference
 reference

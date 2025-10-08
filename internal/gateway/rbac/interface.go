@@ -12,6 +12,9 @@ type RBACManager interface {
 	// Enforce checks if a user has permission to perform an action
 	Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error)
 
+	// EnforceForAPIToken checks if an API token has permission to perform an action
+	EnforceForAPIToken(tokenID int64, scope Scope, resource Resource, action Action) (bool, error)
+
 	// GetAllowedDomain returns the configured domain
 	GetAllowedDomain() string
 

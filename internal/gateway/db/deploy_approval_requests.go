@@ -500,6 +500,35 @@ func (d *Database) RejectDeployApprovalRequestByPublicID(publicID string, approv
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }
 
+func (d *Database) UpdateDeployApprovalRequestBuild(id int64, buildID, releaseID string) error {
+	if strings.TrimSpace(buildID) == "" {
+		return fmt.Errorf("build id required")
+	}
+	if strings.TrimSpace(releaseID) == "" {
+		return fmt.Errorf("release id required")
+	}
+	res, err := d.exec(
+		`UPDATE deploy_approval_requests
+         SET build_id = ?, release_id = ?, updated_at = NOW()
+         WHERE id = ? AND status = ?`,
+		buildID,
+		releaseID,
+		id,
+		DeployApprovalRequestStatusApproved,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update build tracking: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to update build tracking: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deployment approval not found or not approved")
+	}
+	return nil
+}
+
 func (d *Database) MarkDeployApprovalRequestPromoted(id int64, app, releaseID string, tokenID int64, when time.Time) error {
 	if strings.TrimSpace(app) == "" {
 		return fmt.Errorf("app is required")

@@ -339,3 +339,21 @@ func (d *Database) UpdateAPITokenPermissions(id int64, permissions []string) err
 	}
 	return nil
 }
+
+// HasActiveDeployApproval checks if an API token has an active deploy approval
+func (d *Database) HasActiveDeployApproval(tokenID int64) (bool, error) {
+	var count int
+	err := d.queryRow(`
+		SELECT COUNT(*)
+		FROM deploy_approval_requests
+		WHERE target_api_token_id = ?
+		  AND status = 'approved'
+		  AND approval_expires_at > NOW()
+	`, tokenID).Scan(&count)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to check active approval: %w", err)
+	}
+
+	return count > 0, nil
+}

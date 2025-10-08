@@ -236,3 +236,31 @@ func (d *Database) CircleCIEnabled() (bool, error) {
 	}
 	return strings.TrimSpace(settings.APIToken) != "" && strings.TrimSpace(settings.ApprovalJobName) != "", nil
 }
+
+// GetAppImageTagPatterns returns a map of app names to image tag regex patterns.
+// The patterns support {{GIT_COMMIT}} interpolation.
+// Returns empty map if not configured.
+func (d *Database) GetAppImageTagPatterns() (map[string]string, error) {
+	raw, ok, err := d.GetSettingRaw("app_image_tag_patterns")
+	if err != nil {
+		return map[string]string{}, err
+	}
+	if !ok || len(raw) == 0 {
+		return map[string]string{}, nil
+	}
+
+	var patterns map[string]string
+	if err := json.Unmarshal(raw, &patterns); err != nil {
+		return map[string]string{}, fmt.Errorf("invalid app_image_tag_patterns setting: %w", err)
+	}
+
+	return patterns, nil
+}
+
+// UpsertAppImageTagPatterns stores the app-to-pattern mapping.
+func (d *Database) UpsertAppImageTagPatterns(patterns map[string]string, updatedByUserID *int64) error {
+	if patterns == nil {
+		patterns = map[string]string{}
+	}
+	return d.UpsertSetting("app_image_tag_patterns", patterns, updatedByUserID)
+}

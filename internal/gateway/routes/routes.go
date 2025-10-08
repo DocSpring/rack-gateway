@@ -204,6 +204,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.GET("/settings", adminHandler.GetSettings)
 				admin.PUT("/settings/protected_env_vars", adminHandler.UpdateProtectedEnvVars)
 				admin.PUT("/settings/approved_commands", adminHandler.UpdateApprovedCommands)
+				admin.PUT("/settings/app_image_tag_patterns", adminHandler.UpdateAppImageTagPatterns)
 				admin.PUT("/settings/allow_destructive_actions", adminHandler.UpdateAllowDestructiveActions)
 				admin.PUT("/settings/mfa", adminHandler.UpdateMFASettings)
 				admin.GET("/settings/circleci", adminHandler.GetCircleCISettings)

@@ -11,9 +11,21 @@ import (
 	"github.com/casbin/casbin/v2/model"
 )
 
+// RBACDatabase defines the database operations needed by the RBAC manager
+type RBACDatabase interface {
+	GetUser(email string) (*db.User, error)
+	GetAPITokenByID(id int64) (*db.APIToken, error)
+	HasActiveDeployApproval(tokenID int64) (bool, error)
+	ListUsers() ([]*db.User, error)
+	CreateUser(email, name string, roles []string) (*db.User, error)
+	UpdateUserRoles(email string, roles []string) error
+	UpdateUserName(email, name string) error
+	DeleteUser(email string) error
+}
+
 // DBManager implements RBAC using the database
 type DBManager struct {
-	db       *db.Database
+	db       RBACDatabase
 	enforcer *casbin.Enforcer
 	mu       sync.RWMutex
 	domain   string
@@ -103,6 +115,8 @@ var roleConfigs = map[string]roleConfig{
 		Permissions: []string{
 			Convox(ResourceApp, ActionList),
 			Convox(ResourceApp, ActionRead),
+			Convox(ResourceProcess, ActionList),
+			Convox(ResourceProcess, ActionRead),
 			Gateway(ResourceDeployApprovalRequest, ActionCreate),
 			Gateway(ResourceDeployApprovalRequest, ActionRead),
 			Convox(ResourceDeploy, ActionDeployWithApproval), // Grants build, release, process ops when approval exists
@@ -313,6 +327,88 @@ func (m *DBManager) Enforce(userEmail string, scope Scope, resource Resource, ac
 	}
 
 	return ok, nil
+}
+
+// EnforceForAPIToken checks if an API token has permission to perform an action
+func (m *DBManager) EnforceForAPIToken(tokenID int64, scope Scope, resource Resource, action Action) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Get the API token
+	token, err := m.db.GetAPITokenByID(tokenID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get API token: %w", err)
+	}
+	if token == nil {
+		return false, nil // Token doesn't exist
+	}
+
+	// Build permission string from enum types
+	permission := Permission(scope, resource, action)
+
+	// Check if permission is directly granted (with wildcard support)
+	if matchesAnyPermission(token.Permissions, permission) {
+		return true, nil
+	}
+
+	// Check if deploy_with_approval grants this permission
+	return m.checkDeployWithApproval(token.Permissions, tokenID, scope, resource, action)
+}
+
+// matchesAnyPermission checks if the requested permission matches any in the list
+// Supports wildcards like "convox:*:*" (all convox permissions) and "convox:app:*" (all app actions)
+func matchesAnyPermission(permissions []string, requested string) bool {
+	for _, perm := range permissions {
+		if perm == requested {
+			return true
+		}
+		// Check for wildcard patterns
+		if strings.HasSuffix(perm, ":*") {
+			prefix := strings.TrimSuffix(perm, ":*")
+			if strings.HasPrefix(requested, prefix+":") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkDeployWithApproval checks if deploy_with_approval permission grants the requested action
+func (m *DBManager) checkDeployWithApproval(permissions []string, tokenID int64, scope Scope, resource Resource, action Action) (bool, error) {
+	// Only grant additional permissions for specific convox actions
+	if scope != ScopeConvox {
+		return false, nil
+	}
+
+	// Check if token has deploy_with_approval permission
+	hasDeployWithApproval := false
+	deployWithApprovalPerm := Permission(ScopeConvox, ResourceDeploy, ActionDeployWithApproval)
+	for _, perm := range permissions {
+		if perm == deployWithApprovalPerm {
+			hasDeployWithApproval = true
+			break
+		}
+	}
+
+	if !hasDeployWithApproval {
+		return false, nil
+	}
+
+	// Check for active approval for this token
+	hasActiveApproval, err := m.db.HasActiveDeployApproval(tokenID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check active approval: %w", err)
+	}
+	if !hasActiveApproval {
+		return false, nil
+	}
+
+	// Grant permission for object:create when there's an active approval
+	if resource == ResourceObject && action == ActionCreate {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // GetAllowedDomain returns the configured domain

@@ -163,6 +163,9 @@ login_cli_as() {
   local rack_name="${2:-e2e}"
   local secret="${MFA_TOTP_SECRETS[$user_email]:-}"
 
+  # Clear used TOTP codes to allow replay in tests
+  psql_exec "DELETE FROM mfa_totp_attempts"
+
   echo -e "${YELLOW}Starting CLI login for ${user_email} on rack ${rack_name}...${NC}"
   local AUTH_FILE COOKIE_FILE HTML_FILE
   AUTH_FILE="$(mktemp)"
@@ -173,10 +176,18 @@ login_cli_as() {
   set -m
   ./bin/rack-gateway login "${rack_name}" "http://127.0.0.1:${GATEWAY_PORT}" --no-open --auth-file "$AUTH_FILE" >"$HTML_FILE" 2>&1 &
   local CLI_PID=$!
+  echo "    CLI PID: $CLI_PID"
   for _i in $(seq 1 50); do
     [[ -s "$AUTH_FILE" ]] && break
     sleep 0.1
   done
+  if [[ ! -s "$AUTH_FILE" ]]; then
+    echo -e "${RED}Auth file not created after 5 seconds${NC}" >&2
+    echo "CLI output:" >&2
+    cat "$HTML_FILE" >&2
+    kill $CLI_PID 2>/dev/null || true
+    exit 1
+  fi
 
   local AUTH_URL STATE
   AUTH_URL=$(sed -n 's/^AUTH_URL=//p' "$AUTH_FILE")
@@ -193,18 +204,46 @@ login_cli_as() {
   if [[ -n "$secret" ]]; then
     local totp_code
     totp_code=$(generate_totp_code "$secret")
-    curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" \
+    echo "    Sending MFA code for state: ${STATE}"
+    local mfa_response
+    mfa_response=$(curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" \
       -H "Content-Type: application/json" \
       --data "{\"state\":\"${STATE}\",\"code\":\"${totp_code}\"}" \
-      "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/auth/cli/mfa" \
-      -o /dev/null || true
+      "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/auth/cli/mfa")
+    echo "    MFA response: $mfa_response"
+  fi
+
+  echo "  - Waiting for CLI to complete..."
+  set +e
+  local timeout=50
+  local elapsed=0
+  while kill -0 $CLI_PID 2>/dev/null; do
+    if [[ $elapsed -ge $timeout ]]; then
+      echo -e "${RED}CLI login timed out after 5 seconds${NC}" >&2
+      echo "CLI still running. Output so far:" >&2
+      cat "$HTML_FILE" >&2
+      kill $CLI_PID 2>/dev/null || true
+      rm -f "$COOKIE_FILE" "$AUTH_FILE" "$HTML_FILE"
+      set +m
+      exit 1
+    fi
+    sleep 0.1
+    elapsed=$((elapsed + 1))
+  done
+  wait $CLI_PID
+  local wait_status=$?
+  set -e
+  set +m
+
+  if [[ $wait_status -ne 0 ]]; then
+    echo -e "${RED}CLI login failed with status $wait_status${NC}" >&2
+    echo "CLI output:" >&2
+    cat "$HTML_FILE" >&2
+    rm -f "$COOKIE_FILE" "$AUTH_FILE" "$HTML_FILE"
+    exit 1
   fi
 
   rm -f "$COOKIE_FILE" "$AUTH_FILE" "$HTML_FILE"
-
-  echo "  - Waiting for CLI to complete..."
-  wait $CLI_PID
-  set +m
 }
 
 function verify_command_status_and_output() {
@@ -435,12 +474,12 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # No commands allowed
   verify_rgw_command_failure \
     "run web --app rack-gateway 'delete everything'" \
-    "Error: deployment approval required"
+    "Error: You don't have permission to run processes"
 
   # Not even approved commands
   verify_rgw_command_failure \
     "run web --app rack-gateway 'echo hello'" \
-    "Error: deployment approval required"
+    "Error: You don't have permission to run processes"
 
 
   # Request approval as API token (BEFORE building - git commit-based flow)
@@ -463,9 +502,9 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     exit 1
   fi
   echo "$approval_output"
-  REQUEST_ID=$(echo "$approval_output" | grep -oE 'request [0-9]+' | grep -oE '[0-9]+' | head -n1)
+  REQUEST_ID=$(echo "$approval_output" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n1)
   if [[ -z "$REQUEST_ID" ]]; then
-    echo -e "${RED}Failed to parse request ID from approval output${NC}" >&2
+    echo -e "${RED}Failed to parse request ID (UUID) from approval output${NC}" >&2
     exit 1
   fi
 
@@ -525,7 +564,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     "run web --app rack-gateway 'delete everything'" \
     "Error: websocket: bad handshake"
 
-  # But now an approved command is allowed to be run for that release ID
+  # But now an approve   command is allowed to be run for that release ID
   verify_rgw_command "run web --app rack-gateway --release $RELEASE_ID 'echo hello'" \
     'Connected to mock exec for app=rack-gateway pid=proc-123456' \
     '$ echo hello'

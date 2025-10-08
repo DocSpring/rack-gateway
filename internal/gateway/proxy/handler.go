@@ -398,7 +398,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Forward the request to the rack
-	status, err := h.forwardRequest(w, r, rackConfig, path, authUser.Email)
+	status, err := h.forwardRequest(w, r, rackConfig, path, authUser)
 	if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && err == nil && status >= 200 && status < 300 {
 		// Mark the approval as promoted/consumed on successful release promotion
 		h.markDeployApprovalPromoted(tracker)
@@ -1008,7 +1008,7 @@ func escapeJSONString(s string) string {
 	return s
 }
 
-func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path, userEmail string) (int, error) {
+func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path string, authUser *auth.AuthUser) (int, error) {
 	original := path
 	// Build clean target URL without double slashes
 	base := strings.TrimRight(rack.URL, "/")
@@ -1020,7 +1020,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	// Handle WebSocket upgrade requests
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		return h.proxyWebSocket(w, r, rack, targetURL, userEmail)
+		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email)
 	}
 
 	var bodyBytes []byte
@@ -1032,6 +1032,30 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 		if err := r.Body.Close(); err != nil {
 			return 0, fmt.Errorf("failed to close request body: %w", err)
+		}
+	}
+
+	// Validate object uploads for deploy approvals (API tokens only)
+	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/objects/tmp/{name}") {
+		if authUser.IsAPIToken {
+			if authUser.TokenID == nil {
+				return 0, fmt.Errorf("API token authentication missing token ID")
+			}
+			if err := h.validateObjectUpload(r, bodyBytes, *authUser.TokenID); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	// Validate build requests for deploy approvals (API tokens only)
+	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/builds") {
+		if authUser.IsAPIToken {
+			if authUser.TokenID == nil {
+				return 0, fmt.Errorf("API token authentication missing token ID")
+			}
+			if err := h.validateBuildRequest(r, bodyBytes, *authUser.TokenID); err != nil {
+				return 0, err
+			}
 		}
 	}
 
@@ -1053,7 +1077,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	// Convox uses Basic Auth with configurable username (default "convox") and the API key as password
 	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s",
 		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
-	proxyReq.Header.Set("X-User-Email", userEmail)
+	proxyReq.Header.Set("X-User-Email", authUser.Email)
 	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
 
 	client, err := h.httpClient(r.Context(), 30*time.Second)
@@ -1101,10 +1125,10 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			return 0, fmt.Errorf("failed to read response body: %w", err)
 		}
 		if filterRelease {
-			body = h.filterReleaseEnvForUser(userEmail, body, false)
+			body = h.filterReleaseEnvForUser(authUser.Email, body, false)
 		}
 		if shouldCapture {
-			h.captureResourceCreator(r, pth, body, userEmail)
+			h.captureResourceCreator(r, pth, body, authUser.Email)
 		}
 		respReader = bytes.NewReader(body)
 	} else {
@@ -1229,13 +1253,21 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 	}
 
 	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/builds") {
-		if id := extractJSONString(obj["id"]); id != "" {
-			setResource("build", id, true)
+		buildID := extractJSONString(obj["id"])
+		releaseID := extractJSONString(obj["release"])
+
+		if buildID != "" {
+			setResource("build", buildID, true)
 		}
-		if rel := extractJSONString(obj["release"]); rel != "" {
-			if h.recordResourceCreator("release", rel, email) {
-				r.Header.Add("X-Release-Created", rel)
+		if releaseID != "" {
+			if h.recordResourceCreator("release", releaseID, email) {
+				r.Header.Add("X-Release-Created", releaseID)
 			}
+		}
+
+		// Update deploy approval tracking with build_id and release_id
+		if buildID != "" && releaseID != "" {
+			h.updateBuildApprovalTracking(r, buildID, releaseID)
 		}
 	}
 	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
@@ -1634,22 +1666,18 @@ func forbiddenMessage(resource rbac.Resource, action rbac.Action) string {
 
 // hasAPITokenPermission checks if an API token has the required permission
 func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource rbac.Resource, action rbac.Action) bool {
-	resourceStr := resource.String()
-	actionStr := action.String()
-	permission := fmt.Sprintf("convox:%s:%s", resourceStr, actionStr)
-
-	for _, perm := range authUser.Permissions {
-		// Check for exact match
-		if perm == permission {
-			return true
-		}
-		// Check for wildcard matches
-		if perm == "convox:*:*" || perm == fmt.Sprintf("convox:%s:*", resourceStr) {
-			return true
-		}
+	// API tokens must have a TokenID
+	if authUser.TokenID == nil {
+		return false
 	}
 
-	return false
+	// Use RBAC manager to check permissions, which handles deploy_with_approval logic
+	allowed, err := h.rbacManager.EnforceForAPIToken(*authUser.TokenID, rbac.ScopeConvox, resource, action)
+	if err != nil {
+		// Error checking permission, deny access
+		return false
+	}
+	return allowed
 }
 
 type deployApprovalError struct {

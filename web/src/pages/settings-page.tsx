@@ -1,527 +1,717 @@
-import { captureException } from '@sentry/react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { isAxiosError } from 'axios'
-import { X } from 'lucide-react'
-import { useState } from 'react'
-import { toast } from '@/components/ui/use-toast'
-import { Button } from '../components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import { Separator } from '../components/ui/separator'
-import { useAuth } from '../contexts/auth-context'
-import { api } from '../lib/api'
-import { isSentryEnabled } from '../lib/sentry'
-import { protectedEnvVarSchema } from '../lib/validation'
+import { captureException } from "@sentry/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
+import { X } from "lucide-react";
+import { useState } from "react";
+import { toast } from "@/components/ui/use-toast";
+import { Button } from "../components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Separator } from "../components/ui/separator";
+import { useAuth } from "../contexts/auth-context";
+import { api } from "../lib/api";
+import { isSentryEnabled } from "../lib/sentry";
+import { protectedEnvVarSchema } from "../lib/validation";
 
 type RackTLSCert = {
-  pem: string
-  fingerprint: string
-  fetched_at: string
-}
+	pem: string;
+	fingerprint: string;
+	fetched_at: string;
+};
 
 type SettingsErrorPayload = {
-  error?: string
-}
+	error?: string;
+};
 
 type MFASettings = {
-  require_all_users: boolean
-  trusted_device_ttl_days?: number
-  step_up_window_minutes?: number
-}
+	require_all_users: boolean;
+	trusted_device_ttl_days?: number;
+	step_up_window_minutes?: number;
+};
 
 type SettingsResponse = {
-  protected_env_vars: string[]
-  approved_commands: string[]
-  allow_destructive_actions: boolean
-  rack_tls_pinning_enabled?: boolean
-  rack_tls_cert?: RackTLSCert | null
-  mfa?: MFASettings
-  sentry_tests_enabled?: boolean
-}
+	protected_env_vars: string[];
+	approved_commands: string[];
+	app_image_tag_patterns?: Record<string, string>;
+	allow_destructive_actions: boolean;
+	rack_tls_pinning_enabled?: boolean;
+	rack_tls_cert?: RackTLSCert | null;
+	mfa?: MFASettings;
+	sentry_tests_enabled?: boolean;
+};
 
 function extractErrorMessage(error: unknown): string | undefined {
-  if (isAxiosError<SettingsErrorPayload>(error)) {
-    const payload = error.response?.data
-    if (typeof payload === 'string') {
-      return payload
-    }
-    if (payload && typeof payload.error === 'string') {
-      return payload.error
-    }
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return
+	if (isAxiosError<SettingsErrorPayload>(error)) {
+		const payload = error.response?.data;
+		if (typeof payload === "string") {
+			return payload;
+		}
+		if (payload && typeof payload.error === "string") {
+			return payload.error;
+		}
+	}
+	if (error instanceof Error) {
+		return error.message;
+	}
+	return;
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: UI glue code is easier to follow inline.
 export function SettingsPage() {
-  const qc = useQueryClient()
-  const { user } = useAuth()
-  const isAdmin = !!user?.roles?.includes('admin')
+	const qc = useQueryClient();
+	const { user } = useAuth();
+	const isAdmin = !!user?.roles?.includes("admin");
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['settings'],
-    queryFn: async () => api.get<SettingsResponse>('/.gateway/api/admin/settings'),
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
-    staleTime: 0,
-  })
+	const { data, isLoading, error } = useQuery({
+		queryKey: ["settings"],
+		queryFn: async () =>
+			api.get<SettingsResponse>("/.gateway/api/admin/settings"),
+		refetchOnMount: "always",
+		refetchOnWindowFocus: true,
+		staleTime: 0,
+	});
 
-  const [newVar, setNewVar] = useState('')
-  const [newCommand, setNewCommand] = useState('')
-  const envVars = data?.protected_env_vars ?? []
-  const approvedCommands = data?.approved_commands ?? []
-  const allowDestructive = data?.allow_destructive_actions ?? false
-  const requireAllUsers = data?.mfa?.require_all_users ?? false
-  const cert = data?.rack_tls_cert ?? null
-  const certFetchedAt = cert?.fetched_at ? new Date(cert.fetched_at).toLocaleString() : null
-  const pinningEnabled = !!data?.rack_tls_pinning_enabled
-  const sentryTestsEnabled = data?.sentry_tests_enabled ?? false
+	const [newVar, setNewVar] = useState("");
+	const [newCommand, setNewCommand] = useState("");
+	const [newApp, setNewApp] = useState("");
+	const [newPattern, setNewPattern] = useState("");
+	const envVars = data?.protected_env_vars ?? [];
+	const approvedCommands = data?.approved_commands ?? [];
+	const appImageTagPatterns = data?.app_image_tag_patterns ?? {};
+	const allowDestructive = data?.allow_destructive_actions ?? false;
+	const requireAllUsers = data?.mfa?.require_all_users ?? false;
+	const cert = data?.rack_tls_cert ?? null;
+	const certFetchedAt = cert?.fetched_at
+		? new Date(cert.fetched_at).toLocaleString()
+		: null;
+	const pinningEnabled = !!data?.rack_tls_pinning_enabled;
+	const sentryTestsEnabled = data?.sentry_tests_enabled ?? false;
 
-  const saveEnvMutation = useMutation({
-    mutationFn: async (vars: string[]) =>
-      api.put('/.gateway/api/admin/settings/protected_env_vars', {
-        protected_env_vars: vars,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings'] })
-      toast.success('Protected env vars updated')
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to update protected env vars')
-    },
-  })
+	const saveEnvMutation = useMutation({
+		mutationFn: async (vars: string[]) =>
+			api.put("/.gateway/api/admin/settings/protected_env_vars", {
+				protected_env_vars: vars,
+			}),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ["settings"] });
+			toast.success("Protected env vars updated");
+		},
+		onError: (err: unknown) => {
+			const message = err instanceof Error ? err.message : "";
+			toast.error(message || "Failed to update protected env vars");
+		},
+	});
 
-  const saveCommandsMutation = useMutation({
-    mutationFn: async (commands: string[]) =>
-      api.put('/.gateway/api/admin/settings/approved_commands', {
-        approved_commands: commands,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings'] })
-      toast.success('Approved commands updated')
-    },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to update approved commands')
-    },
-  })
+	const saveCommandsMutation = useMutation({
+		mutationFn: async (commands: string[]) =>
+			api.put("/.gateway/api/admin/settings/approved_commands", {
+				approved_commands: commands,
+			}),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ["settings"] });
+			toast.success("Approved commands updated");
+		},
+		onError: (err: unknown) => {
+			const message = err instanceof Error ? err.message : "";
+			toast.error(message || "Failed to update approved commands");
+		},
+	});
 
-  const toggleDestructiveMutation = useMutation({
-    mutationFn: async (allow: boolean) =>
-      api.put('/.gateway/api/admin/settings/allow_destructive_actions', {
-        allow_destructive_actions: allow,
-      }),
-    onMutate: async (allow: boolean) => {
-      await qc.cancelQueries({ queryKey: ['settings'] })
-      const prev = qc.getQueryData<SettingsResponse>(['settings'])
-      qc.setQueryData<SettingsResponse | undefined>(['settings'], (d) =>
-        d ? { ...d, allow_destructive_actions: allow } : d
-      )
-      return { prev }
-    },
-    onError: (err, _vars, ctx) => {
-      if (ctx?.prev) {
-        qc.setQueryData(['settings'], ctx.prev)
-      }
-      const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to update setting')
-    },
-    onSuccess: () => {
-      toast.success('Setting updated')
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
+	const saveAppPatternsMutation = useMutation({
+		mutationFn: async (patterns: Record<string, string>) =>
+			api.put("/.gateway/api/admin/settings/app_image_tag_patterns", {
+				app_image_tag_patterns: patterns,
+			}),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ["settings"] });
+			toast.success("App image tag patterns updated");
+		},
+		onError: (err: unknown) => {
+			const message = err instanceof Error ? err.message : "";
+			toast.error(message || "Failed to update app image tag patterns");
+		},
+	});
 
-  const updateMfaMutation = useMutation({
-    mutationFn: async (require: boolean) =>
-      api.put('/.gateway/api/admin/settings/mfa', {
-        require_all_users: require,
-      }),
-    onMutate: async (require: boolean) => {
-      await qc.cancelQueries({ queryKey: ['settings'] })
-      const prev = qc.getQueryData<SettingsResponse>(['settings'])
-      qc.setQueryData<SettingsResponse | undefined>(['settings'], (current) =>
-        current ? { ...current, mfa: { ...current.mfa, require_all_users: require } } : current
-      )
-      return { prev }
-    },
-    onError: (err, _vars, ctx) => {
-      if (ctx?.prev) {
-        qc.setQueryData(['settings'], ctx.prev)
-      }
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to update MFA settings')
-    },
-    onSuccess: () => {
-      toast.success('MFA setting updated')
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
+	const toggleDestructiveMutation = useMutation({
+		mutationFn: async (allow: boolean) =>
+			api.put("/.gateway/api/admin/settings/allow_destructive_actions", {
+				allow_destructive_actions: allow,
+			}),
+		onMutate: async (allow: boolean) => {
+			await qc.cancelQueries({ queryKey: ["settings"] });
+			const prev = qc.getQueryData<SettingsResponse>(["settings"]);
+			qc.setQueryData<SettingsResponse | undefined>(["settings"], (d) =>
+				d ? { ...d, allow_destructive_actions: allow } : d,
+			);
+			return { prev };
+		},
+		onError: (err, _vars, ctx) => {
+			if (ctx?.prev) {
+				qc.setQueryData(["settings"], ctx.prev);
+			}
+			const message = err instanceof Error ? err.message : "";
+			toast.error(message || "Failed to update setting");
+		},
+		onSuccess: () => {
+			toast.success("Setting updated");
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: ["settings"] });
+		},
+	});
 
-  const refreshCertMutation = useMutation({
-    mutationFn: async () =>
-      api.post<RackTLSCert>('/.gateway/api/admin/settings/rack_tls_cert/refresh'),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['settings'] })
-      toast.success('Rack certificate refreshed')
-    },
-    onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(
-        'Failed to refresh rack certificate',
-        message ? { description: message } : undefined
-      )
-    },
-  })
+	const updateMfaMutation = useMutation({
+		mutationFn: async (require: boolean) =>
+			api.put("/.gateway/api/admin/settings/mfa", {
+				require_all_users: require,
+			}),
+		onMutate: async (require: boolean) => {
+			await qc.cancelQueries({ queryKey: ["settings"] });
+			const prev = qc.getQueryData<SettingsResponse>(["settings"]);
+			qc.setQueryData<SettingsResponse | undefined>(["settings"], (current) =>
+				current
+					? { ...current, mfa: { ...current.mfa, require_all_users: require } }
+					: current,
+			);
+			return { prev };
+		},
+		onError: (err, _vars, ctx) => {
+			if (ctx?.prev) {
+				qc.setQueryData(["settings"], ctx.prev);
+			}
+			const message = extractErrorMessage(err);
+			toast.error(message ?? "Failed to update MFA settings");
+		},
+		onSuccess: () => {
+			toast.success("MFA setting updated");
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: ["settings"] });
+		},
+	});
 
-  const sentryApiTestMutation = useMutation({
-    mutationFn: async () =>
-      api.post('/.gateway/api/admin/diagnostics/sentry', {
-        kind: 'api',
-      }),
-    onSuccess: () => {
-      toast.success('Requested API test event. Check Sentry for confirmation.')
-    },
-    onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(
-        'Failed to trigger API test event',
-        message ? { description: message } : undefined
-      )
-    },
-  })
+	const refreshCertMutation = useMutation({
+		mutationFn: async () =>
+			api.post<RackTLSCert>(
+				"/.gateway/api/admin/settings/rack_tls_cert/refresh",
+			),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ["settings"] });
+			toast.success("Rack certificate refreshed");
+		},
+		onError: (err: unknown) => {
+			const message = extractErrorMessage(err);
+			toast.error(
+				"Failed to refresh rack certificate",
+				message ? { description: message } : undefined,
+			);
+		},
+	});
 
-  const triggerJsTest = () => {
-    if (!isSentryEnabled()) {
-      toast.error('Sentry JavaScript SDK is not active in this session.')
-      return
-    }
-    captureException(new Error('Sentry JS test event triggered from settings page'))
-    toast.success('Submitted JS error to Sentry')
-  }
+	const sentryApiTestMutation = useMutation({
+		mutationFn: async () =>
+			api.post("/.gateway/api/admin/diagnostics/sentry", {
+				kind: "api",
+			}),
+		onSuccess: () => {
+			toast.success("Requested API test event. Check Sentry for confirmation.");
+		},
+		onError: (err: unknown) => {
+			const message = extractErrorMessage(err);
+			toast.error(
+				"Failed to trigger API test event",
+				message ? { description: message } : undefined,
+			);
+		},
+	});
 
-  const triggerCspTest = () => {
-    if (!isSentryEnabled()) {
-      toast.error('Sentry JavaScript SDK is not active in this session.')
-      return
-    }
-    const script = document.createElement('script')
-    script.type = 'text/javascript'
-    script.textContent = 'window.__rgwSentryCspTest = true'
-    script.dataset.test = 'sentry-csp'
-    document.body.append(script)
-    script.remove()
-    toast.success('Attempted inline script to trigger CSP report')
-  }
+	const triggerJsTest = () => {
+		if (!isSentryEnabled()) {
+			toast.error("Sentry JavaScript SDK is not active in this session.");
+			return;
+		}
+		captureException(
+			new Error("Sentry JS test event triggered from settings page"),
+		);
+		toast.success("Submitted JS error to Sentry");
+	};
 
-  const addEnvVar = () => {
-    const parsed = protectedEnvVarSchema.safeParse(newVar)
-    if (!parsed.success) {
-      const message = parsed.error.issues[0]?.message ?? 'Invalid environment variable name'
-      toast.error(message)
-      return
-    }
+	const triggerCspTest = () => {
+		if (!isSentryEnabled()) {
+			toast.error("Sentry JavaScript SDK is not active in this session.");
+			return;
+		}
+		const script = document.createElement("script");
+		script.type = "text/javascript";
+		script.textContent = "window.__rgwSentryCspTest = true";
+		script.dataset.test = "sentry-csp";
+		document.body.append(script);
+		script.remove();
+		toast.success("Attempted inline script to trigger CSP report");
+	};
 
-    const value = parsed.data
-    if (envVars.includes(value)) {
-      setNewVar('')
-      return
-    }
+	const addEnvVar = () => {
+		const parsed = protectedEnvVarSchema.safeParse(newVar);
+		if (!parsed.success) {
+			const message =
+				parsed.error.issues[0]?.message ?? "Invalid environment variable name";
+			toast.error(message);
+			return;
+		}
 
-    saveEnvMutation.mutate([...envVars, value])
-    setNewVar('')
-  }
+		const value = parsed.data;
+		if (envVars.includes(value)) {
+			setNewVar("");
+			return;
+		}
 
-  const removeEnvVar = (v: string) => {
-    const next = envVars.filter((x) => x !== v)
-    saveEnvMutation.mutate(next)
-  }
+		saveEnvMutation.mutate([...envVars, value]);
+		setNewVar("");
+	};
 
-  const addCommand = () => {
-    const trimmed = newCommand.trim()
-    if (!trimmed) {
-      toast.error('Command cannot be empty')
-      return
-    }
+	const removeEnvVar = (v: string) => {
+		const next = envVars.filter((x) => x !== v);
+		saveEnvMutation.mutate(next);
+	};
 
-    if (approvedCommands.includes(trimmed)) {
-      setNewCommand('')
-      return
-    }
+	const addCommand = () => {
+		const trimmed = newCommand.trim();
+		if (!trimmed) {
+			toast.error("Command cannot be empty");
+			return;
+		}
 
-    saveCommandsMutation.mutate([...approvedCommands, trimmed])
-    setNewCommand('')
-  }
+		if (approvedCommands.includes(trimmed)) {
+			setNewCommand("");
+			return;
+		}
 
-  const removeCommand = (cmd: string) => {
-    const next = approvedCommands.filter((x) => x !== cmd)
-    saveCommandsMutation.mutate(next)
-  }
+		saveCommandsMutation.mutate([...approvedCommands, trimmed]);
+		setNewCommand("");
+	};
 
-  return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="font-bold text-3xl">Settings</h1>
-        <p className="mt-2 text-muted-foreground">
-          Configure gateway-wide behavior and safety controls
-        </p>
-      </div>
+	const removeCommand = (cmd: string) => {
+		const next = approvedCommands.filter((x) => x !== cmd);
+		saveCommandsMutation.mutate(next);
+	};
 
-      {error ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
-          Failed to load settings
-        </div>
-      ) : null}
+	const addAppPattern = () => {
+		const trimmedApp = newApp.trim();
+		const trimmedPattern = newPattern.trim();
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Protected Environment Variables</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-muted-foreground text-sm">
-              Keys listed here are considered sensitive and are redacted from logs and UI unless
-              explicitly revealed.
-            </p>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Label className="mb-4" htmlFor="new-var">
-                  Add Key
-                </Label>
-                <Input
-                  disabled={!isAdmin || isLoading || saveEnvMutation.isPending}
-                  id="new-var"
-                  onChange={(e) => setNewVar(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      addEnvVar()
-                    }
-                  }}
-                  placeholder="e.g. DATABASE_URL"
-                  value={newVar}
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  disabled={!isAdmin || isLoading || saveEnvMutation.isPending}
-                  onClick={addEnvVar}
-                >
-                  Add
-                </Button>
-              </div>
-            </div>
-            <Separator className="my-4" />
-            <div className="flex flex-wrap gap-2">
-              {(envVars || []).length === 0 ? (
-                <span className="text-muted-foreground text-sm">No protected keys set</span>
-              ) : (
-                envVars.map((v) => (
-                  <span
-                    className="inline-flex items-center gap-2 rounded-md border bg-muted px-2 py-1 text-xs"
-                    key={v}
-                  >
-                    {v}
-                    <button
-                      aria-label={`Remove ${v}`}
-                      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-background"
-                      disabled={!isAdmin || saveEnvMutation.isPending}
-                      onClick={() => removeEnvVar(v)}
-                      type="button"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+		if (!trimmedApp) {
+			toast.error("App name cannot be empty");
+			return;
+		}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Approved Commands for Deployment Approval</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-muted-foreground text-sm">
-              Commands that can be executed during an active deployment approval window. These are
-              gated by tokens or users with *-with-approval permissions (e.g.,
-              convox:process:exec-with-approval) and can only run while an approved deployment
-              request is active. Uses exact string matching.
-            </p>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Label className="mb-4" htmlFor="new-command">
-                  Add Command
-                </Label>
-                <Input
-                  disabled={!isAdmin || isLoading || saveCommandsMutation.isPending}
-                  id="new-command"
-                  onChange={(e) => setNewCommand(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      addCommand()
-                    }
-                  }}
-                  placeholder="e.g. bin/pre_release"
-                  value={newCommand}
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  disabled={!isAdmin || isLoading || saveCommandsMutation.isPending}
-                  onClick={addCommand}
-                >
-                  Add
-                </Button>
-              </div>
-            </div>
-            <Separator className="my-4" />
-            <div className="flex flex-wrap gap-2">
-              {(approvedCommands || []).length === 0 ? (
-                <span className="text-muted-foreground text-sm">No approved commands set</span>
-              ) : (
-                approvedCommands.map((cmd) => (
-                  <span
-                    className="inline-flex items-center gap-2 rounded-md border bg-muted px-2 py-1 font-mono text-xs"
-                    key={cmd}
-                  >
-                    {cmd}
-                    <button
-                      aria-label={`Remove ${cmd}`}
-                      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-background"
-                      disabled={!isAdmin || saveCommandsMutation.isPending}
-                      onClick={() => removeCommand(cmd)}
-                      type="button"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+		if (!trimmedPattern) {
+			toast.error("Pattern cannot be empty");
+			return;
+		}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Destructive Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-muted-foreground text-sm">
-              When enabled, delete/force operations are allowed globally. Disable to protect against
-              accidental destructive changes.
-            </p>
-            <label className="mt-6 flex items-center gap-3">
-              <input
-                checked={!!allowDestructive}
-                disabled={!isAdmin || isLoading || toggleDestructiveMutation.isPending}
-                onChange={(e) => toggleDestructiveMutation.mutate(e.target.checked)}
-                type="checkbox"
-              />
-              <span className="font-medium text-sm">Allow destructive actions</span>
-            </label>
-          </CardContent>
-        </Card>
+		if (appImageTagPatterns[trimmedApp]) {
+			toast.error(`Pattern for app "${trimmedApp}" already exists`);
+			return;
+		}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>MFA Enforcement</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-muted-foreground text-sm">
-              Require every user to enable multi-factor authentication before accessing sensitive
-              actions.
-            </p>
-            <label className="mt-6 flex items-center gap-3">
-              <input
-                checked={requireAllUsers}
-                disabled={!isAdmin || isLoading || updateMfaMutation.isPending}
-                onChange={(event) => updateMfaMutation.mutate(event.target.checked)}
-                type="checkbox"
-              />
-              <span className="font-medium text-sm">Require MFA for all users</span>
-            </label>
-          </CardContent>
-        </Card>
+		saveAppPatternsMutation.mutate({
+			...appImageTagPatterns,
+			[trimmedApp]: trimmedPattern,
+		});
+		setNewApp("");
+		setNewPattern("");
+	};
 
-        {pinningEnabled ? (
-          <Card className="md:col-span-3">
-            <CardHeader>
-              <CardTitle>Rack TLS Certificate</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-muted-foreground text-sm">
-                The pinned rack certificate is used to verify all proxied connections. Refresh after
-                rotating rack TLS.
-              </p>
-              <textarea
-                className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
-                readOnly
-                rows={cert ? 10 : 4}
-                value={cert?.pem ?? 'No certificate pinned yet.'}
-              />
-              <div className="flex flex-col gap-1 text-muted-foreground text-xs">
-                <span>
-                  <strong>Fingerprint:</strong> {cert?.fingerprint ?? '—'}
-                </span>
-                <span>
-                  <strong>Fetched:</strong> {certFetchedAt ?? '—'}
-                </span>
-              </div>
-              <div>
-                <Button
-                  disabled={!isAdmin || refreshCertMutation.isPending}
-                  onClick={() => refreshCertMutation.mutate()}
-                >
-                  {refreshCertMutation.isPending ? 'Refreshing…' : 'Refresh'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
+	const removeAppPattern = (app: string) => {
+		const { [app]: _removed, ...rest } = appImageTagPatterns;
+		saveAppPatternsMutation.mutate(rest);
+	};
 
-      {sentryTestsEnabled ? (
-        <div className="mt-8 max-w-sm">
-          <Card>
-            <CardHeader>
-              <CardTitle>Test Sentry Error Reports</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm">
-                Send sample events to confirm Sentry ingestion from the gateway and browser.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-4">
-                <Button
-                  disabled={sentryApiTestMutation.isPending}
-                  onClick={() => sentryApiTestMutation.mutate()}
-                  size="sm"
-                  variant="destructive"
-                >
-                  {sentryApiTestMutation.isPending ? 'API…' : 'API'}
-                </Button>
-                <Button onClick={triggerJsTest} size="sm" variant="destructive">
-                  JS
-                </Button>
-                <Button onClick={triggerCspTest} size="sm" variant="destructive">
-                  CSP
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
-    </div>
-  )
+	return (
+		<div className="p-8">
+			<div className="mb-8">
+				<h1 className="font-bold text-3xl">Settings</h1>
+				<p className="mt-2 text-muted-foreground">
+					Configure gateway-wide behavior and safety controls
+				</p>
+			</div>
+
+			{error ? (
+				<div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
+					Failed to load settings
+				</div>
+			) : null}
+
+			<div className="grid gap-6 md:grid-cols-2">
+				<Card>
+					<CardHeader>
+						<CardTitle>MFA Enforcement</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="mb-3 text-muted-foreground text-sm">
+							Require every user to enable multi-factor authentication before
+							accessing sensitive actions.
+						</p>
+						<label className="mt-6 flex items-center gap-3">
+							<input
+								checked={requireAllUsers}
+								disabled={!isAdmin || isLoading || updateMfaMutation.isPending}
+								onChange={(event) =>
+									updateMfaMutation.mutate(event.target.checked)
+								}
+								type="checkbox"
+							/>
+							<span className="font-medium text-sm">
+								Require MFA for all users
+							</span>
+						</label>
+					</CardContent>
+				</Card>
+
+				<Card>
+					<CardHeader>
+						<CardTitle>Destructive Actions</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="mb-3 text-muted-foreground text-sm">
+							When enabled, delete/force operations are allowed globally.
+							Disable to protect against accidental destructive changes.
+						</p>
+						<label className="mt-6 flex items-center gap-3">
+							<input
+								checked={!!allowDestructive}
+								disabled={
+									!isAdmin || isLoading || toggleDestructiveMutation.isPending
+								}
+								onChange={(e) =>
+									toggleDestructiveMutation.mutate(e.target.checked)
+								}
+								type="checkbox"
+							/>
+							<span className="font-medium text-sm">
+								Allow destructive actions
+							</span>
+						</label>
+					</CardContent>
+				</Card>
+
+				<Card>
+					<CardHeader>
+						<CardTitle>Protected Environment Variables</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="mb-3 text-muted-foreground text-sm">
+							Keys listed here are considered sensitive and are redacted from
+							logs and UI unless explicitly revealed.
+						</p>
+						<div className="flex gap-2">
+							<div className="flex-1">
+								<Label className="mb-2 mt-2" htmlFor="new-var">
+									Add Key
+								</Label>
+								<Input
+									disabled={!isAdmin || isLoading || saveEnvMutation.isPending}
+									id="new-var"
+									onChange={(e) => setNewVar(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											addEnvVar();
+										}
+									}}
+									placeholder="e.g. DATABASE_URL"
+									value={newVar}
+								/>
+							</div>
+							<div className="flex items-end">
+								<Button
+									disabled={!isAdmin || isLoading || saveEnvMutation.isPending}
+									onClick={addEnvVar}
+								>
+									Add
+								</Button>
+							</div>
+						</div>
+						<Separator className="my-4" />
+						<div className="flex flex-wrap gap-2">
+							{(envVars || []).length === 0 ? (
+								<span className="text-muted-foreground text-sm">
+									No protected keys set
+								</span>
+							) : (
+								envVars.map((v) => (
+									<span
+										className="inline-flex items-center gap-2 rounded-md border bg-muted px-2 py-1 text-xs"
+										key={v}
+									>
+										{v}
+										<button
+											aria-label={`Remove ${v}`}
+											className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-background"
+											disabled={!isAdmin || saveEnvMutation.isPending}
+											onClick={() => removeEnvVar(v)}
+											type="button"
+										>
+											<X className="h-4 w-4" />
+										</button>
+									</span>
+								))
+							)}
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card>
+					<CardHeader>
+						<CardTitle>Deploy Approvals - Approved Commands</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="mb-3 text-muted-foreground text-sm">
+							Commands that can be executed during an active deployment approval
+							window. Uses exact string matching.
+						</p>
+						<div className="flex gap-2">
+							<div className="flex-1">
+								<Label className="mb-2 mt-2" htmlFor="new-command">
+									Add Command
+								</Label>
+								<Input
+									disabled={
+										!isAdmin || isLoading || saveCommandsMutation.isPending
+									}
+									id="new-command"
+									onChange={(e) => setNewCommand(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											addCommand();
+										}
+									}}
+									placeholder="e.g. bin/pre_release"
+									value={newCommand}
+								/>
+							</div>
+							<div className="flex items-end">
+								<Button
+									disabled={
+										!isAdmin || isLoading || saveCommandsMutation.isPending
+									}
+									onClick={addCommand}
+								>
+									Add
+								</Button>
+							</div>
+						</div>
+						<Separator className="my-4" />
+						<div className="flex flex-wrap gap-2">
+							{(approvedCommands || []).length === 0 ? (
+								<span className="text-muted-foreground text-sm">
+									No approved commands set
+								</span>
+							) : (
+								approvedCommands.map((cmd) => (
+									<span
+										className="inline-flex items-center gap-2 rounded-md border bg-muted px-2 py-1 font-mono text-xs"
+										key={cmd}
+									>
+										{cmd}
+										<button
+											aria-label={`Remove ${cmd}`}
+											className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-background"
+											disabled={!isAdmin || saveCommandsMutation.isPending}
+											onClick={() => removeCommand(cmd)}
+											type="button"
+										>
+											<X className="h-4 w-4" />
+										</button>
+									</span>
+								))
+							)}
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card>
+					<CardHeader>
+						<CardTitle>Deploy Approvals - App Image Tag Patterns</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="mb-3 text-muted-foreground text-sm">
+							Define image tag validation patterns for deploy approval manifest
+							validation. Use{" "}
+							<code className="font-mono">
+								{"{"}
+								{"{"}GIT_COMMIT{"}"}
+								{"}"}
+							</code>{" "}
+							as a placeholder for the approved git commit hash.
+						</p>
+						<div className="flex gap-2">
+							<div className="flex-1">
+								<Label className="mb-2 mt-2" htmlFor="new-app-name">
+									App Name
+								</Label>
+								<Input
+									disabled={
+										!isAdmin || isLoading || saveAppPatternsMutation.isPending
+									}
+									id="new-app-name"
+									onChange={(e) => setNewApp(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											addAppPattern();
+										}
+									}}
+									placeholder="e.g. rack-gateway"
+									value={newApp}
+								/>
+							</div>
+							<div className="flex-1">
+								<Label className="mb-2 mt-2" htmlFor="new-pattern">
+									Image Tag Pattern (Regex)
+								</Label>
+								<Input
+									disabled={
+										!isAdmin || isLoading || saveAppPatternsMutation.isPending
+									}
+									id="new-pattern"
+									onChange={(e) => setNewPattern(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											addAppPattern();
+										}
+									}}
+									placeholder="e.g. .*:{{GIT_COMMIT}}"
+									value={newPattern}
+								/>
+							</div>
+							<div className="flex items-end">
+								<Button
+									disabled={
+										!isAdmin || isLoading || saveAppPatternsMutation.isPending
+									}
+									onClick={addAppPattern}
+								>
+									Add
+								</Button>
+							</div>
+						</div>
+						<Separator className="my-4" />
+						<div className="space-y-2">
+							{Object.keys(appImageTagPatterns).length === 0 ? (
+								<span className="text-muted-foreground text-sm">
+									No app patterns configured
+								</span>
+							) : (
+								Object.entries(appImageTagPatterns).map(([app, pattern]) => (
+									<div
+										className="flex items-center justify-between rounded-md border bg-muted px-3 py-2"
+										key={app}
+									>
+										<div className="flex-1 space-y-1">
+											<div className="font-medium text-sm">{app}</div>
+											<div className="font-mono text-muted-foreground text-xs">
+												{pattern}
+											</div>
+										</div>
+										<button
+											aria-label={`Remove pattern for ${app}`}
+											className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-background"
+											disabled={!isAdmin || saveAppPatternsMutation.isPending}
+											onClick={() => removeAppPattern(app)}
+											type="button"
+										>
+											<X className="h-4 w-4" />
+										</button>
+									</div>
+								))
+							)}
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+
+			{pinningEnabled ? (
+				<div className="mt-6">
+					<Card>
+						<CardHeader>
+							<CardTitle>Rack TLS Certificate</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-3">
+							<p className="text-muted-foreground text-sm">
+								The pinned rack certificate is used to verify all proxied
+								connections. Refresh after rotating rack TLS.
+							</p>
+							<textarea
+								className="w-full rounded-md border bg-muted/40 p-3 font-mono text-xs"
+								readOnly
+								rows={cert ? 10 : 4}
+								value={cert?.pem ?? "No certificate pinned yet."}
+							/>
+							<div className="flex flex-col gap-1 text-muted-foreground text-xs">
+								<span>
+									<strong>Fingerprint:</strong> {cert?.fingerprint ?? "—"}
+								</span>
+								<span>
+									<strong>Fetched:</strong> {certFetchedAt ?? "—"}
+								</span>
+							</div>
+							<div>
+								<Button
+									disabled={!isAdmin || refreshCertMutation.isPending}
+									onClick={() => refreshCertMutation.mutate()}
+								>
+									{refreshCertMutation.isPending ? "Refreshing…" : "Refresh"}
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			) : null}
+
+			{sentryTestsEnabled ? (
+				<div className="mt-8 max-w-sm">
+					<Card>
+						<CardHeader>
+							<CardTitle>Test Sentry Error Reports</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<p className="text-muted-foreground text-sm">
+								Send sample events to confirm Sentry ingestion from the gateway
+								and browser.
+							</p>
+							<div className="mt-6 flex flex-wrap gap-4">
+								<Button
+									disabled={sentryApiTestMutation.isPending}
+									onClick={() => sentryApiTestMutation.mutate()}
+									size="sm"
+									variant="destructive"
+								>
+									{sentryApiTestMutation.isPending ? "API…" : "API"}
+								</Button>
+								<Button onClick={triggerJsTest} size="sm" variant="destructive">
+									JS
+								</Button>
+								<Button
+									onClick={triggerCspTest}
+									size="sm"
+									variant="destructive"
+								>
+									CSP
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			) : null}
+		</div>
+	);
 }

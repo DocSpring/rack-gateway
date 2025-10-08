@@ -304,6 +304,11 @@ type UpdateApprovedCommandsRequest struct {
 	ApprovedCommands []string `json:"approved_commands"`
 }
 
+// UpdateAppImageTagPatternsRequest defines the payload for updating app image tag patterns.
+type UpdateAppImageTagPatternsRequest struct {
+	AppImageTagPatterns map[string]string `json:"app_image_tag_patterns"`
+}
+
 // UpdateAllowDestructiveActionsRequest defines the payload for toggling destructive actions.
 type UpdateAllowDestructiveActionsRequest struct {
 	AllowDestructiveActions bool `json:"allow_destructive_actions"`
