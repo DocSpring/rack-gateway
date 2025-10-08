@@ -55,8 +55,8 @@ func (d *Database) UpdateCLILoginCode(state, code string) error {
 }
 
 // SaveCLILoginResult persists the successful login response after MFA verification.
-func (d *Database) SaveCLILoginResult(state, token, email, name string, expiresAt time.Time, methodID *int64) error {
-	if err := d.SetCLILoginProfile(state, token, email, name, expiresAt); err != nil {
+func (d *Database) SaveCLILoginResult(state, email, name string, methodID *int64) error {
+	if err := d.SetCLILoginProfile(state, email, name); err != nil {
 		return err
 	}
 	return d.MarkCLILoginVerified(state, methodID)
@@ -64,19 +64,17 @@ func (d *Database) SaveCLILoginResult(state, token, email, name string, expiresA
 
 // SetCLILoginProfile stores the OAuth exchange result so the CLI can poll for completion while
 // additional MFA checks (or enrollment) are performed.
-func (d *Database) SetCLILoginProfile(state, token, email, name string, expiresAt time.Time) error {
+func (d *Database) SetCLILoginProfile(state, email, name string) error {
 	_, err := d.exec(`
         UPDATE cli_login_states
         SET code = NULL,
             code_verifier = NULL,
-            login_token = ?,
             login_email = ?,
             login_name = ?,
-            login_expires_at = ?,
             login_error = NULL,
             updated_at = NOW()
         WHERE state = ?
-    `, token, email, name, expiresAt, state)
+    `, email, name, state)
 	if err != nil {
 		return fmt.Errorf("failed to store CLI login profile: %w", err)
 	}

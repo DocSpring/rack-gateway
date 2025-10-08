@@ -20,7 +20,6 @@ type App struct {
 	Config           *config.Config
 	Database         *db.Database
 	RBACManager      rbac.RBACManager
-	JWTManager       *auth.JWTManager
 	SessionManager   *auth.SessionManager
 	OAuthHandler     *auth.OAuthHandler
 	AuthService      *auth.AuthService

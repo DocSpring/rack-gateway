@@ -35,8 +35,6 @@ func (a *App) initializeServices() error {
 		return fmt.Errorf("failed to seed database: %w", err)
 	}
 
-	// Initialize JWT manager
-	a.JWTManager = auth.NewJWTManager(a.Config.JWTSecret, a.Config.JWTExpiry)
 	// Session manager enforces short-lived idle sessions for the web UI
 	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.JWTSecret, a.Config.SessionIdleTimeout)
 
@@ -110,7 +108,7 @@ func (a *App) initializeServices() error {
 	a.TokenService = token.NewService(a.Database)
 
 	// Create combined auth service
-	a.AuthService = auth.NewAuthService(a.JWTManager, a.TokenService, a.Database, a.SessionManager)
+	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager)
 
 	// Debug: Log OAuth configuration (matching original)
 	log.Printf("Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), a.Config.Port)
@@ -144,7 +142,6 @@ func (a *App) initializeServices() error {
 		redirectInput,
 		allowedDomain,
 		issuerURL,
-		a.JWTManager,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize OAuth handler: %w", err)
@@ -256,7 +253,6 @@ func (a *App) setupRouter() {
 		Config:           a.Config,
 		Database:         a.Database,
 		RBACManager:      a.RBACManager,
-		JWTManager:       a.JWTManager,
 		SessionManager:   a.SessionManager,
 		OAuthHandler:     a.OAuthHandler,
 		AuthService:      a.AuthService,

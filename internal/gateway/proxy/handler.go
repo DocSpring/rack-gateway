@@ -2162,14 +2162,7 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 		return nil
 	}
 
-	// Get user's session
-	if authUser.Session == nil {
-		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("session required for MFA verification"))
-		http.Error(w, "session required for MFA verification", http.StatusUnauthorized)
-		return fmt.Errorf("session required")
-	}
-
-	// Check if MFA was provided inline
+	// Check if MFA was provided inline (for CLI requests)
 	if authUser.MFAType != "" && authUser.MFAValue != "" {
 		// Verify the inline MFA
 		userRecord, err := h.database.GetUser(authUser.Email)
@@ -2211,7 +2204,11 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 					} else {
 						// Re-encode for VerifyWebAuthnAssertion
 						assertionResponse, _ := json.Marshal(assertionData.Assertion)
-						_, verifyErr = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(assertionData.SessionData), assertionResponse, clientIPFromRequest(r), r.UserAgent(), &authUser.Session.ID)
+						var sessionIDPtr *int64
+						if authUser.Session != nil {
+							sessionIDPtr = &authUser.Session.ID
+						}
+						_, verifyErr = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(assertionData.SessionData), assertionResponse, clientIPFromRequest(r), r.UserAgent(), sessionIDPtr)
 					}
 				}
 			} else {
@@ -2227,8 +2224,8 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 			return verifyErr
 		}
 
-		// MFA verified - update recent step-up timestamp
-		if h.sessionManager != nil {
+		// MFA verified - update recent step-up timestamp if this is a web session
+		if h.sessionManager != nil && authUser.Session != nil {
 			now := time.Now()
 			if err := h.sessionManager.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
 				log.Printf("Warning: failed to update session step-up: %v", err)
@@ -2236,6 +2233,13 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 		}
 
 		return nil
+	}
+
+	// No inline MFA provided - check for session with recent step-up
+	if authUser.Session == nil {
+		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("session required for MFA verification"))
+		http.Error(w, "session required for MFA verification", http.StatusUnauthorized)
+		return fmt.Errorf("session required")
 	}
 
 	// No inline MFA provided - check if step-up window is still valid

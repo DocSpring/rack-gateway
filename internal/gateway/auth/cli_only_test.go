@@ -11,7 +11,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // setupTestDatabase creates a temporary test database for isolation
@@ -74,19 +73,13 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 
-	// Create JWT manager and auth service
-	jwtSecret := "test-secret"
-	jwtManager := NewJWTManager(jwtSecret, 24*time.Hour)
+	// Create auth service
+	secret := "test-secret"
 	tokenService := token.NewService(database)
-	sessionManager := NewSessionManager(database, jwtSecret, 24*time.Hour)
-	authService := NewAuthService(jwtManager, tokenService, database, sessionManager)
+	sessionManager := NewSessionManager(database, secret, 24*time.Hour)
+	authService := NewAuthService(tokenService, database, sessionManager)
 
-	// Generate a valid JWT token
-	validToken, _, err := jwtManager.GenerateToken("test@example.com", "Test User")
-	if err != nil {
-		t.Fatalf("Failed to generate token: %v", err)
-	}
-
+	// Get user record and create session token
 	userRecord, err := database.GetUser("test@example.com")
 	if err != nil {
 		t.Fatalf("failed to get user: %v", err)
@@ -121,14 +114,14 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 	}{
 		{
 			name:           "Bearer token in header - allowed",
-			authHeader:     "Bearer " + validToken,
+			authHeader:     "Bearer " + sessionToken,
 			cookie:         nil,
 			expectedStatus: http.StatusOK,
 			expectedBody:   "OK",
 		},
 		{
-			name:           "Basic auth with JWT - allowed",
-			authHeader:     basicAuthHeader("convox", validToken),
+			name:           "Basic auth with session token - allowed",
+			authHeader:     basicAuthHeader("convox", sessionToken),
 			cookie:         nil,
 			expectedStatus: http.StatusOK,
 			expectedBody:   "OK",
@@ -142,7 +135,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 		},
 		{
 			name:           "Both cookie and header - blocked (cookie indicates browser)",
-			authHeader:     "Bearer " + validToken,
+			authHeader:     "Bearer " + sessionToken,
 			cookie:         &http.Cookie{Name: "session_token", Value: sessionToken},
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "browser session cookies are not permitted for CLI routes",
@@ -156,7 +149,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 		},
 		{
 			name:           "Invalid auth type - blocked",
-			authHeader:     "Custom " + validToken,
+			authHeader:     "Custom " + sessionToken,
 			cookie:         nil,
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "invalid authorization type for CLI access",
@@ -170,7 +163,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 		},
 		{
 			name:           "Expired token - blocked",
-			authHeader:     "Bearer " + generateExpiredToken(jwtSecret),
+			authHeader:     "Bearer expired-session-token",
 			cookie:         nil,
 			expectedStatus: http.StatusUnauthorized,
 			expectedBody:   "authentication failed",
@@ -236,8 +229,7 @@ func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	rawToken := tokenResp.Token
 	apiToken := tokenResp.APIToken
 
-	jwtManager := NewJWTManager("test-secret", 24*time.Hour)
-	authService := NewAuthService(jwtManager, tokenService, database, nil)
+	authService := NewAuthService(tokenService, database, nil)
 
 	// Create a test handler
 	tt := t
@@ -303,10 +295,9 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 
-	jwtManager := NewJWTManager("test-secret", 24*time.Hour)
 	tokenService := token.NewService(database)
 	sessionManager := NewSessionManager(database, "test-secret", 24*time.Hour)
-	authService := NewAuthService(jwtManager, tokenService, database, sessionManager)
+	authService := NewAuthService(tokenService, database, sessionManager)
 
 	userRecord, err := database.GetUser("test@example.com")
 	if err != nil {
@@ -398,22 +389,6 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to generate expired token
-func generateExpiredToken(secret string) string {
-	claims := &Claims{
-		Email: "test@example.com",
-		Name:  "Test User",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-1 * time.Hour)), // Expired 1 hour ago
-			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, _ := token.SignedString([]byte(secret))
-	return tokenString
 }
 
 func contains(s, substr string) bool {

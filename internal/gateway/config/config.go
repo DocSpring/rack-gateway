@@ -20,7 +20,6 @@ type Config struct {
 	SentryJSTracesRate      string
 	SentryTestsEnabled      bool
 	JWTSecret               string
-	JWTExpiry               time.Duration
 	SessionIdleTimeout      time.Duration
 	GoogleClientID          string
 	GoogleClientSecret      string
@@ -86,7 +85,6 @@ func Load() (*Config, error) {
 		SentryJSDsn:         strings.TrimSpace(getEnv("SENTRY_JS_DSN", "")),
 		SentryJSTracesRate:  jsTracesRate,
 		SentryTestsEnabled:  getEnv("ENABLE_SENTRY_TEST_BUTTONS", "false") == "true",
-		JWTExpiry:           30 * 24 * time.Hour,
 		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleAllowedDomain: getEnv("GOOGLE_ALLOWED_DOMAIN", ""),
@@ -115,7 +113,7 @@ func Load() (*Config, error) {
 	if jwtKey == "" {
 		if cfg.DevMode {
 			jwtKey = generateDevKey()
-			fmt.Printf("Generated dev JWT key: %s\n", jwtKey)
+			fmt.Printf("Generated dev secret key: %s\n", jwtKey)
 		} else {
 			return nil, fmt.Errorf("APP_SECRET_KEY is required in production")
 		}

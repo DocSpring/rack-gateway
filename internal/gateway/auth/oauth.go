@@ -33,7 +33,6 @@ type OAuthHandler struct {
 	oauth2ConfigCLI *oauth2.Config
 	oauth2ConfigWeb *oauth2.Config
 	idTokenVerifier *oidc.IDTokenVerifier
-	jwtManager      *JWTManager
 	allowedDomain   string
 	issuingURL      string
 }
@@ -47,15 +46,13 @@ type LoginStartResponse struct {
 
 // LoginResponse for successful OAuth completion
 type LoginResponse struct {
-	Token     string    `json:"token" validate:"required"`
-	Email     string    `json:"email" validate:"required"`
-	Name      string    `json:"name" validate:"required"`
-	ExpiresAt time.Time `json:"expires_at" validate:"required"`
+	Email string `json:"email" validate:"required"`
+	Name  string `json:"name" validate:"required"`
 }
 
 // NewOAuthHandler creates a new OAuth handler using vetted OIDC libraries
 // The third parameter can be either a base URL (scheme+host) or a full web callback URL.
-func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string, jwtManager *JWTManager) (*OAuthHandler, error) {
+func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string) (*OAuthHandler, error) {
 	ctx := context.Background()
 
 	// Use vetted OIDC provider discovery with exponential backoff retry
@@ -126,7 +123,6 @@ func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, i
 		oauth2ConfigCLI: oauth2ConfigCLI,
 		oauth2ConfigWeb: oauth2ConfigWeb,
 		idTokenVerifier: idTokenVerifier,
-		jwtManager:      jwtManager,
 		allowedDomain:   allowedDomain,
 		issuingURL:      issuerURL,
 	}, nil
@@ -169,7 +165,7 @@ func (h *OAuthHandler) StartWebLogin() (authURL string, state string) {
 	return authURL, state
 }
 
-// CompleteLogin handles OAuth callback - validates code and returns JWT
+// CompleteLogin handles OAuth callback - validates code and returns user info
 func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginResponse, error) {
 	ctx := context.Background()
 
@@ -222,17 +218,9 @@ func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginRe
 		}
 	}
 
-	// Create JWT token using existing JWT manager
-	jwtToken, expiresAt, err := h.jwtManager.GenerateToken(claims.Email, claims.Name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate JWT: %w", err)
-	}
-
 	return &LoginResponse{
-		Token:     jwtToken,
-		Email:     claims.Email,
-		Name:      claims.Name,
-		ExpiresAt: expiresAt,
+		Email: claims.Email,
+		Name:  claims.Name,
 	}, nil
 }
 

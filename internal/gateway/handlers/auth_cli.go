@@ -143,7 +143,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 			return
 		}
 
-		if err := h.database.SetCLILoginProfile(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt); err != nil {
+		if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
 			params := url.Values{}
 			params.Set("error", "persist_failure")
 			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
@@ -295,7 +295,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 				c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
 				return
 			}
-			if err := h.database.SetCLILoginProfile(state, loginResp.Token, loginResp.Email, loginResp.Name, loginResp.ExpiresAt); err != nil {
+			if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
 				return
 			}
@@ -355,7 +355,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body CLILoginCompleteRequest true "CLI login payload"
-// @Success 200 {object} auth.LoginResponse
+// @Success 200 {object} CLILoginResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /auth/cli/complete [post]

@@ -14,19 +14,18 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
-// AuthService combines JWT and API token authentication
+// AuthService handles session and API token authentication
 type AuthService struct {
-	jwtManager   *JWTManager
 	tokenService *token.Service
 	database     *db.Database
 	sessions     *SessionManager
 }
 
-// AuthUser represents an authenticated user from either JWT or API token
+// AuthUser represents an authenticated user from either session or API token
 type AuthUser struct {
 	Email       string          `json:"email"`
 	Name        string          `json:"name"`
-	Roles       []string        `json:"roles,omitempty"`       // For JWT users
+	Roles       []string        `json:"roles,omitempty"`       // For session users
 	Permissions []string        `json:"permissions,omitempty"` // For API token users
 	IsAPIToken  bool            `json:"is_api_token"`
 	TokenID     *int64          `json:"token_id,omitempty"` // For API tokens
@@ -37,16 +36,15 @@ type AuthUser struct {
 }
 
 // NewAuthService creates a new authentication service
-func NewAuthService(jwtManager *JWTManager, tokenService *token.Service, database *db.Database, sessions *SessionManager) *AuthService {
+func NewAuthService(tokenService *token.Service, database *db.Database, sessions *SessionManager) *AuthService {
 	return &AuthService{
-		jwtManager:   jwtManager,
 		tokenService: tokenService,
 		database:     database,
 		sessions:     sessions,
 	}
 }
 
-// Middleware handles both JWT and API token authentication
+// Middleware handles session token and API token authentication
 func (a *AuthService) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, source, err := a.AuthenticateHTTPRequest(r)
@@ -117,13 +115,8 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		case "Bearer":
 			if strings.HasPrefix(credentials, "rgw_") {
 				user, err = a.validateAPIToken(credentials)
-			} else if a.sessions != nil {
-				user, err = a.validateSessionToken(credentials, r)
-				if err != nil {
-					user, err = a.validateJWT(credentials)
-				}
 			} else {
-				user, err = a.validateJWT(credentials)
+				user, err = a.validateSessionToken(credentials, r)
 			}
 		case "Basic":
 			user, err = a.validateBasicAuth(credentials, r)
@@ -136,20 +129,18 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		return user, "header", nil
 	}
 
-	if a.sessions != nil {
-		if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
-			result, err := a.sessions.ValidateSession(cookie.Value, clientIPFromRequest(r), r.UserAgent())
-			if err != nil {
-				return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
-			}
-			return &AuthUser{
-				Email:      result.User.Email,
-				Name:       result.User.Name,
-				Roles:      result.User.Roles,
-				IsAPIToken: false,
-				Session:    result.Session,
-			}, "cookie", nil
+	if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		result, err := a.sessions.ValidateSession(cookie.Value, clientIPFromRequest(r), r.UserAgent())
+		if err != nil {
+			return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
 		}
+		return &AuthUser{
+			Email:      result.User.Email,
+			Name:       result.User.Name,
+			Roles:      result.User.Roles,
+			IsAPIToken: false,
+			Session:    result.Session,
+		}, "cookie", nil
 	}
 
 	return nil, "none", fmt.Errorf("missing authorization")
@@ -176,33 +167,6 @@ func clientIPFromRequest(r *http.Request) string {
 		return host
 	}
 	return strings.TrimSpace(r.RemoteAddr)
-}
-
-func (a *AuthService) validateJWT(tokenString string) (*AuthUser, error) {
-	claims, err := a.jwtManager.ValidateToken(tokenString)
-	if err != nil {
-		// Don't expose JWT validation details - just return a generic error
-		return nil, fmt.Errorf("authentication failed")
-	}
-
-	// Get user roles from database
-	user, err := a.database.GetUser(claims.Email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
-	}
-	if user == nil {
-		return nil, fmt.Errorf("user not found")
-	}
-	if user.Suspended {
-		return nil, fmt.Errorf("user is suspended")
-	}
-
-	return &AuthUser{
-		Email:      claims.Email,
-		Name:       claims.Name,
-		Roles:      user.Roles,
-		IsAPIToken: false,
-	}, nil
 }
 
 func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
@@ -267,9 +231,10 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 	password := parts[1]
 
 	// Parse password field for optional MFA data
-	// Format: JWT:mfa_type:mfa_value (e.g., "token123:totp:123456" or "token123:webauthn:base64data")
+	// Format: session_token.mfa_type.mfa_value (e.g., "session123.totp.123456" or "session123.webauthn.base64data")
+	// Using dots instead of colons to avoid URL encoding issues
 	var authToken, mfaType, mfaValue string
-	passwordParts := strings.SplitN(password, ":", 3)
+	passwordParts := strings.SplitN(password, ".", 3)
 	if len(passwordParts) == 3 {
 		// MFA data present
 		authToken = passwordParts[0]
@@ -282,27 +247,19 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 
 	var user *AuthUser
 
-	// If username is "convox", authToken may be a JWT, session token, or API token
+	// If username is "convox", authToken may be a session token or API token
 	if username == "convox" {
 		if strings.HasPrefix(authToken, "rgw_") {
 			user, err = a.validateAPIToken(authToken)
-		} else if a.sessions != nil {
-			if user, err = a.validateSessionToken(authToken, r); err != nil {
-				user, err = a.validateJWT(authToken)
-			}
 		} else {
-			user, err = a.validateJWT(authToken)
+			user, err = a.validateSessionToken(authToken, r)
 		}
 	} else {
-		// Otherwise, authToken could be an API token or session token tied to a specific account
+		// Otherwise, authToken could be an API token or session token
 		if strings.HasPrefix(authToken, "rgw_") {
 			user, err = a.validateAPIToken(authToken)
-		} else if a.sessions != nil {
-			if user, err = a.validateSessionToken(authToken, r); err != nil {
-				return nil, fmt.Errorf("unsupported authentication method")
-			}
 		} else {
-			return nil, fmt.Errorf("unsupported authentication method")
+			user, err = a.validateSessionToken(authToken, r)
 		}
 	}
 
@@ -334,18 +291,6 @@ func GetSessionID(ctx context.Context) (int64, bool) {
 	return authUser.Session.ID, true
 }
 
-// GetUser returns JWT claims for non-API token requests
-func GetUser(ctx context.Context) (*Claims, bool) {
-	authUser, ok := ctx.Value(UserContextKey).(*AuthUser)
-	if !ok || authUser.IsAPIToken {
-		return nil, false
-	}
-
-	return &Claims{
-		Email: authUser.Email,
-		Name:  authUser.Name,
-	}, true
-}
 
 // decodeBasicAuth decodes a basic auth credentials string
 func decodeBasicAuth(credentials string) (string, error) {
@@ -357,9 +302,6 @@ func decodeBasicAuth(credentials string) (string, error) {
 }
 
 func (a *AuthService) validateSessionToken(token string, r *http.Request) (*AuthUser, error) {
-	if a.sessions == nil {
-		return nil, fmt.Errorf("session authentication unavailable")
-	}
 	trimmed := strings.TrimSpace(token)
 	if trimmed == "" {
 		return nil, fmt.Errorf("empty session token")

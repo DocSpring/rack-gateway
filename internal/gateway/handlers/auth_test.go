@@ -46,7 +46,7 @@ func (f *fakeOAuth) CompleteLogin(code, state, codeVerifier string) (*auth.Login
 	if f.resp != nil {
 		return f.resp, nil
 	}
-	return &auth.LoginResponse{Token: "token", Email: "user@example.com", Name: "User", ExpiresAt: time.Now().Add(time.Hour)}, nil
+	return &auth.LoginResponse{Email: "user@example.com", Name: "User"}, nil
 }
 
 func newTestContext(method, target string) (*gin.Context, *httptest.ResponseRecorder) {
@@ -128,7 +128,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 }
 
 func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
-	oauth := &fakeOAuth{resp: &auth.LoginResponse{Token: "dev-token", Email: "dev@example.com", Name: "Dev", ExpiresAt: time.Now().Add(time.Hour)}}
+	oauth := &fakeOAuth{resp: &auth.LoginResponse{Email: "dev@example.com", Name: "Dev"}}
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	if _, err := database.CreateUser("dev@example.com", "Dev", []string{"viewer"}); err != nil {
@@ -166,7 +166,7 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 }
 
 func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
-	oauth := &fakeOAuth{resp: &auth.LoginResponse{Token: "prod-token", Email: "prod@example.com", Name: "Prod", ExpiresAt: time.Now().Add(time.Hour)}}
+	oauth := &fakeOAuth{resp: &auth.LoginResponse{Email: "prod@example.com", Name: "Prod"}}
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	if _, err := database.CreateUser("prod@example.com", "Prod", []string{"viewer"}); err != nil {

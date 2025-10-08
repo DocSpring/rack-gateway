@@ -14,7 +14,7 @@ import (
 )
 
 // checkMFAAndGetAuth checks if the command requires MFA and returns the auth string
-// Returns: mfaAuth string in format "totp:code" or "webauthn:assertion" or "" for no MFA
+// Returns: mfaAuth string in format "totp.code" or "webauthn.assertion" or "" for no MFA
 func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) {
 	// API tokens bypass all MFA checks (for CI/CD automation)
 	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
@@ -92,7 +92,7 @@ func checkAndPromptMFAIfNeeded(cmd *cobra.Command, baseURL, bearer, rack string,
 }
 
 // promptMFAForCommand prompts the user for MFA and returns the auth string
-// Returns format: "totp:123456" or "webauthn:assertion_data"
+// Returns format: "totp.123456" or "webauthn.assertion_data"
 func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
 	// Get MFA status to see what methods are available
 	mfaStatus, err := getMFAStatus(baseURL, bearer)
@@ -162,7 +162,7 @@ func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (stri
 }
 
 // collectMFAAuth collects MFA verification and returns the auth string
-// Returns format: "totp:123456" or "webauthn:assertion_json"
+// Returns format: "totp.123456" or "webauthn.assertion_json"
 func collectMFAAuth(cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, allMethods []MFAMethodResponse) (string, error) {
 	out := cmd.OutOrStdout()
 
@@ -178,7 +178,7 @@ func collectMFAAuth(cmd *cobra.Command, baseURL, bearer string, method MFAMethod
 			return "", fmt.Errorf("WebAuthn verification failed: %w", err)
 		}
 
-		return "webauthn:" + assertionData, nil
+		return "webauthn." + assertionData, nil
 
 	case "totp":
 		if err := writeLine(out, "Multi-factor authentication required (TOTP)."); err != nil {
@@ -191,7 +191,7 @@ func collectMFAAuth(cmd *cobra.Command, baseURL, bearer string, method MFAMethod
 			return "", err
 		}
 
-		return "totp:" + code, nil
+		return "totp." + code, nil
 
 	default:
 		return "", fmt.Errorf("unsupported MFA method for inline verification: %s", method.Type)

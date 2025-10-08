@@ -376,12 +376,13 @@ export function SettingsPage() {
 
 				<Card>
 					<CardHeader>
-						<CardTitle>Destructive Actions</CardTitle>
+						<CardTitle>Allow Destructive Actions</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<p className="mb-3 text-muted-foreground text-sm">
-							When enabled, delete/force operations are allowed globally.
-							Disable to protect against accidental destructive changes.
+							When disabled, dangerous delete operations are banned globally
+							(e.g. deleting apps). Enable to allow destructive actions (you
+							will still need the required permissions).
 						</p>
 						<label className="mt-6 flex items-center gap-3">
 							<input
