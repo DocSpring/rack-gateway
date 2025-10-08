@@ -12,10 +12,18 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   suspended BOOLEAN NOT NULL DEFAULT FALSE,
   mfa_enrolled BOOLEAN NOT NULL DEFAULT FALSE,
-  mfa_enforced_at TIMESTAMPTZ
+  mfa_enforced_at TIMESTAMPTZ,
+  preferred_mfa_method VARCHAR(20),
+  locked_at TIMESTAMP,
+  locked_reason TEXT,
+  locked_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT check_preferred_mfa_method CHECK (preferred_mfa_method IS NULL OR preferred_mfa_method IN ('totp', 'webauthn'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX idx_users_locked ON users(locked_at) WHERE locked_at IS NOT NULL;
+
+COMMENT ON COLUMN users.preferred_mfa_method IS 'User preferred MFA method for sign-in (totp or webauthn)';
 
 -- API tokens table with public_id
 CREATE TABLE IF NOT EXISTS api_tokens (
@@ -96,6 +104,11 @@ CREATE TABLE IF NOT EXISTS settings (
 -- MFA global settings
 INSERT INTO settings (key, value, updated_at)
 VALUES ('mfa', '{"require_all_users": true, "trusted_device_ttl_days": 30, "step_up_window_minutes": 10}'::jsonb, NOW())
+ON CONFLICT (key) DO NOTHING;
+
+-- Approved commands setting (empty by default, must be configured)
+INSERT INTO settings (key, value, updated_at)
+VALUES ('approved_commands', '{"commands": []}'::jsonb, NOW())
 ON CONFLICT (key) DO NOTHING;
 
 -- User resources tracking
@@ -207,36 +220,140 @@ ALTER TABLE user_sessions
   ADD CONSTRAINT fk_user_sessions_trusted_device
   FOREIGN KEY (trusted_device_id) REFERENCES trusted_devices(id) ON DELETE SET NULL;
 
--- Deploy approval requests for approval-gated deploy flows
+-- MFA TOTP attempts table for replay protection, rate limiting, and audit
+CREATE TABLE mfa_totp_attempts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  method_id BIGINT REFERENCES mfa_methods(id) ON DELETE SET NULL,
+  code_hash VARCHAR(64) NOT NULL,
+  success BOOLEAN NOT NULL,
+  attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  failure_reason TEXT,
+  session_id BIGINT REFERENCES user_sessions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_mfa_totp_attempts_replay
+  ON mfa_totp_attempts(user_id, code_hash, attempted_at DESC)
+  WHERE success = TRUE;
+
+CREATE INDEX idx_mfa_totp_attempts_rate_limit
+  ON mfa_totp_attempts(user_id, attempted_at DESC);
+
+CREATE INDEX idx_mfa_totp_attempts_failures
+  ON mfa_totp_attempts(user_id, attempted_at DESC)
+  WHERE success = FALSE;
+
+-- MFA WebAuthn attempts table for rate limiting and audit
+CREATE TABLE mfa_webauthn_attempts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  method_id BIGINT REFERENCES mfa_methods(id) ON DELETE SET NULL,
+  success BOOLEAN NOT NULL,
+  attempted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  failure_reason TEXT,
+  session_id BIGINT REFERENCES user_sessions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_mfa_webauthn_attempts_rate_limit
+  ON mfa_webauthn_attempts(user_id, attempted_at DESC);
+
+CREATE INDEX idx_mfa_webauthn_attempts_failures
+  ON mfa_webauthn_attempts(user_id, attempted_at DESC)
+  WHERE success = FALSE;
+
+-- Deploy approval requests for git commit-based approval flows
 CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   id BIGSERIAL PRIMARY KEY,
+
+  -- Git commit metadata (required at creation)
+  git_commit_hash VARCHAR(40) NOT NULL,
+  git_branch VARCHAR(255),
+  pipeline_url TEXT,
   message TEXT NOT NULL,
-  app VARCHAR(255) NOT NULL,
-  release_id VARCHAR(120) NOT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','consumed')),
+
+  -- CI provider integration (optional)
+  ci_provider VARCHAR(50),
+  ci_metadata JSONB,
+
+  -- Build/release tracking (filled in when build happens)
+  app VARCHAR(255),
+  build_id VARCHAR(120),
+  release_id VARCHAR(120),
+
+  -- Status and lifecycle
+  status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','expired')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- Creator tracking
   created_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_by_api_token_id BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL,
   target_api_token_id BIGINT NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
-  target_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+
+  -- Approval tracking
   approved_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   approved_at TIMESTAMPTZ,
-  rejected_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
-  rejected_at TIMESTAMPTZ,
   approval_expires_at TIMESTAMPTZ,
-  release_created_at TIMESTAMPTZ,
-  release_promoted_at TIMESTAMPTZ,
-  release_promoted_by_api_token_id BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL,
-  approval_notes TEXT
+  approval_notes TEXT,
+
+  -- Rejection tracking
+  rejected_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  rejected_at TIMESTAMPTZ
 );
 
+-- Indexes for deploy approval requests
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_token ON deploy_approval_requests(target_api_token_id);
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_status ON deploy_approval_requests(status);
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_commit ON deploy_approval_requests(git_commit_hash);
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_approved_at ON deploy_approval_requests(approved_at DESC);
 CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_updated_at ON deploy_approval_requests(updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_app_release ON deploy_approval_requests(app, release_id);
+CREATE INDEX IF NOT EXISTS idx_deploy_approval_requests_release ON deploy_approval_requests(release_id) WHERE release_id IS NOT NULL;
 
-CREATE UNIQUE INDEX idx_deploy_approval_requests_active_release
-  ON deploy_approval_requests(app, target_api_token_id, release_id)
+-- Ensure only one pending/approved request per commit+token combination
+CREATE UNIQUE INDEX idx_deploy_approval_requests_active_commit
+  ON deploy_approval_requests(git_commit_hash, target_api_token_id)
   WHERE status IN ('pending','approved');
+
+-- Track processes created via the gateway for authorization purposes
+CREATE TABLE IF NOT EXISTS processes (
+  id TEXT PRIMARY KEY,
+  app TEXT NOT NULL,
+  release_id TEXT,
+  command TEXT,
+  created_by_user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  created_by_api_token_id BIGINT REFERENCES api_tokens(id) ON DELETE CASCADE,
+  deploy_approval_request_id BIGINT REFERENCES deploy_approval_requests(id),
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  terminated_at TIMESTAMP,
+  CHECK (created_by_user_id IS NOT NULL OR created_by_api_token_id IS NOT NULL)
+);
+
+CREATE INDEX idx_processes_user ON processes(created_by_user_id) WHERE created_by_user_id IS NOT NULL;
+CREATE INDEX idx_processes_token ON processes(created_by_api_token_id) WHERE created_by_api_token_id IS NOT NULL;
+CREATE INDEX idx_processes_approval ON processes(deploy_approval_request_id) WHERE deploy_approval_request_id IS NOT NULL;
+CREATE INDEX idx_processes_app ON processes(app);
+
+-- Slack integration table
+CREATE TABLE IF NOT EXISTS slack_integration (
+  id BIGSERIAL PRIMARY KEY,
+  workspace_id VARCHAR(255) NOT NULL UNIQUE,
+  workspace_name VARCHAR(255),
+  bot_token_encrypted TEXT NOT NULL,
+
+  -- Maps Slack channels to arrays of audit log action patterns
+  channel_actions JSONB NOT NULL DEFAULT '{}',
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+
+  -- OAuth metadata
+  bot_user_id VARCHAR(255),
+  scope TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_slack_integration_workspace ON slack_integration(workspace_id);
