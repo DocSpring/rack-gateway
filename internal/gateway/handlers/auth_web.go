@@ -10,6 +10,8 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/gin-gonic/gin"
 )
 
@@ -166,13 +168,13 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	// Audit logout
 	if h.database != nil {
 		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			ActionType:   "auth",
-			Action:       "logout",
-			ResourceType: "auth",
+			ActionType:   audit.ActionTypeAuth,
+			Action:       audit.ActionScopeLogout,
+			ResourceType: rbac.ResourceStringAuth,
 			Resource:     "web",
-			Status:       "success",
+			Status:       audit.StatusSuccess,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"logout","error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`, audit.ActionScopeLogout, err)
 		}
 	}
 

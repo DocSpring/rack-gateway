@@ -103,13 +103,13 @@ const (
 	ResourceInstance
 	ResourceRack
 	ResourceEnv
-	ResourceSecret
 	ResourceDeploy
 	// Gateway resources
 	ResourceDeployApprovalRequest
 	ResourceAPIToken
 	ResourceUser
 	ResourceIntegration
+  ResourceSecret
 	// Auth/Security resources
 	ResourceAuth
 	ResourceMFA
@@ -126,15 +126,17 @@ const (
 	ResourceStringInstance              = "instance"
 	ResourceStringRack                  = "rack"
 	ResourceStringEnv                   = "env"
-	ResourceStringSecret                = "secret"
 	ResourceStringDeploy                = "deploy"
-	ResourceStringDeployApprovalRequest = "deploy-approval-request"
-	ResourceStringAPIToken              = "api-token"
+  // Gateway resources
+	ResourceStringDeployApprovalRequest = "deploy_approval_request"
+	ResourceStringAPIToken              = "api_token"
 	ResourceStringUser                  = "user"
 	ResourceStringIntegration           = "integration"
+	ResourceStringSecret                = "secret"
+  // Auth/Security resources
 	ResourceStringAuth                  = "auth"
 	ResourceStringMFA                   = "mfa"
-	ResourceStringMFAMethod             = "mfa-method"
+	ResourceStringMFAMethod             = "mfa_method"
 )
 
 var resourceToString = [...]string{
@@ -244,7 +246,7 @@ const (
 	ActionStringApprove            = "approve"
 	ActionStringManage             = "manage"
 	ActionStringSet                = "set"
-	ActionStringDeployWithApproval = "deploy-with-approval"
+	ActionStringDeployWithApproval = "deploy_with_approval"
 )
 
 var actionToString = [...]string{
@@ -340,60 +342,3 @@ func Security(resource Resource, action Action) string {
 	return Permission(ScopeSecurity, resource, action)
 }
 
-// ============================================================================
-// Audit Log String Constants
-// ============================================================================
-
-// Action type constants (high-level categorization for audit logs)
-const (
-	ActionTypeAuth     = ScopeStringAuth
-	ActionTypeGateway  = ScopeStringGateway
-	ActionTypeConvox   = ScopeStringConvox
-	ActionTypeSecurity = ScopeStringSecurity
-)
-
-// Additional resource strings for audit log actions (not in RBAC Resource enum)
-const (
-	ResourceStringLogin              = "login"
-	ResourceStringLogout             = "logout"
-	ResourceStringToken              = "token"
-	ResourceStringAudit              = "audit"
-	ResourceStringRateLimit          = "rate_limit"
-	ResourceStringSuspiciousActivity = "suspicious_activity"
-)
-
-// Action verb strings (second part of audit log action, e.g., "start" in rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart))
-const (
-	ActionStringComplete           = "complete"
-	ActionStringOAuthFailed        = "oauth_failed"
-	ActionStringUserNotAuthorized  = "user_not_authorized"
-	ActionStringValidate           = "validate"
-	ActionStringEnroll             = "enroll"
-	ActionStringVerify             = "verify"
-	ActionStringFailed             = "failed"
-	ActionStringBackupCodeUsed     = "backup-code-used"
-	ActionStringBackupCodeRevealed = "backup-code-revealed"
-	ActionStringRequireAllUsers    = "require_all_users"
-	ActionStringReject             = "reject"
-	ActionStringLock               = "lock"
-	ActionStringUnlock             = "unlock"
-	ActionStringUpdateRoles        = "update_roles"
-	ActionStringExport             = "export"
-	ActionStringUnset              = "unset"
-	ActionStringParamsSet          = "params.set"
-	ActionStringExceeded           = "exceeded"
-)
-
-// Audit log status constants
-const (
-	StatusStringSuccess = "success"
-	StatusStringFailed  = "failed"
-	StatusStringDenied  = "denied"
-	StatusStringError   = "error"
-	StatusStringAlert   = "alert"
-)
-
-// BuildAction builds an audit log action string from scope and verb (e.g., rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart))
-func BuildAction(scope, verb string) string {
-	return scope + "." + verb
-}

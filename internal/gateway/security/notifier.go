@@ -154,16 +154,16 @@ This is an automated security notification.`, time.Now().UTC().Format(time.RFC33
 func (n *Notifier) LoginAttempt(userEmail, userName, channel, status, ipAddress, userAgent string, success bool) {
 	// Audit log
 	if n.database != nil {
-		auditStatus := rbac.StatusStringSuccess
+		auditStatus := audit.StatusSuccess
 		if !success {
-			auditStatus = rbac.StatusStringFailed
+			auditStatus = audit.StatusFailed
 		}
 
-		action := rbac.BuildAction(rbac.ResourceStringLogin, status)
+		action := audit.BuildAction(audit.ActionScopeLogin, status)
 		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
-			ActionType:   rbac.ActionTypeAuth,
+			ActionType:   audit.ActionTypeAuth,
 			Action:       action,
 			ResourceType: rbac.ResourceStringAuth,
 			Resource:     channel,
@@ -206,14 +206,14 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "security",
-			Action:       rbac.BuildAction(rbac.ResourceStringRateLimit, rbac.ActionStringExceeded),
+			Action:       audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),
 			ResourceType: "security",
 			Resource:     path,
 			Status:       "denied",
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringRateLimit, rbac.ActionStringExceeded),"error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),"error":%q}`, err)
 		}
 	}
 
@@ -273,15 +273,15 @@ func (n *Notifier) SuspiciousActivity(userEmail, userName, reason, ipAddress, us
 		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
-			ActionType:   "security",
-			Action:       "suspicious_activity",
-			ResourceType: "security",
+			ActionType:   audit.ActionTypeSecurity,
+			Action:       audit.ActionScopeSuspiciousActivity,
+			ResourceType: audit.ActionScopeRateLimit,
 			Resource:     reason,
-			Status:       "alert",
+			Status:       audit.StatusAlert,
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"suspicious_activity","error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`, audit.ActionScopeSuspiciousActivity, err)
 		}
 	}
 

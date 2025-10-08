@@ -473,7 +473,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 					UserEmail:      authUser.Email,
 					UserName:       r.Header.Get("X-User-Name"),
 					ActionType:     "convox",
-					Action:         rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringCreate),
+					Action:         audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringCreate),
 					ResourceType:   "release",
 					Resource:       rel,
 					Status:         "success",
@@ -608,7 +608,7 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes 
 		UserEmail:    actor,
 		UserName:     r.Header.Get("X-User-Name"),
 		ActionType:   "convox",
-		Action:       rbac.BuildAction(rbac.ResourceStringRack, rbac.ActionStringParamsSet),
+		Action:       audit.BuildAction(rbac.ResourceStringRack, audit.ActionVerbParamsSet),
 		ResourceType: "rack",
 		Resource:     h.rackName,
 		Details:      string(b),
@@ -764,7 +764,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 					UserEmail:      email,
 					UserName:       userName,
 					ActionType:     "convox",
-					Action:         rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet),
+					Action:         audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet),
 					ResourceType:   "secret",
 					Resource:       fmt.Sprintf("%s/%s", app, key),
 					Details:        "{}",
@@ -788,7 +788,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
-				Action:         rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
+				Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, k),
 				Details:        "{\"error\":\"protected key change denied\"}",
@@ -830,7 +830,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
-				Action:         rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
+				Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, key),
 				Details:        "{}",
@@ -891,7 +891,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
-				Action:         rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
+				Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, d.Key),
 				Details:        "{\"error\":\"protected key change denied\"}",
@@ -969,17 +969,17 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []envut
 			newVal = "[REDACTED]"
 		}
 		details := fmt.Sprintf("{\"old\":\"%s\",\"new\":\"%s\"}", escapeJSONString(oldVal), escapeJSONString(newVal))
-		action := rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet)
+		action := audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet)
 		rtype := "env"
 		if d.Secret {
-			action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet)
+			action = audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet)
 			rtype = "secret"
 		}
 		if strings.TrimSpace(d.NewVal) == "" {
 			if d.Secret {
-				action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringUnset)
+				action = audit.BuildAction(rbac.ResourceStringSecret, audit.ActionVerbUnset)
 			} else {
-				action = rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUnset)
+				action = audit.BuildAction(rbac.ResourceStringEnv, audit.ActionVerbUnset)
 			}
 		}
 		_ = h.logAudit(r, &db.AuditLog{

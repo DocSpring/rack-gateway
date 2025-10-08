@@ -139,19 +139,19 @@ func (h *APIHandler) logEnvUpdateDiffs(c *gin.Context, app, email, name string, 
 	for _, diff := range diffs {
 		oldVal := diff.OldVal
 		newVal := diff.NewVal
-		action := rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet)
+		action := audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet)
 		resourceType := "env"
 		if diff.Secret {
-			action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet)
+			action = audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet)
 			resourceType = "secret"
 			oldVal = "[REDACTED]"
 			newVal = "[REDACTED]"
 		}
 		if strings.TrimSpace(diff.NewVal) == "" {
 			if diff.Secret {
-				action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringUnset)
+				action = audit.BuildAction(rbac.ResourceStringSecret, audit.ActionVerbUnset)
 			} else {
-				action = rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUnset)
+				action = audit.BuildAction(rbac.ResourceStringEnv, audit.ActionVerbUnset)
 			}
 		}
 
@@ -455,7 +455,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 				UserEmail:      email,
 				UserName:       name,
 				ActionType:     "convox",
-				Action:         rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringRead),
+				Action:         audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringRead),
 				ResourceType:   "secret",
 				Resource:       res,
 				Details:        string(detailsJSON),
@@ -526,10 +526,10 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		details["secrets"] = true
 	}
 	detailsJSON, _ := json.Marshal(details)
-	action := rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringRead)
+	action := audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringRead)
 	resourceType := "env"
 	if allowedSecrets {
-		action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringRead)
+		action = audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringRead)
 		resourceType = "secret"
 	}
 	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
@@ -659,7 +659,7 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 			UserEmail:      email,
 			UserName:       name,
 			ActionType:     "convox",
-			Action:         rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUpdate),
+			Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUpdate),
 			ResourceType:   "env",
 			Resource:       app,
 			Details:        `{"changes":"none"}`,

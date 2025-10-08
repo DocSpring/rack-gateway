@@ -98,7 +98,7 @@ var roleConfigs = map[string]roleConfig{
 		Parents: []string{"ops"},
 	},
 	// CI/CD role for automated deployments
-	// Uses single deploy-with-approval permission that grants all deployment actions when an active approval exists
+	// Uses single deploy_with_approval permission that grants all deployment actions when an active approval exists
 	"cicd": {
 		Permissions: []string{
 			Convox(ResourceApp, ActionList),

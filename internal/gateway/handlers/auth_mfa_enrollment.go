@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"log"
 	"net/http"
 	"strings"
@@ -174,7 +175,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
+			Action:       audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "totp",
 			Details:      string(details),
@@ -182,7 +183,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),"error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),"error":%q}`, err)
 		}
 	}
 
@@ -411,7 +412,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
+			Action:       audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "webauthn",
 			Details:      string(details),
@@ -419,7 +420,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),"error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),"error":%q}`, err)
 		}
 	}
 

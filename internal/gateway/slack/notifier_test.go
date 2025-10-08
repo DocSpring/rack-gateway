@@ -19,7 +19,7 @@ func TestNotifyAuditEvent_NoIntegration(t *testing.T) {
 	notifier := NewNotifier(database)
 
 	auditLog := &db.AuditLog{
-		Action:    rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
+		Action:    audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
 		UserEmail: "test@example.com",
 		Status:    "success",
 		Timestamp: time.Now(),
@@ -53,7 +53,7 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 	notifier := NewNotifier(database)
 
 	auditLog := &db.AuditLog{
-		Action:    rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
+		Action:    audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
 		UserEmail: "test@example.com",
 		Status:    "success",
 		Timestamp: time.Now(),
@@ -70,14 +70,14 @@ func TestMatchGlob(t *testing.T) {
 		text    string
 		want    bool
 	}{
-		{"mfa.*", rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll), true},
-		{"mfa.*", rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringVerify), true},
+		{"mfa.*", audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), true},
+		{"mfa.*", audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbVerify), true},
 		{"mfa.*", "auth.login", false},
 		{"auth.*", "auth.login", true},
 		{"auth.*", "auth.logout", true},
 		{"deploy-approval-request.*", "deploy-approval-request.created", true},
 		{"deploy-approval-request.*", "deploy-approval-request.approved", true},
-		{"deploy-approval-request.*", rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll), false},
+		{"deploy-approval-request.*", audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), false},
 		{"*.created", "deploy-approval-request.created", true},
 		{"*.created", "api-token.created", true},
 		{"*.created", "deploy-approval-request.approved", false},
@@ -106,7 +106,7 @@ func TestMatchActionToChannels(t *testing.T) {
 		"infrastructure": map[string]interface{}{
 			"id":      "C222",
 			"name":    "#infrastructure",
-			"actions": []interface{}{"deploy-approval-request.*", rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote), "*.created"},
+			"actions": []interface{}{"deploy-approval-request.*", audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote), "*.created"},
 		},
 		"no-id": map[string]interface{}{
 			"id":      nil,
@@ -119,11 +119,11 @@ func TestMatchActionToChannels(t *testing.T) {
 		action   string
 		expected []string
 	}{
-		{rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll), []string{"C111"}},
+		{audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), []string{"C111"}},
 		{"auth.login", []string{"C111"}},
 		{"api-token.created", []string{"C111", "C222"}}, // Matches both security and infrastructure (*.created)
 		{"deploy-approval-request.created", []string{"C222"}},
-		{rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote), []string{"C222"}},
+		{audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote), []string{"C222"}},
 		{"unknown.action", []string{}},
 	}
 
@@ -151,7 +151,7 @@ func TestFormatAuditLogMessage(t *testing.T) {
 		{
 			name: "MFA enrollment success",
 			auditLog: &db.AuditLog{
-				Action:    rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
+				Action:    audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
 				UserEmail: "user@example.com",
 				UserName:  "Test User",
 				Status:    "success",
@@ -159,20 +159,20 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				Details:   "TOTP enrolled",
 			},
 			expectEmoji:   "🔐",
-			expectInText:  []string{rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll), "user@example.com"},
+			expectInText:  []string{audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), "user@example.com"},
 			expectInBlock: []string{"Test User", "success", "TOTP enrolled"},
 		},
 		{
 			name: "OAuth failed",
 			auditLog: &db.AuditLog{
-				Action:    rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringOAuthFailed),
+				Action:    audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed),
 				UserEmail: "hacker@example.com",
 				Status:    "failed",
 				IPAddress: "192.168.1.1",
 				Timestamp: time.Now(),
 			},
 			expectEmoji:   "🚨",
-			expectInText:  []string{rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringOAuthFailed), "hacker@example.com"},
+			expectInText:  []string{audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed), "hacker@example.com"},
 			expectInBlock: []string{"failed", "192.168.1.1"},
 		},
 		{

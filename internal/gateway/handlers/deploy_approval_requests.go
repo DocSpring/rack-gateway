@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -172,12 +173,12 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
-		ActionType:   rbac.ActionTypeGateway,
-		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringCreate),
+		ActionType:   audit.ActionTypeGateway,
+		Action:       audit.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringCreate),
 		ResourceType: rbac.ResourceStringDeployApprovalRequest,
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
-		Status:       rbac.StatusStringSuccess,
+		Status:       audit.StatusSuccess,
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
 	}); err != nil {
@@ -498,7 +499,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
-		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringApprove),
+		Action:       audit.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringApprove),
 		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
@@ -586,7 +587,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
-		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringReject),
+		Action:       audit.BuildAction(rbac.ResourceStringDeployApprovalRequest, audit.ActionVerbReject),
 		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,

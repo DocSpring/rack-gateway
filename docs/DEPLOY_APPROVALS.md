@@ -34,11 +34,13 @@ This creates a pending approval request linked to that specific git commit.
 ### Admin Approval
 
 Admins review pending requests in the UI at `/.gateway/web/deploy_approval_requests`:
+
 - See git commit hash, branch, pipeline URL
 - Click through to see diff on GitHub
 - Approve with MFA
 
 When approved:
+
 - Request marked as `approved` with expiration time (`DEPLOY_APPROVAL_WINDOW`, default 15min)
 - If CircleCI integration configured: Gateway calls CircleCI API to approve the corresponding job
 - CI pipeline continues
@@ -57,10 +59,12 @@ If validation fails, build is rejected with a clear error.
 ### Deploy-Time Enforcement
 
 All deployment actions require an active approval for that git commit:
+
 - `convox run` (with `--release`)
 - `convox releases promote`
 
 The gateway verifies:
+
 - Approval exists for the git commit
 - Approval hasn't expired
 - Release ID matches the approved commit
@@ -71,11 +75,12 @@ The gateway verifies:
 
 - `gateway:deploy-approval-request:create` – Create approval requests (granted to CI/CD tokens)
 - `gateway:deploy-approval-request:approve` – Approve/reject requests (admin only, requires MFA)
-- `convox:deploy:deploy-with-approval` – Perform deployment actions when approval exists
+- `convox:deploy:deploy_with_approval` – Perform deployment actions when approval exists
 
 ### Simplified Permission Model
 
-The `convox:deploy:deploy-with-approval` permission grants access to **all** deployment actions when an active approval exists:
+The `convox:deploy:deploy_with_approval` permission grants access to **all** deployment actions when an active approval exists:
+
 - Build creation (`convox:build:create`)
 - Object upload (`convox:object:create`)
 - Release creation (`convox:release:create`)
@@ -84,28 +89,28 @@ The `convox:deploy:deploy-with-approval` permission grants access to **all** dep
 - Process exec (`convox:process:exec`)
 - Process terminate (`convox:process:terminate`)
 
-CI/CD tokens get `convox:deploy:deploy-with-approval`. Regular users get direct permissions without the approval requirement.
+CI/CD tokens get `convox:deploy:deploy_with_approval`. Regular users get direct permissions without the approval requirement.
 
 ## Database Schema
 
 `deploy_approval_requests` table:
 
-| Column                                           | Notes                                                            |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| `id`                                             | Primary key                                                      |
-| `created_by_user_id` / `created_by_api_token_id` | Who requested approval                                           |
-| `target_api_token_id`                            | CI/CD token that will use the approval                           |
-| `git_commit_hash`                                | Git commit SHA (indexed)                                         |
-| `git_branch`                                     | Branch name                                                      |
-| `pipeline_url`                                   | Link to CI job (GitHub Actions run, CircleCI pipeline, etc.)     |
-| `message`                                        | Human-readable context                                           |
-| `status`                                         | `pending`, `approved`, `rejected`, `expired`                     |
-| `approval_notes`                                 | Admin notes                                                      |
-| `approval_expires_at`                            | Approval expiration                                              |
-| `approved_by_user_id`                            | Admin who approved                                               |
-| `build_id` / `release_id`                        | Tracking which build/release used this approval                  |
-| `ci_provider`                                    | CI provider: `circleci`, `github`, `buildkite`, `jenkins`, etc.  |
-| `ci_metadata`                                    | JSONB - provider-specific integration data                       |
+| Column                                           | Notes                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------- |
+| `id`                                             | Primary key                                                     |
+| `created_by_user_id` / `created_by_api_token_id` | Who requested approval                                          |
+| `target_api_token_id`                            | CI/CD token that will use the approval                          |
+| `git_commit_hash`                                | Git commit SHA (indexed)                                        |
+| `git_branch`                                     | Branch name                                                     |
+| `pipeline_url`                                   | Link to CI job (GitHub Actions run, CircleCI pipeline, etc.)    |
+| `message`                                        | Human-readable context                                          |
+| `status`                                         | `pending`, `approved`, `rejected`, `expired`                    |
+| `approval_notes`                                 | Admin notes                                                     |
+| `approval_expires_at`                            | Approval expiration                                             |
+| `approved_by_user_id`                            | Admin who approved                                              |
+| `build_id` / `release_id`                        | Tracking which build/release used this approval                 |
+| `ci_provider`                                    | CI provider: `circleci`, `github`, `buildkite`, `jenkins`, etc. |
+| `ci_metadata`                                    | JSONB - provider-specific integration data                      |
 
 **Note:** Each gateway is single-tenant and manages approvals for exactly one rack.
 
@@ -137,13 +142,13 @@ rack-gateway deploy-approval list --status pending
 
 ## Configuration
 
-| Setting                     | Default             | Description                                                                            |
-| --------------------------- | ------------------- | -------------------------------------------------------------------------------------- |
-| `DISABLE_DEPLOY_APPROVALS`  | `false`             | Skip approval checks entirely                                                          |
-| `DEPLOY_APPROVAL_WINDOW`    | `15m`               | Approval validity duration                                                             |
-| `ALLOWED_IMAGE_TAG_PATTERN` | `.*:{{GIT_COMMIT}}` | Regex pattern for validating image tags ({{GIT_COMMIT}} replaced with actual hash)    |
-| `CI_INTEGRATION_ENABLED`    | `false`             | Enable automatic CI job approval after admin approval                                  |
-| `CI_INTEGRATION_CONFIG`     | (none)              | JSONB config for CI provider (API tokens, job names, etc.)                             |
+| Setting                     | Default             | Description                                                                        |
+| --------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
+| `DISABLE_DEPLOY_APPROVALS`  | `false`             | Skip approval checks entirely                                                      |
+| `DEPLOY_APPROVAL_WINDOW`    | `15m`               | Approval validity duration                                                         |
+| `ALLOWED_IMAGE_TAG_PATTERN` | `.*:{{GIT_COMMIT}}` | Regex pattern for validating image tags ({{GIT_COMMIT}} replaced with actual hash) |
+| `CI_INTEGRATION_ENABLED`    | `false`             | Enable automatic CI job approval after admin approval                              |
+| `CI_INTEGRATION_CONFIG`     | (none)              | JSONB config for CI provider (API tokens, job names, etc.)                         |
 
 ## CI Integration
 
@@ -162,6 +167,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 #### CircleCI
 
 **ci_metadata:**
+
 ```json
 {
   "workflow_id": "abc-123",
@@ -170,6 +176,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 ```
 
 **Configuration:**
+
 ```json
 {
   "provider": "circleci",
@@ -188,6 +195,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 #### GitHub Actions
 
 **ci_metadata:**
+
 ```json
 {
   "workflow_run_id": "123456",
@@ -196,6 +204,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 ```
 
 **Configuration:**
+
 ```json
 {
   "provider": "github",
@@ -209,6 +218,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 #### BuildKite
 
 **ci_metadata:**
+
 ```json
 {
   "build_number": "456",
@@ -217,6 +227,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 ```
 
 **Configuration:**
+
 ```json
 {
   "provider": "buildkite",
@@ -231,6 +242,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 #### Jenkins
 
 **ci_metadata:**
+
 ```json
 {
   "build_number": "789",
@@ -239,6 +251,7 @@ When enabled, the gateway automatically approves CI jobs after admin approval in
 ```
 
 **Configuration:**
+
 ```json
 {
   "provider": "jenkins",
@@ -290,7 +303,7 @@ If CI integration is configured, gateway automatically approves the deployment j
 ```yaml
 deploy_app_staging:
   requires:
-    - approve_deploy_staging  # CircleCI approval job
+    - approve_deploy_staging # CircleCI approval job
   steps:
     - run:
         command: |
@@ -318,12 +331,13 @@ The gateway parses `convox.yml` and validates image tags match the approved comm
 # convox.yml
 services:
   web:
-    image: docspringcom/app:abc123f-amd64  # Must match approved commit
+    image: docspringcom/app:abc123f-amd64 # Must match approved commit
   worker:
     image: docspringcom/app:abc123f-amd64
 ```
 
 Pattern from settings (default `.*:{{GIT_COMMIT}}`):
+
 - `{{GIT_COMMIT}}` is replaced with approved commit hash
 - All service images must match this pattern
 - Prevents deploying arbitrary code even with compromised CI/CD token
@@ -379,12 +393,14 @@ Pattern from settings (default `.*:{{GIT_COMMIT}}`):
 ## Security Model
 
 Even with a compromised CI/CD token, an attacker cannot:
+
 - Deploy without admin approval
 - Deploy different code than what was approved (manifest validation)
 - Bypass pre-deploy command allowlist
 - Reuse approvals across commits
 
 Attack requires:
+
 - Compromised CI/CD token AND
 - Approval for attacker's malicious commit AND
 - Matching image tag pattern
