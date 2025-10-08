@@ -12,14 +12,14 @@ const (
 
 // Action scope constants (first part of action, e.g., "login" in "login.start")
 const (
-	ActionScopeLogin              = "login"
-	ActionScopeLogout             = "logout"
-	ActionScopeRateLimit          = "rate_limit"
-	ActionScopeSuspiciousActivity = "suspicious_activity"
-	ActionScopeMFA                = rbac.ResourceStringMFA
-	ActionScopeAPIToken           = rbac.ResourceStringAPIToken
+	ActionScopeLogin                 = "login"
+	ActionScopeLogout                = "logout"
+	ActionScopeRateLimit             = "rate_limit"
+	ActionScopeSuspiciousActivity    = "suspicious_activity"
+	ActionScopeMFA                   = rbac.ResourceStringMFA
+	ActionScopeAPIToken              = rbac.ResourceStringAPIToken
 	ActionScopeDeployApprovalRequest = rbac.ResourceStringDeployApprovalRequest
-	ActionScopeRelease            = rbac.ResourceStringRelease
+	ActionScopeRelease               = rbac.ResourceStringRelease
 )
 
 // Action verb constants (second part of action, e.g., "start" in "login.start")

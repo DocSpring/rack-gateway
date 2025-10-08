@@ -125,7 +125,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	// Marshal CI metadata to JSON bytes
 	var ciMetadata []byte
-	if req.CIMetadata != nil && len(req.CIMetadata) > 0 {
+	if len(req.CIMetadata) > 0 {
 		var err error
 		ciMetadata, err = json.Marshal(req.CIMetadata)
 		if err != nil {
@@ -674,10 +674,6 @@ func auditDetails(values map[string]string) string {
 		return "{}"
 	}
 	return string(data)
-}
-
-func ptrTime(t time.Time) *time.Time {
-	return &t
 }
 
 func (h *AdminHandler) approveCircleCIJob(record *db.DeployApprovalRequest) error {

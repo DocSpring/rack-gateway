@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/getsentry/sentry-go"
 )
 
@@ -112,22 +114,22 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 	// Determine emoji based on action type and status
 	emoji := "📝"
 
-	if strings.HasPrefix(auditLog.Action, "mfa.") {
+	if strings.HasPrefix(auditLog.Action, rbac.ResourceStringMFA+".") {
 		emoji = "🔐"
-	} else if strings.HasPrefix(auditLog.Action, "auth.") {
+	} else if strings.HasPrefix(auditLog.Action, audit.ActionScopeLogin+".") || strings.HasPrefix(auditLog.Action, audit.ActionScopeLogout+".") {
 		emoji = "🔑"
-		if auditLog.Status != "success" {
+		if auditLog.Status != audit.StatusSuccess {
 			emoji = "🚨"
 		}
-	} else if strings.HasPrefix(auditLog.Action, "deploy-approval-request.") {
+	} else if strings.HasPrefix(auditLog.Action, rbac.ResourceStringDeployApprovalRequest+".") {
 		emoji = "🚀"
-	} else if strings.HasPrefix(auditLog.Action, "api-token.") {
+	} else if strings.HasPrefix(auditLog.Action, rbac.ResourceStringAPIToken+".") {
 		emoji = "🔑"
 	} else if strings.HasPrefix(auditLog.Action, "user.role.") {
 		emoji = "👤"
 	}
 
-	if auditLog.Status == "denied" || auditLog.Status == "error" || auditLog.Status == "blocked" {
+	if auditLog.Status == audit.StatusDenied || auditLog.Status == audit.StatusError || auditLog.Status == audit.StatusFailed {
 		if emoji == "📝" {
 			emoji = "❌"
 		}

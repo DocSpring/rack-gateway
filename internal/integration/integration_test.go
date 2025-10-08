@@ -502,18 +502,18 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "running")
 	})
 
-	// Test 2: rack (shows rack info)
-	t.Run("rack", func(t *testing.T) {
-		cmd := exec.Command("../../bin/rack-gateway", "rack")
+	// Test 2: rack info (shows remote rack info)
+	t.Run("rack info", func(t *testing.T) {
+		cmd := exec.Command("../../bin/rack-gateway", "rack", "info")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
 		)
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			t.Logf("rack failed with output: %s", output)
+			t.Logf("rack info failed with output: %s", output)
 		}
-		require.NoError(t, err, "rack should succeed")
+		require.NoError(t, err, "rack info should succeed")
 		// Should see rack info from mock server
 		assert.Contains(t, string(output), "mock-rack")
 		assert.Contains(t, string(output), "running")
@@ -659,7 +659,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "user not found")
 
 		// Try to get rack info (should be blocked)
-		cmd = exec.Command("../../bin/rack-gateway", "rack")
+		cmd = exec.Command("../../bin/rack-gateway", "rack", "info")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err = cmd.CombinedOutput()

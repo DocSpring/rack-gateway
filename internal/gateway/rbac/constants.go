@@ -109,7 +109,7 @@ const (
 	ResourceAPIToken
 	ResourceUser
 	ResourceIntegration
-  ResourceSecret
+	ResourceSecret
 	// Auth/Security resources
 	ResourceAuth
 	ResourceMFA
@@ -117,26 +117,26 @@ const (
 )
 
 const (
-	ResourceStringApp                   = "app"
-	ResourceStringProcess               = "process"
-	ResourceStringBuild                 = "build"
-	ResourceStringRelease               = "release"
-	ResourceStringLog                   = "log"
-	ResourceStringObject                = "object"
-	ResourceStringInstance              = "instance"
-	ResourceStringRack                  = "rack"
-	ResourceStringEnv                   = "env"
-	ResourceStringDeploy                = "deploy"
-  // Gateway resources
+	ResourceStringApp      = "app"
+	ResourceStringProcess  = "process"
+	ResourceStringBuild    = "build"
+	ResourceStringRelease  = "release"
+	ResourceStringLog      = "log"
+	ResourceStringObject   = "object"
+	ResourceStringInstance = "instance"
+	ResourceStringRack     = "rack"
+	ResourceStringEnv      = "env"
+	ResourceStringDeploy   = "deploy"
+	// Gateway resources
 	ResourceStringDeployApprovalRequest = "deploy_approval_request"
 	ResourceStringAPIToken              = "api_token"
 	ResourceStringUser                  = "user"
 	ResourceStringIntegration           = "integration"
 	ResourceStringSecret                = "secret"
-  // Auth/Security resources
-	ResourceStringAuth                  = "auth"
-	ResourceStringMFA                   = "mfa"
-	ResourceStringMFAMethod             = "mfa_method"
+	// Auth/Security resources
+	ResourceStringAuth      = "auth"
+	ResourceStringMFA       = "mfa"
+	ResourceStringMFAMethod = "mfa_method"
 )
 
 var resourceToString = [...]string{
@@ -341,4 +341,3 @@ func Auth(resource Resource, action Action) string {
 func Security(resource Resource, action Action) string {
 	return Permission(ScopeSecurity, resource, action)
 }
-

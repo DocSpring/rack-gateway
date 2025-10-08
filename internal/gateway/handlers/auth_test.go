@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -262,7 +263,14 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	handler.WebLoginCallback(c)
 
 	res := w.Result()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 status, got %d", res.StatusCode)
+	if res.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302 redirect, got %d", res.StatusCode)
+	}
+	loc, _ := res.Location()
+	if loc == nil || !strings.Contains(loc.Path, "/auth/error") {
+		t.Fatalf("expected redirect to auth error page, got %v", loc)
+	}
+	if !strings.Contains(loc.RawQuery, "message=Invalid") {
+		t.Fatalf("expected error message in query, got %v", loc.RawQuery)
 	}
 }

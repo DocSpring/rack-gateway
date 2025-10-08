@@ -128,9 +128,8 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 
 	body := map[string]string{
 		"message":             "Deploy release",
-		"app":                 "my-app",
-		"release_id":          "R123",
-		"rack":                "staging",
+		"git_commit_hash":     "abc123def456",
+		"git_branch":          "main",
 		"target_api_token_id": token.PublicID,
 	}
 	payload, err := json.Marshal(body)

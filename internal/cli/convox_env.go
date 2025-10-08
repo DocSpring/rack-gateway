@@ -177,7 +177,7 @@ func envGetGateway(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch env: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// Check status
 	if resp.StatusCode != http.StatusOK {
@@ -248,7 +248,7 @@ func envListGateway(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch env: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	// Check status
 	if resp.StatusCode != http.StatusOK {
