@@ -173,12 +173,12 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
-		ActionType:   audit.ActionTypeGateway,
-		Action:       audit.ActionDeployApprovalRequestCreate,
-		ResourceType: audit.ResourceTypeDeployApprovalRequest,
+		ActionType:   rbac.ActionTypeGateway,
+		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionVerbCreate),
+		ResourceType: rbac.ResourceStringDeployApprovalRequest,
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
-		Status:       audit.StatusSuccess,
+		Status:       rbac.StatusSuccess,
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
 	}); err != nil {

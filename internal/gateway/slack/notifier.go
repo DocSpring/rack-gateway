@@ -172,6 +172,26 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 		},
 	}
 
+	// Add resource fields if present
+	if auditLog.Resource != "" || auditLog.ResourceType != "" {
+		fields := blocks[1]["fields"].([]map[string]interface{})
+		var newFields []map[string]interface{}
+
+		if auditLog.Resource != "" {
+			resourceText := auditLog.Resource
+			if auditLog.ResourceType != "" {
+				resourceText = fmt.Sprintf("%s (%s)", auditLog.Resource, auditLog.ResourceType)
+			}
+			newFields = append(newFields, map[string]interface{}{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*Resource:*\n%s", resourceText),
+			})
+		}
+
+		// Insert resource field after user, before status
+		blocks[1]["fields"] = append(fields[:1], append(newFields, fields[1:]...)...)
+	}
+
 	// Add details if present
 	if auditLog.Details != "" {
 		blocks = append(blocks, map[string]interface{}{

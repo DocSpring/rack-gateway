@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
 	"github.com/gin-gonic/gin"
@@ -19,19 +20,19 @@ var defaultChannelActions = map[string]interface{}{
 		"id":   nil,
 		"name": "#security",
 		"actions": []string{
-			"login.complete",
-			"login.*_failed",
-			"mfa.*",
-			"user.role.*",
-			"api-token.*",
+			rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionVerbComplete),
+			rbac.ResourceStringLogin + ".*_failed", // Matches oauth_failed, user_not_authorized, etc.
+			rbac.ResourceStringMFA + ".*",          // Matches all MFA actions
+			rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionVerbUpdateRoles),
+			rbac.ResourceStringAPIToken + ".*", // Matches all API token actions
 		},
 	},
 	"infrastructure": map[string]interface{}{
 		"id":   nil,
 		"name": "#infrastructure",
 		"actions": []string{
-			"deploy-approval-request.*",
-			"release.promote",
+			rbac.ResourceStringDeployApprovalRequest + ".*", // Matches all deploy approval actions
+			rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionVerbPromote),
 		},
 	},
 }

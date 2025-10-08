@@ -81,10 +81,11 @@ SLACK_CLIENT_SECRET="your-client-secret-here"
 The integration creates two default channel configurations:
 
 **#security** - Security-related events:
+- `login.complete` - Successful login attempts
+- `login.*_failed` - Failed login attempts (oauth_failed, user_not_authorized, etc.)
 - `mfa.*` - MFA enrollment, verification, backup code usage
-- `user.role.*` - User role changes
+- `user.update_roles` - User role changes
 - `api-token.*` - API token creation, updates, deletion
-- `auth.failed` - Failed authentication attempts
 
 **#infrastructure** - Deployment and infrastructure events:
 - `deploy-approval-request.*` - Deploy approval requests, approvals, rejections

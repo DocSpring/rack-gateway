@@ -79,11 +79,11 @@ func (c *Client) ApproveJob(workflowID, jobName string) error {
 type workflowResponse struct {
 	ID   string `json:"id"`
 	Jobs []struct {
-		ID               string `json:"id"`
-		Name             string `json:"name"`
-		Type             string `json:"type"`
-		ApprovalRequest  *struct{} `json:"approval_request_id,omitempty"`
-		Status           string `json:"status"`
+		ID              string    `json:"id"`
+		Name            string    `json:"name"`
+		Type            string    `json:"type"`
+		ApprovalRequest *struct{} `json:"approval_request_id,omitempty"`
+		Status          string    `json:"status"`
 	} `json:"jobs"`
 }
 
@@ -113,11 +113,11 @@ func (c *Client) getWorkflow(workflowID string) (*workflowResponse, error) {
 
 	var result struct {
 		Items []struct {
-			ID               string `json:"id"`
-			Name             string `json:"name"`
-			Type             string `json:"type"`
-			ApprovalRequest  *struct{} `json:"approval_request_id,omitempty"`
-			Status           string `json:"status"`
+			ID              string    `json:"id"`
+			Name            string    `json:"name"`
+			Type            string    `json:"type"`
+			ApprovalRequest *struct{} `json:"approval_request_id,omitempty"`
+			Status          string    `json:"status"`
 		} `json:"items"`
 	}
 
@@ -126,23 +126,23 @@ func (c *Client) getWorkflow(workflowID string) (*workflowResponse, error) {
 	}
 
 	workflow := &workflowResponse{
-		ID:   workflowID,
+		ID: workflowID,
 		Jobs: make([]struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			Type            string `json:"type"`
+			ID              string    `json:"id"`
+			Name            string    `json:"name"`
+			Type            string    `json:"type"`
 			ApprovalRequest *struct{} `json:"approval_request_id,omitempty"`
-			Status          string `json:"status"`
+			Status          string    `json:"status"`
 		}, len(result.Items)),
 	}
 
 	for i, item := range result.Items {
 		workflow.Jobs[i] = struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			Type            string `json:"type"`
+			ID              string    `json:"id"`
+			Name            string    `json:"name"`
+			Type            string    `json:"type"`
 			ApprovalRequest *struct{} `json:"approval_request_id,omitempty"`
-			Status          string `json:"status"`
+			Status          string    `json:"status"`
 		}{
 			ID:              item.ID,
 			Name:            item.Name,
