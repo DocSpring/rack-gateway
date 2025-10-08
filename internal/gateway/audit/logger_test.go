@@ -74,11 +74,11 @@ func TestAuditLogger(t *testing.T) {
 			expectedAction   string
 			expectedResource string
 		}{
-			{"GET", "/apps", "app.list", "all"},
-			{"GET", "/instances", "instance.list", "all"},
-			{"GET", "/apps/myapp/processes", "process.list", "all"},
-			{"GET", "/apps/myapp/builds", "build.list", "all"},
-			{"GET", "/apps/myapp/releases", "release.list", "all"},
+			{"GET", "/apps", rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), "all"},
+			{"GET", "/instances", rbac.BuildAction(rbac.ResourceStringInstance, rbac.ActionStringList), "all"},
+			{"GET", "/apps/myapp/processes", rbac.BuildAction(rbac.ResourceStringProcess, rbac.ActionStringList), "all"},
+			{"GET", "/apps/myapp/builds", rbac.BuildAction(rbac.ResourceStringBuild, rbac.ActionStringList), "all"},
+			{"GET", "/apps/myapp/releases", rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringList), "all"},
 		}
 
 		for _, tc := range testCases {
@@ -99,13 +99,13 @@ func TestAuditLogger(t *testing.T) {
 			action       string
 			expectedType string
 		}{
-			{"/apps", "app.list", "app"},
-			{"/apps/myapp", "app.read", "app"},
-			{"/instances", "instance.list", "instance"},
-			{"/apps/myapp/processes", "process.list", "process"},
-			{"/apps/myapp/builds", "build.list", "build"},
-			{"/apps/myapp/releases", "release.list", "release"},
-			{"/system", "rack.read", "rack"}, // System endpoints have action "rack.*" so type is "rack"
+			{"/apps", rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), "app"},
+			{"/apps/myapp", rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringRead), "app"},
+			{"/instances", rbac.BuildAction(rbac.ResourceStringInstance, rbac.ActionStringList), "instance"},
+			{"/apps/myapp/processes", rbac.BuildAction(rbac.ResourceStringProcess, rbac.ActionStringList), "process"},
+			{"/apps/myapp/builds", rbac.BuildAction(rbac.ResourceStringBuild, rbac.ActionStringList), "build"},
+			{"/apps/myapp/releases", rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringList), "release"},
+			{"/system", rbac.BuildAction(rbac.ResourceStringRack, rbac.ActionStringRead), "rack"}, // System endpoints have action "rack.*" so type is "rack"
 		}
 
 		for _, tc := range testCases {

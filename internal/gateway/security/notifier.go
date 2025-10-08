@@ -10,6 +10,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // Notifier handles security event notifications via audit logs and email
@@ -153,18 +154,18 @@ This is an automated security notification.`, time.Now().UTC().Format(time.RFC33
 func (n *Notifier) LoginAttempt(userEmail, userName, channel, status, ipAddress, userAgent string, success bool) {
 	// Audit log
 	if n.database != nil {
-		auditStatus := "success"
+		auditStatus := rbac.StatusStringSuccess
 		if !success {
-			auditStatus = "failed"
+			auditStatus = rbac.StatusStringFailed
 		}
 
-		action := fmt.Sprintf("login.%s", status)
+		action := rbac.BuildAction(rbac.ResourceStringLogin, status)
 		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
 			UserEmail:    userEmail,
 			UserName:     userName,
-			ActionType:   "auth",
+			ActionType:   rbac.ActionTypeAuth,
 			Action:       action,
-			ResourceType: "auth",
+			ResourceType: rbac.ResourceStringAuth,
 			Resource:     channel,
 			Status:       auditStatus,
 			IPAddress:    ipAddress,
@@ -205,14 +206,14 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 			UserEmail:    userEmail,
 			UserName:     userName,
 			ActionType:   "security",
-			Action:       "rate_limit.exceeded",
+			Action:       rbac.BuildAction(rbac.ResourceStringRateLimit, rbac.ActionStringExceeded),
 			ResourceType: "security",
 			Resource:     path,
 			Status:       "denied",
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"rate_limit.exceeded","error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringRateLimit, rbac.ActionStringExceeded),"error":%q}`, err)
 		}
 	}
 

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -174,11 +173,11 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     dbUser.Name,
 		ActionType:   rbac.ActionTypeGateway,
-		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionVerbCreate),
+		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringCreate),
 		ResourceType: rbac.ResourceStringDeployApprovalRequest,
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
-		Status:       rbac.StatusSuccess,
+		Status:       rbac.StatusStringSuccess,
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
 	}); err != nil {
@@ -499,7 +498,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
-		Action:       "deploy-approval-request.approve",
+		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringApprove),
 		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,
@@ -587,7 +586,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		UserEmail:    userEmail,
 		UserName:     approver.Name,
 		ActionType:   "gateway",
-		Action:       "deploy-approval-request.reject",
+		Action:       rbac.BuildAction(rbac.ResourceStringDeployApprovalRequest, rbac.ActionStringReject),
 		ResourceType: "deploy-approval-request",
 		Resource:     fmt.Sprintf("%d", record.ID),
 		Details:      details,

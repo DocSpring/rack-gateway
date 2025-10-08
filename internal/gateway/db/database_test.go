@@ -81,7 +81,7 @@ func TestDatabase(t *testing.T) {
 			UserEmail:      "user1@example.com",
 			UserName:       "User One",
 			ActionType:     "convox",
-			Action:         "env.read",
+			Action:         rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringRead),
 			Resource:       "myapp",
 			Details:        `{"key": "SECRET_TOKEN"}`,
 			IPAddress:      "192.168.1.1",
@@ -94,7 +94,7 @@ func TestDatabase(t *testing.T) {
 			UserEmail:      "user2@example.com",
 			UserName:       "User Two",
 			ActionType:     "users",
-			Action:         "user.create",
+			Action:         rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringCreate),
 			Resource:       "newuser@example.com",
 			Status:         "success",
 			ResponseTimeMs: 45,
@@ -103,7 +103,7 @@ func TestDatabase(t *testing.T) {
 		log3 := &gwdb.AuditLog{
 			UserEmail:      "attacker@evil.com",
 			ActionType:     "auth",
-			Action:         "login.oauth_failed",
+			Action:         rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringOAuthFailed),
 			Status:         "failed",
 			ResponseTimeMs: 5,
 		}
@@ -143,7 +143,7 @@ func TestDatabase(t *testing.T) {
 		userLogs, err := db.GetAuditLogs("user1@example.com", time.Time{}, 0)
 		require.NoError(t, err)
 		assert.Len(t, userLogs, 1)
-		assert.Equal(t, "env.read", userLogs[0].Action)
+		assert.Equal(t, rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringRead), userLogs[0].Action)
 		assert.Equal(t, "192.168.1.1", userLogs[0].IPAddress)
 
 		// Filter by time (use a time well before we created the logs, in UTC)
@@ -170,7 +170,7 @@ func TestDatabase(t *testing.T) {
 			UserEmail:      "poller@example.com",
 			UserName:       "Poller",
 			ActionType:     "convox",
-			Action:         "process.read",
+			Action:         rbac.BuildAction(rbac.ResourceStringProcess, rbac.ActionStringRead),
 			Resource:       "app-123/process-abc",
 			ResourceType:   "process",
 			Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-001"}`,
@@ -238,7 +238,7 @@ func TestDatabase(t *testing.T) {
 		first := &gwdb.AuditLog{
 			UserEmail:      "test@example.com",
 			ActionType:     "convox",
-			Action:         "app.list",
+			Action:         rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList),
 			Resource:       "all",
 			ResourceType:   "app",
 			Status:         "success",
@@ -254,7 +254,7 @@ func TestDatabase(t *testing.T) {
 		second := &gwdb.AuditLog{
 			UserEmail:      "test@example.com",
 			ActionType:     "convox",
-			Action:         "app.list",
+			Action:         rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList),
 			Resource:       "all",
 			ResourceType:   "app",
 			Status:         "success",
@@ -281,7 +281,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 			UserEmail:      "admin@example.com",
 			UserName:       "Admin User",
 			ActionType:     "convox",
-			Action:         "app.list",
+			Action:         rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList),
 			Status:         "success",
 			RBACDecision:   "allow",
 			HTTPStatus:     200,
@@ -291,7 +291,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 			UserEmail:      "viewer@example.com",
 			UserName:       "Viewer User",
 			ActionType:     "tokens",
-			Action:         "api_token.create",
+			Action:         rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate),
 			Status:         "success",
 			RBACDecision:   "allow",
 			HTTPStatus:     201,
@@ -303,7 +303,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 			UserEmail:      "viewer@example.com",
 			UserName:       "Viewer User",
 			ActionType:     "tokens",
-			Action:         "api_token.delete",
+			Action:         rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete),
 			Status:         "success",
 			RBACDecision:   "allow",
 			HTTPStatus:     200,
@@ -322,9 +322,9 @@ func TestGetAuditLogsPaged(t *testing.T) {
 		action string
 		ts     time.Time
 	}{
-		{"app.list", base.Add(-48 * time.Hour)},
-		{"api_token.create", base.Add(-2 * time.Hour)},
-		{"api_token.delete", base.Add(-1 * time.Hour)},
+		{rbac.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), base.Add(-48 * time.Hour)},
+		{rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), base.Add(-2 * time.Hour)},
+		{rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), base.Add(-1 * time.Hour)},
 	}
 	for _, upd := range updates {
 		_, err := db.DB().Exec(`UPDATE audit_logs SET timestamp = $1 WHERE action = $2`, upd.ts, upd.action)
@@ -361,7 +361,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, timeTotal)
 	require.Len(t, timeFiltered, 1)
-	assert.Equal(t, "api_token.create", timeFiltered[0].Action)
+	assert.Equal(t, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), timeFiltered[0].Action)
 }
 
 func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
@@ -372,7 +372,7 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	initial := &gwdb.AuditLog{
 		UserEmail:      "sequence@example.com",
 		ActionType:     "auth",
-		Action:         "login.start",
+		Action:         rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart),
 		Status:         "success",
 		ResponseTimeMs: 1,
 		IPAddress:      "",
@@ -382,7 +382,7 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	withIP := &gwdb.AuditLog{
 		UserEmail:      "sequence@example.com",
 		ActionType:     "auth",
-		Action:         "login.complete",
+		Action:         rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringComplete),
 		Status:         "success",
 		ResponseTimeMs: 2,
 		IPAddress:      "203.0.113.10",

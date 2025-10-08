@@ -405,7 +405,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "user.create", strings.TrimSpace(req.Email), err.Error(), start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringCreate), strings.TrimSpace(req.Email), err.Error(), start, nil)
 		return
 	}
 
@@ -420,7 +420,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 			}
 		}
 		if !matched {
-			h.respondAuditError(c, http.StatusBadRequest, "user.create", strings.TrimSpace(req.Email), fmt.Sprintf("invalid role: %s", role), start, nil)
+			h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringCreate), strings.TrimSpace(req.Email), fmt.Sprintf("invalid role: %s", role), start, nil)
 			return
 		}
 	}
@@ -432,10 +432,10 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	if err := h.rbac.SaveUser(req.Email, userConfig); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			h.respondAuditError(c, http.StatusConflict, "user.create", strings.TrimSpace(req.Email), "user already exists", start, nil)
+			h.respondAuditError(c, http.StatusConflict, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringCreate), strings.TrimSpace(req.Email), "user already exists", start, nil)
 			return
 		}
-		h.respondAuditError(c, http.StatusInternalServerError, "user.create", strings.TrimSpace(req.Email), "failed to create user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringCreate), strings.TrimSpace(req.Email), "failed to create user", start, nil)
 		return
 	}
 
@@ -466,7 +466,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		details["name"] = req.Name
 	}
 
-	h.respondAuditSuccess(c, http.StatusCreated, payload, "user.create", resource, start, details)
+	h.respondAuditSuccess(c, http.StatusCreated, payload, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringCreate), resource, start, details)
 
 	h.notifyUserCreated(c, req)
 }
@@ -573,16 +573,16 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 	// Can't delete yourself
 	if email == currentUser {
-		h.respondAuditError(c, http.StatusBadRequest, "user.delete", strings.TrimSpace(email), "cannot delete yourself", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringDelete), strings.TrimSpace(email), "cannot delete yourself", start, nil)
 		return
 	}
 
 	if err := h.rbac.DeleteUser(email); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.delete", strings.TrimSpace(email), "failed to delete user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringDelete), strings.TrimSpace(email), "failed to delete user", start, nil)
 		return
 	}
 
-	h.respondAuditSuccess(c, http.StatusNoContent, nil, "user.delete", strings.TrimSpace(email), start, nil)
+	h.respondAuditSuccess(c, http.StatusNoContent, nil, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringDelete), strings.TrimSpace(email), start, nil)
 }
 
 // UpdateUserProfile godoc
@@ -609,23 +609,23 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	var req UpdateUserProfileRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "user.update", originalEmail, err.Error(), start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, err.Error(), start, nil)
 		return
 	}
 
 	userConfig, err := h.rbac.GetUser(originalEmail)
 	if err != nil || userConfig == nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.update", originalEmail, "user not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, "user not found", start, nil)
 		return
 	}
 
 	dbUser, err := h.database.GetUser(originalEmail)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.update", originalEmail, "failed to load user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, "failed to load user", start, nil)
 		return
 	}
 	if dbUser == nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.update", originalEmail, "user not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, "user not found", start, nil)
 		return
 	}
 
@@ -637,14 +637,14 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	emailChanged := !strings.EqualFold(updatedEmail, currentEmail)
 	if emailChanged {
 		if existing, err := h.database.GetUser(updatedEmail); err != nil {
-			h.respondAuditError(c, http.StatusInternalServerError, "user.update", originalEmail, "failed to check email availability", start, nil)
+			h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, "failed to check email availability", start, nil)
 			return
 		} else if existing != nil {
-			h.respondAuditError(c, http.StatusConflict, "user.update", originalEmail, "email already in use", start, map[string]interface{}{"email": updatedEmail})
+			h.respondAuditError(c, http.StatusConflict, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, "email already in use", start, map[string]interface{}{"email": updatedEmail})
 			return
 		}
 		if err := h.database.UpdateUserEmail(originalEmail, updatedEmail); err != nil {
-			h.respondAuditError(c, http.StatusInternalServerError, "user.update", originalEmail, "failed to update email", start, map[string]interface{}{"email": updatedEmail})
+			h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), originalEmail, "failed to update email", start, map[string]interface{}{"email": updatedEmail})
 			return
 		}
 		currentEmail = updatedEmail
@@ -657,7 +657,7 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	userConfig.Name = updatedName
 
 	if err := h.rbac.SaveUser(currentEmail, userConfig); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.update", currentEmail, "failed to update user", start, map[string]interface{}{"email": currentEmail})
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), currentEmail, "failed to update user", start, map[string]interface{}{"email": currentEmail})
 		return
 	}
 
@@ -671,7 +671,7 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 		details["email"] = currentEmail
 	}
 
-	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update", currentEmail, start, details)
+	h.respondAuditSuccess(c, http.StatusOK, payload, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdate), currentEmail, start, details)
 }
 
 // UpdateUserRoles godoc
@@ -696,26 +696,26 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 
 	// Can't change your own roles
 	if email == currentUser {
-		h.respondAuditError(c, http.StatusBadRequest, "user.update_roles", strings.TrimSpace(email), "cannot change your own roles", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdateRoles), strings.TrimSpace(email), "cannot change your own roles", start, nil)
 		return
 	}
 
 	var req UpdateUserRolesRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "user.update_roles", strings.TrimSpace(email), err.Error(), start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdateRoles), strings.TrimSpace(email), err.Error(), start, nil)
 		return
 	}
 
 	user, err := h.rbac.GetUser(email)
 	if err != nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.update_roles", strings.TrimSpace(email), "user not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdateRoles), strings.TrimSpace(email), "user not found", start, nil)
 		return
 	}
 
 	user.Roles = req.Roles
 	if err := h.rbac.SaveUser(email, user); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.update_roles", strings.TrimSpace(email), "failed to update roles", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdateRoles), strings.TrimSpace(email), "failed to update roles", start, nil)
 		return
 	}
 
@@ -725,7 +725,7 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 		Roles: req.Roles,
 	}
 	details := map[string]interface{}{"roles": req.Roles}
-	h.respondAuditSuccess(c, http.StatusOK, payload, "user.update_roles", strings.TrimSpace(email), start, details)
+	h.respondAuditSuccess(c, http.StatusOK, payload, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUpdateRoles), strings.TrimSpace(email), start, details)
 }
 
 // ListUserSessions godoc
@@ -934,41 +934,41 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
 	if email == "" {
-		h.respondAuditError(c, http.StatusBadRequest, "user.lock", email, "email is required", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "email is required", start, nil)
 		return
 	}
 
 	var req LockUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "user.lock", email, "invalid request", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "invalid request", start, nil)
 		return
 	}
 
 	user, err := h.database.GetUser(email)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.lock", email, "failed to load user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "failed to load user", start, nil)
 		return
 	}
 	if user == nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.lock", email, "user not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "user not found", start, nil)
 		return
 	}
 
 	// Get current admin user
 	authUser := h.currentAuthUser(c)
 	if authUser == nil {
-		h.respondAuditError(c, http.StatusUnauthorized, "user.lock", email, "unauthorized", start, nil)
+		h.respondAuditError(c, http.StatusUnauthorized, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "unauthorized", start, nil)
 		return
 	}
 	adminUser, err := h.database.GetUser(authUser.Email)
 	if err != nil || adminUser == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.lock", email, "failed to load admin user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "failed to load admin user", start, nil)
 		return
 	}
 
 	// Lock the account
 	if err := h.database.LockUser(user.ID, req.Reason, &adminUser.ID); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.lock", email, "failed to lock user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, "failed to lock user", start, nil)
 		return
 	}
 
@@ -990,7 +990,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		"locked_by":   adminUser.Email,
 		"target_user": user.Email,
 	}
-	h.respondAuditSuccess(c, http.StatusOK, gin.H{"message": "user locked successfully"}, "user.lock", email, start, details)
+	h.respondAuditSuccess(c, http.StatusOK, gin.H{"message": "user locked successfully"}, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringLock), email, start, details)
 }
 
 // UnlockUser godoc
@@ -1011,35 +1011,35 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
 	if email == "" {
-		h.respondAuditError(c, http.StatusBadRequest, "user.unlock", email, "email is required", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, "email is required", start, nil)
 		return
 	}
 
 	user, err := h.database.GetUser(email)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.unlock", email, "failed to load user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, "failed to load user", start, nil)
 		return
 	}
 	if user == nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.unlock", email, "user not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, "user not found", start, nil)
 		return
 	}
 
 	// Get current admin user
 	authUser := h.currentAuthUser(c)
 	if authUser == nil {
-		h.respondAuditError(c, http.StatusUnauthorized, "user.unlock", email, "unauthorized", start, nil)
+		h.respondAuditError(c, http.StatusUnauthorized, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, "unauthorized", start, nil)
 		return
 	}
 	adminUser, err := h.database.GetUser(authUser.Email)
 	if err != nil || adminUser == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.unlock", email, "failed to load admin user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, "failed to load admin user", start, nil)
 		return
 	}
 
 	// Unlock the account
 	if err := h.database.UnlockUser(user.ID, adminUser.ID); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.unlock", email, "failed to unlock user", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, "failed to unlock user", start, nil)
 		return
 	}
 
@@ -1055,7 +1055,7 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 		"unlocked_by": adminUser.Email,
 		"target_user": user.Email,
 	}
-	h.respondAuditSuccess(c, http.StatusOK, gin.H{"message": "user unlocked successfully"}, "user.unlock", email, start, details)
+	h.respondAuditSuccess(c, http.StatusOK, gin.H{"message": "user unlocked successfully"}, rbac.BuildAction(rbac.ResourceStringUser, rbac.ActionStringUnlock), email, start, details)
 }
 
 func (h *AdminHandler) sessionActorID(c *gin.Context) *int64 {
@@ -1616,7 +1616,7 @@ func (h *AdminHandler) UpdateMFASettings(c *gin.Context) {
 		h.mfaSettings = settings
 	}
 
-	h.notifySettingsChanged(c, "mfa.require_all_users", strconv.FormatBool(settings.RequireAllUsers))
+	h.notifySettingsChanged(c, rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringRequireAllUsers), strconv.FormatBool(settings.RequireAllUsers))
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }
@@ -1711,7 +1711,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	var req CreateAPITokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "api_token.create", strings.TrimSpace(req.UserEmail), err.Error(), start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), strings.TrimSpace(req.UserEmail), err.Error(), start, nil)
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
@@ -1725,7 +1725,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	// Get user ID
 	user, err := h.database.GetUser(targetEmail)
 	if err != nil {
-		h.respondAuditError(c, http.StatusNotFound, "api_token.create", targetEmail, "user not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), targetEmail, "user not found", start, nil)
 		return
 	}
 
@@ -1747,13 +1747,13 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		details := map[string]interface{}{"name": tokenReq.Name}
 		switch {
 		case errors.Is(err, token.ErrAPITokenNameExists):
-			h.respondAuditError(c, http.StatusBadRequest, "api_token.create", targetEmail, "token name already exists", start, details)
+			h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), targetEmail, "token name already exists", start, details)
 			return
 		case errors.Is(err, token.ErrAPITokenNameRequired):
-			h.respondAuditError(c, http.StatusBadRequest, "api_token.create", targetEmail, "token name is required", start, details)
+			h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), targetEmail, "token name is required", start, details)
 			return
 		default:
-			h.respondAuditError(c, http.StatusInternalServerError, "api_token.create", targetEmail, "failed to create token", start, details)
+			h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), targetEmail, "failed to create token", start, details)
 			return
 		}
 	}
@@ -1774,7 +1774,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		"user_email":  targetEmail,
 	}
 	resource := fmt.Sprintf("%d", resp.APIToken.ID)
-	h.respondAuditSuccess(c, http.StatusOK, payload, "api_token.create", resource, start, details)
+	h.respondAuditSuccess(c, http.StatusOK, payload, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), resource, start, details)
 }
 
 func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenName string) {
@@ -1896,24 +1896,24 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
 	if tokenIDStr == "" {
-		h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "invalid token ID", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "invalid token ID", start, nil)
 		return
 	}
 
 	var req UpdateAPITokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, err.Error(), start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, err.Error(), start, nil)
 		return
 	}
 
 	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to load token", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "failed to load token", start, nil)
 		return
 	}
 	if existing == nil {
-		h.respondAuditError(c, http.StatusNotFound, "api_token.update", tokenIDStr, "token not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "token not found", start, nil)
 		return
 	}
 
@@ -1925,13 +1925,13 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 		if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
 			switch {
 			case errors.Is(err, token.ErrAPITokenNameExists):
-				h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "token name already exists", start, map[string]interface{}{"name": name})
+				h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "token name already exists", start, map[string]interface{}{"name": name})
 				return
 			case errors.Is(err, token.ErrAPITokenNameRequired):
-				h.respondAuditError(c, http.StatusBadRequest, "api_token.update", tokenIDStr, "token name is required", start, nil)
+				h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "token name is required", start, nil)
 				return
 			default:
-				h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to update token name", start, map[string]interface{}{"name": name})
+				h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "failed to update token name", start, map[string]interface{}{"name": name})
 				return
 			}
 		}
@@ -1940,7 +1940,7 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 
 	if req.Permissions != nil {
 		if err := h.tokenService.UpdateTokenPermissions(tokenID, req.Permissions); err != nil {
-			h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to update token permissions", start, nil)
+			h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "failed to update token permissions", start, nil)
 			return
 		}
 		details["permissions"] = req.Permissions
@@ -1948,11 +1948,11 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 
 	updated, err := h.database.GetAPITokenByID(tokenID)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "failed to load token", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "failed to load token", start, nil)
 		return
 	}
 	if updated == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "api_token.update", tokenIDStr, "token disappeared", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, "token disappeared", start, nil)
 		return
 	}
 
@@ -1962,7 +1962,7 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	details["current_name"] = updated.Name
 	details["current_permissions"] = updated.Permissions
 
-	h.respondAuditSuccess(c, http.StatusOK, updated, "api_token.update", tokenIDStr, start, details)
+	h.respondAuditSuccess(c, http.StatusOK, updated, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringUpdate), tokenIDStr, start, details)
 }
 
 // DeleteAPIToken godoc
@@ -1981,22 +1981,22 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
 	if tokenIDStr == "" {
-		h.respondAuditError(c, http.StatusBadRequest, "api_token.delete", tokenIDStr, "invalid token ID", start, nil)
+		h.respondAuditError(c, http.StatusBadRequest, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), tokenIDStr, "invalid token ID", start, nil)
 		return
 	}
 
 	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "api_token.delete", tokenIDStr, "failed to load token", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), tokenIDStr, "failed to load token", start, nil)
 		return
 	}
 	if existing == nil {
-		h.respondAuditError(c, http.StatusNotFound, "api_token.delete", tokenIDStr, "token not found", start, nil)
+		h.respondAuditError(c, http.StatusNotFound, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), tokenIDStr, "token not found", start, nil)
 		return
 	}
 
 	if err := h.database.DeleteAPIToken(existing.ID); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "api_token.delete", tokenIDStr, "failed to delete token", start, nil)
+		h.respondAuditError(c, http.StatusInternalServerError, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), tokenIDStr, "failed to delete token", start, nil)
 		return
 	}
 
@@ -2004,7 +2004,7 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	if strings.TrimSpace(existing.Name) != "" {
 		details["name"] = existing.Name
 	}
-	h.respondAuditSuccess(c, http.StatusNoContent, nil, "api_token.delete", tokenIDStr, start, details)
+	h.respondAuditSuccess(c, http.StatusNoContent, nil, rbac.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), tokenIDStr, start, details)
 }
 
 func collectAllPermissions(rolePerms map[string][]string) []string {

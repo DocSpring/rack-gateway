@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"log"
 	"net/http"
 	"os"
@@ -101,14 +102,14 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 
 	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 		ActionType:   "auth",
-		Action:       "login.start",
+		Action:       rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart),
 		ResourceType: "auth",
 		Resource:     resource,
 		Status:       status,
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.GetHeader("User-Agent"),
 	}); err != nil {
-		log.Printf(`{"level":"error","event":"audit_log_failed","action":"login.start","error":%q}`, err)
+		log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart),"error":%q}`, err)
 	}
 }
 

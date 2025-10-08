@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"log"
 	"net/http"
 	"strconv"
@@ -280,7 +281,7 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       "mfa.update",
+			Action:       rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringUpdate),
 			ResourceType: "mfa_method",
 			Resource:     fmt.Sprintf("%d", method.ID),
 			Details:      string(details),

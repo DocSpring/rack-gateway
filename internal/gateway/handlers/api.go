@@ -139,19 +139,19 @@ func (h *APIHandler) logEnvUpdateDiffs(c *gin.Context, app, email, name string, 
 	for _, diff := range diffs {
 		oldVal := diff.OldVal
 		newVal := diff.NewVal
-		action := "env.set"
+		action := rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet)
 		resourceType := "env"
 		if diff.Secret {
-			action = "secrets.set"
+			action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet)
 			resourceType = "secret"
 			oldVal = "[REDACTED]"
 			newVal = "[REDACTED]"
 		}
 		if strings.TrimSpace(diff.NewVal) == "" {
 			if diff.Secret {
-				action = "secrets.unset"
+				action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringUnset)
 			} else {
-				action = "env.unset"
+				action = rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUnset)
 			}
 		}
 
@@ -455,7 +455,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 				UserEmail:      email,
 				UserName:       name,
 				ActionType:     "convox",
-				Action:         "secrets.read",
+				Action:         rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringRead),
 				ResourceType:   "secret",
 				Resource:       res,
 				Details:        string(detailsJSON),
@@ -526,10 +526,10 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		details["secrets"] = true
 	}
 	detailsJSON, _ := json.Marshal(details)
-	action := "env.read"
+	action := rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringRead)
 	resourceType := "env"
 	if allowedSecrets {
-		action = "secrets.read"
+		action = rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringRead)
 		resourceType = "secret"
 	}
 	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
@@ -659,7 +659,7 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 			UserEmail:      email,
 			UserName:       name,
 			ActionType:     "convox",
-			Action:         "env.update",
+			Action:         rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUpdate),
 			ResourceType:   "env",
 			Resource:       app,
 			Details:        `{"changes":"none"}`,

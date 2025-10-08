@@ -362,7 +362,7 @@ const (
 	ResourceStringSuspiciousActivity = "suspicious_activity"
 )
 
-// Action verb strings (second part of audit log action, e.g., "start" in "login.start")
+// Action verb strings (second part of audit log action, e.g., "start" in rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart))
 const (
 	ActionStringComplete           = "complete"
 	ActionStringOAuthFailed        = "oauth_failed"
@@ -386,14 +386,14 @@ const (
 
 // Audit log status constants
 const (
-	StatusSuccess = "success"
-	StatusFailed  = "failed"
-	StatusDenied  = "denied"
-	StatusError   = "error"
-	StatusAlert   = "alert"
+	StatusStringSuccess = "success"
+	StatusStringFailed  = "failed"
+	StatusStringDenied  = "denied"
+	StatusStringError   = "error"
+	StatusStringAlert   = "alert"
 )
 
-// BuildAction builds an audit log action string from scope and verb (e.g., "login.start")
+// BuildAction builds an audit log action string from scope and verb (e.g., rbac.BuildAction(rbac.ResourceStringLogin, rbac.ActionStringStart))
 func BuildAction(scope, verb string) string {
 	return scope + "." + verb
 }

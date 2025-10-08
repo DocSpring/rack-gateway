@@ -183,7 +183,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	require.NoError(t, err)
 	foundRelease := false
 	for _, log := range logs {
-		if log.Action == "release.create" && log.Resource == "R654" {
+		if log.Action == rbac.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringCreate) && log.Resource == "R654" {
 			foundRelease = true
 			require.Equal(t, "release", log.ResourceType)
 			require.Equal(t, "success", log.Status)
@@ -205,7 +205,7 @@ func TestLogEnvDiffsLogsUnset(t *testing.T) {
 	require.NotEmpty(t, logs)
 	found := false
 	for _, log := range logs {
-		if log.Action == "env.unset" && log.Resource == "my-app/FOO" {
+		if log.Action == rbac.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringUnset) && log.Resource == "my-app/FOO" {
 			found = true
 			break
 		}
@@ -226,7 +226,7 @@ func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
 	require.NotEmpty(t, logs)
 	found := false
 	for _, log := range logs {
-		if log.Action == "secrets.unset" && log.Resource == "my-app/SECRET_KEY" {
+		if log.Action == rbac.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringUnset) && log.Resource == "my-app/SECRET_KEY" {
 			found = true
 			break
 		}

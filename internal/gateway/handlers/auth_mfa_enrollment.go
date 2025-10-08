@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"log"
 	"net/http"
 	"strings"
@@ -173,7 +174,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       "mfa.enroll",
+			Action:       rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "totp",
 			Details:      string(details),
@@ -181,7 +182,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"mfa.enroll","error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),"error":%q}`, err)
 		}
 	}
 
@@ -410,7 +411,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       "mfa.enroll",
+			Action:       rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "webauthn",
 			Details:      string(details),
@@ -418,7 +419,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":"mfa.enroll","error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":rbac.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringEnroll),"error":%q}`, err)
 		}
 	}
 
