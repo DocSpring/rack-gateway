@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	gwdb "github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -66,6 +66,8 @@ tasks:
   build:gateway:
     desc: Build gateway API server -> bin/rack-gateway-api
     deps: [deps]
+    env:
+      CGO_CFLAGS: "-Wno-deprecated-declarations"
     sources:
       - go.*
       - Taskfile.go.yml
@@ -79,6 +81,8 @@ tasks:
   build:cli:
     desc: Build gateway CLI -> bin/rack-gateway
     deps: [deps]
+    env:
+      CGO_CFLAGS: "-Wno-deprecated-declarations"
     sources:
       - go.*
       - Taskfile.go.yml
@@ -92,6 +96,8 @@ tasks:
   build:mock:
     desc: Build mock Convox server -> bin/mock-convox
     deps: [deps]
+    env:
+      CGO_CFLAGS: "-Wno-deprecated-declarations"
     sources:
       - go.*
       - Taskfile.go.yml
@@ -105,6 +111,7 @@ tasks:
   test:
     desc: Run Go unit and integration tests safely
     env:
+      CGO_CFLAGS: "-Wno-deprecated-declarations"
       TEST_DATABASE_URL: "{{.ENV.TEST_DATABASE_URL}}"
       DATABASE_URL: "{{if .ENV.TEST_DATABASE_URL}}{{.ENV.TEST_DATABASE_URL}}{{else}}{{.ENV.DATABASE_URL}}{{end}}"
     deps: [deps, build, ":db:ensure:test"]

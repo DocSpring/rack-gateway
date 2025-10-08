@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
@@ -74,11 +75,11 @@ func TestAuditLogger(t *testing.T) {
 			expectedAction   string
 			expectedResource string
 		}{
-			{"GET", "/apps", audit.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), "all"},
-			{"GET", "/instances", audit.BuildAction(rbac.ResourceStringInstance, rbac.ActionStringList), "all"},
-			{"GET", "/apps/myapp/processes", audit.BuildAction(rbac.ResourceStringProcess, rbac.ActionStringList), "all"},
-			{"GET", "/apps/myapp/builds", audit.BuildAction(rbac.ResourceStringBuild, rbac.ActionStringList), "all"},
-			{"GET", "/apps/myapp/releases", audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringList), "all"},
+			{"GET", "/apps", BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), "all"},
+			{"GET", "/instances", BuildAction(rbac.ResourceStringInstance, rbac.ActionStringList), "all"},
+			{"GET", "/apps/myapp/processes", BuildAction(rbac.ResourceStringProcess, rbac.ActionStringList), "all"},
+			{"GET", "/apps/myapp/builds", BuildAction(rbac.ResourceStringBuild, rbac.ActionStringList), "all"},
+			{"GET", "/apps/myapp/releases", BuildAction(rbac.ResourceStringRelease, rbac.ActionStringList), "all"},
 		}
 
 		for _, tc := range testCases {
@@ -99,13 +100,13 @@ func TestAuditLogger(t *testing.T) {
 			action       string
 			expectedType string
 		}{
-			{"/apps", audit.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), "app"},
-			{"/apps/myapp", audit.BuildAction(rbac.ResourceStringApp, rbac.ActionStringRead), "app"},
-			{"/instances", audit.BuildAction(rbac.ResourceStringInstance, rbac.ActionStringList), "instance"},
-			{"/apps/myapp/processes", audit.BuildAction(rbac.ResourceStringProcess, rbac.ActionStringList), "process"},
-			{"/apps/myapp/builds", audit.BuildAction(rbac.ResourceStringBuild, rbac.ActionStringList), "build"},
-			{"/apps/myapp/releases", audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringList), "release"},
-			{"/system", audit.BuildAction(rbac.ResourceStringRack, rbac.ActionStringRead), "rack"}, // System endpoints have action "rack.*" so type is "rack"
+			{"/apps", BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), "app"},
+			{"/apps/myapp", BuildAction(rbac.ResourceStringApp, rbac.ActionStringRead), "app"},
+			{"/instances", BuildAction(rbac.ResourceStringInstance, rbac.ActionStringList), "instance"},
+			{"/apps/myapp/processes", BuildAction(rbac.ResourceStringProcess, rbac.ActionStringList), "process"},
+			{"/apps/myapp/builds", BuildAction(rbac.ResourceStringBuild, rbac.ActionStringList), "build"},
+			{"/apps/myapp/releases", BuildAction(rbac.ResourceStringRelease, rbac.ActionStringList), "release"},
+			{"/system", BuildAction(rbac.ResourceStringRack, rbac.ActionStringRead), "rack"}, // System endpoints have action "rack.*" so type is "rack"
 		}
 
 		for _, tc := range testCases {
