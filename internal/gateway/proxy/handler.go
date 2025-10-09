@@ -26,6 +26,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
+	"github.com/getsentry/sentry-go"
 )
 
 type Handler struct {
@@ -455,6 +456,11 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message st
 		userEmail = authUser.Email
 	}
 
+	// Capture 500-level errors to Sentry
+	if status >= 500 && status < 600 {
+		h.captureSentryError(r, fmt.Errorf("%s", message), userEmail)
+	}
+
 	if !audit.RequestAlreadyLogged(r) {
 		h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf("%s", message))
 	}
@@ -465,4 +471,26 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message st
 	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
 		log.Printf("proxy: failed to encode error response: %v", err)
 	}
+}
+
+// captureSentryError captures an error to Sentry with request context and user information.
+func (h *Handler) captureSentryError(r *http.Request, err error, userEmail string) {
+	if err == nil {
+		return
+	}
+
+	sentry.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		if r != nil {
+			scope.SetRequest(r)
+			scope.SetTag("http_method", r.Method)
+			scope.SetTag("http_path", r.URL.Path)
+		}
+		if userEmail != "" && userEmail != "anonymous" {
+			scope.SetUser(sentry.User{Email: userEmail})
+		}
+		scope.SetTag("component", "proxy")
+		scope.SetTag("rack", h.rackName)
+		sentry.CaptureException(err)
+	})
 }

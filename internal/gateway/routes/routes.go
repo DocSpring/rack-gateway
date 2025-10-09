@@ -69,6 +69,11 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
 	router.Use(gin.Recovery())
+
+	// Capture all 500-level errors to Sentry (must be after sentrygin middleware)
+	if cfg.SentryEnabled {
+		router.Use(middleware.SentryErrorCapture())
+	}
 	router.Use(middleware.RequestLogger(cfg.AuditLogger, cfg.DefaultRack, cfg.Config.DevMode))
 
 	// CORS configuration - allow requests from the configured domain
