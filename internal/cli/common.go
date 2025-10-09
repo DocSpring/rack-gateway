@@ -108,8 +108,47 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 	// Build flags - convert specified cobra flags to stdcli flags
 	var flags []*stdcli.Flag
 	for _, name := range flagNames {
-		if val, _ := cobraCmd.Flags().GetString(name); val != "" {
-			flags = append(flags, &stdcli.Flag{Name: name, Value: val})
+		cobraFlag := cobraCmd.Flags().Lookup(name)
+		if cobraFlag == nil {
+			continue
+		}
+
+		var flag *stdcli.Flag
+		var kind string
+
+		switch cobraFlag.Value.Type() {
+		case "bool":
+			if val, _ := cobraCmd.Flags().GetBool(name); val {
+				flag = &stdcli.Flag{Name: name, Value: val}
+				kind = "bool"
+			}
+		case "int":
+			if val, _ := cobraCmd.Flags().GetInt(name); val != 0 {
+				flag = &stdcli.Flag{Name: name, Value: val}
+				kind = "int"
+			}
+		case "stringSlice":
+			if val, _ := cobraCmd.Flags().GetStringSlice(name); len(val) > 0 {
+				flag = &stdcli.Flag{Name: name, Value: val}
+				kind = "stringslice"
+			}
+		default: // string
+			if val, _ := cobraCmd.Flags().GetString(name); val != "" {
+				flag = &stdcli.Flag{Name: name, Value: val}
+				kind = "string"
+			}
+		}
+
+		if flag != nil {
+			// Use reflection to set the private "kind" field
+			flagValue := reflect.ValueOf(flag).Elem()
+			kindField := flagValue.FieldByName("kind")
+			if kindField.IsValid() {
+				reflect.NewAt(kindField.Type(), unsafe.Pointer(kindField.UnsafeAddr())).
+					Elem().
+					SetString(kind)
+			}
+			flags = append(flags, flag)
 		}
 	}
 

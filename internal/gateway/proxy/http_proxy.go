@@ -36,7 +36,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	// Handle WebSocket upgrade requests
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email)
+		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email, original)
 	}
 
 	var bodyBytes []byte
@@ -51,14 +51,30 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 	}
 
-	// Validate build requests for deploy approvals (API tokens only)
+	// Validate build manifests for ALL users (enforces image pattern security policy)
 	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/builds") {
+		if err := h.validateBuildManifestForAllUsers(r, bodyBytes); err != nil {
+			return 0, err
+		}
+
+		// Additionally validate deploy approval tracking for API tokens
 		if authUser.IsAPIToken {
 			if authUser.TokenID == nil {
 				return 0, fmt.Errorf("API token authentication missing token ID")
 			}
-			if err := h.validateBuildRequest(r, bodyBytes, *authUser.TokenID); err != nil {
+			if err := h.validateBuildRequestForAPIToken(r, bodyBytes, *authUser.TokenID); err != nil {
 				return 0, err
+			}
+		}
+	}
+
+	// Validate process start commands for deploy approval flow
+	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
+		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
+			command := strings.TrimSpace(r.Header.Get("Command"))
+			// Only allow hardcoded sleep command or approved commands
+			if command != "sleep 3600" && !h.isCommandApproved(command) {
+				return 0, fmt.Errorf("command not approved: %s", command)
 			}
 		}
 	}
@@ -106,17 +122,22 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	pth := original
 	filterRelease := isJSON && (routematch.KeyMatch3(pth, "/apps/{app}/releases") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
 	shouldCapture := false
+	captureProcess := false
 	if isJSON {
 		switch r.Method {
 		case http.MethodPost:
 			shouldCapture = true
+			// Capture process creation for deploy approval tracking
+			if routematch.KeyMatch3(pth, "/apps/{app}/services/{service}/processes") {
+				captureProcess = true
+			}
 		case http.MethodGet:
 			if routematch.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 				shouldCapture = true
 			}
 		}
 	}
-	needsBuffer := filterRelease || shouldCapture
+	needsBuffer := filterRelease || shouldCapture || captureProcess
 
 	var body []byte
 	var respReader io.Reader
@@ -133,6 +154,22 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 		if shouldCapture {
 			h.captureResourceCreator(r, pth, body, authUser.Email)
+		}
+		// Only track processes created via deploy approval flow
+		if captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
+				h.captureProcessCreation(r, body, tracker)
+			}
+		}
+		// Mark deploy approval as deployed after successful release promotion
+		if r.Method == http.MethodPost && routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
+				if h.database != nil {
+					if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
+						log.Printf("Failed to mark deploy approval as deployed: %v", err)
+					}
+				}
+			}
 		}
 		respReader = bytes.NewReader(body)
 	} else {
@@ -309,7 +346,27 @@ func (h *Handler) isProtectedKey(key string) bool {
 	return ok
 }
 
-func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string) (int, error) {
+func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string, originalPath string) (int, error) {
+	// Validate and track exec commands for deploy approval flow
+	if routematch.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec") {
+		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
+			processID := extractProcessIDFromPath(originalPath)
+			command := strings.TrimSpace(r.Header.Get("Command"))
+			if processID != "" && command != "" && h.database != nil {
+				// Validate command is in approved list
+				if !h.isCommandApproved(command) {
+					http.Error(w, forbiddenMessage(rbac.ResourceProcess, rbac.ActionExec), http.StatusForbidden)
+					return http.StatusForbidden, nil
+				}
+
+				// Track executed command for auditing
+				if err := h.database.AppendExecCommandToDeployApprovalRequest(tracker.request.ID, processID, command); err != nil {
+					log.Printf("Failed to track exec command in deploy approval: %v", err)
+				}
+			}
+		}
+	}
+
 	// Prepare upstream URL (ws or wss)
 	u, err := url.Parse(target)
 	if err != nil {
@@ -532,5 +589,58 @@ func (h *Handler) checkWebSocketOrigin(r *http.Request) bool {
 	}
 
 	// Reject all other origins
+	return false
+}
+
+// captureProcessCreation extracts process ID from the response and tracks it in the deploy approval request
+func (h *Handler) captureProcessCreation(r *http.Request, body []byte, tracker *deployApprovalTracker) {
+	if h.database == nil || tracker == nil {
+		return
+	}
+
+	// Parse response to extract process ID
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		log.Printf("Failed to parse process creation response: %v", err)
+		return
+	}
+
+	processID, ok := resp["id"].(string)
+	if !ok || processID == "" {
+		log.Printf("Process ID not found in response")
+		return
+	}
+
+	// Track process ID only (not the sleep command - that's just a placeholder)
+	// Actual exec commands will be tracked when process:exec happens
+	if err := h.database.AppendProcessIDToDeployApprovalRequest(tracker.request.ID, processID); err != nil {
+		log.Printf("Failed to track process ID in deploy approval: %v", err)
+	}
+}
+
+// isCommandApproved checks if a command is in the approved commands list
+func (h *Handler) isCommandApproved(command string) bool {
+	if h.database == nil {
+		return false
+	}
+
+	approvedCommands, err := h.database.GetApprovedCommands()
+	if err != nil {
+		log.Printf("Failed to get approved commands: %v", err)
+		return false
+	}
+
+	// If no approved commands configured, deny all
+	if len(approvedCommands) == 0 {
+		return false
+	}
+
+	// Check if command matches any approved command
+	for _, approved := range approvedCommands {
+		if strings.TrimSpace(command) == strings.TrimSpace(approved) {
+			return true
+		}
+	}
+
 	return false
 }

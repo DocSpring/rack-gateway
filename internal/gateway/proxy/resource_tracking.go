@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -96,7 +97,11 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 
 		// Track object URL for deploy approval workflow
 		if objectURL := extractJSONString(obj["url"]); objectURL != "" {
-			h.updateObjectURLApprovalTracking(r, objectURL)
+			// This should never fail because we validated upfront
+			if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
+				// Log error but don't fail - we already validated this should work
+				fmt.Printf("ERROR: failed to update object URL tracking after validation passed: %v\n", err)
+			}
 		}
 	}
 
@@ -117,13 +122,6 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			if h.recordResourceCreator("release", id, email) {
 				r.Header.Add("X-Release-Created", id)
 			}
-		}
-	}
-
-	// Track process creation
-	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
-		if id := extractJSONString(obj["id"]); id != "" {
-			h.trackProcessCreation(r, path, id, email)
 		}
 	}
 }

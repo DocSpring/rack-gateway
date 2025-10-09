@@ -119,10 +119,9 @@ var roleConfigs = map[string]roleConfig{
 			Convox(ResourceProcess, ActionRead),
 			Gateway(ResourceDeployApprovalRequest, ActionCreate),
 			Gateway(ResourceDeployApprovalRequest, ActionRead),
-			Convox(ResourceDeploy, ActionDeployWithApproval), // Grants build, release, process ops when approval exists
+			Convox(ResourceDeploy, ActionDeployWithApproval), // Grants build, release, process ops, and build log access when approval exists
 			Convox(ResourceInstance, ActionList),
 			Convox(ResourceInstance, ActionRead),
-			Convox(ResourceLog, ActionRead),
 			Convox(ResourceRack, ActionRead),
 		},
 	},

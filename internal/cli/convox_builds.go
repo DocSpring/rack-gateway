@@ -17,7 +17,7 @@ func BuildCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "description", "file", "manifest", "no-cache")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "app", "description", "file", "manifest", "no-cache")
 			if err != nil {
 				return err
 			}

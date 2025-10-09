@@ -311,22 +311,6 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Additional gating for process exec and terminate (approval-based permissions)
-	if resource == rbac.ResourceProcess && action == rbac.ActionExec {
-		if ok, message := h.checkProcessExec(r, authUser, path, approvalTracker); !ok {
-			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process exec denied: %s", message))
-			http.Error(w, message, http.StatusForbidden)
-			return
-		}
-	}
-	if resource == rbac.ResourceProcess && action == rbac.ActionTerminate {
-		if ok, message := h.checkProcessTerminate(r, authUser, path, approvalTracker); !ok {
-			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("process terminate denied: %s", message))
-			http.Error(w, message, http.StatusForbidden)
-			return
-		}
-	}
-
 	// Block destructive actions when not allowed by settings
 	if !h.allowDestructive {
 		if isDestructive(methodForRBAC, resource, action) {
@@ -417,7 +401,9 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log request to stdout for CloudWatch (after audit validation passes)
-	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", status, time.Since(start), nil)
+	if !audit.RequestAlreadyLogged(r) {
+		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "allow", status, time.Since(start), nil)
+	}
 
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
@@ -469,7 +455,9 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message st
 		userEmail = authUser.Email
 	}
 
-	h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf("%s", message))
+	if !audit.RequestAlreadyLogged(r) {
+		h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf("%s", message))
+	}
 
 	errorResponse := map[string]string{"error": message}
 	w.Header().Set("Content-Type", "application/json")

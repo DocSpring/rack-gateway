@@ -99,11 +99,20 @@ func Authenticated(authService *auth.AuthService, rbacManager rbac.RBACManager) 
 func CLIOnly(authService *auth.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var nextCalled bool
+
+		// CRITICAL: For WebSocket upgrades, we MUST bypass Gin's response writer wrapper
+		// and use the raw http.ResponseWriter. Gin's wrapper buffers writes which breaks
+		// WebSocket hijacking. This issue only manifests when there are slow operations
+		// (like database queries) before the upgrade, giving Gin time to buffer headers.
+		writer := http.ResponseWriter(c.Writer)
+		isWebSocket := strings.Contains(strings.ToLower(c.Request.Header.Get("Connection")), "upgrade") &&
+			strings.ToLower(c.Request.Header.Get("Upgrade")) == "websocket"
+
 		authService.CLIOnlyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			nextCalled = true
 			// Replace gin request with the authenticated request (carries context + headers)
 			c.Request = r
-		})).ServeHTTP(c.Writer, c.Request)
+		})).ServeHTTP(writer, c.Request)
 
 		if !nextCalled {
 			// Authentication failed and response already written
@@ -112,6 +121,13 @@ func CLIOnly(authService *auth.AuthService) gin.HandlerFunc {
 		}
 
 		c.Next()
+
+		// CRITICAL: After WebSocket upgrade, the connection is hijacked and Gin's writer
+		// status is not updated. If the upgrade succeeded (Written=true), update the status
+		// to 101 so downstream middleware (e.g., HTTP request logger) logs the correct status.
+		if isWebSocket && c.Writer.Written() && c.Writer.Status() == http.StatusOK {
+			c.Status(http.StatusSwitchingProtocols)
+		}
 	}
 }
 

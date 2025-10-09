@@ -177,8 +177,8 @@ func (d *Database) logQuery(prefix, query string, args ...interface{}) {
 	color := sqlColor(query)
 	// Compact query for logging (single line, trimmed whitespace)
 	q := strings.Join(strings.Fields(query), " ")
-	if len(q) > 200 {
-		q = q[:200] + "..."
+	if len(q) > 400 {
+		q = q[:400] + "..."
 	}
 	// Format args with commas
 	argsStr := "[]"

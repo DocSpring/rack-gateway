@@ -168,25 +168,25 @@ tasks:
     desc: Run CLI E2E flow on test stack with only admin tests
     deps: [":docker:test:up", ":docker:test:wait", ":db:migrate:test"]
     cmds:
-      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_ADMIN_TESTS=true bash scripts/cli-e2e.sh
+      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_ADMIN_TESTS=true scripts/cli-e2e.sh
 
   e2e:api-token:
     desc: Run CLI E2E flow on test stack with only API token tests
     deps: [":docker:test:up", ":docker:test:wait", ":db:migrate:test"]
     cmds:
-      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_API_TOKEN_TESTS=true bash scripts/cli-e2e.sh
+      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_API_TOKEN_TESTS=true scripts/cli-e2e.sh
 
   e2e:deployer:
     desc: Run CLI E2E flow on test stack with only deployer tests
     deps: [":docker:test:up", ":docker:test:wait", ":db:migrate:test"]
     cmds:
-      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_DEPLOYER_TESTS=true bash scripts/cli-e2e.sh
+      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_DEPLOYER_TESTS=true scripts/cli-e2e.sh
 
   e2e:viewer:
     desc: Run CLI E2E flow on test stack with only viewer tests
     deps: [":docker:test:up", ":docker:test:wait", ":db:migrate:test"]
     cmds:
-      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_VIEWER_TESTS=true bash scripts/cli-e2e.sh
+      - GATEWAY_PORT={{.TEST_GATEWAY_PORT | default "9447"}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT | default "9345"}} MOCK_CONVOX_PORT={{.TEST_MOCK_CONVOX_PORT | default "6443"}} E2E_DATABASE_NAME=gateway_test E2E_GATEWAY_SERVICE=gateway-api-test ONLY_VIEWER_TESTS=true scripts/cli-e2e.sh
 
   test:all:
     desc: Run all tests in parallel

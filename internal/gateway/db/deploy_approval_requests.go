@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -70,8 +71,11 @@ SELECT
     dr.ci_provider,
     dr.ci_metadata,
     dr.app,
+    dr.object_url,
     dr.build_id,
-    dr.release_id
+    dr.release_id,
+    dr.process_ids,
+    dr.exec_commands
 FROM deploy_approval_requests dr
 LEFT JOIN users created_user ON created_user.id = dr.created_by_user_id
 LEFT JOIN api_tokens created_token ON created_token.id = dr.created_by_api_token_id
@@ -106,8 +110,11 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		ciProvider         sql.NullString
 		ciMetadata         []byte
 		app                sql.NullString
+		objectURL          sql.NullString
 		buildID            sql.NullString
 		releaseID          sql.NullString
+		processIDs         []byte // Array from PostgreSQL
+		execCommands       []byte // JSONB from PostgreSQL
 	)
 
 	if err := scanner.Scan(
@@ -142,8 +149,11 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		&ciProvider,
 		&ciMetadata,
 		&app,
+		&objectURL,
 		&buildID,
 		&releaseID,
+		&processIDs,
+		&execCommands,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeployApprovalRequestNotFound
@@ -223,11 +233,22 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	if app.Valid {
 		dr.App = app.String
 	}
+	if objectURL.Valid {
+		dr.ObjectURL = objectURL.String
+	}
 	if buildID.Valid {
 		dr.BuildID = buildID.String
 	}
 	if releaseID.Valid {
 		dr.ReleaseID = releaseID.String
+	}
+	if len(processIDs) > 0 {
+		// Parse PostgreSQL array - pgx returns it as a []byte in PostgreSQL text array format
+		// For now, use json.Unmarshal which works with PostgreSQL's JSON array representation
+		_ = json.Unmarshal(processIDs, &dr.ProcessIDs)
+	}
+	if len(execCommands) > 0 {
+		dr.ExecCommands = execCommands
 	}
 	return &dr, nil
 }
@@ -250,7 +271,11 @@ func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitB
 	}
 
 	// Check for existing approval with same (git_commit_hash, token) pair
-	existing, err := d.ActiveDeployApprovalRequestByTokenAndCommit(targetAPITokenID, gitCommitHash)
+	existing, err := d.FindDeployApprovalRequest(DeployApprovalLookup{
+		TokenID:       targetAPITokenID,
+		GitCommitHash: gitCommitHash,
+		StatusFilter:  "any",
+	})
 	if err == nil && existing != nil {
 		return nil, &DeployApprovalRequestConflictError{Request: existing}
 	}
@@ -296,7 +321,11 @@ func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitB
 		if strings.Contains(err.Error(), "idx_deploy_approval_requests_active_commit") ||
 			strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			// Try to fetch the conflicting record
-			existing, fetchErr := d.ActiveDeployApprovalRequestByTokenAndCommit(targetAPITokenID, gitCommitHash)
+			existing, fetchErr := d.FindDeployApprovalRequest(DeployApprovalLookup{
+				TokenID:       targetAPITokenID,
+				GitCommitHash: gitCommitHash,
+				StatusFilter:  "any",
+			})
 			if fetchErr == nil && existing != nil {
 				return nil, &DeployApprovalRequestConflictError{Request: existing}
 			}
@@ -317,36 +346,53 @@ func (d *Database) GetDeployApprovalRequestByPublicID(publicID string) (*DeployA
 	return scanDeployApprovalRequest(row)
 }
 
-func (d *Database) ActiveDeployApprovalRequestByTokenAndCommit(tokenID int64, gitCommitHash string) (*DeployApprovalRequest, error) {
-	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.git_commit_hash = ? AND dr.status IN ('pending','approved') AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.created_at DESC LIMIT 1`,
-		tokenID,
-		gitCommitHash,
-	)
-	return scanDeployApprovalRequest(row)
+type DeployApprovalLookup struct {
+	TokenID       int64
+	GitCommitHash string
+	App           string
+	ReleaseID     string
+	BuildID       string
+	ProcessID     string
+	StatusFilter  string // "any", "approved", or specific status
 }
 
-// ActiveDeployApprovalRequestByTokenAndApp finds any active approved deployment for the given app.
-// This is used for process actions (exec, start, terminate) where we need to verify there's
-// an active deployment approval for the app, regardless of which specific release.
-func (d *Database) ActiveDeployApprovalRequestByTokenAndApp(tokenID int64, app string) (*DeployApprovalRequest, error) {
-	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.app = ? AND dr.status = 'approved' AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.approved_at DESC LIMIT 1`,
-		tokenID,
-		app,
-	)
-	return scanDeployApprovalRequest(row)
-}
+func (d *Database) FindDeployApprovalRequest(lookup DeployApprovalLookup) (*DeployApprovalRequest, error) {
+	clauses := []string{"dr.target_api_token_id = ?"}
+	args := []interface{}{lookup.TokenID}
 
-// ActiveDeployApprovalRequestByTokenAndRelease finds the active approval for a specific release.
-// This is used for release promotion and other release-specific actions.
-func (d *Database) ActiveDeployApprovalRequestByTokenAndRelease(tokenID int64, app, releaseID string) (*DeployApprovalRequest, error) {
-	row := d.queryRow(
-		deployApprovalRequestSelect+` WHERE dr.target_api_token_id = ? AND dr.app = ? AND dr.release_id = ? AND dr.status = 'approved' AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW()) ORDER BY dr.approved_at DESC LIMIT 1`,
-		tokenID,
-		app,
-		releaseID,
-	)
+	if lookup.GitCommitHash != "" {
+		clauses = append(clauses, "dr.git_commit_hash = ?")
+		args = append(args, lookup.GitCommitHash)
+	}
+	if lookup.App != "" {
+		clauses = append(clauses, "dr.app = ?")
+		args = append(args, lookup.App)
+	}
+	if lookup.ReleaseID != "" {
+		clauses = append(clauses, "dr.release_id = ?")
+		args = append(args, lookup.ReleaseID)
+	}
+	if lookup.BuildID != "" {
+		clauses = append(clauses, "dr.build_id = ?")
+		args = append(args, lookup.BuildID)
+	}
+	if lookup.ProcessID != "" {
+		clauses = append(clauses, "? = ANY(dr.process_ids)")
+		args = append(args, lookup.ProcessID)
+	}
+
+	// Status filter
+	if lookup.StatusFilter != "" && lookup.StatusFilter != "any" {
+		clauses = append(clauses, "dr.status = ?")
+		args = append(args, lookup.StatusFilter)
+		// For approved status, also check expiration
+		if lookup.StatusFilter == "approved" {
+			clauses = append(clauses, "(dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW())")
+		}
+	}
+
+	query := deployApprovalRequestSelect + " WHERE " + strings.Join(clauses, " AND ") + " ORDER BY dr.created_at DESC LIMIT 1"
+	row := d.queryRow(query, args...)
 	return scanDeployApprovalRequest(row)
 }
 
@@ -585,6 +631,90 @@ func (d *Database) MarkDeployApprovalRequestPromoted(id int64, app, releaseID st
 	}
 	if rows == 0 {
 		return fmt.Errorf("deployment approval not found or already promoted")
+	}
+	return nil
+}
+
+func (d *Database) AppendProcessIDToDeployApprovalRequest(id int64, processID string) error {
+	if strings.TrimSpace(processID) == "" {
+		return fmt.Errorf("process id required")
+	}
+
+	// Use PostgreSQL array_append to add process ID
+	// exec_commands will be populated when actual exec commands are run
+	res, err := d.exec(
+		`UPDATE deploy_approval_requests
+         SET process_ids = array_append(COALESCE(process_ids, ARRAY[]::TEXT[]), ?),
+             updated_at = NOW()
+         WHERE id = ? AND status = ?`,
+		processID,
+		id,
+		DeployApprovalRequestStatusApproved,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to append process ID to deploy approval request: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to append process ID to deploy approval request: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deployment approval not found or not approved")
+	}
+	return nil
+}
+
+func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID, command string) error {
+	if strings.TrimSpace(processID) == "" {
+		return fmt.Errorf("process id required")
+	}
+	if strings.TrimSpace(command) == "" {
+		return fmt.Errorf("command required")
+	}
+
+	// Add command to exec_commands JSONB object
+	res, err := d.exec(
+		`UPDATE deploy_approval_requests
+         SET exec_commands = COALESCE(exec_commands, '{}'::jsonb) || jsonb_build_object(?::text, ?::text),
+             updated_at = NOW()
+         WHERE id = ? AND status = ?`,
+		processID,
+		command,
+		id,
+		DeployApprovalRequestStatusApproved,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to append exec command to deploy approval request: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to append exec command to deploy approval request: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deployment approval not found or not approved")
+	}
+	return nil
+}
+
+// MarkDeployApprovalAsDeployed marks a deploy approval request as deployed after successful promotion
+func (d *Database) MarkDeployApprovalAsDeployed(id int64) error {
+	res, err := d.exec(
+		`UPDATE deploy_approval_requests
+         SET status = ?, updated_at = NOW()
+         WHERE id = ? AND status = ?`,
+		DeployApprovalRequestStatusDeployed,
+		id,
+		DeployApprovalRequestStatusApproved,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to mark deploy approval as deployed: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to mark deploy approval as deployed: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deployment approval not found or not approved")
 	}
 	return nil
 }

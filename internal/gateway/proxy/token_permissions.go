@@ -63,34 +63,38 @@ func tokenHasPermission(perms []string, target string) bool {
 // Returns (allowed, approvalTracker, error). If deploy_with_approval grants access, it returns
 // the approval tracker in the context for downstream validation.
 func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.AuthUser, rack config.RackConfig, resource rbac.Resource, action rbac.Action) (bool, *deployApprovalTracker, error) {
-	if authUser == nil || authUser.TokenID == nil {
+	deny := func() (bool, *deployApprovalTracker, error) {
 		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 	}
 
-	// Check if token has direct permission (no approval required)
+	// Must be an API token
+	if authUser == nil || authUser.TokenID == nil {
+		return deny()
+	}
+
+	// Direct permission wins
 	if h.hasAPITokenPermission(authUser, resource, action) {
 		return true, nil, nil
 	}
 
-	// If token doesn't have direct permission, check if deploy_with_approval can grant it
-	// deploy_with_approval only grants access to specific deployment actions when an approval exists
+	// Only certain actions are approval-gated
 	isApprovalGatedAction := (resource == rbac.ResourceObject && action == rbac.ActionCreate) ||
-		(resource == rbac.ResourceBuild && action == rbac.ActionCreate) ||
-		(resource == rbac.ResourceRelease && (action == rbac.ActionCreate || action == rbac.ActionPromote)) ||
-		(resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate))
+		(resource == rbac.ResourceBuild && (action == rbac.ActionCreate || action == rbac.ActionRead)) ||
+		(resource == rbac.ResourceRelease && action == rbac.ActionPromote) ||
+		(resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate)) ||
+		(resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path))
 
 	if !isApprovalGatedAction {
-		// This action cannot be granted via deploy_with_approval
+		// Not directly allowed and not approval-gated
 		return false, nil, nil
 	}
 
-	// Check if token has deploy_with_approval permission
-	hasDeployWithApproval := tokenHasPermission(authUser.Permissions, rbac.Convox(rbac.ResourceDeploy, rbac.ActionDeployWithApproval))
-	if !hasDeployWithApproval {
+	// Caller must have deploy_with_approval permission
+	if !tokenHasPermission(authUser.Permissions, rbac.Convox(rbac.ResourceDeploy, rbac.ActionDeployWithApproval)) {
 		return false, nil, nil
 	}
 
-	// If deploy approvals are disabled, allow the action
+	// Global bypass
 	if h.config != nil && h.config.DeployApprovalsDisabled {
 		return true, nil, nil
 	}
@@ -99,67 +103,147 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		return false, nil, fmt.Errorf("database unavailable for deploy approvals")
 	}
 
-	// Extract app from URL path (e.g., /apps/{app}/releases/RXXX/promote or /apps/{app}/processes/PID/exec)
+	// Resolve app
 	app := extractAppFromPath(r.URL.Path)
 	if app == "" {
-		return false, nil, &deployApprovalError{status: http.StatusBadRequest, message: "app not found in deploy approval request"}
+		return deny()
 	}
 
-	var req *db.DeployApprovalRequest
-	var err error
+	// Lookup matching approval
+	var (
+		req *db.DeployApprovalRequest
+		err error
+	)
 
-	// For object:create, build:create, release:create, and process actions, look up approval by token+app
-	// (no release ID exists yet for these actions)
-	// For release:promote, require specific release approval (release already exists)
-	if resource == rbac.ResourceRelease && action == rbac.ActionPromote {
-		// Release promote requires specific release approval
+	switch {
+	case resource == rbac.ResourceObject && action == rbac.ActionCreate:
+		// Object upload - check that object_url is not already set
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:      *authUser.TokenID,
+			App:          app,
+			StatusFilter: "approved",
+		})
+		if err == nil && req != nil && req.ObjectURL != "" {
+			return false, nil, &deployApprovalError{
+				status:  http.StatusConflict,
+				message: "an archive has already been uploaded for this deploy approval request",
+			}
+		}
+
+	case resource == rbac.ResourceBuild && action == rbac.ActionCreate:
+		// Build creation - check that build_id is not already set
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:      *authUser.TokenID,
+			App:          app,
+			StatusFilter: "approved",
+		})
+		if err == nil && req != nil && (req.BuildID != "" || req.ReleaseID != "") {
+			return false, nil, &deployApprovalError{
+				status:  http.StatusConflict,
+				message: "a build has already been created for this deploy approval request",
+			}
+		}
+
+	case resource == rbac.ResourceBuild && action == rbac.ActionRead:
+		buildID := extractBuildIDFromPath(r.URL.Path)
+		if buildID == "" {
+			return deny()
+		}
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:      *authUser.TokenID,
+			App:          app,
+			BuildID:      buildID,
+			StatusFilter: "approved",
+		})
+
+	case resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path):
+		buildID := extractBuildIDFromPath(r.URL.Path)
+		if buildID == "" {
+			return deny()
+		}
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:      *authUser.TokenID,
+			App:          app,
+			BuildID:      buildID,
+			StatusFilter: "approved",
+		})
+
+	case resource == rbac.ResourceProcess && action == rbac.ActionStart:
+		// Process start requires Release header with approved release
+		releaseID := r.Header.Get("Release")
+		if releaseID == "" {
+			return deny()
+		}
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:      *authUser.TokenID,
+			App:          app,
+			ReleaseID:    releaseID,
+			StatusFilter: "approved",
+		})
+
+	case resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate):
+		// Process exec/terminate requires the process ID to be in an approved deployment's process_ids
+		processID := extractProcessIDFromPath(r.URL.Path)
+		if processID == "" {
+			return deny()
+		}
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:      *authUser.TokenID,
+			App:          app,
+			ProcessID:    processID,
+			StatusFilter: "approved",
+		})
+
+	case resource == rbac.ResourceRelease && action == rbac.ActionPromote:
 		releaseID := extractReleaseIDFromPath(r.URL.Path)
 		if releaseID == "" {
-			return false, nil, &deployApprovalError{status: http.StatusBadRequest, message: "release_id not found in request"}
+			return deny()
+		}
+		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+			TokenID:   *authUser.TokenID,
+			App:       app,
+			ReleaseID: releaseID,
+		})
+		if err == nil && req != nil {
+			if req.Status == db.DeployApprovalRequestStatusDeployed {
+				return false, nil, &deployApprovalError{
+					status:  http.StatusConflict,
+					message: "this deploy approval request has already been deployed",
+				}
+			}
+			if req.Status != db.DeployApprovalRequestStatusApproved {
+				return deny()
+			}
 		}
 
-		req, err = h.database.ActiveDeployApprovalRequestByTokenAndRelease(*authUser.TokenID, app, releaseID)
-		if err != nil {
-			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-			}
-			return false, nil, err
-		}
-
-		if req == nil {
-			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-		}
-	} else {
-		// All other approval-gated actions use token+app lookup
-		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
-		if err != nil {
-			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-			}
-			return false, nil, err
-		}
-		if req == nil {
-			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-		}
+	default:
+		return false, nil, fmt.Errorf("unsupported deploy approval resource/action: %s:%s", resource, action)
 	}
 
-	// Check if approval is expired
+	if err != nil {
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			return deny()
+		}
+		return false, nil, err
+	}
+	if req == nil {
+		return deny()
+	}
+
+	// Common checks
 	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
-		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+		return deny()
 	}
-
-	// Check if approval is in approved status
 	if req.Status != db.DeployApprovalRequestStatusApproved {
-		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+		return deny()
 	}
 
 	tracker := &deployApprovalTracker{
 		request:   req,
 		tokenID:   *authUser.TokenID,
 		app:       app,
-		releaseID: req.ReleaseID, // Use the release ID from the approval request
+		releaseID: req.ReleaseID, // may be nil
 	}
-
 	return true, tracker, nil
 }
 

@@ -19,36 +19,13 @@ type buildApprovalContext struct {
 
 type buildApprovalContextKey struct{}
 
-// validateBuildRequest validates build requests against active deploy approvals.
-// This is only called for API token requests.
-// It verifies that:
-// 1. The git-sha in the request matches an approved deploy request
-// 2. The manifest in the tarball matches the required image tag pattern
-// 3. Stores the context for updating the approval after successful build
-func (h *Handler) validateBuildRequest(r *http.Request, bodyBytes []byte, tokenID int64) error {
-	// Parse request body (form-encoded: git-sha=abc123&url=object://app/tmp/file.tgz&manifest=convox.yml&...)
+// validateBuildManifestForAllUsers validates build manifests against configured image patterns.
+// This applies to ALL users (admin, deployer, API tokens) and enforces security policies.
+func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, bodyBytes []byte) error {
+	// Parse request body (form-encoded: url=object://app/tmp/file.tgz&manifest=convox.yml&...)
 	vals, err := url.ParseQuery(string(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("invalid build request body")
-	}
-
-	gitSHA := strings.TrimSpace(vals.Get("git-sha"))
-	if gitSHA == "" {
-		// No git-sha in request, skip validation
-		return nil
-	}
-
-	// Check if there's an active approved deployment for this token and git commit
-	approval, err := h.database.ActiveDeployApprovalRequestByTokenAndCommit(tokenID, gitSHA)
-	if err != nil {
-		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-			return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
-		}
-		return fmt.Errorf("failed to check deploy approval: %w", err)
-	}
-
-	if approval == nil {
-		return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
 	}
 
 	// Get app name from path
@@ -72,11 +49,55 @@ func (h *Handler) validateBuildRequest(r *http.Request, bodyBytes []byte, tokenI
 			return fmt.Errorf("build request missing object URL")
 		}
 
+		// Get git commit for validation
+		gitSHA := strings.TrimSpace(vals.Get("git-sha"))
+		if gitSHA == "" {
+			return fmt.Errorf("git-sha is required when image pattern validation is configured")
+		}
+
 		// Validate the manifest from the tarball
-		if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPath, patternTemplate, approval.GitCommitHash); err != nil {
+		if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPath, patternTemplate, gitSHA); err != nil {
 			return fmt.Errorf("manifest validation failed: %w", err)
 		}
 	}
+
+	return nil
+}
+
+// validateBuildRequestForAPIToken validates build requests for API tokens with deploy approvals.
+// This is only called for API token requests and handles deploy approval tracking.
+func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []byte, tokenID int64) error {
+	// Parse request body (form-encoded: git-sha=abc123&url=object://app/tmp/file.tgz&manifest=convox.yml&...)
+	vals, err := url.ParseQuery(string(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("invalid build request body")
+	}
+
+	gitSHA := strings.TrimSpace(vals.Get("git-sha"))
+	if gitSHA == "" {
+		// No git-sha in request, skip deploy approval validation
+		return nil
+	}
+
+	// Check if there's an active approved deployment for this token and git commit
+	approval, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:       tokenID,
+		GitCommitHash: gitSHA,
+		StatusFilter:  "approved",
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
+		}
+		return fmt.Errorf("failed to check deploy approval: %w", err)
+	}
+
+	if approval == nil {
+		return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
+	}
+
+	// Get app name from path
+	app := extractAppFromPath(r.URL.Path)
 
 	// Store approval in context so we can update it after successful build
 	ctx := context.WithValue(r.Context(), buildApprovalContextKey{}, &buildApprovalContext{
@@ -91,22 +112,22 @@ func (h *Handler) validateBuildRequest(r *http.Request, bodyBytes []byte, tokenI
 
 // updateObjectURLApprovalTracking updates the deploy approval request with object_url
 // after a successful object upload
-func (h *Handler) updateObjectURLApprovalTracking(r *http.Request, objectURL string) {
+func (h *Handler) updateObjectURLApprovalTracking(r *http.Request, objectURL string) error {
 	val := r.Context().Value(deployApprovalContextKey)
 	tracker, ok := val.(*deployApprovalTracker)
 	if !ok || tracker == nil || tracker.request == nil {
-		return
+		return nil
 	}
 
 	if objectURL == "" {
-		return
+		return nil
 	}
 
 	err := h.database.UpdateDeployApprovalRequestObjectURL(tracker.request.ID, objectURL)
 	if err != nil {
-		// Log error but don't fail the request - upload already succeeded
-		fmt.Printf("WARNING: failed to update deploy approval object URL tracking: %v\n", err)
+		return fmt.Errorf("failed to track object URL for deployment approval: %w", err)
 	}
+	return nil
 }
 
 // updateBuildApprovalTracking updates the deploy approval request with build_id and release_id

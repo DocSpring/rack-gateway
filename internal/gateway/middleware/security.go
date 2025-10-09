@@ -444,7 +444,13 @@ func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.H
 				return
 			}
 		}
+		// RequestLogger is only for non-proxy routes (UI, auth, etc.)
+		// Proxy routes log themselves in proxy/handler.go
 		if audit.RequestAlreadyLogged(c.Request) {
+			return
+		}
+		// Skip proxy routes - they handle their own logging
+		if strings.HasPrefix(path, "/api/v1/convox/") {
 			return
 		}
 		userEmail := strings.TrimSpace(c.Request.Header.Get("X-User-Email"))

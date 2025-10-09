@@ -264,9 +264,29 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 
 - If CI fails remotely, use `fetch-github-actions-logs` to download and analyze failure logs
 
-### 🧪 Integration Tests
+### 🧪 Testing Rules for AI
 
-**IMPORTANT: AI must NEVER run `task dev` - this is strictly for humans only**
+**CRITICAL RULES - AI MUST FOLLOW:**
+
+1. ❌ **NEVER run `task dev`** - This is strictly for humans only
+2. ❌ **NEVER run `task go:e2e`** - E2E tests are run by humans only
+3. ❌ **NEVER run `task web:e2e`** - E2E tests are run by humans only
+4. ❌ **NEVER run `task e2e`** - E2E tests are run by humans only
+5. ✅ **ONLY run `task go:test`** - Unit and integration tests are safe for AI
+6. ✅ **ONLY run `task web:test`** - Unit tests are safe for AI
+7. ✅ **ONLY run `task lint:fix`** - Linting is safe for AI
+
+**Why AI cannot run E2E tests:**
+- E2E tests take 5-10 minutes to complete
+- They rebuild Docker containers and restart services
+- They require significant system resources
+- The human developer needs to run them manually when ready
+
+**What AI should do instead:**
+- Run `task go:test` to verify Go unit/integration tests pass
+- Run `task web:test` to verify web unit tests pass
+- Run `task lint:fix` to fix any linting issues
+- Tell the user "Please run `task go:e2e` to verify the E2E tests pass"
 
 **Two development modes:**
 

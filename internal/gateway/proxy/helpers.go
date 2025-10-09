@@ -93,6 +93,43 @@ func extractReleaseIDFromPath(path string) string {
 	return ""
 }
 
+// extractBuildIDFromPath extracts the build ID from a path
+func extractBuildIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, seg := range parts {
+		if seg == "builds" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
+// isBuildLogPath checks if the path is a build log request
+func isBuildLogPath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	// /apps/{app}/builds/{id}/logs
+	if len(parts) >= 4 {
+		for i, seg := range parts {
+			if seg == "builds" && i+2 < len(parts) && parts[i+2] == "logs" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// extractProcessIDFromPath extracts the process ID from a path
+func extractProcessIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	// /apps/{app}/processes/{id}/exec or /apps/{app}/processes/{id}
+	for i, seg := range parts {
+		if seg == "processes" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
 // extractJSONString safely extracts a string from a JSON interface value
 func extractJSONString(v interface{}) string {
 	if v == nil {
@@ -128,7 +165,7 @@ func forbiddenMessage(resource rbac.Resource, action rbac.Action) string {
 	case rbac.ResourceRelease:
 		switch action {
 		case rbac.ActionCreate, rbac.ActionPromote:
-			return "You don't have permission to deploy releases."
+			return "You don't have permission to promote releases."
 		}
 	}
 	return "permission denied"

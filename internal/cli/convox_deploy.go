@@ -17,7 +17,7 @@ func DeployCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "description", "file", "manifest", "no-cache", "replace", "wait")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "app", "description", "file", "manifest", "no-cache", "replace", "wait")
 			if err != nil {
 				return err
 			}

@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   build_id VARCHAR(120),
   release_id VARCHAR(120),
 
+  -- Process tracking for auditing
+  process_ids TEXT[],
+  exec_commands JSONB,
+
   -- Status and lifecycle
   status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','expired','deployed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -631,7 +631,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		require.Error(t, err, "ops should be blocked from deploying")
 		msg := string(output)
-		assert.True(t, strings.Contains(msg, "You don't have permission to deploy releases.") || strings.Contains(msg, "permission denied") || strings.Contains(msg, "MFA"), "should be blocked: %s", msg)
+		assert.True(t, strings.Contains(msg, "You don't have permission to promote releases.") || strings.Contains(msg, "permission denied") || strings.Contains(msg, "MFA"), "should be blocked: %s", msg)
 
 		// Try to create an app (should be blocked)
 		cmd = exec.Command("../../bin/rack-gateway", "apps", "create", "newapp")
@@ -649,7 +649,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "ops should be blocked from setting env vars")
-		assert.True(t, strings.Contains(string(output), "You don't have permission to deploy releases.") || strings.Contains(string(output), "MFA"), "should be blocked: %s", output)
+		assert.True(t, strings.Contains(string(output), "You don't have permission to promote releases.") || strings.Contains(string(output), "MFA"), "should be blocked: %s", output)
 	})
 
 	// Test 4: Unknown/unregistered user - should be blocked from everything
