@@ -144,13 +144,13 @@ rack-gateway deploy-approval list --status pending
 
 ## Configuration
 
-| Setting                     | Default             | Description                                                                        |
-| --------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| `DISABLE_DEPLOY_APPROVALS`  | `false`             | Skip approval checks entirely                                                      |
-| `DEPLOY_APPROVAL_WINDOW`    | `15m`               | Approval validity duration                                                         |
-| `ALLOWED_IMAGE_TAG_PATTERN` | `.*:{{GIT_COMMIT}}` | Regex pattern for validating image tags ({{GIT_COMMIT}} replaced with actual hash) |
-| `CI_INTEGRATION_ENABLED`    | `false`             | Enable automatic CI job approval after admin approval                              |
-| `CI_INTEGRATION_CONFIG`     | (none)              | JSONB config for CI provider (API tokens, job names, etc.)                         |
+| Setting                    | Default             | Description                                                                        |
+| -------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
+| `DISABLE_DEPLOY_APPROVALS` | `false`             | Skip approval checks entirely                                                      |
+| `DEPLOY_APPROVAL_WINDOW`   | `15m`               | Approval validity duration                                                         |
+| `ALLOWED_IMAGE_PATTERN`    | `.*:{{GIT_COMMIT}}` | Regex pattern for validating image tags ({{GIT_COMMIT}} replaced with actual hash) |
+| `CI_INTEGRATION_ENABLED`   | `false`             | Enable automatic CI job approval after admin approval                              |
+| `CI_INTEGRATION_CONFIG`    | (none)              | JSONB config for CI provider (API tokens, job names, etc.)                         |
 
 ## CI Integration
 

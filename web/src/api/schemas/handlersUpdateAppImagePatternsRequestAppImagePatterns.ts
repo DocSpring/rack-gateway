@@ -6,9 +6,6 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface AuthLoginResponse {
-  email: string;
-  expires_at: string;
-  name: string;
-  token: string;
-}
+export type HandlersUpdateAppImagePatternsRequestAppImagePatterns = {
+  [key: string]: string;
+};

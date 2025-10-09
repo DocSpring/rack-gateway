@@ -6,1509 +6,1509 @@
  * OpenAPI spec version: 1.0
  */
 import type {
-	AuthLoginStartResponse,
-	DbAPIToken,
-	DbCircleCISettings,
-	DbRackTLSCert,
-	DbUser,
-	GetAdminAuditExportParams,
-	GetAdminAuditParams,
-	GetAdminConfig200,
-	GetAdminDeployApprovalRequestsParams,
-	GetAdminRoles200,
-	GetAdminSettings200,
-	GetAuthCliCallbackParams,
-	GetAuthWebCallbackParams,
-	GetCreatedBy200,
-	GetCreatedByParams,
-	GetEnvParams,
-	GetRack200,
-	HandlersAuditLogsResponse,
-	HandlersBackupCodesResponse,
-	HandlersCLILoginCompleteRequest,
-	HandlersCLILoginResponse,
-	HandlersConfirmTOTPEnrollmentRequest,
-	HandlersConfirmWebAuthnEnrollmentRequest,
-	HandlersCreateAPITokenRequest,
-	HandlersCreateAPITokenResponse,
-	HandlersCreateDeployApprovalRequestRequest,
-	HandlersCreateUserRequest,
-	HandlersCurrentUserResponse,
-	HandlersDeployApprovalRequestList,
-	HandlersDeployApprovalRequestResponse,
-	HandlersEnvValuesResponse,
-	HandlersHealthResponse,
-	HandlersLockUserRequest,
-	HandlersMFAStatusResponse,
-	HandlersRevokeAllSessionsResponse,
-	HandlersRevokeSessionResponse,
-	HandlersStartTOTPEnrollmentResponse,
-	HandlersStartWebAuthnEnrollmentResponse,
-	HandlersStartYubiOTPEnrollmentRequest,
-	HandlersStartYubiOTPEnrollmentResponse,
-	HandlersStatusResponse,
-	HandlersTokenPermissionMetadata,
-	HandlersUpdateAPITokenRequest,
-	HandlersUpdateAllowDestructiveActionsRequest,
-	HandlersUpdateAppImagePatternsRequest,
-	HandlersUpdateApprovedCommandsRequest,
-	HandlersUpdateDeployApprovalRequestStatusRequest,
-	HandlersUpdateEnvValuesRequest,
-	HandlersUpdateEnvValuesResponse,
-	HandlersUpdateMFAMethodRequest,
-	HandlersUpdateMFASettingsRequest,
-	HandlersUpdatePreferredMFAMethodRequest,
-	HandlersUpdateProtectedEnvVarsRequest,
-	HandlersUpdateUserProfileRequest,
-	HandlersUpdateUserRolesRequest,
-	HandlersUserSessionResponse,
-	HandlersUserSummary,
-	HandlersVerifyMFARequest,
-	HandlersVerifyMFAResponse,
-	HandlersVerifyWebAuthnAssertionRequest,
-	HandlersWebAuthnAssertionStartResponse,
-	HandlersWebAuthnEnrollmentResponse,
-} from "./schemas";
+  AuthLoginStartResponse,
+  DbAPIToken,
+  DbCircleCISettings,
+  DbRackTLSCert,
+  DbUser,
+  GetAdminAuditExportParams,
+  GetAdminAuditParams,
+  GetAdminConfig200,
+  GetAdminDeployApprovalRequestsParams,
+  GetAdminRoles200,
+  GetAdminSettings200,
+  GetAuthCliCallbackParams,
+  GetAuthWebCallbackParams,
+  GetCreatedBy200,
+  GetCreatedByParams,
+  GetEnvParams,
+  GetRack200,
+  HandlersAuditLogsResponse,
+  HandlersBackupCodesResponse,
+  HandlersCLILoginCompleteRequest,
+  HandlersCLILoginResponse,
+  HandlersConfirmTOTPEnrollmentRequest,
+  HandlersConfirmWebAuthnEnrollmentRequest,
+  HandlersCreateAPITokenRequest,
+  HandlersCreateAPITokenResponse,
+  HandlersCreateDeployApprovalRequestRequest,
+  HandlersCreateUserRequest,
+  HandlersCurrentUserResponse,
+  HandlersDeployApprovalRequestList,
+  HandlersDeployApprovalRequestResponse,
+  HandlersEnvValuesResponse,
+  HandlersHealthResponse,
+  HandlersLockUserRequest,
+  HandlersMFAStatusResponse,
+  HandlersRevokeAllSessionsResponse,
+  HandlersRevokeSessionResponse,
+  HandlersStartTOTPEnrollmentResponse,
+  HandlersStartWebAuthnEnrollmentResponse,
+  HandlersStartYubiOTPEnrollmentRequest,
+  HandlersStartYubiOTPEnrollmentResponse,
+  HandlersStatusResponse,
+  HandlersTokenPermissionMetadata,
+  HandlersUpdateAPITokenRequest,
+  HandlersUpdateAllowDestructiveActionsRequest,
+  HandlersUpdateAppImagePatternsRequest,
+  HandlersUpdateApprovedCommandsRequest,
+  HandlersUpdateDeployApprovalRequestStatusRequest,
+  HandlersUpdateEnvValuesRequest,
+  HandlersUpdateEnvValuesResponse,
+  HandlersUpdateMFAMethodRequest,
+  HandlersUpdateMFASettingsRequest,
+  HandlersUpdatePreferredMFAMethodRequest,
+  HandlersUpdateProtectedEnvVarsRequest,
+  HandlersUpdateUserProfileRequest,
+  HandlersUpdateUserRolesRequest,
+  HandlersUserSessionResponse,
+  HandlersUserSummary,
+  HandlersVerifyMFARequest,
+  HandlersVerifyMFAResponse,
+  HandlersVerifyWebAuthnAssertionRequest,
+  HandlersWebAuthnAssertionStartResponse,
+  HandlersWebAuthnEnrollmentResponse,
+} from './schemas';
 
-import { createGatewayClient } from "./http-client";
+import { createGatewayClient } from './http-client';
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 export const getRackGatewayAPI = () => {
-	/**
-	 * Returns paginated audit logs filtered by optional query parameters.
-	 * @summary List audit logs
-	 */
-	const getAdminAudit = (
-		params?: GetAdminAuditParams,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersAuditLogsResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersAuditLogsResponse>(
-			{ url: `/admin/audit`, method: "GET", params },
-			options,
-		);
-	};
+  /**
+   * Returns paginated audit logs filtered by optional query parameters.
+   * @summary List audit logs
+   */
+  const getAdminAudit = (
+    params?: GetAdminAuditParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersAuditLogsResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersAuditLogsResponse>(
+      { url: `/admin/audit`, method: 'GET', params },
+      options,
+    );
+  };
 
-	/**
-	 * Streams the filtered audit log dataset as CSV.
-	 * @summary Export audit logs as CSV
-	 */
-	const getAdminAuditExport = (
-		params?: GetAdminAuditExportParams,
-		options?: SecondParameter<typeof createGatewayClient<Blob>>,
-	) => {
-		return createGatewayClient<Blob>(
-			{
-				url: `/admin/audit/export`,
-				method: "GET",
-				params,
-				responseType: "blob",
-			},
-			options,
-		);
-	};
+  /**
+   * Streams the filtered audit log dataset as CSV.
+   * @summary Export audit logs as CSV
+   */
+  const getAdminAuditExport = (
+    params?: GetAdminAuditExportParams,
+    options?: SecondParameter<typeof createGatewayClient<Blob>>,
+  ) => {
+    return createGatewayClient<Blob>(
+      {
+        url: `/admin/audit/export`,
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns the legacy user/domain configuration payload (deprecated).
-	 * @summary Get legacy configuration
-	 */
-	const getAdminConfig = (
-		options?: SecondParameter<typeof createGatewayClient<GetAdminConfig200>>,
-	) => {
-		return createGatewayClient<GetAdminConfig200>(
-			{ url: `/admin/config`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns the legacy user/domain configuration payload (deprecated).
+   * @summary Get legacy configuration
+   */
+  const getAdminConfig = (
+    options?: SecondParameter<typeof createGatewayClient<GetAdminConfig200>>,
+  ) => {
+    return createGatewayClient<GetAdminConfig200>(
+      { url: `/admin/config`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Placeholder endpoint retained for backwards compatibility. Always returns 501.
-	 * @summary Update legacy configuration
-	 */
-	const putAdminConfig = (
-		options?: SecondParameter<typeof createGatewayClient<unknown>>,
-	) => {
-		return createGatewayClient<unknown>(
-			{ url: `/admin/config`, method: "PUT" },
-			options,
-		);
-	};
+  /**
+   * Placeholder endpoint retained for backwards compatibility. Always returns 501.
+   * @summary Update legacy configuration
+   */
+  const putAdminConfig = (
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/admin/config`, method: 'PUT' },
+      options,
+    );
+  };
 
-	/**
-	 * Lists deploy approval requests (admin).
-	 * @summary List deploy approvals
-	 */
-	const getAdminDeployApprovalRequests = (
-		params?: GetAdminDeployApprovalRequestsParams,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersDeployApprovalRequestList>
-		>,
-	) => {
-		return createGatewayClient<HandlersDeployApprovalRequestList>(
-			{ url: `/admin/deploy-approval-requests`, method: "GET", params },
-			options,
-		);
-	};
+  /**
+   * Lists deploy approval requests (admin).
+   * @summary List deploy approvals
+   */
+  const getAdminDeployApprovalRequests = (
+    params?: GetAdminDeployApprovalRequestsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestList>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestList>(
+      { url: `/admin/deploy-approval-requests`, method: 'GET', params },
+      options,
+    );
+  };
 
-	/**
-	 * Approves a pending deploy approval request.
-	 * @summary Approve deploy approval request
-	 */
-	const postAdminDeployApprovalRequestsIdApprove = (
-		id: string,
-		handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-			{
-				url: `/admin/deploy-approval-requests/${id}/approve`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateDeployApprovalRequestStatusRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Approves a pending deploy approval request.
+   * @summary Approve deploy approval request
+   */
+  const postAdminDeployApprovalRequestsIdApprove = (
+    id: string,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      {
+        url: `/admin/deploy-approval-requests/${id}/approve`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Rejects a pending deploy approval request.
-	 * @summary Reject deploy approval request
-	 */
-	const postAdminDeployApprovalRequestsIdReject = (
-		id: string,
-		handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-			{
-				url: `/admin/deploy-approval-requests/${id}/reject`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateDeployApprovalRequestStatusRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Rejects a pending deploy approval request.
+   * @summary Reject deploy approval request
+   */
+  const postAdminDeployApprovalRequestsIdReject = (
+    id: string,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      {
+        url: `/admin/deploy-approval-requests/${id}/reject`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns metadata and permissions for each gateway RBAC role.
-	 * @summary List RBAC roles
-	 */
-	const getAdminRoles = (
-		options?: SecondParameter<typeof createGatewayClient<GetAdminRoles200>>,
-	) => {
-		return createGatewayClient<GetAdminRoles200>(
-			{ url: `/admin/roles`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns metadata and permissions for each gateway RBAC role.
+   * @summary List RBAC roles
+   */
+  const getAdminRoles = (
+    options?: SecondParameter<typeof createGatewayClient<GetAdminRoles200>>,
+  ) => {
+    return createGatewayClient<GetAdminRoles200>(
+      { url: `/admin/roles`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns administrative settings including protected env vars and rack TLS state.
-	 * @summary Get gateway admin settings
-	 */
-	const getAdminSettings = (
-		options?: SecondParameter<typeof createGatewayClient<GetAdminSettings200>>,
-	) => {
-		return createGatewayClient<GetAdminSettings200>(
-			{ url: `/admin/settings`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns administrative settings including protected env vars and rack TLS state.
+   * @summary Get gateway admin settings
+   */
+  const getAdminSettings = (
+    options?: SecondParameter<typeof createGatewayClient<GetAdminSettings200>>,
+  ) => {
+    return createGatewayClient<GetAdminSettings200>(
+      { url: `/admin/settings`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Enables or disables destructive actions such as rack resets.
-	 * @summary Toggle destructive action protections
-	 */
-	const putAdminSettingsAllowDestructiveActions = (
-		handlersUpdateAllowDestructiveActionsRequest: HandlersUpdateAllowDestructiveActionsRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/admin/settings/allow_destructive_actions`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateAllowDestructiveActionsRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Enables or disables destructive actions such as rack resets.
+   * @summary Toggle destructive action protections
+   */
+  const putAdminSettingsAllowDestructiveActions = (
+    handlersUpdateAllowDestructiveActionsRequest: HandlersUpdateAllowDestructiveActionsRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/allow_destructive_actions`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateAllowDestructiveActionsRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Updates the map of app names to image tag regex patterns used for manifest validation
-	 * @summary Update app image tag validation patterns
-	 */
-	const putAdminSettingsAppImagePatterns = (
-		handlersUpdateAppImagePatternsRequest: HandlersUpdateAppImagePatternsRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/admin/settings/app_image_patterns`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateAppImagePatternsRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Updates the map of app names to image tag regex patterns used for manifest validation
+   * @summary Update app image tag validation patterns
+   */
+  const putAdminSettingsAppImagePatterns = (
+    handlersUpdateAppImagePatternsRequest: HandlersUpdateAppImagePatternsRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/app_image_patterns`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateAppImagePatternsRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Replaces the list of approved commands that CI/CD tokens can execute in processes.
-	 * @summary Update approved commands for CI/CD exec
-	 */
-	const putAdminSettingsApprovedCommands = (
-		handlersUpdateApprovedCommandsRequest: HandlersUpdateApprovedCommandsRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/admin/settings/approved_commands`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateApprovedCommandsRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Replaces the list of approved commands that CI/CD tokens can execute in processes.
+   * @summary Update approved commands for CI/CD exec
+   */
+  const putAdminSettingsApprovedCommands = (
+    handlersUpdateApprovedCommandsRequest: HandlersUpdateApprovedCommandsRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/approved_commands`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateApprovedCommandsRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns CircleCI integration configuration including API token and approval job name.
-	 * @summary Get CircleCI integration settings
-	 */
-	const getAdminSettingsCircleci = (
-		options?: SecondParameter<typeof createGatewayClient<DbCircleCISettings>>,
-	) => {
-		return createGatewayClient<DbCircleCISettings>(
-			{ url: `/admin/settings/circleci`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns CircleCI integration configuration including API token and approval job name.
+   * @summary Get CircleCI integration settings
+   */
+  const getAdminSettingsCircleci = (
+    options?: SecondParameter<typeof createGatewayClient<DbCircleCISettings>>,
+  ) => {
+    return createGatewayClient<DbCircleCISettings>(
+      { url: `/admin/settings/circleci`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Configures whether MFA is required for all users.
-	 * @summary Update MFA enforcement defaults
-	 */
-	const putAdminSettingsMfa = (
-		handlersUpdateMFASettingsRequest: HandlersUpdateMFASettingsRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/admin/settings/mfa`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateMFASettingsRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Configures whether MFA is required for all users.
+   * @summary Update MFA enforcement defaults
+   */
+  const putAdminSettingsMfa = (
+    handlersUpdateMFASettingsRequest: HandlersUpdateMFASettingsRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/mfa`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateMFASettingsRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Replaces the list of protected environment variable keys.
-	 * @summary Update protected environment variables
-	 */
-	const putAdminSettingsProtectedEnvVars = (
-		handlersUpdateProtectedEnvVarsRequest: HandlersUpdateProtectedEnvVarsRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/admin/settings/protected_env_vars`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateProtectedEnvVarsRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Replaces the list of protected environment variable keys.
+   * @summary Update protected environment variables
+   */
+  const putAdminSettingsProtectedEnvVars = (
+    handlersUpdateProtectedEnvVarsRequest: HandlersUpdateProtectedEnvVarsRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/settings/protected_env_vars`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateProtectedEnvVarsRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Fetches and stores the latest TLS certificate for the configured Convox rack.
-	 * @summary Refresh rack TLS certificate
-	 */
-	const postAdminSettingsRackTlsCertRefresh = (
-		options?: SecondParameter<typeof createGatewayClient<DbRackTLSCert>>,
-	) => {
-		return createGatewayClient<DbRackTLSCert>(
-			{ url: `/admin/settings/rack_tls_cert/refresh`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Fetches and stores the latest TLS certificate for the configured Convox rack.
+   * @summary Refresh rack TLS certificate
+   */
+  const postAdminSettingsRackTlsCertRefresh = (
+    options?: SecondParameter<typeof createGatewayClient<DbRackTLSCert>>,
+  ) => {
+    return createGatewayClient<DbRackTLSCert>(
+      { url: `/admin/settings/rack_tls_cert/refresh`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns all API tokens configured in the system.
-	 * @summary List API tokens
-	 */
-	const getAdminTokens = (
-		options?: SecondParameter<typeof createGatewayClient<DbAPIToken[]>>,
-	) => {
-		return createGatewayClient<DbAPIToken[]>(
-			{ url: `/admin/tokens`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns all API tokens configured in the system.
+   * @summary List API tokens
+   */
+  const getAdminTokens = (
+    options?: SecondParameter<typeof createGatewayClient<DbAPIToken[]>>,
+  ) => {
+    return createGatewayClient<DbAPIToken[]>(
+      { url: `/admin/tokens`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Generates a new API token for automation or CI/CD use.
-	 * @summary Create an API token
-	 */
-	const postAdminTokens = (
-		handlersCreateAPITokenRequest: HandlersCreateAPITokenRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersCreateAPITokenResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersCreateAPITokenResponse>(
-			{
-				url: `/admin/tokens`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersCreateAPITokenRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Generates a new API token for automation or CI/CD use.
+   * @summary Create an API token
+   */
+  const postAdminTokens = (
+    handlersCreateAPITokenRequest: HandlersCreateAPITokenRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersCreateAPITokenResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersCreateAPITokenResponse>(
+      {
+        url: `/admin/tokens`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCreateAPITokenRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns the permission catalog and metadata used to build API token forms.
-	 * @summary Get token permission metadata
-	 */
-	const getAdminTokensPermissions = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersTokenPermissionMetadata>
-		>,
-	) => {
-		return createGatewayClient<HandlersTokenPermissionMetadata>(
-			{ url: `/admin/tokens/permissions`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns the permission catalog and metadata used to build API token forms.
+   * @summary Get token permission metadata
+   */
+  const getAdminTokensPermissions = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersTokenPermissionMetadata>
+    >,
+  ) => {
+    return createGatewayClient<HandlersTokenPermissionMetadata>(
+      { url: `/admin/tokens/permissions`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns metadata for a specific API token.
-	 * @summary Get API token
-	 */
-	const getAdminTokensTokenID = (
-		tokenID: string,
-		options?: SecondParameter<typeof createGatewayClient<DbAPIToken>>,
-	) => {
-		return createGatewayClient<DbAPIToken>(
-			{ url: `/admin/tokens/${tokenID}`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns metadata for a specific API token.
+   * @summary Get API token
+   */
+  const getAdminTokensTokenID = (
+    tokenID: string,
+    options?: SecondParameter<typeof createGatewayClient<DbAPIToken>>,
+  ) => {
+    return createGatewayClient<DbAPIToken>(
+      { url: `/admin/tokens/${tokenID}`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Updates token metadata such as name and permissions.
-	 * @summary Update an API token
-	 */
-	const putAdminTokensTokenID = (
-		tokenID: string,
-		handlersUpdateAPITokenRequest: HandlersUpdateAPITokenRequest,
-		options?: SecondParameter<typeof createGatewayClient<DbAPIToken>>,
-	) => {
-		return createGatewayClient<DbAPIToken>(
-			{
-				url: `/admin/tokens/${tokenID}`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateAPITokenRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Updates token metadata such as name and permissions.
+   * @summary Update an API token
+   */
+  const putAdminTokensTokenID = (
+    tokenID: string,
+    handlersUpdateAPITokenRequest: HandlersUpdateAPITokenRequest,
+    options?: SecondParameter<typeof createGatewayClient<DbAPIToken>>,
+  ) => {
+    return createGatewayClient<DbAPIToken>(
+      {
+        url: `/admin/tokens/${tokenID}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateAPITokenRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Permanently removes an API token.
-	 * @summary Delete an API token
-	 */
-	const deleteAdminTokensTokenID = (
-		tokenID: string,
-		options?: SecondParameter<typeof createGatewayClient<string>>,
-	) => {
-		return createGatewayClient<string>(
-			{ url: `/admin/tokens/${tokenID}`, method: "DELETE" },
-			options,
-		);
-	};
+  /**
+   * Permanently removes an API token.
+   * @summary Delete an API token
+   */
+  const deleteAdminTokensTokenID = (
+    tokenID: string,
+    options?: SecondParameter<typeof createGatewayClient<string>>,
+  ) => {
+    return createGatewayClient<string>(
+      { url: `/admin/tokens/${tokenID}`, method: 'DELETE' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns every user configured in the gateway along with role assignments.
-	 * @summary List all gateway users
-	 */
-	const getAdminUsers = (
-		options?: SecondParameter<typeof createGatewayClient<DbUser[]>>,
-	) => {
-		return createGatewayClient<DbUser[]>(
-			{ url: `/admin/users`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns every user configured in the gateway along with role assignments.
+   * @summary List all gateway users
+   */
+  const getAdminUsers = (
+    options?: SecondParameter<typeof createGatewayClient<DbUser[]>>,
+  ) => {
+    return createGatewayClient<DbUser[]>(
+      { url: `/admin/users`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Creates a new gateway user with the provided roles.
-	 * @summary Create a user
-	 */
-	const postAdminUsers = (
-		handlersCreateUserRequest: HandlersCreateUserRequest,
-		options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
-	) => {
-		return createGatewayClient<HandlersUserSummary>(
-			{
-				url: `/admin/users`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersCreateUserRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Creates a new gateway user with the provided roles.
+   * @summary Create a user
+   */
+  const postAdminUsers = (
+    handlersCreateUserRequest: HandlersCreateUserRequest,
+    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  ) => {
+    return createGatewayClient<HandlersUserSummary>(
+      {
+        url: `/admin/users`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCreateUserRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns details for a single gateway user.
-	 * @summary Get a user
-	 */
-	const getAdminUsersEmail = (
-		email: string,
-		options?: SecondParameter<typeof createGatewayClient<DbUser>>,
-	) => {
-		return createGatewayClient<DbUser>(
-			{ url: `/admin/users/${email}`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns details for a single gateway user.
+   * @summary Get a user
+   */
+  const getAdminUsersEmail = (
+    email: string,
+    options?: SecondParameter<typeof createGatewayClient<DbUser>>,
+  ) => {
+    return createGatewayClient<DbUser>(
+      { url: `/admin/users/${email}`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Updates a user's display name and/or email.
-	 * @summary Update user profile
-	 */
-	const putAdminUsersEmail = (
-		email: string,
-		handlersUpdateUserProfileRequest: HandlersUpdateUserProfileRequest,
-		options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
-	) => {
-		return createGatewayClient<HandlersUserSummary>(
-			{
-				url: `/admin/users/${email}`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateUserProfileRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Updates a user's display name and/or email.
+   * @summary Update user profile
+   */
+  const putAdminUsersEmail = (
+    email: string,
+    handlersUpdateUserProfileRequest: HandlersUpdateUserProfileRequest,
+    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  ) => {
+    return createGatewayClient<HandlersUserSummary>(
+      {
+        url: `/admin/users/${email}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateUserProfileRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Removes a gateway user and revokes all sessions they own.
-	 * @summary Delete a user
-	 */
-	const deleteAdminUsersEmail = (
-		email: string,
-		options?: SecondParameter<typeof createGatewayClient<string>>,
-	) => {
-		return createGatewayClient<string>(
-			{ url: `/admin/users/${email}`, method: "DELETE" },
-			options,
-		);
-	};
+  /**
+   * Removes a gateway user and revokes all sessions they own.
+   * @summary Delete a user
+   */
+  const deleteAdminUsersEmail = (
+    email: string,
+    options?: SecondParameter<typeof createGatewayClient<string>>,
+  ) => {
+    return createGatewayClient<string>(
+      { url: `/admin/users/${email}`, method: 'DELETE' },
+      options,
+    );
+  };
 
-	/**
-	 * Locks a user account to prevent login
-	 * @summary Lock a user account
-	 */
-	const postAdminUsersEmailLock = (
-		email: string,
-		handlersLockUserRequest: HandlersLockUserRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/admin/users/${email}/lock`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersLockUserRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Locks a user account to prevent login
+   * @summary Lock a user account
+   */
+  const postAdminUsersEmailLock = (
+    email: string,
+    handlersLockUserRequest: HandlersLockUserRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/admin/users/${email}/lock`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersLockUserRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Replaces the role assignments for a user.
-	 * @summary Update user roles
-	 */
-	const putAdminUsersEmailRoles = (
-		email: string,
-		handlersUpdateUserRolesRequest: HandlersUpdateUserRolesRequest,
-		options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
-	) => {
-		return createGatewayClient<HandlersUserSummary>(
-			{
-				url: `/admin/users/${email}/roles`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateUserRolesRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Replaces the role assignments for a user.
+   * @summary Update user roles
+   */
+  const putAdminUsersEmailRoles = (
+    email: string,
+    handlersUpdateUserRolesRequest: HandlersUpdateUserRolesRequest,
+    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  ) => {
+    return createGatewayClient<HandlersUserSummary>(
+      {
+        url: `/admin/users/${email}/roles`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateUserRolesRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns the active (non-revoked) web sessions for the specified user.
-	 * @summary List active sessions for a user
-	 */
-	const getAdminUsersEmailSessions = (
-		email: string,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersUserSessionResponse[]>
-		>,
-	) => {
-		return createGatewayClient<HandlersUserSessionResponse[]>(
-			{ url: `/admin/users/${email}/sessions`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns the active (non-revoked) web sessions for the specified user.
+   * @summary List active sessions for a user
+   */
+  const getAdminUsersEmailSessions = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersUserSessionResponse[]>
+    >,
+  ) => {
+    return createGatewayClient<HandlersUserSessionResponse[]>(
+      { url: `/admin/users/${email}/sessions`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Revokes every active session belonging to the specified user.
-	 * @summary Revoke all sessions for a user
-	 */
-	const postAdminUsersEmailSessionsRevokeAll = (
-		email: string,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersRevokeAllSessionsResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersRevokeAllSessionsResponse>(
-			{ url: `/admin/users/${email}/sessions/revoke_all`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Revokes every active session belonging to the specified user.
+   * @summary Revoke all sessions for a user
+   */
+  const postAdminUsersEmailSessionsRevokeAll = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersRevokeAllSessionsResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersRevokeAllSessionsResponse>(
+      { url: `/admin/users/${email}/sessions/revoke_all`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Revokes a single session for the specified user.
-	 * @summary Revoke a user session
-	 */
-	const postAdminUsersEmailSessionsSessionIDRevoke = (
-		email: string,
-		sessionID: number,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersRevokeSessionResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersRevokeSessionResponse>(
-			{
-				url: `/admin/users/${email}/sessions/${sessionID}/revoke`,
-				method: "POST",
-			},
-			options,
-		);
-	};
+  /**
+   * Revokes a single session for the specified user.
+   * @summary Revoke a user session
+   */
+  const postAdminUsersEmailSessionsSessionIDRevoke = (
+    email: string,
+    sessionID: number,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersRevokeSessionResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersRevokeSessionResponse>(
+      {
+        url: `/admin/users/${email}/sessions/${sessionID}/revoke`,
+        method: 'POST',
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Unlocks a previously locked user account
-	 * @summary Unlock a user account
-	 */
-	const postAdminUsersEmailUnlock = (
-		email: string,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{ url: `/admin/users/${email}/unlock`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Unlocks a previously locked user account
+   * @summary Unlock a user account
+   */
+  const postAdminUsersEmailUnlock = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/admin/users/${email}/unlock`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Stores the OAuth authorization code for the CLI to finish login.
-	 * @summary Complete CLI OAuth redirect
-	 */
-	const getAuthCliCallback = (
-		params: GetAuthCliCallbackParams,
-		options?: SecondParameter<typeof createGatewayClient<unknown>>,
-	) => {
-		return createGatewayClient<unknown>(
-			{ url: `/auth/cli/callback`, method: "GET", params },
-			options,
-		);
-	};
+  /**
+   * Stores the OAuth authorization code for the CLI to finish login.
+   * @summary Complete CLI OAuth redirect
+   */
+  const getAuthCliCallback = (
+    params: GetAuthCliCallbackParams,
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/auth/cli/callback`, method: 'GET', params },
+      options,
+    );
+  };
 
-	/**
-	 * Exchanges the stored authorization code and PKCE verifier for a session token.
-	 * @summary Finalize CLI OAuth login
-	 */
-	const postAuthCliComplete = (
-		handlersCLILoginCompleteRequest: HandlersCLILoginCompleteRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersCLILoginResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersCLILoginResponse>(
-			{
-				url: `/auth/cli/complete`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersCLILoginCompleteRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Exchanges the stored authorization code and PKCE verifier for a session token.
+   * @summary Finalize CLI OAuth login
+   */
+  const postAuthCliComplete = (
+    handlersCLILoginCompleteRequest: HandlersCLILoginCompleteRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersCLILoginResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersCLILoginResponse>(
+      {
+        url: `/auth/cli/complete`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCLILoginCompleteRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Initiates the CLI OAuth flow and returns PKCE parameters.
-	 * @summary Start CLI OAuth login
-	 */
-	const postAuthCliStart = (
-		options?: SecondParameter<
-			typeof createGatewayClient<AuthLoginStartResponse>
-		>,
-	) => {
-		return createGatewayClient<AuthLoginStartResponse>(
-			{ url: `/auth/cli/start`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Initiates the CLI OAuth flow and returns PKCE parameters.
+   * @summary Start CLI OAuth login
+   */
+  const postAuthCliStart = (
+    options?: SecondParameter<
+      typeof createGatewayClient<AuthLoginStartResponse>
+    >,
+  ) => {
+    return createGatewayClient<AuthLoginStartResponse>(
+      { url: `/auth/cli/start`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Generates a new set of MFA backup codes. All prior codes become invalid.
-	 * @summary Regenerate backup codes
-	 */
-	const postAuthMfaBackupCodesRegenerate = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersBackupCodesResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersBackupCodesResponse>(
-			{ url: `/auth/mfa/backup-codes/regenerate`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Generates a new set of MFA backup codes. All prior codes become invalid.
+   * @summary Regenerate backup codes
+   */
+  const postAuthMfaBackupCodesRegenerate = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersBackupCodesResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersBackupCodesResponse>(
+      { url: `/auth/mfa/backup-codes/regenerate`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Confirms the TOTP secret using a verification code and optionally trusts the device.
-	 * @summary Confirm TOTP enrollment
-	 */
-	const postAuthMfaEnrollTotpConfirm = (
-		handlersConfirmTOTPEnrollmentRequest: HandlersConfirmTOTPEnrollmentRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersVerifyMFAResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersVerifyMFAResponse>(
-			{
-				url: `/auth/mfa/enroll/totp/confirm`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersConfirmTOTPEnrollmentRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Confirms the TOTP secret using a verification code and optionally trusts the device.
+   * @summary Confirm TOTP enrollment
+   */
+  const postAuthMfaEnrollTotpConfirm = (
+    handlersConfirmTOTPEnrollmentRequest: HandlersConfirmTOTPEnrollmentRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersVerifyMFAResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      {
+        url: `/auth/mfa/enroll/totp/confirm`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersConfirmTOTPEnrollmentRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
-	 * @summary Start TOTP enrollment
-	 */
-	const postAuthMfaEnrollTotpStart = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStartTOTPEnrollmentResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStartTOTPEnrollmentResponse>(
-			{ url: `/auth/mfa/enroll/totp/start`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
+   * @summary Start TOTP enrollment
+   */
+  const postAuthMfaEnrollTotpStart = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStartTOTPEnrollmentResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStartTOTPEnrollmentResponse>(
+      { url: `/auth/mfa/enroll/totp/start`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Completes WebAuthn credential registration with the client's credential response.
-	 * @summary Confirm WebAuthn enrollment
-	 */
-	const postAuthMfaEnrollWebauthnConfirm = (
-		handlersConfirmWebAuthnEnrollmentRequest: HandlersConfirmWebAuthnEnrollmentRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersWebAuthnEnrollmentResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersWebAuthnEnrollmentResponse>(
-			{
-				url: `/auth/mfa/enroll/webauthn/confirm`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersConfirmWebAuthnEnrollmentRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Completes WebAuthn credential registration with the client's credential response.
+   * @summary Confirm WebAuthn enrollment
+   */
+  const postAuthMfaEnrollWebauthnConfirm = (
+    handlersConfirmWebAuthnEnrollmentRequest: HandlersConfirmWebAuthnEnrollmentRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersWebAuthnEnrollmentResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersWebAuthnEnrollmentResponse>(
+      {
+        url: `/auth/mfa/enroll/webauthn/confirm`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersConfirmWebAuthnEnrollmentRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Begins WebAuthn credential registration. Returns a challenge for the browser.
-	 * @summary Start WebAuthn enrollment
-	 */
-	const postAuthMfaEnrollWebauthnStart = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStartWebAuthnEnrollmentResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStartWebAuthnEnrollmentResponse>(
-			{ url: `/auth/mfa/enroll/webauthn/start`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Begins WebAuthn credential registration. Returns a challenge for the browser.
+   * @summary Start WebAuthn enrollment
+   */
+  const postAuthMfaEnrollWebauthnStart = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStartWebAuthnEnrollmentResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStartWebAuthnEnrollmentResponse>(
+      { url: `/auth/mfa/enroll/webauthn/start`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
-	 * @summary Start Yubico OTP enrollment
-	 */
-	const postAuthMfaEnrollYubiotpStart = (
-		handlersStartYubiOTPEnrollmentRequest: HandlersStartYubiOTPEnrollmentRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStartYubiOTPEnrollmentResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStartYubiOTPEnrollmentResponse>(
-			{
-				url: `/auth/mfa/enroll/yubiotp/start`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersStartYubiOTPEnrollmentRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
+   * @summary Start Yubico OTP enrollment
+   */
+  const postAuthMfaEnrollYubiotpStart = (
+    handlersStartYubiOTPEnrollmentRequest: HandlersStartYubiOTPEnrollmentRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStartYubiOTPEnrollmentResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStartYubiOTPEnrollmentResponse>(
+      {
+        url: `/auth/mfa/enroll/yubiotp/start`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersStartYubiOTPEnrollmentRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Updates the label of an MFA method
-	 * @summary Update MFA method label
-	 */
-	const putAuthMfaMethodsMethodID = (
-		methodID: number,
-		handlersUpdateMFAMethodRequest: HandlersUpdateMFAMethodRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/auth/mfa/methods/${methodID}`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateMFAMethodRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Updates the label of an MFA method
+   * @summary Update MFA method label
+   */
+  const putAuthMfaMethodsMethodID = (
+    methodID: number,
+    handlersUpdateMFAMethodRequest: HandlersUpdateMFAMethodRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/auth/mfa/methods/${methodID}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateMFAMethodRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Removes an existing MFA method for the current user.
-	 * @summary Delete an MFA method
-	 */
-	const deleteAuthMfaMethodsMethodID = (
-		methodID: number,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{ url: `/auth/mfa/methods/${methodID}`, method: "DELETE" },
-			options,
-		);
-	};
+  /**
+   * Removes an existing MFA method for the current user.
+   * @summary Delete an MFA method
+   */
+  const deleteAuthMfaMethodsMethodID = (
+    methodID: number,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/auth/mfa/methods/${methodID}`, method: 'DELETE' },
+      options,
+    );
+  };
 
-	/**
-	 * Sets the user's preferred MFA method for sign-in (totp or webauthn)
-	 * @summary Update preferred MFA method
-	 */
-	const putAuthMfaPreferredMethod = (
-		handlersUpdatePreferredMFAMethodRequest: HandlersUpdatePreferredMFAMethodRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{
-				url: `/auth/mfa/preferred-method`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdatePreferredMFAMethodRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Sets the user's preferred MFA method for sign-in (totp or webauthn)
+   * @summary Update preferred MFA method
+   */
+  const putAuthMfaPreferredMethod = (
+    handlersUpdatePreferredMFAMethodRequest: HandlersUpdatePreferredMFAMethodRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/auth/mfa/preferred-method`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdatePreferredMFAMethodRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns enrollment state, configured methods, trusted devices, and backup code summary.
-	 * @summary Get MFA status for current session
-	 */
-	const getAuthMfaStatus = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersMFAStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersMFAStatusResponse>(
-			{ url: `/auth/mfa/status`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns enrollment state, configured methods, trusted devices, and backup code summary.
+   * @summary Get MFA status for current session
+   */
+  const getAuthMfaStatus = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersMFAStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersMFAStatusResponse>(
+      { url: `/auth/mfa/status`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Revokes a trusted device, requiring MFA on next login from that device.
-	 * @summary Revoke a trusted device
-	 */
-	const deleteAuthMfaTrustedDevicesDeviceID = (
-		deviceID: number,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersStatusResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersStatusResponse>(
-			{ url: `/auth/mfa/trusted-devices/${deviceID}`, method: "DELETE" },
-			options,
-		);
-	};
+  /**
+   * Revokes a trusted device, requiring MFA on next login from that device.
+   * @summary Revoke a trusted device
+   */
+  const deleteAuthMfaTrustedDevicesDeviceID = (
+    deviceID: number,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/auth/mfa/trusted-devices/${deviceID}`, method: 'DELETE' },
+      options,
+    );
+  };
 
-	/**
-	 * Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
-	 * @summary Verify MFA step-up
-	 */
-	const postAuthMfaVerify = (
-		handlersVerifyMFARequest: HandlersVerifyMFARequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersVerifyMFAResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersVerifyMFAResponse>(
-			{
-				url: `/auth/mfa/verify`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersVerifyMFARequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
+   * @summary Verify MFA step-up
+   */
+  const postAuthMfaVerify = (
+    handlersVerifyMFARequest: HandlersVerifyMFARequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersVerifyMFAResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      {
+        url: `/auth/mfa/verify`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersVerifyMFARequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.
-	 * @summary Start WebAuthn assertion for MFA
-	 */
-	const postAuthMfaWebauthnAssertionStart = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersWebAuthnAssertionStartResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersWebAuthnAssertionStartResponse>(
-			{ url: `/auth/mfa/webauthn/assertion/start`, method: "POST" },
-			options,
-		);
-	};
+  /**
+   * Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.
+   * @summary Start WebAuthn assertion for MFA
+   */
+  const postAuthMfaWebauthnAssertionStart = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersWebAuthnAssertionStartResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersWebAuthnAssertionStartResponse>(
+      { url: `/auth/mfa/webauthn/assertion/start`, method: 'POST' },
+      options,
+    );
+  };
 
-	/**
-	 * Completes the WebAuthn assertion ceremony by validating the signed response.
-	 * @summary Verify WebAuthn assertion for MFA
-	 */
-	const postAuthMfaWebauthnAssertionVerify = (
-		handlersVerifyWebAuthnAssertionRequest: HandlersVerifyWebAuthnAssertionRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersVerifyMFAResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersVerifyMFAResponse>(
-			{
-				url: `/auth/mfa/webauthn/assertion/verify`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersVerifyWebAuthnAssertionRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Completes the WebAuthn assertion ceremony by validating the signed response.
+   * @summary Verify WebAuthn assertion for MFA
+   */
+  const postAuthMfaWebauthnAssertionVerify = (
+    handlersVerifyWebAuthnAssertionRequest: HandlersVerifyWebAuthnAssertionRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersVerifyMFAResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      {
+        url: `/auth/mfa/webauthn/assertion/verify`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersVerifyWebAuthnAssertionRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
-	 * @summary Complete web OAuth login
-	 */
-	const getAuthWebCallback = (
-		params: GetAuthWebCallbackParams,
-		options?: SecondParameter<typeof createGatewayClient<unknown>>,
-	) => {
-		return createGatewayClient<unknown>(
-			{ url: `/auth/web/callback`, method: "GET", params },
-			options,
-		);
-	};
+  /**
+   * Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
+   * @summary Complete web OAuth login
+   */
+  const getAuthWebCallback = (
+    params: GetAuthWebCallbackParams,
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/auth/web/callback`, method: 'GET', params },
+      options,
+    );
+  };
 
-	/**
-	 * Redirects the browser to the identity provider for login.
-	 * @summary Start web OAuth login
-	 */
-	const getAuthWebLogin = (
-		options?: SecondParameter<typeof createGatewayClient<unknown>>,
-	) => {
-		return createGatewayClient<unknown>(
-			{ url: `/auth/web/login`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Redirects the browser to the identity provider for login.
+   * @summary Start web OAuth login
+   */
+  const getAuthWebLogin = (
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/auth/web/login`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Revokes the active session, clears the cookie, and redirects to the login screen.
-	 * @summary Log out current session
-	 */
-	const getAuthWebLogout = (
-		options?: SecondParameter<typeof createGatewayClient<unknown>>,
-	) => {
-		return createGatewayClient<unknown>(
-			{ url: `/auth/web/logout`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Revokes the active session, clears the cookie, and redirects to the login screen.
+   * @summary Log out current session
+   */
+  const getAuthWebLogout = (
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/auth/web/logout`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns creator information for the supplied resource identifiers.
-	 * @summary Get resource creator metadata
-	 */
-	const getCreatedBy = (
-		params: GetCreatedByParams,
-		options?: SecondParameter<typeof createGatewayClient<GetCreatedBy200>>,
-	) => {
-		return createGatewayClient<GetCreatedBy200>(
-			{ url: `/created-by`, method: "GET", params },
-			options,
-		);
-	};
+  /**
+   * Returns creator information for the supplied resource identifiers.
+   * @summary Get resource creator metadata
+   */
+  const getCreatedBy = (
+    params: GetCreatedByParams,
+    options?: SecondParameter<typeof createGatewayClient<GetCreatedBy200>>,
+  ) => {
+    return createGatewayClient<GetCreatedBy200>(
+      { url: `/created-by`, method: 'GET', params },
+      options,
+    );
+  };
 
-	/**
-	 * Creates a manual approval record tied to an API token.
-	 * @summary Request deploy approval
-	 */
-	const postDeployApprovalRequests = (
-		handlersCreateDeployApprovalRequestRequest: HandlersCreateDeployApprovalRequestRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-			{
-				url: `/deploy-approval-requests`,
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				data: handlersCreateDeployApprovalRequestRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Creates a manual approval record tied to an API token.
+   * @summary Request deploy approval
+   */
+  const postDeployApprovalRequests = (
+    handlersCreateDeployApprovalRequestRequest: HandlersCreateDeployApprovalRequestRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      {
+        url: `/deploy-approval-requests`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCreateDeployApprovalRequestRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns the status of a deploy approval request.
-	 * @summary Get deploy approval
-	 */
-	const getDeployApprovalRequestsId = (
-		id: string,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-			{ url: `/deploy-approval-requests/${id}`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns the status of a deploy approval request.
+   * @summary Get deploy approval
+   */
+  const getDeployApprovalRequestsId = (
+    id: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      { url: `/deploy-approval-requests/${id}`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns environment variables for a Convox app, masking secrets unless authorized.
-	 * @summary Get environment variables
-	 */
-	const getEnv = (
-		params: GetEnvParams,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersEnvValuesResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersEnvValuesResponse>(
-			{ url: `/env`, method: "GET", params },
-			options,
-		);
-	};
+  /**
+   * Returns environment variables for a Convox app, masking secrets unless authorized.
+   * @summary Get environment variables
+   */
+  const getEnv = (
+    params: GetEnvParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersEnvValuesResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersEnvValuesResponse>(
+      { url: `/env`, method: 'GET', params },
+      options,
+    );
+  };
 
-	/**
-	 * Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
-	 * @summary Update environment variables
-	 */
-	const putEnv = (
-		handlersUpdateEnvValuesRequest: HandlersUpdateEnvValuesRequest,
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersUpdateEnvValuesResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersUpdateEnvValuesResponse>(
-			{
-				url: `/env`,
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				data: handlersUpdateEnvValuesRequest,
-			},
-			options,
-		);
-	};
+  /**
+   * Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+   * @summary Update environment variables
+   */
+  const putEnv = (
+    handlersUpdateEnvValuesRequest: HandlersUpdateEnvValuesRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersUpdateEnvValuesResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersUpdateEnvValuesResponse>(
+      {
+        url: `/env`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateEnvValuesRequest,
+      },
+      options,
+    );
+  };
 
-	/**
-	 * Returns service health information.
-	 * @summary Health check
-	 */
-	const getHealth = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersHealthResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersHealthResponse>(
-			{ url: `/health`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns service health information.
+   * @summary Health check
+   */
+  const getHealth = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersHealthResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersHealthResponse>(
+      { url: `/health`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Returns the authenticated user's profile, roles, and default rack summary.
-	 * @summary Get current user profile
-	 */
-	const getMe = (
-		options?: SecondParameter<
-			typeof createGatewayClient<HandlersCurrentUserResponse>
-		>,
-	) => {
-		return createGatewayClient<HandlersCurrentUserResponse>(
-			{ url: `/me`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Returns the authenticated user's profile, roles, and default rack summary.
+   * @summary Get current user profile
+   */
+  const getMe = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersCurrentUserResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersCurrentUserResponse>(
+      { url: `/me`, method: 'GET' },
+      options,
+    );
+  };
 
-	/**
-	 * Proxies the rack /system endpoint returning the rack's metadata.
-	 * @summary Get rack system information
-	 */
-	const getRack = (
-		options?: SecondParameter<typeof createGatewayClient<GetRack200>>,
-	) => {
-		return createGatewayClient<GetRack200>(
-			{ url: `/rack`, method: "GET" },
-			options,
-		);
-	};
+  /**
+   * Proxies the rack /system endpoint returning the rack's metadata.
+   * @summary Get rack system information
+   */
+  const getRack = (
+    options?: SecondParameter<typeof createGatewayClient<GetRack200>>,
+  ) => {
+    return createGatewayClient<GetRack200>(
+      { url: `/rack`, method: 'GET' },
+      options,
+    );
+  };
 
-	return {
-		getAdminAudit,
-		getAdminAuditExport,
-		getAdminConfig,
-		putAdminConfig,
-		getAdminDeployApprovalRequests,
-		postAdminDeployApprovalRequestsIdApprove,
-		postAdminDeployApprovalRequestsIdReject,
-		getAdminRoles,
-		getAdminSettings,
-		putAdminSettingsAllowDestructiveActions,
-		putAdminSettingsAppImagePatterns,
-		putAdminSettingsApprovedCommands,
-		getAdminSettingsCircleci,
-		putAdminSettingsMfa,
-		putAdminSettingsProtectedEnvVars,
-		postAdminSettingsRackTlsCertRefresh,
-		getAdminTokens,
-		postAdminTokens,
-		getAdminTokensPermissions,
-		getAdminTokensTokenID,
-		putAdminTokensTokenID,
-		deleteAdminTokensTokenID,
-		getAdminUsers,
-		postAdminUsers,
-		getAdminUsersEmail,
-		putAdminUsersEmail,
-		deleteAdminUsersEmail,
-		postAdminUsersEmailLock,
-		putAdminUsersEmailRoles,
-		getAdminUsersEmailSessions,
-		postAdminUsersEmailSessionsRevokeAll,
-		postAdminUsersEmailSessionsSessionIDRevoke,
-		postAdminUsersEmailUnlock,
-		getAuthCliCallback,
-		postAuthCliComplete,
-		postAuthCliStart,
-		postAuthMfaBackupCodesRegenerate,
-		postAuthMfaEnrollTotpConfirm,
-		postAuthMfaEnrollTotpStart,
-		postAuthMfaEnrollWebauthnConfirm,
-		postAuthMfaEnrollWebauthnStart,
-		postAuthMfaEnrollYubiotpStart,
-		putAuthMfaMethodsMethodID,
-		deleteAuthMfaMethodsMethodID,
-		putAuthMfaPreferredMethod,
-		getAuthMfaStatus,
-		deleteAuthMfaTrustedDevicesDeviceID,
-		postAuthMfaVerify,
-		postAuthMfaWebauthnAssertionStart,
-		postAuthMfaWebauthnAssertionVerify,
-		getAuthWebCallback,
-		getAuthWebLogin,
-		getAuthWebLogout,
-		getCreatedBy,
-		postDeployApprovalRequests,
-		getDeployApprovalRequestsId,
-		getEnv,
-		putEnv,
-		getHealth,
-		getMe,
-		getRack,
-	};
+  return {
+    getAdminAudit,
+    getAdminAuditExport,
+    getAdminConfig,
+    putAdminConfig,
+    getAdminDeployApprovalRequests,
+    postAdminDeployApprovalRequestsIdApprove,
+    postAdminDeployApprovalRequestsIdReject,
+    getAdminRoles,
+    getAdminSettings,
+    putAdminSettingsAllowDestructiveActions,
+    putAdminSettingsAppImagePatterns,
+    putAdminSettingsApprovedCommands,
+    getAdminSettingsCircleci,
+    putAdminSettingsMfa,
+    putAdminSettingsProtectedEnvVars,
+    postAdminSettingsRackTlsCertRefresh,
+    getAdminTokens,
+    postAdminTokens,
+    getAdminTokensPermissions,
+    getAdminTokensTokenID,
+    putAdminTokensTokenID,
+    deleteAdminTokensTokenID,
+    getAdminUsers,
+    postAdminUsers,
+    getAdminUsersEmail,
+    putAdminUsersEmail,
+    deleteAdminUsersEmail,
+    postAdminUsersEmailLock,
+    putAdminUsersEmailRoles,
+    getAdminUsersEmailSessions,
+    postAdminUsersEmailSessionsRevokeAll,
+    postAdminUsersEmailSessionsSessionIDRevoke,
+    postAdminUsersEmailUnlock,
+    getAuthCliCallback,
+    postAuthCliComplete,
+    postAuthCliStart,
+    postAuthMfaBackupCodesRegenerate,
+    postAuthMfaEnrollTotpConfirm,
+    postAuthMfaEnrollTotpStart,
+    postAuthMfaEnrollWebauthnConfirm,
+    postAuthMfaEnrollWebauthnStart,
+    postAuthMfaEnrollYubiotpStart,
+    putAuthMfaMethodsMethodID,
+    deleteAuthMfaMethodsMethodID,
+    putAuthMfaPreferredMethod,
+    getAuthMfaStatus,
+    deleteAuthMfaTrustedDevicesDeviceID,
+    postAuthMfaVerify,
+    postAuthMfaWebauthnAssertionStart,
+    postAuthMfaWebauthnAssertionVerify,
+    getAuthWebCallback,
+    getAuthWebLogin,
+    getAuthWebLogout,
+    getCreatedBy,
+    postDeployApprovalRequests,
+    getDeployApprovalRequestsId,
+    getEnv,
+    putEnv,
+    getHealth,
+    getMe,
+    getRack,
+  };
 };
 export type GetAdminAuditResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminAudit"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminAudit']>>
 >;
 export type GetAdminAuditExportResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminAuditExport"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminAuditExport']>
+  >
 >;
 export type GetAdminConfigResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminConfig"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminConfig']>>
 >;
 export type PutAdminConfigResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["putAdminConfig"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminConfig']>>
 >;
 export type GetAdminDeployApprovalRequestsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["getAdminDeployApprovalRequests"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['getAdminDeployApprovalRequests']
+    >
+  >
 >;
 export type PostAdminDeployApprovalRequestsIdApproveResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["postAdminDeployApprovalRequestsIdApprove"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postAdminDeployApprovalRequestsIdApprove']
+    >
+  >
 >;
 export type PostAdminDeployApprovalRequestsIdRejectResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["postAdminDeployApprovalRequestsIdReject"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postAdminDeployApprovalRequestsIdReject']
+    >
+  >
 >;
 export type GetAdminRolesResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminRoles"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminRoles']>>
 >;
 export type GetAdminSettingsResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminSettings"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettings']>>
 >;
 export type PutAdminSettingsAllowDestructiveActionsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["putAdminSettingsAllowDestructiveActions"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['putAdminSettingsAllowDestructiveActions']
+    >
+  >
 >;
 export type PutAdminSettingsAppImagePatternsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["putAdminSettingsAppImagePatterns"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAdminSettingsAppImagePatterns']
+    >
+  >
 >;
 export type PutAdminSettingsApprovedCommandsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["putAdminSettingsApprovedCommands"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAdminSettingsApprovedCommands']
+    >
+  >
 >;
 export type GetAdminSettingsCircleciResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminSettingsCircleci"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettingsCircleci']>
+  >
 >;
 export type PutAdminSettingsMfaResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["putAdminSettingsMfa"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminSettingsMfa']>
+  >
 >;
 export type PutAdminSettingsProtectedEnvVarsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["putAdminSettingsProtectedEnvVars"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAdminSettingsProtectedEnvVars']
+    >
+  >
 >;
 export type PostAdminSettingsRackTlsCertRefreshResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["postAdminSettingsRackTlsCertRefresh"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postAdminSettingsRackTlsCertRefresh']
+    >
+  >
 >;
 export type GetAdminTokensResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminTokens"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminTokens']>>
 >;
 export type PostAdminTokensResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAdminTokens"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAdminTokens']>>
 >;
 export type GetAdminTokensPermissionsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["getAdminTokensPermissions"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['getAdminTokensPermissions']
+    >
+  >
 >;
 export type GetAdminTokensTokenIDResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminTokensTokenID"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminTokensTokenID']>
+  >
 >;
 export type PutAdminTokensTokenIDResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["putAdminTokensTokenID"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminTokensTokenID']>
+  >
 >;
 export type DeleteAdminTokensTokenIDResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["deleteAdminTokensTokenID"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminTokensTokenID']>
+  >
 >;
 export type GetAdminUsersResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminUsers"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminUsers']>>
 >;
 export type PostAdminUsersResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAdminUsers"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAdminUsers']>>
 >;
 export type GetAdminUsersEmailResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["getAdminUsersEmail"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminUsersEmail']>
+  >
 >;
 export type PutAdminUsersEmailResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["putAdminUsersEmail"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminUsersEmail']>
+  >
 >;
 export type DeleteAdminUsersEmailResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["deleteAdminUsersEmail"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminUsersEmail']>
+  >
 >;
 export type PostAdminUsersEmailLockResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["postAdminUsersEmailLock"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['postAdminUsersEmailLock']>
+  >
 >;
 export type PutAdminUsersEmailRolesResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["putAdminUsersEmailRoles"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminUsersEmailRoles']>
+  >
 >;
 export type GetAdminUsersEmailSessionsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["getAdminUsersEmailSessions"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['getAdminUsersEmailSessions']
+    >
+  >
 >;
 export type PostAdminUsersEmailSessionsRevokeAllResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["postAdminUsersEmailSessionsRevokeAll"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postAdminUsersEmailSessionsRevokeAll']
+    >
+  >
 >;
 export type PostAdminUsersEmailSessionsSessionIDRevokeResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["postAdminUsersEmailSessionsSessionIDRevoke"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postAdminUsersEmailSessionsSessionIDRevoke']
+    >
+  >
 >;
 export type PostAdminUsersEmailUnlockResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAdminUsersEmailUnlock"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAdminUsersEmailUnlock']
+    >
+  >
 >;
 export type GetAuthCliCallbackResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthCliCallback"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthCliCallback']>
+  >
 >;
 export type PostAuthCliCompleteResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthCliComplete"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliComplete']>
+  >
 >;
 export type PostAuthCliStartResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthCliStart"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliStart']>>
 >;
 export type PostAuthMfaBackupCodesRegenerateResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaBackupCodesRegenerate"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaBackupCodesRegenerate']
+    >
+  >
 >;
 export type PostAuthMfaEnrollTotpConfirmResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaEnrollTotpConfirm"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaEnrollTotpConfirm']
+    >
+  >
 >;
 export type PostAuthMfaEnrollTotpStartResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaEnrollTotpStart"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaEnrollTotpStart']
+    >
+  >
 >;
 export type PostAuthMfaEnrollWebauthnConfirmResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaEnrollWebauthnConfirm"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaEnrollWebauthnConfirm']
+    >
+  >
 >;
 export type PostAuthMfaEnrollWebauthnStartResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaEnrollWebauthnStart"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaEnrollWebauthnStart']
+    >
+  >
 >;
 export type PostAuthMfaEnrollYubiotpStartResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaEnrollYubiotpStart"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaEnrollYubiotpStart']
+    >
+  >
 >;
 export type PutAuthMfaMethodsMethodIDResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["putAuthMfaMethodsMethodID"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAuthMfaMethodsMethodID']
+    >
+  >
 >;
 export type DeleteAuthMfaMethodsMethodIDResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["deleteAuthMfaMethodsMethodID"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['deleteAuthMfaMethodsMethodID']
+    >
+  >
 >;
 export type PutAuthMfaPreferredMethodResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["putAuthMfaPreferredMethod"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAuthMfaPreferredMethod']
+    >
+  >
 >;
 export type GetAuthMfaStatusResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthMfaStatus"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthMfaStatus']>>
 >;
 export type DeleteAuthMfaTrustedDevicesDeviceIDResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<
-				typeof getRackGatewayAPI
-			>["deleteAuthMfaTrustedDevicesDeviceID"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['deleteAuthMfaTrustedDevicesDeviceID']
+    >
+  >
 >;
 export type PostAuthMfaVerifyResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["postAuthMfaVerify"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthMfaVerify']>>
 >;
 export type PostAuthMfaWebauthnAssertionStartResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaWebauthnAssertionStart"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaWebauthnAssertionStart']
+    >
+  >
 >;
 export type PostAuthMfaWebauthnAssertionVerifyResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postAuthMfaWebauthnAssertionVerify"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaWebauthnAssertionVerify']
+    >
+  >
 >;
 export type GetAuthWebCallbackResult = NonNullable<
-	Awaited<
-		ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebCallback"]>
-	>
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthWebCallback']>
+  >
 >;
 export type GetAuthWebLoginResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebLogin"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthWebLogin']>>
 >;
 export type GetAuthWebLogoutResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getAuthWebLogout"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthWebLogout']>>
 >;
 export type GetCreatedByResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getCreatedBy"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getCreatedBy']>>
 >;
 export type PostDeployApprovalRequestsResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["postDeployApprovalRequests"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postDeployApprovalRequests']
+    >
+  >
 >;
 export type GetDeployApprovalRequestsIdResult = NonNullable<
-	Awaited<
-		ReturnType<
-			ReturnType<typeof getRackGatewayAPI>["getDeployApprovalRequestsId"]
-		>
-	>
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['getDeployApprovalRequestsId']
+    >
+  >
 >;
 export type GetEnvResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getEnv"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getEnv']>>
 >;
 export type PutEnvResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["putEnv"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putEnv']>>
 >;
 export type GetHealthResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getHealth"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getHealth']>>
 >;
 export type GetMeResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getMe"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getMe']>>
 >;
 export type GetRackResult = NonNullable<
-	Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>["getRack"]>>
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getRack']>>
 >;
