@@ -94,6 +94,158 @@ The `fetch-github-actions-logs` script downloads logs for all failing jobs to `t
 3. Use `rg` to search for the actual error messages
 4. Fix the issues and repeat
 
+## 🌳 AST-GREP - Code Search and Extraction
+
+`ast-grep` is a structural code search tool that understands Go syntax via AST (Abstract Syntax Tree) matching.
+
+### Refactoring Large Go Files - The Effective Method
+
+This is the **most effective way** to split a large Go file into multiple smaller files:
+
+**Step 1: Create extraction script with exact signatures**
+
+```bash
+cat > /tmp/extract_functions.sh << 'EOF'
+#!/bin/bash
+{
+echo 'package proxy
+
+import (
+    // Add necessary imports here
+)
+'
+
+# Extract each function with its EXACT signature
+ast-grep run -l go -p 'func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
+echo
+ast-grep run -l go -p 'func diffParams(before, after map[string]string) []paramChange' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
+echo
+
+} > internal/gateway/proxy/new_file.go
+EOF
+chmod +x /tmp/extract_functions.sh && /tmp/extract_functions.sh
+```
+
+**Step 2: Fix imports automatically**
+
+```bash
+task go:imports  # Runs goimports -w . to fix all imports
+```
+
+**Step 3: Verify compilation**
+
+```bash
+task go:build
+```
+
+**Why This Works:**
+- ✅ Extracts complete function bodies with all comments and formatting
+- ✅ Works for functions of any size (even 200+ line functions)
+- ✅ Preserves exact code structure
+- ✅ goimports automatically fixes imports
+- ✅ Can extract multiple functions to one file in a single script
+- ✅ Uses jq to parse JSON output cleanly
+
+**Real Example from Refactoring:**
+
+```bash
+# Extracted 5 functions from 2300-line handler.go to rack_params.go
+{
+echo 'package proxy
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+)
+
+type paramChange struct {
+	Key    string
+	Before string
+	After  string
+}
+'
+
+ast-grep run -l go -p 'func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
+echo
+ast-grep run -l go -p 'func diffParams(before, after map[string]string) []paramChange' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
+echo
+ast-grep run -l go -p 'func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes []paramChange)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
+echo
+
+} > internal/gateway/proxy/rack_params.go
+
+# Then fix imports
+task go:imports
+```
+
+### Key Learnings
+
+**1. File Extension Matters**
+- ast-grep ONLY processes `.go` files by default
+- Files with `.bak` or other extensions are ignored
+- Use `--no-ignore hidden` flag OR copy to a `.go` file first
+
+**2. Pattern Syntax**
+- `$VAR` - matches a single AST node (like `$FUNC`, `$TYPE`)
+- `$$` - matches zero or more AST nodes (parameters, statements, etc.)
+- Meta variables must be UPPERCASE: `$FUNC` ✅, `$func` ❌
+
+**3. Limitations**
+- `$$` CANNOT be used in return type positions - causes parse errors
+- Pattern must be valid Go code that tree-sitter can parse
+- For complex signatures, use concrete types instead of wildcards
+- Struct extraction with `$$` doesn't work well - just copy the struct manually
+
+**4. Working Examples**
+
+```bash
+# ✅ Extract a function with exact signature
+ast-grep run -l go -p 'func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path string, authUser *auth.AuthUser) (int, error)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
+
+# ✅ Match function with concrete return type
+ast-grep run -l go -p 'func (h *Handler) logAudit($R, $AL) error' -l go file.go
+
+# ❌ FAILS - $$ in return type position
+ast-grep run -l go -p 'func (h *Handler) $FUNC($$) $$ { $$ }' file.go
+# Error: "Multiple AST nodes are detected"
+
+# ❌ FAILS - .bak extension ignored
+ast-grep run -l go -p 'package proxy' file.go.bak
+# Returns nothing (file ignored)
+
+# ✅ WORKS - proper .go extension
+ast-grep run -l go -p 'package proxy' file.go
+# file.go:1:package proxy
+```
+
+**5. Debug Mode**
+
+Use `--debug-query=pattern` to see how ast-grep parses your pattern:
+
+```bash
+ast-grep run -p 'func (h *Handler) logAudit($$) $$' -l go --debug-query=pattern file.go
+```
+
+This shows the AST tree and reveals `ERROR` nodes where the pattern is malformed.
+
+**6. Best Practices**
+
+For extracting Go functions:
+1. Know the exact signature (return types, parameter types)
+2. Use specific types instead of `$$` for return values
+3. Use `$$` ONLY for parameter lists and function bodies
+4. Verify file has `.go` extension
+5. Use `--json=compact | jq -r '.[0].text'` to get clean output
+6. Always run `task go:imports` after extraction
+7. For structs, just copy them manually - ast-grep struct extraction is unreliable
+
 ## ⚠️ QUALITY CHECKLIST - MUST PASS BEFORE MARKING TASKS COMPLETE
 
 **NEVER mark a task as "completed" unless this passes:**

@@ -21,6 +21,8 @@ func Reset(t *testing.T, database *db.Database) {
           api_tokens,
           audit_logs,
           cli_login_states,
+          mfa_totp_attempts,
+          mfa_webauthn_attempts,
           users
         RESTART IDENTITY CASCADE`)
 	if err != nil {
@@ -30,6 +32,7 @@ func Reset(t *testing.T, database *db.Database) {
 
 // NewDatabase creates a unique temporary Postgres database for a test, runs migrations,
 // and returns a connected *db.Database. The database is dropped on test cleanup.
+// Sets TEST_DATABASE_URL env var to the created database DSN for subprocesses.
 func NewDatabase(t *testing.T) *db.Database {
 	t.Helper()
 	base := os.Getenv("TEST_DATABASE_URL")
@@ -86,6 +89,10 @@ func NewDatabase(t *testing.T) *db.Database {
 	if err != nil {
 		t.Fatalf("open app db: %v", err)
 	}
+
+	// Set TEST_DATABASE_URL for subprocesses
+	os.Setenv("TEST_DATABASE_URL", dsn) //nolint:errcheck // ignore error
+
 	t.Cleanup(func() {
 		if err := app.Close(); err != nil {
 			t.Fatalf("close app database: %v", err)

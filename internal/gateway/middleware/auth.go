@@ -10,7 +10,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/getsentry/sentry-go"
-	"github.com/getsentry/sentry-go/gin"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 )
 

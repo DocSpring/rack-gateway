@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,18 +61,12 @@ func TestIntegration(t *testing.T) {
 		client: &http.Client{Timeout: 5 * time.Second},
 	}
 
-	// Initialize database connection for creating test sessions
-	database, err := db.NewFromEnv()
-	require.NoError(t, err)
-	servers.database = database
-	defer database.Close()
-
 	t.Log("Starting mock Convox server...")
 	servers.startMockConvox(t)
 	defer servers.cleanup()
 
 	t.Log("Starting gateway server...")
-	servers.startGateway(t)
+	servers.startGateway(t) // This initializes servers.database via dbtest.NewDatabase
 
 	// Wait for servers to be ready
 	waitForServer(t, "http://localhost:"+mockConvoxPort+"/health", 10*time.Second)
@@ -140,18 +136,22 @@ func (s *TestServers) startMockConvox(t *testing.T) {
 }
 
 func (s *TestServers) startGateway(t *testing.T) {
-	// Create database directory for testing
-	dbDir := t.TempDir()
-	dbPath := filepath.Join(dbDir, "test.db")
+	// Create a unique PostgreSQL database for integration tests
+	// This sets TEST_DATABASE_URL env var
+	s.database = dbtest.NewDatabase(t)
 
-	// Pre-create the database with test users
-	if err := s.initTestDatabase(dbPath); err != nil {
-		t.Fatalf("Failed to initialize test database: %v", err)
+	// Pre-create test users
+	s.initTestUsers(t)
+
+	// Get the TEST_DATABASE_URL that was set by dbtest.NewDatabase
+	testDatabaseURL := os.Getenv("TEST_DATABASE_URL")
+	if testDatabaseURL == "" {
+		t.Fatal("TEST_DATABASE_URL not set by dbtest.NewDatabase")
 	}
 
+	// Start gateway with the test database URL
 	s.gatewayCmd = exec.Command("../../bin/rack-gateway-api")
 	s.gatewayCmd.Env = append(os.Environ(),
-		"PORT="+gatewayPort,
 		"PORT="+gatewayPort,
 		"DEV_MODE=true",
 		"DOMAIN=localhost",
@@ -165,8 +165,8 @@ func (s *TestServers) startGateway(t *testing.T) {
 		"RACK_HOST=http://localhost:"+mockConvoxPort,
 		"RACK_TOKEN="+mockRackToken,
 		"RACK_USERNAME=convox",
-		// Database path for testing
-		"DB_PATH="+dbPath,
+		// Use the same test database that we created
+		"DATABASE_URL="+testDatabaseURL,
 	)
 
 	// Capture output for debugging
@@ -180,13 +180,8 @@ func (s *TestServers) startGateway(t *testing.T) {
 	}
 }
 
-func (s *TestServers) initTestDatabase(dbPath string) error {
-	// Create and initialize the database with test users
-	database, err := db.NewFromEnv()
-	if err != nil {
-		return fmt.Errorf("failed to create database: %w", err)
-	}
-	defer database.Close()
+func (s *TestServers) initTestUsers(t *testing.T) {
+	t.Helper()
 
 	// Create test users with appropriate roles
 	testUsers := []struct {
@@ -202,52 +197,20 @@ func (s *TestServers) initTestDatabase(dbPath string) error {
 	}
 
 	for _, u := range testUsers {
-		existing, err := database.GetUser(u.email)
-		if err != nil {
-			return fmt.Errorf("failed to check user %s: %w", u.email, err)
-		}
-		var userID int64
-		if existing == nil {
-			user, err := database.CreateUser(u.email, u.name, u.roles)
-			if err != nil {
-				// On duplicate, fall back to update
-				if !strings.Contains(err.Error(), "duplicate key value") && !strings.Contains(err.Error(), "UNIQUE") {
-					return fmt.Errorf("failed to create user %s: %w", u.email, err)
-				}
-				if err := database.UpdateUserRoles(u.email, u.roles); err != nil {
-					return fmt.Errorf("failed to upsert user %s: %w", u.email, err)
-				}
-				existing, _ = database.GetUser(u.email)
-				userID = existing.ID
-			} else {
-				userID = user.ID
-			}
-		} else {
-			if err := database.UpdateUserRoles(u.email, u.roles); err != nil {
-				return fmt.Errorf("failed to update user %s: %w", u.email, err)
-			}
-			userID = existing.ID
-		}
-		// Mark all test users as MFA enrolled and create a dummy MFA method so RBAC tests work
-		if err := database.SetUserMFAEnrolled(userID, true); err != nil {
-			return fmt.Errorf("failed to mark user %s as MFA enrolled: %w", u.email, err)
-		}
-		// Create a confirmed TOTP method for the user
-		method, err := database.CreateMFAMethod(userID, "totp", "Test TOTP", "test-secret", nil, nil, nil, nil)
-		if err != nil {
-			// Ignore if already exists
-			if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "UNIQUE") {
-				return fmt.Errorf("failed to create MFA method for %s: %w", u.email, err)
-			}
-		} else {
-			// Confirm the method
-			if err := database.ConfirmMFAMethod(method.ID, time.Now()); err != nil {
-				return fmt.Errorf("failed to confirm MFA method for %s: %w", u.email, err)
-			}
-		}
-	}
+		user, err := s.database.CreateUser(u.email, u.name, u.roles)
+		require.NoError(t, err, "failed to create user %s", u.email)
 
-	return nil
+		// Create a confirmed TOTP method using the standard test secret
+		method, err := s.database.CreateMFAMethod(user.ID, "totp", "Test TOTP", "JBSWY3DPEHPK3PXP", nil, nil, nil, nil)
+		require.NoError(t, err, "failed to create MFA method for %s", u.email)
+
+		err = s.database.ConfirmMFAMethod(method.ID, time.Now())
+		require.NoError(t, err, "failed to confirm MFA method for %s", u.email)
+
+		// Mark user as MFA enrolled (required for RequireMFAEnrollment middleware)
+		err = s.database.SetUserMFAEnrolled(user.ID, true)
+		require.NoError(t, err, "failed to set MFA enrolled for %s", u.email)
+	}
 }
 
 func (s *TestServers) cleanup() {
@@ -465,7 +428,12 @@ func createTestSession(t *testing.T, database *db.Database, email string, roles 
 	require.NoError(t, err)
 
 	// Mark session as MFA verified for testing (bypass MFA prompt)
-	err = database.UpdateSessionMFAVerified(session.ID, time.Now(), nil)
+	now := time.Now()
+	err = database.UpdateSessionMFAVerified(session.ID, now, nil)
+	require.NoError(t, err)
+
+	// Also set recent step-up time to bypass MFA verification for CLI commands
+	err = database.UpdateSessionRecentStepUp(session.ID, now)
 	require.NoError(t, err)
 
 	return sessionToken, totpSecret
@@ -532,6 +500,9 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 
 	// Test 1: ps (lists processes)
 	t.Run("ps", func(t *testing.T) {
+		// Clear TOTP attempts to avoid rate limiting
+		_, _ = s.database.DB().Exec("DELETE FROM mfa_totp_attempts")
+
 		cmd := exec.Command("../../bin/rack-gateway", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(),
 			"GATEWAY_CLI_CONFIG_DIR="+configDir,
@@ -615,10 +586,18 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 	// Test 1: Viewer role - should be blocked from write operations
 	t.Run("viewer_blocked_from_writes", func(t *testing.T) {
+		// Clear TOTP attempts to avoid rate limiting
+		_, _ = s.database.DB().Exec("DELETE FROM mfa_totp_attempts")
+
 		configDir, totpSecret := createUserConfig(t, "viewer@example.com", []string{"viewer"})
 
-		// Generate valid MFA code for step-up auth
-		mfaCode, err := totp.GenerateCode(totpSecret, time.Now())
+		// Generate valid MFA code for step-up auth using same parameters as server
+		mfaCode, err := totp.GenerateCodeCustom(totpSecret, time.Now(), totp.ValidateOpts{
+			Period:    30,
+			Skew:      1,
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		})
 		require.NoError(t, err)
 
 		// Try to create an app (should be blocked by RBAC after MFA)
@@ -726,6 +705,9 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 	// Test 5: Verify proper access levels are enforced
 	t.Run("verify_access_levels", func(t *testing.T) {
+		// Clear TOTP attempts to avoid rate limiting
+		_, _ = s.database.DB().Exec("DELETE FROM mfa_totp_attempts")
+
 		// Viewer can read but not write
 		viewerConfig, _ := createUserConfig(t, "viewer@example.com", []string{"viewer"})
 

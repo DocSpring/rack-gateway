@@ -25,6 +25,7 @@ OAuth 2.0 and JWT handling:
 - **Sessions**: Cookie-based sessions for web UI
 
 Key files:
+
 - `auth/oauth.go` - OAuth handlers
 - `auth/jwt.go` - JWT creation and validation
 - `auth/middleware.go` - Auth middleware
@@ -38,6 +39,7 @@ Database-backed RBAC with PostgreSQL:
 - **Admin role**: Wildcard access to all resources
 
 Key files:
+
 - `rbac/rbac.go` - RBAC manager interface
 - `rbac/postgres.go` - PostgreSQL implementation
 - `rbac/middleware.go` - RBAC enforcement middleware
@@ -53,6 +55,7 @@ Request forwarding with WebSocket support:
 - Full WebSocket proxy support for `convox exec` and logs
 
 Key files:
+
 - `proxy/proxy.go` - HTTP proxy handler
 - `proxy/websocket.go` - WebSocket proxy
 
@@ -66,12 +69,14 @@ Structured logging with automatic secret redaction:
 - CloudWatch integration via stdout
 
 Key files:
+
 - `audit/logger.go` - Audit log creation
 - `audit/redactor.go` - Secret redaction
 
 ### `/middleware` - HTTP Middleware
 
 Common middleware:
+
 - `security.go` - CSP headers, CORS, security headers
 - `csrf.go` - CSRF protection for web requests
 - `session.go` - Session management
@@ -79,21 +84,24 @@ Common middleware:
 ### `/ui` - Admin Web Interface
 
 Embedded SPA serving:
+
 - Serves pre-built React SPA from `web/dist`
 - Handles routing for SPA (all routes return index.html)
 - Static asset serving with gzip/brotli compression
 
 ## Database
 
-**PostgreSQL** is required (not SQLite):
+**PostgreSQL** is required.
 
 **Development environment:**
+
 - Database: `gateway_dev`
 - Connection: `postgres://postgres:postgres@postgres:5432/gateway_dev?sslmode=disable`
 - Docker container: `rack-gateway-postgres-1`
 - Host port: `55432`
 
 **Test environment:**
+
 - Database: `gateway_test`
 - Connection: `postgres://postgres:postgres@postgres:5432/gateway_test?sslmode=disable`
 
@@ -134,6 +142,7 @@ Tests complete CLI flows with real gateway server.
 All configuration via environment variables. See `docs/CONFIGURATION.md` for complete list.
 
 **Critical variables:**
+
 - `RACK_HOST` - Convox rack API URL
 - `RACK_TOKEN` - Convox rack API token
 - `APP_SECRET_KEY` - JWT signing key
@@ -146,6 +155,7 @@ All configuration via environment variables. See `docs/CONFIGURATION.md` for com
 ### Content Security Policy (CSP)
 
 The gateway enforces strict CSP:
+
 - No inline scripts (except with nonce)
 - No inline styles (except with nonce)
 - Nonce is generated per request and passed to React via meta tag
@@ -188,6 +198,7 @@ task dev
 ### Hot Reload
 
 The project uses `air` for hot reload in development:
+
 ```bash
 air
 ```

@@ -38,6 +38,15 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACMana
 	return h, database, mgr
 }
 
+// pathToResourceAction converts a path and HTTP method to resource and action for RBAC
+func (h *Handler) pathToResourceAction(path, method string) (string, string) {
+	res, act, ok := routematch.Match(method, path)
+	if !ok {
+		return "", ""
+	}
+	return res.String(), act.String()
+}
+
 func TestPathToResourceActionMatchesRouteSpecs(t *testing.T) {
 	h := &Handler{}
 

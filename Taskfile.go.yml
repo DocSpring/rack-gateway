@@ -17,6 +17,7 @@ tasks:
       - go install honnef.co/go/tools/cmd/staticcheck@latest
       - go install gotest.tools/gotestsum@latest
       - go install github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest
+      - go install golang.org/x/tools/cmd/goimports@latest
 
   install:
     aliases: [":install"]
@@ -129,6 +130,11 @@ tasks:
     desc: Format Go code with gofmt
     cmds:
       - go fmt ./...
+
+  imports:
+    desc: Fix Go imports with goimports
+    cmds:
+      - goimports -w .
 
   lint:
     desc: Run Go linters (check mode)
