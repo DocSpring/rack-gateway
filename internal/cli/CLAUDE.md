@@ -18,7 +18,7 @@ The `rack-gateway` CLI is a multi-rack aware wrapper around the `convox` CLI tha
 
 1. **Multi-rack support**: Switch between multiple gateway instances
 2. **OAuth flow**: PKCE-based browser authentication
-3. **Token management**: Stores JWT tokens per rack
+3. **Token management**: Stores session tokens per rack
 4. **Convox wrapper**: Transparently wraps `convox` CLI commands
 
 ## Configuration
@@ -31,11 +31,11 @@ Structure:
   "racks": {
     "production": {
       "url": "https://gateway-prod.example.com",
-      "token": "jwt-token-here"
+      "token": "session-token-here"
     },
     "staging": {
       "url": "https://gateway-staging.example.com",
-      "token": "jwt-token-here"
+      "token": "session-token-here"
     }
   },
   "current_rack": "production"
@@ -49,7 +49,7 @@ Structure:
 rack-gateway login <rack-name> <gateway-url>
 ```
 
-Opens browser for OAuth flow, stores JWT token in config.
+Opens browser for OAuth flow, stores session token in config.
 
 ### Logout
 ```bash
@@ -116,7 +116,7 @@ The CLI uses PKCE (Proof Key for Code Exchange) for secure OAuth without client 
 2. Open browser to gateway OAuth endpoint
 3. User authenticates with Google
 4. Gateway validates and returns authorization code
-5. CLI exchanges code for JWT token
+5. CLI exchanges code for session token
 6. Token stored in config file
 
 ### Error Handling

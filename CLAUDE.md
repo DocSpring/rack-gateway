@@ -358,8 +358,8 @@ Staging Rack:
 
 Developer CLI:
   ~/.config/rack-gateway/config.json stores:
-    - production: https://gateway-prod.example.com (JWT token)
-    - staging: https://gateway-staging.example.com (JWT token)
+    - production: https://gateway-prod.example.com (session token)
+    - staging: https://gateway-staging.example.com (session token)
 ```
 
 ## Architecture
@@ -372,10 +372,10 @@ Developer Machine -> Gateway Server (per rack) -> Convox Rack API
 
 Flow:
 1. Developer runs: rack-gateway apps --rack staging
-2. CLI loads JWT from ~/.config/rack-gateway/config.json
-3. CLI sets RACK_URL with JWT and calls real convox CLI
-4. Request goes to Gateway API Server with JWT auth
-5. Gateway validates JWT and checks RBAC permissions
+2. CLI loads session token from ~/.config/rack-gateway/config.json
+3. CLI sets RACK_URL with session token and calls real convox CLI
+4. Request goes to Gateway API Server with session token auth
+5. Gateway validates session token and checks RBAC permissions
 6. Gateway proxies to THE Convox rack using actual token
 7. Gateway logs request to CloudWatch
 8. Response flows back through gateway to developer
@@ -403,7 +403,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete environment vari
 
 ```
 internal/gateway/         - Gateway API server (see internal/gateway/CLAUDE.md)
-  auth/                   - OAuth + JWT handling
+  auth/                   - OAuth + session management
   rbac/                   - RBAC manager and policies
   proxy/                  - Request forwarding logic
   audit/                  - Structured logging + redaction
@@ -416,7 +416,7 @@ mock-oauth/               - Mock OAuth server for testing (see mock-oauth/CLAUDE
 
 ## Security & Production Readiness
 
-See `internal/gateway/CLAUDE.md` for detailed security considerations including JWT, CSRF, CSP, and TLS configuration.
+See `internal/gateway/CLAUDE.md` for detailed security considerations including sessions, CSRF, CSP, and TLS configuration.
 
 ## Web Frontend
 
@@ -618,7 +618,7 @@ docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\d+ d
 │   ├── gateway/                  # Gateway server (see CLAUDE.md)
 │   │   ├── app/                  # Application setup
 │   │   ├── audit/                # Audit logging
-│   │   ├── auth/                 # OAuth + JWT + sessions + MFA
+│   │   ├── auth/                 # OAuth + sessions + MFA
 │   │   ├── config/               # Configuration
 │   │   ├── db/                   # Database layer and migrations
 │   │   ├── email/                # Email notifications

@@ -46,10 +46,10 @@ if [ -z "$RACK_HOST" ]; then
     echo -e "${GREEN}Using mock Convox server at ${RACK_HOST}${NC}"
 fi
 
-# Generate JWT key if not set (for development only)
+# Generate secret key if not set (for development only)
 if [ -z "$APP_SECRET_KEY" ] && [ "$DEV_MODE" = "true" ]; then
-    export APP_SECRET_KEY="dev-jwt-secret-$(date +%s)"
-    echo -e "${GREEN}Generated development JWT key${NC}"
+    export APP_SECRET_KEY="dev-secret-$(date +%s)"
+    echo -e "${GREEN}Generated development secret key${NC}"
 fi
 
 echo -e "${GREEN}Development environment ready!${NC}"

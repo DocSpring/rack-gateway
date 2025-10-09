@@ -10,22 +10,22 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 func TestOAuthEndpoint_UsesCustomBaseURL(t *testing.T) {
 	// Create OAuth handler with mock base URL
-	jwtManager := NewJWTManager("test-secret", time.Hour)
-	handler := NewOAuthHandler(
+	handler, err := NewOAuthHandler(
 		"mock-client-id",
 		"mock-client-secret",
 		"http://localhost:8447",
 		"example.com",
 		"http://mock-oauth:3001", // This should make it use mock endpoints
-		jwtManager,
 	)
+	if err != nil {
+		t.Fatalf("Failed to create OAuth handler: %v", err)
+	}
 
 	// Set up HTTP handler using Gin to match new router implementation
 	gin.SetMode(gin.TestMode)

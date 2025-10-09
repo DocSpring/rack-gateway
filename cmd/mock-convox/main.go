@@ -35,7 +35,6 @@
 // - Uses HTTP Basic Auth
 // - Username is always "convox"
 // - Password is the rack API token
-// - Also supports JWT tokens with username "jwt"
 
 package main
 

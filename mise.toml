@@ -32,8 +32,8 @@ GOOGLE_CLIENT_SECRET = "mock-client-secret"
 GOOGLE_ALLOWED_DOMAIN = "example.com"
 GOOGLE_OAUTH_BASE_URL = "http://localhost:3345"
 
-# JWT configuration
-APP_SECRET_KEY = "dev-jwt-secret-key-change-in-production"
+# Secret configuration
+APP_SECRET_KEY = "dev-secret-key-change-in-production"
 
 # Mock Convox rack (for development)
 RACK = "Dev"

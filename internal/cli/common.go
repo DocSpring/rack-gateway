@@ -15,11 +15,11 @@ import (
 // Helper functions for convox commands
 
 // buildRackURL constructs a RACK_URL in the format: https://convox:AUTH@gateway/api/v1/convox
-// AUTH format: JWT or JWT.mfa_type.mfa_value (using dots to avoid URL encoding issues)
+// AUTH format: session_token or session_token.mfa_type.mfa_value (using dots to avoid URL encoding issues)
 // Examples:
-//   - No MFA: eyJhbGc...
-//   - TOTP:   eyJhbGc....totp.123456
-//   - WebAuthn: eyJhbGc....webauthn.base64_assertion
+//   - No MFA: abc123def456...
+//   - TOTP:   abc123def456....totp.123456
+//   - WebAuthn: abc123def456....webauthn.base64_assertion
 func buildRackURL(gatewayURL, auth string) string {
 	// Add /api/v1/convox prefix to the gateway URL
 	base := strings.TrimSuffix(gatewayURL, "/") + "/api/v1/convox"
@@ -50,7 +50,7 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 		return nil, nil, err
 	}
 
-	// Build auth string: JWT or JWT.mfa_type.mfa_value (using dots to avoid URL encoding issues)
+	// Build auth string: session_token or session_token.mfa_type.mfa_value (using dots to avoid URL encoding issues)
 	auth := token
 	if mfaAuth != "" {
 		auth = token + "." + mfaAuth

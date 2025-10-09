@@ -16,8 +16,8 @@ GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 # Remove GOOGLE_OAUTH_BASE_URL to use real Google OAuth instead of mock
 # GOOGLE_OAUTH_BASE_URL = ""
 
-# Override JWT key for local development if needed
-# APP_SECRET_KEY = "your-local-jwt-secret"
+# Override secret key for local development if needed
+# APP_SECRET_KEY = "your-local-secret"
 
 # Override rack configuration for testing with real Convox
 # RACK_HOST = "https://your-rack.convox.cloud"

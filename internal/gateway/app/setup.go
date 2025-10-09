@@ -36,7 +36,7 @@ func (a *App) initializeServices() error {
 	}
 
 	// Session manager enforces short-lived idle sessions for the web UI
-	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.JWTSecret, a.Config.SessionIdleTimeout)
+	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.SessionSecret, a.Config.SessionIdleTimeout)
 
 	// Load MFA settings and initialize the MFA service for enrollment/verification flows
 	mfaSettings, err := a.Database.GetMFASettings()
@@ -178,7 +178,7 @@ func (a *App) initializeServices() error {
 	a.EmailSender = email.NewSender(pmToken, from, pmStream)
 
 	// Initialize MFA service (after email sender)
-	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.JWTSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin, a.EmailSender)
+	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.SessionSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin, a.EmailSender)
 	if err != nil {
 		return fmt.Errorf("failed to initialize MFA service: %w", err)
 	}

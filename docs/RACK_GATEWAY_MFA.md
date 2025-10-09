@@ -2,9 +2,9 @@
 
 ## Background
 
-Rack Gateway currently relies on Google OAuth to authenticate developers. Once a user obtains a JWT, both the web UI and the CLI operate without any second factor. Sessions are short-lived only for the browser; the CLI stores a long-lived JWT locally. To meet the new security requirements (mandatory 2FA, trusted devices, step-up controls, and unified auditing) we are introducing first-class MFA across web and CLI.
+Rack Gateway currently relies on Google OAuth to authenticate developers. Once a user obtains a session token, both the web UI and the CLI operate without any second factor. Sessions are short-lived only for the browser; the CLI stores a long-lived session token locally. To meet the new security requirements (mandatory 2FA, trusted devices, step-up controls, and unified auditing) we are introducing first-class MFA across web and CLI.
 
-The in-progress implementation already adds database support for MFA methods, backup codes, trusted devices, and richer session metadata. The CLI now exchanges the OAuth result for an opaque server-managed session token rather than a JWT, and the server accepts those tokens on both Bearer and Basic channels. This document captures the remaining work to complete the feature end-to-end.
+The in-progress implementation already adds database support for MFA methods, backup codes, trusted devices, and richer session metadata. The CLI now exchanges the OAuth result for an opaque server-managed session token rather than a session token, and the server accepts those tokens on both Bearer and Basic channels. This document captures the remaining work to complete the feature end-to-end.
 
 ## Objectives
 
@@ -63,7 +63,7 @@ The in-progress implementation already adds database support for MFA methods, ba
    - Middleware for step-up enforcement and trusted device cookie issuance.
    - CLI-specific endpoints to request MFA challenges and verify codes.
 2. Update routes config to expose new endpoints and ensure CSRF/rate limiting.
-3. Extend `AuthService` and middleware to differentiate between session tokens, JWTs, and API tokens.
+3. Extend `AuthService` and middleware to differentiate between session tokens, and API tokens.
 4. Implement risk/step-up checks (initial static list of sensitive routes; later add heuristics for IP/UA changes).
 5. Ensure `mfa_enforced_at` populated for all users when `require_all_users` setting is true.
 6. Add DB helpers and tests for new flows (e.g., listing trusted devices, revoking sessions, backup code regeneration).
@@ -74,7 +74,7 @@ The in-progress implementation already adds database support for MFA methods, ba
    - Interactive prompt when server responds with `NeedsMFA` or similar.
    - `--mfa` flag to pre-establish recent MFA.
    - Display backup codes when generated and warn about one-time visibility.
-2. Persist machine metadata from `determineDeviceInfo()` and handle config migrations (existing JWT tokens need upgrade path).
+2. Persist machine metadata from `determineDeviceInfo()` and handle config migrations (existing session tokens need upgrade path).
 3. Update login success messaging to mention 2FA status and next steps when enrollment required.
 4. Tests: update CLI integration tests to exercise the new flows using mocked responses.
 
@@ -100,7 +100,7 @@ The in-progress implementation already adds database support for MFA methods, ba
 ### Rollout & Migration
 
 1. Introduce feature flag via `settings.mfa` so we can deploy safely (enforced by default but allow temporary override in case of incident).
-2. Provide migration script/notes for existing CLI configs (detect JWT tokens, prompt user to re-login to obtain session token).
+2. Provide migration script/notes for existing CLI configs (detect session tokens, prompt user to re-login to obtain session token).
 3. Document new environment variables (`MFA_ENFORCEMENT`, etc.) and instructions for operators.
 
 ## Current Status (as of this document)

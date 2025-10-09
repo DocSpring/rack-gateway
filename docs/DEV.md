@@ -106,7 +106,7 @@ The Rack Gateway is split into multiple components:
 
 **CLI Client** (`config/cli/` in dev, `~/.config/rack-gateway/` in production):
 
-- Stores `config.json` with JWT tokens per rack
+- Stores `config.json` with session tokens per rack
 - Never has direct access to Convox rack credentials
 - Environment variable: `GATEWAY_CLI_CONFIG_DIR=./config/cli` (dev only)
 
@@ -114,7 +114,7 @@ The Rack Gateway is split into multiple components:
 
 - Served at `/ui/*` by the Gateway server
 - Admin interface for user and role management
-- Uses the same OAuth and JWT authentication as CLI
+- Uses the same OAuth and session token authentication as CLI
 
 ## Configuration
 
@@ -135,8 +135,8 @@ GOOGLE_CLIENT_ID = "your-client-id.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET = "your-client-secret"
 GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 
-# Override JWT key for local development if needed
-# APP_SECRET_KEY = "your-local-jwt-secret"
+# Override session secret key for local development if needed
+# APP_SECRET_KEY = "your-local-session-secret"
 ```
 
 ### 2. Database Configuration
@@ -313,11 +313,11 @@ LOG_LEVEL = "debug"
 ```
 config/
 └── cli/                 # CLI development config (auto-created)
-    └── config.json      # Current rack, JWT tokens, and gateway URLs
+    └── config.json      # Current rack, session tokens, and gateway URLs
 
 internal/
 ├── gateway/
-│   ├── auth/           # OAuth and JWT handling
+│   ├── auth/           # OAuth and session token handling
 │   ├── rbac/           # Role-based access control
 │   ├── proxy/          # Request forwarding
 │   ├── audit/          # Audit logging

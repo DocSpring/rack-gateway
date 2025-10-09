@@ -34,7 +34,7 @@ Developer → rack-gateway CLI → Gateway API Server → Convox Rack
      },
      "tokens": {
        "staging": {
-         "token": "jwt-token-here",
+         "token": "session-token-here",
          "email": "user@example.com",
          "expires_at": "2024-02-01T00:00:00Z"
        }
@@ -52,7 +52,7 @@ The gateway server (run by admins) needs:
    - `RACK_TOKEN_STAGING=actual-convox-rack-token`
    - `GOOGLE_CLIENT_ID=oauth-client-id`
    - `GOOGLE_CLIENT_SECRET=oauth-client-secret`
-   - `APP_SECRET_KEY=jwt-signing-key`
+   - `APP_SECRET_KEY=session-secret-key`
 
 2. **No config/racks.yaml**: Racks are discovered from environment variables
 
@@ -61,11 +61,11 @@ The gateway server (run by admins) needs:
 The `rack-gateway` CLI wraps the real `convox` CLI:
 
 1. Developer runs: `rack-gateway apps`
-2. CLI loads gateway URL and JWT token from `~/.config/rack-gateway/config.json`
-3. CLI sets `RACK_URL=https://convox:<jwt-token>@gateway.example.com`
+2. CLI loads gateway URL and session token from `~/.config/rack-gateway/config.json`
+3. CLI sets `RACK_URL=https://convox:<session-token>@gateway.example.com`
 4. CLI executes: `convox apps` with the RACK_URL environment variable
-5. Real convox CLI connects to gateway using JWT as password
-6. Gateway validates JWT, checks RBAC permissions
+5. Real convox CLI connects to gateway using session token as password
+6. Gateway validates session token, checks RBAC permissions
 7. Gateway proxies request to real Convox rack using actual token
 
 ### Direct Native Convox CLI Usage
@@ -77,15 +77,15 @@ The gateway is fully compatible with the native Convox CLI - no wrapper needed:
 export RACK_URL="https://convox:<api-token>@gateway.example.com"
 convox apps  # Uses native convox CLI directly
 
-# For developers with JWT token
-export RACK_URL="https://convox:<jwt-token>@gateway.example.com"
+# For developers with session token
+export RACK_URL="https://convox:<session-token>@gateway.example.com"
 convox apps  # Uses native convox CLI directly
 ```
 
 The rack-gateway CLI wrapper simply provides convenience features:
 
 - Manages multiple rack configurations
-- Handles JWT token storage
+- Handles session token storage
 - Provides login/logout commands
 - Automatic token refresh reminders
 
@@ -189,16 +189,16 @@ The CLI checks in this order (from `pkg/rack/rack.go`):
 2. **Use `RACK_URL` override** to point Convox CLI to proxy:
 
    ```bash
-   export RACK_URL="https://convox:JWT_TOKEN@convox-api-proxy.domain"
+   export RACK_URL="https://convox:SESSION_TOKEN@convox-api-proxy.domain"
    ```
 
-3. **Proxy accepts JWT as Basic Auth password**:
+3. **Proxy accepts session token as Basic Auth password**:
 
    - Username: `convox` (ignored)
-   - Password: User's JWT token from OAuth login
+   - Password: User's session token from OAuth login
 
 4. **Proxy forwards to real Convox API**:
-   - Validates JWT and checks RBAC
+   - Validates session token and checks RBAC
    - Strips incoming Basic Auth
    - Adds real rack's Basic Auth
    - Forwards request to actual Convox API
@@ -220,20 +220,20 @@ Instead of reimplementing all Convox commands, `rack-gateway` acts as a wrapper:
 
    ```bash
    rack-gateway login staging
-   # Performs OAuth, stores JWT
+   # Performs OAuth, stores session token
    ```
 
 2. **Wraps standard Convox CLI**:
 
    ```bash
    rack-gateway apps
-   # Sets RACK_URL with JWT
+   # Sets RACK_URL with session token
    # Executes: convox apps
    ```
 
 3. **Environment Setup**:
    ```go
-   RACK_URL = "https://convox:{JWT}@proxy.domain"
+   RACK_URL = "https://convox:{SESSION_TOKEN}@proxy.domain"
    exec("convox", args...)
    ```
 
@@ -249,7 +249,7 @@ Instead of reimplementing all Convox commands, `rack-gateway` acts as a wrapper:
 
 ### After (With Auth Proxy)
 
-- Individual JWT tokens per user
+- Individual session tokens per user
 - Real rack token never exposed to users
 - Complete audit log with user email
 - 30-day token expiry with rotation
@@ -260,8 +260,8 @@ Instead of reimplementing all Convox commands, `rack-gateway` acts as a wrapper:
 
 ### Proxy Must Handle
 
-1. **Accept Basic Auth**: Extract JWT from password field
-2. **Validate JWT**: Check signature and expiry
+1. **Accept Basic Auth**: Extract session token from password field
+2. **Validate session token**: Check signature and expiry
 3. **Check RBAC**: Verify user has permission for request
 4. **Transform Auth**: Replace with real rack's Basic Auth
 5. **Audit Log**: Record user, action, result
@@ -288,7 +288,7 @@ These should only be done by infrastructure team with direct terraform access.
    ```
 4. **Test standard commands**:
    ```bash
-   export RACK_URL="https://convox:$JWT@proxy.domain"
+   export RACK_URL="https://convox:$SESSION_TOKEN@proxy.domain"
    convox apps
    convox ps -a myapp
    convox logs -a myapp

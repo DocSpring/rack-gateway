@@ -120,7 +120,7 @@ No production deployment can proceed without an authenticated administrator appr
 - Master secret: `APP_SECRET_KEY` used for HMAC and key derivation.
 - Subkeys derived via HKDF:
   - CSRF HMAC key
-  - JWT signing key
+  - Session token signing key
   - OAuth state key
   - Webhook HMAC key
 - Rotation: Keys rotated according to key management policy. Previous keys remain active during grace period.

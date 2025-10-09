@@ -265,7 +265,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 		}
 	}
 
-	// New API v1 routes for CLI (JWT auth only, no cookies)
+	// New API v1 routes for CLI (session token auth only, no cookies)
 	apiV1 := router.Group("/api/v1")
 	{
 		// Convox proxy for CLI

@@ -227,7 +227,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check permissions (different logic for JWT vs API tokens)
+	// Check permissions (different logic for session tokens vs API tokens)
 	var (
 		allowed         bool
 		approvalTracker *deployApprovalTracker

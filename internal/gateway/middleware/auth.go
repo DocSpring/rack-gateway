@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Authenticated enforces authentication for browser/admin API requests, supporting both JWT and session cookies.
+// Authenticated enforces authentication for browser/admin API requests, supporting both session tokens and cookies.
 func Authenticated(authService *auth.AuthService, rbacManager rbac.RBACManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if authService == nil {

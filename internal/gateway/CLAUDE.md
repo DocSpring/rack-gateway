@@ -17,18 +17,18 @@ The gateway API server is the core authentication and authorization proxy that s
 
 ### `/auth` - Authentication
 
-OAuth 2.0 and JWT handling:
+OAuth 2.0 and session management:
 
 - **OAuth flow**: PKCE-based Google OAuth 2.0
-- **JWT tokens**: 30-day TTL, signed with `APP_SECRET_KEY`
+- **Session tokens**: Opaque tokens stored in database, revocable at any time
 - **Domain validation**: Only allows configured Google Workspace domain
-- **Sessions**: Cookie-based sessions for web UI
+- **Sessions**: Cookie-based sessions for web UI, session tokens for CLI
 
 Key files:
 
 - `auth/oauth.go` - OAuth handlers
-- `auth/jwt.go` - JWT creation and validation
-- `auth/middleware.go` - Auth middleware
+- `auth/session_manager.go` - Session creation and validation
+- `auth/service.go` - Combined auth service
 
 ### `/rbac` - Role-Based Access Control
 
@@ -145,7 +145,7 @@ All configuration via environment variables. See `docs/CONFIGURATION.md` for com
 
 - `RACK_HOST` - Convox rack API URL
 - `RACK_TOKEN` - Convox rack API token
-- `APP_SECRET_KEY` - JWT signing key
+- `APP_SECRET_KEY` - Secret for session tokens and CSRF protection
 - `GOOGLE_CLIENT_ID` - OAuth client ID
 - `GOOGLE_CLIENT_SECRET` - OAuth client secret
 - `GOOGLE_ALLOWED_DOMAIN` - Allowed email domain (e.g., "example.com")

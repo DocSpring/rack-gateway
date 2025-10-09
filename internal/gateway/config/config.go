@@ -19,7 +19,7 @@ type Config struct {
 	SentryJSDsn             string
 	SentryJSTracesRate      string
 	SentryTestsEnabled      bool
-	JWTSecret               string
+	SessionSecret           string
 	SessionIdleTimeout      time.Duration
 	GoogleClientID          string
 	GoogleClientSecret      string
@@ -113,16 +113,16 @@ func Load() (*Config, error) {
 		}
 	}
 
-	jwtKey := getEnv("APP_SECRET_KEY", "")
-	if jwtKey == "" {
+	sessionSecret := getEnv("APP_SECRET_KEY", "")
+	if sessionSecret == "" {
 		if cfg.DevMode {
-			jwtKey = generateDevKey()
-			fmt.Printf("Generated dev secret key: %s\n", jwtKey)
+			sessionSecret = generateDevKey()
+			fmt.Printf("Generated dev secret key: %s\n", sessionSecret)
 		} else {
 			return nil, fmt.Errorf("APP_SECRET_KEY is required in production")
 		}
 	}
-	cfg.JWTSecret = jwtKey
+	cfg.SessionSecret = sessionSecret
 
 	// Session idle timeout defaults to 5 minutes to enforce rapid re-auth on inactivity.
 	cfg.SessionIdleTimeout = 5 * time.Minute

@@ -53,7 +53,7 @@ monitoring and alerts, workflows for CI/CD, etc.
 - **Audit Logging**: Complete activity logs with automatic secret redaction
 - **Single-Tenant Design**: One gateway per rack, deployed alongside Convox API
 - **Multi-Rack CLI**: CLI can switch between multiple gateways using `--rack` flag
-- **Session Management**: 30-day JWT sessions with secure token storage
+- **Session Management**: Database-backed sessions with secure token storage
 - **Minimal Web UI**: User and role management interface
 - **Deploy Approvals**: Manual approval workflow for CI/CD actions (build/object/release/promote)
 
@@ -154,7 +154,7 @@ When logging in via http://localhost:8447 during development, you'll be redirect
 
 ## How It Works
 
-The gateway acts as a transparent proxy that speaks the Convox API protocol. It accepts JWT tokens (for developers) or API tokens (for CI/CD) as authentication.
+The gateway acts as a transparent proxy that speaks the Convox API protocol. It accepts session tokens (for developers) or API tokens (for CI/CD) as authentication.
 
 ### Two Ways to Use the Gateway
 
@@ -165,8 +165,8 @@ The gateway acts as a transparent proxy that speaks the Convox API protocol. It 
 export RACK_URL="https://convox:<api-token>@gateway.example.com"
 convox apps  # Uses standard convox CLI directly
 
-# For developers with JWT token
-export RACK_URL="https://convox:<jwt-token>@gateway.example.com"
+# For developers with session token
+export RACK_URL="https://convox:<session-token>@gateway.example.com"
 convox apps  # Uses standard convox CLI directly
 ```
 
@@ -366,12 +366,12 @@ aws logs put-metric-filter \
 
 ## Security Considerations
 
-1. **JWT Keys**: Use strong, unique keys in production
+1. **Session Secrets**: Use strong, unique secret keys in production
 2. **Domain Restriction**: Enforce Google Workspace domain
 3. **TLS**: Always use HTTPS in production
 4. **Rack Tokens**: Store securely, rotate regularly
 5. **Audit Logs**: Monitor for anomalies and denied requests
-6. **Session Duration**: 30-day default, adjust as needed
+6. **Session Management**: All sessions stored in database and revocable
 
 ## Testing
 
