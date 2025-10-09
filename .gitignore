@@ -48,6 +48,7 @@ web/.vite/
 web/test-results/
 web/coverage/
 web/playwright-report/
+scripts/cli-e2e-testdata/convox.valid-image-tag.yml
 
 
 # Task cache

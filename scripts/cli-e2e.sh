@@ -490,8 +490,8 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # Request approval as API token (BEFORE building - git commit-based flow)
   echo -e "${YELLOW}API token requesting deploy approval for git commit...${NC}"
-  GIT_COMMIT_HASH="abc123def456"  # Mock git commit hash for E2E test
-  GIT_BRANCH="main"
+  GIT_COMMIT_HASH=$(git rev-parse HEAD)  # Use actual git commit hash
+  GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)  # Use actual branch name
   PIPELINE_URL="https://circleci.com/gh/example/repo/123"
 
   set +e
@@ -537,7 +537,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   export RACK_GATEWAY_RACK="Test"
 
   # Test manifest validation with invalid image tags (should fail)
-  echo -e "${BLUE}Testing manifest validation with invalid image tags...${NC}"
+  echo -e "${BLUE}Test 1/4: Invalid image tags (should fail)...${NC}"
   TESTDATA_DIR="$(dirname "$0")/cli-e2e-testdata"
 
   set +e
@@ -545,7 +545,7 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   invalid_deploy_status=$?
   set -e
 
-  echo "Invalid deploy output: $invalid_deploy_output" >&2
+  echo "Output: $invalid_deploy_output" >&2
 
   if [[ $invalid_deploy_status -eq 0 ]]; then
     echo -e "${RED}Expected invalid manifest deploy to fail, but it succeeded${NC}" >&2
@@ -555,16 +555,16 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     echo -e "${RED}Expected 'manifest validation failed' error message${NC}" >&2
     exit 1
   fi
-  echo -e "${GREEN}Invalid image tags correctly rejected${NC}"
+  echo -e "${GREEN}✓ Invalid image tags correctly rejected${NC}"
 
   # Test manifest with no image tags (uses build:) - should fail
-  echo -e "${BLUE}Testing manifest validation with build instead of image...${NC}"
+  echo -e "${BLUE}Test 2/4: Build-based manifest (should fail)...${NC}"
   set +e
   no_image_deploy_output=$(./bin/rack-gateway deploy . --app rack-gateway --manifest "$TESTDATA_DIR/convox.no-image-tag.yml" --description "no image test" 2>&1)
   no_image_deploy_status=$?
   set -e
 
-  echo "No image deploy output: $no_image_deploy_output" >&2
+  echo "Output: $no_image_deploy_output" >&2
 
   if [[ $no_image_deploy_status -eq 0 ]]; then
     echo -e "${RED}Expected no-image manifest deploy to fail, but it succeeded${NC}" >&2
@@ -574,40 +574,50 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
     echo -e "${RED}Expected 'must use a pre-built image' error message${NC}" >&2
     exit 1
   fi
-  echo -e "${GREEN}Build-based manifest correctly rejected${NC}"
+  echo -e "${GREEN}✓ Build-based manifest correctly rejected${NC}"
 
-  # Test with actual rack-gateway manifest with no image tags (uses build:) - should fail
-  echo -e "${BLUE}Testing manifest validation with build instead of image...${NC}"
+  # Test with actual rack-gateway convox.yml (uses build:) - should fail
+  echo -e "${BLUE}Test 3/4: Default convox.yml with build (should fail)...${NC}"
   set +e
-  rack_gateway_deploy_output=$(./bin/rack-gateway deploy 2>&1)
-  rack_gateway_deploy_output=$?
+  root_deploy_output=$(./bin/rack-gateway deploy 2>&1)
+  root_deploy_status=$?
   set -e
 
-  echo "No image deploy output: $no_image_deploy_output" >&2
+  echo "Output: $root_deploy_output" >&2
 
-  if [[ $rack_gateway_deploy_output -eq 0 ]]; then
-    echo -e "${RED}Expected rack gateway deploy to fail, but it succeeded${NC}" >&2
+  if [[ $root_deploy_status -eq 0 ]]; then
+    echo -e "${RED}Expected root convox.yml deploy to fail, but it succeeded${NC}" >&2
     exit 1
   fi
-  if ! echo "$rack_gateway_deploy_output" | grep -q "must use a pre-built image"; then
+  if ! echo "$root_deploy_output" | grep -q "must use a pre-built image"; then
     echo -e "${RED}Expected 'must use a pre-built image' error message${NC}" >&2
     exit 1
   fi
-  echo -e "${GREEN}Rack-gateway build-based manifest correctly rejected${NC}"
+  echo -e "${GREEN}✓ Root convox.yml correctly rejected${NC}"
+
+  # Generate valid manifest with correct git commit
+  echo -e "${BLUE}Test 4/4: Generating valid manifest with commit $GIT_COMMIT_HASH...${NC}"
+  cat > "$TESTDATA_DIR/convox.valid-image-tag.yml" <<EOF
+services:
+  web:
+    image: docspringcom/rack-gateway:${GIT_COMMIT_HASH}-amd64
+    port: 3000
+  worker:
+    image: docspringcom/rack-gateway:${GIT_COMMIT_HASH}-amd64
+EOF
 
   # Test with valid manifest (should succeed)
-  echo -e "${BLUE}Testing manifest validation with valid image tags...${NC}"
   set +e
   valid_deploy_output=$(./bin/rack-gateway deploy . --app rack-gateway --manifest "$TESTDATA_DIR/convox.valid-image-tag.yml" --description "valid manifest test" 2>&1)
   valid_deploy_status=$?
   set -e
-  echo "Valid deploy output: $valid_deploy_output" >&2
+  echo "Output: $valid_deploy_output" >&2
 
   if [[ $valid_deploy_status -ne 0 ]]; then
     echo -e "${RED}Valid manifest deploy failed${NC}" >&2
     exit 1
   fi
-  echo -e "${GREEN}Valid manifest deploy succeeded${NC}"
+  echo -e "${GREEN}✓ Valid manifest deploy succeeded${NC}"
 
   # Now build with the approved commit
   echo -e "${BLUE}Running build after approval...${NC}"

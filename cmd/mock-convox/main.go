@@ -172,6 +172,9 @@ var (
 		"schedule_rack_scale_down":     "30 9 * * *",
 		"schedule_rack_scale_up":       "30 18 * * MON-THU",
 	}
+
+	// Persistent temp directory for storing uploaded tarballs
+	objectStorageDir string
 )
 
 // nextID appends an incrementing counter to a base ID to make it unique
@@ -187,6 +190,15 @@ func main() {
 			return
 		}
 	}
+
+	// Create persistent temp directory for object storage
+	var err error
+	objectStorageDir, err = os.MkdirTemp("", "mock-convox-objects-*")
+	if err != nil {
+		log.Fatalf("Failed to create object storage directory: %v", err)
+	}
+	log.Printf("Object storage directory: %s", objectStorageDir)
+
 	r := mux.NewRouter()
 	r.Use(requestLogger)
 
@@ -222,6 +234,8 @@ func main() {
 
 	// Object upload used by deploy: POST /apps/{app}/objects/tmp/<name>.tgz
 	r.HandleFunc("/apps/{app}/objects/tmp/{name}", uploadObject).Methods("POST")
+	// Object download for manifest validation: GET /apps/{app}/objects/{key}
+	r.HandleFunc("/apps/{app}/objects/{key:.*}", downloadObject).Methods("GET")
 
 	// Optional racks listing used by CLI in some flows
 	r.HandleFunc("/racks", listRacks).Methods("GET")
@@ -955,27 +969,78 @@ func setEnvironment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, merged)
 }
 
-// uploadObject accepts a tarball upload for deploy and returns 200 OK
+// uploadObject accepts a tarball upload for deploy and saves it to disk
 func uploadObject(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	name := vars["name"]
 
-	// Drain body to simulate upload and avoid connection reuse issues
-	if _, err := io.Copy(io.Discard, r.Body); err != nil {
-		log.Printf("mock-convox: failed to drain upload body: %v", err)
+	// Create app subdirectory if needed
+	appDir := fmt.Sprintf("%s/%s", objectStorageDir, app)
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		log.Printf("mock-convox: failed to create app directory: %v", err)
+		http.Error(w, "failed to create storage directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Save uploaded tarball to disk
+	objectPath := fmt.Sprintf("%s/tmp/%s", appDir, name)
+	objectDir := fmt.Sprintf("%s/tmp", appDir)
+	if err := os.MkdirAll(objectDir, 0755); err != nil {
+		log.Printf("mock-convox: failed to create tmp directory: %v", err)
+		http.Error(w, "failed to create tmp directory", http.StatusInternalServerError)
+		return
+	}
+
+	f, err := os.Create(objectPath)
+	if err != nil {
+		log.Printf("mock-convox: failed to create object file: %v", err)
+		http.Error(w, "failed to save upload", http.StatusInternalServerError)
+		return
+	}
+	defer f.Close() //nolint:errcheck // ignore error
+
+	written, err := io.Copy(f, r.Body)
+	if err != nil {
+		log.Printf("mock-convox: failed to write upload: %v", err)
+		http.Error(w, "failed to save upload", http.StatusInternalServerError)
+		return
 	}
 	if err := r.Body.Close(); err != nil {
 		log.Printf("mock-convox: failed to close upload body: %v", err)
 	}
 
+	log.Printf("Saved object to %s (%d bytes)", objectPath, written)
+
 	// Return object URL that BuildCreate will use
-	// Format: object://tmp/{name} matches Convox's object storage URL format
+	// Format: object://app/tmp/{name} matches Convox's object storage URL format
 	objectURL := fmt.Sprintf("object://%s/tmp/%s", app, name)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	writeJSON(w, map[string]string{"url": objectURL})
+}
+
+// downloadObject serves uploaded tarballs for manifest validation
+func downloadObject(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	key := vars["key"]
+
+	// Build path to object file
+	objectPath := fmt.Sprintf("%s/%s/%s", objectStorageDir, app, key)
+
+	log.Printf("Fetching object from %s", objectPath)
+
+	// Check if file exists
+	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
+		log.Printf("mock-convox: object not found: %s", objectPath)
+		http.Error(w, "object not found", http.StatusNotFound)
+		return
+	}
+
+	// Serve the file
+	http.ServeFile(w, r, objectPath)
 }
 
 // Helpers

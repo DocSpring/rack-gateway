@@ -108,31 +108,10 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	var req *db.DeployApprovalRequest
 	var err error
 
-	// For object:create and process actions, look up approval by token+app (any active approval for the app)
-	// For release actions, require specific release approval
-	if resource == rbac.ResourceObject && action == rbac.ActionCreate {
-		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
-		if err != nil {
-			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-			}
-			return false, nil, err
-		}
-		if req == nil {
-			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-		}
-	} else if resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
-		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
-		if err != nil {
-			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-			}
-			return false, nil, err
-		}
-		if req == nil {
-			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
-		}
-	} else {
+	// For object:create, build:create, release:create, and process actions, look up approval by token+app
+	// (no release ID exists yet for these actions)
+	// For release:promote, require specific release approval (release already exists)
+	if resource == rbac.ResourceRelease && action == rbac.ActionPromote {
 		// Release promote requires specific release approval
 		releaseID := extractReleaseIDFromPath(r.URL.Path)
 		if releaseID == "" {
@@ -147,6 +126,18 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 			return false, nil, err
 		}
 
+		if req == nil {
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+		}
+	} else {
+		// All other approval-gated actions use token+app lookup
+		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
+		if err != nil {
+			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+			}
+			return false, nil, err
+		}
 		if req == nil {
 			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 		}
