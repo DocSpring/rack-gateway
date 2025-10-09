@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestOAuthHandler_UsesCustomBaseURL(t *testing.T) {
@@ -27,8 +26,6 @@ func TestOAuthHandler_UsesCustomBaseURL(t *testing.T) {
 		t.Skipf("issuer host %q not resolvable: %v", host, err)
 	}
 
-	jwtManager := NewJWTManager("test-secret", time.Hour)
-
 	// Test with custom base URL (should use mock OAuth endpoints)
 	handler, err := NewOAuthHandler(
 		"mock-client-id",
@@ -36,7 +33,6 @@ func TestOAuthHandler_UsesCustomBaseURL(t *testing.T) {
 		"http://localhost:8447",
 		"example.com",
 		baseURL, // Custom issuer URL
-		jwtManager,
 	)
 	if err != nil {
 		t.Fatalf("Failed to create OAuth handler: %v", err)
@@ -61,8 +57,6 @@ func TestOAuthHandler_UsesGoogleByDefault(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping OAuth network-dependent test in short mode")
 	}
-	jwtManager := NewJWTManager("test-secret", time.Hour)
-
 	// Test without custom base URL (should use Google OAuth endpoints)
 	handler, err := NewOAuthHandler(
 		"real-client-id",
@@ -70,7 +64,6 @@ func TestOAuthHandler_UsesGoogleByDefault(t *testing.T) {
 		"http://localhost:8447",
 		"example.com",
 		"https://accounts.google.com", // Google issuer URL
-		jwtManager,
 	)
 	if err != nil {
 		t.Fatalf("Failed to create OAuth handler: %v", err)

@@ -89,10 +89,10 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 }
 
 const (
-	maxExtractedSize  = 100 * 1024 * 1024 // 100MB max total extracted size
-	maxFiles          = 10000             // Max number of files to extract
-	maxFileSize       = 10 * 1024 * 1024  // 10MB max per file
-	maxManifestSize   = 1 * 1024 * 1024   // 1MB max for convox.yml
+	maxExtractedSize = 100 * 1024 * 1024 // 100MB max total extracted size
+	maxFiles         = 10000             // Max number of files to extract
+	maxFileSize      = 10 * 1024 * 1024  // 10MB max per file
+	maxManifestSize  = 1 * 1024 * 1024   // 1MB max for convox.yml
 )
 
 type convoxManifest struct {

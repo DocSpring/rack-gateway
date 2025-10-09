@@ -54,8 +54,30 @@ func TestPathToResourceActionMatchesRouteSpecs(t *testing.T) {
 }
 
 func TestAPITokenPermission_Check(t *testing.T) {
-	h := &Handler{}
-	u := &auth.AuthUser{Permissions: []string{"convox:app:create", "convox:build:create"}, IsAPIToken: true}
+	database := dbtest.NewDatabase(t)
+
+	// Create a mock RBAC manager
+	mgr, err := rbac.NewDBManager(database, "example.com")
+	require.NoError(t, err)
+
+	// Create a test user
+	user, err := database.CreateUser("test@example.com", "Test User", []string{"deployer"})
+	require.NoError(t, err)
+
+	// Create an API token with specific permissions
+	tokenID := int64(1)
+	tokenHash := strings.Repeat("a", 64)
+	permissions := []string{"convox:app:create", "convox:build:create"}
+	_, err = database.CreateAPIToken(tokenHash, "test-token", user.ID, permissions, nil, nil)
+	require.NoError(t, err)
+
+	h := &Handler{rbacManager: mgr, database: database}
+	u := &auth.AuthUser{
+		Email:       "test@example.com",
+		Permissions: permissions,
+		IsAPIToken:  true,
+		TokenID:     &tokenID,
+	}
 
 	// Exact match
 	allowed := h.hasAPITokenPermission(u, rbac.ResourceApp, rbac.ActionCreate)
@@ -65,8 +87,19 @@ func TestAPITokenPermission_Check(t *testing.T) {
 	allowed = h.hasAPITokenPermission(u, rbac.ResourceApp, rbac.ActionDelete)
 	require.False(t, allowed)
 
-	// Wildcard matches
-	u2 := &auth.AuthUser{Permissions: []string{"convox:app:*"}, IsAPIToken: true}
+	// Wildcard matches - create another token with wildcard permission
+	tokenID2 := int64(2)
+	tokenHash2 := strings.Repeat("b", 64)
+	wildcardPerms := []string{"convox:app:*"}
+	_, err = database.CreateAPIToken(tokenHash2, "wildcard-token", user.ID, wildcardPerms, nil, nil)
+	require.NoError(t, err)
+
+	u2 := &auth.AuthUser{
+		Email:       "test@example.com",
+		Permissions: wildcardPerms,
+		IsAPIToken:  true,
+		TokenID:     &tokenID2,
+	}
 	require.True(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionUpdate))
 	require.True(t, h.hasAPITokenPermission(u2, rbac.ResourceApp, rbac.ActionDelete))
 }
@@ -265,7 +298,12 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 	req.Header.Set("X-User-Name", "Creator")
 
 	rr := httptest.NewRecorder()
-	status, err := h.forwardRequest(rr, req, cfg.Racks["default"], "/apps/my-app/builds", "creator@example.com")
+	authUser := &auth.AuthUser{
+		Email: "creator@example.com",
+		Name:  "Creator",
+		Roles: []string{"deployer"},
+	}
+	status, err := h.forwardRequest(rr, req, cfg.Racks["default"], "/apps/my-app/builds", authUser)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, http.StatusOK, rr.Code)

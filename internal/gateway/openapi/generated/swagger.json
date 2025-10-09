@@ -595,6 +595,60 @@
                 }
             }
         },
+        "/admin/settings/app_image_tag_patterns": {
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Updates the map of app names to image tag regex patterns used for manifest validation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update app image tag validation patterns",
+                "parameters": [
+                    {
+                        "description": "App image tag patterns",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateAppImageTagPatternsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/settings/approved_commands": {
             "put": {
                 "security": [
@@ -1814,7 +1868,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.LoginResponse"
+                            "$ref": "#/definitions/handlers.CLILoginResponse"
                         }
                     },
                     "400": {
@@ -3127,29 +3181,6 @@
         }
     },
     "definitions": {
-        "auth.LoginResponse": {
-            "type": "object",
-            "required": [
-                "email",
-                "expires_at",
-                "name",
-                "token"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
         "auth.LoginStartResponse": {
             "type": "object",
             "required": [
@@ -3448,6 +3479,44 @@
                     "type": "string"
                 },
                 "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CLILoginResponse": {
+            "type": "object",
+            "properties": {
+                "channel": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "device_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "enrollment_required": {
+                    "type": "boolean"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "mfa_required": {
+                    "type": "boolean"
+                },
+                "mfa_verified": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "integer"
+                },
+                "token": {
                     "type": "string"
                 }
             }
@@ -4165,6 +4234,17 @@
             "properties": {
                 "allow_destructive_actions": {
                     "type": "boolean"
+                }
+            }
+        },
+        "handlers.UpdateAppImageTagPatternsRequest": {
+            "type": "object",
+            "properties": {
+                "app_image_tag_patterns": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },

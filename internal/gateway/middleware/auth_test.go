@@ -26,13 +26,17 @@ func TestAuthenticatedSetsRequestContext(t *testing.T) {
 		t.Fatalf("new rbac manager: %v", err)
 	}
 
-	jwtManager := auth.NewJWTManager("test-secret", time.Hour)
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	service := auth.NewAuthService(jwtManager, nil, database, sessionManager)
+	service := auth.NewAuthService(nil, database, sessionManager)
 
-	token, _, err := jwtManager.GenerateToken("user@example.com", "User")
+	// Get user and create session
+	user, err := database.GetUser("user@example.com")
 	if err != nil {
-		t.Fatalf("generate token: %v", err)
+		t.Fatalf("get user: %v", err)
+	}
+	token, _, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
 	}
 
 	router := gin.New()

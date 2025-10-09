@@ -9,7 +9,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func TestAuthServiceAllowsCookieJWT(t *testing.T) {
+func TestAuthServiceAllowsCookieSession(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 
@@ -17,7 +17,6 @@ func TestAuthServiceAllowsCookieJWT(t *testing.T) {
 		t.Fatalf("initialize admin: %v", err)
 	}
 
-	manager := NewJWTManager("test-secret", time.Hour)
 	sessionManager := NewSessionManager(database, "test-secret", time.Hour)
 
 	user, err := database.GetUser("user@example.com")
@@ -33,7 +32,7 @@ func TestAuthServiceAllowsCookieJWT(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	svc := NewAuthService(manager, nil, database, sessionManager)
+	svc := NewAuthService(nil, database, sessionManager)
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

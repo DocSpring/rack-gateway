@@ -14,6 +14,10 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
+type contextKey string
+
+const UserContextKey contextKey = "user"
+
 // AuthService handles session and API token authentication
 type AuthService struct {
 	tokenService *token.Service
@@ -290,7 +294,6 @@ func GetSessionID(ctx context.Context) (int64, bool) {
 	}
 	return authUser.Session.ID, true
 }
-
 
 // decodeBasicAuth decodes a basic auth credentials string
 func decodeBasicAuth(credentials string) (string, error) {
