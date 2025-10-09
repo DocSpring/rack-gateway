@@ -248,6 +248,50 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Get the full path including query params
 	path := r.URL.Path
 
+	// Optional early request logging (before RBAC) for debugging
+	if h.config.LogRequestHeaders || h.config.LogRequestBodies {
+		var bodyBytes []byte
+		if r.Body != nil {
+			var err error
+			bodyBytes, err = io.ReadAll(r.Body)
+			if err == nil {
+				r.Body.Close() //nolint:errcheck
+				// Restore body for downstream handlers
+				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
+		}
+
+		if h.config.LogRequestHeaders {
+			fmt.Printf("DEBUG REQUEST HEADERS %s %s:\n", r.Method, path)
+			for key, values := range r.Header {
+				for _, value := range values {
+					fmt.Printf("  %s: %s\n", key, value)
+				}
+			}
+		}
+
+		if h.config.LogRequestBodies && len(bodyBytes) > 0 {
+			// Skip logging binary formats
+			ct := strings.ToLower(r.Header.Get("Content-Type"))
+			isBinary := strings.Contains(ct, "gzip") ||
+				strings.Contains(ct, "application/octet-stream") ||
+				strings.Contains(ct, "application/x-tar") ||
+				strings.Contains(ct, "application/zip")
+
+			if !isBinary {
+				max := h.config.LogBodyMaxBytes
+				logBody := bodyBytes
+				if max > 0 && len(logBody) > max {
+					logBody = append([]byte{}, logBody[:max]...)
+					logBody = append(logBody, []byte("…(truncated)")...)
+				}
+				fmt.Printf("DEBUG REQUEST BODY %s %s len=%d body=%s\n", r.Method, path, len(bodyBytes), string(logBody))
+			} else {
+				fmt.Printf("DEBUG REQUEST BODY %s %s len=%d (binary, not logged)\n", r.Method, path, len(bodyBytes))
+			}
+		}
+	}
+
 	// Before any RBAC/audit, enforce an allowlist of Convox API paths.
 	methodForAllow := r.Method
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
@@ -399,10 +443,6 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Forward the request to the rack
 	status, err := h.forwardRequest(w, r, rackConfig, path, authUser)
-	if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && err == nil && status >= 200 && status < 300 {
-		// Mark the approval as promoted/consumed on successful release promotion
-		h.markDeployApprovalPromoted(tracker)
-	}
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			logRackTLSMismatch("proxy_forward", fpErr)
@@ -1035,18 +1075,6 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 	}
 
-	// Validate object uploads for deploy approvals (API tokens only)
-	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/objects/tmp/{name}") {
-		if authUser.IsAPIToken {
-			if authUser.TokenID == nil {
-				return 0, fmt.Errorf("API token authentication missing token ID")
-			}
-			if err := h.validateObjectUpload(r, bodyBytes, *authUser.TokenID); err != nil {
-				return 0, err
-			}
-		}
-	}
-
 	// Validate build requests for deploy approvals (API tokens only)
 	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/builds") {
 		if authUser.IsAPIToken {
@@ -1154,7 +1182,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
 		}
 		if h.config.LogResponseBodies {
-			max := h.config.LogResponseMaxBytes
+			max := h.config.LogBodyMaxBytes
 			logBody := body
 			if max > 0 && len(logBody) > max {
 				logBody = append([]byte{}, logBody[:max]...)
@@ -1164,7 +1192,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 	} else {
 		if h.config.LogResponseBodies {
-			acc := newLogAccumulator(h.config.LogResponseMaxBytes)
+			acc := newLogAccumulator(h.config.LogBodyMaxBytes)
 			reader := io.TeeReader(respReader, acc)
 			var err error
 			bytesWritten, err = io.Copy(w, reader)
@@ -1283,6 +1311,11 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 		if key != "" {
 			setResource("object", key, false)
+		}
+
+		// Track object URL for deploy approval workflow
+		if objectURL := extractJSONString(obj["url"]); objectURL != "" {
+			h.updateObjectURLApprovalTracking(r, objectURL)
 		}
 	}
 
@@ -1706,24 +1739,21 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		return true, nil, nil
 	}
 
-	// Check if token has -with-approval permission variant
-	withApprovalPerm := fmt.Sprintf("convox:%s:%s-with-approval", resource.String(), action.String())
-	hasWithApproval := tokenHasPermission(authUser.Permissions, withApprovalPerm)
+	// If token doesn't have direct permission, check if deploy_with_approval can grant it
+	// deploy_with_approval only grants access to specific deployment actions when an approval exists
+	isApprovalGatedAction := (resource == rbac.ResourceObject && action == rbac.ActionCreate) ||
+		(resource == rbac.ResourceBuild && action == rbac.ActionCreate) ||
+		(resource == rbac.ResourceRelease && (action == rbac.ActionCreate || action == rbac.ActionPromote)) ||
+		(resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate))
 
-	// For process:start/exec/terminate, need to check for active deploy approval
-	if resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
-		if !hasWithApproval {
-			return false, nil, nil
-		}
-		// Fall through to deploy approval check below
-	} else if resource == rbac.ResourceRelease && action == rbac.ActionPromote {
-		// For release:promote, check deploy approval status
-		if !hasWithApproval {
-			return false, nil, nil
-		}
-		// Fall through to deploy approval check below
-	} else {
-		// No other resource/action combinations support -with-approval
+	if !isApprovalGatedAction {
+		// This action cannot be granted via deploy_with_approval
+		return false, nil, nil
+	}
+
+	// Check if token has deploy_with_approval permission
+	hasDeployWithApproval := tokenHasPermission(authUser.Permissions, rbac.Convox(rbac.ResourceDeploy, rbac.ActionDeployWithApproval))
+	if !hasDeployWithApproval {
 		return false, nil, nil
 	}
 
@@ -1745,18 +1775,29 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	var req *db.DeployApprovalRequest
 	var err error
 
-	// For process actions, look up approval by token+app (any active approval for the app)
+	// For object:create and process actions, look up approval by token+app (any active approval for the app)
 	// For release actions, require specific release approval
-	if resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
+	if resource == rbac.ResourceObject && action == rbac.ActionCreate {
 		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
 		if err != nil {
 			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval required"}
+				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 			}
 			return false, nil, err
 		}
 		if req == nil {
-			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval required"}
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+		}
+	} else if resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
+		req, err = h.database.ActiveDeployApprovalRequestByTokenAndApp(*authUser.TokenID, app)
+		if err != nil {
+			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+			}
+			return false, nil, err
+		}
+		if req == nil {
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 		}
 	} else {
 		// Release promote requires specific release approval
@@ -1768,24 +1809,24 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		req, err = h.database.ActiveDeployApprovalRequestByTokenAndRelease(*authUser.TokenID, app, releaseID)
 		if err != nil {
 			if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: fmt.Sprintf("deployment approval required for release %s", releaseID)}
+				return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 			}
 			return false, nil, err
 		}
 
 		if req == nil {
-			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: fmt.Sprintf("deployment approval required for release %s", releaseID)}
+			return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 		}
 	}
 
 	// Check if approval is expired
 	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
-		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: "deployment approval expired"}
+		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 	}
 
 	// Check if approval is in approved status
 	if req.Status != db.DeployApprovalRequestStatusApproved {
-		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: fmt.Sprintf("deployment approval status is %s (must be approved)", req.Status)}
+		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
 	}
 
 	tracker := &deployApprovalTracker{
@@ -1807,15 +1848,6 @@ func getDeployApprovalTracker(ctx context.Context) *deployApprovalTracker {
 		return tracker
 	}
 	return nil
-}
-
-func (h *Handler) markDeployApprovalPromoted(tracker *deployApprovalTracker) {
-	if tracker == nil || h.database == nil || tracker.request == nil {
-		return
-	}
-	if err := h.database.MarkDeployApprovalRequestPromoted(tracker.request.ID, tracker.app, tracker.releaseID, tracker.tokenID, time.Now()); err != nil {
-		log.Printf("deploy approval promote update failed: %v", err)
-	}
 }
 
 // checkWebSocketOrigin validates the origin header for WebSocket connections

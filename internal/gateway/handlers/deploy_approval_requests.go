@@ -79,6 +79,12 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
+	app := strings.TrimSpace(req.App)
+	if app == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+		return
+	}
+
 	dbUser, err := h.database.GetUser(userEmail)
 	if err != nil {
 		fmt.Printf("CreateDeployApprovalRequest: Failed to load user %s: %v\n", userEmail, err)
@@ -136,6 +142,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
+		app,
 		gitCommitHash,
 		req.GitBranch,
 		req.PipelineURL,

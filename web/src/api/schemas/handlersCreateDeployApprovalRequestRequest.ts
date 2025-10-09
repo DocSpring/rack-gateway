@@ -8,6 +8,7 @@
 import type { HandlersCreateDeployApprovalRequestRequestCiMetadata } from './handlersCreateDeployApprovalRequestRequestCiMetadata';
 
 export interface HandlersCreateDeployApprovalRequestRequest {
+  app: string;
   ci_metadata?: HandlersCreateDeployApprovalRequestRequestCiMetadata;
   ci_provider?: string;
   git_branch?: string;

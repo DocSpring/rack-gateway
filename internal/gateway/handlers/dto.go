@@ -304,9 +304,9 @@ type UpdateApprovedCommandsRequest struct {
 	ApprovedCommands []string `json:"approved_commands"`
 }
 
-// UpdateAppImageTagPatternsRequest defines the payload for updating app image tag patterns.
-type UpdateAppImageTagPatternsRequest struct {
-	AppImageTagPatterns map[string]string `json:"app_image_tag_patterns"`
+// UpdateAppImagePatternsRequest defines the payload for updating app image tag patterns.
+type UpdateAppImagePatternsRequest struct {
+	AppImagePatterns map[string]string `json:"app_image_patterns"`
 }
 
 // UpdateAllowDestructiveActionsRequest defines the payload for toggling destructive actions.
@@ -327,6 +327,7 @@ type UpdatePreferredMFAMethodRequest struct {
 // CreateDeployApprovalRequestRequest represents the payload to open a deploy approval request.
 type CreateDeployApprovalRequestRequest struct {
 	Message            string                 `json:"message" binding:"required"`
+	App                string                 `json:"app" binding:"required"`
 	GitCommitHash      string                 `json:"git_commit_hash" binding:"required"`
 	GitBranch          string                 `json:"git_branch,omitempty"`
 	PipelineURL        string                 `json:"pipeline_url,omitempty"`

@@ -87,6 +87,12 @@ INSERT INTO settings (key, value, updated_at)
 ON CONFLICT (key) DO UPDATE
      SET value = '{"commands": ["echo hello", "echo migrate"]}'::jsonb,
          updated_at = NOW();
+-- Configure image tag pattern for manifest validation
+INSERT INTO settings (key, value, updated_at)
+     VALUES ('app_image_patterns', '{"rack-gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb, NOW())
+ON CONFLICT (key) DO UPDATE
+     SET value = '{"rack-gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb,
+         updated_at = NOW();
 SQL
   )
 
@@ -529,6 +535,79 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   export RACK_GATEWAY_API_TOKEN="$API_TOKEN"
   export RACK_GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
   export RACK_GATEWAY_RACK="Test"
+
+  # Test manifest validation with invalid image tags (should fail)
+  echo -e "${BLUE}Testing manifest validation with invalid image tags...${NC}"
+  TESTDATA_DIR="$(dirname "$0")/cli-e2e-testdata"
+
+  set +e
+  invalid_deploy_output=$(./bin/rack-gateway deploy . --app rack-gateway --manifest "$TESTDATA_DIR/convox.invalid-image-tag.yml" --description "invalid manifest test" 2>&1)
+  invalid_deploy_status=$?
+  set -e
+
+  echo "Invalid deploy output: $invalid_deploy_output" >&2
+
+  if [[ $invalid_deploy_status -eq 0 ]]; then
+    echo -e "${RED}Expected invalid manifest deploy to fail, but it succeeded${NC}" >&2
+    exit 1
+  fi
+  if ! echo "$invalid_deploy_output" | grep -q "manifest validation failed"; then
+    echo -e "${RED}Expected 'manifest validation failed' error message${NC}" >&2
+    exit 1
+  fi
+  echo -e "${GREEN}Invalid image tags correctly rejected${NC}"
+
+  # Test manifest with no image tags (uses build:) - should fail
+  echo -e "${BLUE}Testing manifest validation with build instead of image...${NC}"
+  set +e
+  no_image_deploy_output=$(./bin/rack-gateway deploy . --app rack-gateway --manifest "$TESTDATA_DIR/convox.no-image-tag.yml" --description "no image test" 2>&1)
+  no_image_deploy_status=$?
+  set -e
+
+  echo "No image deploy output: $no_image_deploy_output" >&2
+
+  if [[ $no_image_deploy_status -eq 0 ]]; then
+    echo -e "${RED}Expected no-image manifest deploy to fail, but it succeeded${NC}" >&2
+    exit 1
+  fi
+  if ! echo "$no_image_deploy_output" | grep -q "must use a pre-built image"; then
+    echo -e "${RED}Expected 'must use a pre-built image' error message${NC}" >&2
+    exit 1
+  fi
+  echo -e "${GREEN}Build-based manifest correctly rejected${NC}"
+
+  # Test with actual rack-gateway manifest with no image tags (uses build:) - should fail
+  echo -e "${BLUE}Testing manifest validation with build instead of image...${NC}"
+  set +e
+  rack_gateway_deploy_output=$(./bin/rack-gateway deploy 2>&1)
+  rack_gateway_deploy_output=$?
+  set -e
+
+  echo "No image deploy output: $no_image_deploy_output" >&2
+
+  if [[ $rack_gateway_deploy_output -eq 0 ]]; then
+    echo -e "${RED}Expected rack gateway deploy to fail, but it succeeded${NC}" >&2
+    exit 1
+  fi
+  if ! echo "$rack_gateway_deploy_output" | grep -q "must use a pre-built image"; then
+    echo -e "${RED}Expected 'must use a pre-built image' error message${NC}" >&2
+    exit 1
+  fi
+  echo -e "${GREEN}Rack-gateway build-based manifest correctly rejected${NC}"
+
+  # Test with valid manifest (should succeed)
+  echo -e "${BLUE}Testing manifest validation with valid image tags...${NC}"
+  set +e
+  valid_deploy_output=$(./bin/rack-gateway deploy . --app rack-gateway --manifest "$TESTDATA_DIR/convox.valid-image-tag.yml" --description "valid manifest test" 2>&1)
+  valid_deploy_status=$?
+  set -e
+  echo "Valid deploy output: $valid_deploy_output" >&2
+
+  if [[ $valid_deploy_status -ne 0 ]]; then
+    echo -e "${RED}Valid manifest deploy failed${NC}" >&2
+    exit 1
+  fi
+  echo -e "${GREEN}Valid manifest deploy succeeded${NC}"
 
   # Now build with the approved commit
   echo -e "${BLUE}Running build after approval...${NC}"

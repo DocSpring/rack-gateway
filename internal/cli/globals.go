@@ -18,6 +18,9 @@ var (
 	// MFAMethodFlag is the --mfa-method flag value
 	MFAMethodFlag string
 
+	// MFACodeFlag is the --mfa-code flag value for pre-supplying TOTP codes
+	MFACodeFlag string
+
 	// Version is the CLI version (set by build)
 	Version = "dev"
 

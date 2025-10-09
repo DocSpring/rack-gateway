@@ -12,9 +12,9 @@ tasks:
   migrate:dev:
     aliases: [migrate]
     desc: Apply database migrations to dev database
-    deps: [ensure]
+    deps: [ensure, ":go:build:gateway"]
     cmds:
-      - go run ./cmd/gateway migrate
+      - ./bin/rack-gateway-api migrate
     sources:
       - internal/gateway/db/migrations/**/*.sql
 

@@ -18,9 +18,20 @@ import (
 )
 
 // performMFAStepUp handles MFA verification for step-up authentication scenarios
-// (e.g., deploy approvals, sensitive operations). It respects --mfa-method flag,
+// (e.g., deploy approvals, sensitive operations). It respects --mfa-code and --mfa-method flags,
 // server preferences, and CLI preferences.
 func performMFAStepUp(cmd *cobra.Command, baseURL, bearer, rack string) error {
+	// If --mfa-code flag provided, submit it directly (for TOTP/Yubikey/backup codes)
+	if MFACodeFlag != "" {
+		code := strings.TrimSpace(MFACodeFlag)
+		if code != "" {
+			if err := submitMFAVerification(baseURL, bearer, code); err != nil {
+				return fmt.Errorf("MFA verification failed: %w", err)
+			}
+			return nil
+		}
+	}
+
 	// Get MFA status to see what methods are available
 	mfaStatus, err := getMFAStatus(baseURL, bearer)
 	if err != nil {

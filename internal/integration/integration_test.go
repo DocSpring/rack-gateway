@@ -6,7 +6,10 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,7 +21,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +30,6 @@ const (
 	mockConvoxPort = "9090"
 	gatewayPort    = "8448" // Use 8448 for tests to avoid conflicts with dev (8447)
 	mockRackToken  = "mock-rack-token-12345"
-	testJWTSecret  = "test-secret-key-for-integration-testing"
 )
 
 type TestServers struct {
@@ -35,6 +37,7 @@ type TestServers struct {
 	gatewayCmd    *exec.Cmd
 	client        *http.Client
 	gatewayOut    *bytes.Buffer
+	database      *db.Database
 }
 
 func TestIntegration(t *testing.T) {
@@ -55,6 +58,12 @@ func TestIntegration(t *testing.T) {
 	servers := &TestServers{
 		client: &http.Client{Timeout: 5 * time.Second},
 	}
+
+	// Initialize database connection for creating test sessions
+	database, err := db.NewFromEnv()
+	require.NoError(t, err)
+	servers.database = database
+	defer database.Close()
 
 	t.Log("Starting mock Convox server...")
 	servers.startMockConvox(t)
@@ -350,7 +359,7 @@ func testMockConvoxAuth(t *testing.T, s *TestServers) {
 }
 
 func testProxyWithValidToken(t *testing.T, s *TestServers) {
-	// This would require a valid JWT token
+	// This would require a valid session token
 	// For now, we'll test that the proxy endpoint exists
 	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/v1/proxy/staging/apps")
 	require.NoError(t, err)
@@ -407,22 +416,59 @@ func testAdminEndpointProtection(t *testing.T, s *TestServers) {
 	}
 }
 
-// Helper function to create a test JWT token
-func createTestJWT(t *testing.T, email string, expiresIn time.Duration) string {
-	// Create a JWT token that matches what the gateway expects
-	claims := jwt.MapClaims{
-		"email": email,
-		"name":  "Test User",
-		"exp":   time.Now().Add(expiresIn).Unix(),
-		"iat":   time.Now().Unix(),
-		"nbf":   time.Now().Unix(),
+// Helper function to create a test session token and store it in the database
+// Returns the session token and TOTP secret for generating MFA codes
+func createTestSession(t *testing.T, database *db.Database, email string, roles []string, expiresIn time.Duration) (string, string) {
+	// Create user if doesn't exist
+	user, err := database.GetUser(email)
+	if err != nil || user == nil {
+		user, err = database.CreateUser(email, "Test User", roles)
+		require.NoError(t, err)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(testJWTSecret))
+	// Ensure user has MFA enrolled (required for CLI sessions)
+	totpSecret := "JBSWY3DPEHPK3PXP" // Fixed TOTP secret for testing
+	methods, err := database.ListMFAMethods(user.ID)
+	require.NoError(t, err)
+	if len(methods) == 0 {
+		// Create a confirmed TOTP method for testing
+		method, err := database.CreateMFAMethod(user.ID, "totp", "Test Authenticator", totpSecret, nil, nil, nil, nil)
+		require.NoError(t, err)
+		err = database.ConfirmMFAMethod(method.ID, time.Now())
+		require.NoError(t, err)
+	}
+
+	// Generate session token (96 random bytes, base64url encoded)
+	tokenBytes := make([]byte, 96)
+	_, err = rand.Read(tokenBytes)
+	require.NoError(t, err)
+	sessionToken := base64.RawURLEncoding.EncodeToString(tokenBytes)
+
+	// Hash the token for storage
+	hash := sha256.Sum256([]byte(sessionToken))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	// Create session in database
+	expiresAt := time.Now().Add(expiresIn)
+	session, err := database.CreateUserSession(
+		user.ID,
+		tokenHash,
+		expiresAt,
+		"cli",
+		"",
+		"Test Device",
+		"127.0.0.1",
+		"rack-gateway-test",
+		nil,
+		nil,
+	)
 	require.NoError(t, err)
 
-	return tokenString
+	// Mark session as MFA verified for testing (bypass MFA prompt)
+	err = database.UpdateSessionMFAVerified(session.ID, time.Now(), nil)
+	require.NoError(t, err)
+
+	return sessionToken, totpSecret
 }
 
 // Test that invalid tokens are rejected
@@ -436,7 +482,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
 				"url":        "http://localhost:" + gatewayPort,
-				"token":      "invalid-jwt-token",
+				"token":      "invalid-session-token",
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 			},
@@ -462,18 +508,18 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 
 // Test end-to-end proxy functionality with real commands
 func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
-	// Create a valid JWT token that the gateway will accept
+	// Create a valid session token that the gateway will accept
 	configDir := t.TempDir()
 	configFile := fmt.Sprintf("%s/config.json", configDir)
 
-	validJWT := createTestJWT(t, "test@example.com", 24*time.Hour)
+	sessionToken, _ := createTestSession(t, s.database, "test@example.com", []string{"admin"}, 24*time.Hour)
 
 	config := map[string]interface{}{
 		"current": "staging",
 		"gateways": map[string]interface{}{
 			"staging": map[string]interface{}{
 				"url":        "http://localhost:" + gatewayPort,
-				"token":      validJWT,
+				"token":      sessionToken,
 				"email":      "test@example.com",
 				"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 			},
@@ -539,31 +585,21 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 
 // Test that unauthorized users and users with insufficient permissions are blocked
 func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
-	// Helper function to create config for a user with specific role
-	createUserConfig := func(t *testing.T, email string, role string) string {
+	// Helper function to create config for a user with specific roles
+	// Returns config dir and TOTP secret for MFA
+	createUserConfig := func(t *testing.T, email string, roles []string) (string, string) {
 		configDir := t.TempDir()
 		configFile := filepath.Join(configDir, "config.json")
 
-		// Create JWT with role claim
-		claims := jwt.MapClaims{
-			"email": email,
-			"name":  "Test User",
-			"role":  role, // Add role to JWT claims
-			"exp":   time.Now().Add(24 * time.Hour).Unix(),
-			"iat":   time.Now().Unix(),
-			"nbf":   time.Now().Unix(),
-		}
-
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		tokenString, err := token.SignedString([]byte(testJWTSecret))
-		require.NoError(t, err)
+		// Create session for user with specified roles
+		sessionToken, totpSecret := createTestSession(t, s.database, email, roles, 24*time.Hour)
 
 		config := map[string]interface{}{
 			"current": "staging",
 			"gateways": map[string]interface{}{
 				"staging": map[string]interface{}{
 					"url":        "http://localhost:" + gatewayPort,
-					"token":      tokenString,
+					"token":      sessionToken,
 					"email":      email,
 					"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 				},
@@ -574,23 +610,25 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(configFile, configData, 0600))
 
-		return configDir
+		return configDir, totpSecret
 	}
 
 	// Test 1: Viewer role - should be blocked from write operations
 	t.Run("viewer_blocked_from_writes", func(t *testing.T) {
-		configDir := createUserConfig(t, "viewer@example.com", "viewer")
+		configDir, totpSecret := createUserConfig(t, "viewer@example.com", []string{"viewer"})
 
-		// Try to create an app (should be blocked)
-		cmd := exec.Command("../../bin/rack-gateway", "apps", "create", "newapp")
+		// Generate valid MFA code for step-up auth
+		mfaCode, err := totp.GenerateCode(totpSecret, time.Now())
+		require.NoError(t, err)
+
+		// Try to create an app (should be blocked by RBAC after MFA)
+		cmd := exec.Command("../../bin/rack-gateway", "apps", "create", "newapp", "--mfa-code", mfaCode)
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+configDir)
 
 		output, err := cmd.CombinedOutput()
 
 		require.Error(t, err, "viewer should be blocked from creating apps")
-		// Note: Currently prompts for MFA since JWT tokens don't carry MFA verification state
-		// In a real scenario, users would authenticate with MFA and THEN hit RBAC checks
-		assert.True(t, strings.Contains(string(output), "permission denied") || strings.Contains(string(output), "MFA"), "should be blocked: %s", output)
+		assert.Contains(t, string(output), "permission denied", "should be blocked: %s", output)
 
 		// Try to delete a process (should be blocked)
 		cmd = exec.Command("../../bin/rack-gateway", "ps", "stop", "web-123", "-a", "myapp")
@@ -604,7 +642,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 	// Test 2: Ops role - should be blocked from deployment operations
 	t.Run("ops_blocked_from_deployment", func(t *testing.T) {
-		configDir := createUserConfig(t, "ops@example.com", "ops")
+		configDir, _ := createUserConfig(t, "ops@example.com", []string{"ops"})
 
 		// Try to deploy (should be blocked)
 		cmd := exec.Command("../../bin/rack-gateway", "deploy", "-a", "myapp")
@@ -637,7 +675,25 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 	// Test 4: Unknown/unregistered user - should be blocked from everything
 	t.Run("unknown_user_blocked", func(t *testing.T) {
-		configDir := createUserConfig(t, "unknown@example.com", "")
+		// Create config with invalid token (don't create user in database)
+		configDir := t.TempDir()
+		configFile := filepath.Join(configDir, "config.json")
+
+		config := map[string]interface{}{
+			"current": "staging",
+			"gateways": map[string]interface{}{
+				"staging": map[string]interface{}{
+					"url":        "http://localhost:" + gatewayPort,
+					"token":      "invalid-unknown-user-token",
+					"email":      "unknown@example.com",
+					"expires_at": time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+				},
+			},
+		}
+
+		configData, err := json.MarshalIndent(config, "", "  ")
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(configFile, configData, 0600))
 
 		// Try to list apps (should be blocked)
 		cmd := exec.Command("../../bin/rack-gateway", "apps")
@@ -646,8 +702,8 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err := cmd.CombinedOutput()
 
 		require.Error(t, err, "unknown user should be blocked from listing apps")
-		// Unknown users get "user not found" error
-		assert.Contains(t, string(output), "user not found")
+		// Unknown users get "authentication failed" error due to invalid session
+		assert.Contains(t, string(output), "authentication failed")
 
 		// Try to view processes (should be blocked)
 		cmd = exec.Command("../../bin/rack-gateway", "ps", "-a", "myapp")
@@ -656,7 +712,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "unknown user should be blocked from viewing processes")
-		assert.Contains(t, string(output), "user not found")
+		assert.Contains(t, string(output), "authentication failed")
 
 		// Try to get rack info (should be blocked)
 		cmd = exec.Command("../../bin/rack-gateway", "rack", "info")
@@ -665,13 +721,13 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "unknown user should be blocked from viewing rack info")
-		assert.Contains(t, string(output), "user not found")
+		assert.Contains(t, string(output), "authentication failed")
 	})
 
 	// Test 5: Verify proper access levels are enforced
 	t.Run("verify_access_levels", func(t *testing.T) {
 		// Viewer can read but not write
-		viewerConfig := createUserConfig(t, "viewer@example.com", "viewer")
+		viewerConfig, _ := createUserConfig(t, "viewer@example.com", []string{"viewer"})
 
 		cmd := exec.Command("../../bin/rack-gateway", "apps")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+viewerConfig)
@@ -683,7 +739,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "api") // Should see apps
 
 		// Ops can manage processes but not deploy
-		opsConfig := createUserConfig(t, "ops@example.com", "ops")
+		opsConfig, _ := createUserConfig(t, "ops@example.com", []string{"ops"})
 
 		cmd = exec.Command("../../bin/rack-gateway", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+opsConfig)
@@ -695,7 +751,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		assert.Contains(t, string(output), "web") // Should see processes
 
 		// Deployer can deploy but not delete
-		deployerConfig := createUserConfig(t, "deployer@example.com", "deployer")
+		deployerConfig, _ := createUserConfig(t, "deployer@example.com", []string{"deployer"})
 
 		cmd = exec.Command("../../bin/rack-gateway", "builds", "-a", "myapp")
 		cmd.Env = append(os.Environ(), "GATEWAY_CLI_CONFIG_DIR="+deployerConfig)

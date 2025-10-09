@@ -98,6 +98,7 @@ CI/CD tokens get `convox:deploy:deploy_with_approval`. Regular users get direct 
 | Column                                           | Notes                                                           |
 | ------------------------------------------------ | --------------------------------------------------------------- |
 | `id`                                             | Primary key                                                     |
+| `app`                                            | App name (required)                                             |
 | `created_by_user_id` / `created_by_api_token_id` | Who requested approval                                          |
 | `target_api_token_id`                            | CI/CD token that will use the approval                          |
 | `git_commit_hash`                                | Git commit SHA (indexed)                                        |
@@ -108,7 +109,7 @@ CI/CD tokens get `convox:deploy:deploy_with_approval`. Regular users get direct 
 | `approval_notes`                                 | Admin notes                                                     |
 | `approval_expires_at`                            | Approval expiration                                             |
 | `approved_by_user_id`                            | Admin who approved                                              |
-| `build_id` / `release_id`                        | Tracking which build/release used this approval                 |
+| `object_url` / `build_id` / `release_id`         | Tracking which object/build/release used this approval          |
 | `ci_provider`                                    | CI provider: `circleci`, `github`, `buildkite`, `jenkins`, etc. |
 | `ci_metadata`                                    | JSONB - provider-specific integration data                      |
 
@@ -120,6 +121,7 @@ CI/CD tokens get `convox:deploy:deploy_with_approval`. Regular users get direct 
 
 ```bash
 rack-gateway deploy-approval request \
+  --app myapp \
   --git-commit abc123f \
   --branch main \
   --pipeline-url https://app.circleci.com/pipelines/... \

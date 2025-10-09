@@ -17,13 +17,12 @@ const (
 	DeployApprovalRequestStatusApproved = "approved"
 	DeployApprovalRequestStatusRejected = "rejected"
 	DeployApprovalRequestStatusExpired  = "expired"
+	DeployApprovalRequestStatusDeployed = "deployed"
 )
 
 var (
 	ErrDeployApprovalRequestActive   = errors.New("a deploy approval request is already pending or approved for this token and git commit")
 	ErrDeployApprovalRequestNotFound = errors.New("deploy approval request not found")
-	ErrDeployApprovalMissing         = errors.New("deployment approval required")
-	ErrDeployApprovalRequestExpired  = errors.New("deploy approval expired")
 )
 
 type DeployApprovalRequestConflictError struct {
@@ -233,10 +232,14 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	return &dr, nil
 }
 
-func (d *Database) CreateDeployApprovalRequest(message, gitCommitHash, gitBranch, pipelineURL, ciProvider string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
+func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitBranch, pipelineURL, ciProvider string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil, fmt.Errorf("message is required")
+	}
+	app = strings.TrimSpace(app)
+	if app == "" {
+		return nil, fmt.Errorf("app is required")
 	}
 	gitCommitHash = strings.TrimSpace(gitCommitHash)
 	if gitCommitHash == "" {
@@ -274,9 +277,10 @@ func (d *Database) CreateDeployApprovalRequest(message, gitCommitHash, gitBranch
 
 	var id int64
 	err = d.queryRow(
-		`INSERT INTO deploy_approval_requests (message, git_commit_hash, git_branch, pipeline_url, ci_provider, ci_metadata, status, created_by_user_id, created_by_api_token_id, target_api_token_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		`INSERT INTO deploy_approval_requests (message, app, git_commit_hash, git_branch, pipeline_url, ci_provider, ci_metadata, status, created_by_user_id, created_by_api_token_id, target_api_token_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		message,
+		app,
 		gitCommitHash,
 		gitBranchNull,
 		pipelineURLNull,
@@ -498,6 +502,31 @@ func (d *Database) RejectDeployApprovalRequestByPublicID(publicID string, approv
 		return nil, ErrDeployApprovalRequestNotFound
 	}
 	return d.GetDeployApprovalRequestByPublicID(publicID)
+}
+
+func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL string) error {
+	if strings.TrimSpace(objectURL) == "" {
+		return fmt.Errorf("object url required")
+	}
+	res, err := d.exec(
+		`UPDATE deploy_approval_requests
+         SET object_url = ?, updated_at = NOW()
+         WHERE id = ? AND status = ?`,
+		objectURL,
+		id,
+		DeployApprovalRequestStatusApproved,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update object url tracking: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to update object url tracking: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("deployment approval not found or not approved")
+	}
+	return nil
 }
 
 func (d *Database) UpdateDeployApprovalRequestBuild(id int64, buildID, releaseID string) error {

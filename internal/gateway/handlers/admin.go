@@ -1370,10 +1370,10 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		} else {
 			resp["approved_commands"] = []string{}
 		}
-		if patterns, err := h.database.GetAppImageTagPatterns(); err == nil {
-			resp["app_image_tag_patterns"] = patterns
+		if patterns, err := h.database.GetAppImagePatterns(); err == nil {
+			resp["app_image_patterns"] = patterns
 		} else {
-			resp["app_image_tag_patterns"] = map[string]string{}
+			resp["app_image_patterns"] = map[string]string{}
 		}
 		if settings, err := h.database.GetMFASettings(); err == nil && settings != nil {
 			h.mfaSettings = settings
@@ -1382,7 +1382,7 @@ func (h *AdminHandler) GetSettings(c *gin.Context) {
 		resp["protected_env_vars"] = []string{}
 		resp["allow_destructive_actions"] = false
 		resp["approved_commands"] = []string{}
-		resp["app_image_tag_patterns"] = map[string]string{}
+		resp["app_image_patterns"] = map[string]string{}
 	}
 
 	if h.mfaSettings != nil {
@@ -1528,23 +1528,23 @@ func (h *AdminHandler) UpdateApprovedCommands(c *gin.Context) {
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }
 
-// UpdateAppImageTagPatterns godoc
+// UpdateAppImagePatterns godoc
 // @Summary Update app image tag validation patterns
 // @Description Updates the map of app names to image tag regex patterns used for manifest validation
 // @Tags Settings
 // @Accept json
 // @Produce json
-// @Param request body UpdateAppImageTagPatternsRequest true "App image tag patterns"
+// @Param request body UpdateAppImagePatternsRequest true "App image tag patterns"
 // @Success 200 {object} StatusResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/settings/app_image_tag_patterns [put]
-func (h *AdminHandler) UpdateAppImageTagPatterns(c *gin.Context) {
+// @Router /admin/settings/app_image_patterns [put]
+func (h *AdminHandler) UpdateAppImagePatterns(c *gin.Context) {
 	email := c.GetString("user_email")
 
-	var payload UpdateAppImageTagPatternsRequest
+	var payload UpdateAppImagePatternsRequest
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -1553,7 +1553,7 @@ func (h *AdminHandler) UpdateAppImageTagPatterns(c *gin.Context) {
 
 	// Validate and clean patterns
 	patterns := make(map[string]string)
-	for app, pattern := range payload.AppImageTagPatterns {
+	for app, pattern := range payload.AppImagePatterns {
 		app = strings.TrimSpace(app)
 		pattern = strings.TrimSpace(pattern)
 		if app == "" || pattern == "" {
@@ -1571,7 +1571,7 @@ func (h *AdminHandler) UpdateAppImageTagPatterns(c *gin.Context) {
 	}
 
 	if h.database != nil {
-		if err := h.database.UpsertAppImageTagPatterns(patterns, uid); err != nil {
+		if err := h.database.UpsertAppImagePatterns(patterns, uid); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save app image tag patterns"})
 			return
 		}
@@ -1587,7 +1587,7 @@ func (h *AdminHandler) UpdateAppImageTagPatterns(c *gin.Context) {
 			notifyValue = "(none)"
 		}
 
-		h.notifySettingsChanged(c, "app_image_tag_patterns", notifyValue)
+		h.notifySettingsChanged(c, "app_image_patterns", notifyValue)
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})

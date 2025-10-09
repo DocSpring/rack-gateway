@@ -80,52 +80,13 @@ func TestSaveUserUpdatesDisplayName(t *testing.T) {
 	require.Equal(t, "New Name", unchanged.Name)
 }
 
-func TestDeployWithApprovalPermission(t *testing.T) {
-	t.Run("without approval object:create is denied", func(t *testing.T) {
-		mockDB := &mockDatabase{
-			apiToken: &db.APIToken{
-				ID:          1,
-				Permissions: []string{"convox:deploy:deploy_with_approval"},
-			},
-			hasActiveApproval: false,
-		}
-
-		mgr := &DBManager{
-			db: mockDB,
-			mu: sync.RWMutex{},
-		}
-
-		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceObject, ActionCreate)
-		require.NoError(t, err)
-		require.False(t, ok, "should NOT be allowed to create objects without approval")
-	})
-
-	t.Run("with active approval object:create is granted", func(t *testing.T) {
-		mockDB := &mockDatabase{
-			apiToken: &db.APIToken{
-				ID:          1,
-				Permissions: []string{"convox:deploy:deploy_with_approval"},
-			},
-			hasActiveApproval: true,
-		}
-
-		mgr := &DBManager{
-			db: mockDB,
-			mu: sync.RWMutex{},
-		}
-
-		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceObject, ActionCreate)
-		require.NoError(t, err)
-		require.True(t, ok, "should be allowed to create objects with active approval")
-	})
-
-	t.Run("without deploy_with_approval permission is denied", func(t *testing.T) {
+func TestAPITokenPermissions(t *testing.T) {
+	t.Run("direct permission granted", func(t *testing.T) {
 		mockDB := &mockDatabase{
 			apiToken: &db.APIToken{
 				ID:          1,
 				Permissions: []string{"convox:app:list"},
 			},
-			hasActiveApproval: true, // Even with approval, no deploy_with_approval permission
 		}
 
 		mgr := &DBManager{
@@ -133,9 +94,45 @@ func TestDeployWithApprovalPermission(t *testing.T) {
 			mu: sync.RWMutex{},
 		}
 
-		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceObject, ActionCreate)
+		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceApp, ActionList)
 		require.NoError(t, err)
-		require.False(t, ok, "should NOT be allowed without deploy_with_approval permission")
+		require.True(t, ok, "should be allowed with direct permission")
+	})
+
+	t.Run("direct permission denied", func(t *testing.T) {
+		mockDB := &mockDatabase{
+			apiToken: &db.APIToken{
+				ID:          1,
+				Permissions: []string{"convox:app:list"},
+			},
+		}
+
+		mgr := &DBManager{
+			db: mockDB,
+			mu: sync.RWMutex{},
+		}
+
+		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceApp, ActionDelete)
+		require.NoError(t, err)
+		require.False(t, ok, "should NOT be allowed without direct permission")
+	})
+
+	t.Run("wildcard permission", func(t *testing.T) {
+		mockDB := &mockDatabase{
+			apiToken: &db.APIToken{
+				ID:          1,
+				Permissions: []string{"convox:*:*"},
+			},
+		}
+
+		mgr := &DBManager{
+			db: mockDB,
+			mu: sync.RWMutex{},
+		}
+
+		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceApp, ActionDelete)
+		require.NoError(t, err)
+		require.True(t, ok, "should be allowed with wildcard permission")
 	})
 }
 
@@ -152,6 +149,10 @@ func (m *mockDatabase) GetAPITokenByID(id int64) (*db.APIToken, error) {
 }
 
 func (m *mockDatabase) HasActiveDeployApproval(tokenID int64) (bool, error) {
+	return m.hasActiveApproval, nil
+}
+
+func (m *mockDatabase) HasActiveDeployApprovalForApp(tokenID int64, app string) (bool, error) {
 	return m.hasActiveApproval, nil
 }
 

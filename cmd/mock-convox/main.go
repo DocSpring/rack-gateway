@@ -957,6 +957,10 @@ func setEnvironment(w http.ResponseWriter, r *http.Request) {
 
 // uploadObject accepts a tarball upload for deploy and returns 200 OK
 func uploadObject(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	app := vars["app"]
+	name := vars["name"]
+
 	// Drain body to simulate upload and avoid connection reuse issues
 	if _, err := io.Copy(io.Discard, r.Body); err != nil {
 		log.Printf("mock-convox: failed to drain upload body: %v", err)
@@ -964,10 +968,14 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 	if err := r.Body.Close(); err != nil {
 		log.Printf("mock-convox: failed to close upload body: %v", err)
 	}
-	// Return a minimal JSON response
+
+	// Return object URL that BuildCreate will use
+	// Format: object://tmp/{name} matches Convox's object storage URL format
+	objectURL := fmt.Sprintf("object://%s/tmp/%s", app, name)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"status": "uploaded"})
+	writeJSON(w, map[string]string{"url": objectURL})
 }
 
 // Helpers

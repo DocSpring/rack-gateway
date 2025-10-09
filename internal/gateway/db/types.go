@@ -10,6 +10,7 @@ import (
 type Database struct {
 	db     *sql.DB
 	driver string // always "pgx"
+	logSQL bool   // log all SQL queries
 }
 
 // User represents a user in the system
@@ -152,6 +153,7 @@ type DeployApprovalRequest struct {
 	CIProvider                  string          `json:"ci_provider,omitempty"`
 	CIMetadata                  json.RawMessage `json:"ci_metadata,omitempty"`
 	App                         string          `json:"app,omitempty"`
+	ObjectURL                   string          `json:"object_url,omitempty"`
 	BuildID                     string          `json:"build_id,omitempty"`
 	ReleaseID                   string          `json:"release_id,omitempty"`
 	ReleaseCreatedAt            *time.Time      `json:"release_created_at,omitempty" ts_type:"string | null"`

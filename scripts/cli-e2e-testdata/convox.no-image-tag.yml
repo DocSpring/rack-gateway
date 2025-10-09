@@ -1,0 +1,6 @@
+services:
+  web:
+    build: .
+    port: 3000
+  worker:
+    build: .

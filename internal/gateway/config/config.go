@@ -33,8 +33,10 @@ type Config struct {
 	OperationsUsers         []string
 	DevMode                 bool
 	Racks                   map[string]RackConfig
+	LogRequestBodies        bool
+	LogRequestHeaders       bool
 	LogResponseBodies       bool
-	LogResponseMaxBytes     int
+	LogBodyMaxBytes         int
 	RackTLSPinningEnabled   bool
 	TrustedProxies          []string
 	DeployApprovalsDisabled bool
@@ -93,8 +95,10 @@ func Load() (*Config, error) {
 		SlackClientSecret:   getEnv("SLACK_CLIENT_SECRET", ""),
 		DevMode:             getEnv("DEV_MODE", "false") == "true",
 		Racks:               make(map[string]RackConfig),
+		LogRequestBodies:    getEnv("LOG_REQUEST_BODIES", "false") == "true",
+		LogRequestHeaders:   getEnv("LOG_REQUEST_HEADERS", "false") == "true",
 		LogResponseBodies:   getEnv("LOG_RESPONSE_BODIES", "false") == "true",
-		LogResponseMaxBytes: 16384,
+		LogBodyMaxBytes:     16384,
 		// Disabled by default because the Convox rack API currently generates a fresh self-signed
 		// certificate on every restart (see stdapi.Server.Listen). Pinning that dynamic cert would
 		// break after each deploy. If Convox supports providing a stable internal certificate in the
@@ -103,9 +107,9 @@ func Load() (*Config, error) {
 		DeployApprovalsDisabled: getEnv("DISABLE_DEPLOY_APPROVALS", "false") == "true",
 		DeployApprovalWindow:    15 * time.Minute,
 	}
-	if mb := getEnv("LOG_RESPONSE_MAX_BYTES", "65536"); mb != "" {
+	if mb := getEnv("LOG_BODY_MAX_BYTES", "65536"); mb != "" {
 		if v, err := strconv.Atoi(mb); err == nil && v > 0 {
-			cfg.LogResponseMaxBytes = v
+			cfg.LogBodyMaxBytes = v
 		}
 	}
 

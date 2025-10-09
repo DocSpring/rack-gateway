@@ -52,6 +52,10 @@ func (d *Database) migrateAll() error {
 	sort.Strings(names)
 	for _, name := range names {
 		version := strings.TrimSuffix(name, ".sql")
+		// Extract just the timestamp prefix (before first underscore)
+		if idx := strings.Index(version, "_"); idx > 0 {
+			version = version[:idx]
+		}
 		if applied[version] {
 			continue
 		}

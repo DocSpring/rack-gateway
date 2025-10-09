@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
@@ -94,6 +95,15 @@ func checkAndPromptMFAIfNeeded(cmd *cobra.Command, baseURL, bearer, rack string,
 // promptMFAForCommand prompts the user for MFA and returns the auth string
 // Returns format: "totp.123456" or "webauthn.assertion_data"
 func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
+	// Check for --mfa-code flag first (TOTP/Yubikey/backup code)
+	if MFACodeFlag != "" {
+		code := strings.TrimSpace(MFACodeFlag)
+		if code != "" {
+			// Return the code in the format expected by the gateway
+			return "totp." + code, nil
+		}
+	}
+
 	// Get MFA status to see what methods are available
 	mfaStatus, err := getMFAStatus(baseURL, bearer)
 	if err != nil {

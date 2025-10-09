@@ -1,5 +1,6 @@
 x-gateway-env: &gateway_common_env
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_SQL_QUERIES: "true"
   APP_SECRET_KEY: dev-jwt-secret-key-change-in-production
   GOOGLE_CLIENT_ID: mock-client-id
   GOOGLE_CLIENT_SECRET: mock-client-secret
@@ -14,7 +15,6 @@ x-gateway-env: &gateway_common_env
   RACK_TOKEN: mock-rack-token-12345
   RACK_USERNAME: convox
   DATABASE_URL: postgres://postgres:postgres@postgres:5432/gateway_dev?sslmode=disable
-  LOG_RESPONSE_BODIES: "true"
 
 x-gateway-health: &gateway_healthcheck
   test:
@@ -148,6 +148,9 @@ services:
       FORCE_CSP_IN_DEV: "true"
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
+      LOG_REQUEST_HEADERS: "true"
+      LOG_REQUEST_BODIES: "true"
+      LOG_RESPONSE_BODIES: "true"
     ports:
       - "${TEST_GATEWAY_PORT:-9447}:${TEST_GATEWAY_PORT:-9447}"
     volumes: []

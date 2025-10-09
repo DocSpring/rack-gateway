@@ -35,7 +35,8 @@ func New(dsn string) (*Database, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
-	d := &Database{db: db, driver: "pgx"}
+	logSQL := os.Getenv("LOG_SQL_QUERIES") == "true"
+	d := &Database{db: db, driver: "pgx", logSQL: logSQL}
 	if err := d.migrateAll(); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
@@ -143,19 +144,75 @@ func (d *Database) rebind(q string) string {
 	return b.String()
 }
 
+const (
+	colorReset   = "\033[0m"
+	colorCyan    = "\033[36m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorRed     = "\033[31m"
+	colorMagenta = "\033[35m"
+	colorGray    = "\033[90m"
+)
+
+func sqlColor(query string) string {
+	q := strings.TrimSpace(strings.ToUpper(query))
+	switch {
+	case strings.HasPrefix(q, "SELECT"):
+		return colorCyan
+	case strings.HasPrefix(q, "INSERT"):
+		return colorGreen
+	case strings.HasPrefix(q, "UPDATE"):
+		return colorYellow
+	case strings.HasPrefix(q, "DELETE"):
+		return colorRed
+	default:
+		return colorMagenta
+	}
+}
+
+func (d *Database) logQuery(prefix, query string, args ...interface{}) {
+	if !d.logSQL {
+		return
+	}
+	color := sqlColor(query)
+	// Compact query for logging (single line, trimmed whitespace)
+	q := strings.Join(strings.Fields(query), " ")
+	if len(q) > 200 {
+		q = q[:200] + "..."
+	}
+	// Format args with commas
+	argsStr := "[]"
+	if len(args) > 0 {
+		argStrs := make([]string, len(args))
+		for i, arg := range args {
+			argStrs[i] = fmt.Sprintf("%v", arg)
+		}
+		argsStr = "[" + strings.Join(argStrs, ", ") + "]"
+	}
+	fmt.Printf("%s%s%s %s%s%s %s%s%s\n",
+		colorGray, prefix, colorReset,
+		color, q, colorReset,
+		colorGray, argsStr, colorReset,
+	)
+}
+
 func (d *Database) exec(q string, args ...interface{}) (sql.Result, error) {
+	d.logQuery("EXEC:", q, args...)
 	return d.db.Exec(d.rebind(q), args...)
 }
 
 func (d *Database) execTx(tx *sql.Tx, q string, args ...interface{}) (sql.Result, error) {
+	d.logQuery("EXEC (TX):", q, args...)
 	return tx.Exec(d.rebind(q), args...)
 }
 
 func (d *Database) query(q string, args ...interface{}) (*sql.Rows, error) {
+	d.logQuery("QUERY:", q, args...)
 	return d.db.Query(d.rebind(q), args...)
 }
 
 func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
+	d.logQuery("QUERY ROW:", q, args...)
 	return d.db.QueryRow(d.rebind(q), args...)
 }
 

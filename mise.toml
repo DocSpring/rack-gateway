@@ -11,10 +11,11 @@ TEST_GATEWAY_PORT = "9447"
 TEST_MOCK_OAUTH_PORT = "9345"
 TEST_MOCK_CONVOX_PORT = "6443"
 
+LOG_SQL_QUERIES = "true"
+
 # Application configuration
 DEV_MODE = "true"
 LOG_LEVEL = "debug"
-LOG_RESPONSE_BODIES = "true"
 DOMAIN = "localhost"
 PORT = "8447"  # Gateway listens on this port
 

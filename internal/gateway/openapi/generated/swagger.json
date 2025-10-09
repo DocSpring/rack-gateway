@@ -595,7 +595,7 @@
                 }
             }
         },
-        "/admin/settings/app_image_tag_patterns": {
+        "/admin/settings/app_image_patterns": {
             "put": {
                 "security": [
                     {
@@ -623,7 +623,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.UpdateAppImageTagPatternsRequest"
+                            "$ref": "#/definitions/handlers.UpdateAppImagePatternsRequest"
                         }
                     }
                 ],
@@ -3611,10 +3611,14 @@
         "handlers.CreateDeployApprovalRequestRequest": {
             "type": "object",
             "required": [
+                "app",
                 "git_commit_hash",
                 "message"
             ],
             "properties": {
+                "app": {
+                    "type": "string"
+                },
                 "ci_metadata": {
                     "type": "object",
                     "additionalProperties": true
@@ -4237,10 +4241,10 @@
                 }
             }
         },
-        "handlers.UpdateAppImageTagPatternsRequest": {
+        "handlers.UpdateAppImagePatternsRequest": {
             "type": "object",
             "properties": {
-                "app_image_tag_patterns": {
+                "app_image_patterns": {
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"

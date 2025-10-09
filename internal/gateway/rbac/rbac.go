@@ -15,7 +15,7 @@ import (
 type RBACDatabase interface {
 	GetUser(email string) (*db.User, error)
 	GetAPITokenByID(id int64) (*db.APIToken, error)
-	HasActiveDeployApproval(tokenID int64) (bool, error)
+	HasActiveDeployApprovalForApp(tokenID int64, app string) (bool, error)
 	ListUsers() ([]*db.User, error)
 	CreateUser(email, name string, roles []string) (*db.User, error)
 	UpdateUserRoles(email string, roles []string) error
@@ -347,12 +347,7 @@ func (m *DBManager) EnforceForAPIToken(tokenID int64, scope Scope, resource Reso
 	permission := Permission(scope, resource, action)
 
 	// Check if permission is directly granted (with wildcard support)
-	if matchesAnyPermission(token.Permissions, permission) {
-		return true, nil
-	}
-
-	// Check if deploy_with_approval grants this permission
-	return m.checkDeployWithApproval(token.Permissions, tokenID, scope, resource, action)
+	return matchesAnyPermission(token.Permissions, permission), nil
 }
 
 // matchesAnyPermission checks if the requested permission matches any in the list
@@ -363,52 +358,30 @@ func matchesAnyPermission(permissions []string, requested string) bool {
 			return true
 		}
 		// Check for wildcard patterns
-		if strings.HasSuffix(perm, ":*") {
-			prefix := strings.TrimSuffix(perm, ":*")
-			if strings.HasPrefix(requested, prefix+":") {
+		if strings.Contains(perm, "*") {
+			// Handle multi-level wildcards like "convox:*:*"
+			permParts := strings.Split(perm, ":")
+			reqParts := strings.Split(requested, ":")
+
+			// Must have same number of parts
+			if len(permParts) != len(reqParts) {
+				continue
+			}
+
+			// Check each part
+			match := true
+			for i := range permParts {
+				if permParts[i] != "*" && permParts[i] != reqParts[i] {
+					match = false
+					break
+				}
+			}
+			if match {
 				return true
 			}
 		}
 	}
 	return false
-}
-
-// checkDeployWithApproval checks if deploy_with_approval permission grants the requested action
-func (m *DBManager) checkDeployWithApproval(permissions []string, tokenID int64, scope Scope, resource Resource, action Action) (bool, error) {
-	// Only grant additional permissions for specific convox actions
-	if scope != ScopeConvox {
-		return false, nil
-	}
-
-	// Check if token has deploy_with_approval permission
-	hasDeployWithApproval := false
-	deployWithApprovalPerm := Permission(ScopeConvox, ResourceDeploy, ActionDeployWithApproval)
-	for _, perm := range permissions {
-		if perm == deployWithApprovalPerm {
-			hasDeployWithApproval = true
-			break
-		}
-	}
-
-	if !hasDeployWithApproval {
-		return false, nil
-	}
-
-	// Check for active approval for this token
-	hasActiveApproval, err := m.db.HasActiveDeployApproval(tokenID)
-	if err != nil {
-		return false, fmt.Errorf("failed to check active approval: %w", err)
-	}
-	if !hasActiveApproval {
-		return false, nil
-	}
-
-	// Grant permission for object:create when there's an active approval
-	if resource == ResourceObject && action == ActionCreate {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 // GetAllowedDomain returns the configured domain

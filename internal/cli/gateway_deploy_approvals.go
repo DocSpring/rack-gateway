@@ -64,6 +64,7 @@ func DeployApprovalCommand() *cobra.Command {
 func newDeployApprovalRequestCommand() *cobra.Command {
 	var (
 		rackFlag        string
+		appFlag         string
 		waitFlag        bool
 		pollIntervalStr string
 		timeoutStr      string
@@ -87,6 +88,12 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 			message = strings.TrimSpace(message)
 			if message == "" {
 				return fmt.Errorf("--message is required")
+			}
+
+			// Resolve app using auto-detection
+			app, err := ResolveApp(appFlag)
+			if err != nil {
+				return err
 			}
 
 			rack, err := SelectedRack()
@@ -123,7 +130,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, gatewayURL, bearer, rack, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, "", nil)
+			created, err := createDeployApproval(cmd, gatewayURL, bearer, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, "")
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) && conflict.request != nil {
@@ -170,6 +177,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		}),
 	}
 
+	cmd.Flags().StringVarP(&appFlag, "app", "a", "", "App name (auto-detected from .convox/app or current directory)")
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
 	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
@@ -194,7 +202,6 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 func newDeployApprovalApproveCommand() *cobra.Command {
 	var (
 		rackFlag string
-		mfaCode  string
 		notes    string
 	)
 
@@ -221,7 +228,7 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 				return err
 			}
 
-			approved, err := approveDeployRequest(cmd, gatewayURL, bearer, rack, requestID, strings.TrimSpace(notes), &mfaCode)
+			approved, err := approveDeployRequest(cmd, gatewayURL, bearer, rack, requestID, strings.TrimSpace(notes))
 			if err != nil {
 				return err
 			}
@@ -238,7 +245,6 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
-	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
 	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval")
 
 	return cmd
@@ -248,7 +254,6 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 	var (
 		racksFlag       string
 		pollIntervalStr string
-		mfaCode         string
 		autoApprove     bool
 		notes           string
 		loop            bool
@@ -335,7 +340,7 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				}
 
 				if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-					if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name, &mfaCode); err != nil {
+					if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name); err != nil {
 						return err
 					}
 					resp, body, err = sendDeployApprovalRequest(info.gatewayURL, info.bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
@@ -404,12 +409,12 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 						}
 
 						// Perform MFA step-up before approval
-						if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name, &mfaCode); err != nil {
+						if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name); err != nil {
 							return err
 						}
 
 						// Now approve the request
-						approved, err := approveDeployRequest(cmd, info.gatewayURL, info.bearer, info.name, req.PublicID, strings.TrimSpace(notes), &mfaCode)
+						approved, err := approveDeployRequest(cmd, info.gatewayURL, info.bearer, info.name, req.PublicID, strings.TrimSpace(notes))
 						if err != nil {
 							return err
 						}
@@ -452,7 +457,6 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&racksFlag, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
 	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "1s", "Polling interval")
-	cmd.Flags().StringVar(&mfaCode, "mfa-code", "", "MFA code to satisfy step-up requirements")
 	cmd.Flags().BoolVar(&autoApprove, "approve", false, "Automatically approve the first pending request found")
 	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval (only used with --approve)")
 	cmd.Flags().BoolVar(&loop, "loop", false, "Continue polling for more requests after displaying or approving one")
@@ -540,10 +544,13 @@ func playNotificationSound(cfg *Config, rack string) error {
 	return cmd.Run()
 }
 
-func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, targetToken string, mfaCode *string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, targetToken string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message":         message,
 		"git_commit_hash": gitCommitHash,
+	}
+	if trimmed := strings.TrimSpace(app); trimmed != "" {
+		payload["app"] = trimmed
 	}
 	if trimmed := strings.TrimSpace(gitBranch); trimmed != "" {
 		payload["git_branch"] = trimmed
@@ -557,18 +564,18 @@ func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, gitCommi
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, "/deploy-approval-requests", payload, mfaCode)
+	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, "/deploy-approval-requests", payload)
 }
 
-func approveDeployRequest(cmd *cobra.Command, gatewayURL, bearer, rack, requestID, notes string, mfaCode *string) (*deployApprovalRequest, error) {
+func approveDeployRequest(cmd *cobra.Command, gatewayURL, bearer, rack, requestID, notes string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{}
 	if notes != "" {
 		payload["notes"] = notes
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload, mfaCode)
+	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload)
 }
 
-func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, path string, payload map[string]interface{}, mfaCode *string) (*deployApprovalRequest, error) {
+func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, path string, payload map[string]interface{}) (*deployApprovalRequest, error) {
 	fullPath := path
 	attempts := 0
 	for {
@@ -579,7 +586,7 @@ func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, pat
 		}
 
 		if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-			if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack, mfaCode); err != nil {
+			if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
 				return nil, err
 			}
 			if attempts < 3 {
@@ -605,22 +612,8 @@ func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, pat
 	}
 }
 
-func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer, rack string, mfaCode *string) error {
-	// If mfa-code flag provided, try TOTP verification
-	if mfaCode != nil {
-		code := strings.TrimSpace(*mfaCode)
-		if code != "" {
-			if err := submitMFAVerification(gatewayURL, bearer, code); err != nil {
-				return fmt.Errorf("MFA verification failed: %w", err)
-			}
-			if err := writeLine(cmd.OutOrStdout(), "MFA verified."); err != nil {
-				return err
-			}
-			*mfaCode = ""
-			return nil
-		}
-	}
-	// Use unified MFA module that respects preferences and --mfa-method flag
+func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer, rack string) error {
+	// Use unified MFA module that respects preferences and global --mfa-code and --mfa-method flags
 	return performMFAStepUp(cmd, gatewayURL, bearer, rack)
 }
 

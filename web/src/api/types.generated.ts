@@ -4,4197 +4,4272 @@
  */
 
 export interface paths {
-    "/admin/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List audit logs
-         * @description Returns paginated audit logs filtered by optional query parameters.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Text search */
-                    search?: string;
-                    /** @description Action type filter */
-                    action_type?: string;
-                    /** @description Resource type filter */
-                    resource_type?: string;
-                    /** @description Status filter */
-                    status?: string;
-                    /** @description Page number */
-                    page?: number;
-                    /** @description Page size */
-                    limit?: number;
-                    /** @description ISO8601 start time */
-                    start?: string;
-                    /** @description ISO8601 end time */
-                    end?: string;
-                    /** @description Relative range (e.g. 24h, 7d, custom) */
-                    range?: string;
-                    /** @description Filter by user email */
-                    user?: string;
-                    /** @description Filter by user ID */
-                    user_id?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.AuditLogsResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/audit/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export audit logs as CSV
-         * @description Streams the filtered audit log dataset as CSV.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Text search */
-                    search?: string;
-                    /** @description Action type filter */
-                    action_type?: string;
-                    /** @description Resource type filter */
-                    resource_type?: string;
-                    /** @description Status filter */
-                    status?: string;
-                    /** @description ISO8601 start time */
-                    since?: string;
-                    /** @description ISO8601 end time */
-                    until?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/csv": string;
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/csv": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/csv": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get legacy configuration
-         * @description Returns the legacy user/domain configuration payload (deprecated).
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        /**
-         * Update legacy configuration
-         * @description Placeholder endpoint retained for backwards compatibility. Always returns 501.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Not Implemented */
-                501: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/deploy-approval-requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List deploy approvals
-         * @description Lists deploy approval requests (admin).
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Filter by status */
-                    status?: string;
-                    /** @description Only pending/approved */
-                    only_open?: boolean;
-                    /** @description Limit */
-                    limit?: number;
-                    /** @description Offset */
-                    offset?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestList"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/deploy-approval-requests/{id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Approve deploy approval request
-         * @description Approves a pending deploy approval request.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Deploy approval request public ID (UUID) */
-                    id: string;
-                };
-                cookie?: never;
-            };
-            /** @description Approval notes */
-            requestBody?: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/deploy-approval-requests/{id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reject deploy approval request
-         * @description Rejects a pending deploy approval request.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Deploy approval request public ID (UUID) */
-                    id: string;
-                };
-                cookie?: never;
-            };
-            /** @description Rejection notes */
-            requestBody?: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List RBAC roles
-         * @description Returns metadata and permissions for each gateway RBAC role.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            [key: string]: components["schemas"]["handlers.RoleDescriptor"];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get gateway admin settings
-         * @description Returns administrative settings including protected env vars and rack TLS state.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings/allow_destructive_actions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Toggle destructive action protections
-         * @description Enables or disables destructive actions such as rack resets.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Toggle payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateAllowDestructiveActionsRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings/approved_commands": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update approved commands for CI/CD exec
-         * @description Replaces the list of approved commands that CI/CD tokens can execute in processes.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Approved commands */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateApprovedCommandsRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings/circleci": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get CircleCI integration settings
-         * @description Returns CircleCI integration configuration including API token and approval job name.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.CircleCISettings"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings/mfa": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update MFA enforcement defaults
-         * @description Configures whether MFA is required for all users.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description MFA settings payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateMFASettingsRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings/protected_env_vars": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update protected environment variables
-         * @description Replaces the list of protected environment variable keys.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Protected env vars */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateProtectedEnvVarsRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/settings/rack_tls_cert/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Refresh rack TLS certificate
-         * @description Fetches and stores the latest TLS certificate for the configured Convox rack.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.RackTLSCert"];
-                    };
-                };
-                /** @description Not Implemented */
-                501: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Bad Gateway */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List API tokens
-         * @description Returns all API tokens configured in the system.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.APIToken"][];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Create an API token
-         * @description Generates a new API token for automation or CI/CD use.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Token payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.CreateAPITokenRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.CreateAPITokenResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tokens/permissions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get token permission metadata
-         * @description Returns the permission catalog and metadata used to build API token forms.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.TokenPermissionMetadata"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tokens/{tokenID}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get API token
-         * @description Returns metadata for a specific API token.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Token ID */
-                    tokenID: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.APIToken"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        /**
-         * Update an API token
-         * @description Updates token metadata such as name and permissions.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Token ID */
-                    tokenID: string;
-                };
-                cookie?: never;
-            };
-            /** @description Token update */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateAPITokenRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.APIToken"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        /**
-         * Delete an API token
-         * @description Permanently removes an API token.
-         */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Token ID */
-                    tokenID: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description No Content */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List all gateway users
-         * @description Returns every user configured in the gateway along with role assignments.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.User"][];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Create a user
-         * @description Creates a new gateway user with the provided roles.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description User payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.CreateUserRequest"];
-                };
-            };
-            responses: {
-                /** @description Created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.UserSummary"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Conflict */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a user
-         * @description Returns details for a single gateway user.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["db.User"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        /**
-         * Update user profile
-         * @description Updates a user's display name and/or email.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Current email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            /** @description User profile */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateUserProfileRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.UserSummary"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Conflict */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        /**
-         * Delete a user
-         * @description Removes a gateway user and revokes all sessions they own.
-         */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description No Content */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}/lock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Lock a user account
-         * @description Locks a user account to prevent login
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            /** @description Lock reason */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.LockUserRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update user roles
-         * @description Replaces the role assignments for a user.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            /** @description Role payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateUserRolesRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.UserSummary"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List active sessions for a user
-         * @description Returns the active (non-revoked) web sessions for the specified user.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.UserSessionResponse"][];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}/sessions/revoke_all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Revoke all sessions for a user
-         * @description Revokes every active session belonging to the specified user.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.RevokeAllSessionsResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}/sessions/{sessionID}/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Revoke a user session
-         * @description Revokes a single session for the specified user.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                    /** @description Session ID */
-                    sessionID: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.RevokeSessionResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/users/{email}/unlock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Unlock a user account
-         * @description Unlocks a previously locked user account
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description User email */
-                    email: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/cli/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Complete CLI OAuth redirect
-         * @description Stores the OAuth authorization code for the CLI to finish login.
-         */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Authorization code */
-                    code: string;
-                    /** @description State */
-                    state: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Temporary Redirect */
-                307: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Missing parameters */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/cli/complete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Finalize CLI OAuth login
-         * @description Exchanges the stored authorization code and PKCE verifier for a session token.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description CLI login payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.CLILoginCompleteRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["auth.LoginResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/cli/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start CLI OAuth login
-         * @description Initiates the CLI OAuth flow and returns PKCE parameters.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["auth.LoginStartResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/backup-codes/regenerate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Regenerate backup codes
-         * @description Generates a new set of MFA backup codes. All prior codes become invalid.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.BackupCodesResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/enroll/totp/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm TOTP enrollment
-         * @description Confirms the TOTP secret using a verification code and optionally trusts the device.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Enrollment confirmation payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.ConfirmTOTPEnrollmentRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.VerifyMFAResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/enroll/totp/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start TOTP enrollment
-         * @description Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StartTOTPEnrollmentResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/enroll/webauthn/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm WebAuthn enrollment
-         * @description Completes WebAuthn credential registration with the client's credential response.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description WebAuthn credential */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.ConfirmWebAuthnEnrollmentRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.WebAuthnEnrollmentResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/enroll/webauthn/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start WebAuthn enrollment
-         * @description Begins WebAuthn credential registration. Returns a challenge for the browser.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StartWebAuthnEnrollmentResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/enroll/yubiotp/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start Yubico OTP enrollment
-         * @description Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Yubikey OTP */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.StartYubiOTPEnrollmentRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StartYubiOTPEnrollmentResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/methods/{methodID}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update MFA method label
-         * @description Updates the label of an MFA method
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description MFA Method ID */
-                    methodID: number;
-                };
-                cookie?: never;
-            };
-            /** @description Update request */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateMFAMethodRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        /**
-         * Delete an MFA method
-         * @description Removes an existing MFA method for the current user.
-         */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description MFA method ID */
-                    methodID: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/preferred-method": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update preferred MFA method
-         * @description Sets the user's preferred MFA method for sign-in (totp or webauthn)
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Preferred method */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdatePreferredMFAMethodRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get MFA status for current session
-         * @description Returns enrollment state, configured methods, trusted devices, and backup code summary.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.MFAStatusResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/trusted-devices/{deviceID}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Revoke a trusted device
-         * @description Revokes a trusted device, requiring MFA on next login from that device.
-         */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Trusted device ID */
-                    deviceID: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.StatusResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify MFA step-up
-         * @description Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Verification payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.VerifyMFARequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.VerifyMFAResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/webauthn/assertion/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start WebAuthn assertion for MFA
-         * @description Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.WebAuthnAssertionStartResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/mfa/webauthn/assertion/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify WebAuthn assertion for MFA
-         * @description Completes the WebAuthn assertion ceremony by validating the signed response.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Assertion response and session data */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.VerifyWebAuthnAssertionRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.VerifyMFAResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/web/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Complete web OAuth login
-         * @description Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
-         */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Authorization code */
-                    code: string;
-                    /** @description State */
-                    state: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Redirect to web UI */
-                302: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Invalid state */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description User not authorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-                /** @description Authentication failure */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/web/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Start web OAuth login
-         * @description Redirects the browser to the identity provider for login.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Redirect to identity provider */
-                302: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/web/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Log out current session
-         * @description Revokes the active session, clears the cookie, and redirects to the login screen.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Redirect to login */
-                302: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "*/*": string;
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/created-by": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get resource creator metadata
-         * @description Returns creator information for the supplied resource identifiers.
-         */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Resource type */
-                    type: "app" | "build" | "release";
-                    /** @description Comma-separated resource IDs */
-                    ids?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            [key: string]: components["schemas"]["db.CreatorInfo"];
-                        };
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/deploy-approval-requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request deploy approval
-         * @description Creates a manual approval record tied to an API token.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Deploy approval request payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.CreateDeployApprovalRequestRequest"];
-                };
-            };
-            responses: {
-                /** @description Created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Conflict - pending request already exists */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/deploy-approval-requests/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get deploy approval
-         * @description Returns the status of a deploy approval request.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Deploy approval request public ID (UUID) */
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/env": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get environment variables
-         * @description Returns environment variables for a Convox app, masking secrets unless authorized.
-         */
-        get: {
-            parameters: {
-                query: {
-                    /** @description App name */
-                    app: string;
-                    /** @description Specific key to fetch */
-                    key?: string;
-                    /** @description Include secret values */
-                    secrets?: boolean;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.EnvValuesResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Bad Gateway */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        /**
-         * Update environment variables
-         * @description Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
-         */
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Environment update payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.UpdateEnvValuesRequest"];
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.UpdateEnvValuesResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Bad Gateway */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health check
-         * @description Returns service health information.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.HealthResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get current user profile
-         * @description Returns the authenticated user's profile, roles, and default rack summary.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.CurrentUserResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/rack": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get rack system information
-         * @description Proxies the rack /system endpoint returning the rack's metadata.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Bad Gateway */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+	"/admin/audit": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List audit logs
+		 * @description Returns paginated audit logs filtered by optional query parameters.
+		 */
+		get: {
+			parameters: {
+				query?: {
+					/** @description Text search */
+					search?: string;
+					/** @description Action type filter */
+					action_type?: string;
+					/** @description Resource type filter */
+					resource_type?: string;
+					/** @description Status filter */
+					status?: string;
+					/** @description Page number */
+					page?: number;
+					/** @description Page size */
+					limit?: number;
+					/** @description ISO8601 start time */
+					start?: string;
+					/** @description ISO8601 end time */
+					end?: string;
+					/** @description Relative range (e.g. 24h, 7d, custom) */
+					range?: string;
+					/** @description Filter by user email */
+					user?: string;
+					/** @description Filter by user ID */
+					user_id?: string;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.AuditLogsResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/audit/export": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Export audit logs as CSV
+		 * @description Streams the filtered audit log dataset as CSV.
+		 */
+		get: {
+			parameters: {
+				query?: {
+					/** @description Text search */
+					search?: string;
+					/** @description Action type filter */
+					action_type?: string;
+					/** @description Resource type filter */
+					resource_type?: string;
+					/** @description Status filter */
+					status?: string;
+					/** @description ISO8601 start time */
+					since?: string;
+					/** @description ISO8601 end time */
+					until?: string;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"text/csv": string;
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"text/csv": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"text/csv": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/config": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get legacy configuration
+		 * @description Returns the legacy user/domain configuration payload (deprecated).
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							[key: string]: unknown;
+						};
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		/**
+		 * Update legacy configuration
+		 * @description Placeholder endpoint retained for backwards compatibility. Always returns 501.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description Not Implemented */
+				501: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/deploy-approval-requests": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List deploy approvals
+		 * @description Lists deploy approval requests (admin).
+		 */
+		get: {
+			parameters: {
+				query?: {
+					/** @description Filter by status */
+					status?: string;
+					/** @description Only pending/approved */
+					only_open?: boolean;
+					/** @description Limit */
+					limit?: number;
+					/** @description Offset */
+					offset?: number;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.DeployApprovalRequestList"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/deploy-approval-requests/{id}/approve": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approve deploy approval request
+		 * @description Approves a pending deploy approval request.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Deploy approval request public ID (UUID) */
+					id: string;
+				};
+				cookie?: never;
+			};
+			/** @description Approval notes */
+			requestBody?: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/deploy-approval-requests/{id}/reject": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Reject deploy approval request
+		 * @description Rejects a pending deploy approval request.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Deploy approval request public ID (UUID) */
+					id: string;
+				};
+				cookie?: never;
+			};
+			/** @description Rejection notes */
+			requestBody?: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/roles": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List RBAC roles
+		 * @description Returns metadata and permissions for each gateway RBAC role.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							[key: string]: components["schemas"]["handlers.RoleDescriptor"];
+						};
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get gateway admin settings
+		 * @description Returns administrative settings including protected env vars and rack TLS state.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							[key: string]: unknown;
+						};
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/allow_destructive_actions": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Toggle destructive action protections
+		 * @description Enables or disables destructive actions such as rack resets.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Toggle payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateAllowDestructiveActionsRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/app_image_patterns": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update app image tag validation patterns
+		 * @description Updates the map of app names to image tag regex patterns used for manifest validation
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description App image tag patterns */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateAppImagePatternsRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/approved_commands": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update approved commands for CI/CD exec
+		 * @description Replaces the list of approved commands that CI/CD tokens can execute in processes.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Approved commands */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateApprovedCommandsRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/circleci": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get CircleCI integration settings
+		 * @description Returns CircleCI integration configuration including API token and approval job name.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.CircleCISettings"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/mfa": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update MFA enforcement defaults
+		 * @description Configures whether MFA is required for all users.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description MFA settings payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateMFASettingsRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/protected_env_vars": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update protected environment variables
+		 * @description Replaces the list of protected environment variable keys.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Protected env vars */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateProtectedEnvVarsRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/settings/rack_tls_cert/refresh": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Refresh rack TLS certificate
+		 * @description Fetches and stores the latest TLS certificate for the configured Convox rack.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.RackTLSCert"];
+					};
+				};
+				/** @description Not Implemented */
+				501: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Bad Gateway */
+				502: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/tokens": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List API tokens
+		 * @description Returns all API tokens configured in the system.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.APIToken"][];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		/**
+		 * Create an API token
+		 * @description Generates a new API token for automation or CI/CD use.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Token payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.CreateAPITokenRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.CreateAPITokenResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/tokens/permissions": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get token permission metadata
+		 * @description Returns the permission catalog and metadata used to build API token forms.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.TokenPermissionMetadata"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/tokens/{tokenID}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get API token
+		 * @description Returns metadata for a specific API token.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Token ID */
+					tokenID: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.APIToken"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		/**
+		 * Update an API token
+		 * @description Updates token metadata such as name and permissions.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Token ID */
+					tokenID: string;
+				};
+				cookie?: never;
+			};
+			/** @description Token update */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateAPITokenRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.APIToken"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		/**
+		 * Delete an API token
+		 * @description Permanently removes an API token.
+		 */
+		delete: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Token ID */
+					tokenID: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description No Content */
+				204: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List all gateway users
+		 * @description Returns every user configured in the gateway along with role assignments.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.User"][];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		/**
+		 * Create a user
+		 * @description Creates a new gateway user with the provided roles.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description User payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.CreateUserRequest"];
+				};
+			};
+			responses: {
+				/** @description Created */
+				201: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.UserSummary"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Conflict */
+				409: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get a user
+		 * @description Returns details for a single gateway user.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["db.User"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		/**
+		 * Update user profile
+		 * @description Updates a user's display name and/or email.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Current email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			/** @description User profile */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateUserProfileRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.UserSummary"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Conflict */
+				409: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		/**
+		 * Delete a user
+		 * @description Removes a gateway user and revokes all sessions they own.
+		 */
+		delete: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description No Content */
+				204: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}/lock": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Lock a user account
+		 * @description Locks a user account to prevent login
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			/** @description Lock reason */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.LockUserRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}/roles": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update user roles
+		 * @description Replaces the role assignments for a user.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			/** @description Role payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateUserRolesRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.UserSummary"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}/sessions": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List active sessions for a user
+		 * @description Returns the active (non-revoked) web sessions for the specified user.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.UserSessionResponse"][];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}/sessions/revoke_all": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Revoke all sessions for a user
+		 * @description Revokes every active session belonging to the specified user.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.RevokeAllSessionsResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}/sessions/{sessionID}/revoke": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Revoke a user session
+		 * @description Revokes a single session for the specified user.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+					/** @description Session ID */
+					sessionID: number;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.RevokeSessionResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/admin/users/{email}/unlock": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Unlock a user account
+		 * @description Unlocks a previously locked user account
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description User email */
+					email: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/cli/callback": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Complete CLI OAuth redirect
+		 * @description Stores the OAuth authorization code for the CLI to finish login.
+		 */
+		get: {
+			parameters: {
+				query: {
+					/** @description Authorization code */
+					code: string;
+					/** @description State */
+					state: string;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description Temporary Redirect */
+				307: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+				/** @description Missing parameters */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/cli/complete": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Finalize CLI OAuth login
+		 * @description Exchanges the stored authorization code and PKCE verifier for a session token.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description CLI login payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.CLILoginCompleteRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.CLILoginResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/cli/start": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Start CLI OAuth login
+		 * @description Initiates the CLI OAuth flow and returns PKCE parameters.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["auth.LoginStartResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/backup-codes/regenerate": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Regenerate backup codes
+		 * @description Generates a new set of MFA backup codes. All prior codes become invalid.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.BackupCodesResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/enroll/totp/confirm": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Confirm TOTP enrollment
+		 * @description Confirms the TOTP secret using a verification code and optionally trusts the device.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Enrollment confirmation payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.ConfirmTOTPEnrollmentRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.VerifyMFAResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/enroll/totp/start": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Start TOTP enrollment
+		 * @description Generates a TOTP secret, provisioning URI, and backup codes for the authenticated user.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StartTOTPEnrollmentResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/enroll/webauthn/confirm": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Confirm WebAuthn enrollment
+		 * @description Completes WebAuthn credential registration with the client's credential response.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description WebAuthn credential */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.ConfirmWebAuthnEnrollmentRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.WebAuthnEnrollmentResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/enroll/webauthn/start": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Start WebAuthn enrollment
+		 * @description Begins WebAuthn credential registration. Returns a challenge for the browser.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StartWebAuthnEnrollmentResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/enroll/yubiotp/start": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Start Yubico OTP enrollment
+		 * @description Enrolls a Yubikey using Yubico OTP. Touch your Yubikey to generate an OTP.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Yubikey OTP */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.StartYubiOTPEnrollmentRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StartYubiOTPEnrollmentResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/methods/{methodID}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update MFA method label
+		 * @description Updates the label of an MFA method
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description MFA Method ID */
+					methodID: number;
+				};
+				cookie?: never;
+			};
+			/** @description Update request */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateMFAMethodRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		/**
+		 * Delete an MFA method
+		 * @description Removes an existing MFA method for the current user.
+		 */
+		delete: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description MFA method ID */
+					methodID: number;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/preferred-method": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/**
+		 * Update preferred MFA method
+		 * @description Sets the user's preferred MFA method for sign-in (totp or webauthn)
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Preferred method */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdatePreferredMFAMethodRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/status": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get MFA status for current session
+		 * @description Returns enrollment state, configured methods, trusted devices, and backup code summary.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.MFAStatusResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/trusted-devices/{deviceID}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/**
+		 * Revoke a trusted device
+		 * @description Revokes a trusted device, requiring MFA on next login from that device.
+		 */
+		delete: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Trusted device ID */
+					deviceID: number;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.StatusResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/verify": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Verify MFA step-up
+		 * @description Verifies a TOTP or backup code to satisfy the MFA step-up requirement.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Verification payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.VerifyMFARequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.VerifyMFAResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/webauthn/assertion/start": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Start WebAuthn assertion for MFA
+		 * @description Begins a WebAuthn assertion ceremony for CLI login/step-up. Returns challenge and session data.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.WebAuthnAssertionStartResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/mfa/webauthn/assertion/verify": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Verify WebAuthn assertion for MFA
+		 * @description Completes the WebAuthn assertion ceremony by validating the signed response.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Assertion response and session data */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.VerifyWebAuthnAssertionRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.VerifyMFAResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/web/callback": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Complete web OAuth login
+		 * @description Validates the OAuth callback, issues a session cookie, and redirects to the SPA.
+		 */
+		get: {
+			parameters: {
+				query: {
+					/** @description Authorization code */
+					code: string;
+					/** @description State */
+					state: string;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description Redirect to web UI */
+				302: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+				/** @description Invalid state */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+				/** @description User not authorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+				/** @description Authentication failure */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/web/login": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Start web OAuth login
+		 * @description Redirects the browser to the identity provider for login.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description Redirect to identity provider */
+				302: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/auth/web/logout": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Log out current session
+		 * @description Revokes the active session, clears the cookie, and redirects to the login screen.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description Redirect to login */
+				302: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"*/*": string;
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/created-by": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get resource creator metadata
+		 * @description Returns creator information for the supplied resource identifiers.
+		 */
+		get: {
+			parameters: {
+				query: {
+					/** @description Resource type */
+					type: "app" | "build" | "release";
+					/** @description Comma-separated resource IDs */
+					ids?: string;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							[key: string]: components["schemas"]["db.CreatorInfo"];
+						};
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/deploy-approval-requests": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Request deploy approval
+		 * @description Creates a manual approval record tied to an API token.
+		 */
+		post: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Deploy approval request payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.CreateDeployApprovalRequestRequest"];
+				};
+			};
+			responses: {
+				/** @description Created */
+				201: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Conflict - pending request already exists */
+				409: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/deploy-approval-requests/{id}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get deploy approval
+		 * @description Returns the status of a deploy approval request.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path: {
+					/** @description Deploy approval request public ID (UUID) */
+					id: string;
+				};
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Unauthorized */
+				401: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Not Found */
+				404: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/env": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get environment variables
+		 * @description Returns environment variables for a Convox app, masking secrets unless authorized.
+		 */
+		get: {
+			parameters: {
+				query: {
+					/** @description App name */
+					app: string;
+					/** @description Specific key to fetch */
+					key?: string;
+					/** @description Include secret values */
+					secrets?: boolean;
+				};
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.EnvValuesResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Bad Gateway */
+				502: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		/**
+		 * Update environment variables
+		 * @description Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+		 */
+		put: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			/** @description Environment update payload */
+			requestBody: {
+				content: {
+					"application/json": components["schemas"]["handlers.UpdateEnvValuesRequest"];
+				};
+			};
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.UpdateEnvValuesResponse"];
+					};
+				};
+				/** @description Bad Request */
+				400: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Forbidden */
+				403: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Bad Gateway */
+				502: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/health": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Health check
+		 * @description Returns service health information.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.HealthResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/me": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get current user profile
+		 * @description Returns the authenticated user's profile, roles, and default rack summary.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.CurrentUserResponse"];
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/rack": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get rack system information
+		 * @description Proxies the rack /system endpoint returning the rack's metadata.
+		 */
+		get: {
+			parameters: {
+				query?: never;
+				header?: never;
+				path?: never;
+				cookie?: never;
+			};
+			requestBody?: never;
+			responses: {
+				/** @description OK */
+				200: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": {
+							[key: string]: unknown;
+						};
+					};
+				};
+				/** @description Internal Server Error */
+				500: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+				/** @description Bad Gateway */
+				502: {
+					headers: {
+						[name: string]: unknown;
+					};
+					content: {
+						"application/json": components["schemas"]["handlers.ErrorResponse"];
+					};
+				};
+			};
+		};
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        "auth.LoginResponse": {
-            email: string;
-            expires_at: string;
-            name: string;
-            token: string;
-        };
-        "auth.LoginStartResponse": {
-            auth_url: string;
-            code_verifier: string;
-            state: string;
-        };
-        "db.APIToken": {
-            created_at?: string;
-            created_by_email?: string;
-            created_by_name?: string;
-            created_by_user_id?: number;
-            expires_at?: string;
-            id?: number;
-            last_used_at?: string;
-            name?: string;
-            permissions?: string[];
-            public_id?: string;
-            user_id?: number;
-        };
-        "db.AuditLog": {
-            /** @description e.g., "env.read", "user.create", "login.oauth_failed" */
-            action?: string;
-            /** @description "convox", "users", "auth" */
-            action_type?: string;
-            api_token_id?: number;
-            api_token_name?: string;
-            command?: string;
-            /** @description JSON string */
-            details?: string;
-            event_count?: number;
-            http_status?: number;
-            id?: number;
-            ip_address?: string;
-            /** @description "allow" or "deny" */
-            rbac_decision?: string;
-            resource?: string;
-            resource_type?: string;
-            response_time_ms?: number;
-            /** @description "success", "denied", "error", "blocked" */
-            status?: string;
-            timestamp?: string;
-            user_agent?: string;
-            user_email?: string;
-            user_name?: string;
-        };
-        "db.CircleCISettings": {
-            api_token: string;
-            approval_job_name: string;
-            org_slug?: string;
-        };
-        "db.CreatorInfo": {
-            email?: string;
-            name?: string;
-            user_id?: number;
-        };
-        "db.RackTLSCert": {
-            fetched_at?: string;
-            fingerprint?: string;
-            pem?: string;
-        };
-        "db.User": {
-            created_at?: string;
-            created_by_email?: string;
-            created_by_name?: string;
-            created_by_user_id?: number;
-            email?: string;
-            id?: number;
-            locked_at?: string;
-            locked_by_email?: string;
-            locked_by_name?: string;
-            locked_by_user_id?: number;
-            locked_reason?: string;
-            mfa_enforced_at?: string;
-            mfa_enrolled?: boolean;
-            name?: string;
-            preferred_mfa_method?: string;
-            roles?: string[];
-            suspended?: boolean;
-            updated_at?: string;
-        };
-        "handlers.AuditLogsResponse": {
-            limit: number;
-            logs: components["schemas"]["db.AuditLog"][];
-            page: number;
-            total: number;
-        };
-        "handlers.BackupCodesResponse": {
-            backup_codes: string[];
-        };
-        "handlers.CLILoginCompleteRequest": {
-            client_version?: string;
-            code_verifier: string;
-            device_id?: string;
-            device_name?: string;
-            device_os?: string;
-            state: string;
-        };
-        "handlers.ConfirmTOTPEnrollmentRequest": {
-            code: string;
-            label?: string;
-            method_id: number;
-            trust_device?: boolean;
-        };
-        "handlers.ConfirmWebAuthnEnrollmentRequest": {
-            credential: unknown;
-            label?: string;
-            method_id: number;
-        };
-        "handlers.CreateAPITokenRequest": {
-            name: string;
-            permissions?: string[];
-            user_email?: string;
-        };
-        "handlers.CreateAPITokenResponse": {
-            api_token: components["schemas"]["db.APIToken"];
-            id: number;
-            name: string;
-            permissions: string[];
-            token: string;
-        };
-        "handlers.CreateDeployApprovalRequestRequest": {
-            ci_metadata?: {
-                [key: string]: unknown;
-            };
-            ci_provider?: string;
-            git_branch?: string;
-            git_commit_hash: string;
-            message: string;
-            pipeline_url?: string;
-            target_api_token?: string;
-            target_api_token_id?: string;
-        };
-        "handlers.CreateUserRequest": {
-            email: string;
-            name: string;
-            roles: string[];
-        };
-        "handlers.CurrentUserResponse": {
-            deploy_approvals_enabled: boolean;
-            email: string;
-            has_trusted_device: boolean;
-            mfa_enrolled: boolean;
-            mfa_required: boolean;
-            name: string;
-            permissions: string[];
-            preferred_mfa_method?: string;
-            rack?: components["schemas"]["handlers.RackSummary"];
-            recent_step_up_expires_at?: string;
-            roles: string[];
-        };
-        "handlers.DeployApprovalRequestList": {
-            deploy_approval_requests: components["schemas"]["handlers.DeployApprovalRequestResponse"][];
-        };
-        "handlers.DeployApprovalRequestResponse": {
-            app?: string;
-            approval_expires_at?: string;
-            approval_notes?: string;
-            approved_at?: string;
-            approved_by_email?: string;
-            approved_by_name?: string;
-            build_id?: string;
-            ci_metadata?: {
-                [key: string]: unknown;
-            };
-            ci_provider?: string;
-            created_at: string;
-            created_by_api_token_id?: string;
-            created_by_api_token_name?: string;
-            created_by_email?: string;
-            created_by_name?: string;
-            git_branch?: string;
-            git_commit_hash: string;
-            message: string;
-            pipeline_url?: string;
-            public_id: string;
-            rejected_at?: string;
-            rejected_by_email?: string;
-            rejected_by_name?: string;
-            release_created_at?: string;
-            release_id?: string;
-            release_promoted_at?: string;
-            release_promoted_by_api_token_id?: number;
-            status: string;
-            target_api_token_id: string;
-            target_api_token_name?: string;
-            updated_at: string;
-        };
-        "handlers.EnvValuesResponse": {
-            env: {
-                [key: string]: string;
-            };
-        };
-        "handlers.ErrorResponse": {
-            error: string;
-        };
-        "handlers.HealthResponse": {
-            service: string;
-            status: string;
-        };
-        "handlers.LockUserRequest": {
-            reason: string;
-        };
-        "handlers.MFABackupCodesSummary": {
-            last_generated_at?: string;
-            last_used_at?: string;
-            total: number;
-            unused: number;
-        };
-        "handlers.MFAMethodResponse": {
-            confirmed_at?: string;
-            created_at: string;
-            id: number;
-            label?: string;
-            last_used_at?: string;
-            type: string;
-        };
-        "handlers.MFAStatusResponse": {
-            backup_codes: components["schemas"]["handlers.MFABackupCodesSummary"];
-            enrolled: boolean;
-            methods: components["schemas"]["handlers.MFAMethodResponse"][];
-            preferred_method?: string;
-            recent_step_up_expires_at?: string;
-            required: boolean;
-            trusted_devices: components["schemas"]["handlers.TrustedDeviceResponse"][];
-            webauthn_available: boolean;
-        };
-        "handlers.RackSummary": {
-            alias: string;
-            host: string;
-            name: string;
-        };
-        "handlers.RevokeAllSessionsResponse": {
-            revoked_count: number;
-        };
-        "handlers.RevokeSessionResponse": {
-            revoked: boolean;
-        };
-        "handlers.RoleDescriptor": {
-            description: string;
-            label: string;
-            name: string;
-            permissions: string[];
-        };
-        "handlers.StartTOTPEnrollmentResponse": {
-            backup_codes: string[];
-            method_id: number;
-            secret: string;
-            uri: string;
-        };
-        "handlers.StartWebAuthnEnrollmentResponse": {
-            backup_codes?: string[];
-            method_id: number;
-            public_key_options: unknown;
-        };
-        "handlers.StartYubiOTPEnrollmentRequest": {
-            label?: string;
-            yubi_otp: string;
-        };
-        "handlers.StartYubiOTPEnrollmentResponse": {
-            backup_codes?: string[];
-            method_id: number;
-        };
-        "handlers.StatusResponse": {
-            status: string;
-        };
-        "handlers.TokenPermissionMetadata": {
-            default_permissions: string[];
-            permissions: string[];
-            roles: components["schemas"]["handlers.RoleDescriptor"][];
-            user_permissions: string[];
-            user_roles: string[];
-        };
-        "handlers.TrustedDeviceResponse": {
-            created_at: string;
-            expires_at: string;
-            id: number;
-            ip_address?: string;
-            label: string;
-            last_used_at?: string;
-            revoked_at?: string;
-            revoked_reason?: string;
-            user_agent?: string;
-        };
-        "handlers.UpdateAPITokenRequest": {
-            name?: string;
-            permissions?: string[];
-        };
-        "handlers.UpdateAllowDestructiveActionsRequest": {
-            allow_destructive_actions?: boolean;
-        };
-        "handlers.UpdateApprovedCommandsRequest": {
-            approved_commands?: string[];
-        };
-        "handlers.UpdateDeployApprovalRequestStatusRequest": {
-            notes?: string;
-        };
-        "handlers.UpdateEnvValuesRequest": {
-            app: string;
-            remove?: string[];
-            set?: {
-                [key: string]: string;
-            };
-        };
-        "handlers.UpdateEnvValuesResponse": {
-            env: {
-                [key: string]: string;
-            };
-            release_id?: string;
-        };
-        "handlers.UpdateMFAMethodRequest": {
-            label: string;
-        };
-        "handlers.UpdateMFASettingsRequest": {
-            require_all_users?: boolean;
-        };
-        "handlers.UpdatePreferredMFAMethodRequest": {
-            /** @description "totp", "webauthn", or null to clear */
-            preferred_method?: string;
-        };
-        "handlers.UpdateProtectedEnvVarsRequest": {
-            protected_env_vars?: string[];
-        };
-        "handlers.UpdateUserProfileRequest": {
-            email?: string;
-            name?: string;
-        };
-        "handlers.UpdateUserRolesRequest": {
-            roles: string[];
-        };
-        "handlers.UserSessionResponse": {
-            channel: string;
-            created_at: string;
-            expires_at: string;
-            id: number;
-            ip_address?: string;
-            last_seen_at: string;
-            metadata?: unknown;
-            user_agent?: string;
-        };
-        "handlers.UserSummary": {
-            created_by_email?: string;
-            email: string;
-            name: string;
-            roles: string[];
-        };
-        "handlers.VerifyMFARequest": {
-            code: string;
-            trust_device?: boolean;
-        };
-        "handlers.VerifyMFAResponse": {
-            mfa_verified_at: string;
-            recent_step_up_expires_at: string;
-            trusted_device_cookie: boolean;
-        };
-        "handlers.VerifyWebAuthnAssertionRequest": {
-            assertion_response: string;
-            session_data: string;
-            trust_device?: boolean;
-        };
-        "handlers.WebAuthnAssertionStartResponse": {
-            /** @description protocol.CredentialAssertion */
-            options: unknown;
-            /** @description Serialized session to send back with verification */
-            session_data: string;
-        };
-        "handlers.WebAuthnEnrollmentResponse": {
-            method_id: number;
-            status: string;
-        };
-    };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+	schemas: {
+		"auth.LoginStartResponse": {
+			auth_url: string;
+			code_verifier: string;
+			state: string;
+		};
+		"db.APIToken": {
+			created_at?: string;
+			created_by_email?: string;
+			created_by_name?: string;
+			created_by_user_id?: number;
+			expires_at?: string;
+			id?: number;
+			last_used_at?: string;
+			name?: string;
+			permissions?: string[];
+			public_id?: string;
+			user_id?: number;
+		};
+		"db.AuditLog": {
+			/** @description e.g., "env.read", "user.create", "login.oauth_failed" */
+			action?: string;
+			/** @description "convox", "users", "auth" */
+			action_type?: string;
+			api_token_id?: number;
+			api_token_name?: string;
+			command?: string;
+			/** @description JSON string */
+			details?: string;
+			event_count?: number;
+			http_status?: number;
+			id?: number;
+			ip_address?: string;
+			/** @description "allow" or "deny" */
+			rbac_decision?: string;
+			resource?: string;
+			resource_type?: string;
+			response_time_ms?: number;
+			/** @description "success", "denied", "error", "blocked" */
+			status?: string;
+			timestamp?: string;
+			user_agent?: string;
+			user_email?: string;
+			user_name?: string;
+		};
+		"db.CircleCISettings": {
+			api_token: string;
+			approval_job_name: string;
+			org_slug?: string;
+		};
+		"db.CreatorInfo": {
+			email?: string;
+			name?: string;
+			user_id?: number;
+		};
+		"db.RackTLSCert": {
+			fetched_at?: string;
+			fingerprint?: string;
+			pem?: string;
+		};
+		"db.User": {
+			created_at?: string;
+			created_by_email?: string;
+			created_by_name?: string;
+			created_by_user_id?: number;
+			email?: string;
+			id?: number;
+			locked_at?: string;
+			locked_by_email?: string;
+			locked_by_name?: string;
+			locked_by_user_id?: number;
+			locked_reason?: string;
+			mfa_enforced_at?: string;
+			mfa_enrolled?: boolean;
+			name?: string;
+			preferred_mfa_method?: string;
+			roles?: string[];
+			suspended?: boolean;
+			updated_at?: string;
+		};
+		"handlers.AuditLogsResponse": {
+			limit: number;
+			logs: components["schemas"]["db.AuditLog"][];
+			page: number;
+			total: number;
+		};
+		"handlers.BackupCodesResponse": {
+			backup_codes: string[];
+		};
+		"handlers.CLILoginCompleteRequest": {
+			client_version?: string;
+			code_verifier: string;
+			device_id?: string;
+			device_name?: string;
+			device_os?: string;
+			state: string;
+		};
+		"handlers.CLILoginResponse": {
+			channel?: string;
+			device_id?: string;
+			device_name?: string;
+			email?: string;
+			enrollment_required?: boolean;
+			expires_at?: string;
+			mfa_required?: boolean;
+			mfa_verified?: boolean;
+			name?: string;
+			session_id?: number;
+			token?: string;
+		};
+		"handlers.ConfirmTOTPEnrollmentRequest": {
+			code: string;
+			label?: string;
+			method_id: number;
+			trust_device?: boolean;
+		};
+		"handlers.ConfirmWebAuthnEnrollmentRequest": {
+			credential: unknown;
+			label?: string;
+			method_id: number;
+		};
+		"handlers.CreateAPITokenRequest": {
+			name: string;
+			permissions?: string[];
+			user_email?: string;
+		};
+		"handlers.CreateAPITokenResponse": {
+			api_token: components["schemas"]["db.APIToken"];
+			id: number;
+			name: string;
+			permissions: string[];
+			token: string;
+		};
+		"handlers.CreateDeployApprovalRequestRequest": {
+			app: string;
+			ci_metadata?: {
+				[key: string]: unknown;
+			};
+			ci_provider?: string;
+			git_branch?: string;
+			git_commit_hash: string;
+			message: string;
+			pipeline_url?: string;
+			target_api_token?: string;
+			target_api_token_id?: string;
+		};
+		"handlers.CreateUserRequest": {
+			email: string;
+			name: string;
+			roles: string[];
+		};
+		"handlers.CurrentUserResponse": {
+			deploy_approvals_enabled: boolean;
+			email: string;
+			has_trusted_device: boolean;
+			mfa_enrolled: boolean;
+			mfa_required: boolean;
+			name: string;
+			permissions: string[];
+			preferred_mfa_method?: string;
+			rack?: components["schemas"]["handlers.RackSummary"];
+			recent_step_up_expires_at?: string;
+			roles: string[];
+		};
+		"handlers.DeployApprovalRequestList": {
+			deploy_approval_requests: components["schemas"]["handlers.DeployApprovalRequestResponse"][];
+		};
+		"handlers.DeployApprovalRequestResponse": {
+			app?: string;
+			approval_expires_at?: string;
+			approval_notes?: string;
+			approved_at?: string;
+			approved_by_email?: string;
+			approved_by_name?: string;
+			build_id?: string;
+			ci_metadata?: {
+				[key: string]: unknown;
+			};
+			ci_provider?: string;
+			created_at: string;
+			created_by_api_token_id?: string;
+			created_by_api_token_name?: string;
+			created_by_email?: string;
+			created_by_name?: string;
+			git_branch?: string;
+			git_commit_hash: string;
+			message: string;
+			pipeline_url?: string;
+			public_id: string;
+			rejected_at?: string;
+			rejected_by_email?: string;
+			rejected_by_name?: string;
+			release_created_at?: string;
+			release_id?: string;
+			release_promoted_at?: string;
+			release_promoted_by_api_token_id?: number;
+			status: string;
+			target_api_token_id: string;
+			target_api_token_name?: string;
+			updated_at: string;
+		};
+		"handlers.EnvValuesResponse": {
+			env: {
+				[key: string]: string;
+			};
+		};
+		"handlers.ErrorResponse": {
+			error: string;
+		};
+		"handlers.HealthResponse": {
+			service: string;
+			status: string;
+		};
+		"handlers.LockUserRequest": {
+			reason: string;
+		};
+		"handlers.MFABackupCodesSummary": {
+			last_generated_at?: string;
+			last_used_at?: string;
+			total: number;
+			unused: number;
+		};
+		"handlers.MFAMethodResponse": {
+			confirmed_at?: string;
+			created_at: string;
+			id: number;
+			label?: string;
+			last_used_at?: string;
+			type: string;
+		};
+		"handlers.MFAStatusResponse": {
+			backup_codes: components["schemas"]["handlers.MFABackupCodesSummary"];
+			enrolled: boolean;
+			methods: components["schemas"]["handlers.MFAMethodResponse"][];
+			preferred_method?: string;
+			recent_step_up_expires_at?: string;
+			required: boolean;
+			trusted_devices: components["schemas"]["handlers.TrustedDeviceResponse"][];
+			webauthn_available: boolean;
+		};
+		"handlers.RackSummary": {
+			alias: string;
+			host: string;
+			name: string;
+		};
+		"handlers.RevokeAllSessionsResponse": {
+			revoked_count: number;
+		};
+		"handlers.RevokeSessionResponse": {
+			revoked: boolean;
+		};
+		"handlers.RoleDescriptor": {
+			description: string;
+			label: string;
+			name: string;
+			permissions: string[];
+		};
+		"handlers.StartTOTPEnrollmentResponse": {
+			backup_codes: string[];
+			method_id: number;
+			secret: string;
+			uri: string;
+		};
+		"handlers.StartWebAuthnEnrollmentResponse": {
+			backup_codes?: string[];
+			method_id: number;
+			public_key_options: unknown;
+		};
+		"handlers.StartYubiOTPEnrollmentRequest": {
+			label?: string;
+			yubi_otp: string;
+		};
+		"handlers.StartYubiOTPEnrollmentResponse": {
+			backup_codes?: string[];
+			method_id: number;
+		};
+		"handlers.StatusResponse": {
+			status: string;
+		};
+		"handlers.TokenPermissionMetadata": {
+			default_permissions: string[];
+			permissions: string[];
+			roles: components["schemas"]["handlers.RoleDescriptor"][];
+			user_permissions: string[];
+			user_roles: string[];
+		};
+		"handlers.TrustedDeviceResponse": {
+			created_at: string;
+			expires_at: string;
+			id: number;
+			ip_address?: string;
+			label: string;
+			last_used_at?: string;
+			revoked_at?: string;
+			revoked_reason?: string;
+			user_agent?: string;
+		};
+		"handlers.UpdateAPITokenRequest": {
+			name?: string;
+			permissions?: string[];
+		};
+		"handlers.UpdateAllowDestructiveActionsRequest": {
+			allow_destructive_actions?: boolean;
+		};
+		"handlers.UpdateAppImagePatternsRequest": {
+			app_image_patterns?: {
+				[key: string]: string;
+			};
+		};
+		"handlers.UpdateApprovedCommandsRequest": {
+			approved_commands?: string[];
+		};
+		"handlers.UpdateDeployApprovalRequestStatusRequest": {
+			notes?: string;
+		};
+		"handlers.UpdateEnvValuesRequest": {
+			app: string;
+			remove?: string[];
+			set?: {
+				[key: string]: string;
+			};
+		};
+		"handlers.UpdateEnvValuesResponse": {
+			env: {
+				[key: string]: string;
+			};
+			release_id?: string;
+		};
+		"handlers.UpdateMFAMethodRequest": {
+			label: string;
+		};
+		"handlers.UpdateMFASettingsRequest": {
+			require_all_users?: boolean;
+		};
+		"handlers.UpdatePreferredMFAMethodRequest": {
+			/** @description "totp", "webauthn", or null to clear */
+			preferred_method?: string;
+		};
+		"handlers.UpdateProtectedEnvVarsRequest": {
+			protected_env_vars?: string[];
+		};
+		"handlers.UpdateUserProfileRequest": {
+			email?: string;
+			name?: string;
+		};
+		"handlers.UpdateUserRolesRequest": {
+			roles: string[];
+		};
+		"handlers.UserSessionResponse": {
+			channel: string;
+			created_at: string;
+			expires_at: string;
+			id: number;
+			ip_address?: string;
+			last_seen_at: string;
+			metadata?: unknown;
+			user_agent?: string;
+		};
+		"handlers.UserSummary": {
+			created_by_email?: string;
+			email: string;
+			name: string;
+			roles: string[];
+		};
+		"handlers.VerifyMFARequest": {
+			code: string;
+			trust_device?: boolean;
+		};
+		"handlers.VerifyMFAResponse": {
+			mfa_verified_at: string;
+			recent_step_up_expires_at: string;
+			trusted_device_cookie: boolean;
+		};
+		"handlers.VerifyWebAuthnAssertionRequest": {
+			assertion_response: string;
+			session_data: string;
+			trust_device?: boolean;
+		};
+		"handlers.WebAuthnAssertionStartResponse": {
+			/** @description protocol.CredentialAssertion */
+			options: unknown;
+			/** @description Serialized session to send back with verification */
+			session_data: string;
+		};
+		"handlers.WebAuthnEnrollmentResponse": {
+			method_id: number;
+			status: string;
+		};
+	};
+	responses: never;
+	parameters: never;
+	requestBodies: never;
+	headers: never;
+	pathItems: never;
 }
 export type $defs = Record<string, never>;
 export type operations = Record<string, never>;

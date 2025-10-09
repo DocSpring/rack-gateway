@@ -33,7 +33,7 @@ type MFASettings = {
 type SettingsResponse = {
   protected_env_vars: string[]
   approved_commands: string[]
-  app_image_tag_patterns?: Record<string, string>
+  app_image_patterns?: Record<string, string>
   allow_destructive_actions: boolean
   rack_tls_pinning_enabled?: boolean
   rack_tls_cert?: RackTLSCert | null
@@ -77,7 +77,7 @@ export function SettingsPage() {
   const [newPattern, setNewPattern] = useState('')
   const envVars = data?.protected_env_vars ?? []
   const approvedCommands = data?.approved_commands ?? []
-  const appImageTagPatterns = data?.app_image_tag_patterns ?? {}
+  const appImagePatterns = data?.app_image_patterns ?? {}
   const allowDestructive = data?.allow_destructive_actions ?? false
   const requireAllUsers = data?.mfa?.require_all_users ?? false
   const cert = data?.rack_tls_cert ?? null
@@ -117,8 +117,8 @@ export function SettingsPage() {
 
   const saveAppPatternsMutation = useMutation({
     mutationFn: async (patterns: Record<string, string>) =>
-      api.put('/.gateway/api/admin/settings/app_image_tag_patterns', {
-        app_image_tag_patterns: patterns,
+      api.put('/.gateway/api/admin/settings/app_image_patterns', {
+        app_image_patterns: patterns,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -300,13 +300,13 @@ export function SettingsPage() {
       return
     }
 
-    if (appImageTagPatterns[trimmedApp]) {
+    if (appImagePatterns[trimmedApp]) {
       toast.error(`Pattern for app "${trimmedApp}" already exists`)
       return
     }
 
     saveAppPatternsMutation.mutate({
-      ...appImageTagPatterns,
+      ...appImagePatterns,
       [trimmedApp]: trimmedPattern,
     })
     setNewApp('')
@@ -314,7 +314,7 @@ export function SettingsPage() {
   }
 
   const removeAppPattern = (app: string) => {
-    const { [app]: _removed, ...rest } = appImageTagPatterns
+    const { [app]: _removed, ...rest } = appImagePatterns
     saveAppPatternsMutation.mutate(rest)
   }
 
@@ -566,10 +566,10 @@ export function SettingsPage() {
             </div>
             <Separator className="my-4" />
             <div className="space-y-2">
-              {Object.keys(appImageTagPatterns).length === 0 ? (
+              {Object.keys(appImagePatterns).length === 0 ? (
                 <span className="text-muted-foreground text-sm">No app patterns configured</span>
               ) : (
-                Object.entries(appImageTagPatterns).map(([app, pattern]) => (
+                Object.entries(appImagePatterns).map(([app, pattern]) => (
                   <div
                     className="flex items-center justify-between rounded-md border bg-muted px-3 py-2"
                     key={app}
