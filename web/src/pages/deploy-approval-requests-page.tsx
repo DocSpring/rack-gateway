@@ -1,23 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Navigate } from '@tanstack/react-router'
-import type { VariantProps } from 'class-variance-authority'
+import { Navigate, useNavigate } from '@tanstack/react-router'
 import { Check, Loader2, Timer, X } from 'lucide-react'
-import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
+import type { KeyboardEvent } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DeployApprovalRejectDialog } from '@/components/deploy-approval-reject-dialog'
+import { DeployApprovalStatusBadge } from '@/components/deploy-approval-status-badge'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
-import { Badge, type badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import {
   Table,
@@ -27,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 import { UserMetaCell } from '@/components/user-meta-cell'
@@ -53,21 +43,6 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'rejected', label: 'Rejected' },
   { value: 'consumed', label: 'Consumed' },
 ]
-
-type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>['variant']>
-
-const STATUS_BADGE_VARIANTS: Record<string, BadgeVariant> = {
-  pending: 'outline',
-  approved: 'success',
-  consumed: 'secondary',
-  rejected: 'destructive',
-}
-
-function statusBadge(status: string) {
-  const normalized = status.toLowerCase()
-  const variant = STATUS_BADGE_VARIANTS[normalized] ?? 'secondary'
-  return <Badge variant={variant}>{status}</Badge>
-}
 
 function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest | undefined {
   const trimmed = notes.trim()
@@ -115,15 +90,14 @@ function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
   }
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keep consolidated for now.
 export function DeployApprovalRequestsPage() {
   const { user, isLoading: isAuthLoading } = useAuth()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [rejectRequest, setRejectRequest] = useState<DeployApprovalRequest | null>(null)
-  const [rejectNotes, setRejectNotes] = useState('')
-  const [selectedRequest, setSelectedRequest] = useState<DeployApprovalRequest | null>(null)
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [rejectRequestId, setRejectRequestId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { handleStepUpError } = useStepUp()
+  const navigate = useNavigate()
 
   const queryKey = useMemo(() => ['deploy-approval-requests', statusFilter], [statusFilter])
 
@@ -152,8 +126,7 @@ export function DeployApprovalRequestsPage() {
       rejectDeployApprovalRequest(id, toNotesPayload(notes)),
     onSuccess: (_data, { id }) => {
       toast.success(`Request ${id} was rejected`)
-      setRejectRequest(null)
-      setRejectNotes('')
+      setRejectDialogOpen(false)
       queryClient.invalidateQueries({ queryKey })
     },
   })
@@ -215,8 +188,15 @@ export function DeployApprovalRequestsPage() {
   )
 
   const handleRejectClick = (request: DeployApprovalRequest) => {
-    setRejectRequest(request)
-    setRejectNotes('')
+    setRejectRequestId(request.public_id)
+    setRejectDialogOpen(true)
+  }
+
+  const handleRejectSubmit = (notes: string) => {
+    if (!rejectRequestId) return
+    submitRejection(rejectRequestId, notes).catch(() => {
+      /* errors handled within submitRejection */
+    })
   }
 
   // Redirect if deploy approvals are disabled (must be after all hooks)
@@ -277,7 +257,12 @@ export function DeployApprovalRequestsPage() {
                   key={request.public_id}
                   onApprove={handleApprove}
                   onReject={handleRejectClick}
-                  onSelect={setSelectedRequest}
+                  onSelect={(req) =>
+                    navigate({
+                      to: '/deploy_approval_requests/$id',
+                      params: { id: req.public_id },
+                    })
+                  }
                   rejectDisabled={rejectDisabled}
                   rejectPending={rejectMutation.isPending}
                   request={request}
@@ -311,163 +296,13 @@ export function DeployApprovalRequestsPage() {
         </TablePane>
       </div>
 
-      <Dialog
-        onOpenChange={(open) => (open ? null : setRejectRequest(null))}
-        open={rejectRequest !== null}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject deploy approval request</DialogTitle>
-            <DialogDescription>
-              Provide an optional reason for rejecting request{' '}
-              {rejectRequest ? rejectRequest.public_id : '—'}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="reject-notes">Reason (optional)</Label>
-            <Textarea
-              id="reject-notes"
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                setRejectNotes(event.target.value)
-              }
-              placeholder="Provide additional context for the requester"
-              rows={4}
-              value={rejectNotes}
-            />
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setRejectRequest(null)} variant="outline">
-              Cancel
-            </Button>
-            <Button
-              disabled={rejectMutation.isPending}
-              onClick={() => {
-                if (!rejectRequest) {
-                  return
-                }
-                submitRejection(rejectRequest.public_id, rejectNotes).catch(() => {
-                  /* errors handled within submitRejection */
-                })
-              }}
-              variant="destructive"
-            >
-              {rejectMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <X className="h-4 w-4" />
-              )}
-              Reject request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(open) => (open ? null : setSelectedRequest(null))}
-        open={selectedRequest != null}
-      >
-        <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
-          <DialogHeader>
-            <DialogTitle>Deploy approval request details</DialogTitle>
-            <DialogDescription>
-              Review the full metadata for the selected request.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedRequest && (
-            <div className="space-y-3 text-sm">
-              <DetailRow label="Message" value={selectedRequest.message ?? '—'} />
-              <DetailRow label="Status" value={selectedRequest.status ?? '—'} />
-
-              <DetailRow
-                label="Git Commit"
-                value={selectedRequest.git_commit_hash ?? '—'}
-                valueClassName="font-mono"
-              />
-              <DetailRow
-                label="Branch"
-                value={selectedRequest.git_branch ?? '—'}
-                valueClassName="font-mono"
-              />
-              {selectedRequest.pipeline_url && (
-                <DetailRow
-                  label="Pipeline URL"
-                  value={
-                    <a
-                      className="text-primary hover:underline"
-                      href={selectedRequest.pipeline_url}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      {selectedRequest.pipeline_url}
-                    </a>
-                  }
-                />
-              )}
-              {selectedRequest.ci_provider && (
-                <DetailRow label="CI Provider" value={selectedRequest.ci_provider} />
-              )}
-
-              <DetailRow
-                label="Target Token"
-                value={
-                  selectedRequest.target_api_token_name ??
-                  selectedRequest.target_api_token_id ??
-                  '—'
-                }
-              />
-              <DetailRow label="Created" value={renderTime(selectedRequest.created_at)} />
-              <DetailRow label="Updated" value={renderTime(selectedRequest.updated_at)} />
-              <DetailRow label="Expires" value={renderTime(selectedRequest.approval_expires_at)} />
-
-              <DetailRow
-                label="Created By"
-                value={
-                  selectedRequest.created_by_api_token_name ??
-                  formatUser(selectedRequest.created_by_name, selectedRequest.created_by_email)
-                }
-              />
-              <DetailRow
-                label="Approved By"
-                value={formatUser(
-                  selectedRequest.approved_by_name,
-                  selectedRequest.approved_by_email
-                )}
-              />
-              <DetailRow label="Approved At" value={renderTime(selectedRequest.approved_at)} />
-              <DetailRow
-                label="Rejected By"
-                value={formatUser(
-                  selectedRequest.rejected_by_name,
-                  selectedRequest.rejected_by_email
-                )}
-              />
-              <DetailRow label="Rejected At" value={renderTime(selectedRequest.rejected_at)} />
-              <DetailRow label="Reviewer Notes" value={selectedRequest.approval_notes ?? '—'} />
-
-              {selectedRequest.app && <DetailRow label="App" value={selectedRequest.app} />}
-              {selectedRequest.build_id && (
-                <DetailRow
-                  label="Build ID"
-                  value={selectedRequest.build_id}
-                  valueClassName="font-mono"
-                />
-              )}
-              {selectedRequest.release_id && (
-                <DetailRow
-                  label="Release ID"
-                  value={selectedRequest.release_id}
-                  valueClassName="font-mono"
-                />
-              )}
-            </div>
-          )}
-          <div className="mt-2 flex justify-end">
-            <Button onClick={() => setSelectedRequest(null)} variant="outline">
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DeployApprovalRejectDialog
+        onOpenChange={setRejectDialogOpen}
+        onSubmit={handleRejectSubmit}
+        open={rejectDialogOpen}
+        pending={rejectMutation.isPending}
+        requestId={rejectRequestId ?? ''}
+      />
     </PageLayout>
   )
 }
@@ -565,7 +400,7 @@ function DeployApprovalRequestRow({
           <span className="text-sm">{tokenName}</span>
         )}
       </TableCell>
-      <TableCell>{statusBadge(status)}</TableCell>
+      <TableCell><DeployApprovalStatusBadge status={status} /></TableCell>
       <TableCell>
         <UserMetaCell email={decidedBy?.email} name={decidedBy?.name} />
       </TableCell>
@@ -629,31 +464,5 @@ function DeployApprovalRequestRow({
         </div>
       </TableCell>
     </TableRow>
-  )
-}
-
-type DetailRowProps = {
-  label: string
-  value: ReactNode
-  valueClassName?: string
-}
-
-function renderTime(value?: string | null): ReactNode {
-  return value ? <TimeAgo date={value} /> : '—'
-}
-
-function formatUser(name?: string | null, email?: string | null): string {
-  if (name && email) {
-    return `${name} (${email})`
-  }
-  return name ?? email ?? '—'
-}
-
-function DetailRow({ label, value, valueClassName }: DetailRowProps) {
-  return (
-    <div className="break-words text-sm">
-      <span className="text-muted-foreground">{label}:</span>{' '}
-      <span className={valueClassName}>{value ?? '—'}</span>
-    </div>
   )
 }

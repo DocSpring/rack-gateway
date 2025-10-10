@@ -403,6 +403,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/deploy-approval-requests/{id}/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get audit logs for deploy approval request
+         * @description Returns audit logs associated with a specific deploy approval request.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Limit (default 100) */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description Deploy approval request public ID (UUID) */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.AuditLogsResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/deploy-approval-requests/{id}/reject": {
         parameters: {
             query?: never;
@@ -3903,6 +3993,7 @@ export interface components {
             api_token_id?: number;
             api_token_name?: string;
             command?: string;
+            deploy_approval_request_id?: number;
             /** @description JSON string */
             details?: string;
             event_count?: number;
@@ -4060,10 +4151,15 @@ export interface components {
             created_by_api_token_name?: string;
             created_by_email?: string;
             created_by_name?: string;
+            exec_commands?: {
+                [key: string]: unknown;
+            };
             git_branch?: string;
             git_commit_hash: string;
             message: string;
+            object_url?: string;
             pipeline_url?: string;
+            process_ids?: string[];
             public_id: string;
             rejected_at?: string;
             rejected_by_email?: string;

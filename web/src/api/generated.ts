@@ -14,6 +14,7 @@ import type {
   GetAdminAuditExportParams,
   GetAdminAuditParams,
   GetAdminConfig200,
+  GetAdminDeployApprovalRequestsIdAuditLogsParams,
   GetAdminDeployApprovalRequestsParams,
   GetAdminRoles200,
   GetAdminSettings200,
@@ -168,6 +169,27 @@ export const getRackGatewayAPI = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         data: handlersUpdateDeployApprovalRequestStatusRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Returns audit logs associated with a specific deploy approval request.
+   * @summary Get audit logs for deploy approval request
+   */
+  const getAdminDeployApprovalRequestsIdAuditLogs = (
+    id: string,
+    params?: GetAdminDeployApprovalRequestsIdAuditLogsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersAuditLogsResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersAuditLogsResponse>(
+      {
+        url: `/admin/deploy-approval-requests/${id}/audit-logs`,
+        method: 'GET',
+        params,
       },
       options,
     );
@@ -1122,6 +1144,7 @@ export const getRackGatewayAPI = () => {
     putAdminConfig,
     getAdminDeployApprovalRequests,
     postAdminDeployApprovalRequestsIdApprove,
+    getAdminDeployApprovalRequestsIdAuditLogs,
     postAdminDeployApprovalRequestsIdReject,
     getAdminRoles,
     getAdminSettings,
@@ -1206,6 +1229,15 @@ export type PostAdminDeployApprovalRequestsIdApproveResult = NonNullable<
       ReturnType<
         typeof getRackGatewayAPI
       >['postAdminDeployApprovalRequestsIdApprove']
+    >
+  >
+>;
+export type GetAdminDeployApprovalRequestsIdAuditLogsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['getAdminDeployApprovalRequestsIdAuditLogs']
     >
   >
 >;

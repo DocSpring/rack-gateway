@@ -62,6 +62,13 @@ func (l *logAccumulator) Bytes() []byte {
 
 // logAudit is a helper to log audit entries and mark the request context
 func (h *Handler) logAudit(r *http.Request, al *db.AuditLog) error {
+	// Extract deploy approval request ID from context if present
+	if r != nil {
+		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil && tracker.request != nil {
+			al.DeployApprovalRequestID = &tracker.request.ID
+		}
+	}
+
 	err := h.auditLogger.LogDBEntry(al)
 	if err == nil && r != nil {
 		ctx := audit.MarkAuditLogCreated(r.Context())

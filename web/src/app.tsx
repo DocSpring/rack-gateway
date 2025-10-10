@@ -23,6 +23,7 @@ import { AppsListPage } from './pages/apps-list-page'
 import { AuditPage } from './pages/audit-page'
 import { CallbackPage } from './pages/callback-page'
 import { CLIAuthSuccessPage } from './pages/cli-auth-success-page'
+import { DeployApprovalRequestDetailPage } from './pages/deploy-approval-request-detail-page'
 import { DeployApprovalRequestsPage } from './pages/deploy-approval-requests-page'
 import { InstancesPage } from './pages/instances-page'
 import { IntegrationsPage } from './pages/integrations-page'
@@ -113,6 +114,12 @@ function buildRouteTree() {
     getParentRoute: () => layoutRoute,
     path: 'deploy_approval_requests',
     component: DeployApprovalRequestsPage,
+  })
+
+  const deployApprovalRequestDetailRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'deploy_approval_requests/$id',
+    component: DeployApprovalRequestDetailPage,
   })
 
   const accountSecurityRoute = createRoute({
@@ -211,6 +218,7 @@ function buildRouteTree() {
     userAuditRoute,
     tokensRoute,
     deployApprovalRequestsRoute,
+    deployApprovalRequestDetailRoute,
     auditRoute,
     settingsRoute,
     integrationsRoute,

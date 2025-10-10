@@ -369,8 +369,11 @@ type DeployApprovalRequestResponse struct {
 	CIProvider                string                 `json:"ci_provider,omitempty"`
 	CIMetadata                map[string]interface{} `json:"ci_metadata,omitempty"`
 	App                       string                 `json:"app,omitempty"`
+	ObjectURL                 string                 `json:"object_url,omitempty"`
 	BuildID                   string                 `json:"build_id,omitempty"`
 	ReleaseID                 string                 `json:"release_id,omitempty"`
+	ProcessIDs                []string               `json:"process_ids,omitempty"`
+	ExecCommands              map[string]interface{} `json:"exec_commands,omitempty"`
 	ReleaseCreatedAt          *time.Time             `json:"release_created_at,omitempty" ts_type:"string"`
 	ReleasePromotedAt         *time.Time             `json:"release_promoted_at,omitempty" ts_type:"string"`
 	ReleasePromotedByTokenID  *int64                 `json:"release_promoted_by_api_token_id,omitempty"`

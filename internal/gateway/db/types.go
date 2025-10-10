@@ -83,25 +83,26 @@ type RackTLSCert struct {
 
 // AuditLog represents an audit log entry
 type AuditLog struct {
-	ID             int64     `json:"id"`
-	Timestamp      time.Time `json:"timestamp"`
-	UserEmail      string    `json:"user_email"`
-	UserName       string    `json:"user_name,omitempty"`
-	APITokenID     *int64    `json:"api_token_id,omitempty"`
-	APITokenName   string    `json:"api_token_name,omitempty"`
-	ActionType     string    `json:"action_type"` // "convox", "users", "auth"
-	Action         string    `json:"action"`      // e.g., "env.read", "user.create", "login.oauth_failed"
-	Command        string    `json:"command,omitempty"`
-	Resource       string    `json:"resource,omitempty"`
-	ResourceType   string    `json:"resource_type,omitempty"`
-	Details        string    `json:"details,omitempty"` // JSON string
-	IPAddress      string    `json:"ip_address,omitempty"`
-	UserAgent      string    `json:"user_agent,omitempty"`
-	Status         string    `json:"status"`                  // "success", "denied", "error", "blocked"
-	RBACDecision   string    `json:"rbac_decision,omitempty"` // "allow" or "deny"
-	HTTPStatus     int       `json:"http_status,omitempty"`
-	ResponseTimeMs int       `json:"response_time_ms"`
-	EventCount     int       `json:"event_count"`
+	ID                      int64     `json:"id"`
+	Timestamp               time.Time `json:"timestamp"`
+	UserEmail               string    `json:"user_email"`
+	UserName                string    `json:"user_name,omitempty"`
+	APITokenID              *int64    `json:"api_token_id,omitempty"`
+	APITokenName            string    `json:"api_token_name,omitempty"`
+	ActionType              string    `json:"action_type"` // "convox", "users", "auth"
+	Action                  string    `json:"action"`      // e.g., "env.read", "user.create", "login.oauth_failed"
+	Command                 string    `json:"command,omitempty"`
+	Resource                string    `json:"resource,omitempty"`
+	ResourceType            string    `json:"resource_type,omitempty"`
+	Details                 string    `json:"details,omitempty"` // JSON string
+	IPAddress               string    `json:"ip_address,omitempty"`
+	UserAgent               string    `json:"user_agent,omitempty"`
+	Status                  string    `json:"status"`                  // "success", "denied", "error", "blocked"
+	RBACDecision            string    `json:"rbac_decision,omitempty"` // "allow" or "deny"
+	HTTPStatus              int       `json:"http_status,omitempty"`
+	ResponseTimeMs          int       `json:"response_time_ms"`
+	EventCount              int       `json:"event_count"`
+	DeployApprovalRequestID *int64    `json:"deploy_approval_request_id,omitempty"`
 }
 
 // UserResource represents a creator->resource mapping

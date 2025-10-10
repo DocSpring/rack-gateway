@@ -31,11 +31,12 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 	_, err := d.exec(
 		`INSERT INTO audit_logs (
             user_email, user_name, api_token_id, api_token_name, action_type, action, command, resource, resource_type,
-            details, ip_address, user_agent, status, rbac_decision, http_status, response_time_ms, event_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::inet, ?, ?, ?, ?, ?, ?)`,
+            details, ip_address, user_agent, status, rbac_decision, http_status, response_time_ms, event_count, deploy_approval_request_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::inet, ?, ?, ?, ?, ?, ?, ?)`,
 		log.UserEmail, log.UserName, nullableInt64(log.APITokenID), nullableString(log.APITokenName, 150),
 		log.ActionType, log.Action, log.Command, log.Resource, log.ResourceType,
 		log.Details, nullableIP(log.IPAddress), log.UserAgent, log.Status, log.RBACDecision, log.HTTPStatus, log.ResponseTimeMs, log.EventCount,
+		nullableInt64(log.DeployApprovalRequestID),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create audit log: %w", err)
@@ -203,7 +204,8 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	query := `
         SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
-               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count"
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count",
+               "deploy_approval_request_id"
         FROM "audit_logs"
         WHERE 1=1
     `
@@ -237,11 +239,13 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 		log := new(AuditLog)
 		var tokenID sql.NullInt64
 		var tokenName sql.NullString
+		var deployApprovalRequestID sql.NullInt64
 
 		err := rows.Scan(
 			&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName,
 			&tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details,
 			&log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount,
+			&deployApprovalRequestID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan audit log: %w", err)
@@ -252,6 +256,10 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 		}
 		if tokenName.Valid {
 			log.APITokenName = tokenName.String
+		}
+		if deployApprovalRequestID.Valid {
+			id := deployApprovalRequestID.Int64
+			log.DeployApprovalRequestID = &id
 		}
 
 		logs = append(logs, log)
@@ -342,7 +350,7 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
         SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
                COALESCE("details", ''), COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count"
+               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count", "deploy_approval_request_id"
         FROM "audit_logs" ` + whereClause + `
         ORDER BY "timestamp" DESC
 		LIMIT ? OFFSET ?`
@@ -360,7 +368,8 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 		log := new(AuditLog)
 		var tokenID sql.NullInt64
 		var tokenName sql.NullString
-		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount); err != nil {
+		var deployApprovalRequestID sql.NullInt64
+		if err := rows.Scan(&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName, &tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount, &deployApprovalRequestID); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan audit log: %w", err)
 		}
 		if tokenID.Valid {
@@ -370,9 +379,70 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 		if tokenName.Valid {
 			log.APITokenName = tokenName.String
 		}
+		if deployApprovalRequestID.Valid {
+			id := deployApprovalRequestID.Int64
+			log.DeployApprovalRequestID = &id
+		}
 		logs = append(logs, log)
 	}
 	return logs, total, nil
+}
+
+// GetAuditLogsByDeployApprovalRequestID retrieves audit logs for a specific deploy approval request
+func (d *Database) GetAuditLogsByDeployApprovalRequestID(deployApprovalRequestID int64, limit int) ([]*AuditLog, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+        SELECT "id", "timestamp", "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
+               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''), "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count",
+               "deploy_approval_request_id"
+        FROM "audit_logs"
+        WHERE "deploy_approval_request_id" = ?
+        ORDER BY "timestamp" DESC
+        LIMIT ?
+    `
+
+	rows, err := d.query(query, deployApprovalRequestID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit logs by deploy approval request ID: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck // best-effort close
+
+	var logs []*AuditLog
+	for rows.Next() {
+		log := new(AuditLog)
+		var tokenID sql.NullInt64
+		var tokenName sql.NullString
+		var deployApprovalReqID sql.NullInt64
+
+		err := rows.Scan(
+			&log.ID, &log.Timestamp, &log.UserEmail, &log.UserName,
+			&tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details,
+			&log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount,
+			&deployApprovalReqID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan audit log: %w", err)
+		}
+		if tokenID.Valid {
+			id := tokenID.Int64
+			log.APITokenID = &id
+		}
+		if tokenName.Valid {
+			log.APITokenName = tokenName.String
+		}
+		if deployApprovalReqID.Valid {
+			id := deployApprovalReqID.Int64
+			log.DeployApprovalRequestID = &id
+		}
+
+		logs = append(logs, log)
+	}
+
+	return logs, nil
 }
 
 // CleanupOldAuditLogs deletes audit logs older than retentionDays

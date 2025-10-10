@@ -606,6 +606,82 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
+// GetDeployApprovalRequestAuditLogs godoc
+// @Summary Get audit logs for deploy approval request
+// @Description Returns audit logs associated with a specific deploy approval request.
+// @Tags DeployApprovalRequests
+// @Produce json
+// @Param id path string true "Deploy approval request public ID (UUID)"
+// @Param limit query int false "Limit (default 100)"
+// @Success 200 {object} AuditLogsResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/deploy-approval-requests/{id}/audit-logs [get]
+func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
+	if h == nil || h.database == nil || h.rbac == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+		return
+	}
+
+	userEmail := strings.TrimSpace(c.GetString("user_email"))
+	if userEmail == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return
+	}
+
+	publicID := strings.TrimSpace(c.Param("id"))
+	if publicID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
+		return
+	}
+
+	// Get the deploy approval request to verify it exists and get the internal ID
+	record, err := h.database.GetDeployApprovalRequestByPublicID(publicID)
+	if err != nil {
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy approval request"})
+		return
+	}
+
+	limit := 100
+	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	logs, err := h.database.GetAuditLogsByDeployApprovalRequestID(record.ID, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, AuditLogsResponse{
+		Logs:  logs,
+		Total: len(logs),
+		Page:  1,
+		Limit: limit,
+	})
+}
+
 func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprovalRequestResponse {
 	if dr == nil {
 		return DeployApprovalRequestResponse{}
@@ -632,8 +708,17 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		PipelineURL:               dr.PipelineURL,
 		CIProvider:                dr.CIProvider,
 		App:                       dr.App,
+		ObjectURL:                 dr.ObjectURL,
 		BuildID:                   dr.BuildID,
 		ReleaseID:                 dr.ReleaseID,
+		ProcessIDs:                dr.ProcessIDs,
+	}
+	// Unmarshal exec commands
+	if len(dr.ExecCommands) > 0 {
+		var commands map[string]interface{}
+		if err := json.Unmarshal(dr.ExecCommands, &commands); err == nil {
+			resp.ExecCommands = commands
+		}
 	}
 	// Unmarshal CI metadata
 	if len(dr.CIMetadata) > 0 {

@@ -14,6 +14,7 @@ export interface DbAuditLog {
   api_token_id?: number;
   api_token_name?: string;
   command?: string;
+  deploy_approval_request_id?: number;
   /** JSON string */
   details?: string;
   event_count?: number;

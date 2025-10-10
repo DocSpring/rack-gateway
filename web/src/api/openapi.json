@@ -507,6 +507,104 @@
                 }
             }
         },
+        "/admin/deploy-approval-requests/{id}/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Returns audit logs associated with a specific deploy approval request.",
+                "tags": [
+                    "DeployApprovalRequests"
+                ],
+                "summary": "Get audit logs for deploy approval request",
+                "parameters": [
+                    {
+                        "description": "Deploy approval request public ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit (default 100)",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.AuditLogsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/admin/deploy-approval-requests/{id}/reject": {
             "post": {
                 "security": [
@@ -4012,6 +4110,9 @@
                     "command": {
                         "type": "string"
                     },
+                    "deploy_approval_request_id": {
+                        "type": "integer"
+                    },
                     "details": {
                         "description": "JSON string",
                         "type": "string"
@@ -4543,6 +4644,10 @@
                     "created_by_name": {
                         "type": "string"
                     },
+                    "exec_commands": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
                     "git_branch": {
                         "type": "string"
                     },
@@ -4552,8 +4657,17 @@
                     "message": {
                         "type": "string"
                     },
+                    "object_url": {
+                        "type": "string"
+                    },
                     "pipeline_url": {
                         "type": "string"
+                    },
+                    "process_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     },
                     "public_id": {
                         "type": "string"

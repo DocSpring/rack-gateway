@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 import type { HandlersDeployApprovalRequestResponseCiMetadata } from './handlersDeployApprovalRequestResponseCiMetadata';
+import type { HandlersDeployApprovalRequestResponseExecCommands } from './handlersDeployApprovalRequestResponseExecCommands';
 
 export interface HandlersDeployApprovalRequestResponse {
   app?: string;
@@ -22,10 +23,13 @@ export interface HandlersDeployApprovalRequestResponse {
   created_by_api_token_name?: string;
   created_by_email?: string;
   created_by_name?: string;
+  exec_commands?: HandlersDeployApprovalRequestResponseExecCommands;
   git_branch?: string;
   git_commit_hash: string;
   message: string;
+  object_url?: string;
   pipeline_url?: string;
+  process_ids?: string[];
   public_id: string;
   rejected_at?: string;
   rejected_by_email?: string;

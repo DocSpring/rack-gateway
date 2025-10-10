@@ -235,19 +235,21 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 				deployAdmin := admin.Group("/deploy-approval-requests")
 				deployAdmin.GET("", adminHandler.ListDeployApprovalRequests)
+				deployAdmin.GET("/:id/audit-logs", adminHandler.GetDeployApprovalRequestAuditLogs)
 				deployApprove := deployAdmin.Group("")
 				deployApprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)
 				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 
 				// API tokens (rate limit creation)
+				// SECURITY: API token operations ALWAYS require MFA, with no grace period and no API token bypass
 				tokenGroup := admin.Group("/tokens")
 				tokenGroup.GET("", adminHandler.ListAPITokens)
 				tokenGroup.GET("/permissions", adminHandler.GetTokenPermissionMetadata)
 				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
 
 				tokenSensitive := tokenGroup.Group("")
-				tokenSensitive.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				tokenSensitive.Use(middleware.RequireMFA(cfg.MFASettings))
 				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)

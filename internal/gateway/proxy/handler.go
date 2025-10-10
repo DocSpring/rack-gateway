@@ -419,9 +419,18 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 				if skipManualReleaseLog {
 					continue
 				}
+				var tokenIDPtr *int64
+				if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
+					if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
+						tokenIDPtr = &parsed
+					}
+				}
+
 				_ = h.logAudit(r, &db.AuditLog{
 					UserEmail:      authUser.Email,
 					UserName:       r.Header.Get("X-User-Name"),
+					APITokenID:     tokenIDPtr,
+					APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
 					ActionType:     "convox",
 					Action:         audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringCreate),
 					ResourceType:   "release",
