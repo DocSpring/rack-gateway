@@ -2,6 +2,10 @@
 This project is not affiliated with, endorsed by, or sponsored by Convox, Inc.
 It’s an independent, open source, community-maintained tool that works with Convox racks.
 
+Rack Gateway imports code from the convox/convox repository: https://github.com/convox/convox
+convox/convox is licensed under the Apache License, Version 2.0: https://github.com/convox/convox/blob/master/LICENSE
+See [NOTICE](./NOTICE) for details.
+
 ---
 
 # Rack Gateway
@@ -20,17 +24,17 @@ The Convox source code is available on GitHub: https://github.com/convox/convox
 Convox Console is a closed-source, paid service that provides a web interface for
 managing your rack, including user management, RBAC, audit logging, workflows, and more.
 
-Rack Gateway can be thought of as a "community edition" for the hosted Convox Console.
+Rack Gateway can be considered a "community edition" for the hosted Convox Console.
 It is an open source, self-hosted interface for managing your rack with OAuth login, RBAC,
 audit logs, and secret redaction in env vars. We provide everything you need
 for SOC2 compliance on your own self-hosted infrastructure.
 
 **Rack Gateway is provided without any warranty or support. Use at your own risk.**
 
-Sign up for the official Convox Console or inquire about their enterprise license
-if you need more features or paid support. Convox Console provides many more advanced features
-such as more options for authentication, fine-grained RBAC and custom roles, support for multiple racks,
-monitoring and alerts, workflows for CI/CD, etc.
+If you need more features or paid support, consider signing up for the official Convox Console or
+inquire about an enterprise license for on-premise deployments. Convox Console provides many more
+advanced features such as more authentication options, fine-grained RBAC and custom roles, support
+for managing multiple racks, monitoring and alerts, workflows for CI/CD, etc.
 
 ## 📖 Start Here
 
@@ -366,6 +370,11 @@ aws logs put-metric-filter \
 
 ## Security Considerations
 
+Rack Gateway was built with the goal of achieving SOC 2 compliance for DocSpring's infrastructure.
+
+**We highly recommend setting up Tailscale for secure rack access, so that neither the Convox API nor
+the Rack Gateway API are exposed to the public internet.**
+
 1. **Session Secrets**: Use strong, unique secret keys in production
 2. **Domain Restriction**: Enforce Google Workspace domain
 3. **TLS**: Always use HTTPS in production
@@ -415,19 +424,20 @@ task lint
 4. Run `task test` and `task lint`
 5. Submit pull request
 
-## License
-
-MIT License - See LICENSE file for details
-
 ## Support
 
 For issues or questions:
 
 - Create an issue on GitHub
-- Check audit logs for debugging
+
+DocSpring, Inc. may be able to provide basic paid support for Rack Gateway. Contact us at [support@docspring.com](mailto:support@docspring.com) for more information.
+
+If your support needs are more complex, please consider using the official Convox Console. Convox provides both a hosted console and an enterprise license for on-premise deployments. See the [Convox](https://convox.com) website for more information.
 
 ## Deployment
 
-See DEPLOY.md for a production-ready deployment guide, environment configuration, persistence, and a minimal `convox.yml` example.
+See [DEPLOY.md](./docs/DEPLOY.md) for a production-ready deployment guide, environment configuration, persistence, and a minimal `convox.yml` example.
 
-- Review CloudWatch logs for errors
+## License
+
+Apache License, Version 2.0 - See [LICENSE](./LICENSE) for details
