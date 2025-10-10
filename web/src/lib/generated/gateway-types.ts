@@ -49,8 +49,11 @@ export interface DeployApprovalRequestResponse {
     ci_provider?: string;
     ci_metadata?: {[key: string]: any};
     app?: string;
+    object_url?: string;
     build_id?: string;
     release_id?: string;
+    process_ids?: string[];
+    exec_commands?: {[key: string]: any};
     release_created_at?: string;
     release_promoted_at?: string;
     release_promoted_by_api_token_id?: number;

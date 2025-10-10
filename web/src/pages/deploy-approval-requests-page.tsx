@@ -244,7 +244,6 @@ export function DeployApprovalRequestsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Decided By</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead>Updated</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -408,9 +407,6 @@ function DeployApprovalRequestRow({
       </TableCell>
       <TableCell>
         <TimeAgo date={request.created_at} />
-      </TableCell>
-      <TableCell>
-        <TimeAgo date={request.updated_at} />
       </TableCell>
 
       <TableCell>

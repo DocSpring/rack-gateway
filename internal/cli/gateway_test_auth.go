@@ -227,12 +227,3 @@ func testMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMethodR
 	// Use unified MFA verification module
 	return verifyMFAMethod(cmd, baseURL, bearer, method, allMethods)
 }
-
-func hasMethodType(methods []MFAMethodResponse, methodType string) bool {
-	for _, m := range methods {
-		if m.Type == methodType && !m.IsEnrolling {
-			return true
-		}
-	}
-	return false
-}

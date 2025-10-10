@@ -324,7 +324,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-validate audit log requirements BEFORE proxying to ensure we can return proper error
 	if !audit.HasAuditLogBeenCreated(r.Context()) {
-		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method)
+		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method, r.Header.Get("X-Audit-Resource"))
 		if action == "unknown" || resource == "unknown" {
 			errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s", r.Method, r.URL.Path)
 			log.Printf(`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s"}`, errorMsg, r.Method, r.URL.Path, action, resource)
@@ -368,7 +368,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Create generic audit log if no explicit audit logs were created during request handling
 	// (validation already happened before proxy, so action/resource/resourceType are guaranteed to be valid)
 	if !audit.HasAuditLogBeenCreated(r.Context()) {
-		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method)
+		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method, r.Header.Get("X-Audit-Resource"))
 		resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
 
 		var tokenIDPtr *int64

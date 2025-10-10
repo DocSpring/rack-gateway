@@ -1,12 +1,9 @@
 package cli
 
 import (
-	"bytes"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -125,26 +122,22 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				timeout = dur
 			}
 
-			gatewayURL, bearer, err := gatewayAuthInfo(rack)
+			created, err := createDeployApproval(cmd, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, "")
 			if err != nil {
+				var conflict *deployApprovalRequestConflictError
+				if errors.As(err, &conflict) {
+					if err := writeLine(cmd.OutOrStdout(), "Deploy approval request already exists for this commit"); err != nil {
+						return err
+					}
+					// For conflict errors, we don't have the existing request details
+					// User can check status with: rack-gateway deploy-approval list
+					return nil
+				}
 				return err
 			}
 
-			created, err := createDeployApproval(cmd, gatewayURL, bearer, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, "")
-			if err != nil {
-				var conflict *deployApprovalRequestConflictError
-				if errors.As(err, &conflict) && conflict.request != nil {
-					created = conflict.request
-					if err := writef(cmd.OutOrStdout(), "Deploy approval request %s already exists (status: %s)\n", created.PublicID, created.Status); err != nil {
-						return err
-					}
-				} else {
-					return err
-				}
-			} else {
-				if err := writef(cmd.OutOrStdout(), "Deploy approval request %s created (status: %s)\n", created.PublicID, created.Status); err != nil {
-					return err
-				}
+			if err := writef(cmd.OutOrStdout(), "Deploy approval request %s created (status: %s)\n", created.PublicID, created.Status); err != nil {
+				return err
 			}
 
 			if created == nil {
@@ -152,7 +145,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 			}
 
 			if waitFlag {
-				final, err := waitForDeployApproval(cmd, gatewayURL, bearer, rack, created.PublicID, pollInterval, timeout)
+				final, err := waitForDeployApproval(cmd, rack, created.PublicID, pollInterval, timeout)
 				if err != nil {
 					return err
 				}
@@ -223,12 +216,7 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 				rack = strings.TrimSpace(rackFlag)
 			}
 
-			gatewayURL, bearer, err := gatewayAuthInfo(rack)
-			if err != nil {
-				return err
-			}
-
-			approved, err := approveDeployRequest(cmd, gatewayURL, bearer, rack, requestID, strings.TrimSpace(notes))
+			approved, err := approveDeployRequest(cmd, rack, requestID, strings.TrimSpace(notes))
 			if err != nil {
 				return err
 			}
@@ -297,22 +285,14 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				pollInterval = dur
 			}
 
-			// Prepare auth info for all racks
+			// Prepare rack list for round-robin polling
 			type rackInfo struct {
-				name       string
-				gatewayURL string
-				bearer     string
+				name string
 			}
 			rackInfos := make([]rackInfo, 0, len(racks))
 			for _, rack := range racks {
-				gatewayURL, bearer, err := gatewayAuthInfo(rack)
-				if err != nil {
-					return fmt.Errorf("failed to get auth info for rack %s: %w", rack, err)
-				}
 				rackInfos = append(rackInfos, rackInfo{
-					name:       rack,
-					gatewayURL: gatewayURL,
-					bearer:     bearer,
+					name: rack,
 				})
 			}
 
@@ -333,31 +313,13 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				// Round-robin through racks
 				info := rackInfos[rackIndex]
 				rackIndex = (rackIndex + 1) % len(rackInfos)
+
 				// List pending deploy approval requests
-				resp, body, err := sendDeployApprovalRequest(info.gatewayURL, info.bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
-				if err != nil {
-					return err
-				}
-
-				if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-					if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name); err != nil {
-						return err
-					}
-					resp, body, err = sendDeployApprovalRequest(info.gatewayURL, info.bearer, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil)
-					if err != nil {
-						return err
-					}
-				}
-
-				if resp.StatusCode >= 400 {
-					return fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-				}
-
 				var result struct {
 					Requests []deployApprovalRequest `json:"deploy_approval_requests"`
 				}
-				if err := json.Unmarshal(body, &result); err != nil {
-					return fmt.Errorf("failed to parse deploy approval requests response: %w", err)
+				if err := gatewayRequest(cmd, info.name, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil, &result); err != nil {
+					return err
 				}
 
 				// Verify the response structure - if Requests is nil (not just empty), the JSON field wasn't present
@@ -404,17 +366,8 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 					}
 
 					if autoApprove {
-						if err := writeLine(cmd.OutOrStdout(), "\n🔐 Multi-factor authentication required to approve."); err != nil {
-							return err
-						}
-
-						// Perform MFA step-up before approval
-						if err := satisfyMFAStepUp(cmd, info.gatewayURL, info.bearer, info.name); err != nil {
-							return err
-						}
-
-						// Now approve the request
-						approved, err := approveDeployRequest(cmd, info.gatewayURL, info.bearer, info.name, req.PublicID, strings.TrimSpace(notes))
+						// Approve the request (MFA will be prompted if needed)
+						approved, err := approveDeployRequest(cmd, info.name, req.PublicID, strings.TrimSpace(notes))
 						if err != nil {
 							return err
 						}
@@ -544,7 +497,7 @@ func playNotificationSound(cfg *Config, rack string) error {
 	return cmd.Run()
 }
 
-func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, targetToken string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, targetToken string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message":         message,
 		"git_commit_hash": gitCommitHash,
@@ -564,86 +517,42 @@ func createDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack, app, git
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, "/deploy-approval-requests", payload)
+
+	var result deployApprovalRequest
+	if err := gatewayRequest(cmd, rack, http.MethodPost, "/deploy-approval-requests", payload, &result); err != nil {
+		// Handle conflict error specially
+		if strings.Contains(err.Error(), "409") {
+			return &result, &deployApprovalRequestConflictError{request: &result}
+		}
+		return nil, err
+	}
+	return &result, nil
 }
 
-func approveDeployRequest(cmd *cobra.Command, gatewayURL, bearer, rack, requestID, notes string) (*deployApprovalRequest, error) {
+func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{}
 	if notes != "" {
 		payload["notes"] = notes
 	}
-	return postDeployApprovalRequest(cmd, gatewayURL, bearer, rack, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload)
-}
 
-func postDeployApprovalRequest(cmd *cobra.Command, gatewayURL, bearer, rack, path string, payload map[string]interface{}) (*deployApprovalRequest, error) {
-	fullPath := path
-	attempts := 0
-	for {
-		attempts++
-		resp, body, err := sendDeployApprovalRequest(gatewayURL, bearer, http.MethodPost, fullPath, payload)
-		if err != nil {
-			return nil, err
+	var result deployApprovalRequest
+	if err := gatewayRequest(cmd, rack, http.MethodPost, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload, &result); err != nil {
+		// Handle conflict error specially
+		if strings.Contains(err.Error(), "409") {
+			return &result, &deployApprovalRequestConflictError{request: &result}
 		}
-
-		if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-			if err := satisfyMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
-				return nil, err
-			}
-			if attempts < 3 {
-				continue
-			}
-		}
-
-		if resp.StatusCode >= 400 {
-			if resp.StatusCode == http.StatusConflict {
-				var existing deployApprovalRequest
-				if len(body) > 0 && json.Unmarshal(body, &existing) == nil && existing.PublicID != "" {
-					return &existing, &deployApprovalRequestConflictError{request: &existing}
-				}
-			}
-			return nil, fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-		}
-
-		var result deployApprovalRequest
-		if err := json.Unmarshal(body, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse deploy approval request response: %w", err)
-		}
-		return &result, nil
+		return nil, err
 	}
+	return &result, nil
 }
 
-func satisfyMFAStepUp(cmd *cobra.Command, gatewayURL, bearer, rack string) error {
-	// Use unified MFA module that respects preferences and global --mfa-code and --mfa-method flags
-	return performMFAStepUp(cmd, gatewayURL, bearer, rack)
-}
-
-func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, publicID string, interval, timeout time.Duration) (*deployApprovalRequest, error) {
+func waitForDeployApproval(cmd *cobra.Command, rack, publicID string, interval, timeout time.Duration) (*deployApprovalRequest, error) {
 	start := time.Now()
 	var lastStatus string
 	for {
-		resp, body, err := sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%s", publicID), nil)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode == http.StatusUnauthorized && isMFAStepUpRequired(body) {
-			// Use unified MFA module
-			if err := performMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
-				return nil, err
-			}
-			resp, body, err = sendDeployApprovalRequest(gatewayURL, bearer, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%s", publicID), nil)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-		}
-
 		var result deployApprovalRequest
-		if err := json.Unmarshal(body, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse deploy approval request response: %w", err)
+		if err := gatewayRequest(cmd, rack, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%s", publicID), nil, &result); err != nil {
+			return nil, err
 		}
 
 		statusLower := strings.ToLower(result.Status)
@@ -664,53 +573,4 @@ func waitForDeployApproval(cmd *cobra.Command, gatewayURL, bearer, rack string, 
 
 		time.Sleep(interval)
 	}
-}
-
-func sendDeployApprovalRequest(gatewayURL, bearer, method, path string, payload interface{}) (*http.Response, []byte, error) {
-	fullURL := strings.TrimRight(gatewayURL, "/") + "/.gateway/api" + path
-
-	var body io.Reader
-	if payload != nil {
-		data, err := json.Marshal(payload)
-		if err != nil {
-			return nil, nil, err
-		}
-		body = bytes.NewReader(data)
-	}
-
-	req, err := http.NewRequest(method, fullURL, body)
-	if err != nil {
-		return nil, nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return resp, respBody, nil
-}
-
-func isMFAStepUpRequired(body []byte) bool {
-	if len(body) == 0 {
-		return false
-	}
-	var payload struct {
-		Error string `json:"error"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return false
-	}
-	return strings.EqualFold(payload.Error, "mfa_step_up_required")
 }

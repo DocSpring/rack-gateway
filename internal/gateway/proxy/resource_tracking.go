@@ -81,15 +81,22 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
+		// Extract filename from path for audit logging
+		segments := strings.Split(strings.TrimSpace(path), "/")
+		if len(segments) > 0 {
+			filename := segments[len(segments)-1]
+			if filename != "" {
+				r.Header.Set("X-Audit-Resource", filename)
+			}
+		}
+
+		// Track object key for resource creator
 		key := extractJSONString(obj["key"])
 		if key == "" {
 			key = extractJSONString(obj["id"])
 		}
-		if key == "" {
-			segments := strings.Split(strings.TrimSpace(path), "/")
-			if len(segments) > 0 {
-				key = segments[len(segments)-1]
-			}
+		if key == "" && len(segments) > 0 {
+			key = segments[len(segments)-1]
 		}
 		if key != "" {
 			setResource("object", key, false)
@@ -122,6 +129,13 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			if h.recordResourceCreator("release", id, email) {
 				r.Header.Add("X-Release-Created", id)
 			}
+		}
+	}
+
+	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
+		if id := extractJSONString(obj["id"]); id != "" {
+			r.Header.Set("X-Audit-Resource", id)
+			setResource("process", id, false)
 		}
 	}
 }

@@ -630,9 +630,9 @@ func (h *Handler) isCommandApproved(command string) bool {
 		return false
 	}
 
-	// If no approved commands configured, deny all
+	// If no approved commands configured, allow all commands
 	if len(approvedCommands) == 0 {
-		return false
+		return true
 	}
 
 	// Check if command matches any approved command

@@ -74,9 +74,9 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 
 		if pinRequired {
 			// Need PIN to enumerate credentials - ask for it now
-			fmt.Print("Enter your security key PIN: ")
+			fmt.Fprint(os.Stderr, "Enter your security key PIN: ")
 			pinBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-			fmt.Println() // New line after password input
+			fmt.Fprintln(os.Stderr) // New line after password input
 			if err != nil {
 				return nil, fmt.Errorf("failed to read PIN: %w", err)
 			}
@@ -111,7 +111,7 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 			}
 
 			allowList = filteredAllowList
-			fmt.Printf("Found %d matching credential(s) on this device\n", len(allowList))
+			fmt.Fprintf(os.Stderr, "Found %d matching credential(s) on this device\n", len(allowList))
 		}
 		// If credential enumeration fails, proceed with full allowList
 	}
@@ -144,7 +144,7 @@ func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
 		}
 	}
 
-	fmt.Println("Touch your security key to authenticate...")
+	fmt.Fprintln(os.Stderr, "Touch your security key to authenticate...")
 
 	// Get assertion from device
 	assertion, err := device.Assertion(

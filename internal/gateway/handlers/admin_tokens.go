@@ -40,6 +40,12 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	}
 	req.Name = strings.TrimSpace(req.Name)
 
+	// Validate that permissions are provided
+	if len(req.Permissions) == 0 {
+		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), strings.TrimSpace(req.UserEmail), "permissions required - specify --role or --permission", start, map[string]interface{}{"name": req.Name})
+		return
+	}
+
 	currentUser := c.GetString("user_email")
 	targetEmail := req.UserEmail
 	if targetEmail == "" {

@@ -339,7 +339,8 @@ func getClientIP(r *http.Request) string {
 
 // ParseConvoxAction extracts meaningful action and resource from the request.
 // Returns "unknown" for both if route cannot be matched - caller must handle this.
-func (l *Logger) ParseConvoxAction(path, method string) (action, resource string) {
+// If resourceIDOverride is provided, it will be used instead of parsing from the path.
+func (l *Logger) ParseConvoxAction(path, method, resourceIDOverride string) (action, resource string) {
 	// For audit purposes, treat WebSocket GET upgrades as SOCKET method for matching
 	res, act, ok := routematch.Match(method, path)
 	if !ok && method == http.MethodGet && strings.Contains(path, "/logs") {
@@ -348,7 +349,11 @@ func (l *Logger) ParseConvoxAction(path, method string) (action, resource string
 		}
 	}
 	if ok {
-		return res.String() + "." + act.String(), resourceInstance(path, res.String(), act.String())
+		resourceID := resourceIDOverride
+		if resourceID == "" {
+			resourceID = resourceInstance(path, res.String(), act.String())
+		}
+		return res.String() + "." + act.String(), resourceID
 	}
 	return "unknown", "unknown"
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -184,15 +185,20 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	case resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate):
 		// Process exec/terminate requires the process ID to be in an approved deployment's process_ids
 		processID := extractProcessIDFromPath(r.URL.Path)
+		log.Printf("DEBUG: process %s - checking permission for tokenID=%d app=%s processID=%s", action, *authUser.TokenID, app, processID)
 		if processID == "" {
+			log.Printf("DEBUG: process %s - denied: empty processID", action)
 			return deny()
 		}
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		lookup := db.DeployApprovalLookup{
 			TokenID:      *authUser.TokenID,
 			App:          app,
 			ProcessID:    processID,
 			StatusFilter: "approved",
-		})
+		}
+		log.Printf("DEBUG: process %s - looking up deploy approval: %+v", action, lookup)
+		req, err = h.database.FindDeployApprovalRequest(lookup)
+		log.Printf("DEBUG: process %s - lookup result: req=%v err=%v", action, req != nil, err)
 
 	case resource == rbac.ResourceRelease && action == rbac.ActionPromote:
 		releaseID := extractReleaseIDFromPath(r.URL.Path)
@@ -222,21 +228,30 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			log.Printf("DEBUG: deploy approval lookup failed: not found")
 			return deny()
 		}
+		log.Printf("DEBUG: deploy approval lookup failed: %v", err)
 		return false, nil, err
 	}
 	if req == nil {
+		log.Printf("DEBUG: deploy approval lookup returned nil request")
 		return deny()
 	}
 
+	log.Printf("DEBUG: deploy approval found: id=%s status=%s process_ids=%v", req.PublicID, req.Status, req.ProcessIDs)
+
 	// Common checks
 	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
+		log.Printf("DEBUG: deploy approval expired")
 		return deny()
 	}
 	if req.Status != db.DeployApprovalRequestStatusApproved {
+		log.Printf("DEBUG: deploy approval status check failed: expected=approved actual=%s", req.Status)
 		return deny()
 	}
+
+	log.Printf("DEBUG: deploy approval permission granted")
 
 	tracker := &deployApprovalTracker{
 		request:   req,

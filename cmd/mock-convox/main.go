@@ -213,7 +213,7 @@ func main() {
 	r.HandleFunc("/apps/{app}/processes", getProcesses).Methods("GET")
 	r.HandleFunc("/apps/{app}/processes/{id}", getProcess).Methods("GET")
 	r.HandleFunc("/apps/{app}/processes/{id}/exec", execProcess).Methods("GET")
-	r.HandleFunc("/apps/{app}/processes/{id}/stop", stopProcess).Methods("POST")
+	r.HandleFunc("/apps/{app}/processes/{id}", deleteProcess).Methods("DELETE")
 
 	r.HandleFunc("/apps/{app}/builds", getBuilds).Methods("GET")
 	r.HandleFunc("/apps/{app}/builds/{id}", getBuild).Methods("GET")
@@ -297,10 +297,10 @@ Endpoints:
   GET  /apps                                    # list apps (rack-gateway, api, web)
   GET  /apps/{app}                              # app info
 
-  GET  /apps/{app}/processes                    # list processes
-  GET  /apps/{app}/processes/{id}               # process info
-  GET  /apps/{app}/processes/{id}/exec          # mock exec (WebSocket)
-  POST /apps/{app}/processes/{id}/stop          # stop process (mock)
+  GET    /apps/{app}/processes                  # list processes
+  GET    /apps/{app}/processes/{id}             # process info
+  GET    /apps/{app}/processes/{id}/exec        # mock exec (WebSocket)
+  DELETE /apps/{app}/processes/{id}             # terminate process
 
   GET  /apps/{app}/builds                       # list builds
   GET  /apps/{app}/builds/{id}                  # build info
@@ -715,8 +715,9 @@ func getProcess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, process)
 }
 
-func stopProcess(w http.ResponseWriter, r *http.Request) {
+func deleteProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	log.Printf("DELETE process app=%s id=%s", vars["app"], vars["id"])
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, map[string]string{
 		"id":     vars["id"],

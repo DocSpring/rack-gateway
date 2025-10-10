@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -243,9 +242,16 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		dr.ReleaseID = releaseID.String
 	}
 	if len(processIDs) > 0 {
-		// Parse PostgreSQL array - pgx returns it as a []byte in PostgreSQL text array format
-		// For now, use json.Unmarshal which works with PostgreSQL's JSON array representation
-		_ = json.Unmarshal(processIDs, &dr.ProcessIDs)
+		// Parse PostgreSQL array format: {item1,item2,item3}
+		// Convert to string and parse manually
+		arrStr := string(processIDs)
+		if len(arrStr) > 2 && arrStr[0] == '{' && arrStr[len(arrStr)-1] == '}' {
+			// Remove braces and split by comma
+			inner := arrStr[1 : len(arrStr)-1]
+			if inner != "" {
+				dr.ProcessIDs = strings.Split(inner, ",")
+			}
+		}
 	}
 	if len(execCommands) > 0 {
 		dr.ExecCommands = execCommands

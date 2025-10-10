@@ -120,7 +120,14 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 			if strings.HasPrefix(credentials, "rgw_") {
 				user, err = a.validateAPIToken(credentials)
 			} else {
-				user, err = a.validateSessionToken(credentials, r)
+				// Parse Bearer token for optional inline MFA
+				sessionToken, mfaType, mfaValue := parseInlineMFA(credentials)
+				user, err = a.validateSessionToken(sessionToken, r)
+				if err == nil && mfaType != "" && mfaValue != "" {
+					// Attach inline MFA to the user
+					user.MFAType = mfaType
+					user.MFAValue = mfaValue
+				}
 			}
 		case "Basic":
 			user, err = a.validateBasicAuth(credentials, r)
@@ -249,20 +256,8 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 	username := parts[0]
 	password := parts[1]
 
-	// Parse password field for optional MFA data
-	// Format: session_token.mfa_type.mfa_value (e.g., "session123.totp.123456" or "session123.webauthn.base64data")
-	// Using dots instead of colons to avoid URL encoding issues
-	var authToken, mfaType, mfaValue string
-	passwordParts := strings.SplitN(password, ".", 3)
-	if len(passwordParts) == 3 {
-		// MFA data present
-		authToken = passwordParts[0]
-		mfaType = passwordParts[1]
-		mfaValue = passwordParts[2]
-	} else {
-		// No MFA data, just the token
-		authToken = password
-	}
+	// Parse password field for optional inline MFA data
+	authToken, mfaType, mfaValue := parseInlineMFA(password)
 
 	var user *AuthUser
 
@@ -317,6 +312,19 @@ func decodeBasicAuth(credentials string) (string, error) {
 		return "", fmt.Errorf("failed to decode base64: %w", err)
 	}
 	return string(decoded), nil
+}
+
+// parseInlineMFA parses a token string for optional inline MFA data
+// Format: token.mfa_type.mfa_value (e.g., "session123.totp.123456" or "session123.webauthn.base64data")
+// Returns: (token, mfaType, mfaValue)
+func parseInlineMFA(tokenString string) (string, string, string) {
+	parts := strings.SplitN(tokenString, ".", 3)
+	if len(parts) == 3 {
+		// MFA data present
+		return parts[0], parts[1], parts[2]
+	}
+	// No MFA data, just the token
+	return tokenString, "", ""
 }
 
 func (a *AuthService) validateSessionToken(token string, r *http.Request) (*AuthUser, error) {

@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
@@ -69,13 +71,8 @@ func RequireMFA(mfaService *mfa.Service, database *db.Database, settings *db.MFA
 		case "totp":
 			_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), nil)
 		case "webauthn":
-			// WebAuthn requires session data, which we don't have here
-			// For now, only support TOTP for inline MFA
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-				"error":   "unsupported_mfa_type",
-				"message": "WebAuthn not yet supported for inline MFA verification",
-			})
-			return
+			// WebAuthn inline format: base64(JSON{"session_data": "...", "assertion": {...}})
+			verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"))
 		default:
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error":   "invalid_mfa_type",
@@ -103,4 +100,35 @@ func denyMFA(c *gin.Context) {
 		"error":   "mfa_required",
 		"message": "Multi-factor authentication is required for this sensitive operation.",
 	})
+}
+
+// verifyInlineWebAuthn decodes and verifies inline WebAuthn assertion data
+func verifyInlineWebAuthn(mfaService *mfa.Service, database *db.Database, user *db.User, encodedData, ipAddress, userAgent string) error {
+	// Decode base64
+	jsonData, err := base64.StdEncoding.DecodeString(encodedData)
+	if err != nil {
+		return err
+	}
+
+	// Parse JSON structure to extract session_data and assertion_response
+	var inlineData struct {
+		SessionData       string `json:"session_data"`
+		AssertionResponse string `json:"assertion_response"`
+	}
+
+	if err := json.Unmarshal(jsonData, &inlineData); err != nil {
+		return err
+	}
+
+	// Verify the WebAuthn assertion using the MFA service
+	_, err = mfaService.VerifyWebAuthnAssertion(
+		user,
+		[]byte(inlineData.SessionData),
+		[]byte(inlineData.AssertionResponse),
+		ipAddress,
+		userAgent,
+		nil, // sessionID - not needed for inline verification
+	)
+
+	return err
 }

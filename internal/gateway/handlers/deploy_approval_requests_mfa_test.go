@@ -344,8 +344,8 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
-			"name": "new-token",
-			"role": "viewer",
+			"name":        "new-token",
+			"permissions": []string{"convox:apps:read"},
 		}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
@@ -391,8 +391,8 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
-			"name": "new-token",
-			"role": "viewer",
+			"name":        "new-token",
+			"permissions": []string{"convox:apps:read"},
 		}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()

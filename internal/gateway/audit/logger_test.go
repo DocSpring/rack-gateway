@@ -25,7 +25,7 @@ func TestAuditLogger(t *testing.T) {
 			if method == "SOCKET" {
 				method = http.MethodGet
 			}
-			action, resource := logger.ParseConvoxAction(path, method)
+			action, resource := logger.ParseConvoxAction(path, method, "")
 			expectedAction := fmt.Sprintf("%s.%s", spec.Resource, spec.Action)
 			expectedResource := resourceInstance(path, spec.Resource.String(), spec.Action.String())
 			assert.Equal(t, expectedAction, action, "pattern %s %s", spec.Method, spec.Pattern)
@@ -84,7 +84,7 @@ func TestAuditLogger(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(fmt.Sprintf("%s %s", tc.method, tc.path), func(t *testing.T) {
-				action, resource := logger.ParseConvoxAction(tc.path, tc.method)
+				action, resource := logger.ParseConvoxAction(tc.path, tc.method, "")
 				assert.Equal(t, tc.expectedAction, action, "action mismatch for %s %s", tc.method, tc.path)
 				assert.Equal(t, tc.expectedResource, resource, "resource mismatch for %s %s", tc.method, tc.path)
 				assert.NotEqual(t, "unknown", action, "action should not be unknown")

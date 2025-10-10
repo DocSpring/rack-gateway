@@ -300,6 +300,15 @@ export function DeployApprovalRequestDetailPage() {
               value={request?.release_id ?? '—'}
               valueClassName="font-mono"
             />
+            <DetailRow
+              label="Process IDs"
+              value={
+                request?.process_ids && request.process_ids.length > 0
+                  ? request.process_ids.join(', ')
+                  : '—'
+              }
+              valueClassName="font-mono"
+            />
           </CardContent>
         </Card>
 

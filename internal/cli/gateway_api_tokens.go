@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/spf13/cobra"
 )
 
@@ -212,6 +213,11 @@ func newAPITokenCreateCommand() *cobra.Command {
 				return err
 			}
 
+			// Require either --role or --permission to be specified
+			if role == "" && len(permissions) == 0 {
+				return errors.New("--role or --permission is required")
+			}
+
 			permSet := newPermissionSet()
 			if role != "" {
 				matched := false
@@ -227,9 +233,6 @@ func newAPITokenCreateCommand() *cobra.Command {
 				}
 			}
 			permSet.add(permissions...)
-			if permSet.len() == 0 {
-				permSet.add(metadata.DefaultPermissions...)
-			}
 
 			var expires *time.Time
 			if strings.TrimSpace(expiresAt) != "" {
@@ -350,31 +353,103 @@ func deleteAPIToken(cmd *cobra.Command, rack, id string) error {
 	return gatewayRequest(cmd, rack, http.MethodDelete, "/admin/tokens/"+url.PathEscape(id), nil, nil)
 }
 
+// gatewayMFAContext holds MFA requirement info for a gateway request
+type gatewayMFAContext struct {
+	mfaLevel convox.MFALevel
+	mfaAuth  string // inline MFA auth string (e.g., "totp.123456") for MFAAlways
+}
+
+// checkAndPromptGatewayMFA checks if the gateway operation requires MFA and returns MFA context
+func checkAndPromptGatewayMFA(cmd *cobra.Command, baseURL, bearer, rack, method, path string) (*gatewayMFAContext, error) {
+	// Map gateway API paths to permissions
+	var permissions []string
+
+	// API Token operations
+	if strings.HasPrefix(path, "/admin/tokens") {
+		switch method {
+		case http.MethodPost:
+			permissions = []string{"gateway:api_token:create"}
+		case http.MethodPut, http.MethodPatch:
+			permissions = []string{"gateway:api_token:update"}
+		case http.MethodDelete:
+			permissions = []string{"gateway:api_token:delete"}
+		}
+	}
+
+	// Deploy Approval operations
+	if strings.Contains(path, "/deploy-approval-requests") && strings.Contains(path, "/approve") {
+		permissions = []string{"gateway:deploy_approval_request:approve"}
+	}
+
+	// If no permissions identified, no MFA required
+	if len(permissions) == 0 {
+		return &gatewayMFAContext{mfaLevel: convox.MFANone}, nil
+	}
+
+	mfaLevel := convox.GetMFALevel(permissions)
+	if mfaLevel == convox.MFANone {
+		return &gatewayMFAContext{mfaLevel: convox.MFANone}, nil
+	}
+
+	ctx := &gatewayMFAContext{mfaLevel: mfaLevel}
+
+	// For MFAAlways: always prompt upfront and get inline auth string
+	if mfaLevel == convox.MFAAlways {
+		mfaAuth, err := promptMFAForCommand(cmd, baseURL, bearer, rack)
+		if err != nil {
+			return nil, err
+		}
+		ctx.mfaAuth = mfaAuth
+		return ctx, nil
+	}
+
+	// For MFAStepUp: don't prompt upfront - let server tell us if needed
+	// The retry logic will prompt and include inline MFA if server returns mfa_required
+	return ctx, nil
+}
+
 func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interface{}, out interface{}) error {
 	gatewayURL, bearer, err := gatewayAuthInfo(rack)
 	if err != nil {
 		return err
 	}
 
-	// Try the request
-	statusCode, responseBody, err := doGatewayRequest(gatewayURL, bearer, method, path, body)
+	// Check if this operation requires MFA and prompt BEFORE making the request
+	mfaCtx, err := checkAndPromptGatewayMFA(cmd, gatewayURL, bearer, rack, method, path)
 	if err != nil {
 		return err
 	}
 
-	// Check for MFA step-up requirement
+	// Attach inline MFA to bearer token if needed
+	requestBearer := bearer
+	if mfaCtx.mfaAuth != "" {
+		// Format: session_token.mfa_type.mfa_value (e.g., "session123.totp.123456")
+		requestBearer = bearer + "." + mfaCtx.mfaAuth
+	}
+
+	// Try the request
+	statusCode, responseBody, err := doGatewayRequest(gatewayURL, requestBearer, method, path, body)
+	if err != nil {
+		return err
+	}
+
+	// Smart retry: if server unexpectedly requires MFA, adapt and retry once
 	if statusCode == http.StatusUnauthorized {
 		var errResp struct {
 			Error string `json:"error"`
 		}
-		if json.Unmarshal(responseBody, &errResp) == nil && errResp.Error == "mfa_step_up_required" {
-			// Perform MFA step-up
-			if err := performMFAStepUp(cmd, gatewayURL, bearer, rack); err != nil {
-				return fmt.Errorf("MFA verification failed: %w", err)
-			}
+		if json.Unmarshal(responseBody, &errResp) == nil && errResp.Error == "mfa_required" {
+			// Server requires MFA but we didn't provide it - this can happen when:
+			// 1. CLI thinks step-up is still valid but server disagrees (clock skew/latency)
+			// 2. Server upgraded endpoint to require MFA (version mismatch)
+			// Solution: Prompt for MFA and retry with inline auth
 
-			// Retry the request with the same bearer (MFA sets cookie)
-			statusCode, responseBody, err = doGatewayRequest(gatewayURL, bearer, method, path, body)
+			mfaAuth, err := promptMFAForCommand(cmd, gatewayURL, bearer, rack)
+			if err != nil {
+				return fmt.Errorf("MFA required by server: %w", err)
+			}
+			// Retry with inline MFA
+			statusCode, responseBody, err = doGatewayRequest(gatewayURL, bearer+"."+mfaAuth, method, path, body)
 			if err != nil {
 				return err
 			}
@@ -491,10 +566,6 @@ func (p *permissionSet) add(perms ...string) {
 		}
 		p.items[perm] = struct{}{}
 	}
-}
-
-func (p *permissionSet) len() int {
-	return len(p.items)
 }
 
 func (p *permissionSet) list() []string {
