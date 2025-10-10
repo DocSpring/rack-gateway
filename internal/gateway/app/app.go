@@ -11,6 +11,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
 )
@@ -26,6 +27,7 @@ type App struct {
 	TokenService     *token.Service
 	MFAService       *mfa.Service
 	MFASettings      *db.MFASettings
+	SettingsService  *settings.Service
 	EmailSender      email.Sender
 	ProxyHandler     *proxy.Handler
 	RackCertManager  *rackcert.Manager

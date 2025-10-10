@@ -16,6 +16,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
@@ -35,6 +36,7 @@ type Config struct {
 	TokenService     *token.Service
 	MFAService       *mfa.Service
 	MFASettings      *db.MFASettings
+	SettingsService  *settings.Service
 	EmailSender      email.Sender
 	ProxyHandler     *proxy.Handler
 	RackCertMgr      *rackcert.Manager
@@ -101,6 +103,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier, cfg.AuditLogger)
 	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings, cfg.AuditLogger)
 	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger)
+	settingsHandler := handlers.NewSettingsHandler(cfg.SettingsService, cfg.RBACManager)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
 	staticHandler := handlers.NewStaticHandler(cfg.Config, cfg.SessionManager)
 	healthHandler := handlers.NewHealthHandler()
@@ -205,12 +208,12 @@ func Setup(router *gin.Engine, cfg *Config) {
 				// Config and settings
 				admin.GET("/config", adminHandler.GetConfig)
 				admin.PUT("/config", adminHandler.UpdateConfig)
-				admin.GET("/settings", adminHandler.GetSettings)
-				admin.PUT("/settings/protected_env_vars", adminHandler.UpdateProtectedEnvVars)
-				admin.PUT("/settings/approved_commands", adminHandler.UpdateApprovedCommands)
-				admin.PUT("/settings/app_image_patterns", adminHandler.UpdateAppImagePatterns)
-				admin.PUT("/settings/allow_destructive_actions", adminHandler.UpdateAllowDestructiveActions)
-				admin.PUT("/settings/mfa", adminHandler.UpdateMFASettings)
+
+				// New generic settings endpoints
+				admin.GET("/settings", settingsHandler.GetAllGlobalSettings)
+				admin.GET("/settings/:key", settingsHandler.GetGlobalSetting)
+				admin.PUT("/settings/:key", settingsHandler.UpdateGlobalSetting)
+
 				admin.GET("/settings/circleci", adminHandler.GetCircleCISettings)
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
@@ -265,6 +268,15 @@ func Setup(router *gin.Engine, cfg *Config) {
 				integrations.DELETE("/slack", adminHandler.DeleteSlackIntegrationHandler)
 				integrations.GET("/slack/channels/list", adminHandler.ListSlackChannelsHandler)
 				integrations.POST("/slack/test", adminHandler.TestSlackNotificationHandler)
+			}
+
+			// App-specific settings endpoints
+			apps := authenticated.Group("/apps/:app")
+			apps.Use(middleware.CSRF(cfg.SessionManager))
+			{
+				apps.GET("/settings", settingsHandler.GetAllAppSettings)
+				apps.GET("/settings/:key", settingsHandler.GetAppSetting)
+				apps.PUT("/settings/:key", settingsHandler.UpdateAppSetting)
 			}
 		}
 	}

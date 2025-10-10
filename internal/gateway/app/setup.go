@@ -107,6 +107,9 @@ func (a *App) initializeServices() error {
 	// Initialize token service
 	a.TokenService = token.NewService(a.Database)
 
+	// Initialize settings service
+	a.SettingsService = settings.NewService(a.Database)
+
 	// Create combined auth service
 	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager)
 
@@ -259,6 +262,7 @@ func (a *App) setupRouter() {
 		TokenService:     a.TokenService,
 		MFAService:       a.MFAService,
 		MFASettings:      a.MFASettings,
+		SettingsService:  a.SettingsService,
 		EmailSender:      a.EmailSender,
 		ProxyHandler:     a.ProxyHandler,
 		RackCertMgr:      a.RackCertManager,

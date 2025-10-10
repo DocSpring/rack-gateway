@@ -11,11 +11,10 @@ import (
 // SeedConfig carries optional user/email lists to bootstrap the database. Any nil
 // slice falls back to environment variables when seeding.
 type SeedConfig struct {
-	AdminUsers       []string
-	ViewerUsers      []string
-	DeployerUsers    []string
-	OperationsUsers  []string
-	ProtectedEnvVars []string
+	AdminUsers      []string
+	ViewerUsers     []string
+	DeployerUsers   []string
+	OperationsUsers []string
 }
 
 // SeedDatabase ensures the gateway database contains the expected bootstrap
@@ -50,39 +49,8 @@ func (d *Database) SeedDatabase(cfg *SeedConfig) error {
 		}
 	}
 
-	if len(seed.protectedEnvVars) > 0 {
-		raw, ok, err := d.GetSettingRaw("protected_env_vars")
-		if err != nil {
-			return fmt.Errorf("failed to read protected_env_vars setting: %w", err)
-		}
-		if !ok || len(raw) == 0 {
-			if err := d.UpsertSetting("protected_env_vars", seed.protectedEnvVars, nil); err != nil {
-				return fmt.Errorf("failed to seed protected_env_vars: %w", err)
-			}
-		}
-	}
-
-	// Seed CircleCI settings from environment variables
-	circleCIAPIToken := strings.TrimSpace(os.Getenv("CIRCLE_CI_API_TOKEN"))
-	circleCIApprovalJobName := strings.TrimSpace(os.Getenv("CIRCLE_CI_APPROVAL_JOB_NAME"))
-	circleCIOrgSlug := strings.TrimSpace(os.Getenv("CIRCLE_CI_ORG_SLUG"))
-
-	if circleCIAPIToken != "" || circleCIApprovalJobName != "" {
-		raw, ok, err := d.GetSettingRaw("circleci")
-		if err != nil {
-			return fmt.Errorf("failed to read circleci setting: %w", err)
-		}
-		if !ok || len(raw) == 0 {
-			settings := &CircleCISettings{
-				APIToken:        circleCIAPIToken,
-				ApprovalJobName: circleCIApprovalJobName,
-				OrgSlug:         circleCIOrgSlug,
-			}
-			if err := d.UpsertCircleCISettings(settings, nil); err != nil {
-				return fmt.Errorf("failed to seed circleci settings: %w", err)
-			}
-		}
-	}
+	// Settings are no longer pre-seeded into the database.
+	// They are read from environment variables by the settings service on demand.
 
 	return nil
 }
@@ -152,11 +120,10 @@ func (d *Database) ensureUserWithRoles(email, defaultName string, roles []string
 }
 
 type seedInputs struct {
-	adminUsers       []string
-	viewerUsers      []string
-	deployerUsers    []string
-	operationsUsers  []string
-	protectedEnvVars []string
+	adminUsers      []string
+	viewerUsers     []string
+	deployerUsers   []string
+	operationsUsers []string
 }
 
 func buildSeedInputs(cfg *SeedConfig) seedInputs {
@@ -181,12 +148,6 @@ func buildSeedInputs(cfg *SeedConfig) seedInputs {
 		inputs.operationsUsers = normalizeEmailList(cfg.OperationsUsers)
 	} else {
 		inputs.operationsUsers = normalizeEmailList(parseCSVEnv(os.Getenv("OPERATIONS_USERS")))
-	}
-
-	if cfg != nil && cfg.ProtectedEnvVars != nil {
-		inputs.protectedEnvVars = normalizeProtectedEnvVars(cfg.ProtectedEnvVars)
-	} else {
-		inputs.protectedEnvVars = normalizeProtectedEnvVars(parseCSVEnv(os.Getenv("DB_SEED_PROTECTED_ENV_VARS")))
 	}
 
 	return inputs
@@ -216,24 +177,6 @@ func normalizeEmailList(in []string) []string {
 		}
 		seen[email] = struct{}{}
 		out = append(out, email)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func normalizeProtectedEnvVars(in []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(in))
-	for _, raw := range in {
-		key := strings.TrimSpace(strings.ToUpper(raw))
-		if key == "" {
-			continue
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, key)
 	}
 	sort.Strings(out)
 	return out
