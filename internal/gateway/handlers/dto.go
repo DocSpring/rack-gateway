@@ -366,6 +366,7 @@ type DeployApprovalRequestResponse struct {
 	GitCommitHash             string                 `json:"git_commit_hash" validate:"required"`
 	GitBranch                 string                 `json:"git_branch,omitempty"`
 	PipelineURL               string                 `json:"pipeline_url,omitempty"`
+	PrURL                     string                 `json:"pr_url,omitempty"`
 	CIProvider                string                 `json:"ci_provider,omitempty"`
 	CIMetadata                map[string]interface{} `json:"ci_metadata,omitempty"`
 	App                       string                 `json:"app,omitempty"`

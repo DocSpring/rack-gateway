@@ -46,6 +46,7 @@ export interface DeployApprovalRequestResponse {
     git_commit_hash: string;
     git_branch?: string;
     pipeline_url?: string;
+    pr_url?: string;
     ci_provider?: string;
     ci_metadata?: {[key: string]: any};
     app?: string;

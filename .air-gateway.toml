@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/gateway"
-  cmd = "CGO_CFLAGS=\"-Wno-deprecated-declarations\" go build -o ./tmp/gateway ./cmd/gateway"
+  cmd = "mkdir -p ./tmp && CGO_CFLAGS=\"-Wno-deprecated-declarations\" go build -o ./tmp/gateway ./cmd/gateway"
   delay = 500
   exclude_dir = ["tmp", "vendor", "web", "node_modules", "mock-oauth", ".git"]
   exclude_file = []

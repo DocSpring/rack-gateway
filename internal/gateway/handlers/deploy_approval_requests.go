@@ -15,6 +15,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 )
@@ -140,12 +141,39 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		}
 	}
 
+	// GitHub verification: verify commit exists on branch and find PR
+	var prURL string
+	if h.config != nil && h.config.GitHubToken != "" && h.config.GitHubRepo != "" {
+		gitBranch := strings.TrimSpace(req.GitBranch)
+		if gitBranch == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
+			return
+		}
+
+		owner, repo := github.SplitRepo(h.config.GitHubRepo)
+		if owner == "" || repo == "" {
+			fmt.Printf("CreateDeployApprovalRequest: Invalid GITHUB_REPO format: %s (expected owner/repo)\n", h.config.GitHubRepo)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
+			return
+		}
+
+		client := github.NewClient(h.config.GitHubToken)
+		var err error
+		prURL, err = client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash)
+		if err != nil {
+			fmt.Printf("CreateDeployApprovalRequest: GitHub verification failed: %v\n", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
+			return
+		}
+	}
+
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
 		app,
 		gitCommitHash,
 		req.GitBranch,
 		req.PipelineURL,
+		prURL,
 		req.CIProvider,
 		ciMetadata,
 		dbUser.ID,
@@ -706,6 +734,7 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		GitCommitHash:             dr.GitCommitHash,
 		GitBranch:                 dr.GitBranch,
 		PipelineURL:               dr.PipelineURL,
+		PrURL:                     dr.PrURL,
 		CIProvider:                dr.CIProvider,
 		App:                       dr.App,
 		ObjectURL:                 dr.ObjectURL,

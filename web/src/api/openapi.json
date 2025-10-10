@@ -4663,6 +4663,9 @@
                     "pipeline_url": {
                         "type": "string"
                     },
+                    "pr_url": {
+                        "type": "string"
+                    },
                     "process_ids": {
                         "type": "array",
                         "items": {

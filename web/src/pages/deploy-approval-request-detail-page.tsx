@@ -288,6 +288,21 @@ export function DeployApprovalRequestDetailPage() {
                 }
               />
             )}
+            {request?.pr_url && (
+              <DetailRow
+                label="Pull Request"
+                value={
+                  <a
+                    className="text-link hover:underline"
+                    href={request.pr_url}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {request.pr_url}
+                  </a>
+                }
+              />
+            )}
             {request?.ci_provider && <DetailRow label="CI Provider" value={request.ci_provider} />}
             <DetailRow label="Object URL" value={request?.object_url ?? '—'} />
             <DetailRow

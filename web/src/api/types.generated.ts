@@ -4159,6 +4159,7 @@ export interface components {
             message: string;
             object_url?: string;
             pipeline_url?: string;
+            pr_url?: string;
             process_ids?: string[];
             public_id: string;
             rejected_at?: string;

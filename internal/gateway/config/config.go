@@ -41,6 +41,8 @@ type Config struct {
 	TrustedProxies          []string
 	DeployApprovalsDisabled bool
 	DeployApprovalWindow    time.Duration
+	GitHubToken             string
+	GitHubRepo              string // Format: "owner/repo"
 }
 
 type RackConfig struct {
@@ -165,6 +167,11 @@ func Load() (*Config, error) {
 			cfg.DeployApprovalWindow = dur
 		}
 	}
+
+	// GitHub integration for PR verification (personal access token)
+	// GITHUB_REPO format: "owner/repo" (e.g., "DocSpring/docspring")
+	cfg.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
+	cfg.GitHubRepo = strings.TrimSpace(getEnv("GITHUB_REPO", ""))
 
 	return cfg, nil
 }

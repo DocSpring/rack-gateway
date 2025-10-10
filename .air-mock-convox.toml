@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/mock-convox"
-  cmd = "CGO_CFLAGS=\"-Wno-deprecated-declarations\" go build -o ./tmp/mock-convox ./cmd/mock-convox"
+  cmd = "mkdir -p ./tmp && CGO_CFLAGS=\"-Wno-deprecated-declarations\" go build -o ./tmp/mock-convox ./cmd/mock-convox"
   delay = 500
   exclude_dir = ["tmp", "vendor", "web", "node_modules", "mock-oauth", "internal", ".git"]
   exclude_file = []
