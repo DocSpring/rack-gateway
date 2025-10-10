@@ -538,12 +538,38 @@ func jsonStringArray(values []string) interface{} {
 	return string(b)
 }
 
-// LogTOTPAttempt records a TOTP verification attempt for replay protection, rate limiting, and audit
-func (d *Database) LogTOTPAttempt(userID int64, methodID *int64, codeHash string, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+// ConsumeTOTPTimeStep atomically marks a TOTP time-step as used.
+// Returns true if successfully consumed (first use), false if already used (replay).
+// This prevents replay attacks by ensuring each time-step can only be used once.
+func (d *Database) ConsumeTOTPTimeStep(userID int64, timeStep int64, methodID *int64, ipAddress string, userAgent string, sessionID *int64) (bool, error) {
+	result, err := d.exec(`
+        INSERT INTO used_totp_steps (user_id, time_step, method_id, ip_address, user_agent, session_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, time_step) DO NOTHING
+    `, userID, timeStep, methodID, nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+
+	if err != nil {
+		return false, fmt.Errorf("failed to consume TOTP time-step: %w", err)
+	}
+
+	// Check if a row was actually inserted
+	// If ON CONFLICT triggered, no row was inserted (rowsAffected = 0), meaning it was already used
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	// If rowsAffected > 0, the time-step was successfully consumed (first use)
+	// If rowsAffected = 0, the time-step was already used (replay attack)
+	return rowsAffected > 0, nil
+}
+
+// LogTOTPAttempt records a TOTP verification attempt for rate limiting and audit
+func (d *Database) LogTOTPAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
 	_, err := d.exec(`
-        INSERT INTO mfa_totp_attempts (user_id, method_id, code_hash, success, failure_reason, ip_address, user_agent, session_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, userID, methodID, codeHash, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+        INSERT INTO mfa_totp_attempts (user_id, method_id, success, failure_reason, ip_address, user_agent, session_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, userID, methodID, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to log TOTP attempt: %w", err)
 	}
@@ -562,22 +588,6 @@ func (d *Database) CountRecentTOTPAttempts(userID int64, minutes int) (int, erro
 		return 0, fmt.Errorf("failed to count TOTP attempts: %w", err)
 	}
 	return count, nil
-}
-
-// CheckTOTPReplay checks if a code was successfully used in the last N minutes
-func (d *Database) CheckTOTPReplay(userID int64, codeHash string, minutes int) (bool, error) {
-	var exists bool
-	query := `
-        SELECT EXISTS(
-            SELECT 1 FROM mfa_totp_attempts
-            WHERE user_id = $1 AND code_hash = $2 AND attempted_at > NOW() - INTERVAL '1 minute' * $3 AND success = TRUE
-        )
-    `
-	err := d.queryRow(query, userID, codeHash, minutes).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("failed to check TOTP replay: %w", err)
-	}
-	return exists, nil
 }
 
 // LogWebAuthnAttempt records a WebAuthn verification attempt for rate limiting and audit

@@ -197,4 +197,16 @@ EOF
 
 ensure_local_database
 
-go test "$@"
+# Use gotestsum for better output formatting if available
+if command -v gotestsum >/dev/null 2>&1; then
+    # Use dots format by default (shows . for pass, F for fail)
+    # In CI, use testname format to show all passes for better debugging
+    if [ -n "${CI:-}" ]; then
+        gotestsum --format testname -- "$@"
+    else
+        gotestsum --format dots -- "$@"
+    fi
+else
+    echo "Warning: gotestsum not found, using plain go test. Run 'task go:tools' to install." >&2
+    go test "$@"
+fi

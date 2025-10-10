@@ -400,7 +400,9 @@ function DeployApprovalRequestRow({
           <span className="text-sm">{tokenName}</span>
         )}
       </TableCell>
-      <TableCell><DeployApprovalStatusBadge status={status} /></TableCell>
+      <TableCell>
+        <DeployApprovalStatusBadge status={status} />
+      </TableCell>
       <TableCell>
         <UserMetaCell email={decidedBy?.email} name={decidedBy?.name} />
       </TableCell>

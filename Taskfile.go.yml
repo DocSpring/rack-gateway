@@ -74,6 +74,7 @@ tasks:
       - Taskfile.go.yml
       - cmd/gateway/**/*.go
       - internal/**/*.go
+      - internal/gateway/db/migrations/**/*.sql
     generates:
       - bin/rack-gateway-api
     cmds:

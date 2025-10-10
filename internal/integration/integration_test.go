@@ -511,6 +511,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Logf("ps failed with output: %s", output)
+			t.Logf("Gateway logs:\n%s", s.gatewayOut.String())
 		}
 		require.NoError(t, err, "ps should succeed")
 		// Should see processes from mock server

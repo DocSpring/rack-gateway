@@ -41,13 +41,13 @@ func TestVerifyTOTP_ReplayProtection(t *testing.T) {
 		t.Fatalf("expected first attempt to succeed, got: %v", err)
 	}
 
-	// Second attempt with same code should be rejected
+	// Second attempt with same code should be rejected (generic error)
 	_, err = svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil)
 	if err == nil {
 		t.Fatal("expected replay detection to reject reused code")
 	}
-	if err.Error() != "code already used" {
-		t.Fatalf("expected 'code already used' error, got: %v", err)
+	if err.Error() != "verification failed" {
+		t.Fatalf("expected 'verification failed' error, got: %v", err)
 	}
 }
 
@@ -70,7 +70,7 @@ func TestVerifyTOTP_RateLimiting(t *testing.T) {
 	}
 
 	// Log one more directly to hit rate limit without triggering lock
-	_ = database.LogTOTPAttempt(user.ID, nil, hashTOTPCode("fake"), false, "invalid_code", "1.2.3.4", "test-agent", nil)
+	_ = database.LogTOTPAttempt(user.ID, nil, false, "invalid_code", "1.2.3.4", "test-agent", nil)
 
 	// 6th attempt should be rate limited (not locked, since only 4 failed verifications)
 	_, err = svc.VerifyTOTP(user, "123456", "1.2.3.4", "test-agent", nil)
@@ -174,28 +174,4 @@ func TestVerifyTOTP_LoggingMetadata(t *testing.T) {
 	// This test verifies that attempt logging happens, but we can't easily
 	// query the attempts table in this test framework without adding more methods.
 	// The real verification happens in integration tests.
-}
-
-func TestHashTOTPCode_Consistency(t *testing.T) {
-	t.Parallel()
-
-	code := "123456"
-	hash1 := hashTOTPCode(code)
-	hash2 := hashTOTPCode(code)
-
-	if hash1 != hash2 {
-		t.Error("expected consistent hashing for same code")
-	}
-
-	// Different codes should produce different hashes
-	hash3 := hashTOTPCode("654321")
-	if hash1 == hash3 {
-		t.Error("expected different hashes for different codes")
-	}
-
-	// Hash should be deterministic
-	expectedLength := 64 // SHA-256 hex = 64 chars
-	if len(hash1) != expectedLength {
-		t.Errorf("expected hash length %d, got %d", expectedLength, len(hash1))
-	}
 }

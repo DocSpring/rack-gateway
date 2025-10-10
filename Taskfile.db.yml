@@ -39,9 +39,16 @@ tasks:
     cmds:
       - docker compose exec -T gateway-api-preview ./rack-gateway-api migrate
 
+  drop:
+    desc: Drop all databases (DELETES ALL DATA)
+    cmds:
+      - docker exec rack-gateway-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS gateway_dev;"
+      - docker exec rack-gateway-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS gateway_test;"
+
   reset:
     aliases: [reset:all]
     desc: Drop and recreate all databases (DELETES ALL DATA)
+    deps: [":go:build:gateway"]
     cmds:
       - ./scripts/reset-databases.sh
 

@@ -206,7 +206,7 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 
 // VerifyTOTP validates a TOTP or backup code during login or step-up.
 // Also supports Yubico OTP if the code looks like a Yubikey OTP.
-// Includes replay protection, rate limiting, and automatic account locking.
+// Includes atomic time-step replay protection, rate limiting, and automatic account locking.
 func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userAgent string, sessionID *int64) (*VerificationResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")
@@ -232,25 +232,8 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 	}
 	if recentAttempts >= 5 {
 		// Log rate limit hit
-		_ = s.db.LogTOTPAttempt(user.ID, nil, hashTOTPCode(sanitized), false, "rate_limited", ipAddress, userAgent, sessionID)
+		_ = s.db.LogTOTPAttempt(user.ID, nil, false, "rate_limited", ipAddress, userAgent, sessionID)
 		return nil, fmt.Errorf("too many attempts - try again in 5 minutes")
-	}
-
-	// Check for replay attack (only for 6-digit codes)
-	if len(sanitized) == 6 {
-		codeHash := hashTOTPCode(sanitized)
-		replayed, err := s.db.CheckTOTPReplay(user.ID, codeHash, 2)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check replay: %w", err)
-		}
-		if replayed {
-			_ = s.db.LogTOTPAttempt(user.ID, nil, codeHash, false, "replay_detected", ipAddress, userAgent, sessionID)
-			// Count failed attempts for account locking
-			if err := s.checkAndLockAccount(user.ID); err != nil {
-				return nil, err
-			}
-			return nil, fmt.Errorf("code already used")
-		}
 	}
 
 	// Check if it's a Yubico OTP (44 characters)
@@ -262,6 +245,7 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 		// Fall through to try TOTP/backup codes
 	}
 
+	// Try TOTP verification
 	methods, err := s.db.ListMFAMethods(user.ID)
 	if err != nil {
 		return nil, err
@@ -270,28 +254,45 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 		if method.Type != "totp" {
 			continue
 		}
-		if err := s.validateTOTPCode(method.Secret, user.Email, sanitized); err == nil {
-			now := time.Now()
-			// Log successful attempt
-			codeHash := hashTOTPCode(sanitized)
-			if err := s.db.LogTOTPAttempt(user.ID, &method.ID, codeHash, true, "", ipAddress, userAgent, sessionID); err != nil {
-				return nil, fmt.Errorf("failed to log attempt: %w", err)
-			}
 
-			if method.ConfirmedAt == nil {
-				if err := s.db.ConfirmMFAMethod(method.ID, now); err != nil {
-					return nil, err
-				}
-			} else {
-				if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
-					return nil, err
-				}
-			}
-			return &VerificationResult{MethodID: method.ID}, nil
+		// Validate code and get the time-step it's valid for
+		timeStep, err := s.validateTOTPCodeWithTimeStep(method.Secret, sanitized)
+		if err != nil {
+			continue // Try next method
 		}
+
+		// Atomically consume the time-step (replay protection)
+		consumed, err := s.db.ConsumeTOTPTimeStep(user.ID, timeStep, &method.ID, ipAddress, userAgent, sessionID)
+		if err != nil {
+			_ = s.db.LogTOTPAttempt(user.ID, &method.ID, false, "database_error", ipAddress, userAgent, sessionID)
+			return nil, fmt.Errorf("verification failed")
+		}
+		if !consumed {
+			// Time-step was already used (replay attack)
+			_ = s.db.LogTOTPAttempt(user.ID, &method.ID, false, "replay_detected", ipAddress, userAgent, sessionID)
+			if err := s.checkAndLockAccount(user.ID); err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("verification failed")
+		}
+
+		// Success - log and update method
+		now := time.Now()
+		_ = s.db.LogTOTPAttempt(user.ID, &method.ID, true, "", ipAddress, userAgent, sessionID)
+
+		if method.ConfirmedAt == nil {
+			if err := s.db.ConfirmMFAMethod(method.ID, now); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := s.db.UpdateMFAMethodLastUsed(method.ID, now); err != nil {
+				return nil, err
+			}
+		}
+		return &VerificationResult{MethodID: method.ID}, nil
 	}
 
-	// fallback to backup codes
+	// Fallback to backup codes
 	hash := s.hashBackupCode(sanitized)
 	used, err := s.db.MarkBackupCodeUsed(user.ID, hash)
 	if err != nil {
@@ -299,22 +300,19 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 	}
 	if used {
 		// Log successful backup code usage
-		if err := s.db.LogTOTPAttempt(user.ID, nil, hash, true, "backup_code", ipAddress, userAgent, sessionID); err != nil {
-			return nil, fmt.Errorf("failed to log attempt: %w", err)
-		}
+		_ = s.db.LogTOTPAttempt(user.ID, nil, true, "backup_code", ipAddress, userAgent, sessionID)
 		return &VerificationResult{MethodID: 0}, nil
 	}
 
-	// Log failed attempt
-	codeHash := hashTOTPCode(sanitized)
-	_ = s.db.LogTOTPAttempt(user.ID, nil, codeHash, false, "invalid_code", ipAddress, userAgent, sessionID)
+	// Log failed attempt (generic error, don't leak why it failed)
+	_ = s.db.LogTOTPAttempt(user.ID, nil, false, "invalid_code", ipAddress, userAgent, sessionID)
 
 	// Check if we should lock the account (5 failures in 5 minutes)
 	if err := s.checkAndLockAccount(user.ID); err != nil {
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("invalid code")
+	return nil, fmt.Errorf("verification failed")
 }
 
 // checkAndLockAccount checks failed MFA attempts and locks account if threshold exceeded
@@ -348,12 +346,6 @@ func (s *Service) checkAndLockAccount(userID int64) error {
 		return fmt.Errorf("account locked due to multiple failed attempts - contact administrator")
 	}
 	return nil
-}
-
-// hashTOTPCode creates a SHA-256 hash of a TOTP code for replay detection
-func hashTOTPCode(code string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(code)))
-	return hex.EncodeToString(sum[:])
 }
 
 // StartYubiOTPEnrollment provisions a Yubico OTP method for the user.
@@ -957,21 +949,38 @@ func (s *Service) hashBackupCode(code string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// validateTOTPCodeWithTimeStep validates a TOTP code and returns the time-step it was valid for.
+// Returns (timeStep, nil) on success, or (0, error) on failure.
+func (s *Service) validateTOTPCodeWithTimeStep(secret, code string) (int64, error) {
+	now := time.Now()
+	currentStep := now.Unix() / totpPeriodSeconds
+
+	// Try current step and adjacent steps (skew = 1)
+	for skew := int64(-1); skew <= 1; skew++ {
+		testStep := currentStep + skew
+		testTime := time.Unix(testStep*totpPeriodSeconds, 0)
+
+		expectedCode, err := totp.GenerateCodeCustom(secret, testTime, totp.ValidateOpts{
+			Period:    totpPeriodSeconds,
+			Skew:      0, // We're doing manual skew
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		})
+		if err != nil {
+			continue
+		}
+
+		if expectedCode == strings.TrimSpace(code) {
+			return testStep, nil
+		}
+	}
+
+	return 0, fmt.Errorf("invalid code")
+}
+
 func (s *Service) validateTOTPCode(secret, email, code string) error {
-	opts := totp.ValidateOpts{
-		Period:    totpPeriodSeconds,
-		Skew:      1,
-		Digits:    otp.DigitsSix,
-		Algorithm: otp.AlgorithmSHA1,
-	}
-	ok, err := totp.ValidateCustom(code, secret, time.Now(), opts)
-	if err != nil {
-		return fmt.Errorf("invalid code: %w", err)
-	}
-	if !ok {
-		return fmt.Errorf("invalid code")
-	}
-	return nil
+	_, err := s.validateTOTPCodeWithTimeStep(secret, code)
+	return err
 }
 
 func hashToken(token string) string {

@@ -103,6 +103,10 @@ func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, 
 
 // AuthenticateHTTPRequest attempts to authenticate the provided request, returning the user and auth source label.
 func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, string, error) {
+	var user *AuthUser
+	var source string
+	var err error
+
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authHeader != "" {
 		parts := strings.SplitN(authHeader, " ", 2)
@@ -111,10 +115,6 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		}
 		authType := parts[0]
 		credentials := parts[1]
-		var (
-			user *AuthUser
-			err  error
-		)
 		switch authType {
 		case "Bearer":
 			if strings.HasPrefix(credentials, "rgw_") {
@@ -130,24 +130,39 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		if err != nil {
 			return nil, "header", fmt.Errorf("authentication failed: %v", err)
 		}
-		return user, "header", nil
-	}
-
-	if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		source = "header"
+	} else if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
 		result, err := a.sessions.ValidateSession(cookie.Value, clientIPFromRequest(r), r.UserAgent())
 		if err != nil {
 			return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
 		}
-		return &AuthUser{
+		user = &AuthUser{
 			Email:      result.User.Email,
 			Name:       result.User.Name,
 			Roles:      result.User.Roles,
 			IsAPIToken: false,
 			Session:    result.Session,
-		}, "cookie", nil
+		}
+		source = "cookie"
+	} else {
+		return nil, "none", fmt.Errorf("missing authorization")
 	}
 
-	return nil, "none", fmt.Errorf("missing authorization")
+	// Extract MFA code from X-MFA-Code header (web flow)
+	// This is in addition to inline MFA in password (CLI flow)
+	if mfaCode := strings.TrimSpace(r.Header.Get("X-MFA-Code")); mfaCode != "" {
+		// Determine MFA type from the code format
+		// TOTP codes are 6-8 digits, WebAuthn assertions are longer base64 strings
+		if len(mfaCode) <= 8 {
+			user.MFAType = "totp"
+			user.MFAValue = mfaCode
+		} else {
+			user.MFAType = "webauthn"
+			user.MFAValue = mfaCode
+		}
+	}
+
+	return user, source, nil
 }
 
 func clientIPFromRequest(r *http.Request) string {

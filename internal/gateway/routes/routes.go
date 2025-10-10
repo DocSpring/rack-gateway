@@ -94,7 +94,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = allowedOrigins
 	corsConfig.AllowCredentials = true
-	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization")
+	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization", "X-MFA-Code")
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
@@ -236,8 +236,10 @@ func Setup(router *gin.Engine, cfg *Config) {
 				deployAdmin := admin.Group("/deploy-approval-requests")
 				deployAdmin.GET("", adminHandler.ListDeployApprovalRequests)
 				deployAdmin.GET("/:id/audit-logs", adminHandler.GetDeployApprovalRequestAuditLogs)
+				// CRITICAL SECURITY: Deploy approvals are privileged operations that ALWAYS require
+				// MFA code in the request. Use RequireMFA, not RequireMFAStepUp.
 				deployApprove := deployAdmin.Group("")
-				deployApprove.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				deployApprove.Use(middleware.RequireMFA(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)
 				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 
@@ -249,7 +251,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
 
 				tokenSensitive := tokenGroup.Group("")
-				tokenSensitive.Use(middleware.RequireMFA(cfg.MFASettings))
+				tokenSensitive.Use(middleware.RequireMFA(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)

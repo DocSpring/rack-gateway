@@ -26,12 +26,10 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 	permission := fmt.Sprintf("convox:%s:%s", resource.String(), action.String())
 
 	// Look up the MFA level for this permission
+	// If not explicitly defined, default to MFANone (read-only operations don't require MFA)
 	mfaLevel, ok := routematch.GetMFALevelForPermission(permission)
 	if !ok {
-		// Permission not found - this should never happen since we already matched the route
-		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusInternalServerError, time.Since(start), fmt.Errorf("MFA level not found for permission: %s", permission))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return fmt.Errorf("MFA level not found")
+		mfaLevel = convox.MFANone
 	}
 
 	// No MFA required
