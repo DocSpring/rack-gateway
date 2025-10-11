@@ -10,7 +10,6 @@ import type { SettingsSettingSource } from './settingsSettingSource';
 export interface SettingsSetting {
   /** e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS" */
   env_var?: string;
-  key?: string;
   source?: SettingsSettingSource;
   value?: unknown;
 }

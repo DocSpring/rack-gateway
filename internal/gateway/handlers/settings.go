@@ -61,8 +61,8 @@ func (h *SettingsHandler) GetGlobalSetting(c *gin.Context) {
 	}
 
 	// Get default value based on key
-	defaultValue := getDefaultValueForGlobalKey(key)
-	if defaultValue == nil {
+	defaultValue, err := settings.GetGlobalSettingDefault(key)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
 		return
 	}
@@ -100,7 +100,7 @@ func (h *SettingsHandler) UpdateGlobalSetting(c *gin.Context) {
 	}
 
 	// Check if key is valid
-	if !isValidGlobalKey(key) {
+	if !settings.IsValidGlobalSetting(key) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
 		return
 	}
@@ -128,7 +128,11 @@ func (h *SettingsHandler) UpdateGlobalSetting(c *gin.Context) {
 	}
 
 	// Return updated setting
-	defaultValue := getDefaultValueForGlobalKey(key)
+	defaultValue, err := settings.GetGlobalSettingDefault(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting default"})
+		return
+	}
 	setting, err := h.settingsService.GetGlobalSetting(key, defaultValue)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
@@ -159,7 +163,7 @@ func (h *SettingsHandler) DeleteGlobalSetting(c *gin.Context) {
 	}
 
 	// Check if key is valid
-	if !isValidGlobalKey(key) {
+	if !settings.IsValidGlobalSetting(key) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
 		return
 	}
@@ -171,7 +175,11 @@ func (h *SettingsHandler) DeleteGlobalSetting(c *gin.Context) {
 	}
 
 	// Return the setting after deletion (will show env or default source)
-	defaultValue := getDefaultValueForGlobalKey(key)
+	defaultValue, err := settings.GetGlobalSettingDefault(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting default"})
+		return
+	}
 	setting, err := h.settingsService.GetGlobalSetting(key, defaultValue)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
@@ -228,8 +236,8 @@ func (h *SettingsHandler) GetAppSetting(c *gin.Context) {
 	}
 
 	// Get default value based on key
-	defaultValue := getDefaultValueForAppKey(key)
-	if defaultValue == nil {
+	defaultValue, err := settings.GetAppSettingDefault(key)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
 		return
 	}
@@ -269,7 +277,7 @@ func (h *SettingsHandler) UpdateAppSetting(c *gin.Context) {
 	}
 
 	// Check if key is valid
-	if !isValidAppKey(key) {
+	if !settings.IsValidAppSetting(key) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
 		return
 	}
@@ -296,7 +304,11 @@ func (h *SettingsHandler) UpdateAppSetting(c *gin.Context) {
 	}
 
 	// Return updated setting
-	defaultValue := getDefaultValueForAppKey(key)
+	defaultValue, err := settings.GetAppSettingDefault(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting default"})
+		return
+	}
 	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
@@ -329,7 +341,7 @@ func (h *SettingsHandler) DeleteAppSetting(c *gin.Context) {
 	}
 
 	// Check if key is valid
-	if !isValidAppKey(key) {
+	if !settings.IsValidAppSetting(key) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
 		return
 	}
@@ -341,7 +353,11 @@ func (h *SettingsHandler) DeleteAppSetting(c *gin.Context) {
 	}
 
 	// Return the setting after deletion (will show env or default source)
-	defaultValue := getDefaultValueForAppKey(key)
+	defaultValue, err := settings.GetAppSettingDefault(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting default"})
+		return
+	}
 	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
@@ -349,73 +365,4 @@ func (h *SettingsHandler) DeleteAppSetting(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, setting)
-}
-
-// getDefaultValueForGlobalKey returns the default value for a global setting key.
-func getDefaultValueForGlobalKey(key string) interface{} {
-	switch key {
-	case settings.KeyMFARequireAllUsers:
-		return true
-	case settings.KeyTrustedDeviceTTLDays:
-		return 30
-	case settings.KeyStepUpWindowMinutes:
-		return 10
-	case settings.KeyAllowDestructiveActions:
-		return false
-	default:
-		return nil
-	}
-}
-
-// getDefaultValueForAppKey returns the default value for an app setting key.
-func getDefaultValueForAppKey(key string) interface{} {
-	switch key {
-	case settings.KeyApprovedDeployCommands:
-		return []string(nil)
-	case settings.KeyProtectedEnvVars:
-		return []string(nil)
-	case settings.KeySecretEnvVars:
-		return []string(nil)
-	case settings.KeyServiceImagePatterns:
-		return map[string]string(nil)
-	case settings.KeyGitHubVerification:
-		return true
-	case settings.KeyAllowDeployFromDefaultBranch:
-		return false
-	case settings.KeyDefaultBranch:
-		return "main"
-	case settings.KeyRequirePRForBranch:
-		return true
-	case settings.KeyVerifyGitCommitMode:
-		return "latest"
-	default:
-		return nil
-	}
-}
-
-// isValidGlobalKey checks if a key is a valid global setting.
-func isValidGlobalKey(key string) bool {
-	validKeys := map[string]bool{
-		settings.KeyMFARequireAllUsers:      true,
-		settings.KeyTrustedDeviceTTLDays:    true,
-		settings.KeyStepUpWindowMinutes:     true,
-		settings.KeyAllowDestructiveActions: true,
-	}
-	return validKeys[key]
-}
-
-// isValidAppKey checks if a key is a valid app setting.
-func isValidAppKey(key string) bool {
-	validKeys := map[string]bool{
-		settings.KeyApprovedDeployCommands:       true,
-		settings.KeyProtectedEnvVars:             true,
-		settings.KeySecretEnvVars:                true,
-		settings.KeyServiceImagePatterns:         true,
-		settings.KeyGitHubVerification:           true,
-		settings.KeyAllowDeployFromDefaultBranch: true,
-		settings.KeyDefaultBranch:                true,
-		settings.KeyRequirePRForBranch:           true,
-		settings.KeyVerifyGitCommitMode:          true,
-	}
-	return validKeys[key]
 }

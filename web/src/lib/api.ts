@@ -16,10 +16,10 @@ import type {
   HandlersCreateAPITokenRequest,
   HandlersCreateAPITokenResponse,
   HandlersCreateUserRequest,
-  HandlersCurrentUserResponse,
   HandlersDeployApprovalRequestList,
   HandlersDeployApprovalRequestResponse,
   HandlersHealthResponse,
+  HandlersInfoResponse,
   HandlersMFAMethodResponse,
   HandlersMFAStatusResponse,
   HandlersRevokeAllSessionsResponse,
@@ -81,7 +81,7 @@ export type CreateAPITokenResponse = HandlersCreateAPITokenResponse
 export type APIToken = DbAPIToken
 export type UpdateAPITokenRequest = HandlersUpdateAPITokenRequest
 export type RackInfo = GetRack200
-export type CurrentUserResponse = HandlersCurrentUserResponse
+export type InfoResponse = HandlersInfoResponse
 export type HealthResponse = HandlersHealthResponse
 export type EnvValuesMap = Record<string, string>
 export type StartTOTPEnrollmentResponse = HandlersStartTOTPEnrollmentResponse
@@ -233,7 +233,7 @@ export const deleteAPIToken = async (tokenPublicId: string): Promise<void> => {
   await unwrap(gateway.deleteAdminTokensTokenID(tokenPublicId))
 }
 
-export const getCurrentUser = (): Promise<CurrentUserResponse> => unwrap(gateway.getMe())
+export const getInfo = (): Promise<InfoResponse> => unwrap(gateway.getInfo())
 
 export const getHealth = (): Promise<HealthResponse> => unwrap(gateway.getHealth())
 
@@ -333,7 +333,13 @@ export const put = <T = unknown>(
 ): Promise<T> => {
   // Handle primitive JSON values (null, false, true, numbers, strings) by sending as JSON strings
   // This avoids axios treating falsy values as "no data"
-  if (data === null || data === false || data === true || typeof data === 'number' || typeof data === 'string') {
+  if (
+    data === null ||
+    data === false ||
+    data === true ||
+    typeof data === 'number' ||
+    typeof data === 'string'
+  ) {
     return gatewayAxios
       .request<T>({
         method: 'PUT',
@@ -415,7 +421,7 @@ export const api = {
   createAPIToken,
   updateAPIToken,
   deleteAPIToken,
-  getCurrentUser,
+  getInfo,
   getHealth,
   getRackInfo,
   getConvoxInstances,

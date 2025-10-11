@@ -1,6 +1,6 @@
 import type { AxiosError } from 'axios'
 import axios from 'axios'
-import type { HandlersCurrentUserResponse, HandlersRackSummary } from '@/api/schemas'
+import type { HandlersInfoResponse, HandlersRackSummary } from '@/api/schemas'
 import { APIRoute } from './routes'
 
 export const SESSION_EXPIRED_MESSAGE = 'Session expired. Please sign in again.'
@@ -61,26 +61,26 @@ class AuthService {
   // Get current user (cookie-based auth; no JS access to HttpOnly cookie needed)
   async getCurrentUser(options: { suppressAuthError?: boolean } = {}): Promise<User | null> {
     try {
-      const response = await axios.get<HandlersCurrentUserResponse>(APIRoute('me'), {
+      const response = await axios.get<HandlersInfoResponse>(APIRoute('info'), {
         withCredentials: true,
       })
-      const payload = response.data ?? {}
+      const data = response.data
+      const userInfo = data?.user
 
-      const rack: User['rack'] = normalizeRack(payload.rack)
-      const roles = Array.isArray(payload.roles) ? payload.roles : []
-      const fallbackRoles = Array.isArray(payload.permissions) ? payload.permissions : []
+      const rack: User['rack'] = normalizeRack(data?.rack)
+      const roles = Array.isArray(userInfo?.roles) ? userInfo.roles : []
 
       const mapped: User = {
-        email: payload.email ?? '',
-        name: payload.name ?? '',
-        roles: roles.length > 0 ? roles : fallbackRoles,
+        email: userInfo?.email ?? '',
+        name: userInfo?.name ?? '',
+        roles,
         rack,
-        mfaEnrolled: Boolean(payload.mfa_enrolled),
-        mfaRequired: Boolean(payload.mfa_required),
-        preferred_mfa_method: payload.preferred_mfa_method ?? null,
-        recentStepUpExpiresAt: payload.recent_step_up_expires_at ?? null,
-        has_trusted_device: Boolean(payload.has_trusted_device),
-        deploy_approvals_enabled: payload.deploy_approvals_enabled ?? true,
+        mfaEnrolled: Boolean(userInfo?.mfa_enrolled),
+        mfaRequired: Boolean(userInfo?.mfa_required),
+        preferred_mfa_method: userInfo?.preferred_mfa_method ?? null,
+        recentStepUpExpiresAt: userInfo?.recent_step_up_expires_at ?? null,
+        has_trusted_device: Boolean(userInfo?.has_trusted_device),
+        deploy_approvals_enabled: true, // No longer part of user info
       }
 
       return mapped

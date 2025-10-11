@@ -3276,26 +3276,26 @@
                 }
             }
         },
-        "/me": {
+        "/info": {
             "get": {
                 "security": [
                     {
                         "SessionCookie": []
                     }
                 ],
-                "description": "Returns the authenticated user's profile, roles, and default rack summary.",
+                "description": "Returns user, rack, and integrations status in a single request for app bootstrap",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Me"
+                    "Info"
                 ],
-                "summary": "Get current user profile",
+                "summary": "Get gateway information",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CurrentUserResponse"
+                            "$ref": "#/definitions/handlers.InfoResponse"
                         }
                     },
                     "500": {
@@ -3825,60 +3825,6 @@
                 }
             }
         },
-        "handlers.CurrentUserResponse": {
-            "type": "object",
-            "required": [
-                "deploy_approvals_enabled",
-                "email",
-                "has_trusted_device",
-                "mfa_enrolled",
-                "mfa_required",
-                "name",
-                "permissions",
-                "roles"
-            ],
-            "properties": {
-                "deploy_approvals_enabled": {
-                    "type": "boolean"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "has_trusted_device": {
-                    "type": "boolean"
-                },
-                "mfa_enrolled": {
-                    "type": "boolean"
-                },
-                "mfa_required": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "preferred_mfa_method": {
-                    "type": "string"
-                },
-                "rack": {
-                    "$ref": "#/definitions/handlers.RackSummary"
-                },
-                "recent_step_up_expires_at": {
-                    "type": "string"
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
         "handlers.DeployApprovalRequestList": {
             "type": "object",
             "required": [
@@ -4051,6 +3997,44 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.InfoResponse": {
+            "type": "object",
+            "required": [
+                "integrations",
+                "rack",
+                "user"
+            ],
+            "properties": {
+                "integrations": {
+                    "$ref": "#/definitions/handlers.IntegrationsInfo"
+                },
+                "rack": {
+                    "$ref": "#/definitions/handlers.RackSummary"
+                },
+                "user": {
+                    "$ref": "#/definitions/handlers.UserInfo"
+                }
+            }
+        },
+        "handlers.IntegrationsInfo": {
+            "type": "object",
+            "required": [
+                "circleci",
+                "github",
+                "slack"
+            ],
+            "properties": {
+                "circleci": {
+                    "type": "boolean"
+                },
+                "github": {
+                    "type": "boolean"
+                },
+                "slack": {
+                    "type": "boolean"
                 }
             }
         },
@@ -4500,6 +4484,46 @@
                 }
             }
         },
+        "handlers.UserInfo": {
+            "type": "object",
+            "required": [
+                "email",
+                "has_trusted_device",
+                "mfa_enrolled",
+                "mfa_required",
+                "name",
+                "roles"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "has_trusted_device": {
+                    "type": "boolean"
+                },
+                "mfa_enrolled": {
+                    "type": "boolean"
+                },
+                "mfa_required": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "preferred_mfa_method": {
+                    "type": "string"
+                },
+                "recent_step_up_expires_at": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "handlers.UserSessionResponse": {
             "type": "object",
             "required": [
@@ -4646,9 +4670,6 @@
             "properties": {
                 "env_var": {
                     "description": "e.g., \"RGW_SETTING_REQUIRE_MFA_ALL_USERS\"",
-                    "type": "string"
-                },
-                "key": {
                     "type": "string"
                 },
                 "source": {

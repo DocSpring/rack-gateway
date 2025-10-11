@@ -3889,7 +3889,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/me": {
+    "/info": {
         parameters: {
             query?: never;
             header?: never;
@@ -3897,8 +3897,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get current user profile
-         * @description Returns the authenticated user's profile, roles, and default rack summary.
+         * Get gateway information
+         * @description Returns user, rack, and integrations status in a single request for app bootstrap
          */
         get: {
             parameters: {
@@ -3915,7 +3915,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["handlers.CurrentUserResponse"];
+                        "application/json": components["schemas"]["handlers.InfoResponse"];
                     };
                 };
                 /** @description Internal Server Error */
@@ -4118,7 +4118,10 @@ export interface components {
         };
         "handlers.CreateAPITokenRequest": {
             name: string;
+            /** @description Explicit permissions (overrides role) */
             permissions?: string[];
+            /** @description Role shortcut (viewer, ops, deployer, cicd, admin) */
+            role?: string;
             user_email?: string;
         };
         "handlers.CreateAPITokenResponse": {
@@ -4144,19 +4147,6 @@ export interface components {
         "handlers.CreateUserRequest": {
             email: string;
             name: string;
-            roles: string[];
-        };
-        "handlers.CurrentUserResponse": {
-            deploy_approvals_enabled: boolean;
-            email: string;
-            has_trusted_device: boolean;
-            mfa_enrolled: boolean;
-            mfa_required: boolean;
-            name: string;
-            permissions: string[];
-            preferred_mfa_method?: string;
-            rack?: components["schemas"]["handlers.RackSummary"];
-            recent_step_up_expires_at?: string;
             roles: string[];
         };
         "handlers.DeployApprovalRequestList": {
@@ -4213,6 +4203,16 @@ export interface components {
         "handlers.HealthResponse": {
             service: string;
             status: string;
+        };
+        "handlers.InfoResponse": {
+            integrations: components["schemas"]["handlers.IntegrationsInfo"];
+            rack: components["schemas"]["handlers.RackSummary"];
+            user: components["schemas"]["handlers.UserInfo"];
+        };
+        "handlers.IntegrationsInfo": {
+            circleci: boolean;
+            github: boolean;
+            slack: boolean;
         };
         "handlers.LockUserRequest": {
             reason: string;
@@ -4332,6 +4332,16 @@ export interface components {
         "handlers.UpdateUserRolesRequest": {
             roles: string[];
         };
+        "handlers.UserInfo": {
+            email: string;
+            has_trusted_device: boolean;
+            mfa_enrolled: boolean;
+            mfa_required: boolean;
+            name: string;
+            preferred_mfa_method?: string;
+            recent_step_up_expires_at?: string;
+            roles: string[];
+        };
         "handlers.UserSessionResponse": {
             channel: string;
             created_at: string;
@@ -4375,7 +4385,6 @@ export interface components {
         "settings.Setting": {
             /** @description e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS" */
             env_var?: string;
-            key?: string;
             source?: components["schemas"]["settings.SettingSource"];
             value?: unknown;
         };

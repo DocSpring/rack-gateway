@@ -176,7 +176,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				mfaStepUp.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
 			}
 			// User API
-			authenticated.GET("/me", apiHandler.GetMe)
+			authenticated.GET("/info", apiHandler.GetInfo)
 			authenticated.GET("/created-by", apiHandler.GetCreatedBy)
 			authenticated.GET("/rack", apiHandler.GetRackInfo)
 			authenticated.GET("/env", apiHandler.GetEnvValues)

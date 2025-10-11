@@ -32,7 +32,6 @@ const (
 
 // Setting represents a resolved setting value with its source.
 type Setting struct {
-	Key    string        `json:"key"`
 	Value  interface{}   `json:"value"`
 	Source SettingSource `json:"source"`
 	EnvVar string        `json:"env_var,omitempty"` // e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS"
@@ -109,7 +108,6 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 			return nil, fmt.Errorf("failed to unmarshal setting %s: %w", key, err)
 		}
 		return &Setting{
-			Key:    key,
 			Value:  value,
 			Source: SourceDB,
 		}, nil
@@ -123,7 +121,6 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 			fmt.Printf("Warning: failed to parse env var %s: %v\n", envVarName, err)
 		} else {
 			return &Setting{
-				Key:    key,
 				Value:  parsedValue,
 				Source: SourceEnv,
 				EnvVar: envVarName,
@@ -133,7 +130,6 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 
 	// 3. Return default
 	return &Setting{
-		Key:    key,
 		Value:  defaultValue,
 		Source: SourceDefault,
 	}, nil
@@ -159,29 +155,78 @@ const (
 
 // App setting keys
 const (
-	KeyApprovedDeployCommands       = "approved_deploy_commands"
-	KeyProtectedEnvVars             = "protected_env_vars"
-	KeySecretEnvVars                = "secret_env_vars"
-	KeyServiceImagePatterns         = "service_image_patterns"
-	KeyGitHubVerification           = "github_verification"
-	KeyAllowDeployFromDefaultBranch = "allow_deploy_from_default_branch"
-	KeyDefaultBranch                = "default_branch"
-	KeyRequirePRForBranch           = "require_pr_for_branch"
-	KeyVerifyGitCommitMode          = "verify_git_commit_mode"
+	KeyApprovedDeployCommands        = "approved_deploy_commands"
+	KeyProtectedEnvVars              = "protected_env_vars"
+	KeySecretEnvVars                 = "secret_env_vars"
+	KeyServiceImagePatterns          = "service_image_patterns"
+	KeyGitHubVerification            = "github_verification"
+	KeyAllowDeployFromDefaultBranch  = "allow_deploy_from_default_branch"
+	KeyDefaultBranch                 = "default_branch"
+	KeyRequirePRForBranch            = "require_pr_for_branch"
+	KeyVerifyGitCommitMode           = "verify_git_commit_mode"
+	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
+	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
 )
+
+// DefaultGlobalSettings defines all valid global settings with their default values.
+var DefaultGlobalSettings = map[string]interface{}{
+	KeyMFARequireAllUsers:      true,
+	KeyTrustedDeviceTTLDays:    30,
+	KeyStepUpWindowMinutes:     10,
+	KeyAllowDestructiveActions: false,
+}
+
+// DefaultAppSettings defines all valid app-specific settings with their default values.
+var DefaultAppSettings = map[string]interface{}{
+	KeyApprovedDeployCommands:        []string(nil),
+	KeyProtectedEnvVars:              []string(nil),
+	KeySecretEnvVars:                 []string(nil),
+	KeyServiceImagePatterns:          map[string]string(nil),
+	KeyGitHubVerification:            true,
+	KeyAllowDeployFromDefaultBranch:  false,
+	KeyDefaultBranch:                 "main",
+	KeyRequirePRForBranch:            true,
+	KeyVerifyGitCommitMode:           "latest",
+	KeyCircleCIApprovalJobName:       "",
+	KeyCircleCIAutoApproveOnApproval: false,
+}
+
+// IsValidGlobalSetting checks if a key is a valid global setting.
+func IsValidGlobalSetting(key string) bool {
+	_, exists := DefaultGlobalSettings[key]
+	return exists
+}
+
+// IsValidAppSetting checks if a key is a valid app-specific setting.
+func IsValidAppSetting(key string) bool {
+	_, exists := DefaultAppSettings[key]
+	return exists
+}
+
+// GetGlobalSettingDefault returns the default value for a global setting.
+// Returns error if the setting key is unknown.
+func GetGlobalSettingDefault(key string) (interface{}, error) {
+	defaultValue, exists := DefaultGlobalSettings[key]
+	if !exists {
+		return nil, fmt.Errorf("unknown global setting key: %s", key)
+	}
+	return defaultValue, nil
+}
+
+// GetAppSettingDefault returns the default value for an app setting.
+// Returns error if the setting key is unknown.
+func GetAppSettingDefault(key string) (interface{}, error) {
+	defaultValue, exists := DefaultAppSettings[key]
+	if !exists {
+		return nil, fmt.Errorf("unknown app setting key: %s", key)
+	}
+	return defaultValue, nil
+}
 
 // GetAllGlobalSettings retrieves all global settings with environment fallback.
 func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
-	// Define all global settings with their defaults
-	settingDefs := map[string]interface{}{
-		KeyMFARequireAllUsers:      true,
-		KeyTrustedDeviceTTLDays:    30,
-		KeyStepUpWindowMinutes:     10,
-		KeyAllowDestructiveActions: false,
-	}
-
 	result := make(map[string]*Setting)
-	for key, defaultValue := range settingDefs {
+	for key, defaultValue := range DefaultGlobalSettings {
 		setting, err := s.GetGlobalSetting(key, defaultValue)
 		if err != nil {
 			return nil, err
@@ -194,21 +239,8 @@ func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
 
 // GetAllAppSettings retrieves all app-specific settings with environment fallback.
 func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error) {
-	// Define all app settings with their defaults
-	settingDefs := map[string]interface{}{
-		KeyApprovedDeployCommands:       []string(nil),
-		KeyProtectedEnvVars:             []string(nil),
-		KeySecretEnvVars:                []string(nil),
-		KeyServiceImagePatterns:         map[string]string(nil),
-		KeyGitHubVerification:           true,
-		KeyAllowDeployFromDefaultBranch: false,
-		KeyDefaultBranch:                "main",
-		KeyRequirePRForBranch:           true,
-		KeyVerifyGitCommitMode:          "latest",
-	}
-
 	result := make(map[string]*Setting)
-	for key, defaultValue := range settingDefs {
+	for key, defaultValue := range DefaultAppSettings {
 		setting, err := s.GetAppSetting(appName, key, defaultValue)
 		if err != nil {
 			return nil, err

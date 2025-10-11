@@ -43,6 +43,8 @@ type Config struct {
 	DeployApprovalWindow    time.Duration
 	GitHubToken             string
 	GitHubRepo              string // Format: "owner/repo"
+	CircleCIToken           string
+	CircleCIOrgSlug         string // Format: "gh/YourOrg" (required for CircleCI integration)
 }
 
 type RackConfig struct {
@@ -172,6 +174,12 @@ func Load() (*Config, error) {
 	// GITHUB_REPO format: "owner/repo" (e.g., "DocSpring/docspring")
 	cfg.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
 	cfg.GitHubRepo = strings.TrimSpace(getEnv("GITHUB_REPO", ""))
+
+	// CircleCI integration for pipeline approval
+	// CIRCLECI_TOKEN: Personal API token from CircleCI
+	// CIRCLECI_ORG_SLUG: Format "gh/YourOrg" or "bb/YourOrg" (required for API calls)
+	cfg.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
+	cfg.CircleCIOrgSlug = strings.TrimSpace(getEnv("CIRCLECI_ORG_SLUG", ""))
 
 	return cfg, nil
 }

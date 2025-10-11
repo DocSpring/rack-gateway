@@ -34,11 +34,11 @@ import type {
   HandlersCreateAPITokenResponse,
   HandlersCreateDeployApprovalRequestRequest,
   HandlersCreateUserRequest,
-  HandlersCurrentUserResponse,
   HandlersDeployApprovalRequestList,
   HandlersDeployApprovalRequestResponse,
   HandlersEnvValuesResponse,
   HandlersHealthResponse,
+  HandlersInfoResponse,
   HandlersLockUserRequest,
   HandlersMFAStatusResponse,
   HandlersRevokeAllSessionsResponse,
@@ -1104,16 +1104,14 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Returns the authenticated user's profile, roles, and default rack summary.
-   * @summary Get current user profile
+   * Returns user, rack, and integrations status in a single request for app bootstrap
+   * @summary Get gateway information
    */
-  const getMe = (
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersCurrentUserResponse>
-    >,
+  const getInfo = (
+    options?: SecondParameter<typeof createGatewayClient<HandlersInfoResponse>>,
   ) => {
-    return createGatewayClient<HandlersCurrentUserResponse>(
-      { url: `/me`, method: 'GET' },
+    return createGatewayClient<HandlersInfoResponse>(
+      { url: `/info`, method: 'GET' },
       options,
     );
   };
@@ -1193,7 +1191,7 @@ export const getRackGatewayAPI = () => {
     getEnv,
     putEnv,
     getHealth,
-    getMe,
+    getInfo,
     getRack,
   };
 };
@@ -1528,8 +1526,8 @@ export type PutEnvResult = NonNullable<
 export type GetHealthResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getHealth']>>
 >;
-export type GetMeResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getMe']>>
+export type GetInfoResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getInfo']>>
 >;
 export type GetRackResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getRack']>>

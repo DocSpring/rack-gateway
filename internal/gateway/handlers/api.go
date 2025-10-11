@@ -198,74 +198,91 @@ func (h *APIHandler) logEnvUpdateDiffs(c *gin.Context, app, email, name string, 
 	}
 }
 
-// GetMe godoc
-// @Summary Get current user profile
-// @Description Returns the authenticated user's profile, roles, and default rack summary.
-// @Tags Me
+// GetInfo godoc
+// @Summary Get gateway information
+// @Description Returns user, rack, and integrations status in a single request for app bootstrap
+// @Tags Info
 // @Produce json
-// @Success 200 {object} CurrentUserResponse
+// @Success 200 {object} InfoResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /me [get]
-func (h *APIHandler) GetMe(c *gin.Context) {
+// @Router /info [get]
+func (h *APIHandler) GetInfo(c *gin.Context) {
 	email := c.GetString("user_email")
 	name := c.GetString("user_name")
 	rolesVal, _ := c.Get("user_roles")
 	roles := normalizeStringSlice(rolesVal)
 
-	user, err := h.rbac.GetUser(email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
-		return
-	}
 	dbUser, err := h.database.GetUser(email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
 		return
 	}
 
-	response := CurrentUserResponse{
-		Email:                  email,
-		Name:                   name,
-		Roles:                  roles,
-		Permissions:            user.Roles,
-		DeployApprovalsEnabled: h.config == nil || !h.config.DeployApprovalsDisabled,
+	// Build user info
+	userInfo := UserInfo{
+		Email:            email,
+		Name:             name,
+		Roles:            roles,
+		MFAEnrolled:      false,
+		MFARequired:      false,
+		HasTrustedDevice: false,
 	}
+
 	if dbUser != nil {
-		if strings.TrimSpace(response.Name) == "" {
-			response.Name = dbUser.Name
+		if strings.TrimSpace(userInfo.Name) == "" {
+			userInfo.Name = dbUser.Name
 		}
-		response.MFAEnrolled = dbUser.MFAEnrolled
-		response.PreferredMFAMethod = dbUser.PreferredMFAMethod
+		userInfo.MFAEnrolled = dbUser.MFAEnrolled
+		userInfo.PreferredMFAMethod = dbUser.PreferredMFAMethod
 	}
+
 	if shouldEnforceMFA(h.mfaSettings, dbUser) {
-		response.MFARequired = true
+		userInfo.MFARequired = true
 	}
+
 	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && authUser.Session != nil {
 		if authUser.Session.RecentStepUpAt != nil {
 			expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
-			response.RecentStepUpExpiresAt = &expires
+			userInfo.RecentStepUpExpiresAt = &expires
 		}
-		// Check if session has a trusted device attached
 		if authUser.Session.TrustedDeviceID != nil && *authUser.Session.TrustedDeviceID > 0 {
-			response.HasTrustedDevice = true
+			userInfo.HasTrustedDevice = true
 		}
 	}
 
-	if rc, ok := h.primaryRack(); ok {
-		alias := strings.TrimSpace(rc.Alias)
+	// Build rack info
+	rc, ok := h.primaryRack()
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "rack not configured"})
+		return
+	}
+
+	alias := strings.TrimSpace(rc.Alias)
+	if alias == "" {
+		alias = strings.TrimSpace(rc.Name)
 		if alias == "" {
-			alias = strings.TrimSpace(rc.Name)
-			if alias == "" {
-				alias = "default"
-			}
+			alias = "default"
 		}
-		host := strings.TrimSpace(rc.URL)
-		response.Rack = &RackSummary{
-			Name:  rc.Name,
-			Alias: alias,
-			Host:  host,
-		}
+	}
+
+	rackInfo := RackSummary{
+		Name:  rc.Name,
+		Alias: alias,
+		Host:  strings.TrimSpace(rc.URL),
+	}
+
+	// Build integrations info
+	integrationsInfo := IntegrationsInfo{
+		Slack:    h.config != nil && strings.TrimSpace(h.config.SlackClientID) != "" && strings.TrimSpace(h.config.SlackClientSecret) != "",
+		GitHub:   h.config != nil && strings.TrimSpace(h.config.GitHubToken) != "",
+		CircleCI: h.config != nil && strings.TrimSpace(h.config.CircleCIToken) != "" && strings.TrimSpace(h.config.CircleCIOrgSlug) != "",
+	}
+
+	response := InfoResponse{
+		User:         userInfo,
+		Rack:         rackInfo,
+		Integrations: integrationsInfo,
 	}
 
 	c.JSON(http.StatusOK, response)

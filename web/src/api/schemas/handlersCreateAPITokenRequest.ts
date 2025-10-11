@@ -8,6 +8,9 @@
 
 export interface HandlersCreateAPITokenRequest {
   name: string;
+  /** Explicit permissions (overrides role) */
   permissions?: string[];
+  /** Role shortcut (viewer, ops, deployer, cicd, admin) */
+  role?: string;
   user_email?: string;
 }

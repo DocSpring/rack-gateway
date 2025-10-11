@@ -19,6 +19,7 @@ export function AppPage() {
     { key: 'builds', name: 'Builds', to: '/apps/$app/builds' as const },
     { key: 'releases', name: 'Releases', to: '/apps/$app/releases' as const },
     { key: 'env', name: 'Environment', to: '/apps/$app/env' as const },
+    { key: 'settings', name: 'Settings', to: '/apps/$app/settings' as const },
   ]
 
   return (

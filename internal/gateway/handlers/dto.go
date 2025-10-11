@@ -141,19 +141,30 @@ type RackSummary struct {
 	Host  string `json:"host" validate:"required"`
 }
 
-// CurrentUserResponse describes the authenticated user's profile and permissions.
-type CurrentUserResponse struct {
-	Email                  string       `json:"email" validate:"required"`
-	Name                   string       `json:"name" validate:"required"`
-	Roles                  []string     `json:"roles" validate:"required"`
-	Permissions            []string     `json:"permissions" validate:"required"`
-	Rack                   *RackSummary `json:"rack,omitempty"`
-	MFAEnrolled            bool         `json:"mfa_enrolled" validate:"required"`
-	MFARequired            bool         `json:"mfa_required" validate:"required"`
-	PreferredMFAMethod     *string      `json:"preferred_mfa_method,omitempty"`
-	RecentStepUpExpiresAt  *time.Time   `json:"recent_step_up_expires_at,omitempty"`
-	HasTrustedDevice       bool         `json:"has_trusted_device" validate:"required"`
-	DeployApprovalsEnabled bool         `json:"deploy_approvals_enabled" validate:"required"`
+// UserInfo describes the user portion of the info endpoint
+type UserInfo struct {
+	Email                 string     `json:"email" validate:"required"`
+	Name                  string     `json:"name" validate:"required"`
+	Roles                 []string   `json:"roles" validate:"required"`
+	MFAEnrolled           bool       `json:"mfa_enrolled" validate:"required"`
+	MFARequired           bool       `json:"mfa_required" validate:"required"`
+	PreferredMFAMethod    *string    `json:"preferred_mfa_method,omitempty"`
+	RecentStepUpExpiresAt *time.Time `json:"recent_step_up_expires_at,omitempty"`
+	HasTrustedDevice      bool       `json:"has_trusted_device" validate:"required"`
+}
+
+// IntegrationsInfo describes which external integrations are configured
+type IntegrationsInfo struct {
+	Slack    bool `json:"slack" validate:"required"`
+	GitHub   bool `json:"github" validate:"required"`
+	CircleCI bool `json:"circleci" validate:"required"`
+}
+
+// InfoResponse provides bootstrap information for the frontend
+type InfoResponse struct {
+	User         UserInfo         `json:"user" validate:"required"`
+	Rack         RackSummary      `json:"rack" validate:"required"`
+	Integrations IntegrationsInfo `json:"integrations" validate:"required"`
 }
 
 // EnvValuesResponse wraps environment variable key/value pairs.
