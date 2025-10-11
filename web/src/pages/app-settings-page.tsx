@@ -38,16 +38,22 @@ function extractErrorMessage(error: unknown): string | undefined {
   return
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
 function VCSCIProvidersCard({
   app,
   settings,
   disabled,
+  integrations,
 }: {
   app: string
   settings: AppSettingsResponse | undefined
   disabled: boolean
+  integrations?: { github: boolean; circleci: boolean }
 }) {
   const qc = useQueryClient()
+
+  const githubAvailable = integrations?.github ?? false
+  const circleciAvailable = integrations?.circleci ?? false
   const [vcsProvider, setVcsProvider] = useState<string | null>(null)
   const [vcsRepo, setVcsRepo] = useState<string | null>(null)
   const [ciProvider, setCiProvider] = useState<string | null>(null)
@@ -290,7 +296,7 @@ function VCSCIProvidersCard({
                 onChange={(e) => setVcsRepo(e.target.value)}
                 placeholder="docspring"
                 type="text"
-                value={displayVcsRepo}
+                value={displayVcsRepo ?? ''}
               />
               <SourceIndicator setting={settings?.vcs_repo} />
             </div>
@@ -301,12 +307,12 @@ function VCSCIProvidersCard({
         </div>
 
         <div className="grid grid-cols-2 gap-12">
-          <div>
+          <div className={disabled || !circleciAvailable ? 'opacity-50' : ''}>
             <Label htmlFor="ci-provider">CI Provider</Label>
             <div className="flex items-center gap-2">
               <select
                 className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
-                disabled={disabled}
+                disabled={disabled || !circleciAvailable}
                 id="ci-provider"
                 onChange={(e) => setCiProvider(e.target.value)}
                 value={displayCiProvider}
@@ -323,12 +329,12 @@ function VCSCIProvidersCard({
             </div>
           </div>
 
-          <div>
+          <div className={disabled || !circleciAvailable ? 'opacity-50' : ''}>
             <Label htmlFor="ci-org-slug">CI Organization Slug</Label>
             <div className="flex items-center gap-2">
               <Input
                 className="flex-1"
-                disabled={disabled}
+                disabled={disabled || !circleciAvailable}
                 id="ci-org-slug"
                 onChange={(e) => setCiOrgSlug(e.target.value)}
                 placeholder="gh/DocSpring"
@@ -346,10 +352,12 @@ function VCSCIProvidersCard({
           <h3 className="mb-4 font-semibold text-sm">GitHub Verification</h3>
           <div className="grid grid-cols-2 gap-12">
             <div className="space-y-4">
-              <label className="flex items-center gap-3">
+              <label
+                className={`flex items-center gap-3 ${disabled || !githubAvailable ? 'cursor-not-allowed opacity-50' : ''}`}
+              >
                 <input
                   checked={displayGithubVerification}
-                  disabled={disabled}
+                  disabled={disabled || !githubAvailable}
                   onChange={(e) => setGithubVerification(e.target.checked)}
                   type="checkbox"
                 />
@@ -360,10 +368,12 @@ function VCSCIProvidersCard({
                 Verify git commits against GitHub when creating deploy approval requests.
               </p>
 
-              <label className="flex items-center gap-3">
+              <label
+                className={`flex items-center gap-3 ${disabled || !githubAvailable ? 'cursor-not-allowed opacity-50' : ''}`}
+              >
                 <input
                   checked={displayAllowDeployFromDefaultBranch}
-                  disabled={disabled}
+                  disabled={disabled || !githubAvailable}
                   onChange={(e) => setAllowDeployFromDefaultBranch(e.target.checked)}
                   type="checkbox"
                 />
@@ -374,10 +384,12 @@ function VCSCIProvidersCard({
                 When disabled, deployments must be from a non-default branch.
               </p>
 
-              <label className="flex items-center gap-3">
+              <label
+                className={`flex items-center gap-3 ${disabled || !githubAvailable ? 'cursor-not-allowed opacity-50' : ''}`}
+              >
                 <input
                   checked={displayRequirePRForBranch}
-                  disabled={disabled}
+                  disabled={disabled || !githubAvailable}
                   onChange={(e) => setRequirePRForBranch(e.target.checked)}
                   type="checkbox"
                 />
@@ -390,11 +402,11 @@ function VCSCIProvidersCard({
             </div>
 
             <div className="space-y-4">
-              <div>
+              <div className={disabled || !githubAvailable ? 'opacity-50' : ''}>
                 <Label htmlFor="default-branch">Default Branch</Label>
                 <div className="flex items-center gap-2">
                   <Input
-                    disabled={disabled}
+                    disabled={disabled || !githubAvailable}
                     id="default-branch"
                     onChange={(e) => setDefaultBranch(e.target.value)}
                     placeholder="main"
@@ -408,12 +420,12 @@ function VCSCIProvidersCard({
                 </p>
               </div>
 
-              <div>
+              <div className={disabled || !githubAvailable ? 'opacity-50' : ''}>
                 <Label htmlFor="verify-git-commit-mode">Git Commit Verification Mode</Label>
                 <div className="flex items-center gap-2">
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    disabled={disabled}
+                    disabled={disabled || !githubAvailable}
                     id="verify-git-commit-mode"
                     onChange={(e) => setVerifyGitCommitMode(e.target.value)}
                     value={displayVerifyGitCommitMode}
@@ -751,7 +763,12 @@ export function AppSettingsPage() {
       ) : null}
 
       <div className="grid gap-6">
-        <VCSCIProvidersCard app={app} disabled={!isAdmin} settings={appSettings} />
+        <VCSCIProvidersCard
+          app={app}
+          disabled={!isAdmin}
+          integrations={user?.integrations}
+          settings={appSettings}
+        />
         <div className="grid grid-cols-2 gap-12">
           <StringArrayCard
             app={app}

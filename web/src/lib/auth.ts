@@ -10,12 +10,16 @@ export type User = {
   name: string
   roles: string[]
   rack?: { name: string; alias?: string; host: string }
-  mfaEnrolled?: boolean
-  mfaRequired?: boolean
+  mfa_enrolled?: boolean
+  mfa_required?: boolean
   preferred_mfa_method?: string | null
-  recentStepUpExpiresAt?: string | null
+  recent_step_up_expires_at?: string | null
   has_trusted_device?: boolean
-  deploy_approvals_enabled?: boolean
+  integrations: {
+    slack: boolean
+    github: boolean
+    circleci: boolean
+  }
 }
 
 export type AuthState = {
@@ -75,12 +79,16 @@ class AuthService {
         name: userInfo?.name ?? '',
         roles,
         rack,
-        mfaEnrolled: Boolean(userInfo?.mfa_enrolled),
-        mfaRequired: Boolean(userInfo?.mfa_required),
+        mfa_enrolled: Boolean(userInfo?.mfa_enrolled),
+        mfa_required: Boolean(userInfo?.mfa_required),
         preferred_mfa_method: userInfo?.preferred_mfa_method ?? null,
-        recentStepUpExpiresAt: userInfo?.recent_step_up_expires_at ?? null,
+        recent_step_up_expires_at: userInfo?.recent_step_up_expires_at ?? null,
         has_trusted_device: Boolean(userInfo?.has_trusted_device),
-        deploy_approvals_enabled: true, // No longer part of user info
+        integrations: {
+          slack: Boolean(data?.integrations?.slack),
+          github: Boolean(data?.integrations?.github),
+          circleci: Boolean(data?.integrations?.circleci),
+        },
       }
 
       return mapped

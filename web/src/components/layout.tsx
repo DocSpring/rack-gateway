@@ -73,7 +73,7 @@ export function Layout() {
   }, [location.pathname])
   const [showCliDialog, setShowCliDialog] = useState(false)
 
-  const needsMfaEnrollment = Boolean(user?.mfaRequired && !user?.mfaEnrolled)
+  const needsMfaEnrollment = Boolean(user?.mfa_required && !user?.mfa_enrolled)
 
   const rackAlias = user?.rack?.alias ?? user?.rack?.name ?? 'default'
   const gatewayOrigin = useMemo(() => {
@@ -96,7 +96,7 @@ export function Layout() {
       { name: 'API Tokens', href: '/api_tokens', icon: Key },
     ]
 
-    if (user?.roles?.includes('admin') && user?.deploy_approvals_enabled) {
+    if (user?.roles?.includes('admin')) {
       nav.push({
         name: 'Deploy Approvals',
         href: '/deploy_approval_requests',
@@ -111,16 +111,16 @@ export function Layout() {
       icon: Lock,
     })
 
+    if (user?.roles?.includes('admin')) {
+      nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
+      nav.push({ name: 'Settings', href: '/settings', icon: Settings })
+    }
+
     nav.push({
       name: 'Configure CLI',
       icon: TerminalSquare,
       onSelect: () => setShowCliDialog(true),
     })
-
-    if (user?.roles?.includes('admin')) {
-      nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
-      nav.push({ name: 'Settings', href: '/settings', icon: Settings })
-    }
 
     if (needsMfaEnrollment) {
       return nav
@@ -144,7 +144,7 @@ export function Layout() {
     }
 
     return nav
-  }, [needsMfaEnrollment, user?.roles, user?.deploy_approvals_enabled])
+  }, [needsMfaEnrollment, user?.roles])
 
   const currentUserHref = useMemo(() => {
     if (!user?.email) {

@@ -199,9 +199,9 @@ export function DeployApprovalRequestsPage() {
     })
   }
 
-  // Redirect if deploy approvals are disabled (must be after all hooks)
-  // Wait for auth to load before checking to avoid false redirects on page refresh
-  if (!(isAuthLoading || user?.deploy_approvals_enabled)) {
+  // Deploy approvals are always available now, no need to check for feature flag
+  // Just ensure user is authenticated
+  if (!(isAuthLoading || user)) {
     return <Navigate replace to="/" />
   }
 
