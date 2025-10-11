@@ -1,6 +1,4 @@
 services:
-  web:
+  gateway:
     image: docspringcom/rack-gateway:wrongcommit123-amd64
-    port: 3000
-  worker:
-    image: docspringcom/rack-gateway:abc123def456-amd64
+    port: 8080

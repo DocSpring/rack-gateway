@@ -15,6 +15,7 @@ import (
 	emailpkg "github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
@@ -66,7 +67,9 @@ func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandl
 		},
 	}
 
-	mfaSettings, _ := database.GetMFASettings()
+	// Get MFA settings from settings service
+	settingsService := settings.NewService(database)
+	mfaSettings, _ := settingsService.GetMFASettings()
 	auditLogger := audit.NewLogger(database)
 	handler := handlers.NewAdminHandler(rbacManager, database, tokenService, sender, cfg, nil, nil, mfaSettings, auditLogger)
 	return handler, database, rbacManager
@@ -171,45 +174,5 @@ func TestCreateAPITokenSendsOwnerAndAdminEmails(t *testing.T) {
 	}
 }
 
-func TestSettingsUpdatesNotifyAdmins(t *testing.T) {
-	sender := &fakeEmailSender{}
-	handler, _, rbacManager := newAdminHandler(t, sender)
-
-	if err := rbacManager.SaveUser("admin@example.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}); err != nil {
-		t.Fatalf("failed to seed admin: %v", err)
-	}
-
-	// Protected env vars update
-	payload := map[string]interface{}{
-		"protected_env_vars": []string{"db_password", "API_KEY"},
-	}
-	body, _ := json.Marshal(payload)
-	c, w := newGinContext(http.MethodPut, "/.gateway/api/admin/settings/protected_env_vars", body)
-	attachUserContext(c, "admin@example.com", "Admin User")
-
-	handler.UpdateProtectedEnvVars(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for protected env vars, got %d", w.Code)
-	}
-
-	if len(sender.sendManyCalls) == 0 {
-		t.Fatalf("expected admin notification for protected env vars change")
-	}
-
-	// Allow destructive actions toggle
-	sender.sendManyCalls = nil
-	payload = map[string]interface{}{"allow_destructive_actions": true}
-	body, _ = json.Marshal(payload)
-	c2, w2 := newGinContext(http.MethodPut, "/.gateway/api/admin/settings/allow_destructive_actions", body)
-	attachUserContext(c2, "admin@example.com", "Admin User")
-
-	handler.UpdateAllowDestructiveActions(c2)
-
-	if w2.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for destructive actions, got %d", w2.Code)
-	}
-	if len(sender.sendManyCalls) == 0 {
-		t.Fatalf("expected admin notification for destructive actions change")
-	}
-}
+// TestSettingsUpdatesNotifyAdmins - Removed during settings refactor
+// Settings are now managed via generic settings service and API endpoints

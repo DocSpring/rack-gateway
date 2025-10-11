@@ -7,4 +7,4 @@
  */
 import type { SettingsSetting } from './settingsSetting';
 
-export type GetAdminSettings200 = { [key: string]: SettingsSetting };
+export type GetAppsAppSettings200 = { [key: string]: SettingsSetting };

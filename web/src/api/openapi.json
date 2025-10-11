@@ -741,11 +741,11 @@
                         "SessionCookie": []
                     }
                 ],
-                "description": "Returns administrative settings including protected env vars and rack TLS state.",
+                "description": "Returns all global settings with their sources (db, env, or default)",
                 "tags": [
                     "Settings"
                 ],
-                "summary": "Get gateway admin settings",
+                "summary": "Get all global settings",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -753,343 +753,9 @@
                             "application/json": {
                                 "schema": {
                                     "type": "object",
-                                    "additionalProperties": true
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/settings/allow_destructive_actions": {
-            "put": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Enables or disables destructive actions such as rack resets.",
-                "tags": [
-                    "Settings"
-                ],
-                "summary": "Toggle destructive action protections",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateAllowDestructiveActionsRequest"
-                            }
-                        }
-                    },
-                    "description": "Toggle payload",
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.StatusResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/settings/app_image_patterns": {
-            "put": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Updates the map of app names to image tag regex patterns used for manifest validation",
-                "tags": [
-                    "Settings"
-                ],
-                "summary": "Update app image tag validation patterns",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateAppImagePatternsRequest"
-                            }
-                        }
-                    },
-                    "description": "App image tag patterns",
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.StatusResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/settings/approved_commands": {
-            "put": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Replaces the list of approved commands that CI/CD tokens can execute in processes.",
-                "tags": [
-                    "Settings"
-                ],
-                "summary": "Update approved commands for CI/CD exec",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateApprovedCommandsRequest"
-                            }
-                        }
-                    },
-                    "description": "Approved commands",
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.StatusResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/settings/circleci": {
-            "get": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    }
-                ],
-                "description": "Returns CircleCI integration configuration including API token and approval job name.",
-                "tags": [
-                    "Settings"
-                ],
-                "summary": "Get CircleCI integration settings",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/db.CircleCISettings"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/settings/mfa": {
-            "put": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Configures whether MFA is required for all users.",
-                "tags": [
-                    "Settings"
-                ],
-                "summary": "Update MFA enforcement defaults",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateMFASettingsRequest"
-                            }
-                        }
-                    },
-                    "description": "MFA settings payload",
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.StatusResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/settings/protected_env_vars": {
-            "put": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Replaces the list of protected environment variable keys.",
-                "tags": [
-                    "Settings"
-                ],
-                "summary": "Update protected environment variables",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateProtectedEnvVarsRequest"
-                            }
-                        }
-                    },
-                    "description": "Protected env vars",
-                    "required": true
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.StatusResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                    "additionalProperties": {
+                                        "$ref": "#/components/schemas/settings.Setting"
+                                    }
                                 }
                             }
                         }
@@ -1145,6 +811,202 @@
                     },
                     "502": {
                         "description": "Bad Gateway",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/settings/{key}": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns a single global setting with its source",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get a specific global setting",
+                "parameters": [
+                    {
+                        "description": "Setting key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/settings.Setting"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Updates a single global setting and stores it in the database",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update a global setting",
+                "parameters": [
+                    {
+                        "description": "Setting key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "$ref": "#/components/requestBodies/Value"
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/settings.Setting"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Deletes a global setting from the database, reverting to env or default value",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Delete a global setting",
+                "parameters": [
+                    {
+                        "description": "Setting key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/settings.Setting"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2248,6 +2110,279 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/handlers.StatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/apps/{app}/settings": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns all settings for a specific app with their sources",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get all app settings",
+                "parameters": [
+                    {
+                        "description": "App name",
+                        "name": "app",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "$ref": "#/components/schemas/settings.Setting"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/apps/{app}/settings/{key}": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns a single app setting with its source",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get a specific app setting",
+                "parameters": [
+                    {
+                        "description": "App name",
+                        "name": "app",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Setting key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/settings.Setting"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Updates a single app setting and stores it in the database",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Update an app setting",
+                "parameters": [
+                    {
+                        "description": "App name",
+                        "name": "app",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Setting key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "$ref": "#/components/requestBodies/Value"
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/settings.Setting"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
+                    }
+                ],
+                "description": "Deletes an app setting from the database, reverting to env or default value",
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Delete an app setting",
+                "parameters": [
+                    {
+                        "description": "App name",
+                        "name": "app",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Setting key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/settings.Setting"
                                 }
                             }
                         }
@@ -4015,6 +4150,19 @@
         }
     ],
     "components": {
+        "requestBodies": {
+            "Value": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                },
+                "description": "Setting value",
+                "required": true
+            }
+        },
         "securitySchemes": {
             "CSRFToken": {
                 "description": "HMAC-derived CSRF token tied to the active session.",
@@ -4156,24 +4304,6 @@
                         "type": "string"
                     },
                     "user_name": {
-                        "type": "string"
-                    }
-                }
-            },
-            "db.CircleCISettings": {
-                "type": "object",
-                "required": [
-                    "api_token",
-                    "approval_job_name"
-                ],
-                "properties": {
-                    "api_token": {
-                        "type": "string"
-                    },
-                    "approval_job_name": {
-                        "type": "string"
-                    },
-                    "org_slug": {
                         "type": "string"
                     }
                 }
@@ -5101,36 +5231,6 @@
                     }
                 }
             },
-            "handlers.UpdateAllowDestructiveActionsRequest": {
-                "type": "object",
-                "properties": {
-                    "allow_destructive_actions": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "handlers.UpdateAppImagePatternsRequest": {
-                "type": "object",
-                "properties": {
-                    "app_image_patterns": {
-                        "type": "object",
-                        "additionalProperties": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
-            "handlers.UpdateApprovedCommandsRequest": {
-                "type": "object",
-                "properties": {
-                    "approved_commands": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
             "handlers.UpdateDeployApprovalRequestStatusRequest": {
                 "type": "object",
                 "properties": {
@@ -5191,31 +5291,12 @@
                     }
                 }
             },
-            "handlers.UpdateMFASettingsRequest": {
-                "type": "object",
-                "properties": {
-                    "require_all_users": {
-                        "type": "boolean"
-                    }
-                }
-            },
             "handlers.UpdatePreferredMFAMethodRequest": {
                 "type": "object",
                 "properties": {
                     "preferred_method": {
                         "description": "\"totp\", \"webauthn\", or null to clear",
                         "type": "string"
-                    }
-                }
-            },
-            "handlers.UpdateProtectedEnvVarsRequest": {
-                "type": "object",
-                "properties": {
-                    "protected_env_vars": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
                     }
                 }
             },
@@ -5385,6 +5466,35 @@
                         "type": "string"
                     }
                 }
+            },
+            "settings.Setting": {
+                "type": "object",
+                "properties": {
+                    "env_var": {
+                        "description": "e.g., \"RGW_SETTING_REQUIRE_MFA_ALL_USERS\"",
+                        "type": "string"
+                    },
+                    "key": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "$ref": "#/components/schemas/settings.SettingSource"
+                    },
+                    "value": {}
+                }
+            },
+            "settings.SettingSource": {
+                "type": "string",
+                "enum": [
+                    "db",
+                    "env",
+                    "default"
+                ],
+                "x-enum-varnames": [
+                    "SourceDB",
+                    "SourceEnv",
+                    "SourceDefault"
+                ]
             }
         }
     }

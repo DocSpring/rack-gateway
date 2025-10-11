@@ -28,7 +28,7 @@ psql_exec() {
 }
 
 declare -A MFA_TOTP_SECRETS=(
-  ["admin@example.com"]="JBSWY3DPEHPK3PXP"
+  ["admin@example.com"]="K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU"
   ["deployer@example.com"]="KB6VQXGZLMN4Y3DC"
   ["viewer@example.com"]="NB2WY5DPFVXHI6ZT"
 )
@@ -76,22 +76,22 @@ UPDATE settings
    SET value = jsonb_set(value, '{require_all_users}', 'false'::jsonb, true),
        updated_at = NOW()
  WHERE key = 'mfa';
-INSERT INTO settings (key, value, updated_at)
-     VALUES ('mfa', jsonb_build_object('require_all_users', false), NOW())
-ON CONFLICT (key) DO UPDATE
+INSERT INTO settings (app_name, key, value, updated_at)
+     VALUES (NULL, 'mfa', jsonb_build_object('require_all_users', false), NOW())
+ON CONFLICT (app_name, key) DO UPDATE
      SET value = jsonb_set(settings.value, '{require_all_users}', 'false'::jsonb, true),
          updated_at = NOW();
 -- Allow specific commands for E2E tests (deploy approvals)
-INSERT INTO settings (key, value, updated_at)
-     VALUES ('approved_commands', '{"commands": ["echo rake db:migrate"]}'::jsonb, NOW())
-ON CONFLICT (key) DO UPDATE
+INSERT INTO settings (app_name, key, value, updated_at)
+     VALUES (NULL, 'approved_commands', '{"commands": ["echo rake db:migrate"]}'::jsonb, NOW())
+ON CONFLICT (app_name, key) DO UPDATE
      SET value = '{"commands": ["echo rake db:migrate"]}'::jsonb,
          updated_at = NOW();
 -- Configure image tag pattern for manifest validation
-INSERT INTO settings (key, value, updated_at)
-     VALUES ('app_image_patterns', '{"rack-gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb, NOW())
-ON CONFLICT (key) DO UPDATE
-     SET value = '{"rack-gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb,
+INSERT INTO settings (app_name, key, value, updated_at)
+     VALUES ('rack-gateway', 'service_image_patterns', '{"gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb, NOW())
+ON CONFLICT (app_name, key) DO UPDATE
+     SET value = '{"gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb,
          updated_at = NOW();
 SQL
   )
@@ -115,6 +115,10 @@ offset = digest[-1] & 0x0F
 code = (struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7FFFFFFF) % 1000000
 print(f"{code:06d}")
 PY
+}
+
+clear_mfa_replay_protection() {
+  psql_exec "DELETE FROM used_totp_steps; DELETE FROM mfa_totp_attempts;"
 }
 
 E2E_TS="$(date +%s%3N)"
@@ -169,8 +173,8 @@ login_cli_as() {
   local rack_name="${2:-e2e}"
   local secret="${MFA_TOTP_SECRETS[$user_email]:-}"
 
-  # Clear used TOTP codes to allow replay in tests
-  psql_exec "DELETE FROM mfa_totp_attempts"
+  # Clear MFA replay protection
+  clear_mfa_replay_protection
 
   echo -e "${YELLOW}Starting CLI login for ${user_email} on rack ${rack_name}...${NC}"
   local AUTH_FILE COOKIE_FILE HTML_FILE
@@ -439,9 +443,14 @@ fi
 if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   # Create a CI/CD API token and exercise pipeline-style commands using the raw token
   echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
+
+  # Clear MFA replay protection
+  clear_mfa_replay_protection
+  MFA_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
   API_TOKEN_JSON=$(./bin/rack-gateway api-token create \
     --name "E2E CLI API Token ${E2E_TS}" \
     --role cicd \
+    --mfa-code "$MFA_CODE" \
     --output json)
 
   API_TOKEN=$(jq -r '.token' <<<"$API_TOKEN_JSON")
@@ -524,6 +533,9 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
 
   # Log in as admin to approve the request
   login_cli_as "admin@example.com" "e2e"
+
+  # Clear MFA replay protection for approve command
+  clear_mfa_replay_protection
 
   APPROVE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
   verify_rgw_command \
@@ -608,11 +620,9 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${BLUE}Test 4/6: First successful build with valid manifest (commit $GIT_COMMIT_HASH)...${NC}"
   cat > "$TESTDATA_DIR/convox.valid-image-tag.yml" <<EOF
 services:
-  web:
+  gateway:
     image: docspringcom/rack-gateway:${GIT_COMMIT_HASH}-amd64
-    port: 3000
-  worker:
-    image: docspringcom/rack-gateway:${GIT_COMMIT_HASH}-amd64
+    port: 8080
 EOF
 
   # Test with valid manifest - this will succeed and set build_id/release_id
@@ -749,7 +759,11 @@ EOF
 
   # Delete via admin login to validate token deletion flow
   login_cli_as "admin@example.com" "e2e"
-  verify_rgw_command "api-token delete $API_TOKEN_PUBLIC_ID" "Deleted token $API_TOKEN_PUBLIC_ID"
+
+  # Clear MFA replay protection for token deletion
+  clear_mfa_replay_protection
+  DELETE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
+  verify_rgw_command "api-token delete $API_TOKEN_PUBLIC_ID --mfa-code $DELETE_CODE" "Deleted token $API_TOKEN_PUBLIC_ID"
   logout_cli
 fi
 
@@ -772,7 +786,9 @@ if [ -z "$SKIP_DEPLOYER_TESTS" ]; then
   # (env set tests removed for deployer; protected env policy preservation)
 
   # Should not be able to delete apps
-  verify_rgw_command_failure "apps delete rack-gateway" "Error: permission denied"
+  clear_mfa_replay_protection
+  DELETE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[deployer@example.com]}")
+  verify_rgw_command_failure "apps delete rack-gateway --mfa-code $DELETE_CODE" "Error: permission denied"
 
   logout_cli
 fi
@@ -795,7 +811,9 @@ if [ -z "$SKIP_VIEWER_TESTS" ]; then
 
   # Viewer should not be able to set env or delete apps
   verify_rgw_command_failure "env set NOTALLOWED=1" "Error: permission denied"
-  verify_rgw_command_failure "apps delete rack-gateway" "Error: permission denied"
+  clear_mfa_replay_protection
+  DELETE_CODE=$(generate_totp_code "${MFA_TOTP_SECRETS[viewer@example.com]}")
+  verify_rgw_command_failure "apps delete rack-gateway --mfa-code $DELETE_CODE" "Error: permission denied"
 fi
 
 echo -e "${GREEN}CLI E2E completed successfully.${NC}"

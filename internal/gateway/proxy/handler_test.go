@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,7 +35,7 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACMana
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default", "default", nil, nil, nil)
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{}, "default", "default", nil, nil, nil)
 	return h, database, mgr
 }
 
@@ -196,7 +197,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default", "default", nil, nil, nil)
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{}, "default", "default", nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -300,7 +301,7 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "default", "default", nil, nil, nil)
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{}, "default", "default", nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"foo":"bar"}`))
 	req.Header.Set("Content-Type", "application/json")

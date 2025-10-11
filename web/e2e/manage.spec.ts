@@ -156,11 +156,18 @@ test('tokens: create, rename, delete', async ({ page }) => {
   const timestamp = Date.now()
   const name1 = `E2E Web API Token ${timestamp}`
 
-  // Create token
+  // Create token - opens create dialog
   await page.getByRole('button', { name: /Create Token/i }).click()
-  await page.getByLabel('Token Name').fill(name1)
-  await page.getByRole('button', { name: /Create Token/i }).click()
-  // Close created token dialog
+  const createDialog = page.getByRole('dialog')
+  await expect(createDialog).toBeVisible()
+  await createDialog.getByLabel('Token Name').fill(name1)
+
+  // Submit the create token form - step-up window from login is still valid
+  // so no MFA dialog will appear, token is created immediately
+  await createDialog.getByRole('button', { name: /Create Token/i }).click()
+
+  // Token should be created successfully and success dialog appears
+  await expect(page.getByText(/API token created successfully/i)).toBeVisible()
   await page.getByRole('button', { name: /Done/i }).click()
 
   // Verify row appears
@@ -213,9 +220,18 @@ test('audit logs: view and filter', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
   const timestamp = Date.now()
   const tokenName = `E2E Web API Token ${timestamp}`
+
+  // Open create token dialog
   await page.getByRole('button', { name: /Create Token/i }).click()
-  await page.getByLabel('Token Name').fill(tokenName)
-  await page.getByRole('button', { name: /Create Token/i }).click()
+  const createDialog = page.getByRole('dialog')
+  await expect(createDialog).toBeVisible()
+  await createDialog.getByLabel('Token Name').fill(tokenName)
+
+  // Submit the form - step-up window from login is still valid
+  // so token is created immediately without MFA dialog
+  await createDialog.getByRole('button', { name: /Create Token/i }).click()
+
+  // Token should be created successfully
   await expect(page.getByText('API token created successfully', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /Done/i }).click()
 

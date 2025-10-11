@@ -13,7 +13,6 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -513,17 +512,6 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	// Trigger CircleCI approval if integration is enabled and metadata is present
-	if record.CIProvider == "circleci" && len(record.CIMetadata) > 0 {
-		go func() {
-			if err := h.approveCircleCIJob(record); err != nil {
-				fmt.Printf("Failed to approve CircleCI job for request %d: %v\n", record.ID, err)
-			} else {
-				fmt.Printf("Successfully approved CircleCI job for request %d\n", record.ID)
-			}
-		}()
-	}
-
 	details := auditDetails(map[string]string{
 		"expires_at": expiresAt.UTC().Format(time.RFC3339),
 		"notes":      strings.TrimSpace(payload.Notes),
@@ -795,46 +783,4 @@ func auditDetails(values map[string]string) string {
 		return "{}"
 	}
 	return string(data)
-}
-
-func (h *AdminHandler) approveCircleCIJob(record *db.DeployApprovalRequest) error {
-	// Check if CircleCI integration is enabled
-	enabled, err := h.database.CircleCIEnabled()
-	if err != nil {
-		return fmt.Errorf("failed to check circleci enabled: %w", err)
-	}
-	if !enabled {
-		return fmt.Errorf("circleci integration not enabled")
-	}
-
-	// Get CircleCI settings
-	settings, err := h.database.GetCircleCISettings()
-	if err != nil {
-		return fmt.Errorf("failed to get circleci settings: %w", err)
-	}
-
-	// Parse CI metadata
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
-		return fmt.Errorf("failed to parse ci_metadata: %w", err)
-	}
-
-	// Validate metadata
-	if err := circleci.ValidateMetadata(metadata); err != nil {
-		return fmt.Errorf("invalid circleci metadata: %w", err)
-	}
-
-	// Parse metadata
-	approvalMeta, err := circleci.ParseMetadata(metadata)
-	if err != nil {
-		return fmt.Errorf("failed to parse metadata: %w", err)
-	}
-
-	// Create CircleCI client and approve the job
-	client := circleci.NewClient(settings.APIToken)
-	if err := client.ApproveJob(approvalMeta.WorkflowID, approvalMeta.ApprovalJobName); err != nil {
-		return fmt.Errorf("failed to approve circleci job: %w", err)
-	}
-
-	return nil
 }

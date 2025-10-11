@@ -14,6 +14,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
@@ -58,12 +59,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		"abc123",
 		"main",
 		"https://example.com/pipeline",
-		"github",
-		nil,       // ciMetadata
-		admin.ID,  // createdByUserID
-		nil,       // createdByAPITokenID
-		token.ID,  // targetAPITokenID
-		&admin.ID, // targetUserID
+		"",           // prURL
+		"github",     // ciProvider
+		[]byte("{}"), // ciMetadata - must be valid JSON
+		admin.ID,     // createdByUserID
+		nil,          // createdByAPITokenID
+		token.ID,     // targetAPITokenID
+		&admin.ID,    // targetUserID
 	)
 	require.NoError(t, err)
 	require.Equal(t, "pending", req.Status)
@@ -85,7 +87,8 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get MFA settings
-	mfaSettings, err := database.GetMFASettings()
+	settingsService := settings.NewService(database)
+	mfaSettings, err := settingsService.GetMFASettings()
 	require.NoError(t, err)
 
 	t.Run("denies approval without MFA code", func(t *testing.T) {
@@ -138,12 +141,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			"def456",
 			"main",
 			"https://example.com/pipeline",
-			"github",
-			nil,
-			admin.ID,
-			nil,
-			token.ID,
-			&admin.ID,
+			"",           // prURL
+			"github",     // ciProvider
+			[]byte("{}"), // ciMetadata - must be valid JSON
+			admin.ID,     // createdByUserID
+			nil,          // createdByAPITokenID
+			token.ID,     // targetAPITokenID
+			&admin.ID,    // targetUserID
 		)
 		require.NoError(t, err)
 
@@ -316,7 +320,8 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get MFA settings
-	mfaSettings, err := database.GetMFASettings()
+	settingsService := settings.NewService(database)
+	mfaSettings, err := settingsService.GetMFASettings()
 	require.NoError(t, err)
 
 	t.Run("denies token creation without MFA code", func(t *testing.T) {

@@ -1,6 +1,4 @@
 services:
-  web:
+  gateway:
     build: .
-    port: 3000
-  worker:
-    build: .
+    port: 8080

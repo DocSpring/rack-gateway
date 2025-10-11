@@ -101,7 +101,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier, cfg.AuditLogger)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings, cfg.AuditLogger)
+	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
 	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger)
 	settingsHandler := handlers.NewSettingsHandler(cfg.SettingsService, cfg.RBACManager)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
@@ -213,8 +213,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 				admin.GET("/settings", settingsHandler.GetAllGlobalSettings)
 				admin.GET("/settings/:key", settingsHandler.GetGlobalSetting)
 				admin.PUT("/settings/:key", settingsHandler.UpdateGlobalSetting)
+				admin.DELETE("/settings/:key", settingsHandler.DeleteGlobalSetting)
 
-				admin.GET("/settings/circleci", adminHandler.GetCircleCISettings)
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
 
@@ -247,14 +247,14 @@ func Setup(router *gin.Engine, cfg *Config) {
 				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 
 				// API tokens (rate limit creation)
-				// SECURITY: API token operations ALWAYS require MFA, with no grace period and no API token bypass
+				// SECURITY: API token operations require MFA step-up authentication
 				tokenGroup := admin.Group("/tokens")
 				tokenGroup.GET("", adminHandler.ListAPITokens)
 				tokenGroup.GET("/permissions", adminHandler.GetTokenPermissionMetadata)
 				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
 
 				tokenSensitive := tokenGroup.Group("")
-				tokenSensitive.Use(middleware.RequireMFA(cfg.MFAService, cfg.Database, cfg.MFASettings))
+				tokenSensitive.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
 				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
@@ -277,6 +277,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				apps.GET("/settings", settingsHandler.GetAllAppSettings)
 				apps.GET("/settings/:key", settingsHandler.GetAppSetting)
 				apps.PUT("/settings/:key", settingsHandler.UpdateAppSetting)
+				apps.DELETE("/settings/:key", settingsHandler.DeleteAppSetting)
 			}
 		}
 	}

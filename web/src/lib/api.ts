@@ -330,7 +330,25 @@ export const put = <T = unknown>(
   path: string,
   data?: unknown,
   config?: AxiosRequestConfig
-): Promise<T> => gatewayAxios.put<T>(normalizePath(path), data, config).then((res) => res.data)
+): Promise<T> => {
+  // Special handling for null - send as raw string "null" to avoid axios issues
+  if (data === null) {
+    return gatewayAxios
+      .request<T>({
+        method: 'PUT',
+        url: normalizePath(path),
+        data: 'null',
+        headers: {
+          'Content-Type': 'application/json',
+          ...config?.headers,
+        },
+        transformRequest: [], // Don't transform the data, send raw string
+        ...config,
+      })
+      .then((res) => res.data)
+  }
+  return gatewayAxios.put<T>(normalizePath(path), data, config).then((res) => res.data)
+}
 
 export const destroy = <T = unknown>(path: string, config?: AxiosRequestConfig): Promise<T> =>
   gatewayAxios.delete<T>(normalizePath(path), config).then((res) => res.data)

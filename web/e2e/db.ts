@@ -78,18 +78,11 @@ export async function resetAllMfaState() {
     await client.query(
       'UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL, preferred_mfa_method = NULL;'
     )
+    // Delete any MFA-related global settings (app_name = NULL)
     await client.query(
-      `UPDATE settings
-          SET value = jsonb_set(value, '{require_all_users}', 'false'::jsonb, true),
-              updated_at = NOW()
-        WHERE key = 'mfa';`
-    )
-    await client.query(
-      `INSERT INTO settings (key, value, updated_at)
-       VALUES ('mfa', jsonb_build_object('require_all_users', false), NOW())
-       ON CONFLICT (key) DO UPDATE
-         SET value = jsonb_set(settings.value, '{require_all_users}', 'false'::jsonb, true),
-             updated_at = NOW();`
+      `DELETE FROM settings
+        WHERE app_name IS NULL
+          AND key IN ('mfa_require_all_users', 'mfa_trusted_device_ttl_days', 'mfa_step_up_window_minutes');`
     )
   })
 }
@@ -140,6 +133,22 @@ export async function clearMfaAttempts() {
   await withDbClient(async (client) => {
     await client.query('DELETE FROM mfa_totp_attempts;')
     await client.query('DELETE FROM mfa_webauthn_attempts;')
+    await client.query('DELETE FROM used_totp_steps;')
+  })
+}
+
+export async function getUserMfaSecret(email: string): Promise<string | null> {
+  return await withDbClient(async (client) => {
+    const result = await client.query(
+      `SELECT secret FROM mfa_methods
+       WHERE user_id = (SELECT id FROM users WHERE email = $1)
+       AND type = 'totp'
+       AND confirmed_at IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 1;`,
+      [email]
+    )
+    return result.rows[0]?.secret || null
   })
 }
 

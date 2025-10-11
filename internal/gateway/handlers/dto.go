@@ -229,7 +229,8 @@ type UpdateUserRolesRequest struct {
 type CreateAPITokenRequest struct {
 	Name        string   `json:"name" binding:"required"`
 	UserEmail   string   `json:"user_email"`
-	Permissions []string `json:"permissions"`
+	Role        string   `json:"role"`        // Role shortcut (viewer, ops, deployer, cicd, admin)
+	Permissions []string `json:"permissions"` // Explicit permissions (overrides role)
 }
 
 // CreateAPITokenResponse represents the response body for API token creation.

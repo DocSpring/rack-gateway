@@ -32,12 +32,12 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, bodyBytes []
 	app := extractAppFromPath(r.URL.Path)
 
 	// Check if manifest validation is required for this app
-	patterns, err := h.database.GetAppImagePatterns()
+	patterns, err := h.settingsService.GetServiceImagePatterns(app)
 	if err != nil {
-		return fmt.Errorf("failed to get app image patterns: %w", err)
+		return fmt.Errorf("failed to get service image patterns: %w", err)
 	}
 
-	if patternTemplate, hasPattern := patterns[app]; hasPattern {
+	if len(patterns) > 0 {
 		// Manifest validation is required - extract and validate the manifest
 		objectURL := strings.TrimSpace(vals.Get("url"))
 		manifestPath := strings.TrimSpace(vals.Get("manifest"))
@@ -56,7 +56,7 @@ func (h *Handler) validateBuildManifestForAllUsers(r *http.Request, bodyBytes []
 		}
 
 		// Validate the manifest from the tarball
-		if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPath, patternTemplate, gitSHA); err != nil {
+		if err := h.validateBuildManifest(r.Context(), app, objectURL, manifestPath, patterns, gitSHA); err != nil {
 			return fmt.Errorf("manifest validation failed: %w", err)
 		}
 	}

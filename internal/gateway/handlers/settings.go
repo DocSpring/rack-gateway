@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
-	"strings"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/gin-gonic/gin"
 )
@@ -12,14 +11,14 @@ import (
 // SettingsHandler handles generic settings API endpoints.
 type SettingsHandler struct {
 	settingsService *settings.Service
-	rbac            RBACManager
+	rbac            rbac.RBACManager
 }
 
 // NewSettingsHandler creates a new settings handler.
-func NewSettingsHandler(settingsService *settings.Service, rbac RBACManager) *SettingsHandler {
+func NewSettingsHandler(settingsService *settings.Service, rbacMgr rbac.RBACManager) *SettingsHandler {
 	return &SettingsHandler{
 		settingsService: settingsService,
-		rbac:            rbac,
+		rbac:            rbacMgr,
 	}
 }
 
@@ -112,25 +111,6 @@ func (h *SettingsHandler) UpdateGlobalSetting(c *gin.Context) {
 		return
 	}
 
-	// If value is nil, delete the setting (revert to env/default)
-	if value == nil {
-		if err := h.settingsService.DeleteGlobalSetting(key); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete setting"})
-			return
-		}
-
-		// Return the setting after deletion (will show env or default source)
-		defaultValue := getDefaultValueForGlobalKey(key)
-		setting, err := h.settingsService.GetGlobalSetting(key, defaultValue)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
-			return
-		}
-
-		c.JSON(http.StatusOK, setting)
-		return
-	}
-
 	// Get user ID for audit
 	var uid *int64
 	if h.rbac != nil {
@@ -146,6 +126,49 @@ func (h *SettingsHandler) UpdateGlobalSetting(c *gin.Context) {
 	}
 
 	// Return updated setting
+	defaultValue := getDefaultValueForGlobalKey(key)
+	setting, err := h.settingsService.GetGlobalSetting(key, defaultValue)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
+		return
+	}
+
+	c.JSON(http.StatusOK, setting)
+}
+
+// DeleteGlobalSetting godoc
+// @Summary Delete a global setting
+// @Description Deletes a global setting from the database, reverting to env or default value
+// @Tags Settings
+// @Produce json
+// @Param key path string true "Setting key"
+// @Success 200 {object} settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /admin/settings/{key} [delete]
+func (h *SettingsHandler) DeleteGlobalSetting(c *gin.Context) {
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
+
+	// Check if key is valid
+	if !isValidGlobalKey(key) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
+		return
+	}
+
+	// Delete the setting
+	if err := h.settingsService.DeleteGlobalSetting(key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete setting"})
+		return
+	}
+
+	// Return the setting after deletion (will show env or default source)
 	defaultValue := getDefaultValueForGlobalKey(key)
 	setting, err := h.settingsService.GetGlobalSetting(key, defaultValue)
 	if err != nil {
@@ -256,25 +279,6 @@ func (h *SettingsHandler) UpdateAppSetting(c *gin.Context) {
 		return
 	}
 
-	// If value is nil, delete the setting (revert to env/default)
-	if value == nil {
-		if err := h.settingsService.DeleteAppSetting(appName, key); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete setting"})
-			return
-		}
-
-		// Return the setting after deletion (will show env or default source)
-		defaultValue := getDefaultValueForAppKey(key)
-		setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
-			return
-		}
-
-		c.JSON(http.StatusOK, setting)
-		return
-	}
-
 	// Get user ID for audit
 	var uid *int64
 	if h.rbac != nil {
@@ -290,6 +294,51 @@ func (h *SettingsHandler) UpdateAppSetting(c *gin.Context) {
 	}
 
 	// Return updated setting
+	defaultValue := getDefaultValueForAppKey(key)
+	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
+		return
+	}
+
+	c.JSON(http.StatusOK, setting)
+}
+
+// DeleteAppSetting godoc
+// @Summary Delete an app setting
+// @Description Deletes an app setting from the database, reverting to env or default value
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Param key path string true "Setting key"
+// @Success 200 {object} settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/{key} [delete]
+func (h *SettingsHandler) DeleteAppSetting(c *gin.Context) {
+	appName := c.Param("app")
+	key := c.Param("key")
+	if appName == "" || key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app name and key are required"})
+		return
+	}
+
+	// Check if key is valid
+	if !isValidAppKey(key) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
+		return
+	}
+
+	// Delete the setting
+	if err := h.settingsService.DeleteAppSetting(appName, key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete setting"})
+		return
+	}
+
+	// Return the setting after deletion (will show env or default source)
 	defaultValue := getDefaultValueForAppKey(key)
 	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
 	if err != nil {
@@ -367,18 +416,4 @@ func isValidAppKey(key string) bool {
 		settings.KeyVerifyGitCommitMode:          true,
 	}
 	return validKeys[key]
-}
-
-// parseSettingValue attempts to parse a JSON value into the appropriate Go type.
-func parseSettingValue(raw []byte) (interface{}, error) {
-	var value interface{}
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return nil, err
-	}
-	return value, nil
-}
-
-// normalizeSettingKey converts snake_case to the canonical format.
-func normalizeSettingKey(key string) string {
-	return strings.ToLower(strings.TrimSpace(key))
 }

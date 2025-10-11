@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/routes"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	slackpkg "github.com/DocSpring/rack-gateway/internal/gateway/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	"github.com/gin-gonic/gin"
@@ -38,19 +38,16 @@ func (a *App) initializeServices() error {
 	// Session manager enforces short-lived idle sessions for the web UI
 	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.SessionSecret, a.Config.SessionIdleTimeout)
 
-	// Load MFA settings and initialize the MFA service for enrollment/verification flows
-	mfaSettings, err := a.Database.GetMFASettings()
+	// Initialize settings service early (before RBAC, token service, etc.)
+	a.SettingsService = settings.NewService(a.Database)
+
+	// Load MFA settings from settings service
+	mfaSettings, err := a.SettingsService.GetMFASettings()
 	if err != nil {
 		return fmt.Errorf("failed to load MFA settings: %w", err)
 	}
-	if envVal := strings.TrimSpace(os.Getenv("MFA_REQUIRE_ALL_USERS")); envVal != "" {
-		if parsed, err := strconv.ParseBool(envVal); err == nil && mfaSettings.RequireAllUsers != parsed {
-			mfaSettings.RequireAllUsers = parsed
-			if err := a.Database.UpsertMFASettings(mfaSettings, nil); err != nil {
-				return fmt.Errorf("failed to apply MFA_REQUIRE_ALL_USERS override: %w", err)
-			}
-		}
-	}
+	// Environment variable MFA_REQUIRE_ALL_USERS can override database setting
+	// This is handled automatically by the settings service (env > db > default)
 	a.MFASettings = mfaSettings
 
 	issuer := "Rack Gateway"
@@ -106,9 +103,6 @@ func (a *App) initializeServices() error {
 
 	// Initialize token service
 	a.TokenService = token.NewService(a.Database)
-
-	// Initialize settings service
-	a.SettingsService = settings.NewService(a.Database)
 
 	// Create combined auth service
 	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager)
@@ -234,7 +228,7 @@ func (a *App) initializeServices() error {
 		pinnedMgr = nil
 	}
 
-	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
+	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
 	a.DefaultRack = rackAlias
 
 	return nil

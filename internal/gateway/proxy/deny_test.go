@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,7 +38,7 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 		},
 	}}
 
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, email.NoopSender{}, "testrack", "testrack", nil, nil, nil)
+	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{}, "testrack", "testrack", nil, nil, nil)
 
 	// Create request: DELETE /apps/myapp
 	req := httptest.NewRequest(http.MethodDelete, "/apps/myapp", nil)

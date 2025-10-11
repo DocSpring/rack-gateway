@@ -71,9 +71,10 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	// Validate process start commands for deploy approval flow
 	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
+			app := extractAppFromPath(original)
 			command := strings.TrimSpace(r.Header.Get("Command"))
 			// Only allow hardcoded sleep command or approved commands
-			if command != "sleep 3600" && !h.isCommandApproved(command) {
+			if command != "sleep 3600" && !h.isCommandApproved(app, command) {
 				return 0, fmt.Errorf("command not approved: %s", command)
 			}
 		}
@@ -341,7 +342,19 @@ func (h *Handler) isSecretKey(key string) bool {
 	return envutil.IsSecretKey(key, extra)
 }
 
-func (h *Handler) isProtectedKey(key string) bool {
+func (h *Handler) isProtectedKeyForApp(key, app string) bool {
+	// Check app-scoped protected env vars from settings service
+	if h.settingsService != nil && app != "" {
+		if protectedKeys, err := h.settingsService.GetProtectedEnvVars(app); err == nil {
+			upperKey := strings.ToUpper(strings.TrimSpace(key))
+			for _, protected := range protectedKeys {
+				if strings.ToUpper(strings.TrimSpace(protected)) == upperKey {
+					return true
+				}
+			}
+		}
+	}
+	// Fallback to global protected env map (deprecated, will be removed)
 	_, ok := h.protectedEnv[strings.ToUpper(strings.TrimSpace(key))]
 	return ok
 }
@@ -350,11 +363,12 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	// Validate and track exec commands for deploy approval flow
 	if routematch.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec") {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
+			app := extractAppFromPath(originalPath)
 			processID := extractProcessIDFromPath(originalPath)
 			command := strings.TrimSpace(r.Header.Get("Command"))
 			if processID != "" && command != "" && h.database != nil {
 				// Validate command is in approved list
-				if !h.isCommandApproved(command) {
+				if !h.isCommandApproved(app, command) {
 					http.Error(w, forbiddenMessage(rbac.ResourceProcess, rbac.ActionExec), http.StatusForbidden)
 					return http.StatusForbidden, nil
 				}
@@ -618,15 +632,15 @@ func (h *Handler) captureProcessCreation(r *http.Request, body []byte, tracker *
 	}
 }
 
-// isCommandApproved checks if a command is in the approved commands list
-func (h *Handler) isCommandApproved(command string) bool {
-	if h.database == nil {
+// isCommandApproved checks if a command is in the approved commands list for the given app
+func (h *Handler) isCommandApproved(app, command string) bool {
+	if h.settingsService == nil {
 		return false
 	}
 
-	approvedCommands, err := h.database.GetApprovedCommands()
+	approvedCommands, err := h.settingsService.GetApprovedDeployCommands(app)
 	if err != nil {
-		log.Printf("Failed to get approved commands: %v", err)
+		log.Printf("Failed to get approved commands for app %s: %v", app, err)
 		return false
 	}
 

@@ -21,6 +21,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,6 +33,7 @@ type APIHandler struct {
 	rackCertManager *rackcert.Manager
 	mfaSettings     *db.MFASettings
 	auditLogger     *audit.Logger
+	settingsService *settings.Service
 }
 
 var (
@@ -40,7 +42,7 @@ var (
 )
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager, mfaSettings *db.MFASettings, auditLogger *audit.Logger) *APIHandler {
+func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.Config, rackCertManager *rackcert.Manager, mfaSettings *db.MFASettings, auditLogger *audit.Logger, settingsService *settings.Service) *APIHandler {
 	return &APIHandler{
 		rbac:            rbac,
 		database:        database,
@@ -48,6 +50,7 @@ func NewAPIHandler(rbac rbac.RBACManager, database *db.Database, config *config.
 		rackCertManager: rackCertManager,
 		mfaSettings:     mfaSettings,
 		auditLogger:     auditLogger,
+		settingsService: settingsService,
 	}
 }
 
@@ -89,9 +92,28 @@ func (h *APIHandler) rackContext(ctx context.Context) (config.RackConfig, *tls.C
 	return rc, tlsCfg, nil
 }
 
-func (h *APIHandler) secretAndProtectedKeys() ([]string, map[string]struct{}) {
+func (h *APIHandler) secretAndProtectedKeys(app string) ([]string, map[string]struct{}) {
 	extra := make([]string, 0)
 	seen := make(map[string]struct{})
+
+	// Get secret env vars for this app
+	if h.settingsService != nil {
+		if arr, err := h.settingsService.GetSecretEnvVars(app); err == nil {
+			for _, key := range arr {
+				trim := strings.TrimSpace(key)
+				if trim == "" {
+					continue
+				}
+				upper := strings.ToUpper(trim)
+				if _, ok := seen[upper]; !ok {
+					extra = append(extra, trim)
+					seen[upper] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Fall back to environment variable for backward compatibility
 	if raw := os.Getenv("CONVOX_SECRET_ENV_VARS"); raw != "" {
 		for _, part := range strings.Split(raw, ",") {
 			trim := strings.TrimSpace(part)
@@ -107,8 +129,8 @@ func (h *APIHandler) secretAndProtectedKeys() ([]string, map[string]struct{}) {
 	}
 
 	protected := make(map[string]struct{})
-	if h.database != nil {
-		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
+	if h.settingsService != nil {
+		if arr, err := h.settingsService.GetProtectedEnvVars(app); err == nil {
 			for _, key := range arr {
 				trim := strings.TrimSpace(key)
 				if trim == "" {
@@ -499,7 +521,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	}
 
 	// Mask secrets unless explicit access was granted
-	extraSecrets, _ := h.secretAndProtectedKeys()
+	extraSecrets, _ := h.secretAndProtectedKeys(app)
 	if !allowedSecrets {
 		for k := range envMap {
 			if envutil.IsSecretKey(k, extraSecrets) {
@@ -617,7 +639,7 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 		baseEnv = map[string]string{}
 	}
 
-	extraSecrets, protectedSet := h.secretAndProtectedKeys()
+	extraSecrets, protectedSet := h.secretAndProtectedKeys(app)
 	allowSecrets, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
 	canViewSecrets, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead)
 

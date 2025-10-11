@@ -1,5 +1,7 @@
 import { expect, request, test } from '@playwright/test'
+import { authenticator } from 'otplib'
 import { APIRoute, WebRoute } from '@/lib/routes'
+import { clearMfaAttempts, getUserMfaSecret } from './db'
 import { login } from './helpers'
 
 test.describe('CSRF Protection for Proxy Routes', () => {
@@ -68,11 +70,32 @@ test.describe('CSRF Protection for Proxy Routes', () => {
       throw new Error('CSRF token not found in meta tag')
     }
 
+    // Get MFA secret for generating step-up code
+    const mfaSecret = await getUserMfaSecret('admin@example.com')
+    if (!mfaSecret) {
+      throw new Error('MFA secret not found for admin user')
+    }
+
+    // Wait for fresh TOTP window to avoid replay protection
+    const currentSecond = Math.floor(Date.now() / 1000)
+    const secondsIntoWindow = currentSecond % 30
+    if (secondsIntoWindow > 25) {
+      // Less than 5 seconds left, wait for next window
+      await new Promise((resolve) => setTimeout(resolve, (30 - secondsIntoWindow + 2) * 1000))
+    }
+
+    // Clear attempts and generate fresh code
+    await clearMfaAttempts()
+    // Small delay to ensure database transaction commits
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const mfaCode = authenticator.generate(mfaSecret)
+
     const tokenName = `Playwright CLI Token ${Date.now()}`
     const createResponse = await page.request.post(APIRoute('admin/tokens'), {
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-Token': csrfToken,
+        'X-MFA-Code': mfaCode,
       },
       data: {
         name: tokenName,
@@ -158,10 +181,11 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     // verify by checking console errors or network activity
 
     // Instead, let's do a more direct test with fetch
-    const result = await page.evaluate(async () => {
+    const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8447'
+    const result = await page.evaluate(async (url) => {
       try {
         // Try to make a state-changing request using fetch (which sends cookies)
-        const response = await fetch('/apps/production/builds', {
+        const response = await fetch(`${url}/apps/production/builds`, {
           method: 'POST',
           credentials: 'include', // Include cookies
           headers: {
@@ -176,7 +200,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
       } catch (error: any) {
         return { error: error.message }
       }
-    })
+    }, baseUrl)
 
     // Should be rejected with 401
     expect(result).toHaveProperty('status', 401)

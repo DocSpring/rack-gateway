@@ -26,6 +26,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/getsentry/sentry-go"
 )
 
@@ -35,6 +36,7 @@ type Handler struct {
 	auditLogger      *audit.Logger
 	secretNames      map[string]struct{}
 	database         *db.Database
+	settingsService  *settings.Service
 	protectedEnv     map[string]struct{}
 	allowDestructive bool
 	emailer          email.Sender
@@ -47,13 +49,14 @@ type Handler struct {
 
 const maskedSecret = envutil.MaskedSecret
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {
+func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, settingsService *settings.Service, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
 		auditLogger:      auditLogger,
 		secretNames:      make(map[string]struct{}),
 		database:         database,
+		settingsService:  settingsService,
 		protectedEnv:     make(map[string]struct{}),
 		allowDestructive: false,
 		emailer:          mailer,
@@ -72,17 +75,7 @@ func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *a
 			}
 		}
 	}
-	// Load settings from DB
-	if database != nil {
-		if arr, err := database.GetProtectedEnvVars(); err == nil {
-			for _, k := range arr {
-				h.protectedEnv[strings.ToUpper(k)] = struct{}{}
-			}
-		}
-		if v, err := database.GetAllowDestructiveActions(); err == nil {
-			h.allowDestructive = v
-		}
-	}
+	// Settings are loaded on-demand from the settings service (no initialization needed)
 	return h
 }
 
@@ -131,21 +124,6 @@ func (h *Handler) ReplaceProtectedEnv(keys []string) {
 
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
-	// Refresh dynamic settings from DB
-	if h.database != nil {
-		if v, err := h.database.GetAllowDestructiveActions(); err == nil {
-			h.allowDestructive = v
-		}
-		if arr, err := h.database.GetProtectedEnvVars(); err == nil {
-			// rebuild map quickly (small set)
-			m := make(map[string]struct{}, len(arr))
-			for _, k := range arr {
-				m[strings.ToUpper(strings.TrimSpace(k))] = struct{}{}
-			}
-			h.protectedEnv = m
-		}
-	}
 
 	// Get the default rack (there's only one per gateway instance)
 	rackConfig, exists := h.config.Racks["default"]
@@ -313,7 +291,13 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Block destructive actions when not allowed by settings
-	if !h.allowDestructive {
+	allowDestructive, err := h.settingsService.GetAllowDestructiveActions()
+	if err != nil {
+		// Log error but continue with safe default (don't allow)
+		log.Printf("Failed to get allow_destructive_actions setting: %v", err)
+		allowDestructive = false
+	}
+	if !allowDestructive {
 		if isDestructive(methodForRBAC, resource, action) {
 			// Log as denied (RBAC) for consistency
 			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("destructive actions are disabled by policy"))

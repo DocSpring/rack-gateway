@@ -18,6 +18,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/gin-gonic/gin"
 )
@@ -44,7 +45,8 @@ func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handle
 	}
 
 	auditLogger := audit.NewLogger(database)
-	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil, auditLogger)
+	settingsService := settings.NewService(database)
+	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil, auditLogger, settingsService)
 	return handler, rbacManager
 }
 
@@ -289,7 +291,9 @@ func TestUpdateEnvValuesProtectedKeyDenied(t *testing.T) {
 		t.Fatalf("failed to seed admin: %v", err)
 	}
 
-	if err := database.UpsertSetting("protected_env_vars", []string{"PROTECTED"}, nil); err != nil {
+	// Set protected env vars for this specific app
+	appName := "myapp"
+	if err := database.UpsertSetting(&appName, "protected_env_vars", []string{"PROTECTED"}, nil); err != nil {
 		t.Fatalf("failed to seed protected env vars: %v", err)
 	}
 

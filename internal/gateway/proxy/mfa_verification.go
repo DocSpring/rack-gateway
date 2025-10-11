@@ -125,8 +125,8 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 	if authUser.Session.RecentStepUpAt != nil {
 		// Get step-up window duration from settings
 		stepUpWindow := 10 * time.Minute // Default
-		if h.database != nil {
-			if settings, err := h.database.GetMFASettings(); err == nil && settings != nil && settings.StepUpWindowMinutes > 0 {
+		if h.settingsService != nil {
+			if settings, err := h.settingsService.GetMFASettings(); err == nil && settings != nil && settings.StepUpWindowMinutes > 0 {
 				stepUpWindow = time.Duration(settings.StepUpWindowMinutes) * time.Minute
 			}
 		}

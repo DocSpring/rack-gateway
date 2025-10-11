@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
+import { clearMfaAttempts } from './db'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
@@ -39,6 +40,9 @@ async function requireStepUp(page: Page) {
 async function completeStepUp(page: Page, secret: string) {
   const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   await expect(dialog).toBeVisible()
+
+  // Clear MFA attempts to allow code reuse within same TOTP window
+  await clearMfaAttempts()
 
   const code = authenticator.generate(secret)
   await dialog.getByLabel('Verification code').fill(code)

@@ -151,6 +151,9 @@ services:
       LOG_REQUEST_HEADERS: "true"
       LOG_REQUEST_BODIES: "true"
       LOG_RESPONSE_BODIES: "true"
+      # Test settings via environment variables
+      RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS: "45"
+      RGW_APP_API_SETTING_DEFAULT_BRANCH: "develop"
     ports:
       - "${TEST_GATEWAY_PORT:-9447}:${TEST_GATEWAY_PORT:-9447}"
     volumes: []

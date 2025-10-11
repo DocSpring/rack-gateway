@@ -39,6 +39,18 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
+	req.Role = strings.TrimSpace(strings.ToLower(req.Role))
+
+	// Convert role to permissions if provided
+	if req.Role != "" && len(req.Permissions) == 0 {
+		rolePerms := rbac.DefaultRolePermissions()
+		if perms, found := rolePerms[req.Role]; found {
+			req.Permissions = perms
+		} else {
+			h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), strings.TrimSpace(req.UserEmail), fmt.Sprintf("invalid role: %s (valid roles: viewer, ops, deployer, cicd, admin)", req.Role), start, map[string]interface{}{"name": req.Name, "role": req.Role})
+			return
+		}
+	}
 
 	// Validate that permissions are provided
 	if len(req.Permissions) == 0 {

@@ -16,6 +16,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
@@ -24,9 +25,10 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager)
 	database := dbtest.NewDatabase(t)
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
+	settingsService := settings.NewService(database)
 	h := NewHandler(&config.Config{Racks: map[string]config.RackConfig{
 		"default": {Name: "default", URL: "http://mock", Username: "convox", APIKey: "token", Enabled: true},
-	}}, mgr, audit.NewLogger(database), database, email.NoopSender{}, "testrack", "testrack", nil, nil, nil)
+	}}, mgr, audit.NewLogger(database), database, settingsService, email.NoopSender{}, "testrack", "testrack", nil, nil, nil)
 	// Configure extra secret names
 	h.secretNames["DATABASE_URL"] = struct{}{}
 	h.secretNames["REDIS_URL"] = struct{}{}
@@ -152,14 +154,9 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 
 func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
-	// Set protected env var
-	require.NoError(t, database.UpsertSetting("protected_env_vars", []string{"DATABASE_URL"}, nil))
-	// Reload handler protected set
-	if arr, err := database.GetProtectedEnvVars(); err == nil {
-		for _, k := range arr {
-			h.protectedEnv[strings.ToUpper(k)] = struct{}{}
-		}
-	}
+	// Set protected env var for the app (app-scoped setting)
+	appName := "app"
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"DATABASE_URL"}, nil))
 	// Admin user (even admin should be blocked from protected changes)
 	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 

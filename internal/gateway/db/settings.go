@@ -50,7 +50,7 @@ func (d *Database) GetAllSettings(appName *string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all settings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	settings := make(map[string][]byte)
 	for rows.Next() {

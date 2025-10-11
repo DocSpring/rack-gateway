@@ -8,7 +8,6 @@
 import type {
   AuthLoginStartResponse,
   DbAPIToken,
-  DbCircleCISettings,
   DbRackTLSCert,
   DbUser,
   GetAdminAuditExportParams,
@@ -18,6 +17,7 @@ import type {
   GetAdminDeployApprovalRequestsParams,
   GetAdminRoles200,
   GetAdminSettings200,
+  GetAppsAppSettings200,
   GetAuthCliCallbackParams,
   GetAuthWebCallbackParams,
   GetCreatedBy200,
@@ -50,16 +50,11 @@ import type {
   HandlersStatusResponse,
   HandlersTokenPermissionMetadata,
   HandlersUpdateAPITokenRequest,
-  HandlersUpdateAllowDestructiveActionsRequest,
-  HandlersUpdateAppImagePatternsRequest,
-  HandlersUpdateApprovedCommandsRequest,
   HandlersUpdateDeployApprovalRequestStatusRequest,
   HandlersUpdateEnvValuesRequest,
   HandlersUpdateEnvValuesResponse,
   HandlersUpdateMFAMethodRequest,
-  HandlersUpdateMFASettingsRequest,
   HandlersUpdatePreferredMFAMethodRequest,
-  HandlersUpdateProtectedEnvVarsRequest,
   HandlersUpdateUserProfileRequest,
   HandlersUpdateUserRolesRequest,
   HandlersUserSessionResponse,
@@ -69,6 +64,8 @@ import type {
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
+  SettingsSetting,
+  ValueBody,
 } from './schemas';
 
 import { createGatewayClient } from './http-client';
@@ -231,132 +228,14 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Returns administrative settings including protected env vars and rack TLS state.
-   * @summary Get gateway admin settings
+   * Returns all global settings with their sources (db, env, or default)
+   * @summary Get all global settings
    */
   const getAdminSettings = (
     options?: SecondParameter<typeof createGatewayClient<GetAdminSettings200>>,
   ) => {
     return createGatewayClient<GetAdminSettings200>(
       { url: `/admin/settings`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Enables or disables destructive actions such as rack resets.
-   * @summary Toggle destructive action protections
-   */
-  const putAdminSettingsAllowDestructiveActions = (
-    handlersUpdateAllowDestructiveActionsRequest: HandlersUpdateAllowDestructiveActionsRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      {
-        url: `/admin/settings/allow_destructive_actions`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateAllowDestructiveActionsRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Updates the map of app names to image tag regex patterns used for manifest validation
-   * @summary Update app image tag validation patterns
-   */
-  const putAdminSettingsAppImagePatterns = (
-    handlersUpdateAppImagePatternsRequest: HandlersUpdateAppImagePatternsRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      {
-        url: `/admin/settings/app_image_patterns`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateAppImagePatternsRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Replaces the list of approved commands that CI/CD tokens can execute in processes.
-   * @summary Update approved commands for CI/CD exec
-   */
-  const putAdminSettingsApprovedCommands = (
-    handlersUpdateApprovedCommandsRequest: HandlersUpdateApprovedCommandsRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      {
-        url: `/admin/settings/approved_commands`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateApprovedCommandsRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Returns CircleCI integration configuration including API token and approval job name.
-   * @summary Get CircleCI integration settings
-   */
-  const getAdminSettingsCircleci = (
-    options?: SecondParameter<typeof createGatewayClient<DbCircleCISettings>>,
-  ) => {
-    return createGatewayClient<DbCircleCISettings>(
-      { url: `/admin/settings/circleci`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Configures whether MFA is required for all users.
-   * @summary Update MFA enforcement defaults
-   */
-  const putAdminSettingsMfa = (
-    handlersUpdateMFASettingsRequest: HandlersUpdateMFASettingsRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      {
-        url: `/admin/settings/mfa`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateMFASettingsRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Replaces the list of protected environment variable keys.
-   * @summary Update protected environment variables
-   */
-  const putAdminSettingsProtectedEnvVars = (
-    handlersUpdateProtectedEnvVarsRequest: HandlersUpdateProtectedEnvVarsRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      {
-        url: `/admin/settings/protected_env_vars`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateProtectedEnvVarsRequest,
-      },
       options,
     );
   };
@@ -370,6 +249,54 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<DbRackTLSCert>(
       { url: `/admin/settings/rack_tls_cert/refresh`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Returns a single global setting with its source
+   * @summary Get a specific global setting
+   */
+  const getAdminSettingsKey = (
+    key: string,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      { url: `/admin/settings/${key}`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Updates a single global setting and stores it in the database
+   * @summary Update a global setting
+   */
+  const putAdminSettingsKey = (
+    key: string,
+    valueBody: ValueBody,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      {
+        url: `/admin/settings/${key}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: valueBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Deletes a global setting from the database, reverting to env or default value
+   * @summary Delete a global setting
+   */
+  const deleteAdminSettingsKey = (
+    key: string,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      { url: `/admin/settings/${key}`, method: 'DELETE' },
       options,
     );
   };
@@ -657,6 +584,73 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<HandlersStatusResponse>(
       { url: `/admin/users/${email}/unlock`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Returns all settings for a specific app with their sources
+   * @summary Get all app settings
+   */
+  const getAppsAppSettings = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<GetAppsAppSettings200>
+    >,
+  ) => {
+    return createGatewayClient<GetAppsAppSettings200>(
+      { url: `/apps/${app}/settings`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Returns a single app setting with its source
+   * @summary Get a specific app setting
+   */
+  const getAppsAppSettingsKey = (
+    app: string,
+    key: string,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      { url: `/apps/${app}/settings/${key}`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Updates a single app setting and stores it in the database
+   * @summary Update an app setting
+   */
+  const putAppsAppSettingsKey = (
+    app: string,
+    key: string,
+    valueBody: ValueBody,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      {
+        url: `/apps/${app}/settings/${key}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: valueBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Deletes an app setting from the database, reverting to env or default value
+   * @summary Delete an app setting
+   */
+  const deleteAppsAppSettingsKey = (
+    app: string,
+    key: string,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      { url: `/apps/${app}/settings/${key}`, method: 'DELETE' },
       options,
     );
   };
@@ -1148,13 +1142,10 @@ export const getRackGatewayAPI = () => {
     postAdminDeployApprovalRequestsIdReject,
     getAdminRoles,
     getAdminSettings,
-    putAdminSettingsAllowDestructiveActions,
-    putAdminSettingsAppImagePatterns,
-    putAdminSettingsApprovedCommands,
-    getAdminSettingsCircleci,
-    putAdminSettingsMfa,
-    putAdminSettingsProtectedEnvVars,
     postAdminSettingsRackTlsCertRefresh,
+    getAdminSettingsKey,
+    putAdminSettingsKey,
+    deleteAdminSettingsKey,
     getAdminTokens,
     postAdminTokens,
     getAdminTokensPermissions,
@@ -1172,6 +1163,10 @@ export const getRackGatewayAPI = () => {
     postAdminUsersEmailSessionsRevokeAll,
     postAdminUsersEmailSessionsSessionIDRevoke,
     postAdminUsersEmailUnlock,
+    getAppsAppSettings,
+    getAppsAppSettingsKey,
+    putAppsAppSettingsKey,
+    deleteAppsAppSettingsKey,
     getAuthCliCallback,
     postAuthCliComplete,
     postAuthCliStart,
@@ -1256,46 +1251,6 @@ export type GetAdminRolesResult = NonNullable<
 export type GetAdminSettingsResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettings']>>
 >;
-export type PutAdminSettingsAllowDestructiveActionsResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['putAdminSettingsAllowDestructiveActions']
-    >
-  >
->;
-export type PutAdminSettingsAppImagePatternsResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['putAdminSettingsAppImagePatterns']
-    >
-  >
->;
-export type PutAdminSettingsApprovedCommandsResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['putAdminSettingsApprovedCommands']
-    >
-  >
->;
-export type GetAdminSettingsCircleciResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettingsCircleci']>
-  >
->;
-export type PutAdminSettingsMfaResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminSettingsMfa']>
-  >
->;
-export type PutAdminSettingsProtectedEnvVarsResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['putAdminSettingsProtectedEnvVars']
-    >
-  >
->;
 export type PostAdminSettingsRackTlsCertRefreshResult = NonNullable<
   Awaited<
     ReturnType<
@@ -1303,6 +1258,21 @@ export type PostAdminSettingsRackTlsCertRefreshResult = NonNullable<
         typeof getRackGatewayAPI
       >['postAdminSettingsRackTlsCertRefresh']
     >
+  >
+>;
+export type GetAdminSettingsKeyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettingsKey']>
+  >
+>;
+export type PutAdminSettingsKeyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminSettingsKey']>
+  >
+>;
+export type DeleteAdminSettingsKeyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminSettingsKey']>
   >
 >;
 export type GetAdminTokensResult = NonNullable<
@@ -1394,6 +1364,26 @@ export type PostAdminUsersEmailUnlockResult = NonNullable<
     ReturnType<
       ReturnType<typeof getRackGatewayAPI>['postAdminUsersEmailUnlock']
     >
+  >
+>;
+export type GetAppsAppSettingsResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAppsAppSettings']>
+  >
+>;
+export type GetAppsAppSettingsKeyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAppsAppSettingsKey']>
+  >
+>;
+export type PutAppsAppSettingsKeyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAppsAppSettingsKey']>
+  >
+>;
+export type DeleteAppsAppSettingsKeyResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAppsAppSettingsKey']>
   >
 >;
 export type GetAuthCliCallbackResult = NonNullable<

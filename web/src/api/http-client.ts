@@ -59,7 +59,13 @@ gatewayAxios.interceptors.response.use(
     if (status === 401) {
       const dataError = (error?.response?.data as { error?: string } | undefined)?.error
       const mfaRequiredHeader = error?.response?.headers?.['x-mfa-required']
-      if (dataError === 'mfa_step_up_required' || mfaRequiredHeader === 'step-up') {
+      // Don't treat MFA-required errors as session expiration
+      if (
+        dataError === 'mfa_step_up_required' ||
+        dataError === 'mfa_required' ||
+        mfaRequiredHeader === 'step-up' ||
+        mfaRequiredHeader === 'always'
+      ) {
         return Promise.reject(error)
       }
       const hasWindow = typeof window !== 'undefined'

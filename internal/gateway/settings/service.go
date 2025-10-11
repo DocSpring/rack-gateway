@@ -350,6 +350,30 @@ func (s *Service) GetProtectedEnvVars(appName string) ([]string, error) {
 	}
 }
 
+// GetSecretEnvVars returns secret environment variables for an app.
+func (s *Service) GetSecretEnvVars(appName string) ([]string, error) {
+	setting, err := s.GetAppSetting(appName, KeySecretEnvVars, []string{})
+	if err != nil {
+		return []string{}, err
+	}
+
+	// Handle both []interface{} and []string from JSON unmarshaling
+	switch val := setting.Value.(type) {
+	case []string:
+		return normalizeEnvVars(val), nil
+	case []interface{}:
+		strs := make([]string, 0, len(val))
+		for _, v := range val {
+			if s, ok := v.(string); ok {
+				strs = append(strs, s)
+			}
+		}
+		return normalizeEnvVars(strs), nil
+	default:
+		return []string{}, nil
+	}
+}
+
 // normalizeEnvVars normalizes env var names (uppercase, unique).
 func normalizeEnvVars(vars []string) []string {
 	seen := map[string]struct{}{}
@@ -392,5 +416,33 @@ func (s *Service) GetApprovedDeployCommands(appName string) ([]string, error) {
 		return strs, nil
 	default:
 		return []string{}, nil
+	}
+}
+
+// GetServiceImagePatterns returns service image patterns for an app.
+func (s *Service) GetServiceImagePatterns(appName string) (map[string]string, error) {
+	setting, err := s.GetAppSetting(appName, KeyServiceImagePatterns, map[string]string(nil))
+	if err != nil {
+		return map[string]string{}, err
+	}
+
+	if setting.Value == nil {
+		return map[string]string{}, nil
+	}
+
+	// Handle both map[string]interface{} and map[string]string from JSON unmarshaling
+	switch val := setting.Value.(type) {
+	case map[string]string:
+		return val, nil
+	case map[string]interface{}:
+		result := make(map[string]string)
+		for k, v := range val {
+			if s, ok := v.(string); ok {
+				result[k] = s
+			}
+		}
+		return result, nil
+	default:
+		return map[string]string{}, nil
 	}
 }

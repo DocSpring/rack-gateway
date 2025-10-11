@@ -153,7 +153,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 
 	// If posting any protected key explicitly, deny immediately (no change to protected keys allowed)
 	for k := range posted {
-		if h.isProtectedKey(k) {
+		if h.isProtectedKeyForApp(k, app) {
 			userName := r.Header.Get("X-User-Name")
 			_ = h.logAudit(r, &db.AuditLog{
 				UserEmail:      email,
@@ -254,10 +254,9 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 
 	// Deny any modifications to protected env vars
 	for _, d := range diffs {
-		if h.isProtectedKey(d.Key) {
+		if h.isProtectedKeyForApp(d.Key, app) {
 			// Log denied change for protected key
 			userName := r.Header.Get("X-User-Name")
-			app := extractAppFromPath(r.URL.Path)
 			_ = h.logAudit(r, &db.AuditLog{
 				UserEmail:      email,
 				UserName:       userName,

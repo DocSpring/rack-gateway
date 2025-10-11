@@ -43,7 +43,12 @@ function isAxiosStepUpError(error: unknown): boolean {
   }
   const errorCode = (error.response?.data as { error?: string } | undefined)?.error
   const header = error.response?.headers?.['x-mfa-required']
-  return errorCode === 'mfa_step_up_required' || header === 'step-up'
+  return (
+    errorCode === 'mfa_step_up_required' ||
+    errorCode === 'mfa_required' ||
+    header === 'step-up' ||
+    header === 'always'
+  )
 }
 
 export function StepUpProvider({ children }: { children: ReactNode }) {
