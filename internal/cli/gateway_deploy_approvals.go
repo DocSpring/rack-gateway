@@ -2,6 +2,7 @@ package cli
 
 import (
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,7 +32,6 @@ type deployApprovalRequest struct {
 	ApprovalNotes      string                 `json:"approval_notes,omitempty"`
 	GitCommitHash      string                 `json:"git_commit_hash"`
 	GitBranch          string                 `json:"git_branch,omitempty"`
-	PipelineURL        string                 `json:"pipeline_url,omitempty"`
 	CIMetadata         map[string]interface{} `json:"ci_metadata,omitempty"`
 }
 
@@ -66,7 +66,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		timeoutStr      string
 		gitCommitHash   string
 		gitBranch       string
-		pipelineURL     string
+		ciMetadata      string
 		message         string
 	)
 
@@ -120,7 +120,15 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				timeout = dur
 			}
 
-			created, err := createDeployApproval(cmd, rack, app, gitCommitHash, gitBranch, pipelineURL, message, "")
+			// Parse CI metadata JSON if provided
+			var ciMetadataMap map[string]interface{}
+			if trimmed := strings.TrimSpace(ciMetadata); trimmed != "" {
+				if err := json.Unmarshal([]byte(trimmed), &ciMetadataMap); err != nil {
+					return fmt.Errorf("invalid --ci-metadata JSON: %w", err)
+				}
+			}
+
+			created, err := createDeployApproval(cmd, rack, app, gitCommitHash, gitBranch, ciMetadataMap, message, "")
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) {
@@ -180,7 +188,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	)
 	cmd.Flags().StringVar(&gitCommitHash, "git-commit", "", "Git commit SHA (required)")
 	cmd.Flags().StringVar(&gitBranch, "branch", "", "Git branch name")
-	cmd.Flags().StringVar(&pipelineURL, "pipeline-url", "", "CI pipeline URL (e.g., CircleCI build URL)")
+	cmd.Flags().StringVar(&ciMetadata, "ci-metadata", "", "CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')")
 	cmd.Flags().StringVar(&message, "message", "", "Deploy approval message (required)")
 
 	_ = cmd.MarkFlagRequired("git-commit")
@@ -494,7 +502,7 @@ func playNotificationSound(cfg *Config, rack string) error {
 	return cmd.Run()
 }
 
-func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranch, pipelineURL, message, targetToken string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranch string, ciMetadata map[string]interface{}, message, targetToken string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message":         message,
 		"git_commit_hash": gitCommitHash,
@@ -505,8 +513,8 @@ func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranc
 	if trimmed := strings.TrimSpace(gitBranch); trimmed != "" {
 		payload["git_branch"] = trimmed
 	}
-	if trimmed := strings.TrimSpace(pipelineURL); trimmed != "" {
-		payload["pipeline_url"] = trimmed
+	if len(ciMetadata) > 0 {
+		payload["ci_metadata"] = ciMetadata
 	}
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed

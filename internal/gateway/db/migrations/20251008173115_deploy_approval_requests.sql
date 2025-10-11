@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   -- Git commit metadata (required at creation)
   git_commit_hash VARCHAR(40) NOT NULL,
   git_branch VARCHAR(255),
-  pipeline_url TEXT,
   pr_url TEXT,
   message TEXT NOT NULL,
 

@@ -113,7 +113,7 @@ var mfaEnrollmentAllowedPrefixes = []string{
 }
 
 var mfaEnrollmentAllowedExact = map[string]struct{}{
-	"/.gateway/api/me": {},
+	"/.gateway/api/info": {},
 }
 
 func isMFAEnrollmentAllowedPath(path string) bool {

@@ -342,7 +342,6 @@ type CreateDeployApprovalRequestRequest struct {
 	App                string                 `json:"app" binding:"required"`
 	GitCommitHash      string                 `json:"git_commit_hash" binding:"required"`
 	GitBranch          string                 `json:"git_branch,omitempty"`
-	PipelineURL        string                 `json:"pipeline_url,omitempty"`
 	CIMetadata         map[string]interface{} `json:"ci_metadata,omitempty"`
 	TargetAPITokenID   *string                `json:"target_api_token_id,omitempty"`
 	TargetAPITokenName string                 `json:"target_api_token,omitempty"`
@@ -376,7 +375,6 @@ type DeployApprovalRequestResponse struct {
 	ApprovalNotes             string                 `json:"approval_notes,omitempty"`
 	GitCommitHash             string                 `json:"git_commit_hash" validate:"required"`
 	GitBranch                 string                 `json:"git_branch,omitempty"`
-	PipelineURL               string                 `json:"pipeline_url,omitempty"`
 	PrURL                     string                 `json:"pr_url,omitempty"`
 	CIMetadata                map[string]interface{} `json:"ci_metadata,omitempty"`
 	App                       string                 `json:"app,omitempty"`

@@ -221,7 +221,6 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		app,
 		gitCommitHash,
 		req.GitBranch,
-		req.PipelineURL,
 		prURL,
 		ciMetadata,
 		dbUser.ID,
@@ -249,7 +248,6 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		"token_uuid":      token.PublicID,
 		"git_commit_hash": gitCommitHash,
 		"git_branch":      req.GitBranch,
-		"pipeline_url":    req.PipelineURL,
 		"message":         message,
 	})
 
@@ -855,7 +853,6 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		RejectedByName:            dr.RejectedByName,
 		GitCommitHash:             dr.GitCommitHash,
 		GitBranch:                 dr.GitBranch,
-		PipelineURL:               dr.PipelineURL,
 		PrURL:                     dr.PrURL,
 		App:                       dr.App,
 		ObjectURL:                 dr.ObjectURL,

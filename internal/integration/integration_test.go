@@ -288,7 +288,7 @@ func testHealthCheck(t *testing.T, s *TestServers) {
 }
 
 func testUnauthenticatedAccess(t *testing.T, s *TestServers) {
-	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/api/me")
+	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/api/info")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
