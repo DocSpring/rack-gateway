@@ -200,6 +200,19 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 			if err := h.database.SetUserMFAEnrolled(userRecord.ID, false); err != nil {
 				log.Printf("failed to update mfa enrollment after delete: %v", err)
 			}
+			// Clear all trusted devices when MFA is fully disabled
+			trustedDevices, err := h.database.ListTrustedDevices(userRecord.ID)
+			if err != nil {
+				log.Printf("failed to list trusted devices: %v", err)
+			} else {
+				for _, device := range trustedDevices {
+					if device != nil && device.RevokedAt == nil {
+						if err := h.database.RevokeTrustedDevice(device.ID, "mfa_disabled"); err != nil {
+							log.Printf("failed to revoke trusted device %d: %v", device.ID, err)
+						}
+					}
+				}
+			}
 		}
 	} else {
 		log.Printf("failed to list remaining mfa methods: %v", err)

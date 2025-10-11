@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -272,5 +274,107 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	}
 	if !strings.Contains(loc.RawQuery, "message=Invalid") {
 		t.Fatalf("expected error message in query, got %v", loc.RawQuery)
+	}
+}
+
+func TestDeleteMFAMethodClearsTrustedDevicesWhenFullyDisabled(t *testing.T) {
+	oauth := &fakeOAuth{}
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
+	// Create user with MFA enrolled
+	user, err := database.CreateUser("user@example.com", "User", []string{"viewer"})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	if err := database.SetUserMFAEnrolled(user.ID, true); err != nil {
+		t.Fatalf("failed to mark user enrolled: %v", err)
+	}
+
+	// Create MFA method
+	now := time.Now()
+	mfaMethod, err := database.CreateMFAMethod(user.ID, "totp", "Test TOTP", "test-secret", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create mfa method: %v", err)
+	}
+	// Confirm the method
+	if err := database.ConfirmMFAMethod(mfaMethod.ID, now); err != nil {
+		t.Fatalf("failed to confirm mfa method: %v", err)
+	}
+
+	// Create trusted devices
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	_, err = database.CreateTrustedDevice(user.ID, "11111111-1111-1111-1111-111111111111", "device1-token-hash", expiresAt, "127.0.0.1", "ua-hash-1", nil)
+	if err != nil {
+		t.Fatalf("failed to create device1: %v", err)
+	}
+	_, err = database.CreateTrustedDevice(user.ID, "22222222-2222-2222-2222-222222222222", "device2-token-hash", expiresAt, "127.0.0.1", "ua-hash-2", nil)
+	if err != nil {
+		t.Fatalf("failed to create device2: %v", err)
+	}
+
+	// Create session
+	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionToken, _, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Setup MFA service and handler
+	pepper := []byte("mfa-pepper-for-tests")
+	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "", nil)
+	if err != nil {
+		t.Fatalf("failed to init mfa service: %v", err)
+	}
+
+	settings := &db.MFASettings{RequireAllUsers: true}
+	config := &config.Config{DevMode: true}
+	auditLogger := audit.NewLogger(database)
+	handler := NewAuthHandler(oauth, database, config, sessionManager, mfaService, settings, nil, auditLogger)
+
+	// Setup request context
+	methodIDStr := fmt.Sprintf("%d", mfaMethod.ID)
+	c, w := newTestContext(http.MethodDelete, "/.gateway/api/auth/mfa/methods/"+methodIDStr)
+	c.Params = []gin.Param{{Key: "methodID", Value: methodIDStr}}
+	c.Request.Header.Set("Authorization", "Bearer "+sessionToken)
+
+	// Set auth user in context
+	authUser := &auth.AuthUser{
+		Email:      user.Email,
+		Name:       user.Name,
+		Roles:      user.Roles,
+		IsAPIToken: false,
+	}
+	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
+
+	// Delete the MFA method
+	handler.DeleteMFAMethod(c)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify user is no longer MFA enrolled
+	user, err = database.GetUser(user.Email)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if user.MFAEnrolled {
+		t.Errorf("expected user MFAEnrolled to be false after deleting last method")
+	}
+
+	// Verify all trusted devices were revoked
+	devices, err := database.ListTrustedDevices(user.ID)
+	if err != nil {
+		t.Fatalf("failed to list trusted devices: %v", err)
+	}
+	for _, device := range devices {
+		if device.RevokedAt == nil {
+			t.Errorf("expected device %d to be revoked, but RevokedAt is nil", device.ID)
+		}
+		if device.RevokedReason != "mfa_disabled" {
+			t.Errorf("expected revoked reason 'mfa_disabled', got %q", device.RevokedReason)
+		}
 	}
 }

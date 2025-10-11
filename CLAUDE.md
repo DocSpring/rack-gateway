@@ -474,12 +474,13 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 
 ### 🔧 Go Development
 
-| Command         | Description                                  |
-| --------------- | -------------------------------------------- |
-| `task go:build` | Build all Go binaries                        |
-| `task go:lint`  | Run Go linters (vet/fmt/staticcheck)         |
-| `task go:test`  | Run Go unit/integration tests (uses test DB) |
-| `task go:e2e`   | Run CLI E2E tests                            |
+| Command           | Description                                  |
+| ----------------- | -------------------------------------------- |
+| `task go:build`   | Build all Go binaries                        |
+| `task go:lint`    | Run Go linters (vet/fmt/staticcheck)         |
+| `task go:test`    | Run Go unit/integration tests (uses test DB) |
+| `task go:e2e`     | Run CLI E2E tests                            |
+| `task go:imports` | Fix all Go imports with goimports            |
 
 ### 🌐 Web Development
 
