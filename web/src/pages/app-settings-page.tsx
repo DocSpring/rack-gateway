@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
 import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import { StringArrayInput } from '@/components/settings/string-array-input'
 import { toast } from '@/components/ui/use-toast'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -256,7 +257,7 @@ function VCSCIProvidersCard({
       </CardHeader>
       <CardContent className="space-y-6 pb-6">
         {/* VCS & CI Configuration */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-12">
           <div>
             <Label htmlFor="vcs-provider">VCS Provider</Label>
             <div className="flex items-center gap-2">
@@ -299,7 +300,7 @@ function VCSCIProvidersCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-12">
           <div>
             <Label htmlFor="ci-provider">CI Provider</Label>
             <div className="flex items-center gap-2">
@@ -343,7 +344,7 @@ function VCSCIProvidersCard({
         {/* GitHub Verification Settings */}
         <div>
           <h3 className="mb-4 font-semibold text-sm">GitHub Verification</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-12">
             <div className="space-y-4">
               <label className="flex items-center gap-3">
                 <input
@@ -482,56 +483,12 @@ function StringArrayCard({
   const setting = settings?.[settingKey]
   const currentValue = getSettingValue<string[] | null>(setting, null) ?? []
 
-  // Local state: array of strings (for pending edits)
-  const [items, setItems] = useState<string[]>([])
-  const [isEditing, setIsEditing] = useState(false)
+  const [items, setItems] = useState<string[]>(currentValue)
 
-  // Display the current saved value unless we're actively editing
-  const displayItems = isEditing ? items : currentValue
-
-  // Has changes if we're editing and local state differs from saved state
+  // Check if items differ from current value
   const hasChanges =
-    isEditing &&
-    (items.length !== currentValue.length ||
-      items.some((item, i) => item.trim() !== currentValue[i]?.trim()))
-
-  const addItem = () => {
-    if (isEditing) {
-      // Add to existing edits
-      setItems([...items, ''])
-    } else {
-      // Start editing with current value
-      setItems([...currentValue, ''])
-      setIsEditing(true)
-    }
-  }
-
-  const removeItem = (index: number) => {
-    if (isEditing) {
-      // Remove from existing edits
-      setItems(items.filter((_, i) => i !== index))
-    } else {
-      // Start editing with current value minus this item
-      const base = [...currentValue]
-      setItems(base.filter((_, i) => i !== index))
-      setIsEditing(true)
-    }
-  }
-
-  const updateItem = (index: number, value: string) => {
-    if (isEditing) {
-      // Update existing edits
-      const newItems = [...items]
-      newItems[index] = value
-      setItems(newItems)
-    } else {
-      // Start editing with current value
-      const base = [...currentValue]
-      base[index] = value
-      setItems(base)
-      setIsEditing(true)
-    }
-  }
+    items.length !== currentValue.length ||
+    items.some((item, i) => item.trim() !== currentValue[i]?.trim())
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -541,8 +498,6 @@ function StringArrayCard({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setItems([])
-      setIsEditing(false)
       toast.success('Setting updated')
     },
     onError: (err: unknown) => {
@@ -555,10 +510,10 @@ function StringArrayCard({
     mutationFn: async () => {
       await api.delete(`/.gateway/api/apps/${app}/settings/${settingKey}`)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      // Reset to empty array after clearing
       setItems([])
-      setIsEditing(false)
       toast.success('Setting cleared')
     },
     onError: (err: unknown) => {
@@ -568,8 +523,7 @@ function StringArrayCard({
   })
 
   const handleCancel = () => {
-    setItems([])
-    setIsEditing(false)
+    setItems(currentValue)
   }
 
   const handleSave = () => {
@@ -591,42 +545,13 @@ function StringArrayCard({
         <p className="text-muted-foreground text-sm">{description}</p>
 
         <div className="space-y-2">
-          {displayItems.length === 0 ? (
-            <p className="mb-5 text-muted-foreground text-sm italic">No items configured</p>
-          ) : (
-            <div className="space-y-2">
-              {displayItems.map((item, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: index is stable during edit session
-                <div className="flex items-center gap-2" key={index}>
-                  <Input
-                    disabled={disabled}
-                    onChange={(e) => updateItem(index, e.target.value)}
-                    placeholder={placeholder ?? 'Enter value'}
-                    type="text"
-                    value={item}
-                  />
-                  {!disabled && (
-                    <Button
-                      onClick={() => removeItem(index)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            {!disabled && (
-              <Button onClick={addItem} size="sm" type="button" variant="outline">
-                Add Item
-              </Button>
-            )}
-            <SourceIndicator setting={setting} />
-          </div>
+          <StringArrayInput
+            disabled={disabled}
+            onChange={setItems}
+            placeholder={placeholder ?? 'Enter value'}
+            value={items}
+          />
+          <SourceIndicator setting={setting} />
         </div>
 
         <div className="flex justify-end gap-2">
@@ -674,7 +599,13 @@ function ServiceImagePatternsCard({
 
   const setting = settings?.service_image_patterns
   const currentValue = getSettingValue<Record<string, string> | null>(setting, null)
-  const displayValue = value !== null ? value : JSON.stringify(currentValue ?? {}, null, 2)
+
+  let displayValue = ''
+  if (value !== null) {
+    displayValue = value
+  } else if (currentValue) {
+    displayValue = JSON.stringify(currentValue, null, 2)
+  }
 
   const hasChanges = value !== null
 
@@ -746,7 +677,7 @@ function ServiceImagePatternsCard({
               disabled={disabled}
               id="service-image-patterns"
               onChange={(e) => setValue(e.target.value)}
-              placeholder='{"web": "^ghcr.io/myorg/myapp:.*", "worker": "^.*$"}'
+              placeholder='{"web": "^ghcr.io/myorg/myapp:{{GIT_COMMIT}}$", "worker": "^.*$"}'
               value={displayValue}
             />
             <SourceIndicator setting={setting} />
@@ -803,13 +734,7 @@ export function AppSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <div className="mb-8">
-          <h1 className="font-bold text-3xl">App Settings: {app}</h1>
-          <p className="mt-2 text-muted-foreground">
-            Configure app-specific deploy requirements and protections
-          </p>
-        </div>
+      <div>
         <div className="flex h-64 items-center justify-center">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -818,14 +743,7 @@ export function AppSettingsPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="font-bold text-3xl">App Settings: {app}</h1>
-        <p className="mt-2 text-muted-foreground">
-          Configure app-specific deploy requirements and protections
-        </p>
-      </div>
-
+    <div>
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
           Failed to load settings
@@ -834,12 +752,12 @@ export function AppSettingsPage() {
 
       <div className="grid gap-6">
         <VCSCIProvidersCard app={app} disabled={!isAdmin} settings={appSettings} />
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-2 gap-12">
           <StringArrayCard
             app={app}
             description="Environment variables that are protected (values masked) and cannot be changed."
             disabled={!isAdmin}
-            placeholder="DATABASE_URL"
+            placeholder="e.g. DATABASE_URL"
             settingKey="protected_env_vars"
             settings={appSettings}
             title="Protected Environment Variables"
@@ -848,18 +766,18 @@ export function AppSettingsPage() {
             app={app}
             description="Environment variables that are treated as secrets (values masked) but can still be changed."
             disabled={!isAdmin}
-            placeholder="API_KEY"
+            placeholder="e.g. API_KEY"
             settingKey="secret_env_vars"
             settings={appSettings}
             title="Secret Environment Variables"
           />
         </div>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-2 gap-12">
           <StringArrayCard
             app={app}
             description="Commands that a CI/CD token can run during an approved deploy request."
             disabled={!isAdmin}
-            placeholder="bundle exec rake db:migrate"
+            placeholder="e.g. bundle exec rake db:migrate"
             settingKey="approved_deploy_commands"
             settings={appSettings}
             title="Approved Deploy Commands"

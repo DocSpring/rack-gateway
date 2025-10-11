@@ -464,7 +464,7 @@ function VCSCIProvidersCard({
           these in their individual settings.
         </p>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-12">
           <div>
             <Label htmlFor="vcs-provider">VCS Provider</Label>
             <div className="flex items-center gap-2">
@@ -503,7 +503,7 @@ function VCSCIProvidersCard({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-12">
           <div>
             <Label htmlFor="ci-provider">CI Provider</Label>
             <div className="flex items-center gap-2">

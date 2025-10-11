@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
+import { StringArrayInput } from '../components/settings/string-array-input'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -328,7 +329,7 @@ export function IntegrationsPage() {
 
       <div className="space-y-4">
         {/* CircleCI and GitHub Cards - Side by Side */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-12">
           {/* CircleCI Card */}
           <Card>
             <CardHeader>
@@ -597,12 +598,20 @@ function ChannelConfigCard({
   isUpdating,
   isTesting,
 }: ChannelConfigCardProps) {
-  const [newAction, setNewAction] = useState('')
-
-  const handleAddAction = () => {
-    if (newAction.trim()) {
-      onAddAction(configKey, newAction)
-      setNewAction('')
+  const handleActionsChange = (newActions: string[]) => {
+    // Determine what changed by comparing lengths and content
+    if (newActions.length > config.actions.length) {
+      // Item was added - find the new one
+      const newAction = newActions.find((a) => !config.actions.includes(a))
+      if (newAction) {
+        onAddAction(configKey, newAction)
+      }
+    } else if (newActions.length < config.actions.length) {
+      // Item was removed - find which index
+      const removedIndex = config.actions.findIndex((a) => !newActions.includes(a))
+      if (removedIndex !== -1) {
+        onRemoveAction(configKey, removedIndex)
+      }
     }
   }
 
@@ -660,39 +669,12 @@ function ChannelConfigCard({
 
         <div className="space-y-2">
           <Label>Action Patterns</Label>
-          <div className="space-y-2">
-            {config.actions.map((action, index) => (
-              <div className="flex items-center gap-2" key={action}>
-                <code className="flex-1 rounded bg-muted px-3 py-2 font-mono text-sm">
-                  {action}
-                </code>
-                <Button
-                  disabled={isUpdating}
-                  onClick={() => onRemoveAction(configKey, index)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <X className="size-4" />
-                </Button>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <Input
-                autoComplete="off"
-                onChange={(e) => setNewAction(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddAction()
-                  }
-                }}
-                placeholder="e.g., mfa.*, deploy-approval-request.*"
-                value={newAction}
-              />
-              <Button disabled={isUpdating || !newAction.trim()} onClick={handleAddAction}>
-                <Plus className="size-4" />
-              </Button>
-            </div>
-          </div>
+          <StringArrayInput
+            disabled={isUpdating}
+            onChange={handleActionsChange}
+            placeholder="e.g., mfa.*, deploy-approval-request.*"
+            value={config.actions}
+          />
           <p className="text-muted-foreground text-xs">
             Use glob patterns like <code>mfa.*</code> to match actions. View audit logs to see
             available actions.
