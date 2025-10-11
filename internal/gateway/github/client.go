@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,11 @@ type PullRequest struct {
 	State string `json:"state"`
 }
 
+// PRCommentRequest represents a GitHub PR comment request
+type PRCommentRequest struct {
+	Body string `json:"body"`
+}
+
 // Branch represents a GitHub branch
 type Branch struct {
 	Name   string `json:"name"`
@@ -55,6 +61,25 @@ func SplitRepo(ownerRepo string) (owner, repo string) {
 		return "", ""
 	}
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+}
+
+// ExtractPRNumber extracts the PR number from a GitHub PR URL.
+// Example: "https://github.com/owner/repo/pull/123" returns 123
+func ExtractPRNumber(prURL string) (int, error) {
+	// Expected format: https://github.com/owner/repo/pull/123
+	parts := strings.Split(prURL, "/")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("invalid PR URL format")
+	}
+
+	// Get the last part which should be the number
+	prNumStr := parts[len(parts)-1]
+	prNum, err := strconv.Atoi(prNumStr)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse PR number: %w", err)
+	}
+
+	return prNum, nil
 }
 
 // VerifyCommitOptions holds options for commit verification
@@ -219,4 +244,36 @@ func (c *Client) findPRForBranch(owner, repo, branch string) (*PullRequest, erro
 	}
 
 	return &prs[0], nil
+}
+
+// PostPRComment posts a comment on a pull request
+func (c *Client) PostPRComment(owner, repo string, prNumber int, comment string) error {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments", owner, repo, prNumber)
+
+	body, err := json.Marshal(PRCommentRequest{Body: comment})
+	if err != nil {
+		return fmt.Errorf("failed to marshal comment: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }

@@ -68,7 +68,6 @@ SELECT
     dr.git_branch,
     dr.pipeline_url,
     dr.pr_url,
-    dr.ci_provider,
     dr.ci_metadata,
     dr.app,
     dr.object_url,
@@ -108,7 +107,6 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		gitBranch          sql.NullString
 		pipelineURL        sql.NullString
 		prURL              sql.NullString
-		ciProvider         sql.NullString
 		ciMetadata         []byte
 		app                sql.NullString
 		objectURL          sql.NullString
@@ -148,7 +146,6 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		&gitBranch,
 		&pipelineURL,
 		&prURL,
-		&ciProvider,
 		&ciMetadata,
 		&app,
 		&objectURL,
@@ -229,9 +226,6 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	if prURL.Valid {
 		dr.PrURL = prURL.String
 	}
-	if ciProvider.Valid {
-		dr.CIProvider = ciProvider.String
-	}
 	if len(ciMetadata) > 0 {
 		dr.CIMetadata = ciMetadata
 	}
@@ -265,7 +259,7 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 	return &dr, nil
 }
 
-func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitBranch, pipelineURL, prURL, ciProvider string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
+func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitBranch, pipelineURL, prURL string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil, fmt.Errorf("message is required")
@@ -311,22 +305,17 @@ func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitB
 	if trimmed := strings.TrimSpace(prURL); trimmed != "" {
 		prURLNull = sql.NullString{String: trimmed, Valid: true}
 	}
-	var ciProviderNull sql.NullString
-	if trimmed := strings.TrimSpace(ciProvider); trimmed != "" {
-		ciProviderNull = sql.NullString{String: trimmed, Valid: true}
-	}
 
 	var id int64
 	err = d.queryRow(
-		`INSERT INTO deploy_approval_requests (message, app, git_commit_hash, git_branch, pipeline_url, pr_url, ci_provider, ci_metadata, status, created_by_user_id, created_by_api_token_id, target_api_token_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		`INSERT INTO deploy_approval_requests (message, app, git_commit_hash, git_branch, pipeline_url, pr_url, ci_metadata, status, created_by_user_id, created_by_api_token_id, target_api_token_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		message,
 		app,
 		gitCommitHash,
 		gitBranchNull,
 		pipelineURLNull,
 		prURLNull,
-		ciProviderNull,
 		ciMetadata,
 		DeployApprovalRequestStatusPending,
 		createdByUserID,

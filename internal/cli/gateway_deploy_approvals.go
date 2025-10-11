@@ -32,7 +32,6 @@ type deployApprovalRequest struct {
 	GitCommitHash      string                 `json:"git_commit_hash"`
 	GitBranch          string                 `json:"git_branch,omitempty"`
 	PipelineURL        string                 `json:"pipeline_url,omitempty"`
-	CIProvider         string                 `json:"ci_provider,omitempty"`
 	CIMetadata         map[string]interface{} `json:"ci_metadata,omitempty"`
 }
 
@@ -68,7 +67,6 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		gitCommitHash   string
 		gitBranch       string
 		pipelineURL     string
-		ciProvider      string
 		message         string
 	)
 
@@ -122,7 +120,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				timeout = dur
 			}
 
-			created, err := createDeployApproval(cmd, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, "")
+			created, err := createDeployApproval(cmd, rack, app, gitCommitHash, gitBranch, pipelineURL, message, "")
 			if err != nil {
 				var conflict *deployApprovalRequestConflictError
 				if errors.As(err, &conflict) {
@@ -183,7 +181,6 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	cmd.Flags().StringVar(&gitCommitHash, "git-commit", "", "Git commit SHA (required)")
 	cmd.Flags().StringVar(&gitBranch, "branch", "", "Git branch name")
 	cmd.Flags().StringVar(&pipelineURL, "pipeline-url", "", "CI pipeline URL (e.g., CircleCI build URL)")
-	cmd.Flags().StringVar(&ciProvider, "ci-provider", "", "CI provider (circleci, github, buildkite, jenkins, etc.)")
 	cmd.Flags().StringVar(&message, "message", "", "Deploy approval message (required)")
 
 	_ = cmd.MarkFlagRequired("git-commit")
@@ -497,7 +494,7 @@ func playNotificationSound(cfg *Config, rack string) error {
 	return cmd.Run()
 }
 
-func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranch, pipelineURL, ciProvider, message, targetToken string) (*deployApprovalRequest, error) {
+func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranch, pipelineURL, message, targetToken string) (*deployApprovalRequest, error) {
 	payload := map[string]interface{}{
 		"message":         message,
 		"git_commit_hash": gitCommitHash,
@@ -510,9 +507,6 @@ func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranc
 	}
 	if trimmed := strings.TrimSpace(pipelineURL); trimmed != "" {
 		payload["pipeline_url"] = trimmed
-	}
-	if trimmed := strings.TrimSpace(ciProvider); trimmed != "" {
-		payload["ci_provider"] = trimmed
 	}
 	if trimmed := strings.TrimSpace(targetToken); trimmed != "" {
 		payload["target_api_token_id"] = trimmed

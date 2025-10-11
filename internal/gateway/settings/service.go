@@ -177,6 +177,7 @@ const (
 	KeyVerifyGitCommitMode           = "verify_git_commit_mode"
 	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
 	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
+	KeyGitHubPostPRComment           = "github_post_pr_comment"
 )
 
 // VerifyGitCommitMode represents valid values for verify_git_commit_mode setting
@@ -214,6 +215,7 @@ var DefaultAppSettings = map[string]interface{}{
 	KeyVerifyGitCommitMode:           "latest",
 	KeyCircleCIApprovalJobName:       "",
 	KeyCircleCIAutoApproveOnApproval: false,
+	KeyGitHubPostPRComment:           true,
 }
 
 // IsValidGlobalSetting checks if a key is a valid global setting.

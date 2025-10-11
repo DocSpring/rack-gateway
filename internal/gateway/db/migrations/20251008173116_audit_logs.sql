@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   response_time_ms INTEGER NOT NULL DEFAULT 0,
   event_count INTEGER NOT NULL DEFAULT 1,
   api_token_id BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL,
-  api_token_name VARCHAR(150)
+  api_token_name VARCHAR(150),
+  deploy_approval_request_id BIGINT REFERENCES deploy_approval_requests(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
@@ -30,3 +31,4 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_user_timestamp ON audit_logs(user_emai
 CREATE INDEX IF NOT EXISTS idx_audit_logs_status_action_resource_ts ON audit_logs(status, action_type, resource_type, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_event ON audit_logs(user_email, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_api_token_id ON audit_logs(api_token_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_deploy_approval_request_id ON audit_logs(deploy_approval_request_id, timestamp DESC);

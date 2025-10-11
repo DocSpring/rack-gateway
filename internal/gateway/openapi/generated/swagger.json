@@ -3779,9 +3779,6 @@
                     "type": "object",
                     "additionalProperties": true
                 },
-                "ci_provider": {
-                    "type": "string"
-                },
                 "git_branch": {
                     "type": "string"
                 },
@@ -3875,9 +3872,6 @@
                 "ci_metadata": {
                     "type": "object",
                     "additionalProperties": true
-                },
-                "ci_provider": {
-                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"

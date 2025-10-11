@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS deploy_approval_requests (
   pr_url TEXT,
   message TEXT NOT NULL,
 
-  -- CI provider integration (optional)
-  ci_provider VARCHAR(50),
+  -- CI metadata (optional, for CircleCI workflow info, etc.)
   ci_metadata JSONB,
 
   -- Build/release tracking

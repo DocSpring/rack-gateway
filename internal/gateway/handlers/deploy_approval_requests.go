@@ -223,7 +223,6 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		req.GitBranch,
 		req.PipelineURL,
 		prURL,
-		req.CIProvider,
 		ciMetadata,
 		dbUser.ID,
 		createdByAPITokenID,
@@ -268,6 +267,44 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	}); err != nil {
 		// best-effort logging; ignore error
 		_ = err
+	}
+
+	// Post PR comment if GitHub integration is enabled and PR was found
+	if h.settingsService != nil && prURL != "" && h.config != nil && h.config.GitHubToken != "" && h.config.GitHubRepo != "" {
+		postComment, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubPostPRComment, true)
+		if err != nil {
+			log.Printf("WARN: Failed to get github_post_pr_comment setting: %v", err)
+		} else if postComment {
+			// Build the deploy approval request URL
+			gatewayURL := h.config.Domain
+			if gatewayURL == "" || gatewayURL == "localhost" {
+				gatewayURL = fmt.Sprintf("http://localhost:%s", h.config.Port)
+			} else {
+				gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
+			}
+			approvalURL := fmt.Sprintf("%s/.gateway/web/deploy_approval_requests/%s", gatewayURL, record.PublicID)
+
+			// Extract PR number from URL
+			prNumber, err := github.ExtractPRNumber(prURL)
+			if err != nil {
+				log.Printf("WARN: Failed to extract PR number from URL %s: %v", prURL, err)
+			} else {
+				owner, repo := github.SplitRepo(h.config.GitHubRepo)
+				if owner != "" && repo != "" {
+					comment := fmt.Sprintf("## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s", approvalURL)
+
+					// Post comment in background (don't block response)
+					go func() {
+						client := github.NewClient(h.config.GitHubToken)
+						if err := client.PostPRComment(owner, repo, prNumber, comment); err != nil {
+							log.Printf("ERROR: Failed to post PR comment: %v", err)
+						} else {
+							log.Printf("INFO: Successfully posted comment on PR #%d", prNumber)
+						}
+					}()
+				}
+			}
+		}
 	}
 
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
@@ -582,40 +619,46 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	})
 
 	// Trigger CircleCI approval if configured and enabled
-	if h.settingsService != nil && record.CIProvider == "circleci" && len(record.CIMetadata) > 0 {
-		autoApprove, err := getAppSettingBool(h.settingsService, record.App, settings.KeyCircleCIAutoApproveOnApproval, false)
+	if h.settingsService != nil && len(record.CIMetadata) > 0 {
+		// Check if CI provider is CircleCI
+		ciProvider, err := getAppSettingString(h.settingsService, record.App, settings.KeyCIProvider, "")
 		if err != nil {
-			log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
-		} else if autoApprove && h.config != nil && h.config.CircleCIToken != "" {
-			// Parse CI metadata to get workflow_id and approval_job_name
-			var metadata map[string]interface{}
-			if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
-				log.Printf("WARN: Failed to unmarshal CircleCI metadata: %v", err)
-			} else {
-				// Get the approval job name from app settings
-				approvalJobName, err := getAppSettingString(h.settingsService, record.App, settings.KeyCircleCIApprovalJobName, "")
-				if err != nil {
-					log.Printf("WARN: Failed to get circleci_approval_job_name setting: %v", err)
-				} else if approvalJobName == "" {
-					log.Printf("WARN: CircleCI auto-approve enabled but no approval_job_name configured for app %s", record.App)
+			log.Printf("WARN: Failed to get ci_provider setting: %v", err)
+		} else if ciProvider == "circleci" {
+			autoApprove, err := getAppSettingBool(h.settingsService, record.App, settings.KeyCircleCIAutoApproveOnApproval, false)
+			if err != nil {
+				log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
+			} else if autoApprove && h.config != nil && h.config.CircleCIToken != "" {
+				// Parse CI metadata to get workflow_id and approval_job_name
+				var metadata map[string]interface{}
+				if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
+					log.Printf("WARN: Failed to unmarshal CircleCI metadata: %v", err)
 				} else {
-					// Override approval_job_name from settings if configured
-					metadata["approval_job_name"] = approvalJobName
-
-					// Validate and parse metadata
-					circleciMetadata, err := circleci.ParseMetadata(metadata)
+					// Get the approval job name from app settings
+					approvalJobName, err := getAppSettingString(h.settingsService, record.App, settings.KeyCircleCIApprovalJobName, "")
 					if err != nil {
-						log.Printf("WARN: Invalid CircleCI metadata: %v", err)
+						log.Printf("WARN: Failed to get circleci_approval_job_name setting: %v", err)
+					} else if approvalJobName == "" {
+						log.Printf("WARN: CircleCI auto-approve enabled but no approval_job_name configured for app %s", record.App)
 					} else {
-						// Trigger CircleCI approval in background (don't block response)
-						go func() {
-							client := circleci.NewClient(h.config.CircleCIToken)
-							if err := client.ApproveJob(circleciMetadata.WorkflowID, circleciMetadata.ApprovalJobName); err != nil {
-								log.Printf("ERROR: Failed to approve CircleCI job: %v", err)
-							} else {
-								log.Printf("INFO: Successfully approved CircleCI job %s in workflow %s", circleciMetadata.ApprovalJobName, circleciMetadata.WorkflowID)
-							}
-						}()
+						// Override approval_job_name from settings if configured
+						metadata["approval_job_name"] = approvalJobName
+
+						// Validate and parse metadata
+						circleciMetadata, err := circleci.ParseMetadata(metadata)
+						if err != nil {
+							log.Printf("WARN: Invalid CircleCI metadata: %v", err)
+						} else {
+							// Trigger CircleCI approval in background (don't block response)
+							go func() {
+								client := circleci.NewClient(h.config.CircleCIToken)
+								if err := client.ApproveJob(circleciMetadata.WorkflowID, circleciMetadata.ApprovalJobName); err != nil {
+									log.Printf("ERROR: Failed to approve CircleCI job: %v", err)
+								} else {
+									log.Printf("INFO: Successfully approved CircleCI job %s in workflow %s", circleciMetadata.ApprovalJobName, circleciMetadata.WorkflowID)
+								}
+							}()
+						}
 					}
 				}
 			}
@@ -814,7 +857,6 @@ func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprova
 		GitBranch:                 dr.GitBranch,
 		PipelineURL:               dr.PipelineURL,
 		PrURL:                     dr.PrURL,
-		CIProvider:                dr.CIProvider,
 		App:                       dr.App,
 		ObjectURL:                 dr.ObjectURL,
 		BuildID:                   dr.BuildID,

@@ -60,7 +60,6 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		"main",
 		"https://example.com/pipeline",
 		"",           // prURL
-		"github",     // ciProvider
 		[]byte("{}"), // ciMetadata - must be valid JSON
 		admin.ID,     // createdByUserID
 		nil,          // createdByAPITokenID
@@ -142,7 +141,6 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			"main",
 			"https://example.com/pipeline",
 			"",           // prURL
-			"github",     // ciProvider
 			[]byte("{}"), // ciMetadata - must be valid JSON
 			admin.ID,     // createdByUserID
 			nil,          // createdByAPITokenID

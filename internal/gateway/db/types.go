@@ -152,7 +152,6 @@ type DeployApprovalRequest struct {
 	GitBranch                   string          `json:"git_branch,omitempty"`
 	PipelineURL                 string          `json:"pipeline_url,omitempty"`
 	PrURL                       string          `json:"pr_url,omitempty"`
-	CIProvider                  string          `json:"ci_provider,omitempty"`
 	CIMetadata                  json.RawMessage `json:"ci_metadata,omitempty"`
 	App                         string          `json:"app,omitempty"`
 	ObjectURL                   string          `json:"object_url,omitempty"`
