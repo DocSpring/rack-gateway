@@ -4389,7 +4389,7 @@ export interface components {
             value?: unknown;
         };
         /** @enum {string} */
-        "settings.SettingSource": "db" | "env" | "default";
+        "settings.SettingSource": "db" | "env" | "default" | "global_default";
     };
     responses: never;
     parameters: never;

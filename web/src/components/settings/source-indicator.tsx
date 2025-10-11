@@ -23,11 +23,14 @@ export function SourceIndicator({ setting }: { setting: SettingsSetting | undefi
     let tooltipText = ''
 
     if (setting.source === 'env') {
-      label = `(from env var)`
+      label = '(from env var)'
       tooltipText = `Set via ${setting.env_var} - click to copy`
     } else if (setting.source === 'default') {
       label = '(default)'
       tooltipText = `Set via ${setting.env_var} - click to copy`
+    } else if (setting.source === 'global_default') {
+      label = '(global default)'
+      tooltipText = `Using global default - set via ${setting.env_var} to override`
     } else if (setting.source === 'db') {
       label = '(database)'
       tooltipText = `Clear to use ${setting.env_var} - click to copy`
@@ -57,6 +60,10 @@ export function SourceIndicator({ setting }: { setting: SettingsSetting | undefi
   // Fallback for when there's no env_var (shouldn't happen)
   if (setting.source === 'default') {
     return <span className="text-muted-foreground text-xs">(default)</span>
+  }
+
+  if (setting.source === 'global_default') {
+    return <span className="text-muted-foreground text-xs">(global default)</span>
   }
 
   return null

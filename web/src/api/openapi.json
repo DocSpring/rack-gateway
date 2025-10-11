@@ -5514,12 +5514,14 @@
                 "enum": [
                     "db",
                     "env",
-                    "default"
+                    "default",
+                    "global_default"
                 ],
                 "x-enum-varnames": [
                     "SourceDB",
                     "SourceEnv",
-                    "SourceDefault"
+                    "SourceDefault",
+                    "SourceGlobalDefault"
                 ]
             }
         }

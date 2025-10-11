@@ -63,8 +63,12 @@ type SlackConfig = {
 
 type CircleCISettings = {
   api_token: string
-  approval_job_name: string
-  org_slug?: string
+  org_slug: string
+}
+
+type GitHubSettings = {
+  token: string
+  repo?: string
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Page component with multiple integration handlers
@@ -94,6 +98,22 @@ export function IntegrationsPage() {
     queryFn: async (): Promise<CircleCISettings | null> => {
       try {
         const response = await api.get<CircleCISettings>('/.gateway/api/admin/settings/circleci')
+        return response
+      } catch (error: unknown) {
+        if (hasStatus(error, 404)) {
+          return null
+        }
+        throw error
+      }
+    },
+  })
+
+  // Fetch GitHub settings
+  const { data: gitHubSettings } = useQuery<GitHubSettings | null>({
+    queryKey: ['github-settings'],
+    queryFn: async (): Promise<GitHubSettings | null> => {
+      try {
+        const response = await api.get<GitHubSettings>('/.gateway/api/admin/settings/github')
         return response
       } catch (error: unknown) {
         if (hasStatus(error, 404)) {
@@ -293,8 +313,9 @@ export function IntegrationsPage() {
 
   const slackConfigured = slackConfig?.configured !== false
   const circleCIEnabled = !!(
-    circleCISettings?.api_token?.trim() && circleCISettings?.approval_job_name?.trim()
+    circleCISettings?.api_token?.trim() && circleCISettings?.org_slug?.trim()
   )
+  const gitHubEnabled = !!gitHubSettings?.token?.trim()
 
   return (
     <div className="container mx-auto p-6">
@@ -306,92 +327,150 @@ export function IntegrationsPage() {
       </div>
 
       <div className="space-y-4">
-        {/* CircleCI Card */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <svg className="size-6" fill="currentColor" viewBox="0 0 24 24">
-                    <title>CircleCI logo</title>
-                    <circle cx="12" cy="12" fill="currentColor" r="10.5" />
-                    <circle cx="12" cy="12" fill="white" r="4" />
-                  </svg>
-                  CircleCI
-                </CardTitle>
-                <CardDescription>
-                  Automatically approve CircleCI jobs after deploy approval
-                </CardDescription>
+        {/* CircleCI and GitHub Cards - Side by Side */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* CircleCI Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <svg className="size-6" fill="currentColor" viewBox="0 0 24 24">
+                      <title>CircleCI logo</title>
+                      <circle cx="12" cy="12" fill="currentColor" r="10.5" />
+                      <circle cx="12" cy="12" fill="white" r="4" />
+                    </svg>
+                    CircleCI
+                  </CardTitle>
+                  <CardDescription>
+                    Auto-approve CircleCI jobs after deploy approval
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {circleCIEnabled ? (
+                    <CheckCircle2 className="size-5 text-green-600" />
+                  ) : (
+                    <Circle className="size-5 text-muted-foreground" />
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {circleCIEnabled ? (
-                  <CheckCircle2 className="size-5 text-green-600" />
-                ) : (
-                  <Circle className="size-5 text-muted-foreground" />
-                )}
-                <span className="text-muted-foreground text-sm">
-                  {circleCIEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {circleCIEnabled ? (
-              <div className="space-y-3">
-                <Alert>
-                  <CheckCircle2 className="size-4" />
-                  <AlertDescription>
-                    CircleCI integration is enabled. When a deploy approval is granted, the gateway
-                    will automatically approve the corresponding CircleCI job.
-                  </AlertDescription>
-                </Alert>
-                <div className="rounded border bg-muted p-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Approval Job Name:</span>
-                      <code className="rounded bg-background px-2 py-1">
-                        {circleCISettings?.approval_job_name}
-                      </code>
-                    </div>
-                    {circleCISettings?.org_slug && (
+            </CardHeader>
+            <CardContent>
+              {circleCIEnabled ? (
+                <div className="space-y-3">
+                  <Alert>
+                    <CheckCircle2 className="size-4" />
+                    <AlertDescription>
+                      CircleCI integration is enabled. The gateway will automatically approve
+                      CircleCI jobs when deploy approvals are granted.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="rounded border bg-muted p-4">
+                    <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="font-medium">Organization:</span>
                         <code className="rounded bg-background px-2 py-1">
                           {circleCISettings?.org_slug}
                         </code>
                       </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">API Token:</span>
-                      <span className="text-muted-foreground">Configured</span>
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">API Token:</span>
+                        <span className="text-muted-foreground">Configured</span>
+                      </div>
                     </div>
                   </div>
+                  <p className="text-muted-foreground text-xs">
+                    Set via env vars:
+                    <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_TOKEN</code>,
+                    <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_ORG_SLUG</code>
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Per-app job names are configured in app settings.
+                  </p>
                 </div>
-                <p className="text-muted-foreground text-xs">
-                  Configuration is managed via environment variables:
-                  <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLE_CI_API_TOKEN</code>,
-                  <code className="ml-1 rounded bg-muted px-1 py-0.5">
-                    CIRCLE_CI_APPROVAL_JOB_NAME
-                  </code>
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4 py-8">
-                <p className="text-center text-muted-foreground text-sm">
-                  CircleCI integration is not configured. Set the following environment variables to
-                  enable:
-                </p>
-                <div className="w-full max-w-md space-y-2 rounded border bg-muted p-4 font-mono text-sm">
-                  <div>CIRCLE_CI_API_TOKEN=your-api-token</div>
-                  <div>CIRCLE_CI_APPROVAL_JOB_NAME=approve_deploy_staging</div>
-                  <div className="text-muted-foreground">
-                    CIRCLE_CI_ORG_SLUG=gh/YourOrg (optional)
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-6">
+                  <p className="text-center text-muted-foreground text-sm">
+                    Set these environment variables to enable:
+                  </p>
+                  <div className="w-full space-y-2 rounded border bg-muted p-4 font-mono text-sm">
+                    <div>CIRCLECI_TOKEN=your-api-token</div>
+                    <div>CIRCLECI_ORG_SLUG=gh/YourOrg</div>
                   </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* GitHub Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <svg className="size-6" fill="currentColor" viewBox="0 0 24 24">
+                      <title>GitHub logo</title>
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                    GitHub
+                  </CardTitle>
+                  <CardDescription>Verify commits and PRs for deployments</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {gitHubEnabled ? (
+                    <CheckCircle2 className="size-5 text-green-600" />
+                  ) : (
+                    <Circle className="size-5 text-muted-foreground" />
+                  )}
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              {gitHubEnabled ? (
+                <div className="space-y-3">
+                  <Alert>
+                    <CheckCircle2 className="size-4" />
+                    <AlertDescription>
+                      GitHub integration is enabled. The gateway can verify git commits and PRs for
+                      deploy approval requests.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="rounded border bg-muted p-4">
+                    <div className="space-y-2">
+                      {gitHubSettings?.repo && (
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">Repository:</span>
+                          <code className="rounded bg-background px-2 py-1">
+                            {gitHubSettings.repo}
+                          </code>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">API Token:</span>
+                        <span className="text-muted-foreground">Configured</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    Set via env vars:
+                    <code className="ml-1 rounded bg-muted px-1 py-0.5">GITHUB_TOKEN</code>,
+                    <code className="ml-1 rounded bg-muted px-1 py-0.5">GITHUB_REPO</code>
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-6">
+                  <p className="text-center text-muted-foreground text-sm">
+                    Set these environment variables to enable:
+                  </p>
+                  <div className="w-full space-y-2 rounded border bg-muted p-4 font-mono text-sm">
+                    <div>GITHUB_TOKEN=your-personal-access-token</div>
+                    <div>GITHUB_REPO=owner/repo</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Slack Card */}
         {slackConfigured ? (

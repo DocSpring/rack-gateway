@@ -37,7 +37,7 @@ function extractErrorMessage(error: unknown): string | undefined {
   return
 }
 
-function GitHubVerificationCard({
+function VCSCIProvidersCard({
   app,
   settings,
   disabled,
@@ -47,6 +47,10 @@ function GitHubVerificationCard({
   disabled: boolean
 }) {
   const qc = useQueryClient()
+  const [vcsProvider, setVcsProvider] = useState<string | null>(null)
+  const [vcsRepo, setVcsRepo] = useState<string | null>(null)
+  const [ciProvider, setCiProvider] = useState<string | null>(null)
+  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null)
   const [githubVerification, setGithubVerification] = useState<boolean | null>(null)
   const [allowDeployFromDefaultBranch, setAllowDeployFromDefaultBranch] = useState<boolean | null>(
     null
@@ -55,6 +59,10 @@ function GitHubVerificationCard({
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const [verifyGitCommitMode, setVerifyGitCommitMode] = useState<string | null>(null)
 
+  const currentVcsProvider = getSettingValue(settings?.vcs_provider, '')
+  const currentVcsRepo = getSettingValue(settings?.vcs_repo, '')
+  const currentCiProvider = getSettingValue(settings?.ci_provider, '')
+  const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '')
   const currentGithubVerification = getSettingValue(settings?.github_verification, true)
   const currentAllowDeployFromDefaultBranch = getSettingValue(
     settings?.allow_deploy_from_default_branch,
@@ -64,6 +72,10 @@ function GitHubVerificationCard({
   const currentDefaultBranch = getSettingValue(settings?.default_branch, 'main')
   const currentVerifyGitCommitMode = getSettingValue(settings?.verify_git_commit_mode, 'latest')
 
+  const displayVcsProvider = vcsProvider !== null ? vcsProvider : currentVcsProvider
+  const displayVcsRepo = vcsRepo !== null ? vcsRepo : currentVcsRepo
+  const displayCiProvider = ciProvider !== null ? ciProvider : currentCiProvider
+  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug
   const displayGithubVerification =
     githubVerification !== null ? githubVerification : currentGithubVerification
   const displayAllowDeployFromDefaultBranch =
@@ -77,6 +89,10 @@ function GitHubVerificationCard({
     verifyGitCommitMode !== null ? verifyGitCommitMode : currentVerifyGitCommitMode
 
   const hasChanges =
+    vcsProvider !== null ||
+    vcsRepo !== null ||
+    ciProvider !== null ||
+    ciOrgSlug !== null ||
     githubVerification !== null ||
     allowDeployFromDefaultBranch !== null ||
     requirePRForBranch !== null ||
@@ -84,8 +100,23 @@ function GitHubVerificationCard({
     verifyGitCommitMode !== null
 
   const updateMutation = useMutation({
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
       const updates: Promise<unknown>[] = []
+      if (vcsProvider !== null) {
+        updates.push(
+          api.put(`/.gateway/api/apps/${app}/settings/vcs_provider`, vcsProvider || null)
+        )
+      }
+      if (vcsRepo !== null) {
+        updates.push(api.put(`/.gateway/api/apps/${app}/settings/vcs_repo`, vcsRepo || null))
+      }
+      if (ciProvider !== null) {
+        updates.push(api.put(`/.gateway/api/apps/${app}/settings/ci_provider`, ciProvider || null))
+      }
+      if (ciOrgSlug !== null) {
+        updates.push(api.put(`/.gateway/api/apps/${app}/settings/ci_org_slug`, ciOrgSlug || null))
+      }
       if (githubVerification !== null) {
         updates.push(
           api.put(`/.gateway/api/apps/${app}/settings/github_verification`, githubVerification)
@@ -116,6 +147,10 @@ function GitHubVerificationCard({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setVcsProvider(null)
+      setVcsRepo(null)
+      setCiProvider(null)
+      setCiOrgSlug(null)
       setGithubVerification(null)
       setAllowDeployFromDefaultBranch(null)
       setRequirePRForBranch(null)
@@ -130,8 +165,21 @@ function GitHubVerificationCard({
   })
 
   const clearMutation = useMutation({
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
       const updates: Promise<unknown>[] = []
+      if (settings?.vcs_provider?.source === 'db') {
+        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/vcs_provider`))
+      }
+      if (settings?.vcs_repo?.source === 'db') {
+        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/vcs_repo`))
+      }
+      if (settings?.ci_provider?.source === 'db') {
+        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/ci_provider`))
+      }
+      if (settings?.ci_org_slug?.source === 'db') {
+        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/ci_org_slug`))
+      }
       if (settings?.github_verification?.source === 'db') {
         updates.push(api.delete(`/.gateway/api/apps/${app}/settings/github_verification`))
       }
@@ -153,6 +201,10 @@ function GitHubVerificationCard({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setVcsProvider(null)
+      setVcsRepo(null)
+      setCiProvider(null)
+      setCiOrgSlug(null)
       setGithubVerification(null)
       setAllowDeployFromDefaultBranch(null)
       setRequirePRForBranch(null)
@@ -167,6 +219,10 @@ function GitHubVerificationCard({
   })
 
   const handleCancel = () => {
+    setVcsProvider(null)
+    setVcsRepo(null)
+    setCiProvider(null)
+    setCiOrgSlug(null)
     setGithubVerification(null)
     setAllowDeployFromDefaultBranch(null)
     setRequirePRForBranch(null)
@@ -183,6 +239,10 @@ function GitHubVerificationCard({
   }
 
   const hasDbSettings =
+    settings?.vcs_provider?.source === 'db' ||
+    settings?.vcs_repo?.source === 'db' ||
+    settings?.ci_provider?.source === 'db' ||
+    settings?.ci_org_slug?.source === 'db' ||
     settings?.github_verification?.source === 'db' ||
     settings?.allow_deploy_from_default_branch?.source === 'db' ||
     settings?.require_pr_for_branch?.source === 'db' ||
@@ -192,88 +252,182 @@ function GitHubVerificationCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Deploy & GitHub Verification</CardTitle>
+        <CardTitle>VCS, CI & Deploy Settings</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 pb-6">
-        <label className="flex items-center gap-3">
-          <input
-            checked={displayGithubVerification}
-            disabled={disabled}
-            onChange={(e) => setGithubVerification(e.target.checked)}
-            type="checkbox"
-          />
-          <span className="font-medium text-sm">Enable GitHub verification</span>
-          <SourceIndicator setting={settings?.github_verification} />
-        </label>
-        <p className="text-muted-foreground text-xs">
-          Verify git commits against GitHub when creating deploy approval requests.
-        </p>
-
-        <label className="flex items-center gap-3">
-          <input
-            checked={displayAllowDeployFromDefaultBranch}
-            disabled={disabled}
-            onChange={(e) => setAllowDeployFromDefaultBranch(e.target.checked)}
-            type="checkbox"
-          />
-          <span className="font-medium text-sm">Allow deploy from default branch</span>
-          <SourceIndicator setting={settings?.allow_deploy_from_default_branch} />
-        </label>
-        <p className="text-muted-foreground text-xs">
-          When disabled, deployments must be from a non-default branch.
-        </p>
-
-        <label className="flex items-center gap-3">
-          <input
-            checked={displayRequirePRForBranch}
-            disabled={disabled}
-            onChange={(e) => setRequirePRForBranch(e.target.checked)}
-            type="checkbox"
-          />
-          <span className="font-medium text-sm">Require PR for branch</span>
-          <SourceIndicator setting={settings?.require_pr_for_branch} />
-        </label>
-        <p className="text-muted-foreground text-xs">
-          Require a GitHub pull request to exist for the branch being deployed.
-        </p>
-
-        <div>
-          <Label htmlFor="default-branch">Default Branch</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              className="w-96"
-              disabled={disabled}
-              id="default-branch"
-              onChange={(e) => setDefaultBranch(e.target.value)}
-              placeholder="main"
-              type="text"
-              value={displayDefaultBranch}
-            />
-            <SourceIndicator setting={settings?.default_branch} />
+      <CardContent className="space-y-6 pb-6">
+        {/* VCS & CI Configuration */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="vcs-provider">VCS Provider</Label>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={disabled}
+                id="vcs-provider"
+                onChange={(e) => setVcsProvider(e.target.value)}
+                value={displayVcsProvider}
+              >
+                <option value="github">GitHub</option>
+                <option disabled value="gitlab">
+                  GitLab (coming soon)
+                </option>
+                <option disabled value="bitbucket">
+                  Bitbucket (coming soon)
+                </option>
+              </select>
+              <SourceIndicator setting={settings?.vcs_provider} />
+            </div>
           </div>
-          <p className="mt-1 text-muted-foreground text-xs">
-            The default branch name for the app's repository
-          </p>
+
+          <div>
+            <Label htmlFor="vcs-repo">VCS Repository</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                className="flex-1"
+                disabled={disabled}
+                id="vcs-repo"
+                onChange={(e) => setVcsRepo(e.target.value)}
+                placeholder="docspring"
+                type="text"
+                value={displayVcsRepo}
+              />
+              <SourceIndicator setting={settings?.vcs_repo} />
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">
+              Just the repo name (not the full URL)
+            </p>
+          </div>
         </div>
 
-        <div>
-          <Label htmlFor="verify-git-commit-mode">Git Commit Verification Mode</Label>
-          <div className="flex items-center gap-2">
-            <select
-              className="h-9 w-96 rounded-md border border-input bg-background px-3 text-sm"
-              disabled={disabled}
-              id="verify-git-commit-mode"
-              onChange={(e) => setVerifyGitCommitMode(e.target.value)}
-              value={displayVerifyGitCommitMode}
-            >
-              <option value="branch">branch (commit must exist on branch)</option>
-              <option value="latest">latest (commit must be latest on branch)</option>
-            </select>
-            <SourceIndicator setting={settings?.verify_git_commit_mode} />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="ci-provider">CI Provider</Label>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={disabled}
+                id="ci-provider"
+                onChange={(e) => setCiProvider(e.target.value)}
+                value={displayCiProvider}
+              >
+                <option value="circleci">CircleCI</option>
+                <option disabled value="github_actions">
+                  GitHub Actions (coming soon)
+                </option>
+                <option disabled value="gitlab_ci">
+                  GitLab CI (coming soon)
+                </option>
+              </select>
+              <SourceIndicator setting={settings?.ci_provider} />
+            </div>
           </div>
-          <p className="mt-1 text-muted-foreground text-xs">
-            How strictly to verify git commits when deploying
-          </p>
+
+          <div>
+            <Label htmlFor="ci-org-slug">CI Organization Slug</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                className="flex-1"
+                disabled={disabled}
+                id="ci-org-slug"
+                onChange={(e) => setCiOrgSlug(e.target.value)}
+                placeholder="gh/DocSpring"
+                type="text"
+                value={displayCiOrgSlug}
+              />
+              <SourceIndicator setting={settings?.ci_org_slug} />
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">Leave empty to use global default</p>
+          </div>
+        </div>
+
+        {/* GitHub Verification Settings */}
+        <div>
+          <h3 className="mb-4 font-semibold text-sm">GitHub Verification</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <label className="flex items-center gap-3">
+                <input
+                  checked={displayGithubVerification}
+                  disabled={disabled}
+                  onChange={(e) => setGithubVerification(e.target.checked)}
+                  type="checkbox"
+                />
+                <span className="font-medium text-sm">Enable GitHub verification</span>
+                <SourceIndicator setting={settings?.github_verification} />
+              </label>
+              <p className="text-muted-foreground text-xs">
+                Verify git commits against GitHub when creating deploy approval requests.
+              </p>
+
+              <label className="flex items-center gap-3">
+                <input
+                  checked={displayAllowDeployFromDefaultBranch}
+                  disabled={disabled}
+                  onChange={(e) => setAllowDeployFromDefaultBranch(e.target.checked)}
+                  type="checkbox"
+                />
+                <span className="font-medium text-sm">Allow deploy from default branch</span>
+                <SourceIndicator setting={settings?.allow_deploy_from_default_branch} />
+              </label>
+              <p className="text-muted-foreground text-xs">
+                When disabled, deployments must be from a non-default branch.
+              </p>
+
+              <label className="flex items-center gap-3">
+                <input
+                  checked={displayRequirePRForBranch}
+                  disabled={disabled}
+                  onChange={(e) => setRequirePRForBranch(e.target.checked)}
+                  type="checkbox"
+                />
+                <span className="font-medium text-sm">Require PR for branch</span>
+                <SourceIndicator setting={settings?.require_pr_for_branch} />
+              </label>
+              <p className="text-muted-foreground text-xs">
+                Require a GitHub pull request to exist for the branch being deployed.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="default-branch">Default Branch</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    disabled={disabled}
+                    id="default-branch"
+                    onChange={(e) => setDefaultBranch(e.target.value)}
+                    placeholder="main"
+                    type="text"
+                    value={displayDefaultBranch}
+                  />
+                  <SourceIndicator setting={settings?.default_branch} />
+                </div>
+                <p className="mt-1 text-muted-foreground text-xs">
+                  The default branch name for the app's repository
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="verify-git-commit-mode">Git Commit Verification Mode</Label>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    disabled={disabled}
+                    id="verify-git-commit-mode"
+                    onChange={(e) => setVerifyGitCommitMode(e.target.value)}
+                    value={displayVerifyGitCommitMode}
+                  >
+                    <option value="branch">branch (commit must exist on branch)</option>
+                    <option value="latest">latest (commit must be latest on branch)</option>
+                  </select>
+                  <SourceIndicator setting={settings?.verify_git_commit_mode} />
+                </div>
+                <p className="mt-1 text-muted-foreground text-xs">
+                  How strictly to verify git commits when deploying
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end gap-2">
@@ -679,7 +833,7 @@ export function AppSettingsPage() {
       ) : null}
 
       <div className="grid gap-6">
-        <GitHubVerificationCard app={app} disabled={!isAdmin} settings={appSettings} />
+        <VCSCIProvidersCard app={app} disabled={!isAdmin} settings={appSettings} />
         <div className="grid grid-cols-2 gap-6">
           <StringArrayCard
             app={app}

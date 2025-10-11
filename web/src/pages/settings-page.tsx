@@ -344,6 +344,238 @@ function DestructiveActionsCard({
   )
 }
 
+function VCSCIProvidersCard({
+  settings,
+  disabled,
+}: {
+  settings: GlobalSettingsResponse | undefined
+  disabled: boolean
+}) {
+  const qc = useQueryClient()
+  const [vcsProvider, setVcsProvider] = useState<string | null>(null)
+  const [vcsOrgName, setVcsOrgName] = useState<string | null>(null)
+  const [ciProvider, setCiProvider] = useState<string | null>(null)
+  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null)
+
+  const currentVcsProvider = getSettingValue(settings?.default_vcs_provider, 'github')
+  const currentVcsOrgName = getSettingValue(settings?.default_vcs_org_name, '')
+  const currentCiProvider = getSettingValue(settings?.default_ci_provider, 'circleci')
+  const currentCiOrgSlug = getSettingValue(settings?.default_ci_org_slug, '')
+
+  const displayVcsProvider = vcsProvider !== null ? vcsProvider : currentVcsProvider
+  const displayVcsOrgName = vcsOrgName !== null ? vcsOrgName : currentVcsOrgName
+  const displayCiProvider = ciProvider !== null ? ciProvider : currentCiProvider
+  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug
+
+  const hasChanges =
+    vcsProvider !== null || vcsOrgName !== null || ciProvider !== null || ciOrgSlug !== null
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const updates: Promise<unknown>[] = []
+      if (vcsProvider !== null) {
+        updates.push(api.put('/.gateway/api/admin/settings/default_vcs_provider', vcsProvider))
+      }
+      if (vcsOrgName !== null) {
+        updates.push(api.put('/.gateway/api/admin/settings/default_vcs_org_name', vcsOrgName))
+      }
+      if (ciProvider !== null) {
+        updates.push(api.put('/.gateway/api/admin/settings/default_ci_provider', ciProvider))
+      }
+      if (ciOrgSlug !== null) {
+        updates.push(api.put('/.gateway/api/admin/settings/default_ci_org_slug', ciOrgSlug))
+      }
+      await Promise.all(updates)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+      setVcsProvider(null)
+      setVcsOrgName(null)
+      setCiProvider(null)
+      setCiOrgSlug(null)
+      toast.success('Provider settings updated')
+    },
+    onError: (err: unknown) => {
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to update settings')
+    },
+  })
+
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      const updates: Promise<unknown>[] = []
+      if (settings?.default_vcs_provider?.source === 'db') {
+        updates.push(api.delete('/.gateway/api/admin/settings/default_vcs_provider'))
+      }
+      if (settings?.default_vcs_org_name?.source === 'db') {
+        updates.push(api.delete('/.gateway/api/admin/settings/default_vcs_org_name'))
+      }
+      if (settings?.default_ci_provider?.source === 'db') {
+        updates.push(api.delete('/.gateway/api/admin/settings/default_ci_provider'))
+      }
+      if (settings?.default_ci_org_slug?.source === 'db') {
+        updates.push(api.delete('/.gateway/api/admin/settings/default_ci_org_slug'))
+      }
+      await Promise.all(updates)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+      setVcsProvider(null)
+      setVcsOrgName(null)
+      setCiProvider(null)
+      setCiOrgSlug(null)
+      toast.success('Provider settings cleared')
+    },
+    onError: (err: unknown) => {
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to clear settings')
+    },
+  })
+
+  const handleCancel = () => {
+    setVcsProvider(null)
+    setVcsOrgName(null)
+    setCiProvider(null)
+    setCiOrgSlug(null)
+  }
+
+  const handleSave = () => {
+    updateMutation.mutate()
+  }
+
+  const handleClear = () => {
+    clearMutation.mutate()
+  }
+
+  const hasDbSettings =
+    settings?.default_vcs_provider?.source === 'db' ||
+    settings?.default_vcs_org_name?.source === 'db' ||
+    settings?.default_ci_provider?.source === 'db' ||
+    settings?.default_ci_org_slug?.source === 'db'
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Default VCS & CI Providers</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 pb-6">
+        <p className="text-muted-foreground text-sm">
+          Configure default version control and CI/CD providers for all apps. Apps can override
+          these in their individual settings.
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="vcs-provider">VCS Provider</Label>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                disabled={disabled}
+                id="vcs-provider"
+                onChange={(e) => setVcsProvider(e.target.value)}
+                value={displayVcsProvider}
+              >
+                <option value="github">GitHub</option>
+                <option disabled value="gitlab">
+                  GitLab (coming soon)
+                </option>
+                <option disabled value="bitbucket">
+                  Bitbucket (coming soon)
+                </option>
+              </select>
+              <SourceIndicator setting={settings?.default_vcs_provider} />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="vcs-org-name">VCS Organization Name</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                disabled={disabled}
+                id="vcs-org-name"
+                onChange={(e) => setVcsOrgName(e.target.value)}
+                placeholder="DocSpring"
+                type="text"
+                value={displayVcsOrgName}
+              />
+              <SourceIndicator setting={settings?.default_vcs_org_name} />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="ci-provider">CI Provider</Label>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                disabled={disabled}
+                id="ci-provider"
+                onChange={(e) => setCiProvider(e.target.value)}
+                value={displayCiProvider}
+              >
+                <option value="circleci">CircleCI</option>
+                <option disabled value="github_actions">
+                  GitHub Actions (coming soon)
+                </option>
+                <option disabled value="gitlab_ci">
+                  GitLab CI (coming soon)
+                </option>
+              </select>
+              <SourceIndicator setting={settings?.default_ci_provider} />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="ci-org-slug">CI Organization Slug</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                disabled={disabled}
+                id="ci-org-slug"
+                onChange={(e) => setCiOrgSlug(e.target.value)}
+                placeholder="gh/DocSpring"
+                type="text"
+                value={displayCiOrgSlug}
+              />
+              <SourceIndicator setting={settings?.default_ci_org_slug} />
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">
+              For CircleCI: gh/YourOrg (GitHub), bb/YourOrg (Bitbucket)
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          {hasDbSettings && (
+            <Button
+              disabled={disabled || clearMutation.isPending}
+              onClick={handleClear}
+              size="sm"
+              variant="outline"
+            >
+              Clear
+            </Button>
+          )}
+          {hasChanges && (
+            <>
+              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+                Cancel
+              </Button>
+              <Button
+                disabled={disabled || updateMutation.isPending}
+                onClick={handleSave}
+                size="sm"
+              >
+                Save
+              </Button>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function SettingsPage() {
   const { user } = useAuth()
   const isAdmin = !!user?.roles?.includes('admin')
@@ -391,9 +623,12 @@ export function SettingsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <MfaConfigCard disabled={!isAdmin} settings={globalSettings} />
-        <DestructiveActionsCard disabled={!isAdmin} settings={globalSettings} />
+      <div className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          <MfaConfigCard disabled={!isAdmin} settings={globalSettings} />
+          <DestructiveActionsCard disabled={!isAdmin} settings={globalSettings} />
+        </div>
+        <VCSCIProvidersCard disabled={!isAdmin} settings={globalSettings} />
       </div>
     </div>
   )

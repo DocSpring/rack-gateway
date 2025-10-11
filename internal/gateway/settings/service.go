@@ -25,9 +25,10 @@ func NewService(database *db.Database) *Service {
 type SettingSource string
 
 const (
-	SourceDB      SettingSource = "db"
-	SourceEnv     SettingSource = "env"
-	SourceDefault SettingSource = "default"
+	SourceDB            SettingSource = "db"
+	SourceEnv           SettingSource = "env"
+	SourceDefault       SettingSource = "default"
+	SourceGlobalDefault SettingSource = "global_default"
 )
 
 // Setting represents a resolved setting value with its source.
@@ -153,6 +154,10 @@ const (
 	KeyTrustedDeviceTTLDays    = "mfa_trusted_device_ttl_days"
 	KeyStepUpWindowMinutes     = "mfa_step_up_window_minutes"
 	KeyAllowDestructiveActions = "allow_destructive_actions"
+	KeyDefaultVCSProvider      = "default_vcs_provider"
+	KeyDefaultVCSOrgName       = "default_vcs_org_name"
+	KeyDefaultCIProvider       = "default_ci_provider"
+	KeyDefaultCIOrgSlug        = "default_ci_org_slug"
 )
 
 // App setting keys
@@ -161,6 +166,10 @@ const (
 	KeyProtectedEnvVars              = "protected_env_vars"
 	KeySecretEnvVars                 = "secret_env_vars"
 	KeyServiceImagePatterns          = "service_image_patterns"
+	KeyVCSProvider                   = "vcs_provider"
+	KeyVCSRepo                       = "vcs_repo"
+	KeyCIProvider                    = "ci_provider"
+	KeyCIOrgSlug                     = "ci_org_slug"
 	KeyGitHubVerification            = "github_verification"
 	KeyAllowDeployFromDefaultBranch  = "allow_deploy_from_default_branch"
 	KeyDefaultBranch                 = "default_branch"
@@ -176,6 +185,10 @@ var DefaultGlobalSettings = map[string]interface{}{
 	KeyTrustedDeviceTTLDays:    30,
 	KeyStepUpWindowMinutes:     10,
 	KeyAllowDestructiveActions: false,
+	KeyDefaultVCSProvider:      "github",
+	KeyDefaultVCSOrgName:       "",
+	KeyDefaultCIProvider:       "circleci",
+	KeyDefaultCIOrgSlug:        "",
 }
 
 // DefaultAppSettings defines all valid app-specific settings with their default values.
@@ -184,6 +197,10 @@ var DefaultAppSettings = map[string]interface{}{
 	KeyProtectedEnvVars:              []string(nil),
 	KeySecretEnvVars:                 []string(nil),
 	KeyServiceImagePatterns:          map[string]string(nil),
+	KeyVCSProvider:                   nil, // nil means use global default
+	KeyVCSRepo:                       nil, // nil means not configured
+	KeyCIProvider:                    nil, // nil means use global default
+	KeyCIOrgSlug:                     nil, // nil means use global default
 	KeyGitHubVerification:            true,
 	KeyAllowDeployFromDefaultBranch:  false,
 	KeyDefaultBranch:                 "main",
@@ -240,13 +257,39 @@ func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
 }
 
 // GetAllAppSettings retrieves all app-specific settings with environment fallback.
+// For VCS/CI provider fields, if the app setting is nil/empty, it will use the global default
+// and mark the source as SourceGlobalDefault.
 func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error) {
 	result := make(map[string]*Setting)
+
+	// Map of app setting keys to their corresponding global default keys
+	globalDefaultKeys := map[string]string{
+		KeyVCSProvider: KeyDefaultVCSProvider,
+		KeyCIProvider:  KeyDefaultCIProvider,
+		KeyCIOrgSlug:   KeyDefaultCIOrgSlug,
+	}
+
 	for key, defaultValue := range DefaultAppSettings {
 		setting, err := s.GetAppSetting(appName, key, defaultValue)
 		if err != nil {
 			return nil, err
 		}
+
+		// Check if this setting should fall back to a global default
+		if globalKey, hasGlobal := globalDefaultKeys[key]; hasGlobal {
+			// If app setting is nil or empty string, use global default
+			if setting.Value == nil || setting.Value == "" {
+				globalSetting, err := s.GetGlobalSetting(globalKey, "")
+				if err != nil {
+					return nil, err
+				}
+				// Use global value but mark as coming from global default
+				setting.Value = globalSetting.Value
+				setting.Source = SourceGlobalDefault
+				// Keep the app-level env var name for reference
+			}
+		}
+
 		result[key] = setting
 	}
 

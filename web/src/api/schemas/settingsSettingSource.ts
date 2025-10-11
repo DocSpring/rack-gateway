@@ -14,4 +14,5 @@ export const SettingsSettingSource = {
   SourceDB: 'db',
   SourceEnv: 'env',
   SourceDefault: 'default',
+  SourceGlobalDefault: 'global_default',
 } as const;
