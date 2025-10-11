@@ -179,6 +179,12 @@ const (
 	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
 )
 
+// VerifyGitCommitMode represents valid values for verify_git_commit_mode setting
+const (
+	VerifyGitCommitModeBranch = "branch" // Commit must exist on the specified branch
+	VerifyGitCommitModeLatest = "latest" // Commit must be the latest on the specified branch
+)
+
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
 	KeyMFARequireAllUsers:      true,
