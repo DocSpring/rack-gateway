@@ -3,7 +3,7 @@ mock-oauth: cd mock-oauth && pnpm dev
 mock-convox: air -c .air-mock-convox.toml
 
 # Gateway API (with hot reload)
-gateway: LOG_SQL_QUERIES=true air -c .air-gateway.toml
+gateway: LOG_REQUEST_BODIES=true LOG_SQL_QUERIES=true air -c .air-gateway.toml
 
 # Frontend (Vite dev server with hot reload)
 web: cd web && pnpm dev

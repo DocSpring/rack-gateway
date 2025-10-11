@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -121,6 +122,7 @@ func (h *SettingsHandler) UpdateGlobalSetting(c *gin.Context) {
 
 	// Save to database
 	if err := h.settingsService.SetGlobalSetting(key, value, uid); err != nil {
+		fmt.Printf("ERROR saving setting %s: %v\n", key, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save setting"})
 		return
 	}

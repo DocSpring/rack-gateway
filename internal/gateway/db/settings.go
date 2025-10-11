@@ -77,14 +77,14 @@ func (d *Database) UpsertSetting(appName *string, key string, value interface{},
 			_, err = d.exec(`
 				INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
 				VALUES (NULL, ?, ?::jsonb, NOW(), ?)
-				ON CONFLICT (app_name, key) DO UPDATE
+				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
 				SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
 				key, string(b), *updatedByUserID)
 		} else {
 			_, err = d.exec(`
 				INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
 				VALUES (?, ?, ?::jsonb, NOW(), ?)
-				ON CONFLICT (app_name, key) DO UPDATE
+				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
 				SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
 				*appName, key, string(b), *updatedByUserID)
 		}
@@ -93,14 +93,14 @@ func (d *Database) UpsertSetting(appName *string, key string, value interface{},
 			_, err = d.exec(`
 				INSERT INTO settings (app_name, key, value, updated_at)
 				VALUES (NULL, ?, ?::jsonb, NOW())
-				ON CONFLICT (app_name, key) DO UPDATE
+				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
 				SET value = EXCLUDED.value, updated_at = NOW()`,
 				key, string(b))
 		} else {
 			_, err = d.exec(`
 				INSERT INTO settings (app_name, key, value, updated_at)
 				VALUES (?, ?, ?::jsonb, NOW())
-				ON CONFLICT (app_name, key) DO UPDATE
+				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
 				SET value = EXCLUDED.value, updated_at = NOW()`,
 				*appName, key, string(b))
 		}

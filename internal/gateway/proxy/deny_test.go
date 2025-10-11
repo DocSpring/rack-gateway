@@ -2,10 +2,11 @@ package proxy
 
 import (
 	"context"
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"

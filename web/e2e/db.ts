@@ -152,6 +152,17 @@ export async function getUserMfaSecret(email: string): Promise<string | null> {
   })
 }
 
+export async function clearAllGlobalSettings() {
+  await withDbClient(async (client) => {
+    // Clear all global settings except the ones needed for E2E tests
+    await client.query(
+      `DELETE FROM settings
+       WHERE app_name IS NULL
+       AND key NOT IN ('mfa', 'approved_commands', 'service_image_patterns')`
+    )
+  })
+}
+
 export async function setupBothMfaMethodsForUser(email: string) {
   await withDbClient(async (client) => {
     // First reset any existing MFA state

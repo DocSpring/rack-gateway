@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
-import { setupBothMfaMethodsForUser } from './db'
+import { clearAllGlobalSettings, setupBothMfaMethodsForUser } from './db'
 import { expect, test } from './fixtures'
 import { login } from './helpers'
 
@@ -13,6 +13,9 @@ async function navigateToSettings(page: Page) {
 
 test.describe('Global Settings', () => {
   test.beforeEach(async ({ page }) => {
+    // Clear all settings from database to ensure clean state
+    await clearAllGlobalSettings()
+
     await login(page)
     await navigateToSettings(page)
   })
@@ -81,18 +84,21 @@ test.describe('Global Settings', () => {
 
     const allowDestructiveCheckbox = page.getByLabel(/allow destructive actions/i)
 
-    // Toggle the checkbox
-    await allowDestructiveCheckbox.click()
+    // Verify default state (unchecked)
+    await expect(allowDestructiveCheckbox).not.toBeChecked()
 
-    // Wait for API response
-    const updateResponsePromise = page.waitForResponse(
+    // Step 1: Check the checkbox
+    await allowDestructiveCheckbox.click()
+    await expect(allowDestructiveCheckbox).toBeChecked()
+
+    // Step 2: Save (checked state)
+    let updateResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/.gateway/api/admin/settings/allow_destructive_actions') &&
         response.request().method() === 'PUT'
     )
 
-    // Click Save
-    const saveButton = page.getByRole('button', { name: /^save$/i }).first()
+    let saveButton = page.getByRole('button', { name: /^save$/i }).first()
     await saveButton.click()
     await updateResponsePromise
 
@@ -103,7 +109,28 @@ test.describe('Global Settings', () => {
     const clearButton = page.getByRole('button', { name: /^clear$/i })
     await expect(clearButton.first()).toBeVisible()
 
-    // Click Clear to revert to default
+    // Step 3: Uncheck the checkbox
+    await allowDestructiveCheckbox.click()
+    await expect(allowDestructiveCheckbox).not.toBeChecked()
+
+    // Step 4: Save (unchecked state)
+    updateResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/.gateway/api/admin/settings/allow_destructive_actions') &&
+        response.request().method() === 'PUT'
+    )
+
+    saveButton = page.getByRole('button', { name: /^save$/i }).first()
+    await saveButton.click()
+    await updateResponsePromise
+
+    // Save/Cancel buttons should disappear
+    await expect(saveButton).not.toBeVisible({ timeout: 2000 })
+
+    // Clear button should still be visible (setting is in DB with explicit false value)
+    await expect(clearButton.first()).toBeVisible()
+
+    // Step 5: Clear to revert to default
     const clearResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/.gateway/api/admin/settings/allow_destructive_actions') &&

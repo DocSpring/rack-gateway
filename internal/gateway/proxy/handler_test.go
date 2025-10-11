@@ -3,12 +3,13 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"

@@ -331,18 +331,19 @@ export const put = <T = unknown>(
   data?: unknown,
   config?: AxiosRequestConfig
 ): Promise<T> => {
-  // Special handling for null - send as raw string "null" to avoid axios issues
-  if (data === null) {
+  // Handle primitive JSON values (null, false, true, numbers, strings) by sending as JSON strings
+  // This avoids axios treating falsy values as "no data"
+  if (data === null || data === false || data === true || typeof data === 'number' || typeof data === 'string') {
     return gatewayAxios
       .request<T>({
         method: 'PUT',
         url: normalizePath(path),
-        data: 'null',
+        data: JSON.stringify(data),
         headers: {
           'Content-Type': 'application/json',
           ...config?.headers,
         },
-        transformRequest: [], // Don't transform the data, send raw string
+        transformRequest: [], // Don't transform the data, send raw JSON string
         ...config,
       })
       .then((res) => res.data)

@@ -1,13 +1,11 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -149,50 +147,6 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Get the full path including query params
 	path := r.URL.Path
-
-	// Optional early request logging (before RBAC) for debugging
-	if h.config.LogRequestHeaders || h.config.LogRequestBodies {
-		var bodyBytes []byte
-		if r.Body != nil {
-			var err error
-			bodyBytes, err = io.ReadAll(r.Body)
-			if err == nil {
-				r.Body.Close() //nolint:errcheck
-				// Restore body for downstream handlers
-				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			}
-		}
-
-		if h.config.LogRequestHeaders {
-			fmt.Printf("DEBUG REQUEST HEADERS %s %s:\n", r.Method, path)
-			for key, values := range r.Header {
-				for _, value := range values {
-					fmt.Printf("  %s: %s\n", key, value)
-				}
-			}
-		}
-
-		if h.config.LogRequestBodies && len(bodyBytes) > 0 {
-			// Skip logging binary formats
-			ct := strings.ToLower(r.Header.Get("Content-Type"))
-			isBinary := strings.Contains(ct, "gzip") ||
-				strings.Contains(ct, "application/octet-stream") ||
-				strings.Contains(ct, "application/x-tar") ||
-				strings.Contains(ct, "application/zip")
-
-			if !isBinary {
-				max := h.config.LogBodyMaxBytes
-				logBody := bodyBytes
-				if max > 0 && len(logBody) > max {
-					logBody = append([]byte{}, logBody[:max]...)
-					logBody = append(logBody, []byte("…(truncated)")...)
-				}
-				fmt.Printf("DEBUG REQUEST BODY %s %s len=%d body=%s\n", r.Method, path, len(bodyBytes), string(logBody))
-			} else {
-				fmt.Printf("DEBUG REQUEST BODY %s %s len=%d (binary, not logged)\n", r.Method, path, len(bodyBytes))
-			}
-		}
-	}
 
 	// Before any RBAC/audit, enforce an allowlist of Convox API paths.
 	methodForAllow := r.Method

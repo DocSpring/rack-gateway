@@ -67,6 +67,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 		}
 	}))
 	router.Use(requestIDMiddleware)
+	router.Use(middleware.DebugLogging(cfg.Config))
 	router.Use(middleware.SecurityHeaders(cfg.Config))
 	router.Use(middleware.HostValidator(cfg.Config))
 	router.Use(middleware.OriginValidator(cfg.Config))
