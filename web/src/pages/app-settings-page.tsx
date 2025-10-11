@@ -4,6 +4,7 @@ import { isAxiosError } from 'axios'
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
+import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
 import { toast } from '@/components/ui/use-toast'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -18,32 +19,6 @@ type SettingsErrorPayload = {
 
 type AppSettingsResponse = {
   [key: string]: SettingsSetting
-}
-
-function getSettingValue<T>(setting: SettingsSetting | undefined, defaultValue: T): T {
-  if (!setting || setting.value === undefined) {
-    return defaultValue
-  }
-  return setting.value as T
-}
-
-function formatSourceIndicator(setting: SettingsSetting | undefined): string | null {
-  if (!setting || setting.source === 'db') {
-    return null
-  }
-  if (setting.source === 'env' && setting.env_var) {
-    return `from env: ${setting.env_var}`
-  }
-  if (setting.source === 'default') {
-    return 'default'
-  }
-  return null
-}
-
-function SourceIndicator({ setting }: { setting: SettingsSetting | undefined }) {
-  const source = formatSourceIndicator(setting)
-  if (!source) return null
-  return <span className="text-muted-foreground text-xs">({source})</span>
 }
 
 function extractErrorMessage(error: unknown): string | undefined {
@@ -350,27 +325,70 @@ function StringArrayCard({
   placeholder?: string
 }) {
   const qc = useQueryClient()
-  const [value, setValue] = useState<string | null>(null)
-
   const setting = settings?.[settingKey]
-  const currentValue = getSettingValue<string[] | null>(setting, null)
-  const displayValue = value !== null ? value : (currentValue ?? []).join(', ')
+  const currentValue = getSettingValue<string[] | null>(setting, null) ?? []
 
-  const hasChanges = value !== null
+  // Local state: array of strings (for pending edits)
+  const [items, setItems] = useState<string[]>([])
+  const [isEditing, setIsEditing] = useState(false)
+
+  // Display the current saved value unless we're actively editing
+  const displayItems = isEditing ? items : currentValue
+
+  // Has changes if we're editing and local state differs from saved state
+  const hasChanges =
+    isEditing &&
+    (items.length !== currentValue.length ||
+      items.some((item, i) => item.trim() !== currentValue[i]?.trim()))
+
+  const addItem = () => {
+    if (isEditing) {
+      // Add to existing edits
+      setItems([...items, ''])
+    } else {
+      // Start editing with current value
+      setItems([...currentValue, ''])
+      setIsEditing(true)
+    }
+  }
+
+  const removeItem = (index: number) => {
+    if (isEditing) {
+      // Remove from existing edits
+      setItems(items.filter((_, i) => i !== index))
+    } else {
+      // Start editing with current value minus this item
+      const base = [...currentValue]
+      setItems(base.filter((_, i) => i !== index))
+      setIsEditing(true)
+    }
+  }
+
+  const updateItem = (index: number, value: string) => {
+    if (isEditing) {
+      // Update existing edits
+      const newItems = [...items]
+      newItems[index] = value
+      setItems(newItems)
+    } else {
+      // Start editing with current value
+      const base = [...currentValue]
+      base[index] = value
+      setItems(base)
+      setIsEditing(true)
+    }
+  }
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      if (value === null) return
-      // Convert comma-separated string to array, trimming whitespace
-      const arr = value
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
-      await api.put(`/.gateway/api/apps/${app}/settings/${settingKey}`, arr)
+      // Filter out empty strings
+      const filtered = items.map((s) => s.trim()).filter((s) => s.length > 0)
+      await api.put(`/.gateway/api/apps/${app}/settings/${settingKey}`, filtered)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setValue(null)
+      setItems([])
+      setIsEditing(false)
       toast.success('Setting updated')
     },
     onError: (err: unknown) => {
@@ -385,7 +403,8 @@ function StringArrayCard({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setValue(null)
+      setItems([])
+      setIsEditing(false)
       toast.success('Setting cleared')
     },
     onError: (err: unknown) => {
@@ -395,7 +414,8 @@ function StringArrayCard({
   })
 
   const handleCancel = () => {
-    setValue(null)
+    setItems([])
+    setIsEditing(false)
   }
 
   const handleSave = () => {
@@ -415,24 +435,48 @@ function StringArrayCard({
       </CardHeader>
       <CardContent className="space-y-4 pb-6">
         <p className="text-muted-foreground text-sm">{description}</p>
-        <div>
-          <Label htmlFor={settingKey}>Comma-separated list</Label>
+
+        <div className="space-y-2">
+          {displayItems.length === 0 ? (
+            <p className="mb-5 text-muted-foreground text-sm italic">No items configured</p>
+          ) : (
+            <div className="space-y-2">
+              {displayItems.map((item, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: index is stable during edit session
+                <div className="flex items-center gap-2" key={index}>
+                  <Input
+                    disabled={disabled}
+                    onChange={(e) => updateItem(index, e.target.value)}
+                    placeholder={placeholder ?? 'Enter value'}
+                    type="text"
+                    value={item}
+                  />
+                  {!disabled && (
+                    <Button
+                      onClick={() => removeItem(index)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2">
-            <Input
-              className="flex-1"
-              disabled={disabled}
-              id={settingKey}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={placeholder ?? 'VAR1, VAR2, VAR3'}
-              type="text"
-              value={displayValue}
-            />
+            {!disabled && (
+              <Button onClick={addItem} size="sm" type="button" variant="outline">
+                Add Item
+              </Button>
+            )}
             <SourceIndicator setting={setting} />
           </div>
         </div>
 
         <div className="flex justify-end gap-2">
-          {hasDbSetting && (
+          {hasDbSetting && !hasChanges && (
             <Button
               disabled={disabled || clearMutation.isPending}
               onClick={handleClear}
@@ -636,34 +680,38 @@ export function AppSettingsPage() {
 
       <div className="grid gap-6">
         <GitHubVerificationCard app={app} disabled={!isAdmin} settings={appSettings} />
-        <StringArrayCard
-          app={app}
-          description="Environment variables that are protected (masked) and cannot be changed via CLI or web UI."
-          disabled={!isAdmin}
-          placeholder="RACK_TOKEN, DATABASE_URL"
-          settingKey="protected_env_vars"
-          settings={appSettings}
-          title="Protected Environment Variables"
-        />
-        <StringArrayCard
-          app={app}
-          description="Environment variables that are treated as secrets (values masked) but can still be changed."
-          disabled={!isAdmin}
-          placeholder="API_KEY, WEBHOOK_SECRET"
-          settingKey="secret_env_vars"
-          settings={appSettings}
-          title="Secret Environment Variables"
-        />
-        <StringArrayCard
-          app={app}
-          description="Commands that a CI/CD token can run during an approved deploy lifecycle (e.g., database migrations, smoke tests)."
-          disabled={!isAdmin}
-          placeholder="bundle exec rake db:migrate, npm run smoke-test"
-          settingKey="approved_deploy_commands"
-          settings={appSettings}
-          title="Approved Deploy Commands"
-        />
-        <ServiceImagePatternsCard app={app} disabled={!isAdmin} settings={appSettings} />
+        <div className="grid grid-cols-2 gap-6">
+          <StringArrayCard
+            app={app}
+            description="Environment variables that are protected (values masked) and cannot be changed."
+            disabled={!isAdmin}
+            placeholder="DATABASE_URL"
+            settingKey="protected_env_vars"
+            settings={appSettings}
+            title="Protected Environment Variables"
+          />
+          <StringArrayCard
+            app={app}
+            description="Environment variables that are treated as secrets (values masked) but can still be changed."
+            disabled={!isAdmin}
+            placeholder="API_KEY"
+            settingKey="secret_env_vars"
+            settings={appSettings}
+            title="Secret Environment Variables"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          <StringArrayCard
+            app={app}
+            description="Commands that a CI/CD token can run during an approved deploy request."
+            disabled={!isAdmin}
+            placeholder="bundle exec rake db:migrate"
+            settingKey="approved_deploy_commands"
+            settings={appSettings}
+            title="Approved Deploy Commands"
+          />
+          <ServiceImagePatternsCard app={app} disabled={!isAdmin} settings={appSettings} />
+        </div>
       </div>
     </div>
   )

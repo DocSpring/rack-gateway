@@ -110,6 +110,7 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 		return &Setting{
 			Value:  value,
 			Source: SourceDB,
+			EnvVar: envVarName,
 		}, nil
 	}
 
@@ -132,6 +133,7 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 	return &Setting{
 		Value:  defaultValue,
 		Source: SourceDefault,
+		EnvVar: envVarName,
 	}, nil
 }
 

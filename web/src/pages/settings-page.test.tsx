@@ -123,7 +123,7 @@ describe('SettingsPage', () => {
       renderSettingsPage()
 
       await waitFor(() => {
-        expect(screen.getByText(/from env: RGW_SETTING_MFA_REQUIRE_ALL_USERS/i)).toBeInTheDocument()
+        expect(screen.getByText(/from env/i)).toBeInTheDocument()
       })
 
       // Should show "default" for default values

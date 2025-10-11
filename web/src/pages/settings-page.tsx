@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios'
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
+import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
 import { toast } from '@/components/ui/use-toast'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -17,32 +18,6 @@ type SettingsErrorPayload = {
 
 type GlobalSettingsResponse = {
   [key: string]: SettingsSetting
-}
-
-function getSettingValue<T>(setting: SettingsSetting | undefined, defaultValue: T): T {
-  if (!setting || setting.value === undefined) {
-    return defaultValue
-  }
-  return setting.value as T
-}
-
-function formatSourceIndicator(setting: SettingsSetting | undefined): string | null {
-  if (!setting || setting.source === 'db') {
-    return null
-  }
-  if (setting.source === 'env' && setting.env_var) {
-    return `from env: ${setting.env_var}`
-  }
-  if (setting.source === 'default') {
-    return 'default'
-  }
-  return null
-}
-
-function SourceIndicator({ setting }: { setting: SettingsSetting | undefined }) {
-  const source = formatSourceIndicator(setting)
-  if (!source) return null
-  return <span className="text-muted-foreground text-xs">({source})</span>
 }
 
 function extractErrorMessage(error: unknown): string | undefined {
