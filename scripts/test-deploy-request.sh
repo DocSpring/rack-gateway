@@ -45,8 +45,7 @@ fi
 MESSAGE="${MESSAGE:-Test deploy request from script}"
 GIT_COMMIT="${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "abc1234567890123456789012345678901234567")}"
 BRANCH="${BRANCH:-$(git branch --show-current 2>/dev/null || echo "main")}"
-CI_PROVIDER="${CI_PROVIDER:-github}"
-PIPELINE_URL="${PIPELINE_URL:-https://github.com/example/repo/actions/runs/123456}"
+CI_METADATA="${CI_METADATA:-{\"workflow_id\":\"test-workflow-123\",\"pipeline_number\":\"42\"}}"
 
 # Clean up any existing deploy requests for this commit
 echo -e "${BLUE}Cleaning up existing deploy requests for commit ${GIT_COMMIT:0:7}...${NC}"
@@ -57,8 +56,7 @@ echo -e "${BLUE}Creating deploy approval request...${NC}"
 echo -e "  Message: ${YELLOW}$MESSAGE${NC}"
 echo -e "  Branch: ${YELLOW}$BRANCH${NC}"
 echo -e "  Commit: ${YELLOW}${GIT_COMMIT:0:7}${NC}"
-echo -e "  CI Provider: ${YELLOW}$CI_PROVIDER${NC}"
-echo -e "  Pipeline URL: ${YELLOW}$PIPELINE_URL${NC}"
+echo -e "  CI Metadata: ${YELLOW}$CI_METADATA${NC}"
 echo ""
 
 # Create deploy approval request using the new API token (app auto-detected from directory)
@@ -68,8 +66,7 @@ DEPLOY_OUTPUT=$(./bin/rack-gateway deploy-approval request \
   --message "$MESSAGE" \
   --git-commit "$GIT_COMMIT" \
   --branch "$BRANCH" \
-  --ci-provider "$CI_PROVIDER" \
-  --pipeline-url "$PIPELINE_URL" 2>&1)
+  --ci-metadata "$CI_METADATA" 2>&1)
 
 REQUEST_STATUS=$?
 set -e

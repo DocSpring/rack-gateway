@@ -150,14 +150,16 @@ func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (
 
 // Global setting keys
 const (
-	KeyMFARequireAllUsers      = "mfa_require_all_users"
-	KeyTrustedDeviceTTLDays    = "mfa_trusted_device_ttl_days"
-	KeyStepUpWindowMinutes     = "mfa_step_up_window_minutes"
-	KeyAllowDestructiveActions = "allow_destructive_actions"
-	KeyDefaultVCSProvider      = "default_vcs_provider"
-	KeyDefaultVCSOrgName       = "default_vcs_org_name"
-	KeyDefaultCIProvider       = "default_ci_provider"
-	KeyDefaultCIOrgSlug        = "default_ci_org_slug"
+	KeyMFARequireAllUsers          = "mfa_require_all_users"
+	KeyTrustedDeviceTTLDays        = "mfa_trusted_device_ttl_days"
+	KeyStepUpWindowMinutes         = "mfa_step_up_window_minutes"
+	KeyAllowDestructiveActions     = "allow_destructive_actions"
+	KeyDefaultVCSProvider          = "default_vcs_provider"
+	KeyDefaultVCSOrgName           = "default_vcs_org_name"
+	KeyDefaultCIProvider           = "default_ci_provider"
+	KeyDefaultCIOrgSlug            = "default_ci_org_slug"
+	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
+	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
 )
 
 // App setting keys
@@ -188,14 +190,16 @@ const (
 
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
-	KeyMFARequireAllUsers:      true,
-	KeyTrustedDeviceTTLDays:    30,
-	KeyStepUpWindowMinutes:     10,
-	KeyAllowDestructiveActions: false,
-	KeyDefaultVCSProvider:      "github",
-	KeyDefaultVCSOrgName:       "",
-	KeyDefaultCIProvider:       "circleci",
-	KeyDefaultCIOrgSlug:        "",
+	KeyMFARequireAllUsers:          true,
+	KeyTrustedDeviceTTLDays:        30,
+	KeyStepUpWindowMinutes:         10,
+	KeyAllowDestructiveActions:     false,
+	KeyDefaultVCSProvider:          "github",
+	KeyDefaultVCSOrgName:           "",
+	KeyDefaultCIProvider:           "circleci",
+	KeyDefaultCIOrgSlug:            "",
+	KeyDeployApprovalsEnabled:      true,
+	KeyDeployApprovalWindowMinutes: 15,
 }
 
 // DefaultAppSettings defines all valid app-specific settings with their default values.
@@ -409,6 +413,38 @@ func (s *Service) GetAllowDestructiveActions() (bool, error) {
 	}
 
 	return false, nil
+}
+
+// GetDeployApprovalsEnabled returns whether deploy approvals are enabled.
+func (s *Service) GetDeployApprovalsEnabled() (bool, error) {
+	setting, err := s.GetGlobalSetting(KeyDeployApprovalsEnabled, true)
+	if err != nil {
+		return true, err
+	}
+
+	if val, ok := setting.Value.(bool); ok {
+		return val, nil
+	}
+
+	return true, nil
+}
+
+// GetDeployApprovalWindowMinutes returns the deploy approval window in minutes.
+func (s *Service) GetDeployApprovalWindowMinutes() (int, error) {
+	setting, err := s.GetGlobalSetting(KeyDeployApprovalWindowMinutes, 15)
+	if err != nil {
+		return 15, err
+	}
+
+	// Handle both int and float64 (JSON unmarshaling quirk)
+	switch val := setting.Value.(type) {
+	case int:
+		return val, nil
+	case float64:
+		return int(val), nil
+	default:
+		return 15, nil
+	}
 }
 
 // GetProtectedEnvVars returns protected environment variables for an app.

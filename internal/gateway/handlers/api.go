@@ -276,7 +276,7 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 	integrationsInfo := IntegrationsInfo{
 		Slack:    h.config != nil && strings.TrimSpace(h.config.SlackClientID) != "" && strings.TrimSpace(h.config.SlackClientSecret) != "",
 		GitHub:   h.config != nil && strings.TrimSpace(h.config.GitHubToken) != "",
-		CircleCI: h.config != nil && strings.TrimSpace(h.config.CircleCIToken) != "" && strings.TrimSpace(h.config.CircleCIOrgSlug) != "",
+		CircleCI: h.config != nil && strings.TrimSpace(h.config.CircleCIToken) != "",
 	}
 
 	response := InfoResponse{

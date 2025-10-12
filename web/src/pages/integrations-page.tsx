@@ -327,9 +327,9 @@ export function IntegrationsPage() {
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* CircleCI and GitHub Cards - Side by Side */}
-        <div className="grid grid-cols-2 gap-12">
+        <div className="grid grid-cols-2 gap-6">
           {/* CircleCI Card */}
           <Card>
             <CardHeader>
@@ -381,23 +381,25 @@ export function IntegrationsPage() {
                     </div>
                   </div>
                   <p className="text-muted-foreground text-xs">
-                    Set via env vars:
-                    <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_TOKEN</code>,
-                    <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_ORG_SLUG</code>
+                    API token set via{' '}
+                    <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_TOKEN</code> env
+                    var.
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    Per-app job names are configured in app settings.
+                    Per-app organization slugs and job names are configured in app settings.
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-4 py-6">
-                  <p className="text-center text-muted-foreground text-sm">
-                    Set these environment variables to enable:
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    Set the CircleCI API token environment variable to enable:
                   </p>
                   <div className="w-full space-y-2 rounded border bg-muted p-4 font-mono text-sm">
                     <div>CIRCLECI_TOKEN=your-api-token</div>
-                    <div>CIRCLECI_ORG_SLUG=gh/YourOrg</div>
                   </div>
+                  <p className="text-muted-foreground text-xs">
+                    Per-app organization slugs are configured in app settings.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -453,20 +455,22 @@ export function IntegrationsPage() {
                     </div>
                   </div>
                   <p className="text-muted-foreground text-xs">
-                    Set via env vars:
-                    <code className="ml-1 rounded bg-muted px-1 py-0.5">GITHUB_TOKEN</code>,
-                    <code className="ml-1 rounded bg-muted px-1 py-0.5">GITHUB_REPO</code>
+                    API token set via{' '}
+                    <code className="ml-1 rounded bg-muted px-1 py-0.5">GITHUB_TOKEN</code> env var.
+                    Per-app repositories are configured in app settings.
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-4 py-6">
-                  <p className="text-center text-muted-foreground text-sm">
-                    Set these environment variables to enable:
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    Set the GitHub API token environment variable to enable:
                   </p>
                   <div className="w-full space-y-2 rounded border bg-muted p-4 font-mono text-sm">
                     <div>GITHUB_TOKEN=your-personal-access-token</div>
-                    <div>GITHUB_REPO=owner/repo</div>
                   </div>
+                  <p className="text-muted-foreground text-xs">
+                    Per-app repositories are configured in app settings.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -549,20 +553,22 @@ export function IntegrationsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-4 py-8">
-                  <p className="text-center text-muted-foreground text-sm">
+                <div className="flex flex-col gap-4 pb-4">
+                  <p className="mb-4 text-muted-foreground text-sm">
                     Connect your Slack workspace to receive notifications for security events and
                     deploy approvals.
                   </p>
-                  <Button
-                    disabled={isConnecting || connectMutation.isPending}
-                    onClick={handleConnect}
-                  >
-                    {isConnecting || connectMutation.isPending ? (
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                    ) : null}
-                    Connect to Slack
-                  </Button>
+                  <div>
+                    <Button
+                      disabled={isConnecting || connectMutation.isPending}
+                      onClick={handleConnect}
+                    >
+                      {isConnecting || connectMutation.isPending ? (
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                      ) : null}
+                      Connect to Slack
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

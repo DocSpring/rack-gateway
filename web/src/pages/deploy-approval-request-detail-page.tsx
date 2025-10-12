@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useParams } from '@tanstack/react-router'
 import { Check, Loader2, X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { type AuditLogRecord, AuditLogsPane } from '@/components/audit-logs-pane'
 import { DeployApprovalRejectDialog } from '@/components/deploy-approval-reject-dialog'
 import { DeployApprovalStatusBadge } from '@/components/deploy-approval-status-badge'
@@ -19,6 +19,7 @@ import {
   rejectDeployApprovalRequest,
   type UpdateDeployApprovalRequestStatusRequest,
 } from '@/lib/api'
+import { buildCircleCIPipelineUrl, extractCircleCIMetadata } from '@/lib/ci-utils'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -71,6 +72,35 @@ export function DeployApprovalRequestDetailPage() {
     queryFn: () => api.get(`/.gateway/api/deploy-approval-requests/${id}`),
     retry: 1,
   })
+
+  // Fetch app settings to get ci_org_slug for building pipeline URL
+  const { data: appSettings } = useQuery<Record<string, { value: unknown; source: string }>, Error>(
+    {
+      queryKey: ['app-settings', request?.app],
+      queryFn: () => api.get(`/.gateway/api/apps/${request?.app}/settings`),
+      enabled: !!request?.app,
+      retry: 1,
+    }
+  )
+
+  // Extract CI metadata and build pipeline URL if available
+  const { circleCIPipelineUrl, circleCIMetadata } = useMemo(() => {
+    if (!request?.ci_metadata) {
+      return { circleCIPipelineUrl: null, circleCIMetadata: null }
+    }
+
+    const metadata = extractCircleCIMetadata(request.ci_metadata)
+    const ciOrgSlug = appSettings?.ci_org_slug?.value as string | undefined
+
+    if (metadata.pipelineNumber && ciOrgSlug) {
+      return {
+        circleCIPipelineUrl: buildCircleCIPipelineUrl(ciOrgSlug, metadata.pipelineNumber),
+        circleCIMetadata: metadata,
+      }
+    }
+
+    return { circleCIPipelineUrl: null, circleCIMetadata: metadata }
+  }, [request?.ci_metadata, appSettings?.ci_org_slug])
 
   const approveMutation = useMutation({
     mutationFn: (requestId: string) => approveDeployApprovalRequest(requestId, {}),
@@ -273,21 +303,6 @@ export function DeployApprovalRequestDetailPage() {
               value={request?.git_branch ?? '—'}
               valueClassName="font-mono"
             />
-            {request?.pipeline_url && (
-              <DetailRow
-                label="Pipeline URL"
-                value={
-                  <a
-                    className="text-link hover:underline"
-                    href={request.pipeline_url}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    {request.pipeline_url}
-                  </a>
-                }
-              />
-            )}
             {request?.pr_url && (
               <DetailRow
                 label="Pull Request"
@@ -303,7 +318,31 @@ export function DeployApprovalRequestDetailPage() {
                 }
               />
             )}
-            {request?.ci_provider && <DetailRow label="CI Provider" value={request.ci_provider} />}
+            {circleCIMetadata?.workflowId && (
+              <DetailRow
+                label="Workflow ID"
+                value={circleCIMetadata.workflowId}
+                valueClassName="font-mono text-xs"
+              />
+            )}
+            {circleCIMetadata?.pipelineNumber && (
+              <DetailRow label="Pipeline Number" value={circleCIMetadata.pipelineNumber} />
+            )}
+            {circleCIPipelineUrl && (
+              <DetailRow
+                label="Pipeline URL"
+                value={
+                  <a
+                    className="text-link hover:underline"
+                    href={circleCIPipelineUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {circleCIPipelineUrl}
+                  </a>
+                }
+              />
+            )}
             <DetailRow label="Object URL" value={request?.object_url ?? '—'} />
             <DetailRow
               label="Build ID"

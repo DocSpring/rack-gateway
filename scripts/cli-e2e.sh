@@ -502,14 +502,13 @@ if [ -z "$SKIP_API_TOKEN_TESTS" ]; then
   echo -e "${YELLOW}API token requesting deploy approval for git commit...${NC}"
   GIT_COMMIT_HASH=$(git rev-parse HEAD)  # Use actual git commit hash
   GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)  # Use actual branch name
-  PIPELINE_URL="https://circleci.com/gh/example/repo/123"
+  CI_METADATA='{"workflow_id":"test-workflow-'${E2E_TS}'","pipeline_number":"'${E2E_TS}'"}'
 
   set +e
   approval_output=$(./bin/rack-gateway deploy-approval request \
     --git-commit "$GIT_COMMIT_HASH" \
     --branch "$GIT_BRANCH" \
-    --pipeline-url "$PIPELINE_URL" \
-    --ci-provider "circleci" \
+    --ci-metadata "$CI_METADATA" \
     --message "Pipeline deployment ${E2E_TS}" 2>&1)
   approval_status=$?
   set -e

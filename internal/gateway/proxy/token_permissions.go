@@ -95,9 +95,16 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 		return false, nil, nil
 	}
 
-	// Global bypass
-	if h.config != nil && h.config.DeployApprovalsDisabled {
-		return true, nil, nil
+	// Check if deploy approvals are enabled (default: true)
+	if h.settingsService != nil {
+		enabled, err := h.settingsService.GetDeployApprovalsEnabled()
+		if err != nil {
+			// Log error but continue with safe default (enabled)
+			log.Printf("Failed to get deploy_approvals_enabled setting: %v", err)
+		} else if !enabled {
+			// Deploy approvals disabled globally - allow with approval permission
+			return true, nil, nil
+		}
 	}
 
 	if h.database == nil {

@@ -1,119 +1,177 @@
-# Deploy Approval Workflow
+# Deploy Approval System
 
-This guide explains how the deploy-approval gate works, which roles can interact with it, and the quickest way to exercise the flow locally.
+This guide explains the deploy approval workflow, which adds a manual checkpoint before sensitive Convox deployment actions.
 
 ## Overview
 
-Deploy approvals add a manual checkpoint in front of sensitive Convox deployment actions. The approval flow is designed to integrate with CI/CD pipelines:
+Deploy approvals integrate with CI/CD pipelines to enforce admin review before deployments:
 
-1. **CI tests pass** → CI pushes a deploy approval request with git commit metadata
-2. **Admin reviews and approves** in the gateway UI or CLI (with MFA)
-3. **Gateway optionally approves CircleCI job** via API (if integration configured)
-4. **CI builds** → Gateway validates manifest against approved git commit
-5. **CI deploys** → All deployment actions gated by the approval
+1. **CI tests pass** → CI pushes deploy approval request (git commit + CI metadata)
+2. **Admin reviews and approves** in gateway UI (requires MFA step-up)
+3. **Gateway auto-approves CI job** via provider API (if configured per-app)
+4. **CI builds and deploys** → Gateway validates manifest matches approved commit
+5. **Deployment actions gated** by approval throughout the lifecycle
 
-Approvals can be bypassed entirely by setting `DISABLE_DEPLOY_APPROVALS=true` (intended for staging racks).
+Approvals can be disabled entirely with `RGW_SETTING_DEPLOY_APPROVALS_ENABLED=false` (useful for staging racks).
 
-## New Architecture (Git Commit-Based)
+## Architecture
 
-### Push-Based Workflow
+### Request Creation (CI/CD)
 
-After CI tests pass, the pipeline pushes approval requests to all rack gateways:
+After tests pass, CI creates an approval request:
 
 ```bash
-# After tests pass in CI
 rack-gateway deploy-approval request \
   --git-commit "${CIRCLE_SHA1}" \
   --branch "${CIRCLE_BRANCH}" \
-  --pipeline-url "${CIRCLE_BUILD_URL}" \
+  --ci-metadata '{"workflow_id":"abc-123","pipeline_number":"6279"}' \
   --message "Deploy abc123f to production"
 ```
 
-This creates a pending approval request linked to that specific git commit.
+**What happens:**
+- Creates pending request linked to git commit hash
+- Stores CI metadata as flexible JSON for provider integration
+- Target API token (CI/CD token) is automatically resolved
 
-### Admin Approval
+### Admin Approval (Web UI)
 
-Admins review pending requests in the UI at `/.gateway/web/deploy_approval_requests`:
+Admins review pending requests at `/.gateway/web/deploy_approval_requests`:
 
-- See git commit hash, branch, pipeline URL
-- Click through to see diff on GitHub
-- Approve with MFA
+- View git commit hash, branch, PR link (if GitHub verification enabled)
+- Click through to see code changes
+- Approve with MFA step-up authentication
 
-When approved:
+**When approved:**
+- Request marked as `approved` with expiration time (default 15min, configurable via `RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES`)
+- If CI integration configured for the app: Gateway calls CI provider API to auto-approve the job
+- CI pipeline unblocks and continues
 
-- Request marked as `approved` with expiration time (`DEPLOY_APPROVAL_WINDOW`, default 15min)
-- If CircleCI integration configured: Gateway calls CircleCI API to approve the corresponding job
-- CI pipeline continues
+### Build Validation
 
-### Build-Time Validation
+When CI calls `convox build`:
 
-When CI calls `rack-gateway build`:
+1. **Manifest validation**: Gateway parses submitted `convox.yml`
+2. **Image tag check**: Validates `image:` entries match approved commit pattern
+3. **Commit match**: Ensures git commit in image tags matches approved commit
+4. **Record tracking**: Links `build_id` → `release_id` → `git_commit_hash`
 
-1. **Manifest validation**: Gateway parses the `convox.yml` submitted with the build
-2. **Image tag check**: Validates all `image:` entries match the pattern from settings (e.g., `.*:{{GIT_COMMIT}}-amd64`)
-3. **Commit match**: Ensures the git commit in image tags matches the approved commit
-4. **Record tracking**: Stores `build_id` → `release_id` → `git_commit_hash` in database
+If validation fails, build is rejected with clear error message.
 
-If validation fails, build is rejected with a clear error.
+### Deploy Enforcement
 
-### Deploy-Time Enforcement
-
-All deployment actions require an active approval for that git commit:
+All deployment actions require active approval:
 
 - `convox run` (with `--release`)
 - `convox releases promote`
 
-The gateway verifies:
-
+Gateway verifies:
 - Approval exists for the git commit
 - Approval hasn't expired
-- Release ID matches the approved commit
-
-## Permissions & Roles
-
-### RBAC Scopes
-
-- `gateway:deploy-approval-request:create` – Create approval requests (granted to CI/CD tokens)
-- `gateway:deploy-approval-request:approve` – Approve/reject requests (admin only, requires MFA)
-- `convox:deploy:deploy_with_approval` – Perform deployment actions when approval exists
-
-### Simplified Permission Model
-
-The `convox:deploy:deploy_with_approval` permission grants access to **all** deployment actions when an active approval exists:
-
-- Build creation (`convox:build:create`)
-- Object upload (`convox:object:create`)
-- Release creation (`convox:release:create`)
-- Release promotion (`convox:release:promote`)
-- Process start (`convox:process:start`)
-- Process exec (`convox:process:exec`)
-- Process terminate (`convox:process:terminate`)
-
-CI/CD tokens get `convox:deploy:deploy_with_approval`. Regular users get direct permissions without the approval requirement.
+- Release ID matches approved commit
 
 ## Database Schema
 
-`deploy_approval_requests` table:
+The `deploy_approval_requests` table tracks the complete lifecycle:
 
-| Column                                           | Notes                                                           |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `id`                                             | Primary key                                                     |
-| `app`                                            | App name (required)                                             |
-| `created_by_user_id` / `created_by_api_token_id` | Who requested approval                                          |
-| `target_api_token_id`                            | CI/CD token that will use the approval                          |
-| `git_commit_hash`                                | Git commit SHA (indexed)                                        |
-| `git_branch`                                     | Branch name                                                     |
-| `pipeline_url`                                   | Link to CI job (GitHub Actions run, CircleCI pipeline, etc.)    |
-| `message`                                        | Human-readable context                                          |
-| `status`                                         | `pending`, `approved`, `rejected`, `expired`                    |
-| `approval_notes`                                 | Admin notes                                                     |
-| `approval_expires_at`                            | Approval expiration                                             |
-| `approved_by_user_id`                            | Admin who approved                                              |
-| `object_url` / `build_id` / `release_id`         | Tracking which object/build/release used this approval          |
-| `ci_provider`                                    | CI provider: `circleci`, `github`, `buildkite`, `jenkins`, etc. |
-| `ci_metadata`                                    | JSONB - provider-specific integration data                      |
+| Column                     | Type      | Description                                                |
+| -------------------------- | --------- | ---------------------------------------------------------- |
+| `id`                       | bigserial | Primary key                                                |
+| `public_id`                | uuid      | External UUID for API access                               |
+| `app`                      | varchar   | Application name (required)                                |
+| `git_commit_hash`          | varchar   | Git commit SHA (indexed, required)                         |
+| `git_branch`               | varchar   | Branch name                                                |
+| `pr_url`                   | text      | Pull request URL (set by GitHub verification)              |
+| `ci_metadata`              | jsonb     | CI provider metadata (workflow_id, pipeline_number, etc.)  |
+| `message`                  | text      | Human-readable context (required)                          |
+| `status`                   | varchar   | `pending`, `approved`, `rejected`, `expired`, `deployed`   |
+| `created_by_user_id`       | bigint    | User who created request                                   |
+| `created_by_api_token_id`  | bigint    | API token that created request                             |
+| `target_api_token_id`      | bigint    | CI/CD token that will use approval (required)              |
+| `approved_by_user_id`      | bigint    | Admin who approved                                         |
+| `approved_at`              | timestamp | Approval timestamp                                         |
+| `approval_expires_at`      | timestamp | When approval expires                                      |
+| `approval_notes`           | text      | Admin notes on approval/rejection                          |
+| `rejected_by_user_id`      | bigint    | Admin who rejected                                         |
+| `rejected_at`              | timestamp | Rejection timestamp                                        |
+| `object_url`               | text      | Object storage URL (set during build)                      |
+| `build_id`                 | varchar   | Convox build ID                                            |
+| `release_id`               | varchar   | Convox release ID                                          |
+| `process_ids`              | text[]    | Process IDs from exec commands                             |
+| `exec_commands`            | jsonb     | Executed commands for audit trail                          |
 
 **Note:** Each gateway is single-tenant and manages approvals for exactly one rack.
+
+**State machine:** The database enforces strict ordering: `pending` → `approved` → `object_url` → `build_id` → `release_id` → `deployed`
+
+## CI Integration
+
+The gateway supports automated CI job approval after admin approval. This is configured per-app via settings.
+
+### How It Works
+
+1. **CI pushes request** with `ci_metadata` containing provider-specific fields
+2. **Admin approves** in gateway UI
+3. **Gateway reads app settings** to determine:
+   - Which CI provider to use (`ci_provider`)
+   - Provider-specific configuration (`ci_org_slug`, approval job names, etc.)
+   - Whether auto-approval is enabled (`circleci_auto_approve_on_approval`)
+4. **Gateway calls CI API** to approve the waiting job
+5. **CI job unblocks** and deployment proceeds
+
+### Configuration Layers
+
+**1. Gateway Environment Variables (Global)**
+
+```bash
+# CircleCI API token (required for CircleCI integration)
+CIRCLECI_TOKEN=your-circleci-api-token
+
+# Default org slug (can be overridden per-app)
+RGW_SETTING_DEFAULT_CI_ORG_SLUG=gh/DocSpring/docspring
+```
+
+**2. App Settings (Per-App via UI or API)**
+
+Each app can configure:
+
+| Setting                               | Description                                                  | Example                          |
+| ------------------------------------- | ------------------------------------------------------------ | -------------------------------- |
+| `ci_provider`                         | CI system to use                                             | `circleci`                       |
+| `ci_org_slug`                         | Organization/repo slug for building pipeline URLs            | `gh/DocSpring/docspring`         |
+| `circleci_approval_job_name`          | Name of approval job in CircleCI workflow                    | `approve_deploy_production`      |
+| `circleci_auto_approve_on_approval`   | Enable automatic CircleCI job approval after admin approval  | `true`                           |
+
+Settings can also be configured via environment variables:
+```bash
+# Per-app settings via environment
+RGW_APP_MYAPP_SETTING_CI_PROVIDER=circleci
+RGW_APP_MYAPP_SETTING_CIRCLECI_APPROVAL_JOB_NAME=approve_deploy_production
+RGW_APP_MYAPP_SETTING_CIRCLECI_AUTO_APPROVE_ON_APPROVAL=true
+```
+
+### CircleCI Integration
+
+See [CIRCLECI.md](./CIRCLECI.md) for complete CircleCI integration documentation.
+
+**Quick summary:**
+
+**CI Metadata Required:**
+```json
+{
+  "workflow_id": "abc-123-def-456",
+  "pipeline_number": "6279"
+}
+```
+
+**What Gateway Does:**
+1. Uses `workflow_id` from metadata + `approval_job_name` from app settings
+2. Calls CircleCI API: `POST /workflow/{workflow_id}/approve/{job_id}`
+3. CI job unblocks automatically
+
+**Pipeline URL Building:**
+- Gateway uses `ci_org_slug` + `pipeline_number` from metadata
+- Builds URL: `https://app.circleci.com/pipelines/{ci_org_slug}/{pipeline_number}`
+- Example: `https://app.circleci.com/pipelines/github/DocSpring/docspring/6279`
 
 ## CLI Commands
 
@@ -124,17 +182,29 @@ rack-gateway deploy-approval request \
   --app myapp \
   --git-commit abc123f \
   --branch main \
-  --pipeline-url https://app.circleci.com/pipelines/... \
+  --ci-metadata '{"workflow_id":"abc-123","pipeline_number":"6279"}' \
   --message "Deploy to production"
+```
+
+**CircleCI Example:**
+
+```bash
+rack-gateway deploy-approval request \
+  --app myapp \
+  --git-commit "$CIRCLE_SHA1" \
+  --branch "$CIRCLE_BRANCH" \
+  --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":<< pipeline.number >>}" \
+  --message "Deploy $CIRCLE_BRANCH@$CIRCLE_SHA1 to production"
 ```
 
 ### Approve (Admin)
 
 ```bash
 rack-gateway deploy-approval approve <request-id> \
-  --notes "Reviewed diff, LGTM" \
-  --mfa-code 123456
+  --notes "Reviewed diff, LGTM"
 ```
+
+Requires MFA step-up authentication.
 
 ### List Pending
 
@@ -142,255 +212,154 @@ rack-gateway deploy-approval approve <request-id> \
 rack-gateway deploy-approval list --status pending
 ```
 
+### Wait for Approval (CI/CD)
+
+```bash
+rack-gateway deploy-approval request \
+  --git-commit abc123f \
+  --message "Deploy" \
+  --wait \
+  --timeout 20m
+```
+
+Blocks until approved/rejected or timeout reached.
+
+## Permissions & RBAC
+
+### Scopes
+
+- `gateway:deploy-approval-request:create` – Create approval requests (CI/CD tokens)
+- `gateway:deploy-approval-request:approve` – Approve/reject requests (admin only, requires MFA)
+- `convox:deploy:deploy_with_approval` – Perform deployment when approval exists
+
+### Permission Model
+
+The `convox:deploy:deploy_with_approval` permission grants access to ALL deployment actions when an active approval exists:
+
+- Build creation (`convox:build:create`)
+- Object upload (`convox:object:create`)
+- Release creation (`convox:release:create`)
+- Release promotion (`convox:release:promote`)
+- Process start (`convox:process:start`)
+- Process exec (`convox:process:exec`)
+- Process terminate (`convox:process:terminate`)
+
+**Role assignments:**
+- **CI/CD tokens:** Get `convox:deploy:deploy_with_approval` (require approval)
+- **Human users:** Get direct permissions (no approval required)
+
 ## Configuration
 
-| Setting                    | Default             | Description                                                                        |
-| -------------------------- | ------------------- | ---------------------------------------------------------------------------------- |
-| `DISABLE_DEPLOY_APPROVALS` | `false`             | Skip approval checks entirely                                                      |
-| `DEPLOY_APPROVAL_WINDOW`   | `15m`               | Approval validity duration                                                         |
-| `ALLOWED_IMAGE_PATTERN`    | `.*:{{GIT_COMMIT}}` | Regex pattern for validating image tags ({{GIT_COMMIT}} replaced with actual hash) |
-| `CI_INTEGRATION_ENABLED`   | `false`             | Enable automatic CI job approval after admin approval                              |
-| `CI_INTEGRATION_CONFIG`    | (none)              | JSONB config for CI provider (API tokens, job names, etc.)                         |
+Deploy approvals can be configured via the Settings UI or environment variables:
 
-## CI Integration
+| Setting                                        | Default | Description                                 |
+| ---------------------------------------------- | ------- | ------------------------------------------- |
+| `RGW_SETTING_DEPLOY_APPROVALS_ENABLED`        | `true`  | Enable/disable approval checks globally     |
+| `RGW_SETTING_DEPLOY_APPROVAL_WINDOW_MINUTES`  | `15`    | How long approvals remain valid (minutes)   |
 
-When enabled, the gateway automatically approves CI jobs after admin approval in the gateway UI. This is provider-agnostic and works with any CI system.
-
-### How It Works
-
-1. CI pushes approval request with `ci_provider` and `ci_metadata`
-2. Admin approves in gateway UI
-3. Gateway reads `ci_provider` and `ci_metadata`
-4. Gateway calls the appropriate CI API to approve the job
-5. CI job unblocks and proceeds with deployment
-
-### Supported Providers
-
-#### CircleCI
-
-**ci_metadata:**
-
-```json
-{
-  "workflow_id": "abc-123",
-  "approval_job_name": "approve_deploy_staging"
-}
-```
-
-**Configuration:**
-
-```json
-{
-  "provider": "circleci",
-  "api_token": "your-circleci-token",
-  "org_slug": "gh/YourOrg",
-  "approval_jobs": {
-    "staging": "approve_deploy_staging",
-    "production-us": "approve_deploy_us",
-    "production-eu": "approve_deploy_eu"
-  }
-}
-```
-
-**API call:** `POST /workflow/{workflow_id}/approve/{job-id}`
-
-#### GitHub Actions
-
-**ci_metadata:**
-
-```json
-{
-  "workflow_run_id": "123456",
-  "environment": "production"
-}
-```
-
-**Configuration:**
-
-```json
-{
-  "provider": "github",
-  "api_token": "ghp_your-github-token",
-  "repo": "YourOrg/your-repo"
-}
-```
-
-**API call:** `POST /repos/{owner}/{repo}/actions/runs/{run_id}/pending_deployments` (approve environment)
-
-#### BuildKite
-
-**ci_metadata:**
-
-```json
-{
-  "build_number": "456",
-  "job_id": "abc-123"
-}
-```
-
-**Configuration:**
-
-```json
-{
-  "provider": "buildkite",
-  "api_token": "your-buildkite-token",
-  "org_slug": "your-org",
-  "pipeline": "deploy"
-}
-```
-
-**API call:** `PUT /organizations/{org}/pipelines/{pipeline}/builds/{number}/jobs/{id}/unblock`
-
-#### Jenkins
-
-**ci_metadata:**
-
-```json
-{
-  "build_number": "789",
-  "job_name": "deploy-production"
-}
-```
-
-**Configuration:**
-
-```json
-{
-  "provider": "jenkins",
-  "api_token": "your-jenkins-token",
-  "base_url": "https://jenkins.example.com",
-  "user": "deploy-bot"
-}
-```
-
-**API call:** Custom script execution or Input API
-
-### Setup
-
-1. Enable CI integration in gateway settings
-2. Configure `CI_INTEGRATION_CONFIG` with provider-specific settings
-3. Ensure CI jobs include metadata when pushing approval requests
-4. Gateway will automatically approve jobs when admin approves in UI
+These settings can also be managed in the web UI at `/.gateway/web/settings` under "Deploy Approvals".
 
 ## Example CI/CD Flow (CircleCI)
 
-### 1. After Tests Pass
+### 1. `.circleci/config.yml`
 
 ```yaml
-# .circleci/config.yml
-request_deploy_approvals:
-  docker:
-    - image: docspringcom/ci:deploy-2025.09-amd64
-  steps:
-    - request_deploy_approval:
-        environment: STAGING
-        environment_label: staging
-    - request_deploy_approval:
-        environment: US
-        environment_label: production-us
+version: 2.1
+
+workflows:
+  deploy:
+    jobs:
+      - test
+      - build:
+          requires:
+            - test
+
+      # Request approval from gateway
+      - request_approval:
+          requires:
+            - build
+
+      # CircleCI approval job (auto-approved by gateway)
+      - approve_deploy_production:
+          type: approval
+          requires:
+            - request_approval
+
+      # Deploy after approval
+      - deploy:
+          requires:
+            - approve_deploy_production
+
+jobs:
+  test:
+    docker:
+      - image: cimg/node:18.0
+    steps:
+      - checkout
+      - run: npm test
+
+  build:
+    docker:
+      - image: cimg/node:18.0
+    steps:
+      - checkout
+      - run: convox build --app myapp --description "Build $CIRCLE_SHA1"
+
+  request_approval:
+    docker:
+      - image: your-org/rack-gateway-cli:latest
+    steps:
+      - run:
+          name: Request deploy approval
+          command: |
+            rack-gateway deploy-approval request \
+              --git-commit "$CIRCLE_SHA1" \
+              --branch "$CIRCLE_BRANCH" \
+              --ci-metadata "{\"workflow_id\":\"$CIRCLE_WORKFLOW_ID\",\"pipeline_number\":<< pipeline.number >>}" \
+              --message "Deploy $CIRCLE_BRANCH@$CIRCLE_SHA1 to production"
+          environment:
+            RACK_GATEWAY_API_TOKEN: $RACK_GATEWAY_API_TOKEN
+            RACK_GATEWAY_URL: https://gateway.example.com
+
+  deploy:
+    docker:
+      - image: your-org/rack-gateway-cli:latest
+    steps:
+      - checkout
+      - run: convox deploy --app myapp
 ```
 
-This pushes approval requests to all 3 racks.
+### 2. Admin Approval
 
-### 2. Admin Approves
+Admin logs into gateway UI at `https://gateway.example.com/.gateway/web/deploy_approval_requests`, reviews pending request, clicks "Approve" with MFA.
 
-Admin logs into rack-gateway UI, sees pending request, clicks "Approve" with MFA.
+### 3. Automatic Job Approval
 
-### 3. CI Job Unblocks
+If app has `circleci_auto_approve_on_approval=true`, gateway automatically approves the CircleCI job via API.
 
-If CI integration is configured, gateway automatically approves the deployment job via the CI provider's API.
+### 4. Build & Deploy
 
-### 4. Build with Validation
-
-```yaml
-deploy_app_staging:
-  requires:
-    - approve_deploy_staging # CircleCI approval job
-  steps:
-    - run:
-        command: |
-          # Manifest has git commit in image tags
-          sed "s/:latest/:${CIRCLE_SHA1}-amd64/g" convox.yml > /tmp/convox.yml
-
-          # Build validates manifest against approved commit
-          convox-gateway convox build --app myapp
-```
-
-### 5. Deploy
-
-```bash
-convox-gateway convox run --release $RELEASE_ID 'rails db:migrate'
-convox-gateway convox releases promote $RELEASE_ID
-```
-
-All gated by the approval for that specific git commit.
+CI continues with build and deploy, all gated by the approved commit.
 
 ## Manifest Validation (Defense in Depth)
 
-The gateway parses `convox.yml` and validates image tags match the approved commit:
+The gateway validates `convox.yml` to ensure deployed images match the approved commit:
 
 ```yaml
 # convox.yml
 services:
   web:
-    image: docspringcom/app:abc123f-amd64 # Must match approved commit
+    image: docspringcom/app:abc123f-amd64  # Must match approved commit
   worker:
     image: docspringcom/app:abc123f-amd64
 ```
 
-Pattern from settings (default `.*:{{GIT_COMMIT}}`):
-
-- `{{GIT_COMMIT}}` is replaced with approved commit hash
+**Pattern from settings** (default `.*:{{GIT_COMMIT}}`):
+- `{{GIT_COMMIT}}` replaced with approved commit hash
 - All service images must match this pattern
 - Prevents deploying arbitrary code even with compromised CI/CD token
 
 **Note:** This is specific to teams that build images outside Convox. Teams using `convox build` for Docker builds may not need this validation.
-
-## Local Testing
-
-### Automated Coverage
-
-- `task web:e2e` – Playwright tests including approval UI
-- `task go:e2e` – CLI E2E tests with approval flow
-- `task ci` – Full pipeline
-
-### Manual Smoke Test
-
-1. **Start test stack**
-
-   ```bash
-   task docker:test:up
-   ```
-
-2. **Build CLI**
-
-   ```bash
-   task go:build:cli
-   ```
-
-3. **Login as admin**
-
-   ```bash
-   ./bin/rack-gateway login test http://localhost:9447 --no-open
-   ```
-
-4. **Request approval**
-
-   ```bash
-   ./bin/rack-gateway deploy-approval request \
-     --git-commit abc123f \
-     --branch main \
-     --pipeline-url https://example.com \
-     --message "Test deploy"
-   ```
-
-5. **Approve in UI**
-
-   Visit `http://localhost:9447/.gateway/web/deploy_approval_requests`
-
-6. **Test build validation**
-
-   Create a test `convox.yml` with matching git commit in image tags and run build.
 
 ## Security Model
 
@@ -401,10 +370,53 @@ Even with a compromised CI/CD token, an attacker cannot:
 - Bypass pre-deploy command allowlist
 - Reuse approvals across commits
 
-Attack requires:
-
+**Attack requires:**
 - Compromised CI/CD token AND
-- Approval for attacker's malicious commit AND
-- Matching image tag pattern
+- Admin approval for attacker's malicious commit AND
+- Image tags matching the approved commit pattern
 
-For additional environment variables or advanced configuration, consult [docs/CONFIGURATION.md](./CONFIGURATION.md).
+## Local Testing
+
+### Automated Tests
+
+- `task web:e2e` – Playwright E2E tests including approval UI
+- `task go:e2e` – CLI E2E tests with approval flow
+- `task ci` – Full CI pipeline
+
+### Manual Smoke Test
+
+1. **Start test stack:**
+   ```bash
+   task docker:test:up
+   ```
+
+2. **Build CLI:**
+   ```bash
+   task go:build
+   ```
+
+3. **Login as admin:**
+   ```bash
+   ./bin/rack-gateway login test http://localhost:9447 --no-open
+   ```
+
+4. **Request approval:**
+   ```bash
+   ./bin/rack-gateway deploy-approval request \
+     --git-commit abc123f \
+     --branch main \
+     --ci-metadata '{"workflow_id":"test-123","pipeline_number":"42"}' \
+     --message "Test deploy"
+   ```
+
+5. **Approve in UI:**
+   Visit `http://localhost:9447/.gateway/web/deploy_approval_requests`
+
+6. **Test build validation:**
+   Create test `convox.yml` with matching git commit in image tags and run build.
+
+## Additional Configuration
+
+For complete environment variable reference, see [CONFIGURATION.md](./CONFIGURATION.md).
+
+For CircleCI-specific setup, see [CIRCLECI.md](./CIRCLECI.md).

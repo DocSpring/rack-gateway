@@ -11,40 +11,36 @@ import (
 )
 
 type Config struct {
-	Port                    string
-	Domain                  string
-	SentryDSN               string
-	SentryEnvironment       string
-	SentryRelease           string
-	SentryJSDsn             string
-	SentryJSTracesRate      string
-	SentryTestsEnabled      bool
-	SessionSecret           string
-	SessionIdleTimeout      time.Duration
-	GoogleClientID          string
-	GoogleClientSecret      string
-	GoogleAllowedDomain     string
-	GoogleOAuthBaseURL      string
-	SlackClientID           string
-	SlackClientSecret       string
-	AdminUsers              []string
-	ViewerUsers             []string
-	DeployerUsers           []string
-	OperationsUsers         []string
-	DevMode                 bool
-	Racks                   map[string]RackConfig
-	LogRequestBodies        bool
-	LogRequestHeaders       bool
-	LogResponseBodies       bool
-	LogBodyMaxBytes         int
-	RackTLSPinningEnabled   bool
-	TrustedProxies          []string
-	DeployApprovalsDisabled bool
-	DeployApprovalWindow    time.Duration
-	GitHubToken             string
-	GitHubRepo              string // Format: "owner/repo"
-	CircleCIToken           string
-	CircleCIOrgSlug         string // Format: "gh/YourOrg" (required for CircleCI integration)
+	Port                  string
+	Domain                string
+	SentryDSN             string
+	SentryEnvironment     string
+	SentryRelease         string
+	SentryJSDsn           string
+	SentryJSTracesRate    string
+	SentryTestsEnabled    bool
+	SessionSecret         string
+	SessionIdleTimeout    time.Duration
+	GoogleClientID        string
+	GoogleClientSecret    string
+	GoogleAllowedDomain   string
+	GoogleOAuthBaseURL    string
+	SlackClientID         string
+	SlackClientSecret     string
+	AdminUsers            []string
+	ViewerUsers           []string
+	DeployerUsers         []string
+	OperationsUsers       []string
+	DevMode               bool
+	Racks                 map[string]RackConfig
+	LogRequestBodies      bool
+	LogRequestHeaders     bool
+	LogResponseBodies     bool
+	LogBodyMaxBytes       int
+	RackTLSPinningEnabled bool
+	TrustedProxies        []string
+	GitHubToken           string
+	CircleCIToken         string
 }
 
 type RackConfig struct {
@@ -107,9 +103,7 @@ func Load() (*Config, error) {
 		// certificate on every restart (see stdapi.Server.Listen). Pinning that dynamic cert would
 		// break after each deploy. If Convox supports providing a stable internal certificate in the
 		// future, operators can enable this flag to re-activate TOFU pinning.
-		RackTLSPinningEnabled:   getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
-		DeployApprovalsDisabled: getEnv("DISABLE_DEPLOY_APPROVALS", "false") == "true",
-		DeployApprovalWindow:    15 * time.Minute,
+		RackTLSPinningEnabled: getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
 	}
 	if mb := getEnv("LOG_BODY_MAX_BYTES", "65536"); mb != "" {
 		if v, err := strconv.Atoi(mb); err == nil && v > 0 {
@@ -164,22 +158,11 @@ func Load() (*Config, error) {
 
 	cfg.loadRacksFromEnv()
 
-	if window := strings.TrimSpace(getEnv("DEPLOY_APPROVAL_WINDOW", "")); window != "" {
-		if dur, err := time.ParseDuration(window); err == nil && dur > 0 {
-			cfg.DeployApprovalWindow = dur
-		}
-	}
-
-	// GitHub integration for PR verification (personal access token)
-	// GITHUB_REPO format: "owner/repo" (e.g., "DocSpring/docspring")
+	// GitHub integration token for PR verification (personal access token)
 	cfg.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
-	cfg.GitHubRepo = strings.TrimSpace(getEnv("GITHUB_REPO", ""))
 
-	// CircleCI integration for pipeline approval
-	// CIRCLECI_TOKEN: Personal API token from CircleCI
-	// CIRCLECI_ORG_SLUG: Format "gh/YourOrg" or "bb/YourOrg" (required for API calls)
+	// CircleCI integration token for pipeline approval
 	cfg.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
-	cfg.CircleCIOrgSlug = strings.TrimSpace(getEnv("CIRCLECI_ORG_SLUG", ""))
 
 	return cfg, nil
 }

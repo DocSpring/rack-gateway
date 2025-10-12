@@ -42,9 +42,16 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
 		return
 	}
-	if h.config != nil && h.config.DeployApprovalsDisabled {
-		c.JSON(http.StatusNotFound, gin.H{"error": "deploy approvals feature is disabled"})
-		return
+
+	// Check if deploy approvals are enabled (default: true)
+	if h.settingsService != nil {
+		enabled, err := h.settingsService.GetDeployApprovalsEnabled()
+		if err != nil {
+			log.Printf("WARN: Failed to get deploy_approvals_enabled setting: %v", err)
+		} else if !enabled {
+			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approvals feature is disabled"})
+			return
+		}
 	}
 
 	userEmail := strings.TrimSpace(c.GetString("user_email"))
@@ -145,73 +152,76 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	// GitHub verification based on app settings
 	var prURL string
 	if h.settingsService != nil {
-		githubVerificationEnabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true)
-		if err != nil {
+		if githubVerificationEnabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true); err != nil {
 			fmt.Printf("CreateDeployApprovalRequest: Failed to get github_verification setting: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 			return
-		}
-
-		if githubVerificationEnabled && h.config != nil && h.config.GitHubToken != "" && h.config.GitHubRepo != "" {
-			gitBranch := strings.TrimSpace(req.GitBranch)
-			if gitBranch == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
-				return
-			}
-
-			owner, repo := github.SplitRepo(h.config.GitHubRepo)
-			if owner == "" || repo == "" {
-				fmt.Printf("CreateDeployApprovalRequest: Invalid GITHUB_REPO format: %s (expected owner/repo)\n", h.config.GitHubRepo)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
-				return
-			}
-
-			// Check if deploying from default branch is allowed
-			allowDefaultBranch, err := getAppSettingBool(h.settingsService, app, settings.KeyAllowDeployFromDefaultBranch, false)
-			if err != nil {
-				fmt.Printf("CreateDeployApprovalRequest: Failed to get allow_deploy_from_default_branch setting: %v\n", err)
+		} else if githubVerificationEnabled && h.config != nil && h.config.GitHubToken != "" {
+			if githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, ""); err != nil {
+				fmt.Printf("CreateDeployApprovalRequest: Failed to get vcs_repo setting: %v\n", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 				return
-			}
+			} else if githubRepo != "" {
+				gitBranch := strings.TrimSpace(req.GitBranch)
+				if gitBranch == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
+					return
+				}
 
-			defaultBranch, err := getAppSettingString(h.settingsService, app, settings.KeyDefaultBranch, "main")
-			if err != nil {
-				fmt.Printf("CreateDeployApprovalRequest: Failed to get default_branch setting: %v\n", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-				return
-			}
+				owner, repo := github.SplitRepo(githubRepo)
+				if owner == "" || repo == "" {
+					fmt.Printf("CreateDeployApprovalRequest: Invalid vcs_repo format: %s (expected owner/repo)\n", githubRepo)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
+					return
+				}
 
-			if !allowDefaultBranch && gitBranch == defaultBranch {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("deploying from default branch '%s' is not allowed", defaultBranch)})
-				return
-			}
+				// Check if deploying from default branch is allowed
+				allowDefaultBranch, err := getAppSettingBool(h.settingsService, app, settings.KeyAllowDeployFromDefaultBranch, false)
+				if err != nil {
+					fmt.Printf("CreateDeployApprovalRequest: Failed to get allow_deploy_from_default_branch setting: %v\n", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+					return
+				}
 
-			// Get verification mode and PR requirement
-			requirePR, err := getAppSettingBool(h.settingsService, app, settings.KeyRequirePRForBranch, true)
-			if err != nil {
-				fmt.Printf("CreateDeployApprovalRequest: Failed to get require_pr_for_branch setting: %v\n", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-				return
-			}
+				defaultBranch, err := getAppSettingString(h.settingsService, app, settings.KeyDefaultBranch, "main")
+				if err != nil {
+					fmt.Printf("CreateDeployApprovalRequest: Failed to get default_branch setting: %v\n", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+					return
+				}
 
-			verifyMode, err := getAppSettingString(h.settingsService, app, settings.KeyVerifyGitCommitMode, settings.VerifyGitCommitModeLatest)
-			if err != nil {
-				fmt.Printf("CreateDeployApprovalRequest: Failed to get verify_git_commit_mode setting: %v\n", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-				return
-			}
+				if !allowDefaultBranch && gitBranch == defaultBranch {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("deploying from default branch '%s' is not allowed", defaultBranch)})
+					return
+				}
 
-			client := github.NewClient(h.config.GitHubToken)
-			opts := github.VerifyCommitOptions{
-				RequirePR: requirePR,
-				Mode:      verifyMode,
-			}
+				// Get verification mode and PR requirement
+				requirePR, err := getAppSettingBool(h.settingsService, app, settings.KeyRequirePRForBranch, true)
+				if err != nil {
+					fmt.Printf("CreateDeployApprovalRequest: Failed to get require_pr_for_branch setting: %v\n", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+					return
+				}
 
-			prURL, err = client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
-			if err != nil {
-				fmt.Printf("CreateDeployApprovalRequest: GitHub verification failed: %v\n", err)
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
-				return
+				verifyMode, err := getAppSettingString(h.settingsService, app, settings.KeyVerifyGitCommitMode, settings.VerifyGitCommitModeLatest)
+				if err != nil {
+					fmt.Printf("CreateDeployApprovalRequest: Failed to get verify_git_commit_mode setting: %v\n", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+					return
+				}
+
+				client := github.NewClient(h.config.GitHubToken)
+				opts := github.VerifyCommitOptions{
+					RequirePR: requirePR,
+					Mode:      verifyMode,
+				}
+
+				prURL, err = client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
+				if err != nil {
+					fmt.Printf("CreateDeployApprovalRequest: GitHub verification failed: %v\n", err)
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
+					return
+				}
 			}
 		}
 	}
@@ -268,42 +278,70 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	}
 
 	// Post PR comment if GitHub integration is enabled and PR was found
-	if h.settingsService != nil && prURL != "" && h.config != nil && h.config.GitHubToken != "" && h.config.GitHubRepo != "" {
-		postComment, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubPostPRComment, true)
-		if err != nil {
-			log.Printf("WARN: Failed to get github_post_pr_comment setting: %v", err)
-		} else if postComment {
-			// Build the deploy approval request URL
-			gatewayURL := h.config.Domain
-			if gatewayURL == "" || gatewayURL == "localhost" {
-				gatewayURL = fmt.Sprintf("http://localhost:%s", h.config.Port)
-			} else {
-				gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
-			}
-			approvalURL := fmt.Sprintf("%s/.gateway/web/deploy_approval_requests/%s", gatewayURL, record.PublicID)
-
-			// Extract PR number from URL
-			prNumber, err := github.ExtractPRNumber(prURL)
-			if err != nil {
-				log.Printf("WARN: Failed to extract PR number from URL %s: %v", prURL, err)
-			} else {
-				owner, repo := github.SplitRepo(h.config.GitHubRepo)
-				if owner != "" && repo != "" {
-					comment := fmt.Sprintf("## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s", approvalURL)
-
-					// Post comment in background (don't block response)
-					go func() {
-						client := github.NewClient(h.config.GitHubToken)
-						if err := client.PostPRComment(owner, repo, prNumber, comment); err != nil {
-							log.Printf("ERROR: Failed to post PR comment: %v", err)
-						} else {
-							log.Printf("INFO: Successfully posted comment on PR #%d", prNumber)
-						}
-					}()
-				}
-			}
-		}
+	if h.settingsService == nil || prURL == "" || h.config == nil || h.config.GitHubToken == "" {
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
 	}
+
+	postComment, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubPostPRComment, true)
+	if err != nil {
+		log.Printf("WARN: Failed to get github_post_pr_comment setting: %v", err)
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	if !postComment {
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, "")
+	if err != nil {
+		log.Printf("WARN: Failed to get vcs_repo setting: %v", err)
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	if githubRepo == "" {
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	// Build the deploy approval request URL
+	gatewayURL := h.config.Domain
+	if gatewayURL == "" || gatewayURL == "localhost" {
+		gatewayURL = fmt.Sprintf("http://localhost:%s", h.config.Port)
+	} else {
+		gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
+	}
+	approvalURL := fmt.Sprintf("%s/.gateway/web/deploy_approval_requests/%s", gatewayURL, record.PublicID)
+
+	// Extract PR number from URL
+	prNumber, err := github.ExtractPRNumber(prURL)
+	if err != nil {
+		log.Printf("WARN: Failed to extract PR number from URL %s: %v", prURL, err)
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	owner, repo := github.SplitRepo(githubRepo)
+	if owner == "" || repo == "" {
+		log.Printf("WARN: Invalid vcs_repo format: %s", githubRepo)
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	comment := fmt.Sprintf("## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s", approvalURL)
+
+	// Post comment in background (don't block response)
+	go func() {
+		client := github.NewClient(h.config.GitHubToken)
+		if err := client.PostPRComment(owner, repo, prNumber, comment); err != nil {
+			log.Printf("ERROR: Failed to post PR comment: %v", err)
+		} else {
+			log.Printf("INFO: Successfully posted comment on PR #%d", prNumber)
+		}
+	}()
 
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }
@@ -581,11 +619,18 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	window := 15 * time.Minute
-	if h.config != nil && h.config.DeployApprovalWindow > 0 {
-		window = h.config.DeployApprovalWindow
+	// Get approval window from settings (default: 15 minutes)
+	windowMinutes := 15
+	if h.settingsService != nil {
+		minutes, err := h.settingsService.GetDeployApprovalWindowMinutes()
+		if err != nil {
+			log.Printf("WARN: Failed to get deploy_approval_window_minutes setting: %v", err)
+		} else if minutes > 0 {
+			windowMinutes = minutes
+		}
 	}
 
+	window := time.Duration(windowMinutes) * time.Minute
 	expiresAt := time.Now().Add(window)
 	record, err := h.database.ApproveDeployApprovalRequestByPublicID(publicID, approver.ID, expiresAt, payload.Notes)
 	if err != nil {
@@ -617,51 +662,84 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	})
 
 	// Trigger CircleCI approval if configured and enabled
-	if h.settingsService != nil && len(record.CIMetadata) > 0 {
-		// Check if CI provider is CircleCI
-		ciProvider, err := getAppSettingString(h.settingsService, record.App, settings.KeyCIProvider, "")
-		if err != nil {
-			log.Printf("WARN: Failed to get ci_provider setting: %v", err)
-		} else if ciProvider == "circleci" {
-			autoApprove, err := getAppSettingBool(h.settingsService, record.App, settings.KeyCircleCIAutoApproveOnApproval, false)
-			if err != nil {
-				log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
-			} else if autoApprove && h.config != nil && h.config.CircleCIToken != "" {
-				// Parse CI metadata to get workflow_id and approval_job_name
-				var metadata map[string]interface{}
-				if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
-					log.Printf("WARN: Failed to unmarshal CircleCI metadata: %v", err)
-				} else {
-					// Get the approval job name from app settings
-					approvalJobName, err := getAppSettingString(h.settingsService, record.App, settings.KeyCircleCIApprovalJobName, "")
-					if err != nil {
-						log.Printf("WARN: Failed to get circleci_approval_job_name setting: %v", err)
-					} else if approvalJobName == "" {
-						log.Printf("WARN: CircleCI auto-approve enabled but no approval_job_name configured for app %s", record.App)
-					} else {
-						// Override approval_job_name from settings if configured
-						metadata["approval_job_name"] = approvalJobName
-
-						// Validate and parse metadata
-						circleciMetadata, err := circleci.ParseMetadata(metadata)
-						if err != nil {
-							log.Printf("WARN: Invalid CircleCI metadata: %v", err)
-						} else {
-							// Trigger CircleCI approval in background (don't block response)
-							go func() {
-								client := circleci.NewClient(h.config.CircleCIToken)
-								if err := client.ApproveJob(circleciMetadata.WorkflowID, circleciMetadata.ApprovalJobName); err != nil {
-									log.Printf("ERROR: Failed to approve CircleCI job: %v", err)
-								} else {
-									log.Printf("INFO: Successfully approved CircleCI job %s in workflow %s", circleciMetadata.ApprovalJobName, circleciMetadata.WorkflowID)
-								}
-							}()
-						}
-					}
-				}
-			}
-		}
+	if h.settingsService == nil || len(record.CIMetadata) == 0 {
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
 	}
+
+	// Check if CI provider is CircleCI
+	ciProvider, err := getAppSettingString(h.settingsService, record.App, settings.KeyCIProvider, "")
+	if err != nil {
+		log.Printf("WARN: Failed to get ci_provider setting: %v", err)
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	if ciProvider != "circleci" {
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	autoApprove, err := getAppSettingBool(h.settingsService, record.App, settings.KeyCircleCIAutoApproveOnApproval, false)
+	if err != nil {
+		log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	if !autoApprove {
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	if h.config == nil || h.config.CircleCIToken == "" {
+		log.Printf("WARN: CircleCI auto-approve enabled but no CircleCIToken configured")
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	// Parse CI metadata
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
+		log.Printf("WARN: Failed to unmarshal CircleCI metadata: %v", err)
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	// Get the approval job name from app settings
+	approvalJobName, err := getAppSettingString(h.settingsService, record.App, settings.KeyCircleCIApprovalJobName, "")
+	if err != nil {
+		log.Printf("WARN: Failed to get circleci_approval_job_name setting: %v", err)
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	if approvalJobName == "" {
+		log.Printf("WARN: CircleCI auto-approve enabled but no approval_job_name configured for app %s", record.App)
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	// Override approval_job_name from settings if configured
+	metadata["approval_job_name"] = approvalJobName
+
+	// Validate and parse metadata
+	circleciMetadata, err := circleci.ParseMetadata(metadata)
+	if err != nil {
+		log.Printf("WARN: Invalid CircleCI metadata: %v", err)
+		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	// Trigger CircleCI approval in background (don't block response)
+	go func() {
+		client := circleci.NewClient(h.config.CircleCIToken)
+		if err := client.ApproveJob(circleciMetadata.WorkflowID, circleciMetadata.ApprovalJobName); err != nil {
+			log.Printf("ERROR: Failed to approve CircleCI job: %v", err)
+		} else {
+			log.Printf("INFO: Successfully approved CircleCI job %s in workflow %s", circleciMetadata.ApprovalJobName, circleciMetadata.WorkflowID)
+		}
+	}()
 
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
