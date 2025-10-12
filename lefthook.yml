@@ -27,6 +27,11 @@ pre-commit:
       run: task go:format
       stage_fixed: true
 
+    go-imports:
+      glob: "**/*.go"
+      run: task go:imports
+      stage_fixed: true
+
     go-lint:
       glob: "**/*.go"
       run: task go:lint
