@@ -51,9 +51,7 @@ services:
       dockerfile: Dockerfile.mock-convox
     environment:
       MOCK_CONVOX_PORT: 5444
-      MOCK_CONVOX_LOG_HEADERS: true
-      MOCK_CONVOX_LOG_REQUEST_BODY: true
-      MOCK_CONVOX_LOG_RESPONSE_BODY: true
+      LOG_LEVEL: debug
     ports:
       - "5444:5444"
     networks:
@@ -90,9 +88,7 @@ services:
       dockerfile: Dockerfile.mock-convox
     environment:
       MOCK_CONVOX_PORT: ${TEST_MOCK_CONVOX_PORT:-6443}
-      MOCK_CONVOX_LOG_HEADERS: true
-      MOCK_CONVOX_LOG_REQUEST_BODY: true
-      MOCK_CONVOX_LOG_RESPONSE_BODY: true
+      LOG_LEVEL: debug
     ports:
       - "${TEST_MOCK_CONVOX_PORT:-6443}:${TEST_MOCK_CONVOX_PORT:-6443}"
     networks:
@@ -148,9 +144,7 @@ services:
       FORCE_CSP_IN_DEV: "true"
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
-      LOG_REQUEST_HEADERS: "true"
-      LOG_REQUEST_BODIES: "true"
-      LOG_RESPONSE_BODIES: "true"
+      LOG_LEVEL: debug
       # Test settings via environment variables
       RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS: "45"
       RGW_APP_API_SETTING_DEFAULT_BRANCH: "develop"

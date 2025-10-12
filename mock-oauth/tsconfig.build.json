@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["server.ts", "logging.ts"],
+  "exclude": ["tests", "dist", "node_modules"]
+}

@@ -443,22 +443,6 @@ func authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// getBoolEnv returns true if the env var parses to a truthy value, else defaultVal.
-func getBoolEnv(name string, defaultVal bool) bool {
-	v := strings.TrimSpace(os.Getenv(name))
-	if v == "" {
-		return defaultVal
-	}
-	switch strings.ToLower(v) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return defaultVal
-	}
-}
-
 func getApps(w http.ResponseWriter, r *http.Request) {
 	apps := []App{
 		{

@@ -1,6 +1,4 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-
+import { expect, test } from "bun:test";
 import request from "supertest";
 
 import { createApp } from "../server.js";
@@ -8,9 +6,9 @@ import { createApp } from "../server.js";
 test("openid configuration endpoint", async () => {
   const app = await createApp();
   const response = await request(app).get("/.well-known/openid-configuration");
-  assert.equal(response.status, 200);
-  assert.equal(response.body.issuer.includes("http"), true);
-  assert.equal(response.body.authorization_endpoint.includes("/oauth2/v2/auth"), true);
+  expect(response.status).toBe(200);
+  expect(response.body.issuer.includes("http")).toBe(true);
+  expect(response.body.authorization_endpoint.includes("/oauth2/v2/auth")).toBe(true);
 });
 
 test("token endpoint rejects invalid code", async () => {
@@ -22,6 +20,6 @@ test("token endpoint rejects invalid code", async () => {
     client_id: "mock-client-id",
   });
 
-  assert.equal(response.status, 400);
-  assert.equal(response.body.error, "invalid_grant");
+  expect(response.status).toBe(400);
+  expect(response.body.error).toBe("invalid_grant");
 });

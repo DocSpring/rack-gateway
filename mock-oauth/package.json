@@ -5,14 +5,14 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc --project tsconfig.json",
-    "start": "pnpm run build && node dist/server.js",
-    "dev": "nodemon --watch server.ts --watch logging.ts --exec \"pnpm exec ts-node --esm server.ts\"",
-    "test": "pnpm run build && NODE_ENV=test node --test dist/tests/**/*.js",
-    "lint": "pnpm exec biome check .",
-    "lint:fix": "pnpm exec biome check --write .",
-    "format": "pnpm exec biome format --write .",
-    "typecheck": "pnpm exec tsc -b --noEmit --pretty false"
+    "build": "bunx tsc --project tsconfig.build.json",
+    "start": "bun run build && bun dist/server.js",
+    "dev": "bun --watch server.ts",
+    "test": "bun test tests",
+    "lint": "bunx biome check .",
+    "lint:fix": "bunx biome check --write .",
+    "format": "bunx biome format --write .",
+    "typecheck": "bunx tsc -b --noEmit --pretty false"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -26,9 +26,8 @@
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
     "@types/supertest": "^6.0.3",
-    "nodemon": "^3.1.10",
     "supertest": "^7.0.0",
-    "ts-node": "^10.9.2",
+    "bun-types": "^1.1.5",
     "typescript": "^5.9.2",
     "ultracite": "5.4.4"
   },

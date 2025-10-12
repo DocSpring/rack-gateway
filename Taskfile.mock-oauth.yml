@@ -7,9 +7,10 @@ tasks:
     desc: Install dependencies for mock OAuth server
     sources:
       - package.json
-      - pnpm-lock.yaml
+      - bun.lock
       - ../Taskfile.mock-oauth.yml
-    cmds: [pnpm install]
+    cmds:
+      - bun install
 
   build:
     dir: mock-oauth
@@ -17,19 +18,22 @@ tasks:
     deps: [deps]
     sources:
       - package.json
-      - pnpm-lock.yaml
+      - bun.lock
       - tsconfig.json
+      - tsconfig.build.json
       - ../Taskfile.mock-oauth.yml
       - "*.ts"
     generates:
       - dist/**/*
-    cmds: [pnpm build]
+    cmds:
+      - bun run build
 
   test:
     dir: mock-oauth
     desc: Run mock OAuth server unit tests
     deps: [deps]
-    cmds: [pnpm test]
+    cmds:
+      - NODE_ENV=test bun run test
 
   lint:
     desc: Run TypeScript typecheck and Biome lint
@@ -43,28 +47,33 @@ tasks:
     dir: mock-oauth
     desc: Run TypeScript type checking
     deps: [deps]
-    cmds: [pnpm typecheck]
+    cmds:
+      - bun run typecheck
 
   lint:biome:
     dir: mock-oauth
     desc: Run Biome lint
     deps: [deps]
-    cmds: [pnpm exec biome check .]
+    cmds:
+      - bun run lint
 
   lint:biome:fix:
     dir: mock-oauth
     desc: Lint mock OAuth server and apply safe fixes
     deps: [deps]
-    cmds: [pnpm exec biome check . --write]
+    cmds:
+      - bun run lint:fix
 
   format:
     dir: mock-oauth
     desc: Format mock OAuth code (Biome)
     deps: [deps]
-    cmds: [pnpm exec biome format --write .]
+    cmds:
+      - bun run format
 
   dev:
     dir: mock-oauth
     desc: Run mock OAuth server in watch mode
     deps: [deps]
-    cmds: [pnpm dev]
+    cmds:
+      - bun run dev

@@ -12,6 +12,11 @@ import {
 } from './db'
 import { expect } from './fixtures'
 
+type E2EWindow = Window &
+  typeof globalThis & {
+    __e2e_totpSecret?: string | null
+  }
+
 export type LoginOptions = {
   /**
    * Display text of the mock OAuth user card to select.
@@ -109,7 +114,7 @@ export async function ensureMfaEnrollment(
   await page.goto(WebRoute('account/security'))
   await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-  const secret = await startTotpEnrollmentViaUi(page)
+  const secret = await startTotpEnrollmentViaUi(page, email)
 
   await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
   const statusBadge = page.locator('[data-slot="card"]').first().getByText('Enabled')
@@ -169,11 +174,12 @@ export async function satisfyStepUpModal(
 
 async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<string> {
   await page.evaluate(() => {
-    const global = window as Record<string, unknown>
-    global.__e2e_totpSecret = null
+    const globalWindow = window as unknown as E2EWindow
+    globalWindow.__e2e_totpSecret = null
 
     const stub = (text: string) => {
-      global.__e2e_totpSecret = text
+      const win = window as unknown as E2EWindow
+      win.__e2e_totpSecret = text
       return Promise.resolve()
     }
 
@@ -197,13 +203,17 @@ async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<stri
 
   await expect
     .poll(async () =>
-      page.evaluate(() => (window as Record<string, unknown>).__e2e_totpSecret ?? '')
+      page.evaluate(() => {
+        const win = window as unknown as E2EWindow
+        return win.__e2e_totpSecret ?? ''
+      })
     )
     .not.toEqual('')
 
-  let secret = (await page.evaluate(() => (window as Record<string, unknown>).__e2e_totpSecret)) as
-    | string
-    | null
+  let secret = (await page.evaluate(() => {
+    const win = window as unknown as E2EWindow
+    return win.__e2e_totpSecret ?? null
+  })) as string | null
 
   if (!secret) {
     secret = await pollPendingTotpSecret(email, 5000)

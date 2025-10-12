@@ -95,17 +95,25 @@ export const test = base.extend({
       }
 
       const originalOpen = XMLHttpRequest.prototype.open
-      XMLHttpRequest.prototype.open = function (method: string, url: string, ...rest) {
+      const patchedOpen = function (
+        this: XMLHttpRequest,
+        ...args: Parameters<typeof originalOpen>
+      ) {
+        const [method, url] = args
+        const urlString = typeof url === 'string' ? url : url.toString()
+
         ;(this as any).__e2e_capture_totp =
           typeof method === 'string' &&
           method.toUpperCase() === 'POST' &&
-          typeof url === 'string' &&
-          url.includes('/auth/mfa/enroll/totp/start')
-        if ((this as any).__e2e_capture_totp) {
-          console.debug('[E2E] Observing TOTP enrollment request via XHR', method, url)
+          urlString.includes('/auth/mfa/enroll/totp/start')
+
+        if ((this as any).__e2e_capture_totp === true) {
+          console.debug('[E2E] Observing TOTP enrollment request via XHR', method, urlString)
         }
-        return originalOpen.call(this, method, url, ...rest)
+
+        return originalOpen.apply(this, args)
       }
+      XMLHttpRequest.prototype.open = patchedOpen as typeof XMLHttpRequest.prototype.open
 
       const originalSend = XMLHttpRequest.prototype.send
       XMLHttpRequest.prototype.send = function (...args) {
