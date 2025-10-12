@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
@@ -31,7 +30,6 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		start := time.Now()
 		req := c.Request
 
 		path := req.URL.RequestURI()
@@ -113,7 +111,6 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 			}
 		}
 
-		_ = start
 	}
 }
 

@@ -131,9 +131,140 @@ func (d *Database) getUserSession(where string, args ...interface{}) (*UserSessi
 	return &session, nil
 }
 
+func (d *Database) getUserSessionWithUser(where string, args ...interface{}) (*UserSession, *User, error) {
+	query := fmt.Sprintf(`
+		SELECT us.id, us.user_id, us.token_hash, us.created_at, us.updated_at, us.last_seen_at, us.expires_at, us.channel,
+		       us.device_id, us.device_name, us.mfa_verified_at, us.recent_step_up_at, us.trusted_device_id,
+		       us.ip_address, us.user_agent, us.revoked_at, us.revoked_by_user_id, us.metadata, us.device_metadata,
+		       u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended, u.mfa_enrolled,
+		       u.mfa_enforced_at, u.preferred_mfa_method, u.locked_at, u.locked_reason, u.locked_by_user_id,
+		       lbu.email, lbu.name
+		FROM user_sessions us
+		JOIN users u ON u.id = us.user_id
+		LEFT JOIN users lbu ON lbu.id = u.locked_by_user_id
+		WHERE %s
+	`, where)
+
+	var (
+		session     UserSession
+		deviceID    sql.NullString
+		deviceName  sql.NullString
+		mfaVerified sql.NullTime
+		recentStep  sql.NullTime
+		trustedID   sql.NullInt64
+		ip          sql.NullString
+		ua          sql.NullString
+		revoked     sql.NullTime
+		revoker     sql.NullInt64
+		meta        sql.NullString
+		deviceMeta  sql.NullString
+
+		user          User
+		rolesJSON     string
+		mfaEnforced   sql.NullTime
+		preferred     sql.NullString
+		lockedAt      sql.NullTime
+		lockedReason  sql.NullString
+		lockedBy      sql.NullInt64
+		lockedByEmail sql.NullString
+		lockedByName  sql.NullString
+	)
+
+	row := d.queryRow(query, args...)
+	if err := row.Scan(
+		&session.ID, &session.UserID, &session.TokenHash, &session.CreatedAt, &session.UpdatedAt,
+		&session.LastSeenAt, &session.ExpiresAt, &session.Channel, &deviceID, &deviceName,
+		&mfaVerified, &recentStep, &trustedID, &ip, &ua, &revoked, &revoker, &meta, &deviceMeta,
+		&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended,
+		&user.MFAEnrolled, &mfaEnforced, &preferred, &lockedAt, &lockedReason, &lockedBy,
+		&lockedByEmail, &lockedByName,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("failed to get user session with user: %w", err)
+	}
+
+	if deviceID.Valid {
+		session.DeviceID = deviceID.String
+	}
+	if deviceName.Valid {
+		session.DeviceName = deviceName.String
+	}
+
+	if mfaVerified.Valid {
+		verified := mfaVerified.Time
+		session.MFAVerifiedAt = &verified
+	}
+	if recentStep.Valid {
+		step := recentStep.Time
+		session.RecentStepUpAt = &step
+	}
+	if trustedID.Valid {
+		id := trustedID.Int64
+		session.TrustedDeviceID = &id
+	}
+	if ip.Valid {
+		session.IPAddress = ip.String
+	}
+	if ua.Valid {
+		session.UserAgent = ua.String
+	}
+	if revoked.Valid {
+		revokedAt := revoked.Time
+		session.RevokedAt = &revokedAt
+	}
+	if revoker.Valid {
+		id := revoker.Int64
+		session.RevokedByUser = &id
+	}
+	if meta.Valid {
+		session.Metadata = json.RawMessage(meta.String)
+	}
+	if deviceMeta.Valid {
+		session.DeviceMetadata = json.RawMessage(deviceMeta.String)
+	}
+
+	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal user roles: %w", err)
+	}
+	if mfaEnforced.Valid {
+		t := mfaEnforced.Time
+		user.MFAEnforcedAt = &t
+	}
+	if preferred.Valid {
+		val := preferred.String
+		user.PreferredMFAMethod = &val
+	}
+	if lockedAt.Valid {
+		t := lockedAt.Time
+		user.LockedAt = &t
+	}
+	if lockedReason.Valid {
+		user.LockedReason = lockedReason.String
+	}
+	if lockedBy.Valid {
+		id := lockedBy.Int64
+		user.LockedByUserID = &id
+	}
+	if lockedByEmail.Valid {
+		user.LockedByEmail = lockedByEmail.String
+	}
+	if lockedByName.Valid {
+		user.LockedByName = lockedByName.String
+	}
+
+	return &session, &user, nil
+}
+
 // GetUserSessionByHash retrieves a session by hashed token value.
 func (d *Database) GetUserSessionByHash(tokenHash string) (*UserSession, error) {
 	return d.getUserSession("token_hash = ?", tokenHash)
+}
+
+// GetUserSessionWithUserByHash retrieves a session and associated user by hashed token value.
+func (d *Database) GetUserSessionWithUserByHash(tokenHash string) (*UserSession, *User, error) {
+	return d.getUserSessionWithUser("us.token_hash = ?", tokenHash)
 }
 
 // GetUserSessionByID retrieves a session by identifier.

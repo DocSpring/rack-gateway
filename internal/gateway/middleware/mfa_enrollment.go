@@ -29,16 +29,21 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 			return
 		}
 
-		user, err := database.GetUser(authUser.Email)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-			c.Abort()
-			return
-		}
+		user := auth.GetAuthUserRecord(c.Request.Context())
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-			c.Abort()
-			return
+			loaded, err := database.GetUser(authUser.Email)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+				c.Abort()
+				return
+			}
+			if loaded == nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+				c.Abort()
+				return
+			}
+			authUser.DBUser = loaded
+			user = loaded
 		}
 
 		if shouldEnforceMFAForMiddleware(settings, user) && !user.MFAEnrolled {
@@ -76,16 +81,21 @@ func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gi
 			return
 		}
 
-		user, err := database.GetUser(authUser.Email)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-			c.Abort()
-			return
-		}
+		user := auth.GetAuthUserRecord(c.Request.Context())
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-			c.Abort()
-			return
+			loaded, err := database.GetUser(authUser.Email)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+				c.Abort()
+				return
+			}
+			if loaded == nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+				c.Abort()
+				return
+			}
+			authUser.DBUser = loaded
+			user = loaded
 		}
 
 		if !shouldEnforceMFAForMiddleware(settings, user) || user.MFAEnrolled {

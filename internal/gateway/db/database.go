@@ -170,6 +170,8 @@ func (d *Database) logQuery(prefix, query string, args ...interface{}) {
 
 	message := strings.Join(segments, " ") + " args=" + argsStr
 	gtwlog.DebugTopicf(gtwlog.TopicSQL, "%s", message)
+
+	logSQLTrace()
 }
 
 func (d *Database) exec(q string, args ...interface{}) (sql.Result, error) {
@@ -251,6 +253,57 @@ func queryCaller() string {
 		}
 	}
 	return ""
+}
+
+func logSQLTrace() {
+	if !gtwlog.TopicEnabled(gtwlog.TopicSQLTrace) {
+		return
+	}
+
+	const traceDepth = 10
+	pcs := make([]uintptr, 32)
+	n := runtime.Callers(4, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+	lines := make([]string, 0, traceDepth)
+	depth := 0
+	for {
+		frame, more := frames.Next()
+		if frame.Function == "" {
+			if !more {
+				break
+			}
+			continue
+		}
+
+		file := frame.File
+		// Skip internal database frames so trace points to caller sites
+		if strings.Contains(file, "/internal/gateway/db/") || strings.Contains(file, "\\internal\\gateway\\db\\") {
+			if !more {
+				break
+			}
+			continue
+		}
+		// Skip Go runtime frames
+		if strings.Contains(file, "/src/runtime/") {
+			if !more {
+				break
+			}
+			continue
+		}
+
+		rel := relativePath(file)
+		lines = append(lines, fmt.Sprintf("#%d %s (%s:%d)", depth, frame.Function, rel, frame.Line))
+		depth++
+		if depth >= traceDepth || !more {
+			break
+		}
+	}
+
+	if len(lines) == 0 {
+		return
+	}
+
+	gtwlog.DebugTopicf(gtwlog.TopicSQLTrace, "%s", strings.Join(lines, "\n"))
 }
 
 // ResetDatabase drops all gateway tables and re-applies migrations. It reads

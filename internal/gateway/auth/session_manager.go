@@ -128,7 +128,7 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 	}
 
 	tokenHash := hashSessionToken(trimmed)
-	session, err := m.db.GetUserSessionByHash(tokenHash)
+	session, user, err := m.db.GetUserSessionWithUserByHash(tokenHash)
 	if err != nil {
 		return nil, err
 	}
@@ -150,10 +150,6 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 		return nil, fmt.Errorf("session expired")
 	}
 
-	user, err := m.db.GetUserByID(session.UserID)
-	if err != nil {
-		return nil, err
-	}
 	if user == nil {
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
 		return nil, fmt.Errorf("session user missing")

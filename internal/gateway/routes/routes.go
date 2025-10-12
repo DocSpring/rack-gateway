@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
@@ -78,6 +80,16 @@ func Setup(router *gin.Engine, cfg *Config) {
 	if cfg.SentryEnabled {
 		router.Use(middleware.SentryErrorCapture())
 	}
+
+	router.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/.well-known/") {
+			c.Status(http.StatusNotFound)
+			c.Abort()
+			return
+		}
+		c.AbortWithStatus(http.StatusNotFound)
+	})
 
 	// CORS configuration - allow requests from the configured domain
 	// In production this is set via DOMAIN env var

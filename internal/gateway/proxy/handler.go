@@ -190,7 +190,11 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// For regular users (not API tokens), check direct permissions
 		// API tokens use -with-approval variants that are gated by the deploy approval system
-		allowed, err = h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
+		if authUser != nil && authUser.DBUser != nil {
+			allowed, err = h.rbacManager.EnforceUser(authUser.DBUser, rbac.ScopeConvox, resource, action)
+		} else {
+			allowed, err = h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
+		}
 		if err != nil {
 			allowed = false
 		}

@@ -38,6 +38,10 @@ func (a *allowAllRBAC) Enforce(userEmail string, scope rbac.Scope, resource rbac
 	return true, nil
 }
 
+func (a *allowAllRBAC) EnforceUser(user *db.User, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+	return true, nil
+}
+
 func (a *allowAllRBAC) EnforceForAPIToken(tokenID int64, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
 	return true, nil
 }

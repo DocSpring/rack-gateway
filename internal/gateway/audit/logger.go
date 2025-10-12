@@ -34,7 +34,6 @@ type SlackNotifier interface {
 type LogEntry struct {
 	Timestamp     string                 `json:"ts"`
 	UserEmail     string                 `json:"user_email"`
-	Rack          string                 `json:"rack"`
 	Method        string                 `json:"method"`
 	Path          string                 `json:"path"`
 	QueryParams   string                 `json:"query_params,omitempty"`
@@ -203,7 +202,6 @@ func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision strin
 	entry := &LogEntry{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		UserEmail:    userEmail,
-		Rack:         rack,
 		Method:       r.Method,
 		Path:         path,
 		QueryParams:  r.URL.RawQuery,

@@ -36,13 +36,13 @@ func Authenticated(authService *auth.AuthService, rbacManager rbac.RBACManager) 
 		}
 
 		if !authUser.IsAPIToken {
-			dbUser, err := rbacManager.GetUser(authUser.Email)
-			if err != nil || dbUser == nil {
+			dbUser := authUser.DBUser
+			if dbUser == nil {
 				c.JSON(http.StatusForbidden, gin.H{"error": "user not authorized"})
 				c.Abort()
 				return
 			}
-			authUser.Roles = dbUser.Roles
+			authUser.Roles = append([]string(nil), dbUser.Roles...)
 			c.Set("user_roles", dbUser.Roles)
 			c.Set("user_name", dbUser.Name)
 		} else {

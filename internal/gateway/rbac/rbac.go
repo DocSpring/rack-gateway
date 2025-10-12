@@ -302,29 +302,28 @@ func (m *DBManager) syncUsersFromDB() error {
 func (m *DBManager) Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.enforceWithEmailLocked(userEmail, scope, resource, action)
+}
 
-	// First check if user exists and is not suspended
-	user, err := m.db.GetUser(userEmail)
-	if err != nil {
-		return false, fmt.Errorf("failed to get user: %w", err)
-	}
+// EnforceUser checks permissions for a preloaded user without additional database access.
+func (m *DBManager) EnforceUser(user *db.User, scope Scope, resource Resource, action Action) (bool, error) {
 	if user == nil {
-		return false, nil // User doesn't exist
+		return false, nil
 	}
 	if user.Suspended {
-		return false, nil // User is suspended
+		return false, nil
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.enforceWithEmailLocked(user.Email, scope, resource, action)
+}
 
-	// Build permission string from enum types
+func (m *DBManager) enforceWithEmailLocked(email string, scope Scope, resource Resource, action Action) (bool, error) {
 	permission := Permission(scope, resource, action)
-
-	// Check permission using Casbin with 3 parameters (sub, obj, act)
-	// The third parameter is "*" as we don't use it in our model
-	ok, err := m.enforcer.Enforce(userEmail, permission, "*")
+	ok, err := m.enforcer.Enforce(email, permission, "*")
 	if err != nil {
 		return false, fmt.Errorf("failed to enforce: %w", err)
 	}
-
 	return ok, nil
 }
 

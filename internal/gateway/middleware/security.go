@@ -436,6 +436,12 @@ func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.H
 		if path == "/.gateway/api/health" {
 			return
 		}
+		if strings.HasPrefix(path, "/.well-known/") {
+			return
+		}
+		if path == "/favicon.ico" {
+			return
+		}
 		// Skip noisy Vite dev server requests in development (static assets)
 		if devMode && strings.HasPrefix(path, "/.gateway/web/") {
 			remainder := path[len("/.gateway/web/"):]

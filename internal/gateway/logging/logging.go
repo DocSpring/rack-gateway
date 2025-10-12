@@ -14,6 +14,7 @@ const (
 	TopicHTTPResponseHeaders = "http.response.headers"
 	TopicHTTPResponseBody    = "http.response.body"
 	TopicSQL                 = "sql"
+	TopicSQLTrace            = "sql/trace"
 	TopicAuth                = "auth"
 	TopicMFA                 = "mfa"
 	TopicMFAStepUp           = "mfa.stepup"

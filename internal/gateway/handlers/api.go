@@ -213,10 +213,18 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 	rolesVal, _ := c.Get("user_roles")
 	roles := normalizeStringSlice(rolesVal)
 
-	dbUser, err := h.database.GetUser(email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-		return
+	var dbUser *db.User
+	authUser, _ := auth.GetAuthUser(c.Request.Context())
+	if authUser != nil {
+		dbUser = authUser.DBUser
+	}
+	if dbUser == nil {
+		var err error
+		dbUser, err = h.database.GetUser(email)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+			return
+		}
 	}
 
 	// Build user info
@@ -241,7 +249,7 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 		userInfo.MFARequired = true
 	}
 
-	if authUser, ok := auth.GetAuthUser(c.Request.Context()); ok && authUser != nil && authUser.Session != nil {
+	if authUser != nil && authUser.Session != nil {
 		if authUser.Session.RecentStepUpAt != nil {
 			expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
 			userInfo.RecentStepUpExpiresAt = &expires

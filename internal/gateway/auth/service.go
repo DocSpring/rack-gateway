@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -17,6 +18,7 @@ import (
 type contextKey string
 
 const UserContextKey contextKey = "user"
+const userRecordKey contextKey = "user_record"
 
 // AuthService handles session and API token authentication
 type AuthService struct {
@@ -27,16 +29,25 @@ type AuthService struct {
 
 // AuthUser represents an authenticated user from either session or API token
 type AuthUser struct {
-	Email       string          `json:"email"`
-	Name        string          `json:"name"`
-	Roles       []string        `json:"roles,omitempty"`       // For session users
-	Permissions []string        `json:"permissions,omitempty"` // For API token users
-	IsAPIToken  bool            `json:"is_api_token"`
-	TokenID     *int64          `json:"token_id,omitempty"` // For API tokens
-	TokenName   string          `json:"token_name,omitempty"`
-	Session     *db.UserSession `json:"-"`
-	MFAType     string          `json:"-"` // "totp" or "webauthn" - inline MFA provided with request
-	MFAValue    string          `json:"-"` // The MFA verification data (TOTP code or WebAuthn assertion)
+	Email              string          `json:"email"`
+	Name               string          `json:"name"`
+	Roles              []string        `json:"roles,omitempty"`       // For session users
+	Permissions        []string        `json:"permissions,omitempty"` // For API token users
+	IsAPIToken         bool            `json:"is_api_token"`
+	TokenID            *int64          `json:"token_id,omitempty"` // For API tokens
+	TokenName          string          `json:"token_name,omitempty"`
+	Session            *db.UserSession `json:"-"`
+	MFAType            string          `json:"-"` // "totp" or "webauthn" - inline MFA provided with request
+	MFAValue           string          `json:"-"` // The MFA verification data (TOTP code or WebAuthn assertion)
+	Suspended          bool            `json:"-"`
+	MFAEnrolled        bool            `json:"-"`
+	PreferredMFAMethod *string         `json:"-"`
+	LockedAt           *time.Time      `json:"-"`
+	LockedReason       string          `json:"-"`
+	LockedByUserID     *int64          `json:"-"`
+	LockedByEmail      string          `json:"-"`
+	LockedByName       string          `json:"-"`
+	DBUser             *db.User        `json:"-"`
 }
 
 // NewAuthService creates a new authentication service
@@ -59,6 +70,9 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 
 		// Add user to request context and headers for audit logging
 		ctx := context.WithValue(r.Context(), UserContextKey, user)
+		if user != nil && user.DBUser != nil {
+			ctx = context.WithValue(ctx, userRecordKey, user.DBUser)
+		}
 		r = r.WithContext(ctx)
 
 		// Set headers for audit logging
@@ -97,7 +111,9 @@ func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, 
 	if src == "" {
 		src = "none"
 	}
-	logging.Debugf("[auth:401] %s %s src=%s reason=%s", r.Method, r.URL.Path, src, reason)
+	if logging.TopicEnabled(logging.TopicAuth) {
+		logging.DebugTopicf(logging.TopicAuth, "[auth:401] %s %s src=%s reason=%s", r.Method, r.URL.Path, src, reason)
+	}
 	http.Error(w, reason, http.StatusUnauthorized)
 }
 
@@ -144,11 +160,23 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 			return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
 		}
 		user = &AuthUser{
-			Email:      result.User.Email,
-			Name:       result.User.Name,
-			Roles:      result.User.Roles,
-			IsAPIToken: false,
-			Session:    result.Session,
+			Email:              result.User.Email,
+			Name:               result.User.Name,
+			Roles:              append([]string(nil), result.User.Roles...),
+			IsAPIToken:         false,
+			Session:            result.Session,
+			Suspended:          result.User.Suspended,
+			MFAEnrolled:        result.User.MFAEnrolled,
+			PreferredMFAMethod: result.User.PreferredMFAMethod,
+			LockedAt:           result.User.LockedAt,
+			LockedReason:       result.User.LockedReason,
+			LockedByUserID:     result.User.LockedByUserID,
+			LockedByEmail:      result.User.LockedByEmail,
+			LockedByName:       result.User.LockedByName,
+			DBUser:             result.User,
+		}
+		if result.Session != nil {
+			result.Session.UserID = result.User.ID
 		}
 		source = "cookie"
 	} else {
@@ -226,12 +254,21 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 	}
 
 	userResp := &AuthUser{
-		Email:       user.Email,
-		Name:        user.Name,
-		Permissions: apiToken.Permissions,
-		IsAPIToken:  true,
-		TokenID:     &apiToken.ID,
-		TokenName:   apiToken.Name,
+		Email:              user.Email,
+		Name:               user.Name,
+		Permissions:        append([]string(nil), apiToken.Permissions...),
+		IsAPIToken:         true,
+		TokenID:            &apiToken.ID,
+		TokenName:          apiToken.Name,
+		Suspended:          user.Suspended,
+		MFAEnrolled:        user.MFAEnrolled,
+		PreferredMFAMethod: user.PreferredMFAMethod,
+		LockedAt:           user.LockedAt,
+		LockedReason:       user.LockedReason,
+		LockedByUserID:     user.LockedByUserID,
+		LockedByEmail:      user.LockedByEmail,
+		LockedByName:       user.LockedByName,
+		DBUser:             user,
 	}
 
 	return userResp, nil
@@ -292,6 +329,19 @@ func GetAuthUser(ctx context.Context) (*AuthUser, bool) {
 	return user, ok
 }
 
+// GetAuthUserRecord retrieves the loaded db.User from context when available.
+func GetAuthUserRecord(ctx context.Context) *db.User {
+	if user, ok := ctx.Value(UserContextKey).(*AuthUser); ok && user != nil && user.DBUser != nil {
+		return user.DBUser
+	}
+	if v := ctx.Value(userRecordKey); v != nil {
+		if dbUser, ok := v.(*db.User); ok {
+			return dbUser
+		}
+	}
+	return nil
+}
+
 // GetSessionID extracts the session ID from the request context
 func GetSessionID(ctx context.Context) (int64, bool) {
 	authUser, ok := ctx.Value(UserContextKey).(*AuthUser)
@@ -335,11 +385,24 @@ func (a *AuthService) validateSessionToken(token string, r *http.Request) (*Auth
 	if result == nil || result.User == nil || result.Session == nil {
 		return nil, fmt.Errorf("session invalid")
 	}
-	return &AuthUser{
-		Email:      result.User.Email,
-		Name:       result.User.Name,
-		Roles:      result.User.Roles,
-		IsAPIToken: false,
-		Session:    result.Session,
-	}, nil
+	authUser := &AuthUser{
+		Email:              result.User.Email,
+		Name:               result.User.Name,
+		Roles:              append([]string(nil), result.User.Roles...),
+		IsAPIToken:         false,
+		Session:            result.Session,
+		Suspended:          result.User.Suspended,
+		MFAEnrolled:        result.User.MFAEnrolled,
+		PreferredMFAMethod: result.User.PreferredMFAMethod,
+		LockedAt:           result.User.LockedAt,
+		LockedReason:       result.User.LockedReason,
+		LockedByUserID:     result.User.LockedByUserID,
+		LockedByEmail:      result.User.LockedByEmail,
+		LockedByName:       result.User.LockedByName,
+		DBUser:             result.User,
+	}
+	if result.Session != nil {
+		result.Session.UserID = result.User.ID
+	}
+	return authUser, nil
 }
