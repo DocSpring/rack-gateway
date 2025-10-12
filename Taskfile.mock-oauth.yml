@@ -25,6 +25,12 @@ tasks:
       - dist/**/*
     cmds: [pnpm build]
 
+  test:
+    dir: mock-oauth
+    desc: Run mock OAuth server unit tests
+    deps: [deps]
+    cmds: [pnpm test]
+
   lint:
     desc: Run TypeScript typecheck and Biome lint
     deps: [lint:typecheck, lint:biome]

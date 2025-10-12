@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { authenticator } from 'otplib'
-import { APIRoute, WebRoute } from '@/lib/routes'
+import { WebRoute } from '@/lib/routes'
 import {
   clearMfaAttempts,
   enforceMfaForUser,
@@ -126,7 +126,12 @@ export async function satisfyStepUpModal(
   page: Page,
   options: { email?: string; secret?: string; trustDevice?: boolean; require?: boolean } = {}
 ): Promise<boolean> {
-  const { email = 'admin@example.com', secret: secretOverride, trustDevice = false, require = false } = options
+  const {
+    email = 'admin@example.com',
+    secret: secretOverride,
+    trustDevice = false,
+    require = false,
+  } = options
 
   const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   const visible = await dialog.isVisible().catch(() => false)
@@ -167,7 +172,7 @@ async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<stri
     const global = window as Record<string, unknown>
     global.__e2e_totpSecret = null
 
-    const stub = async (text: string) => {
+    const stub = (text: string) => {
       global.__e2e_totpSecret = text
       return Promise.resolve()
     }
@@ -196,9 +201,9 @@ async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<stri
     )
     .not.toEqual('')
 
-  let secret = (await page.evaluate(
-    () => (window as Record<string, unknown>).__e2e_totpSecret
-  )) as string | null
+  let secret = (await page.evaluate(() => (window as Record<string, unknown>).__e2e_totpSecret)) as
+    | string
+    | null
 
   if (!secret) {
     secret = await pollPendingTotpSecret(email, 5000)

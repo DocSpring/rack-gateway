@@ -58,3 +58,7 @@ pre-commit:
       root: "web/"
       glob: "**/*.{ts,tsx}"
       run: pnpm tsc --noEmit
+
+    mock-oauth-test:
+      glob: "mock-oauth/**/*.{ts,tsx}"
+      run: task mock-oauth:test

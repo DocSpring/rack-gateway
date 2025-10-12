@@ -167,7 +167,6 @@ export async function getPendingTotpSecret(email: string): Promise<string | null
   })
 }
 
-
 export async function clearAllGlobalSettings() {
   await withDbClient(async (client) => {
     // Clear all global settings except the ones needed for E2E tests

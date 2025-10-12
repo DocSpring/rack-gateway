@@ -1,49 +1,49 @@
-import { createServer } from "node:http"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { createServer } from "node:http";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import cors from "cors"
-import express, { type Express, type Request, type Response } from "express"
-import { exportJWK, generateKeyPair, type JWK, SignJWT } from "jose"
-import { v4 as uuidv4 } from "uuid"
+import cors from "cors";
+import express, { type Express, type Request, type Response } from "express";
+import { exportJWK, generateKeyPair, type JWK, SignJWT } from "jose";
+import { v4 as uuidv4 } from "uuid";
 
-import { Logger, truncateForLog } from "./logging.js"
+import { Logger, truncateForLog } from "./logging.js";
 
 type MockUser = {
-  id: string
-  email: string
-  name: string
-  picture: string
-  verified_email: boolean
-}
+  id: string;
+  email: string;
+  name: string;
+  picture: string;
+  verified_email: boolean;
+};
 
 type AuthorizationCodePayload = {
-  clientId: string
-  redirectUri: string
-  codeChallenge?: string
-  codeChallengeMethod?: string
-  user: MockUser
-  expires: number
-}
+  clientId: string;
+  redirectUri: string;
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
+  user: MockUser;
+  expires: number;
+};
 
 type AccessTokenPayload = {
-  user: MockUser
-  expires: number
-}
+  user: MockUser;
+  expires: number;
+};
 
 type TokenRequestBody = {
-  grant_type?: string
-  code?: string
-  redirect_uri?: string
-  code_verifier?: string
-  client_id?: string
-}
+  grant_type?: string;
+  code?: string;
+  redirect_uri?: string;
+  code_verifier?: string;
+  client_id?: string;
+};
 
-type PublicJwk = JWK & { kid: string }
+type PublicJwk = JWK & { kid: string };
 type SigningContext = {
-  publicJwk: PublicJwk
-  signingKey: CryptoKey
-  kid: string
-}
+  publicJwk: PublicJwk;
+  signingKey: CryptoKey;
+  kid: string;
+};
 
 const mockUsers: Record<string, MockUser> = {
   "admin@example.com": {
@@ -81,24 +81,24 @@ const mockUsers: Record<string, MockUser> = {
     picture: "https://via.placeholder.com/128",
     verified_email: true,
   },
-}
+};
 
-const authCodes = new Map<string, AuthorizationCodePayload>()
-const accessTokens = new Map<string, AccessTokenPayload>()
+const authCodes = new Map<string, AuthorizationCodePayload>();
+const accessTokens = new Map<string, AccessTokenPayload>();
 
 const HTTP_STATUS = {
   badRequest: 400,
   unauthorized: 401,
   internalServerError: 500,
   ok: 200,
-} as const
+} as const;
 
-const ONE_MINUTE_IN_MS = 60_000
-const ONE_HOUR_IN_MS = 60 * ONE_MINUTE_IN_MS
-const AUTH_CODE_TTL = 10 * ONE_MINUTE_IN_MS
-const DEFAULT_PORT = 3345
+const ONE_MINUTE_IN_MS = 60_000;
+const ONE_HOUR_IN_MS = 60 * ONE_MINUTE_IN_MS;
+const AUTH_CODE_TTL = 10 * ONE_MINUTE_IN_MS;
+const DEFAULT_PORT = 3345;
 
-const logger = new Logger("mock-oauth")
+const logger = new Logger("mock-oauth");
 
 export const TOPICS = {
   http: "http",
@@ -106,105 +106,178 @@ export const TOPICS = {
   httpBody: "http.body",
   flow: "flow",
   tokens: "tokens",
-} as const
+} as const;
 
-const argv = process.argv.slice(2)
+type ErrorResponse = {
+  status: number;
+  body: { error: string; error_description: string };
+};
+
+const badRequest = (error: string, description: string): ErrorResponse => ({
+  status: HTTP_STATUS.badRequest,
+  body: { error, error_description: description },
+});
+
+const resolveClientId = (req: Request, body: TokenRequestBody): string | undefined => {
+  let clientId = body.client_id;
+  const authHeader = req.headers.authorization ?? "";
+
+  if (authHeader.startsWith("Basic ")) {
+    try {
+      const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
+      const [user] = decoded.split(":", 2);
+      clientId = user;
+    } catch (error) {
+      logger.warn("Failed to decode Basic auth header %o", error);
+    }
+  }
+
+  return clientId;
+};
+
+type TokenValidationSuccess = {
+  authData: AuthorizationCodePayload;
+  clientId: string;
+  code: string;
+};
+type TokenValidationResult = TokenValidationSuccess | { error: ErrorResponse };
+
+const validateTokenRequest = (req: Request, body: TokenRequestBody): TokenValidationResult => {
+  const { grant_type, code, redirect_uri } = body;
+
+  if (grant_type !== "authorization_code") {
+    return {
+      error: badRequest(
+        "unsupported_grant_type",
+        "Only authorization_code grant type is supported"
+      ),
+    };
+  }
+
+  const clientId = resolveClientId(req, body);
+
+  if (!(code && redirect_uri && clientId)) {
+    return { error: badRequest("invalid_request", "Missing required parameters") };
+  }
+
+  const authData = authCodes.get(code);
+  if (!authData || authData.expires < Date.now()) {
+    logger.warn("Invalid or expired authorization code %s", code);
+    return { error: badRequest("invalid_grant", "Invalid or expired authorization code") };
+  }
+
+  if (authData.redirectUri !== redirect_uri || authData.clientId !== clientId) {
+    logger.warn(
+      "Authorization code mismatch code=%s storedRedirect=%s providedRedirect=%s storedClient=%s providedClient=%s",
+      code,
+      authData.redirectUri,
+      redirect_uri,
+      authData.clientId,
+      clientId
+    );
+    return { error: badRequest("invalid_grant", "Redirect URI or client ID mismatch") };
+  }
+
+  return { authData, clientId, code };
+};
+
+const argv = process.argv.slice(2);
 if (argv.includes("--help") || argv.includes("-h")) {
   logger.info(
-    "Mock OAuth Server\n\nUsage: node dist/server.js [options]\n\nOptions:\n  --help, -h       Show this help message and exit.\n\nConfiguration:\n  MOCK_OAUTH_PORT    Port the HTTP server listens on (default: 3345).\n  PORT               Fallback port if MOCK_OAUTH_PORT not set.\n  OAUTH_ISSUER       Internal issuer URL override.\n  OAUTH_BROWSER_BASE Browser-facing base URL override.\n",
-  )
-  process.exit(0)
+    "Mock OAuth Server\n\nUsage: node dist/server.js [options]\n\nOptions:\n  --help, -h       Show this help message and exit.\n\nConfiguration:\n  MOCK_OAUTH_PORT    Port the HTTP server listens on (default: 3345).\n  PORT               Fallback port if MOCK_OAUTH_PORT not set.\n  OAUTH_ISSUER       Internal issuer URL override.\n  OAUTH_BROWSER_BASE Browser-facing base URL override.\n"
+  );
+  process.exit(0);
 }
 
-let publicJwk: PublicJwk | undefined
-let currentKid: string | undefined
-let signingKey: CryptoKey | undefined
-let keysPromise: Promise<void> | null = null
+let publicJwk: PublicJwk | undefined;
+let currentKid: string | undefined;
+let signingKey: CryptoKey | undefined;
+let keysPromise: Promise<void> | null = null;
 
-const ensureKeys = async (): Promise<void> => {
+const ensureKeys = (): Promise<void> => {
   if (keysPromise) {
-    return keysPromise
+    return keysPromise;
   }
   keysPromise = (async () => {
-    const { publicKey, privateKey } = await generateKeyPair("RS256")
-    const jwk = await exportJWK(publicKey)
-    const kid = uuidv4()
+    const { publicKey, privateKey } = await generateKeyPair("RS256");
+    const jwk = await exportJWK(publicKey);
+    const kid = uuidv4();
     publicJwk = {
       ...jwk,
       kty: "RSA",
       kid,
       use: "sig",
       alg: "RS256",
-    } as PublicJwk
-    signingKey = privateKey
-    currentKid = kid
-    logger.debug(TOPICS.tokens, `generated signing keys kid=${kid}`)
-  })()
-  return keysPromise
-}
+    } as PublicJwk;
+    signingKey = privateKey;
+    currentKid = kid;
+    logger.debug(TOPICS.tokens, `generated signing keys kid=${kid}`);
+  })();
+  return keysPromise;
+};
 
 const getSigningContext = (): SigningContext => {
   if (!(publicJwk && signingKey && currentKid)) {
-    throw new Error("Signing keys have not been initialised")
+    throw new Error("Signing keys have not been initialised");
   }
   return {
     publicJwk,
     signingKey,
     kid: currentKid,
-  }
-}
+  };
+};
 
 const resolveInternalBase = (req: Request): string =>
-  process.env.OAUTH_ISSUER ?? `${req.protocol}://${req.get("host")}`
+  process.env.OAUTH_ISSUER ?? `${req.protocol}://${req.get("host")}`;
 
 const resolveBrowserBase = (req: Request): string =>
-  process.env.OAUTH_BROWSER_BASE ?? `${req.protocol}://${req.get("host")}`
+  process.env.OAUTH_BROWSER_BASE ?? `${req.protocol}://${req.get("host")}`;
 
-export const loggerInstance = logger
+export const loggerInstance = logger;
 
 export async function createApp(): Promise<Express> {
-  await ensureKeys()
+  await ensureKeys();
 
-  const app = express()
-  app.use(cors())
-  app.use(express.json())
-  app.use(express.urlencoded({ extended: true }))
+  const app = express();
+  app.use(cors());
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   app.use((req, res, next) => {
     if (logger.topicEnabled(TOPICS.http)) {
-      logger.debug(TOPICS.http, `request ${req.method} ${req.originalUrl}`)
+      logger.debug(TOPICS.http, `request ${req.method} ${req.originalUrl}`);
     }
     if (logger.topicEnabled(TOPICS.httpHeaders)) {
       for (const [key, value] of Object.entries(req.headers)) {
-        logger.debug(TOPICS.httpHeaders, `${key}: ${String(value)}`)
+        logger.debug(TOPICS.httpHeaders, `${key}: ${String(value)}`);
       }
     }
     if (logger.topicEnabled(TOPICS.httpBody) && req.body && Object.keys(req.body).length > 0) {
-      logger.debug(TOPICS.httpBody, truncateForLog(JSON.stringify(req.body)))
+      logger.debug(TOPICS.httpBody, truncateForLog(JSON.stringify(req.body)));
     }
 
     res.on("finish", () => {
       if (logger.topicEnabled(TOPICS.http)) {
-        logger.debug(TOPICS.http, `response ${res.statusCode} ${req.method} ${req.originalUrl}`)
+        logger.debug(TOPICS.http, `response ${res.statusCode} ${req.method} ${req.originalUrl}`);
       }
-    })
+    });
 
-    next()
-  })
+    next();
+  });
 
-  registerRoutes(app)
-  return app
+  registerRoutes(app);
+  return app;
 }
 
 function registerRoutes(app: Express) {
   app.get("/.well-known/jwks", (_req: Request, res: Response) => {
-    const { publicJwk: currentPublicJwk } = getSigningContext()
-    res.json({ keys: [currentPublicJwk] })
-  })
+    const { publicJwk: currentPublicJwk } = getSigningContext();
+    res.json({ keys: [currentPublicJwk] });
+  });
 
   app.get("/.well-known/openid-configuration", (req: Request, res: Response) => {
-    const internalBase = resolveInternalBase(req)
-    const browserBase = resolveBrowserBase(req)
+    const internalBase = resolveInternalBase(req);
+    const browserBase = resolveBrowserBase(req);
     res.json({
       issuer: internalBase,
       authorization_endpoint: `${browserBase}/oauth2/v2/auth`,
@@ -216,11 +289,11 @@ function registerRoutes(app: Express) {
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: ["RS256"],
       scopes_supported: ["openid", "email", "profile"],
-    })
-  })
+    });
+  });
 
   app.get("/oauth2/v2/auth", (req: Request, res: Response) => {
-    const query = req.query as Record<string, string | undefined>
+    const query = req.query as Record<string, string | undefined>;
     const {
       client_id,
       redirect_uri,
@@ -229,29 +302,29 @@ function registerRoutes(app: Express) {
       code_challenge,
       code_challenge_method,
       selected_user,
-    } = query
+    } = query;
 
     if (!(client_id && redirect_uri) || response_type !== "code") {
       return res.status(HTTP_STATUS.badRequest).json({
         error: "invalid_request",
         error_description: "Missing or invalid required parameters",
-      })
+      });
     }
 
     if (!selected_user) {
-      logger.debug(TOPICS.flow, "no user selected, redirecting to dev selector")
-      return res.redirect(`/dev/select-user?${req.url.split("?")[1] ?? ""}`)
+      logger.debug(TOPICS.flow, "no user selected, redirecting to dev selector");
+      return res.redirect(`/dev/select-user?${req.url.split("?")[1] ?? ""}`);
     }
 
-    const user = mockUsers[selected_user]
+    const user = mockUsers[selected_user];
     if (!user) {
       return res.status(HTTP_STATUS.badRequest).json({
         error: "invalid_user",
         error_description: "Selected user not found",
-      })
+      });
     }
 
-    const authCode = uuidv4()
+    const authCode = uuidv4();
     authCodes.set(authCode, {
       clientId: client_id,
       redirectUri: redirect_uri,
@@ -259,85 +332,38 @@ function registerRoutes(app: Express) {
       codeChallengeMethod: code_challenge_method,
       user,
       expires: Date.now() + AUTH_CODE_TTL,
-    })
+    });
 
-    logger.debug(TOPICS.flow, `issued auth code ${authCode} for ${user.email}`)
+    logger.debug(TOPICS.flow, `issued auth code ${authCode} for ${user.email}`);
 
-    const redirectUrl = new URL(redirect_uri)
-    redirectUrl.searchParams.set("code", authCode)
+    const redirectUrl = new URL(redirect_uri);
+    redirectUrl.searchParams.set("code", authCode);
     if (state) {
-      redirectUrl.searchParams.set("state", state)
+      redirectUrl.searchParams.set("state", state);
     }
 
-    return res.redirect(redirectUrl.toString())
-  })
+    return res.redirect(redirectUrl.toString());
+  });
 
   app.post("/oauth2/v4/token", async (req: Request, res: Response) => {
-    const body = req.body as TokenRequestBody
-    const { grant_type, code, redirect_uri } = body
-
-    let clientId = body.client_id
-    const authHeader = req.headers.authorization ?? ""
-
-    if (authHeader.startsWith("Basic ")) {
-      try {
-        const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf8")
-        const [user] = decoded.split(":", 2)
-        clientId = user
-      } catch (error) {
-        logger.warn("Failed to decode Basic auth header %o", error)
-      }
+    const validation = validateTokenRequest(req, req.body as TokenRequestBody);
+    if ("error" in validation) {
+      return res.status(validation.error.status).json(validation.error.body);
     }
 
-    if (grant_type !== "authorization_code") {
-      return res.status(HTTP_STATUS.badRequest).json({
-        error: "unsupported_grant_type",
-        error_description: "Only authorization_code grant type is supported",
-      })
-    }
+    const { authData, code } = validation;
 
-    if (!(code && redirect_uri && clientId)) {
-      return res.status(HTTP_STATUS.badRequest).json({
-        error: "invalid_request",
-        error_description: "Missing required parameters",
-      })
-    }
-
-    const authData = authCodes.get(code)
-    if (!authData || authData.expires < Date.now()) {
-      logger.warn("Invalid or expired authorization code %s", code)
-      return res.status(HTTP_STATUS.badRequest).json({
-        error: "invalid_grant",
-        error_description: "Invalid or expired authorization code",
-      })
-    }
-
-    if (authData.redirectUri !== redirect_uri || authData.clientId !== clientId) {
-      logger.warn(
-        "Authorization code mismatch code=%s storedRedirect=%s providedRedirect=%s storedClient=%s providedClient=%s",
-        code,
-        authData.redirectUri,
-        redirect_uri,
-        authData.clientId,
-        clientId,
-      )
-      return res.status(HTTP_STATUS.badRequest).json({
-        error: "invalid_grant",
-        error_description: "Redirect URI or client ID mismatch",
-      })
-    }
-
-    const accessToken = uuidv4()
-    const idToken = await generateMockIdToken(authData.user)
+    const accessToken = uuidv4();
+    const idToken = await generateMockIdToken(authData.user);
 
     accessTokens.set(accessToken, {
       user: authData.user,
       expires: Date.now() + ONE_HOUR_IN_MS,
-    })
+    });
 
-    authCodes.delete(code)
+    authCodes.delete(code);
 
-    logger.debug(TOPICS.tokens, `issued access token for ${authData.user.email}`)
+    logger.debug(TOPICS.tokens, `issued access token for ${authData.user.email}`);
 
     return res.json({
       access_token: accessToken,
@@ -345,47 +371,47 @@ function registerRoutes(app: Express) {
       expires_in: ONE_HOUR_IN_MS / ONE_MINUTE_IN_MS,
       id_token: idToken,
       scope: "openid email profile",
-    })
-  })
+    });
+  });
 
   app.get("/oauth2/v2/userinfo", (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization
+    const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       return res.status(HTTP_STATUS.unauthorized).json({
         error: "invalid_token",
         error_description: "Invalid or missing access token",
-      })
+      });
     }
 
-    const token = authHeader.substring(7)
-    const tokenData = accessTokens.get(token)
+    const token = authHeader.substring(7);
+    const tokenData = accessTokens.get(token);
 
     if (!tokenData || tokenData.expires < Date.now()) {
       return res.status(HTTP_STATUS.unauthorized).json({
         error: "invalid_token",
         error_description: "Invalid or expired access token",
-      })
+      });
     }
 
-    return res.json(tokenData.user)
-  })
+    return res.json(tokenData.user);
+  });
 
   type UserSelectionParams = {
-    client_id?: string
-    redirect_uri?: string
-    response_type?: string
-    scope?: string
-    state?: string
-    code_challenge?: string
-    code_challenge_method?: string
-  }
+    client_id?: string;
+    redirect_uri?: string;
+    response_type?: string;
+    scope?: string;
+    state?: string;
+    code_challenge?: string;
+    code_challenge_method?: string;
+  };
 
   app.get(
     "/dev/select-user",
     (req: Request<unknown, unknown, unknown, UserSelectionParams>, res: Response) => {
-      const users = Object.values(mockUsers)
-      const query = req.query ?? {}
-      const queryParams = new URLSearchParams(query as Record<string, string>)
+      const users = Object.values(mockUsers);
+      const query = req.query ?? {};
+      const queryParams = new URLSearchParams(query as Record<string, string>);
 
       const cardsHtml = users
         .map(
@@ -394,9 +420,9 @@ function registerRoutes(app: Express) {
           <h3>${user.name}</h3>
           <p class="email">${user.email}</p>
         </div>
-      `,
+      `
         )
-        .join("")
+        .join("");
 
       res.type("html").send(`
     <!DOCTYPE html>
@@ -480,36 +506,39 @@ function registerRoutes(app: Express) {
         </script>
       </body>
     </html>
-  `)
-    },
-  )
+  `);
+    }
+  );
 }
 
 export async function start(port = DEFAULT_PORT): Promise<void> {
-  const app = await createApp()
-  const server = createServer(app)
+  const app = await createApp();
+  const server = createServer(app);
   server.listen(port, () => {
-    logger.info(`Mock OAuth server running on port ${port}`)
-    logger.info(`Visit http://localhost:${port} for endpoint info`)
-    logger.debug(TOPICS.flow, `Mock users available: ${Object.keys(mockUsers).join(", ")}`)
-  })
+    logger.info(`Mock OAuth server running on port ${port}`);
+    logger.info(`Visit http://localhost:${port} for endpoint info`);
+    logger.debug(TOPICS.flow, `Mock users available: ${Object.keys(mockUsers).join(", ")}`);
+  });
 }
 
-const modulePath = fileURLToPath(import.meta.url)
-const invokedPath = fileURLToPath(pathToFileURL(process.argv[1] ?? "").href)
+const modulePath = fileURLToPath(import.meta.url);
+const invokedPath = fileURLToPath(pathToFileURL(process.argv[1] ?? "").href);
 
 if (modulePath === invokedPath && process.env.NODE_ENV !== "test") {
-  const port = Number.parseInt(process.env.MOCK_OAUTH_PORT ?? process.env.PORT ?? String(DEFAULT_PORT), 10)
+  const port = Number.parseInt(
+    process.env.MOCK_OAUTH_PORT ?? process.env.PORT ?? String(DEFAULT_PORT),
+    10
+  );
   start(port).catch((error) => {
-    logger.error("Failed to start mock OAuth server %o", error)
-    process.exit(1)
-  })
+    logger.error("Failed to start mock OAuth server %o", error);
+    process.exit(1);
+  });
 }
 
 const generateMockIdToken = (user: MockUser): Promise<string> => {
-  const { signingKey: signingKeyContext, kid } = getSigningContext()
-  const issuer = process.env.OAUTH_ISSUER ?? `http://localhost:${DEFAULT_PORT}`
-  const now = Math.floor(Date.now() / 1000)
+  const { signingKey: signingKeyContext, kid } = getSigningContext();
+  const issuer = process.env.OAUTH_ISSUER ?? `http://localhost:${DEFAULT_PORT}`;
+  const now = Math.floor(Date.now() / 1000);
 
   const payload = {
     iss: issuer,
@@ -521,7 +550,7 @@ const generateMockIdToken = (user: MockUser): Promise<string> => {
     email_verified: user.verified_email,
     name: user.name,
     picture: user.picture,
-  }
+  };
 
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "RS256", kid })
@@ -529,7 +558,7 @@ const generateMockIdToken = (user: MockUser): Promise<string> => {
     .setAudience("mock-client-id")
     .setIssuedAt()
     .setExpirationTime("1h")
-    .sign(signingKeyContext)
-}
+    .sign(signingKeyContext);
+};
 
-export { createApp as default }
+export { createApp as default };

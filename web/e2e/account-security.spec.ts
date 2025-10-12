@@ -1,7 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
-import { clearMfaAttempts } from './db'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,

@@ -68,12 +68,12 @@ export const test = base.extend({
         const response = await originalFetch(...args)
         try {
           const requestInfo = args[0]
-          const url =
-            typeof requestInfo === 'string'
-              ? requestInfo
-              : requestInfo instanceof Request
-              ? requestInfo.url
-              : ''
+          let url = ''
+          if (typeof requestInfo === 'string') {
+            url = requestInfo
+          } else if (requestInfo instanceof Request) {
+            url = requestInfo.url
+          }
           if (
             typeof url === 'string' &&
             url.includes('/auth/mfa/enroll/totp/start') &&
@@ -113,7 +113,8 @@ export const test = base.extend({
           this.addEventListener('load', function () {
             try {
               const xhr = this as XMLHttpRequest
-              const raw = xhr.responseType && xhr.responseType !== 'text' ? xhr.response : xhr.responseText
+              const raw =
+                xhr.responseType && xhr.responseType !== 'text' ? xhr.response : xhr.responseText
               if (!raw) return
               const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
               globalObject.__e2e_last_mfa_enroll = parsed

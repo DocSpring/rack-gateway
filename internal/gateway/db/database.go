@@ -253,7 +253,7 @@ func queryCaller() string {
 			continue
 		}
 		file := frame.File
-		if !(strings.Contains(file, "/internal/gateway/db/") || strings.Contains(file, "\\internal\\gateway\\db\\")) {
+		if !strings.Contains(file, "/internal/gateway/db/") && !strings.Contains(file, "\\internal\\gateway\\db\\") {
 			return fmt.Sprintf("%s:%d", filepath.Base(file), frame.Line)
 		}
 		if !more {

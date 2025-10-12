@@ -111,3 +111,6 @@ jobs:
 
       - name: Mock OAuth lint (Typecheck and Biome)
         run: task mock-oauth:lint
+
+      - name: Mock OAuth tests
+        run: task mock-oauth:test

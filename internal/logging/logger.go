@@ -296,9 +296,9 @@ func parseTopicList(raw string) []string {
 func normalizeTopics(topics []string) []string {
 	result := make([]string, 0, len(topics))
 	for _, topic := range topics {
-	if n := normalizeTopic(topic); n != "" {
-		result = append(result, n)
-	}
+		if n := normalizeTopic(topic); n != "" {
+			result = append(result, n)
+		}
 	}
 	return result
 }
@@ -306,4 +306,3 @@ func normalizeTopics(topics []string) []string {
 func normalizeTopic(topic string) string {
 	return strings.Trim(strings.ToLower(topic), " \t\r\n")
 }
-

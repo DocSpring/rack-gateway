@@ -198,6 +198,6 @@ func (m MFALevel) String() string {
 	case MFAAlways:
 		return "always"
 	default:
-    panic(fmt.Sprintf("CRITICAL: Unknown MFALevel %d", m))
+		panic(fmt.Sprintf("CRITICAL: Unknown MFALevel %d", m))
 	}
 }

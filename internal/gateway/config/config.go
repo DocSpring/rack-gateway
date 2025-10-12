@@ -89,8 +89,8 @@ func Load() (*Config, error) {
 		GoogleOAuthBaseURL:  getEnv("GOOGLE_OAUTH_BASE_URL", ""),
 		SlackClientID:       getEnv("SLACK_CLIENT_ID", ""),
 		SlackClientSecret:   getEnv("SLACK_CLIENT_SECRET", ""),
-    DevMode:             getEnv("DEV_MODE", "false") == "true",
-    Racks:               make(map[string]RackConfig),
+		DevMode:             getEnv("DEV_MODE", "false") == "true",
+		Racks:               make(map[string]RackConfig),
 
 		// Disabled by default because the Convox rack API currently generates a fresh self-signed
 		// certificate on every restart (see stdapi.Server.Listen). Pinning that dynamic cert would
