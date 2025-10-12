@@ -45,13 +45,17 @@
 
 :root {
   --radius: 0.65rem;
+
+  /* Primary green - logo color #03A63F */
+  --primary-green: oklch(0.6323 0.1849 147.46);
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.6 0.18 155);
+  --primary: var(--primary-green);
   --primary-foreground: oklch(1 0 0);
   --link: oklch(0.5 0.15 240);
   --secondary: oklch(0.967 0.001 286.375);
@@ -80,8 +84,8 @@
   --sidebar-ring: oklch(0.623 0.214 259.815);
 
   /* react-hot-toast colors */
-  --rht-success-bg: #16a34a;
-  --rht-success-fg: #ffffff;
+  --rht-success-bg: var(--primary-green);
+  --rht-success-fg: oklch(1 0 0);
   --rht-error-bg: var(--destructive);
   --rht-error-fg: var(--destructive-foreground);
   --rht-warning-bg: #ea580c;
@@ -91,13 +95,16 @@
 }
 
 .dark {
+  /* Primary green - slightly lighter for dark mode */
+  --primary-green: oklch(0.68 0.18 147.46);
+
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.65 0.18 155);
+  --primary: var(--primary-green);
   --primary-foreground: oklch(0.1 0 0);
   --link: oklch(0.6 0.15 240);
   --secondary: oklch(0.274 0.006 286.033);
@@ -126,8 +133,8 @@
   --sidebar-ring: oklch(0.488 0.243 264.376);
 
   /* react-hot-toast colors for dark mode */
-  --rht-success-bg: #16a34a;
-  --rht-success-fg: #ffffff;
+  --rht-success-bg: var(--primary-green);
+  --rht-success-fg: oklch(0.1 0 0);
   --rht-error-bg: var(--destructive);
   --rht-error-fg: var(--destructive-foreground);
   --rht-warning-bg: #ea580c;
