@@ -3788,9 +3788,6 @@
                 "message": {
                     "type": "string"
                 },
-                "pipeline_url": {
-                    "type": "string"
-                },
                 "target_api_token": {
                     "type": "string"
                 },
@@ -3902,9 +3899,6 @@
                     "type": "string"
                 },
                 "object_url": {
-                    "type": "string"
-                },
-                "pipeline_url": {
                     "type": "string"
                 },
                 "pr_url": {

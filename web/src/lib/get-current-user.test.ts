@@ -11,11 +11,16 @@ describe('getCurrentUser', () => {
   })
 
   it('uses withCredentials and returns user', async () => {
-    const mockResp = { data: { email: 'admin@example.com', name: 'Admin' } }
+    const mockResp = {
+      data: {
+        user: { email: 'admin@example.com', name: 'Admin', roles: ['admin'] },
+        rack: { name: 'test-rack' },
+      },
+    }
     vi.mocked(axios.get).mockResolvedValueOnce(mockResp as unknown as never)
 
     const user = await authService.getCurrentUser()
-    expect(axios.get).toHaveBeenCalledWith(APIRoute('me'), { withCredentials: true })
+    expect(axios.get).toHaveBeenCalledWith(APIRoute('info'), { withCredentials: true })
     expect(user?.email).toBe('admin@example.com')
   })
 

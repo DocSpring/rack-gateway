@@ -86,7 +86,10 @@ export function AccountSecurityPage() {
   const location = useLocation()
   const { refresh: refreshUser, user } = useAuth()
   const { openStepUp, requireStepUp, isVerifying: isGlobalStepUpVerifying } = useStepUp()
-  const [showMethodSelector, setShowMethodSelector] = useState(false)
+  const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
+  const [enrollmentStep, setEnrollmentStep] = useState<'method-selection' | 'totp-setup'>(
+    'method-selection'
+  )
   const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null)
   const [verificationCode, setVerificationCode] = useState('')
   const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
@@ -161,11 +164,10 @@ export function AccountSecurityPage() {
     mutationFn: startTOTPEnrollment,
     onSuccess: (data) => {
       setEnrollment({ ...data, enrollmentType: 'totp' })
-      setEnrollmentLabel(DEFAULT_MFA_LABEL)
       setVerificationCode('')
       setTrustEnrollmentDevice(true)
       setRecentBackupCodes(data.backup_codes ?? null)
-      setShowMethodSelector(false)
+      setEnrollmentStep('totp-setup')
       toast.success('MFA enrollment started')
     },
     onError: (error) => {
@@ -199,28 +201,22 @@ export function AccountSecurityPage() {
           credential as PublicKeyCredential
         )
 
-        const confirmResponse = await confirmWebAuthnEnrollment({
+        const normalizedLabel = enrollmentLabel.trim() || 'Security Key'
+        await confirmWebAuthnEnrollment({
           method_id: data.method_id ?? 0,
           credential: credentialForBackend,
-          label: 'Security Key',
+          label: normalizedLabel,
         })
 
         // Success!
         setRecentBackupCodes(data.backup_codes ?? null)
-        setShowMethodSelector(false)
         toast.success('WebAuthn enrollment completed')
+        // Close modal - onOpenChange will clean up state after animation
+        setEnrollmentModalOpen(false)
         await invalidateStatus()
         refreshUser().catch(() => {
           /* noop */
         })
-
-        // Automatically open the edit dialog so user can customize the label
-        // Use the method_id from the confirm response, not the start response
-        setEditingMethod({
-          id: confirmResponse.method_id ?? 0,
-          label: 'Security Key',
-        })
-        setEditLabel('Security Key')
       } catch (error) {
         const msg = getErrorMessage(error)
         toast.error(`WebAuthn enrollment failed: ${msg}`)
@@ -257,11 +253,8 @@ export function AccountSecurityPage() {
     mutationFn: confirmTOTPEnrollment,
     onSuccess: async () => {
       toast.success('Multi-factor authentication enabled')
-      setEnrollment(null)
-      setEnrollmentLabel(DEFAULT_MFA_LABEL)
-      setQrDataUrl(null)
-      setVerificationCode('')
-      setTrustEnrollmentDevice(true)
+      // Close modal first - onOpenChange will clean up state after animation
+      setEnrollmentModalOpen(false)
       await invalidateStatus()
       refreshUser().catch(() => {
         /* noop */
@@ -574,12 +567,9 @@ export function AccountSecurityPage() {
                   startTOTPMutation.isPending || startWebAuthnMutation.isPending || !!enrollment
                 }
                 onClick={() => {
-                  // If only TOTP is available, skip method selector and go straight to enrollment
-                  if (status?.webauthn_available) {
-                    setShowMethodSelector(true)
-                  } else {
-                    handleStartEnrollment('totp')
-                  }
+                  setEnrollmentModalOpen(true)
+                  setEnrollmentStep('method-selection')
+                  setEnrollmentLabel(DEFAULT_MFA_LABEL)
                 }}
               >
                 {enrollment ? 'Enrollment In Progress' : 'Enable MFA'}
@@ -633,186 +623,6 @@ export function AccountSecurityPage() {
           </Card>
         ) : null}
       </div>
-
-      {showMethodSelector && !enrollment ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Choose MFA Method</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground text-sm">
-              Select the type of multi-factor authentication you want to use:
-            </p>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <button
-                className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={startTOTPMutation.isPending}
-                onClick={() => handleStartEnrollment('totp')}
-                type="button"
-              >
-                <h3 className="font-semibold">TOTP Authenticator</h3>
-                <p className="text-muted-foreground text-sm">
-                  Use Google Authenticator, Authy, or similar apps
-                </p>
-              </button>
-
-              {status?.webauthn_available && (
-                <button
-                  className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={startWebAuthnMutation.isPending}
-                  onClick={() => handleStartEnrollment('webauthn')}
-                  type="button"
-                >
-                  <h3 className="font-semibold">WebAuthn / FIDO2</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Use security keys, Touch ID, or Windows Hello
-                  </p>
-                </button>
-              )}
-            </div>
-
-            <Button onClick={() => setShowMethodSelector(false)} variant="outline">
-              Cancel
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {enrollment ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Finish MFA Enrollment</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 pb-2">
-            <div className="grid gap-6 md:grid-cols-2">
-              {enrollment.enrollmentType === 'totp' && (
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-base">Scan the QR code</h3>
-                  {qrDataUrl ? (
-                    /* biome-ignore lint/performance/noImgElement: Using inline QR code image for authenticator setup. */
-                    <img
-                      alt="Authenticator QR code"
-                      className="h-48 w-48 rounded border"
-                      height={192}
-                      src={qrDataUrl}
-                      width={192}
-                    />
-                  ) : (
-                    <p className="text-muted-foreground text-sm">
-                      Unable to render QR code. Use the secret key instead.
-                    </p>
-                  )}
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      className="w-fit"
-                      onClick={() =>
-                        handleCopy('secret' in enrollment ? (enrollment.secret ?? '') : '')
-                      }
-                      variant="secondary"
-                    >
-                      Copy secret for manual entry
-                    </Button>
-                    <p className="text-muted-foreground text-xs">
-                      Use this if your authenticator app cannot scan the QR code.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {enrollment.enrollmentType === 'webauthn' && (
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-base">WebAuthn Ready</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Your security key or biometric authenticator is ready. You'll be prompted to use
-                    it when confirming.
-                  </p>
-                </div>
-              )}
-              <div className="space-y-4">
-                {recentBackupCodes && recentBackupCodes.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-base">Backup codes</h3>
-                    <p className="text-muted-foreground text-sm">
-                      Store these codes somewhere safe. Each code can be used once if you lose
-                      access to your authenticator.
-                    </p>
-                    <ul className="mt-3 grid grid-cols-1 gap-1 font-mono text-sm md:grid-cols-2">
-                      {recentBackupCodes.map((code) => (
-                        <li className="rounded border bg-muted px-2 py-1" key={code}>
-                          {code}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Button
-                        onClick={() => handleCopyCodes(recentBackupCodes)}
-                        variant="secondary"
-                      >
-                        Copy codes
-                      </Button>
-                      <Button
-                        onClick={() => handleDownloadCodes(recentBackupCodes)}
-                        variant="secondary"
-                      >
-                        Download
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="mt-8 space-y-3">
-              <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
-              <MFAInput
-                className="max-w-64"
-                id="verification-code"
-                maxLength={6}
-                onChange={(event) => setVerificationCode(event.target.value.trim())}
-                placeholder="123456"
-                value={verificationCode}
-              />
-              <div className="mt-8 space-y-2">
-                <Label htmlFor="mfa-method-label">Authenticator label</Label>
-                <Input
-                  className="max-w-64"
-                  id="mfa-method-label"
-                  maxLength={150}
-                  onChange={(event) => setEnrollmentLabel(event.target.value)}
-                  placeholder={DEFAULT_MFA_LABEL}
-                  value={enrollmentLabel}
-                />
-              </div>
-              <label className="flex items-center gap-2 py-5 text-sm">
-                <input
-                  checked={trustEnrollmentDevice}
-                  onChange={(event) => setTrustEnrollmentDevice(event.target.checked)}
-                  type="checkbox"
-                />
-                Trust this browser for 30 days
-              </label>
-              <div className="flex gap-2">
-                <Button
-                  disabled={verificationCode.length === 0 || confirmEnrollmentMutation.isPending}
-                  onClick={handleConfirmEnrollment}
-                >
-                  Confirm
-                </Button>
-                <Button
-                  onClick={() => {
-                    setEnrollment(null)
-                    setEnrollmentLabel(DEFAULT_MFA_LABEL)
-                    setQrDataUrl(null)
-                    setVerificationCode('')
-                  }}
-                  variant="outline"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {methods.length > 0 ? (
         <Card>
@@ -906,11 +716,9 @@ export function AccountSecurityPage() {
                 startTOTPMutation.isPending || startWebAuthnMutation.isPending || !!enrollment
               }
               onClick={() => {
-                if (status?.webauthn_available) {
-                  setShowMethodSelector(true)
-                } else {
-                  handleStartEnrollment('totp')
-                }
+                setEnrollmentModalOpen(true)
+                setEnrollmentStep('method-selection')
+                setEnrollmentLabel(DEFAULT_MFA_LABEL)
               }}
               variant="outline"
             >
@@ -980,6 +788,202 @@ export function AccountSecurityPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setEnrollmentModalOpen(false)
+            setEnrollmentStep('method-selection')
+            setEnrollment(null)
+            setEnrollmentLabel(DEFAULT_MFA_LABEL)
+            setQrDataUrl(null)
+            setVerificationCode('')
+          }
+        }}
+        open={enrollmentModalOpen}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Enable Multi-Factor Authentication</DialogTitle>
+            <DialogDescription>
+              Set up an additional verification method to secure your account.
+            </DialogDescription>
+          </DialogHeader>
+
+          {enrollmentStep === 'method-selection' ? (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="mfa-method-label">Device name (optional)</Label>
+                <Input
+                  id="mfa-method-label"
+                  maxLength={150}
+                  onChange={(event) => setEnrollmentLabel(event.target.value)}
+                  placeholder={DEFAULT_MFA_LABEL}
+                  value={enrollmentLabel}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Give this authenticator a memorable name
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Choose authentication method</Label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {status?.webauthn_available && (
+                    <button
+                      className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={startWebAuthnMutation.isPending}
+                      onClick={() => handleStartEnrollment('webauthn')}
+                      type="button"
+                    >
+                      <h3 className="font-semibold">Passkey or security key</h3>
+                      <p className="text-muted-foreground text-sm">
+                        Use security keys, Touch ID, or Windows Hello
+                      </p>
+                    </button>
+                  )}
+                  <button
+                    className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={startTOTPMutation.isPending}
+                    onClick={() => handleStartEnrollment('totp')}
+                    type="button"
+                  >
+                    <h3 className="font-semibold">Authenticator app</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Use Google Authenticator, Authy, or similar apps
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  onClick={() => {
+                    setEnrollmentModalOpen(false)
+                    setEnrollmentStep('method-selection')
+                    setEnrollmentLabel(DEFAULT_MFA_LABEL)
+                  }}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+
+          {enrollmentStep === 'totp-setup' && enrollment ? (
+            <div className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-base">Scan the QR code</h3>
+                  {qrDataUrl ? (
+                    /* biome-ignore lint/performance/noImgElement: Using inline QR code image for authenticator setup. */
+                    <img
+                      alt="Authenticator QR code"
+                      className="h-48 w-48 rounded border"
+                      height={192}
+                      src={qrDataUrl}
+                      width={192}
+                    />
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      Unable to render QR code. Use the secret key instead.
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      className="w-fit"
+                      onClick={() =>
+                        handleCopy('secret' in enrollment ? (enrollment.secret ?? '') : '')
+                      }
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Copy secret for manual entry
+                    </Button>
+                    <p className="text-muted-foreground text-xs">
+                      Use this if your authenticator app cannot scan the QR code.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {recentBackupCodes && recentBackupCodes.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-base">Backup codes</h3>
+                      <p className="text-muted-foreground text-sm">
+                        Store these codes somewhere safe. Each code can be used once if you lose
+                        access to your authenticator.
+                      </p>
+                      <ul className="mt-3 grid grid-cols-1 gap-1 font-mono text-sm">
+                        {recentBackupCodes.slice(0, 6).map((code) => (
+                          <li className="rounded border bg-muted px-2 py-1" key={code}>
+                            {code}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          onClick={() => handleCopyCodes(recentBackupCodes)}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Copy codes
+                        </Button>
+                        <Button
+                          onClick={() => handleDownloadCodes(recentBackupCodes)}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
+                <MFAInput
+                  autoFocus
+                  className="max-w-64"
+                  id="verification-code"
+                  maxLength={6}
+                  onChange={(event) => setVerificationCode(event.target.value.trim())}
+                  placeholder="123456"
+                  value={verificationCode}
+                />
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    checked={trustEnrollmentDevice}
+                    onChange={(event) => setTrustEnrollmentDevice(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Trust this browser for 30 days
+                </label>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => {
+                    setEnrollmentStep('method-selection')
+                    setEnrollment(null)
+                    setQrDataUrl(null)
+                    setVerificationCode('')
+                  }}
+                  variant="outline"
+                >
+                  Back
+                </Button>
+                <Button
+                  disabled={verificationCode.length === 0 || confirmEnrollmentMutation.isPending}
+                  onClick={handleConfirmEnrollment}
+                >
+                  {confirmEnrollmentMutation.isPending ? 'Confirming...' : 'Confirm'}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDeleteDialog
         busy={disableAllPending || deleteMethodMutation.isPending}

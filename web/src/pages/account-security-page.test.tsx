@@ -155,15 +155,32 @@ describe('AccountSecurityPage', () => {
     const Wrapper = createWrapper()
     render(<AccountSecurityPage />, { wrapper: Wrapper })
 
+    // Click "Enable MFA" to open modal
     const enableButton = await screen.findByRole('button', { name: /enable mfa/i })
     await userEvent.click(enableButton)
 
+    // Modal should be open with method selection
     await waitFor(() => {
-      expect(apiMocks.startTOTPEnrollment).toHaveBeenCalled()
-      expect(screen.getByText(/finish mfa enrollment/i)).toBeInTheDocument()
+      expect(screen.getByText(/Enable Multi-Factor Authentication/i)).toBeInTheDocument()
+      expect(screen.getByText(/Device name/i)).toBeInTheDocument()
     })
 
-    const labelInput = screen.getByLabelText(/Authenticator label/i)
+    // Label should have default value in method selection step
+    const labelInput = screen.getByLabelText(/Device name/i)
     expect(labelInput).toHaveValue('Authenticator App')
+
+    // Click "Authenticator app" button to start TOTP enrollment
+    const totpButton = await screen.findByRole('button', { name: /Authenticator app/i })
+    await userEvent.click(totpButton)
+
+    // Should call startTOTPEnrollment and show TOTP setup
+    await waitFor(() => {
+      expect(apiMocks.startTOTPEnrollment).toHaveBeenCalled()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    // Verify QR code section is visible in modal
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent(/Scan the QR code/i)
   })
 })
