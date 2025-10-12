@@ -10,7 +10,6 @@ import (
 type Database struct {
 	db     *sql.DB
 	driver string // always "pgx"
-	logSQL bool   // log all SQL queries
 }
 
 // User represents a user in the system

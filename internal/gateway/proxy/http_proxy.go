@@ -17,12 +17,15 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
+
+const proxyLogBodyLimit = 16384
 
 func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path string, authUser *auth.AuthUser) (int, error) {
 	original := path
@@ -140,6 +143,11 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 	needsBuffer := filterRelease || shouldCapture || captureProcess
 
+	logProxy := gtwlog.TopicEnabled(gtwlog.TopicProxy)
+	logResponse := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponse)
+	logResponseHeaders := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseHeaders)
+	logResponseBody := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseBody)
+
 	var body []byte
 	var respReader io.Reader
 	var bytesWritten int64
@@ -189,24 +197,21 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 
 	w.WriteHeader(resp.StatusCode)
 
+	contentType := resp.Header.Get("Content-Type")
+	shouldCaptureBody := logResponseBody && !isLikelyBinaryContent(contentType)
+
 	if needsBuffer {
 		var err error
 		bytesWritten, err = io.Copy(w, respReader)
 		if err != nil {
 			return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
 		}
-		if h.config.LogResponseBodies {
-			max := h.config.LogBodyMaxBytes
-			logBody := body
-			if max > 0 && len(logBody) > max {
-				logBody = append([]byte{}, logBody[:max]...)
-				logBody = append(logBody, []byte("…(truncated)")...)
-			}
-			logSnippet = logBody
+		if shouldCaptureBody {
+			logSnippet = truncateBytes(body, proxyLogBodyLimit)
 		}
 	} else {
-		if h.config.LogResponseBodies {
-			acc := newLogAccumulator(h.config.LogBodyMaxBytes)
+		if shouldCaptureBody {
+			acc := newLogAccumulator(proxyLogBodyLimit)
 			reader := io.TeeReader(respReader, acc)
 			var err error
 			bytesWritten, err = io.Copy(w, reader)
@@ -223,9 +228,15 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		}
 	}
 
-	// Optional response logging
-	if h.config.LogResponseBodies {
-		ctHeader := resp.Header.Get("Content-Type")
+	if logResponseHeaders {
+		for key, values := range resp.Header {
+			for _, value := range values {
+				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "%s: %s", key, value)
+			}
+		}
+	}
+
+	if logProxy || logResponse || (logResponseBody && len(logSnippet) > 0) {
 		upstreamMethod := ""
 		upstreamURL := ""
 		if resp.Request != nil {
@@ -234,11 +245,37 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 				upstreamURL = resp.Request.URL.String()
 			}
 		}
-		fmt.Printf("DEBUG RESPONSE %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q body=%s\n",
-			r.Method, path, resp.StatusCode, ctHeader, bytesWritten, upstreamMethod, upstreamURL, string(logSnippet))
+		if logProxy {
+			gtwlog.DebugTopicf(gtwlog.TopicProxy, "upstream response %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q", r.Method, path, resp.StatusCode, contentType, bytesWritten, upstreamMethod, upstreamURL)
+		}
+		if logResponse {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponse, "upstream response %s %s -> %d ct=%q len=%d", r.Method, path, resp.StatusCode, contentType, bytesWritten)
+		}
+		if logResponseBody && len(logSnippet) > 0 {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "upstream response %s %s -> %d body=%s", r.Method, path, resp.StatusCode, string(logSnippet))
+		}
 	}
 
 	return resp.StatusCode, nil
+}
+
+func truncateBytes(body []byte, limit int) []byte {
+	if limit <= 0 || len(body) <= limit {
+		return body
+	}
+	truncated := append([]byte{}, body[:limit]...)
+	return append(truncated, []byte("…(truncated)")...)
+}
+
+func isLikelyBinaryContent(contentType string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if ct == "" {
+		return false
+	}
+	return strings.Contains(ct, "application/octet-stream") ||
+		strings.Contains(ct, "application/x-tar") ||
+		strings.Contains(ct, "application/zip") ||
+		strings.Contains(ct, "gzip")
 }
 
 func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {

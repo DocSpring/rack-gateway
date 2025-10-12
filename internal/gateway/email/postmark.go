@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // Sender is a minimal interface for sending emails.
@@ -142,11 +143,12 @@ type LoggerSender struct{ From string }
 
 func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 	if htmlBody != "" {
-		log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n[text]\n%s\n[html]\n%s", to, l.From, subject, textBody, htmlBody)
+		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
+		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s html=%s", textBody, htmlBody)
 		appendDevEmail([]string{to}, subject, textBody, htmlBody)
 		return nil
 	}
-	log.Printf("[DEV EMAIL] To=%s From=%s Subject=%q\n%s", to, l.From, subject, textBody)
+	gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
 	appendDevEmail([]string{to}, subject, textBody, htmlBody)
 	return nil
 }
@@ -162,11 +164,12 @@ func (l *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string)
 	}
 	b, _ := json.Marshal(bcc)
 	if htmlBody != "" {
-		log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n[text]\n%s\n[html]\n%s", primary, string(b), l.From, subject, textBody, htmlBody)
+		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s bcc=%s subject=%q", primary, string(b), subject)
+		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s html=%s", textBody, htmlBody)
 		appendDevEmail(to, subject, textBody, htmlBody)
 		return nil
 	}
-	log.Printf("[DEV EMAIL] To=%s BCC=%s From=%s Subject=%q\n%s", primary, string(b), l.From, subject, textBody)
+	gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s bcc=%s subject=%q", primary, string(b), subject)
 	appendDevEmail(to, subject, textBody, htmlBody)
 	return nil
 }

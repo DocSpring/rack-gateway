@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -35,8 +38,7 @@ func New(dsn string) (*Database, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
-	logSQL := os.Getenv("LOG_SQL_QUERIES") == "true"
-	d := &Database{db: db, driver: "pgx", logSQL: logSQL}
+	d := &Database{db: db, driver: "pgx"}
 	if err := d.migrateAll(); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
@@ -144,56 +146,41 @@ func (d *Database) rebind(q string) string {
 	return b.String()
 }
 
-const (
-	colorReset   = "\033[0m"
-	colorCyan    = "\033[36m"
-	colorGreen   = "\033[32m"
-	colorYellow  = "\033[33m"
-	colorRed     = "\033[31m"
-	colorMagenta = "\033[35m"
-	colorGray    = "\033[90m"
-)
-
-func sqlColor(query string) string {
-	q := strings.TrimSpace(strings.ToUpper(query))
-	switch {
-	case strings.HasPrefix(q, "SELECT"):
-		return colorCyan
-	case strings.HasPrefix(q, "INSERT"):
-		return colorGreen
-	case strings.HasPrefix(q, "UPDATE"):
-		return colorYellow
-	case strings.HasPrefix(q, "DELETE"):
-		return colorRed
-	default:
-		return colorMagenta
-	}
-}
-
 func (d *Database) logQuery(prefix, query string, args ...interface{}) {
-	if !d.logSQL {
+	logAggregate := gtwlog.TopicEnabled(gtwlog.TopicSQL)
+	logQuery := gtwlog.TopicEnabled(gtwlog.TopicSQLQuery)
+	logSource := gtwlog.TopicEnabled(gtwlog.TopicSQLSource)
+
+	if !logAggregate && !logQuery && !logSource {
 		return
 	}
-	color := sqlColor(query)
-	// Compact query for logging (single line, trimmed whitespace)
-	q := strings.Join(strings.Fields(query), " ")
-	if len(q) > 400 {
-		q = q[:400] + "..."
+
+	compact := strings.Join(strings.Fields(query), " ")
+	if len(compact) > 400 {
+		compact = compact[:400] + "..."
 	}
-	// Format args with commas
-	argsStr := "[]"
-	if len(args) > 0 {
-		argStrs := make([]string, len(args))
-		for i, arg := range args {
-			argStrs[i] = fmt.Sprintf("%v", arg)
-		}
-		argsStr = "[" + strings.Join(argStrs, ", ") + "]"
+
+	color := sqlColor(compact)
+	caller := queryCaller()
+	argsStr := formatArgs(args)
+
+	if logAggregate {
+		message := fmt.Sprintf("%s%s%s %s%s%s %s args=%s",
+			colorGray, prefix, colorReset,
+			color, compact, colorReset,
+			caller,
+			argsStr,
+		)
+		gtwlog.DebugTopicf(gtwlog.TopicSQL, "%s", message)
 	}
-	fmt.Printf("%s%s%s %s%s%s %s%s%s\n",
-		colorGray, prefix, colorReset,
-		color, q, colorReset,
-		colorGray, argsStr, colorReset,
-	)
+
+	if logQuery {
+		gtwlog.DebugTopicf(gtwlog.TopicSQLQuery, "%s %s args=%s", prefix, compact, argsStr)
+	}
+
+	if logSource && caller != "" {
+		gtwlog.DebugTopicf(gtwlog.TopicSQLSource, "%s %s", prefix, caller)
+	}
 }
 
 func (d *Database) exec(q string, args ...interface{}) (sql.Result, error) {
@@ -214,6 +201,66 @@ func (d *Database) query(q string, args ...interface{}) (*sql.Rows, error) {
 func (d *Database) queryRow(q string, args ...interface{}) *sql.Row {
 	d.logQuery("QUERY ROW:", q, args...)
 	return d.db.QueryRow(d.rebind(q), args...)
+}
+
+func formatArgs(args []interface{}) string {
+	if len(args) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(args))
+	for i, arg := range args {
+		parts[i] = fmt.Sprintf("%v", arg)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+const (
+	colorReset   = "\033[0m"
+	colorGray    = "\033[90m"
+	colorCyan    = "\033[36m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorRed     = "\033[31m"
+	colorMagenta = "\033[35m"
+)
+
+func sqlColor(query string) string {
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	switch {
+	case strings.HasPrefix(upper, "SELECT"):
+		return colorCyan
+	case strings.HasPrefix(upper, "INSERT"):
+		return colorGreen
+	case strings.HasPrefix(upper, "UPDATE"):
+		return colorYellow
+	case strings.HasPrefix(upper, "DELETE"):
+		return colorRed
+	default:
+		return colorMagenta
+	}
+}
+
+func queryCaller() string {
+	pcs := make([]uintptr, 16)
+	n := runtime.Callers(3, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if frame.Function == "" {
+			if !more {
+				break
+			}
+			continue
+		}
+		file := frame.File
+		if !(strings.Contains(file, "/internal/gateway/db/") || strings.Contains(file, "\\internal\\gateway\\db\\")) {
+			return fmt.Sprintf("%s:%d", filepath.Base(file), frame.Line)
+		}
+		if !more {
+			break
+		}
+	}
+	return ""
 }
 
 // ResetDatabase drops all gateway tables and re-applies migrations. It reads

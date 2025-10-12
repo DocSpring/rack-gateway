@@ -1,62 +1,36 @@
 package logging
 
-import (
-	"log"
-	"os"
-	"strings"
-)
+import base "github.com/DocSpring/rack-gateway/internal/logging"
 
-type Level int
+var logger = base.NewLogger("gateway")
 
 const (
-	Debug Level = iota
-	Info
-	Warn
-	Error
+	TopicHTTP                = "http"
+	TopicHTTPRequest         = "http.request"
+	TopicHTTPRequestHeaders  = "http.request.headers"
+	TopicHTTPRequestBody     = "http.request.body"
+	TopicHTTPResponse        = "http.response"
+	TopicHTTPResponseHeaders = "http.response.headers"
+	TopicHTTPResponseBody    = "http.response.body"
+	TopicSQL                 = "sql"
+	TopicSQLQuery            = "sql.query"
+	TopicSQLSource           = "sql.source"
+	TopicAuth                = "auth"
+	TopicMFA                 = "mfa"
+	TopicMFAStepUp           = "mfa.stepup"
+	TopicProxy               = "proxy"
+	TopicEmail               = "email"
+	TopicEmailSummary        = "email.summary"
+	TopicEmailBody           = "email.body"
 )
 
-var current Level = Info
+func Reload() { logger.Reload() }
 
-func init() {
-	setLevelFromEnv()
+func DebugTopicf(topic, format string, args ...interface{}) {
+	logger.DebugTopicf(topic, format, args...)
 }
-
-func setLevelFromEnv() {
-	lvl := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
-	switch lvl {
-	case "debug", "trace":
-		current = Debug
-	case "info", "":
-		current = Info
-	case "warn", "warning":
-		current = Warn
-	case "error", "err":
-		current = Error
-	default:
-		current = Info
-	}
-}
-
-func SetLevel(l Level) { current = l }
-func GetLevel() Level  { return current }
-
-func Debugf(format string, args ...interface{}) {
-	if current <= Debug {
-		log.Printf(format, args...)
-	}
-}
-func Infof(format string, args ...interface{}) {
-	if current <= Info {
-		log.Printf(format, args...)
-	}
-}
-func Warnf(format string, args ...interface{}) {
-	if current <= Warn {
-		log.Printf(format, args...)
-	}
-}
-func Errorf(format string, args ...interface{}) {
-	if current <= Error {
-		log.Printf(format, args...)
-	}
-}
+func Debugf(format string, args ...interface{}) { logger.Debugf(format, args...) }
+func Infof(format string, args ...interface{})  { logger.Infof(format, args...) }
+func Warnf(format string, args ...interface{})  { logger.Warnf(format, args...) }
+func Errorf(format string, args ...interface{}) { logger.Errorf(format, args...) }
+func TopicEnabled(topic string) bool            { return logger.TopicEnabled(topic) }

@@ -10,10 +10,13 @@ import (
 	"net/url"
 	"time"
 
+	clilog "github.com/DocSpring/rack-gateway/internal/cli/logging"
 	"github.com/convox/convox/pkg/structs"
 	"github.com/convox/stdapi"
 	"github.com/convox/stdsdk"
 )
+
+const maxLoggedBodyBytes = 4096
 
 // Client is a custom SDK client that talks to the rack-gateway API
 type Client struct {
@@ -38,12 +41,14 @@ func (c *Client) request(method, path string, body interface{}, out interface{})
 	fullURL := c.gatewayURL + "/api/v1/convox" + path
 
 	var payload io.Reader
+	var requestBody []byte
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return err
 		}
 		payload = bytes.NewReader(data)
+		requestBody = data
 	}
 
 	req, err := http.NewRequest(method, fullURL, payload)
@@ -56,24 +61,53 @@ func (c *Client) request(method, path string, body interface{}, out interface{})
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	if clilog.TopicEnabled(clilog.TopicHTTP) {
+		clilog.DebugTopicf(clilog.TopicHTTP, "%s %s", method, fullURL)
+	}
+	if clilog.TopicEnabled(clilog.TopicHTTPBody) && len(requestBody) > 0 {
+		clilog.DebugTopicf(clilog.TopicHTTPBody, "payload=%s", truncateBody(requestBody))
+	}
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(respBody))
+
+	if clilog.TopicEnabled(clilog.TopicHTTP) {
+		clilog.DebugTopicf(clilog.TopicHTTP, "<-- %d %s", resp.StatusCode, fullURL)
+	}
+	if clilog.TopicEnabled(clilog.TopicHTTPBody) && len(respBody) > 0 {
+		clilog.DebugTopicf(clilog.TopicHTTPBody, "response=%s", truncateBody(respBody))
+	}
+
 	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, string(b))
+		return fmt.Errorf("gateway request failed (%d): %s", resp.StatusCode, string(respBody))
 	}
 
 	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		if len(respBody) == 0 {
+			return nil
+		}
+		if err := json.Unmarshal(respBody, out); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func truncateBody(body []byte) string {
+	if len(body) <= maxLoggedBodyBytes {
+		return string(body)
+	}
+	return string(body[:maxLoggedBodyBytes]) + "…(truncated)"
 }
 
 // ProcessList lists processes for an app

@@ -53,6 +53,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
@@ -67,7 +68,7 @@ func writeJSON(w http.ResponseWriter, payload interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 	}
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("mock-convox: failed to encode JSON response: %v", err)
+		mclog.Errorf("failed to encode JSON response: %v", err)
 	}
 }
 
@@ -196,7 +197,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create object storage directory: %v", err)
 	}
-	log.Printf("Object storage directory: %s", objectStorageDir)
+	mclog.Infof("object storage directory: %s", objectStorageDir)
 
 	r := mux.NewRouter()
 	r.Use(requestLogger)
@@ -262,7 +263,7 @@ func main() {
 
 	// Log 404s explicitly so unexpected routes are visible in logs
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("404 %s %s", r.Method, r.URL.String())
+		mclog.Warnf("404 %s %s", r.Method, r.URL.String())
 		http.NotFound(w, r)
 	})
 
@@ -271,8 +272,8 @@ func main() {
 		port = "9090"
 	}
 
-	log.Printf("Mock Convox API server starting on port %s", port)
-	log.Printf("Expected auth: Basic %s", base64.StdEncoding.EncodeToString([]byte(mockUsername+":"+mockPassword)))
+	mclog.Infof("Mock Convox API server starting on port %s", port)
+	mclog.DebugTopicf(mclog.TopicAuth, "expected auth: Basic %s", base64.StdEncoding.EncodeToString([]byte(mockUsername+":"+mockPassword)))
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
 
@@ -323,55 +324,52 @@ Endpoints:
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("Request: %s %s rawQuery=%q", r.Method, r.URL.Path, r.URL.RawQuery)
-		if getBoolEnv("MOCK_CONVOX_LOG_HEADERS", true) {
+		if mclog.TopicEnabled(mclog.TopicHTTP) {
+			mclog.DebugTopicf(mclog.TopicHTTP, "request %s %s rawQuery=%q", r.Method, r.URL.Path, r.URL.RawQuery)
+		}
+		if mclog.TopicEnabled(mclog.TopicHTTPHeaders) {
 			for k, vs := range r.Header {
 				for _, v := range vs {
-					log.Printf("[Header] %s: %s", k, v)
+					mclog.DebugTopicf(mclog.TopicHTTPHeaders, "%s: %s", k, v)
 				}
 			}
 		}
-		// Log request body for write methods unless it's an object upload (huge tarball)
-		if getBoolEnv("MOCK_CONVOX_LOG_REQUEST_BODY", false) && r.Body != nil && !isObjectUploadPath(r.URL.Path) && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
-			// Read and restore body
+		if mclog.TopicEnabled(mclog.TopicHTTPRequest) && r.Body != nil && !isObjectUploadPath(r.URL.Path) && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
 			buf, err := io.ReadAll(r.Body)
 			if err != nil {
-				log.Printf("mock-convox: failed to read request body: %v", err)
+				mclog.Warnf("failed to read request body: %v", err)
 			} else {
 				if err := r.Body.Close(); err != nil {
-					log.Printf("mock-convox: failed to close request body: %v", err)
+					mclog.Warnf("failed to close request body: %v", err)
 				}
 				r.Body = io.NopCloser(strings.NewReader(string(buf)))
-				max := 4096
-				preview := string(buf)
-				if len(preview) > max {
-					preview = preview[:max] + "…(truncated)"
-				}
-				if preview != "" {
-					log.Printf("[Request Body] %d bytes: %s", len(buf), preview)
-				} else {
-					log.Printf("[Request Body] 0 bytes")
-				}
+				preview := truncateForLog(string(buf))
+				mclog.DebugTopicf(mclog.TopicHTTPRequest, "body (%d bytes): %s", len(buf), preview)
 			}
 		}
 		sr := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sr, r)
-		if getBoolEnv("MOCK_CONVOX_LOG_RESPONSE_BODY", false) && !isObjectUploadPath(r.URL.Path) {
-			// Log response body preview
-			max := 4096
-			preview := string(sr.body)
-			if len(preview) > max {
-				preview = preview[:max] + "…(truncated)"
-			}
-			log.Printf("[Response Body] %d bytes: %s", len(sr.body), preview)
+		if mclog.TopicEnabled(mclog.TopicHTTPResponse) && !isObjectUploadPath(r.URL.Path) {
+			preview := truncateForLog(string(sr.body))
+			mclog.DebugTopicf(mclog.TopicHTTPResponse, "body (%d bytes): %s", len(sr.body), preview)
 		}
-		log.Printf("Response: %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
+		if mclog.TopicEnabled(mclog.TopicHTTP) {
+			mclog.DebugTopicf(mclog.TopicHTTP, "response %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
+		}
 	})
 }
 
 // isObjectUploadPath returns true for deploy tarball uploads
 func isObjectUploadPath(p string) bool {
 	return strings.Contains(p, "/objects/tmp/")
+}
+
+func truncateForLog(body string) string {
+	const maxPreviewBytes = 4096
+	if len(body) <= maxPreviewBytes {
+		return body
+	}
+	return body[:maxPreviewBytes] + "…(truncated)"
 }
 
 type statusRecorder struct {
@@ -524,7 +522,7 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = r.Body.Close()
-	log.Printf("SERVICE processes start app=%s service=%s query=%q body=%q", app, service, r.URL.RawQuery, rawBody)
+	mclog.DebugTopicf(mclog.TopicAppProcesses, "start app=%s service=%s query=%q body=%q", app, service, r.URL.RawQuery, rawBody)
 
 	// Stub: return 202 Accepted with a fake process id; echo method
 	w.Header().Set("Content-Type", "application/json")
@@ -541,7 +539,7 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 func listServices(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
-	log.Printf("SERVICES list app=%s", app)
+	mclog.DebugTopicf(mclog.TopicAppProcesses, "services list app=%s", app)
 	services := []map[string]interface{}{
 		{
 			"name":    "web",
@@ -561,14 +559,14 @@ func restartService(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	service := vars["service"]
-	log.Printf("SERVICE restart app=%s service=%s", app, service)
+	mclog.DebugTopicf(mclog.TopicAppProcesses, "service restart app=%s service=%s", app, service)
 	writeJSON(w, map[string]string{"status": "restarting"})
 }
 
 func restartApp(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
-	log.Printf("APP restart app=%s", app)
+	mclog.DebugTopicf(mclog.TopicAppProcesses, "app restart app=%s", app)
 	writeJSON(w, map[string]string{"status": "restarting"})
 }
 
@@ -577,7 +575,7 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	app := vars["app"]
 	id := vars["id"]
-	log.Printf("EXEC request for app=%s pid=%s query=%q", app, id, r.URL.RawQuery)
+	mclog.DebugTopicf(mclog.TopicAppProcesses, "exec request app=%s pid=%s query=%q", app, id, r.URL.RawQuery)
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
@@ -586,7 +584,7 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("exec upgrade error: %v", err)
+		mclog.Errorf("exec upgrade error: %v", err)
 		http.Error(w, "upgrade failed", http.StatusBadRequest)
 		return
 	}
@@ -717,7 +715,7 @@ func getProcess(w http.ResponseWriter, r *http.Request) {
 
 func deleteProcess(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	log.Printf("DELETE process app=%s id=%s", vars["app"], vars["id"])
+	mclog.DebugTopicf(mclog.TopicAppProcesses, "delete process app=%s id=%s", vars["app"], vars["id"])
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, map[string]string{
 		"id":     vars["id"],
@@ -877,7 +875,7 @@ func listRacks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("[]")); err != nil {
-		log.Printf("mock-convox: failed to write racks response: %v", err)
+		mclog.Errorf("failed to write racks response: %v", err)
 	}
 }
 
@@ -978,7 +976,7 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 	// Create app subdirectory if needed
 	appDir := fmt.Sprintf("%s/%s", objectStorageDir, app)
 	if err := os.MkdirAll(appDir, 0755); err != nil {
-		log.Printf("mock-convox: failed to create app directory: %v", err)
+		mclog.Errorf("failed to create app directory: %v", err)
 		http.Error(w, "failed to create storage directory", http.StatusInternalServerError)
 		return
 	}
@@ -987,14 +985,14 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 	objectPath := fmt.Sprintf("%s/tmp/%s", appDir, name)
 	objectDir := fmt.Sprintf("%s/tmp", appDir)
 	if err := os.MkdirAll(objectDir, 0755); err != nil {
-		log.Printf("mock-convox: failed to create tmp directory: %v", err)
+		mclog.Errorf("failed to create tmp directory: %v", err)
 		http.Error(w, "failed to create tmp directory", http.StatusInternalServerError)
 		return
 	}
 
 	f, err := os.Create(objectPath)
 	if err != nil {
-		log.Printf("mock-convox: failed to create object file: %v", err)
+		mclog.Errorf("failed to create object file: %v", err)
 		http.Error(w, "failed to save upload", http.StatusInternalServerError)
 		return
 	}
@@ -1002,15 +1000,15 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 
 	written, err := io.Copy(f, r.Body)
 	if err != nil {
-		log.Printf("mock-convox: failed to write upload: %v", err)
+		mclog.Errorf("failed to write upload: %v", err)
 		http.Error(w, "failed to save upload", http.StatusInternalServerError)
 		return
 	}
 	if err := r.Body.Close(); err != nil {
-		log.Printf("mock-convox: failed to close upload body: %v", err)
+		mclog.Warnf("failed to close upload body: %v", err)
 	}
 
-	log.Printf("Saved object to %s (%d bytes)", objectPath, written)
+	mclog.DebugTopicf(mclog.TopicAppObjects, "saved object to %s (%d bytes)", objectPath, written)
 
 	// Return object URL that BuildCreate will use
 	// Format: object://app/tmp/{name} matches Convox's object storage URL format
@@ -1030,11 +1028,11 @@ func downloadObject(w http.ResponseWriter, r *http.Request) {
 	// Build path to object file
 	objectPath := fmt.Sprintf("%s/%s/%s", objectStorageDir, app, key)
 
-	log.Printf("Fetching object from %s", objectPath)
+	mclog.DebugTopicf(mclog.TopicAppObjects, "fetching object from %s", objectPath)
 
 	// Check if file exists
 	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
-		log.Printf("mock-convox: object not found: %s", objectPath)
+		mclog.Warnf("object not found: %s", objectPath)
 		http.Error(w, "object not found", http.StatusNotFound)
 		return
 	}
@@ -1131,10 +1129,10 @@ func putSystem(w http.ResponseWriter, r *http.Request) {
 		if b, err := io.ReadAll(r.Body); err == nil {
 			body = b
 		} else {
-			log.Printf("mock-convox: failed to read system body: %v", err)
+			mclog.Errorf("failed to read system body: %v", err)
 		}
 		if err := r.Body.Close(); err != nil {
-			log.Printf("mock-convox: failed to close system body: %v", err)
+			mclog.Warnf("failed to close system body: %v", err)
 		}
 	}
 
@@ -1345,7 +1343,7 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log the request for debugging
-	log.Printf("%s %s", r.Method, r.URL.Path)
+	mclog.DebugTopicf(mclog.TopicHTTP, "%s %s", r.Method, r.URL.Path)
 
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, response)

@@ -2,117 +2,103 @@ package middleware
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/gin-gonic/gin"
 )
 
 // DebugLogging logs request and response bodies for debugging purposes.
 // This middleware should be added early in the chain to capture all requests.
-func DebugLogging(cfg *config.Config) gin.HandlerFunc {
-	if cfg == nil {
-		return func(c *gin.Context) {
-			c.Next()
-		}
-	}
-
-	logHeaders := cfg.LogRequestHeaders
-	logRequestBodies := cfg.LogRequestBodies
-	logResponseBodies := cfg.LogResponseBodies
-	maxBytes := cfg.LogBodyMaxBytes
-
-	// Skip if no logging is enabled
-	if !logHeaders && !logRequestBodies && !logResponseBodies {
-		return func(c *gin.Context) {
-			c.Next()
-		}
-	}
-
+func DebugLogging(_ *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		path := c.Request.URL.Path
-		method := c.Request.Method
-
-		// Skip health check endpoints
-		if path == "/.gateway/api/health" {
+		if c.Request.URL.Path == "/.gateway/api/health" {
 			c.Next()
 			return
 		}
 
-		// Log request headers
-		if logHeaders {
-			fmt.Printf("DEBUG REQUEST HEADERS %s %s:\n", method, path)
-			for key, values := range c.Request.Header {
+		logHTTP := gtwlog.TopicEnabled(gtwlog.TopicHTTP)
+		logHTTPRequest := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequest)
+		logReqHeaders := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequestHeaders)
+		logReqBody := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequestBody)
+		logHTTPResp := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponse)
+		logRespHeaders := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseHeaders)
+		logRespBody := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseBody)
+
+		if !logHTTP && !logHTTPRequest && !logReqHeaders && !logReqBody && !logHTTPResp && !logRespHeaders && !logRespBody {
+			c.Next()
+			return
+		}
+
+		start := time.Now()
+		req := c.Request
+
+		if logHTTP {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTP, "%s %s", req.Method, req.URL.RequestURI())
+		}
+		if logHTTPRequest {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTPRequest, "%s %s", req.Method, req.URL.RequestURI())
+		}
+		if logReqHeaders {
+			for key, values := range req.Header {
 				for _, value := range values {
-					fmt.Printf("  %s: %s\n", key, value)
+					gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestHeaders, "%s: %s", key, value)
 				}
 			}
 		}
 
-		// Log request body
-		var requestBodyBytes []byte
-		if logRequestBodies && c.Request.Body != nil {
-			var err error
-			requestBodyBytes, err = io.ReadAll(c.Request.Body)
+		if (logReqBody || logHTTPRequest) && req.Body != nil {
+			bodyBytes, err := io.ReadAll(req.Body)
 			if err == nil {
-				c.Request.Body.Close() //nolint:errcheck
-				// Restore body for downstream handlers
-				c.Request.Body = io.NopCloser(bytes.NewReader(requestBodyBytes))
-
-				if len(requestBodyBytes) > 0 {
-					// Skip logging binary formats
-					ct := strings.ToLower(c.GetHeader("Content-Type"))
-					isBinary := strings.Contains(ct, "gzip") ||
-						strings.Contains(ct, "application/octet-stream") ||
-						strings.Contains(ct, "application/x-tar") ||
-						strings.Contains(ct, "application/zip")
-
-					if !isBinary {
-						logBody := requestBodyBytes
-						if maxBytes > 0 && len(logBody) > maxBytes {
-							logBody = append([]byte{}, logBody[:maxBytes]...)
-							logBody = append(logBody, []byte("…(truncated)")...)
-						}
-						fmt.Printf("DEBUG REQUEST BODY %s %s len=%d body=%s\n", method, path, len(requestBodyBytes), string(logBody))
-					} else {
-						fmt.Printf("DEBUG REQUEST BODY %s %s len=%d (binary, not logged)\n", method, path, len(requestBodyBytes))
+				_ = req.Body.Close()
+				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				if len(bodyBytes) > 0 && !isBinaryContent(req.Header.Get("Content-Type")) {
+					if logReqBody {
+						gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", len(bodyBytes), truncateBody(bodyBytes))
+					} else if logHTTPRequest {
+						gtwlog.DebugTopicf(gtwlog.TopicHTTPRequest, "len=%d body=%s", len(bodyBytes), truncateBody(bodyBytes))
 					}
+				}
+			} else {
+				gtwlog.Warnf("failed to read request body: %v", err)
+			}
+		}
+
+		var writer *bodyWriter
+		if logRespBody || logHTTPResp {
+			writer = &bodyWriter{ResponseWriter: c.Writer, body: &bytes.Buffer{}}
+			c.Writer = writer
+		}
+
+		c.Next()
+
+		if logRespHeaders {
+			for key, values := range c.Writer.Header() {
+				for _, value := range values {
+					gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "%s: %s", key, value)
 				}
 			}
 		}
 
-		// Capture response body if needed
-		if logResponseBodies {
-			// Create a response writer that captures the body
-			writer := &bodyWriter{
-				ResponseWriter: c.Writer,
-				body:           &bytes.Buffer{},
-			}
-			c.Writer = writer
-
-			// Process request
-			c.Next()
-
-			// Log response body (JSON only)
+		if (logRespBody || logHTTPResp) && writer != nil {
 			responseBody := writer.body.Bytes()
-			if len(responseBody) > 0 {
-				ct := strings.ToLower(c.Writer.Header().Get("Content-Type"))
-				isJSON := strings.Contains(ct, "application/json")
-
-				if isJSON {
-					logBody := responseBody
-					if maxBytes > 0 && len(logBody) > maxBytes {
-						logBody = append([]byte{}, logBody[:maxBytes]...)
-						logBody = append(logBody, []byte("…(truncated)")...)
-					}
-					fmt.Printf("DEBUG RESPONSE BODY %s %s status=%d len=%d body=%s\n", method, path, c.Writer.Status(), len(responseBody), string(logBody))
+			if len(responseBody) > 0 && !isBinaryContent(c.Writer.Header().Get("Content-Type")) {
+				if logRespBody {
+					gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), truncateBody(responseBody))
+				} else if logHTTPResp {
+					gtwlog.DebugTopicf(gtwlog.TopicHTTPResponse, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), truncateBody(responseBody))
 				}
 			}
-		} else {
-			// No response logging, just continue
-			c.Next()
+		}
+
+		if logHTTP {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTP, "response %d %s in %s", c.Writer.Status(), req.URL.RequestURI(), time.Since(start))
+		}
+		if logHTTPResp {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponse, "response %d %s in %s", c.Writer.Status(), req.URL.RequestURI(), time.Since(start))
 		}
 	}
 }
@@ -131,4 +117,23 @@ func (w *bodyWriter) Write(b []byte) (int, error) {
 func (w *bodyWriter) WriteString(s string) (int, error) {
 	w.body.WriteString(s)
 	return w.ResponseWriter.WriteString(s)
+}
+
+func truncateBody(body []byte) string {
+	const maxBytes = 16384
+	if len(body) <= maxBytes {
+		return string(body)
+	}
+	return string(body[:maxBytes]) + "…(truncated)"
+}
+
+func isBinaryContent(contentType string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if ct == "" {
+		return false
+	}
+	return strings.Contains(ct, "application/octet-stream") ||
+		strings.Contains(ct, "application/x-tar") ||
+		strings.Contains(ct, "application/zip") ||
+		strings.Contains(ct, "gzip")
 }
