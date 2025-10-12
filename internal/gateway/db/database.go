@@ -148,10 +148,7 @@ func (d *Database) rebind(q string) string {
 
 func (d *Database) logQuery(prefix, query string, args ...interface{}) {
 	logAggregate := gtwlog.TopicEnabled(gtwlog.TopicSQL)
-	logQuery := gtwlog.TopicEnabled(gtwlog.TopicSQLQuery)
-	logSource := gtwlog.TopicEnabled(gtwlog.TopicSQLSource)
-
-	if !logAggregate && !logQuery && !logSource {
+	if !logAggregate {
 		return
 	}
 
@@ -164,23 +161,15 @@ func (d *Database) logQuery(prefix, query string, args ...interface{}) {
 	caller := queryCaller()
 	argsStr := formatArgs(args)
 
-	if logAggregate {
-		message := fmt.Sprintf("%s%s%s %s%s%s %s args=%s",
-			colorGray, prefix, colorReset,
-			color, compact, colorReset,
-			caller,
-			argsStr,
-		)
-		gtwlog.DebugTopicf(gtwlog.TopicSQL, "%s", message)
+	segments := make([]string, 0, 3)
+	if caller != "" {
+		segments = append(segments, fmt.Sprintf("%s%s%s", colorGray, caller, colorReset))
 	}
+	segments = append(segments, fmt.Sprintf("%s%s%s", colorGray, prefix, colorReset))
+	segments = append(segments, fmt.Sprintf("%s%s%s", color, compact, colorReset))
 
-	if logQuery {
-		gtwlog.DebugTopicf(gtwlog.TopicSQLQuery, "%s %s args=%s", prefix, compact, argsStr)
-	}
-
-	if logSource && caller != "" {
-		gtwlog.DebugTopicf(gtwlog.TopicSQLSource, "%s %s", prefix, caller)
-	}
+	message := strings.Join(segments, " ") + " args=" + argsStr
+	gtwlog.DebugTopicf(gtwlog.TopicSQL, "%s", message)
 }
 
 func (d *Database) exec(q string, args ...interface{}) (sql.Result, error) {
@@ -254,7 +243,8 @@ func queryCaller() string {
 		}
 		file := frame.File
 		if !strings.Contains(file, "/internal/gateway/db/") && !strings.Contains(file, "\\internal\\gateway\\db\\") {
-			return fmt.Sprintf("%s:%d", filepath.Base(file), frame.Line)
+			rel := relativePath(file)
+			return fmt.Sprintf("%s:%d", rel, frame.Line)
 		}
 		if !more {
 			break
@@ -339,4 +329,15 @@ func (d *Database) Close() error {
 // Avoid using this in application code where higher-level helpers exist.
 func (d *Database) DB() *sql.DB {
 	return d.db
+}
+func relativePath(file string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return filepath.Base(file)
+	}
+	rel, err := filepath.Rel(wd, file)
+	if err != nil {
+		return filepath.Base(file)
+	}
+	return rel
 }

@@ -2,7 +2,7 @@ package logging
 
 import base "github.com/DocSpring/rack-gateway/internal/logging"
 
-var logger = base.NewLogger("mock-convox")
+var logger = base.NewLogger()
 
 const (
 	TopicHTTP         = "http"

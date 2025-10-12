@@ -2,19 +2,18 @@ package logging
 
 import base "github.com/DocSpring/rack-gateway/internal/logging"
 
-var logger = base.NewLogger("gateway")
+var logger = base.NewLogger()
 
 const (
 	TopicHTTP                = "http"
 	TopicHTTPRequest         = "http.request"
+	TopicHTTPRequestInfo     = "http.request.info"
 	TopicHTTPRequestHeaders  = "http.request.headers"
 	TopicHTTPRequestBody     = "http.request.body"
 	TopicHTTPResponse        = "http.response"
 	TopicHTTPResponseHeaders = "http.response.headers"
 	TopicHTTPResponseBody    = "http.response.body"
 	TopicSQL                 = "sql"
-	TopicSQLQuery            = "sql.query"
-	TopicSQLSource           = "sql.source"
 	TopicAuth                = "auth"
 	TopicMFA                 = "mfa"
 	TopicMFAStepUp           = "mfa.stepup"

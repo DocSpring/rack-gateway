@@ -2,7 +2,7 @@ package logging
 
 import base "github.com/DocSpring/rack-gateway/internal/logging"
 
-var logger = base.NewLogger("cli")
+var logger = base.NewLogger()
 
 const (
 	TopicHTTP     = "http"

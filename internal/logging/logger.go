@@ -29,6 +29,13 @@ type Options struct {
 // Option configures a logger.
 type Option func(*Options)
 
+// WithPrefix sets the prefix used in log messages.
+func WithPrefix(prefix string) Option {
+	return func(o *Options) {
+		o.Prefix = prefix
+	}
+}
+
 // WithLevelEnv sets the environment variable consulted for log level.
 func WithLevelEnv(name string) Option {
 	return func(o *Options) {
@@ -79,9 +86,8 @@ type Logger struct {
 }
 
 // NewLogger constructs a new logger.
-func NewLogger(prefix string, opts ...Option) *Logger {
+func NewLogger(opts ...Option) *Logger {
 	options := Options{
-		Prefix:       strings.TrimSpace(prefix),
 		LevelEnv:     "LOG_LEVEL",
 		TopicsEnv:    "DEBUG_TOPICS",
 		DefaultLevel: Info,
@@ -89,6 +95,8 @@ func NewLogger(prefix string, opts ...Option) *Logger {
 	for _, opt := range opts {
 		opt(&options)
 	}
+
+	options.Prefix = strings.TrimSpace(options.Prefix)
 
 	l := &Logger{
 		prefix:        options.Prefix,
@@ -142,6 +150,14 @@ func (l *Logger) TopicEnabled(topic string) bool {
 	}
 	if _, ok := l.explicit[n]; ok {
 		return true
+	}
+	for explicit := range l.explicit {
+		if strings.HasPrefix(explicit, "*") {
+			continue
+		}
+		if explicit != "" && strings.HasPrefix(n, explicit+".") {
+			return true
+		}
 	}
 	for _, prefix := range l.prefixTopics {
 		if strings.HasPrefix(n, prefix) {
@@ -247,7 +263,7 @@ func (l *Logger) addTopicsLocked(topics ...string) {
 		if strings.HasSuffix(n, ".*") {
 			prefix := strings.TrimSuffix(n, ".*")
 			if prefix != "" {
-				l.prefixTopics = append(l.prefixTopics, prefix+".")
+				l.prefixTopics = append(l.prefixTopics, prefix)
 			}
 			continue
 		}

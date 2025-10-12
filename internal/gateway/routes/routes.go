@@ -67,6 +67,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 		}
 	}))
 	router.Use(requestIDMiddleware)
+	router.Use(middleware.RequestLogger(cfg.AuditLogger, cfg.DefaultRack, cfg.Config.DevMode))
 	router.Use(middleware.DebugLogging(cfg.Config))
 	router.Use(middleware.SecurityHeaders(cfg.Config))
 	router.Use(middleware.HostValidator(cfg.Config))
@@ -77,7 +78,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 	if cfg.SentryEnabled {
 		router.Use(middleware.SentryErrorCapture())
 	}
-	router.Use(middleware.RequestLogger(cfg.AuditLogger, cfg.DefaultRack, cfg.Config.DevMode))
 
 	// CORS configuration - allow requests from the configured domain
 	// In production this is set via DOMAIN env var

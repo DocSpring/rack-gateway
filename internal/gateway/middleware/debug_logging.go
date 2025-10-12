@@ -20,15 +20,13 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		logHTTP := gtwlog.TopicEnabled(gtwlog.TopicHTTP)
-		logHTTPRequest := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequest)
+		logReqInfo := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequestInfo)
 		logReqHeaders := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequestHeaders)
 		logReqBody := gtwlog.TopicEnabled(gtwlog.TopicHTTPRequestBody)
-		logHTTPResp := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponse)
 		logRespHeaders := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseHeaders)
 		logRespBody := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseBody)
 
-		if !logHTTP && !logHTTPRequest && !logReqHeaders && !logReqBody && !logHTTPResp && !logRespHeaders && !logRespBody {
+		if !logReqInfo && !logReqHeaders && !logReqBody && !logRespHeaders && !logRespBody {
 			c.Next()
 			return
 		}
@@ -36,31 +34,42 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		start := time.Now()
 		req := c.Request
 
-		if logHTTP {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTP, "%s %s", req.Method, req.URL.RequestURI())
+		path := req.URL.RequestURI()
+		if shouldFilterHTTPLog(path) {
+			logReqInfo = false
+			logReqHeaders = false
+			logReqBody = false
+			logRespHeaders = false
+			logRespBody = false
 		}
-		if logHTTPRequest {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTPRequest, "%s %s", req.Method, req.URL.RequestURI())
+
+		if logReqInfo {
+			gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestInfo, "%s %s", req.Method, path)
 		}
+
 		if logReqHeaders {
+			var builder strings.Builder
 			for key, values := range req.Header {
 				for _, value := range values {
-					gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestHeaders, "%s: %s", key, value)
+					builder.WriteString(key)
+					builder.WriteString(": ")
+					builder.WriteString(value)
+					builder.WriteByte('\n')
 				}
+			}
+			headers := strings.TrimSuffix(builder.String(), "\n")
+			if headers != "" {
+				gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestHeaders, "\n%s", headers)
 			}
 		}
 
-		if (logReqBody || logHTTPRequest) && req.Body != nil {
+		if logReqBody && req.Body != nil && isJSONContentType(req.Header.Get("Content-Type")) {
 			bodyBytes, err := io.ReadAll(req.Body)
 			if err == nil {
 				_ = req.Body.Close()
 				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 				if len(bodyBytes) > 0 && !isBinaryContent(req.Header.Get("Content-Type")) {
-					if logReqBody {
-						gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", len(bodyBytes), truncateBody(bodyBytes))
-					} else if logHTTPRequest {
-						gtwlog.DebugTopicf(gtwlog.TopicHTTPRequest, "len=%d body=%s", len(bodyBytes), truncateBody(bodyBytes))
-					}
+					gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", len(bodyBytes), truncateBody(bodyBytes))
 				}
 			} else {
 				gtwlog.Warnf("failed to read request body: %v", err)
@@ -68,7 +77,7 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		}
 
 		var writer *bodyWriter
-		if logRespBody || logHTTPResp {
+		if logRespBody {
 			writer = &bodyWriter{ResponseWriter: c.Writer, body: &bytes.Buffer{}}
 			c.Writer = writer
 		}
@@ -76,31 +85,59 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		c.Next()
 
 		if logRespHeaders {
+			var builder strings.Builder
 			for key, values := range c.Writer.Header() {
 				for _, value := range values {
-					gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "%s: %s", key, value)
+					builder.WriteString(key)
+					builder.WriteString(": ")
+					builder.WriteString(value)
+					builder.WriteByte('\n')
 				}
+			}
+			headers := strings.TrimSuffix(builder.String(), "\n")
+			if headers != "" {
+				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "\n%s", headers)
 			}
 		}
 
-		if (logRespBody || logHTTPResp) && writer != nil {
+		respJSON := logRespBody && isJSONContentType(c.Writer.Header().Get("Content-Type"))
+		if respJSON {
+			writer = &bodyWriter{ResponseWriter: c.Writer, body: &bytes.Buffer{}}
+			c.Writer = writer
+		}
+		c.Next()
+		if respJSON && writer != nil {
 			responseBody := writer.body.Bytes()
 			if len(responseBody) > 0 && !isBinaryContent(c.Writer.Header().Get("Content-Type")) {
-				if logRespBody {
-					gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), truncateBody(responseBody))
-				} else if logHTTPResp {
-					gtwlog.DebugTopicf(gtwlog.TopicHTTPResponse, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), truncateBody(responseBody))
-				}
+				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), truncateBody(responseBody))
 			}
 		}
 
-		if logHTTP {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTP, "response %d %s in %s", c.Writer.Status(), req.URL.RequestURI(), time.Since(start))
-		}
-		if logHTTPResp {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponse, "response %d %s in %s", c.Writer.Status(), req.URL.RequestURI(), time.Since(start))
-		}
+		_ = start
 	}
+}
+
+func shouldFilterHTTPLog(path string) bool {
+	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/web/@") {
+		return true
+	}
+
+	idx := strings.LastIndex(path, ".")
+	if idx == -1 {
+		return false
+	}
+
+	lastSlash := strings.LastIndex(path, "/")
+	if lastSlash >= 0 && idx < lastSlash {
+		return false
+	}
+
+	ext := path[idx+1:]
+	if ext == "" {
+		return false
+	}
+
+	return !strings.Contains(ext, "/")
 }
 
 // bodyWriter wraps gin.ResponseWriter to capture response body
@@ -136,4 +173,18 @@ func isBinaryContent(contentType string) bool {
 		strings.Contains(ct, "application/x-tar") ||
 		strings.Contains(ct, "application/zip") ||
 		strings.Contains(ct, "gzip")
+}
+
+func isJSONContentType(contentType string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if ct == "" {
+		return false
+	}
+	if idx := strings.IndexByte(ct, ';'); idx >= 0 {
+		ct = strings.TrimSpace(ct[:idx])
+	}
+	if ct == "application/json" {
+		return true
+	}
+	return strings.HasSuffix(ct, "+json")
 }
