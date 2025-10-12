@@ -352,7 +352,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       await waitFor(() => {
-        expect(api.post).toHaveBeenCalledWith('/.gateway/api/admin/tokens', {
+        expect(api.post).toHaveBeenCalledWith('/api/v1/admin/tokens', {
           name: 'New Token',
           permissions: defaultPermissions,
         })
@@ -471,7 +471,7 @@ describe('TokensPage', () => {
       fireEvent.click(screen.getByRole('button', { name: CREATE_TOKEN_RE }))
 
       await waitFor(() => {
-        expect(api.post).toHaveBeenCalledWith('/.gateway/api/admin/tokens', {
+        expect(api.post).toHaveBeenCalledWith('/api/v1/admin/tokens', {
           name: 'Viewer Token',
           permissions: ['convox:app:list'],
         })
@@ -590,7 +590,7 @@ describe('TokensPage', () => {
       await user.click(screen.getByRole('button', { name: DELETE_TOKEN_RE }))
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith('/.gateway/api/admin/tokens/tok-1')
+        expect(api.delete).toHaveBeenCalledWith('/api/v1/admin/tokens/tok-1')
       })
     })
   })

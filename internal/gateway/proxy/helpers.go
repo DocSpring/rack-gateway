@@ -79,8 +79,8 @@ func (h *Handler) logAudit(r *http.Request, al *db.AuditLog) error {
 
 // extractAppFromPath extracts the app name from a Convox API path
 func extractAppFromPath(p string) string {
-	// Strip /api/v1/convox prefix if present
-	p = strings.TrimPrefix(p, "/api/v1/convox")
+	// Strip /api/v1/rack-proxy prefix if present
+	p = strings.TrimPrefix(p, "/api/v1/rack-proxy")
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	// Handle: /apps/{app}/releases/..., /apps/{app}/processes/..., /apps/{app}/services/{service}/processes
 	if len(parts) >= 2 && parts[0] == "apps" {

@@ -47,7 +47,7 @@ export function LoginPage() {
               aria-hidden
               className="-ml-1 mb-4"
               height={52}
-              src="/.gateway/web/logo.svg"
+              src="/app/logo.svg"
               width={52}
             />
             <h1 className="font-bold text-4xl text-foreground tracking-tight">Rack Gateway</h1>

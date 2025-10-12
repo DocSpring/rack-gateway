@@ -67,7 +67,7 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 		}
 	}
 
-	redirect := fmt.Sprintf("/.gateway/api/auth/cli/mfa?state=%s", url.QueryEscape(state))
+	redirect := fmt.Sprintf("%s?state=%s", APIRoute("auth/cli/mfa"), url.QueryEscape(state))
 	c.Redirect(http.StatusTemporaryRedirect, redirect)
 }
 

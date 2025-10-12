@@ -11,7 +11,7 @@ import (
 var swaggerJSON []byte
 
 const (
-	defaultSpecPath        = "/.gateway/openapi.json"
+	defaultSpecPath        = "/openapi.json"
 	openapiJSONContentType = "application/json"
 )
 

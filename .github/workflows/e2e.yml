@@ -91,14 +91,14 @@ jobs:
       - name: Wait for services
         run: |
           chmod +x scripts/wait-for-services.sh
-          WEB_UI_PATH='/.gateway/web/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-for-services.sh
+          WEB_UI_PATH='/app/' WEB_PORT=${GATEWAY_PORT} CHECK_VITE_PROXY=false bash scripts/wait-for-services.sh
 
       - name: Diagnose endpoints
         run: |
           set -x
           docker compose ps
-          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/health || true
-          curl -sv http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/web/login -o /dev/null || true
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/api/v1/health || true
+          curl -sv http://127.0.0.1:${GATEWAY_PORT}/app/login -o /dev/null || true
 
       - name: Install Playwright and deps
         working-directory: web
@@ -126,7 +126,7 @@ jobs:
       TEST_MOCK_OAUTH_PORT: 9345
       TEST_MOCK_CONVOX_PORT: 6443
       GATEWAY_TEST_IMAGE: rack-gateway-api:e2e-${{ github.sha }}
-      WEB_UI_PATH: "/.gateway/web/"
+      WEB_UI_PATH: "/app/"
       CHECK_VITE_PROXY: false
     steps:
       - name: Checkout

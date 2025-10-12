@@ -110,7 +110,7 @@ func verifyMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMetho
 
 // getMFAStatus fetches MFA status from the gateway API
 func getMFAStatus(baseURL, sessionToken string) (*MFAStatusResponse, error) {
-	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/status", strings.TrimSuffix(baseURL, "/"))
+	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/status", strings.TrimSuffix(baseURL, "/"))
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func filterMethodsByPreference(methods []MFAMethodResponse, preference string) [
 // tryWebAuthnVerification performs WebAuthn assertion flow
 func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	// Get assertion challenge from gateway
-	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/start", strings.TrimSuffix(baseURL, "/"))
+	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", strings.TrimSuffix(baseURL, "/"))
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
 	if err != nil {
 		return err
@@ -278,7 +278,7 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	}
 
 	// Submit assertion to gateway
-	verifyEndpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
+	verifyEndpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
 	verifyPayload := map[string]any{
 		"session_data":       startResp.SessionData,
 		"assertion_response": string(assertionJSON),
@@ -334,7 +334,7 @@ func promptMFACode() (string, error) {
 
 // submitMFAVerification submits an MFA code for verification
 func submitMFAVerification(baseURL, sessionToken, code string) error {
-	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/verify", strings.TrimSuffix(baseURL, "/"))
+	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/verify", strings.TrimSuffix(baseURL, "/"))
 	payload := map[string]any{
 		"code": code,
 	}
@@ -546,7 +546,7 @@ func collectMFAAuth(cmd *cobra.Command, baseURL, bearer, rack string, method MFA
 
 // collectWebAuthnAssertion performs WebAuthn and returns the assertion as a base64-encoded JSON string
 func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
-	endpoint := fmt.Sprintf("%s/.gateway/api/auth/mfa/webauthn/assertion/start", baseURL)
+	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", baseURL)
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
 	if err != nil {
 		return "", err

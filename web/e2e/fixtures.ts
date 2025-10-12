@@ -149,7 +149,7 @@ export const test = base.extend({
         }
 
         // Suppress expected 401s from CLI-only proxy endpoints
-        if (status === 401 && !url.includes('/.gateway/')) {
+        if (status === 401 && !url.includes('/')) {
           return
         }
 

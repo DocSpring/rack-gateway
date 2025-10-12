@@ -473,7 +473,7 @@ func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interfac
 
 // doGatewayRequest performs the actual HTTP request and returns status, body, and error
 func doGatewayRequest(gatewayURL, bearer, method, path string, body interface{}) (int, []byte, error) {
-	fullURL := gatewayURL + "/.gateway/api" + path
+	fullURL := gatewayURL + "/api/v1" + path
 
 	var payload io.Reader
 	if body != nil {

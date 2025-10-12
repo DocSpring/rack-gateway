@@ -35,7 +35,7 @@ export function AllProcessesPage() {
   } = useQuery({
     queryKey: ['all-procs'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/.gateway/api/convox/apps')
+      const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
           const ps = await api.get<
@@ -47,7 +47,7 @@ export function AllProcessesPage() {
               release: string
               started?: string
             }[]
-          >(`/.gateway/api/convox/apps/${a.name}/processes`)
+          >(`/api/v1/convox/apps/${a.name}/processes`)
           return ps.map((p) => ({
             ...p,
             app: a.name,
@@ -68,7 +68,7 @@ export function AllProcessesPage() {
             app?: string
             started?: string
           }[]
-        >('/.gateway/api/convox/system/processes')
+        >('/api/v1/convox/system/processes')
         systemProcs = (sys || []).map((p) => ({
           ...p,
           app: p.app || 'system',

@@ -129,14 +129,14 @@ func Setup(router *gin.Engine, cfg *Config) {
 	router.GET("/robots.txt", handlers.Robots)
 
 	// Web UI static files
-	router.GET("/.gateway/web", handlers.WebRedirect)
-	router.GET("/.gateway/web/*filepath", staticHandler.ServeStatic)
+	router.GET("/app", handlers.WebRedirect)
+	router.GET("/app/*filepath", staticHandler.ServeStatic)
 
 	// API documentation
 	openapi.Register(router)
 
 	// API routes
-	api := router.Group("/.gateway/api")
+	api := router.Group("/api/v1")
 	{
 		// Rate limited auth endpoints
 		authGroup := api.Group("")
@@ -295,17 +295,12 @@ func Setup(router *gin.Engine, cfg *Config) {
 				appSettingsMutations.DELETE("/settings", settingsHandler.DeleteAppSettings)
 			}
 		}
-	}
 
-	// New API v1 routes for CLI (session token auth only, no cookies)
-	apiV1 := router.Group("/api/v1")
-	{
-		// Convox proxy for CLI
-		convoxCLI := apiV1.Group("/convox")
+		convoxCLI := api.Group("/rack-proxy")
 		convoxCLI.Use(middleware.CLIOnly(cfg.AuthService))
 		convoxCLI.Use(middleware.RequireMFAEnrollment(cfg.Database, cfg.MFASettings))
 		{
-			// Proxy all methods to Convox rack, stripping /api/v1/convox prefix
+			// Proxy all methods to Convox rack, stripping /api/v1/rack-proxy prefix
 			convoxCLI.GET("/*path", proxyHandler.ProxyStripPrefix)
 			convoxCLI.POST("/*path", proxyHandler.ProxyStripPrefix)
 			convoxCLI.PUT("/*path", proxyHandler.ProxyStripPrefix)
@@ -315,11 +310,4 @@ func Setup(router *gin.Engine, cfg *Config) {
 			convoxCLI.OPTIONS("/*path", proxyHandler.ProxyStripPrefix)
 		}
 	}
-
-	// Catch-all: Proxy to Convox (CLI only, no cookie auth)
-	router.NoRoute(
-		middleware.CLIOnly(cfg.AuthService),
-		middleware.RequireMFAEnrollment(cfg.Database, cfg.MFASettings),
-		proxyHandler.ProxyToRack,
-	)
 }

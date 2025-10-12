@@ -37,10 +37,10 @@ export function AllBuildsPage() {
   } = useQuery({
     queryKey: ['all-builds'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/.gateway/api/convox/apps')
+      const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const bs = await api.get<Build[]>(`/.gateway/api/convox/apps/${a.name}/builds`)
+          const bs = await api.get<Build[]>(`/api/v1/convox/apps/${a.name}/builds`)
           return bs.map((b) => ({ ...b, app: a.name }))
         })
       )
@@ -54,7 +54,7 @@ export function AllBuildsPage() {
         const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
         if (ids) {
           const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/.gateway/api/created-by?type=build&ids=${encodeURIComponent(ids)}`
+            `/api/v1/created-by?type=build&ids=${encodeURIComponent(ids)}`
           )
           for (const b of items) {
             const m = map[b.id]

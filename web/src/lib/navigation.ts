@@ -1,4 +1,4 @@
-const SPA_WEB_PREFIX = '/.gateway/web'
+const SPA_WEB_PREFIX = '/web'
 
 const coercePath = (input: string): string => {
   if (input.startsWith(SPA_WEB_PREFIX)) {

@@ -57,13 +57,13 @@ test('users: edit name and email', async ({ page }) => {
   const waitForDelete = page.waitForResponse(
     (response) =>
       response.request().method() === 'DELETE' &&
-      response.url().includes('/.gateway/api/admin/users/') &&
+      response.url().includes('/api/v1/admin/users/') &&
       response.status() === 204
   )
   const waitForUsersReload = page.waitForResponse(
     (response) =>
       response.request().method() === 'GET' &&
-      response.url().includes('/.gateway/api/admin/users') &&
+      response.url().includes('/api/v1/admin/users') &&
       response.status() === 200
   )
   await Promise.all([

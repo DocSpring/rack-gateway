@@ -69,7 +69,7 @@ export function DeployApprovalRequestDetailPage() {
     error: requestError,
   } = useQuery<DeployApprovalRequest, Error>({
     queryKey: ['deploy-approval-request', id],
-    queryFn: () => api.get(`/.gateway/api/deploy-approval-requests/${id}`),
+    queryFn: () => api.get(`/api/v1/deploy-approval-requests/${id}`),
     retry: 1,
   })
 
@@ -77,7 +77,7 @@ export function DeployApprovalRequestDetailPage() {
   const { data: appSettings } = useQuery<Record<string, { value: unknown; source: string }>, Error>(
     {
       queryKey: ['app-settings', request?.app],
-      queryFn: () => api.get(`/.gateway/api/apps/${request?.app}/settings`),
+      queryFn: () => api.get(`/api/v1/apps/${request?.app}/settings`),
       enabled: !!request?.app,
       retry: 1,
     }
@@ -183,9 +183,7 @@ export function DeployApprovalRequestDetailPage() {
   } = useQuery<AuditLogsResponse, Error>({
     queryKey: ['deployApprovalRequestAuditLogs', id, auditPageIndex, DEFAULT_PER_PAGE],
     queryFn: () =>
-      api.get(
-        `/.gateway/api/admin/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}`
-      ),
+      api.get(`/api/v1/admin/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}`),
     enabled: !!request,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: true,

@@ -9,8 +9,8 @@
 - Added system library checks to `scripts/install.sh` for Linux (libudev-dev, libusb-1.0-0-dev)
 - Added go-ctap/ctaphid dependency to go.mod (v0.8.1)
 - **Gateway API endpoints for WebAuthn assertion:**
-  - `POST /.gateway/api/auth/mfa/webauthn/assertion/start` - Start WebAuthn assertion ceremony
-  - `POST /.gateway/api/auth/mfa/webauthn/assertion/verify` - Verify WebAuthn assertion response
+  - `POST /api/v1/auth/mfa/webauthn/assertion/start` - Start WebAuthn assertion ceremony
+  - `POST /api/v1/auth/mfa/webauthn/assertion/verify` - Verify WebAuthn assertion response
 - **MFA service methods:**
   - `StartWebAuthnAssertion()` - Begin WebAuthn login ceremony
   - `VerifyWebAuthnAssertion()` - Validate assertion response with stored session data

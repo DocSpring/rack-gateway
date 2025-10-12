@@ -31,12 +31,12 @@ export function AppReleasesPage() {
   } = useQuery({
     queryKey: ['app-releases', app],
     queryFn: async () => {
-      const items = await api.get<Release[]>(`/.gateway/api/convox/apps/${app}/releases`)
+      const items = await api.get<Release[]>(`/api/v1/convox/apps/${app}/releases`)
       try {
         const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
         if (ids) {
           const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/.gateway/api/created-by?type=release&ids=${encodeURIComponent(ids)}`
+            `/api/v1/created-by?type=release&ids=${encodeURIComponent(ids)}`
           )
           for (const r of items) {
             const m = map[r.id]

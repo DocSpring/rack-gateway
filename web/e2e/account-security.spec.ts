@@ -56,7 +56,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   const mfaDialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   const isVisible = await mfaDialog.isVisible({ timeout: 5000 }).catch(() => false)
   if (!isVisible) {
-    await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
+    await page.waitForURL(/web(?:\/|$)/, { timeout: 15_000 })
     return
   }
 
@@ -71,7 +71,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   await mfaDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
   // Auto-submits on 6-digit code, no need to click Verify button
   await expect(mfaDialog).toBeHidden({ timeout: 5000 })
-  await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
+  await page.waitForURL(/web(?:\/|$)/, { timeout: 15_000 })
 }
 
 test.describe('Account security', () => {
@@ -332,7 +332,7 @@ test.describe('Account security', () => {
     await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/\.gateway\/web\/login$/)
+    await page.waitForURL(/web\/login$/)
     await performLoginWithMfa(page, secret, true)
 
     await page.goto(WebRoute('account/security'))
@@ -371,7 +371,7 @@ test.describe('Account security', () => {
     await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/\.gateway\/web\/login$/)
+    await page.waitForURL(/web\/login$/)
 
     const btn = page
       .getByTestId('login-cta')
@@ -386,7 +386,7 @@ test.describe('Account security', () => {
     await expect(userCard).toBeVisible()
     await userCard.click()
 
-    await expect.poll(async () => page.url()).toMatch(/\.gateway\/web\/auth\/mfa\/challenge/i)
+    await expect.poll(async () => page.url()).toMatch(/web\/auth\/mfa\/challenge/i)
 
     await expect(page.getByText('Multi-Factor Authentication Required')).toBeVisible({
       timeout: 15_000,
@@ -481,7 +481,7 @@ test.describe('Account security', () => {
     // Enforce MFA and logout
     await enforceMfaFor(ADMIN_EMAIL)
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/\.gateway\/web\/login$/)
+    await page.waitForURL(/web\/login$/)
 
     // Login and verify WebAuthn method is shown (not TOTP input)
     const btn = page
@@ -499,7 +499,7 @@ test.describe('Account security', () => {
 
     // WebAuthn starts automatically and succeeds (mocked in E2E)
     // Wait for navigation to complete, indicating successful WebAuthn verification
-    await page.waitForURL(/\/.gateway\/web\/rack/, { timeout: 10_000 })
+    await page.waitForURL(/\/web\/rack/, { timeout: 10_000 })
   })
 
   // NOTE: MFA rate limiting is tested in Go unit tests (TestVerifyTOTP_RateLimiting)

@@ -79,7 +79,7 @@ func (h *AdminHandler) SlackOAuthAuthorizeHandler(c *gin.Context) {
 		scheme = "http"
 	}
 	host := c.Request.Host
-	redirectURI := fmt.Sprintf("%s://%s/.gateway/api/admin/integrations/slack/oauth/callback", scheme, host)
+	redirectURI := fmt.Sprintf("%s://%s/api/v1/admin/integrations/slack/oauth/callback", scheme, host)
 
 	// Build Slack authorization URL
 	authURL := fmt.Sprintf(
@@ -122,7 +122,7 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 		scheme = "http"
 	}
 	host := c.Request.Host
-	redirectURI := fmt.Sprintf("%s://%s/.gateway/api/admin/integrations/slack/oauth/callback", scheme, host)
+	redirectURI := fmt.Sprintf("%s://%s/api/v1/admin/integrations/slack/oauth/callback", scheme, host)
 
 	// Exchange code for access token
 	oauthResp, err := slack.ExchangeOAuthCode(h.config.SlackClientID, h.config.SlackClientSecret, code, redirectURI)
@@ -162,7 +162,7 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 	}
 
 	// Redirect to integrations page
-	c.Redirect(http.StatusFound, "/.gateway/web/integrations?slack=connected")
+	c.Redirect(http.StatusFound, "/app/integrations?slack=connected")
 }
 
 // GetSlackIntegrationHandler retrieves the current Slack integration

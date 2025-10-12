@@ -16,6 +16,7 @@
 ### Unit Tests (Vitest)
 
 Run unit tests:
+
 ```bash
 task web:test
 # or directly:
@@ -23,11 +24,13 @@ pnpm test
 ```
 
 **What to test:**
-- Router basepath handling for `/.gateway/web`, including `/login` and `/auth/callback` routes
+
+- Router basepath handling for `/web`, including `/login` and `/auth/callback` routes
 - Auth flows and API adapters (mock network; do not depend on browser)
 - Critical UI/behavior for Users, Tokens, and Audit pages
 
 **Testing policy:**
+
 - Prefer fast feedback: write unit tests and run type checks before E2E
 - Always run `pnpm typecheck` and keep types clean
 - When a web E2E test fails, first reproduce the failure with a focused unit test; fix it there, then re-run E2E
@@ -48,15 +51,18 @@ PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test --grep "user
 ```
 
 **CRITICAL: If you're updating application code (not just test files), you MUST rebuild first:**
+
 - `task web:e2e` automatically rebuilds the gateway and restarts containers
 - Running Playwright manually does NOT rebuild - you must run `task web:e2e` or `task docker:test:up` first
 
 **When to use manual Playwright commands:**
+
 - ✅ Iterating on test selectors or assertions
 - ✅ Debugging test failures (faster feedback loop)
 - ✅ Writing new test cases
 
 **When you MUST use `task web:e2e`:**
+
 - ✅ Testing changes to application code (components, pages, API handlers)
 - ✅ After modifying any `.tsx`, `.ts`, or `.go` files
 - ✅ Before marking work as complete
@@ -64,6 +70,7 @@ PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test --grep "user
 ### Type Checking
 
 Always run type checking before committing:
+
 ```bash
 pnpm typecheck
 ```
@@ -90,6 +97,7 @@ This project has strict CSP requirements. All inline styles must use nonces:
 - Always use native HTML elements when possible (e.g., `<select>` instead of custom select components)
 
 **CSP-related issues:**
+
 - If you see CSP errors in the console, check if third-party components are generating inline styles
 - Use native HTML form elements to avoid CSP violations
 - react-hot-toast is configured with CSS variables to avoid inline styles

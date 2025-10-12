@@ -6,12 +6,12 @@ test('aggregates repeated app list views into single audit entry', async ({ page
 
   // Trigger three consecutive app list fetches directly to avoid interleaving logs
   for (let i = 0; i < 3; i += 1) {
-    const response = await page.request.get('/.gateway/api/convox/apps')
+    const response = await page.request.get('/api/v1/convox/apps')
     expect(response.ok()).toBeTruthy()
   }
 
   // Navigate to audit logs and confirm aggregation badge
-  await page.goto('/.gateway/web/audit_logs')
+  await page.goto('/app/audit_logs')
   await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
 
   const table = page.getByRole('table')

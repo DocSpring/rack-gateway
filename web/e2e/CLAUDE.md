@@ -26,6 +26,7 @@ task web:e2e
 ```
 
 This command:
+
 1. Rebuilds the Docker test image (includes gateway + web assets)
 2. Starts the test stack with `docker compose`
 3. Waits for services to be healthy
@@ -33,6 +34,7 @@ This command:
 5. Reports results
 
 **Use this when:**
+
 - You've changed application code (`.tsx`, `.ts`, `.go` files)
 - You want to run all E2E tests
 - You're verifying a complete feature
@@ -47,6 +49,7 @@ task docker:test:up
 Rebuilds and starts the test stack without running tests. The stack stays running until you stop it.
 
 **Use this when:**
+
 - You want to iterate on test files without rebuilding the app
 - You need to debug tests manually
 - You want to keep the stack running for multiple test runs
@@ -72,12 +75,14 @@ pnpm exec playwright test --headed e2e/login.spec.ts
 **IMPORTANT**: Running individual tests does NOT rebuild the application. If you've changed app code (not just test files), you MUST rebuild first with `task docker:test:up` or `task web:e2e`.
 
 **Use individual test runs when:**
+
 - ✅ Iterating on test selectors or assertions (test code only)
 - ✅ Debugging test failures
 - ✅ Writing new test cases
 - ✅ The application code hasn't changed
 
 **You MUST use `task web:e2e` or rebuild when:**
+
 - ❌ You've modified React components (`.tsx`)
 - ❌ You've changed API handlers (`.go`)
 - ❌ You've updated routing logic
@@ -88,7 +93,7 @@ pnpm exec playwright test --headed e2e/login.spec.ts
 When tests run, services are available at:
 
 - **Gateway API**: `http://localhost:9447`
-- **Web UI**: `http://localhost:9447/.gateway/web/`
+- **Web UI**: `http://localhost:9447/app/`
 - **Mock OAuth**: `http://localhost:9345`
 - **Mock Convox API**: `http://localhost:5443`
 
@@ -99,17 +104,17 @@ The `PLAYWRIGHT_BASE_URL` is automatically set to `http://localhost:9447` by the
 ### Test Structure
 
 ```typescript
-import { expect, test } from './fixtures'
-import { login } from './helpers'
+import { expect, test } from "./fixtures";
+import { login } from "./helpers";
 
-test('descriptive test name', async ({ page }) => {
+test("descriptive test name", async ({ page }) => {
   // Login helper handles OAuth flow
-  await login(page)
+  await login(page);
 
   // Navigate and test
-  await page.goto(WebRoute('rack'))
-  await expect(page.getByRole('heading', { name: 'Rack' })).toBeVisible()
-})
+  await page.goto(WebRoute("rack"));
+  await expect(page.getByRole("heading", { name: "Rack" })).toBeVisible();
+});
 ```
 
 ### Test Fixtures
@@ -132,13 +137,13 @@ Handles the complete OAuth login flow:
 
 ```typescript
 // Login as default admin user with MFA enrollment
-await login(page)
+await login(page);
 
 // Login as different user
-await login(page, { userCardText: 'Test User' })
+await login(page, { userCardText: "Test User" });
 
 // Login without auto-enrolling MFA (for testing enrollment flow)
-await login(page, { autoEnrollMfa: false })
+await login(page, { autoEnrollMfa: false });
 ```
 
 #### `ensureMfaEnrollment(page)`
@@ -146,7 +151,7 @@ await login(page, { autoEnrollMfa: false })
 Programmatically enrolls user in TOTP MFA:
 
 ```typescript
-await ensureMfaEnrollment(page)
+await ensureMfaEnrollment(page);
 ```
 
 #### `resetMfaFor(email)`
@@ -154,7 +159,7 @@ await ensureMfaEnrollment(page)
 Removes all MFA methods for a user (useful for testing enrollment flows):
 
 ```typescript
-await resetMfaFor('admin@test.com')
+await resetMfaFor("admin@test.com");
 ```
 
 #### `enforceMfaFor(email)`
@@ -162,7 +167,7 @@ await resetMfaFor('admin@test.com')
 Sets MFA enforcement flag for a user:
 
 ```typescript
-await enforceMfaFor('admin@test.com')
+await enforceMfaFor("admin@test.com");
 ```
 
 #### `clearStepUpSessions()`
@@ -170,7 +175,7 @@ await enforceMfaFor('admin@test.com')
 Expires all step-up authentication sessions:
 
 ```typescript
-await clearStepUpSessions()
+await clearStepUpSessions();
 ```
 
 ### Route Helpers
@@ -178,15 +183,15 @@ await clearStepUpSessions()
 Use `WebRoute()` and `APIRoute()` helpers for consistent URLs:
 
 ```typescript
-import { WebRoute, APIRoute } from '@/lib/routes'
+import { WebRoute, APIRoute } from "@/lib/routes";
 
 // Web routes
-await page.goto(WebRoute('rack'))
-await page.goto(WebRoute('admin/users'))
-await page.goto(WebRoute('account/security'))
+await page.goto(WebRoute("rack"));
+await page.goto(WebRoute("admin/users"));
+await page.goto(WebRoute("account/security"));
 
 // API routes (for fetch calls in tests)
-const response = await page.request.get(APIRoute('auth/mfa/status'))
+const response = await page.request.get(APIRoute("auth/mfa/status"));
 ```
 
 ## Common Test Patterns
@@ -194,65 +199,65 @@ const response = await page.request.get(APIRoute('auth/mfa/status'))
 ### Testing Protected Routes
 
 ```typescript
-test('admin page requires authentication', async ({ page }) => {
-  await page.goto(WebRoute('admin/users'))
+test("admin page requires authentication", async ({ page }) => {
+  await page.goto(WebRoute("admin/users"));
 
   // Should redirect to login
-  await expect(page).toHaveURL(/login/)
-})
+  await expect(page).toHaveURL(/login/);
+});
 ```
 
 ### Testing MFA Enforcement
 
 ```typescript
-test('sensitive action requires MFA code', async ({ page }) => {
-  await login(page)
+test("sensitive action requires MFA code", async ({ page }) => {
+  await login(page);
 
   // Navigate to sensitive page
-  await page.goto(WebRoute('admin/api-tokens'))
+  await page.goto(WebRoute("admin/api-tokens"));
 
   // Try to create token without MFA code
-  await page.getByRole('button', { name: /Create Token/i }).click()
+  await page.getByRole("button", { name: /Create Token/i }).click();
 
   // Should show MFA prompt
-  await expect(page.getByText(/Enter your authentication code/i)).toBeVisible()
-})
+  await expect(page.getByText(/Enter your authentication code/i)).toBeVisible();
+});
 ```
 
 ### Testing Forms
 
 ```typescript
-test('user can create API token', async ({ page }) => {
-  await login(page)
+test("user can create API token", async ({ page }) => {
+  await login(page);
 
-  await page.goto(WebRoute('admin/api-tokens'))
-  await page.getByRole('button', { name: /Create Token/i }).click()
+  await page.goto(WebRoute("admin/api-tokens"));
+  await page.getByRole("button", { name: /Create Token/i }).click();
 
   // Fill form
-  await page.getByLabel(/Token Name/i).fill('test-token')
-  await page.getByLabel(/Role/i).selectOption('deployer')
+  await page.getByLabel(/Token Name/i).fill("test-token");
+  await page.getByLabel(/Role/i).selectOption("deployer");
 
   // Submit
-  await page.getByRole('button', { name: /Create/i }).click()
+  await page.getByRole("button", { name: /Create/i }).click();
 
   // Verify success
-  await expect(page.getByText(/Token created successfully/i)).toBeVisible()
-})
+  await expect(page.getByText(/Token created successfully/i)).toBeVisible();
+});
 ```
 
 ### Testing Navigation
 
 ```typescript
-test('sidebar navigation works', async ({ page }) => {
-  await login(page)
+test("sidebar navigation works", async ({ page }) => {
+  await login(page);
 
   // Navigate via sidebar
-  await page.getByRole('link', { name: /Users/i }).click()
-  await expect(page).toHaveURL(WebRoute('admin/users'))
+  await page.getByRole("link", { name: /Users/i }).click();
+  await expect(page).toHaveURL(WebRoute("admin/users"));
 
-  await page.getByRole('link', { name: /Audit Logs/i }).click()
-  await expect(page).toHaveURL(WebRoute('admin/audit'))
-})
+  await page.getByRole("link", { name: /Audit Logs/i }).click();
+  await expect(page).toHaveURL(WebRoute("admin/audit"));
+});
 ```
 
 ## Database Helpers
@@ -260,13 +265,13 @@ test('sidebar navigation works', async ({ page }) => {
 Tests can interact with the test database via helper functions in `db.ts`:
 
 ```typescript
-import { resetMfaForUser, enforceMfaForUser } from './db'
+import { resetMfaForUser, enforceMfaForUser } from "./db";
 
 // Reset MFA for testing enrollment flows
-await resetMfaForUser('admin@test.com')
+await resetMfaForUser("admin@test.com");
 
 // Enforce MFA requirement
-await enforceMfaForUser('admin@test.com')
+await enforceMfaForUser("admin@test.com");
 ```
 
 ## Debugging Tests
@@ -287,12 +292,14 @@ pnpm exec playwright test --ui
 ### View Test Results
 
 After tests run, Playwright generates:
+
 - Screenshots on failure
 - Videos of test execution
 - HTML snapshots of pages
 - Trace files for debugging
 
 View results:
+
 ```bash
 pnpm exec playwright show-report
 ```
@@ -316,18 +323,22 @@ docker compose logs -f gateway-api-test
 ### Common Issues
 
 **"ERR_CONNECTION_REFUSED"**:
+
 - Test stack isn't running
 - Run `task docker:test:up` first
 
 **"Element not found" / Timeout errors**:
+
 - Application code changed but image not rebuilt
 - Run `task docker:test:up` or `task web:e2e`
 
 **"Cannot find module" errors**:
+
 - Web dependencies out of sync
 - Run `pnpm install` in web directory
 
 **Tests pass locally but fail in CI**:
+
 - Check if test depends on timing or race conditions
 - Use `waitFor` and `expect.poll` for async assertions
 - Check CI logs with `fetch-github-actions-logs` script

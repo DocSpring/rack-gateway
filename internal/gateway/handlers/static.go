@@ -24,20 +24,7 @@ import (
 
 // RootRedirect handles the root path redirect
 func RootRedirect(c *gin.Context) {
-	userAgent := c.GetHeader("User-Agent")
-	accept := c.GetHeader("Accept")
-
-	// Redirect browsers to web UI
-	if strings.Contains(accept, "text/html") || strings.Contains(userAgent, "Mozilla") {
-		c.Redirect(http.StatusTemporaryRedirect, WebRoute("/"))
-		return
-	}
-
-	// Return JSON for CLI/API clients
-	c.JSON(http.StatusOK, gin.H{
-		"service": "rack-gateway",
-		"version": "1.0.0",
-	})
+	c.Redirect(http.StatusTemporaryRedirect, DefaultWebRoute)
 }
 
 // Favicon serves the actual favicon from web/dist

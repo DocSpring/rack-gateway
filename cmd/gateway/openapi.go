@@ -3,7 +3,7 @@
 // @title Rack Gateway API
 // @version 1.0
 // @description API for the Rack Gateway administration and proxy services.
-// @BasePath /.gateway/api
+// @BasePath /api
 // @schemes http https
 // @securityDefinitions.apiKey SessionCookie
 // @in header

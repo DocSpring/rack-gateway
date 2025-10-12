@@ -27,7 +27,7 @@ fi
 
 # Check gateway API
 echo -n "Gateway API ($URL): "
-if curl -s -f -o /dev/null "$URL/.gateway/api/health"; then
+if curl -s -f -o /dev/null "$URL/api/v1/health"; then
     echo -e "${GREEN}✓ Healthy${NC}"
 else
     echo -e "${RED}✗ Not responding${NC}"

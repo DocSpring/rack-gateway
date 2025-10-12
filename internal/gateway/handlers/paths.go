@@ -1,8 +1,8 @@
 package handlers
 
 const (
-	apiRootPath = "/.gateway/api"
-	webRootPath = "/.gateway/web"
+	apiRootPath = "/api/v1"
+	webRootPath = "/app"
 
 	// DefaultWebRoute is the landing page for the SPA after login.
 	DefaultWebRoute    = webRootPath + "/rack"

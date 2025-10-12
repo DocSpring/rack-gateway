@@ -38,7 +38,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 		config:   cfg,
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/.gateway/api/admin/integrations/slack/oauth/authorize", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/integrations/slack/oauth/authorize", nil)
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,
 		Name:  user.Name,
@@ -78,7 +78,7 @@ func TestGetSlackIntegration_NotFound(t *testing.T) {
 		config:   &config.Config{},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/api/admin/integrations/slack", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/integrations/slack", nil)
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,
 		Name:  user.Name,
@@ -123,7 +123,7 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 		config:   &config.Config{},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/api/admin/integrations/slack", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/integrations/slack", nil)
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,
 		Name:  user.Name,
@@ -194,7 +194,7 @@ func TestUpdateSlackChannels(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPut, "/.gateway/api/admin/integrations/slack/channels", strings.NewReader(string(payload)))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/integrations/slack/channels", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,
@@ -253,7 +253,7 @@ func TestDeleteSlackIntegration(t *testing.T) {
 		config:   &config.Config{},
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/.gateway/api/admin/integrations/slack", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/integrations/slack", nil)
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,
 		Name:  user.Name,
@@ -298,7 +298,7 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPut, "/.gateway/api/admin/integrations/slack/channels", strings.NewReader(string(payload)))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/integrations/slack/channels", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,

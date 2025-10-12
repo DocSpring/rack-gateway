@@ -14,7 +14,7 @@ import (
 // This middleware should be added early in the chain to capture all requests.
 func DebugLogging(_ *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.URL.Path == "/.gateway/api/health" {
+		if c.Request.URL.Path == "/api/v1/health" {
 			c.Next()
 			return
 		}
@@ -115,7 +115,7 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 }
 
 func shouldFilterHTTPLog(path string) bool {
-	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/web/@") {
+	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/app/@") {
 		return true
 	}
 

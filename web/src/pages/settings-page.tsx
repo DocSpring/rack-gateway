@@ -53,7 +53,7 @@ function MfaConfigCard({
       if (stepUpWindow !== null) {
         updates.mfa_step_up_window_minutes = stepUpWindow
       }
-      return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', updates)
+      return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', updates)
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
@@ -85,9 +85,7 @@ function MfaConfigCard({
       }
       if (keys.length > 0) {
         const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(
-          `/.gateway/api/admin/settings?${params}`
-        )
+        return await api.delete<Record<string, SettingsSetting>>(`/api/v1/admin/settings?${params}`)
       }
     },
     onSuccess: (updatedSettings) => {
@@ -255,7 +253,7 @@ function DestructiveActionsCard({
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (allowDestructive !== null) {
-        return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', {
+        return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', {
           allow_destructive_actions: allowDestructive,
         })
       }
@@ -279,7 +277,7 @@ function DestructiveActionsCard({
   const clearMutation = useMutation({
     mutationFn: async () =>
       await api.delete<Record<string, SettingsSetting>>(
-        '/.gateway/api/admin/settings?key=allow_destructive_actions'
+        '/api/v1/admin/settings?key=allow_destructive_actions'
       ),
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
@@ -419,7 +417,7 @@ function VCSCIProvidersCard({
       if (ciOrgSlug !== null) {
         updates.default_ci_org_slug = ciOrgSlug
       }
-      return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', updates)
+      return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', updates)
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
@@ -455,9 +453,7 @@ function VCSCIProvidersCard({
       }
       if (keys.length > 0) {
         const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(
-          `/.gateway/api/admin/settings?${params}`
-        )
+        return await api.delete<Record<string, SettingsSetting>>(`/api/v1/admin/settings?${params}`)
       }
     },
     onSuccess: (updatedSettings) => {
@@ -666,7 +662,7 @@ function DeployApprovalsCard({
       if (windowMinutes !== null) {
         updates.deploy_approval_window_minutes = windowMinutes
       }
-      return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', updates)
+      return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', updates)
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
@@ -694,9 +690,7 @@ function DeployApprovalsCard({
       }
       if (keys.length > 0) {
         const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(
-          `/.gateway/api/admin/settings?${params}`
-        )
+        return await api.delete<Record<string, SettingsSetting>>(`/api/v1/admin/settings?${params}`)
       }
     },
     onSuccess: (updatedSettings) => {
@@ -834,7 +828,7 @@ export function SettingsPage() {
     error,
   } = useQuery({
     queryKey: ['globalSettings'],
-    queryFn: async () => api.get<GlobalSettingsResponse>('/.gateway/api/admin/settings'),
+    queryFn: async () => api.get<GlobalSettingsResponse>('/api/v1/admin/settings'),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,

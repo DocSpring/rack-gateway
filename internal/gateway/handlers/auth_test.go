@@ -105,7 +105,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, config, sessionManager, mfaService, settings, nil, auditLogger)
 
-	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback")
+	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback")
 	c.Request.AddCookie(&http.Cookie{Name: trustedDeviceCookie, Value: "stale-token"})
 	c.Request.Header.Set("User-Agent", "Playwright Test")
 
@@ -140,7 +140,7 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil, auditLogger)
 
-	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=state")
+	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=state")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
 	handler.WebLoginCallback(c)
 
@@ -178,7 +178,7 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil, nil, auditLogger)
 
-	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=state")
+	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=state")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state", Secure: true})
 	handler.WebLoginCallback(c)
 
@@ -203,7 +203,7 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil, auditLogger)
 
-	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/logout")
+	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/logout")
 	handler.WebLogout(c)
 
 	res := w.Result()
@@ -230,7 +230,7 @@ func TestWebLoginStartSetsStateCookie(t *testing.T) {
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil, nil, auditLogger)
 
-	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/login")
+	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/login")
 	handler.WebLoginStart(c)
 
 	res := w.Result()
@@ -260,7 +260,7 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil, auditLogger)
 
-	c, w := newTestContext(http.MethodGet, "/.gateway/api/auth/web/callback?code=abc&state=other")
+	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=other")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
 	handler.WebLoginCallback(c)
 
@@ -334,7 +334,7 @@ func TestDeleteMFAMethodClearsTrustedDevicesWhenFullyDisabled(t *testing.T) {
 
 	// Setup request context
 	methodIDStr := fmt.Sprintf("%d", mfaMethod.ID)
-	c, w := newTestContext(http.MethodDelete, "/.gateway/api/auth/mfa/methods/"+methodIDStr)
+	c, w := newTestContext(http.MethodDelete, "/api/v1/auth/mfa/methods/"+methodIDStr)
 	c.Params = []gin.Param{{Key: "methodID", Value: methodIDStr}}
 	c.Request.Header.Set("Authorization", "Bearer "+sessionToken)
 

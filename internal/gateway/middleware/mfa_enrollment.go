@@ -119,11 +119,11 @@ func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gi
 }
 
 var mfaEnrollmentAllowedPrefixes = []string{
-	"/.gateway/api/auth/mfa",
+	"/api/v1/auth/mfa",
 }
 
 var mfaEnrollmentAllowedExact = map[string]struct{}{
-	"/.gateway/api/info": {},
+	"/api/v1/info": {},
 }
 
 func isMFAEnrollmentAllowedPath(path string) bool {

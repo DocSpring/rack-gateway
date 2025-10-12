@@ -46,7 +46,7 @@ func TestAuthServiceAllowsCookieSession(t *testing.T) {
 		}
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/api/info", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: sessionToken})
 	rw := httptest.NewRecorder()
 

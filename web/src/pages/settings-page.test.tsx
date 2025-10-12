@@ -268,7 +268,7 @@ describe('SettingsPage', () => {
       fireEvent.click(saveButton)
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith('/.gateway/api/admin/settings', {
+        expect(api.put).toHaveBeenCalledWith('/api/v1/admin/settings', {
           allow_destructive_actions: true,
         })
       })
@@ -372,7 +372,7 @@ describe('SettingsPage', () => {
       fireEvent.click(saveButtons[0])
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith('/.gateway/api/admin/settings', {
+        expect(api.put).toHaveBeenCalledWith('/api/v1/admin/settings', {
           mfa_trusted_device_ttl_days: 60,
           mfa_step_up_window_minutes: 15,
         })
@@ -466,7 +466,7 @@ describe('SettingsPage', () => {
         // Check that api.delete was called with query params for the settings
         expect(api.delete).toHaveBeenCalledWith(
           expect.stringMatching(
-            /\.gateway\/api\/admin\/settings\?key=(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/
+            /api\/v1\/admin\/settings\?key=(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/
           )
         )
       })

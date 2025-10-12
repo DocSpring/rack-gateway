@@ -1,5 +1,5 @@
-const API_PREFIX = '/.gateway/api'
-const WEB_PREFIX = '/.gateway/web'
+const API_PREFIX = '/api/v1'
+const WEB_PREFIX = '/app'
 
 const join = (prefix: string, path = ''): string => {
   if (!path) {

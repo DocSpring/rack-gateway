@@ -43,4 +43,4 @@ Key proxy mappings (examples)
 Notes
 
 - API tokens are checked against their own permission list (exact or wildcard like `convox:apps:*`).
-- The gateway admin UI (`/.gateway/api/admin/*`) is admin‑only.
+- The gateway admin UI (`/api/v1/admin/*`) is admin‑only.

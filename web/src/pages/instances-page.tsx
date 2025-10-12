@@ -26,7 +26,7 @@ export function InstancesPage() {
   type RackInfo = { provider?: string; region?: string }
   const { data: rack } = useQuery({
     queryKey: ['rack-info'],
-    queryFn: async () => api.get<RackInfo>('/.gateway/api/rack'),
+    queryFn: async () => api.get<RackInfo>('/api/v1/rack'),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
   })
@@ -36,7 +36,7 @@ export function InstancesPage() {
     error,
   } = useQuery({
     queryKey: ['instances'],
-    queryFn: async () => api.get<Instance[]>('/.gateway/api/convox/instances'),
+    queryFn: async () => api.get<Instance[]>('/api/v1/convox/instances'),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,

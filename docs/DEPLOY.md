@@ -32,8 +32,8 @@ Create an OAuth client in Google Cloud Console for your Workspace domain:
 - Authorized JavaScript origins:
   - https://$WEB_DOMAIN (e.g., https://portal.example.com)
 - Authorized redirect URIs:
-  - https://$DOMAIN/.gateway/api/auth/web/callback
-  - https://$DOMAIN/.gateway/api/auth/cli/callback
+  - https://$DOMAIN/api/v1/auth/web/callback
+  - https://$DOMAIN/api/v1/auth/cli/callback
 
 1. Copy the values:
 
@@ -92,13 +92,13 @@ convox deploy -a rack-gateway
 This builds:
 
 - `gateway` (Dockerfile.gateway) — API/proxy on port 8080
-- `web` (web/Dockerfile) — Nginx SPA on port 80, proxies `/api/` to `gateway`
+- `web` (web/Dockerfile) — Nginx SPA on port 80, proxies `/api/v1/` to `gateway`
 
 ## 5) Verify
 
 ```
 
-curl -s https://$DOMAIN/.gateway/api/health
+curl -s https://$DOMAIN/api/v1/health
 
 ```
 

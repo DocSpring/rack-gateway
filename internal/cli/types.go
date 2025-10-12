@@ -36,21 +36,21 @@ type RackStatus struct {
 	StatusLines []string
 }
 
-// LoginStartResponse is the response from /.gateway/api/auth/cli/start
+// LoginStartResponse is the response from /api/v1/auth/cli/start
 type LoginStartResponse struct {
 	AuthURL      string `json:"auth_url"`
 	State        string `json:"state"`
 	CodeVerifier string `json:"code_verifier"`
 }
 
-// LoginCallbackRequest is the request to /.gateway/api/auth/cli/complete
+// LoginCallbackRequest is the request to /api/v1/auth/cli/complete
 type LoginCallbackRequest struct {
 	Code         string `json:"code"`
 	State        string `json:"state"`
 	CodeVerifier string `json:"code_verifier"`
 }
 
-// LoginResponse is the response from /.gateway/api/auth/cli/complete
+// LoginResponse is the response from /api/v1/auth/cli/complete
 type LoginResponse struct {
 	Token              string    `json:"token"`
 	Email              string    `json:"email"`
@@ -73,7 +73,7 @@ type DeviceInfo struct {
 	ClientVersion string
 }
 
-// MFAStatusResponse is the response from /.gateway/api/auth/mfa/status
+// MFAStatusResponse is the response from /api/v1/auth/mfa/status
 type MFAStatusResponse struct {
 	Enrolled              bool                `json:"enrolled"`
 	Required              bool                `json:"required"`

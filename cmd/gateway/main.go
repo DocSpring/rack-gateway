@@ -18,7 +18,7 @@ import (
 // @title Rack Gateway API
 // @version 1.0
 // @description API for the Rack Gateway administration and proxy services.
-// @BasePath /.gateway/api
+// @BasePath /api/v1
 // @schemes http https
 // @securityDefinitions.apiKey SessionCookie
 // @in header
@@ -76,6 +76,7 @@ func main() {
 	// Start server in goroutine
 	go func() {
 		log.Printf("Starting server on port %s", application.Config.Port)
+		log.Printf("Visit the web UI at http://localhost:%s/", application.Config.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

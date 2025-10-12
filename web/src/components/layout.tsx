@@ -61,7 +61,7 @@ export function Layout() {
   const location = useLocation()
   const pathname = useMemo(() => {
     const p = location.pathname || ''
-    const base = '/.gateway/web'
+    const base = '/web'
     if (p === base) {
       return '/'
     }
@@ -174,7 +174,7 @@ export function Layout() {
             aria-hidden
             className="mr-3 size-7"
             height={32}
-            src="/.gateway/web/logo.svg"
+            src="/app/logo.svg"
             width={32}
           />
           <h1 className="font-semibold text-xl">Rack Gateway</h1>

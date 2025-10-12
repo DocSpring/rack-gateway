@@ -30,12 +30,12 @@ export function AppsListPage() {
   } = useQuery({
     queryKey: ['apps-list'],
     queryFn: async () => {
-      const items = await api.get<App[]>('/.gateway/api/convox/apps')
+      const items = await api.get<App[]>('/api/v1/convox/apps')
       try {
         const ids = Array.from(new Set(items.map((a) => a.name))).join(',')
         if (ids) {
           const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/.gateway/api/created-by?type=app&ids=${encodeURIComponent(ids)}`
+            `/api/v1/created-by?type=app&ids=${encodeURIComponent(ids)}`
           )
           for (const a of items) {
             const m = map[a.name]

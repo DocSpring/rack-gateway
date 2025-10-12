@@ -15,6 +15,7 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
 
 # Copy only the source needed for mock-convox
 COPY cmd/mock-convox ./cmd/mock-convox
+COPY internal/logging ./internal/logging
 
 # Build mock binary with caches
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \

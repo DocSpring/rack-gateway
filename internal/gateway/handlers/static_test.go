@@ -21,7 +21,7 @@ func TestStaticHandlerRedirectsToDefault(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/app/", nil)
 	c.Request = req
 	c.Params = gin.Params{{Key: "filepath", Value: "/"}}
 
@@ -48,7 +48,7 @@ func TestStaticHandlerProxiesInDev(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/login", nil)
+	req := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	c.Request = req
 	c.Params = gin.Params{{Key: "filepath", Value: "/login"}}
 
@@ -59,7 +59,7 @@ func TestStaticHandlerProxiesInDev(t *testing.T) {
 	}
 	select {
 	case r := <-received:
-		if r.URL.Path != "/.gateway/web/login" {
+		if r.URL.Path != "/app/login" {
 			t.Fatalf("expected proxy to preserve path, got %s", r.URL.Path)
 		}
 	default:
@@ -88,7 +88,7 @@ func TestStaticHandlerServesDist(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/login", nil)
+	req := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	c.Request = req
 	c.Params = gin.Params{{Key: "filepath", Value: "/login"}}
 
@@ -106,7 +106,7 @@ func TestStaticHandlerServesDist(t *testing.T) {
 
 	recAsset := httptest.NewRecorder()
 	cAsset, _ := gin.CreateTestContext(recAsset)
-	reqAsset := httptest.NewRequest(http.MethodGet, "/.gateway/web/assets/app.js", nil)
+	reqAsset := httptest.NewRequest(http.MethodGet, "/app/assets/app.js", nil)
 	cAsset.Request = reqAsset
 	cAsset.Params = gin.Params{{Key: "filepath", Value: "/assets/app.js"}}
 
@@ -142,7 +142,7 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 	handler.distRoot = tmp
 	handler.configureAssets()
 
-	req := httptest.NewRequest(http.MethodGet, "/.gateway/web/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/app/", nil)
 	rec := httptest.NewRecorder()
 	handler.serveIndex(rec, req)
 

@@ -111,43 +111,41 @@ function VCSCIProvidersCard({
     mutationFn: async () => {
       const updates: Promise<unknown>[] = []
       if (vcsProvider !== null) {
-        updates.push(
-          api.put(`/.gateway/api/apps/${app}/settings/vcs_provider`, vcsProvider || null)
-        )
+        updates.push(api.put(`/api/v1/apps/${app}/settings/vcs_provider`, vcsProvider || null))
       }
       if (vcsRepo !== null) {
-        updates.push(api.put(`/.gateway/api/apps/${app}/settings/vcs_repo`, vcsRepo || null))
+        updates.push(api.put(`/api/v1/apps/${app}/settings/vcs_repo`, vcsRepo || null))
       }
       if (ciProvider !== null) {
-        updates.push(api.put(`/.gateway/api/apps/${app}/settings/ci_provider`, ciProvider || null))
+        updates.push(api.put(`/api/v1/apps/${app}/settings/ci_provider`, ciProvider || null))
       }
       if (ciOrgSlug !== null) {
-        updates.push(api.put(`/.gateway/api/apps/${app}/settings/ci_org_slug`, ciOrgSlug || null))
+        updates.push(api.put(`/api/v1/apps/${app}/settings/ci_org_slug`, ciOrgSlug || null))
       }
       if (githubVerification !== null) {
         updates.push(
-          api.put(`/.gateway/api/apps/${app}/settings/github_verification`, githubVerification)
+          api.put(`/api/v1/apps/${app}/settings/github_verification`, githubVerification)
         )
       }
       if (allowDeployFromDefaultBranch !== null) {
         updates.push(
           api.put(
-            `/.gateway/api/apps/${app}/settings/allow_deploy_from_default_branch`,
+            `/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`,
             allowDeployFromDefaultBranch
           )
         )
       }
       if (requirePRForBranch !== null) {
         updates.push(
-          api.put(`/.gateway/api/apps/${app}/settings/require_pr_for_branch`, requirePRForBranch)
+          api.put(`/api/v1/apps/${app}/settings/require_pr_for_branch`, requirePRForBranch)
         )
       }
       if (defaultBranch !== null) {
-        updates.push(api.put(`/.gateway/api/apps/${app}/settings/default_branch`, defaultBranch))
+        updates.push(api.put(`/api/v1/apps/${app}/settings/default_branch`, defaultBranch))
       }
       if (verifyGitCommitMode !== null) {
         updates.push(
-          api.put(`/.gateway/api/apps/${app}/settings/verify_git_commit_mode`, verifyGitCommitMode)
+          api.put(`/api/v1/apps/${app}/settings/verify_git_commit_mode`, verifyGitCommitMode)
         )
       }
       await Promise.all(updates)
@@ -176,33 +174,31 @@ function VCSCIProvidersCard({
     mutationFn: async () => {
       const updates: Promise<unknown>[] = []
       if (settings?.vcs_provider?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/vcs_provider`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_provider`))
       }
       if (settings?.vcs_repo?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/vcs_repo`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_repo`))
       }
       if (settings?.ci_provider?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/ci_provider`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_provider`))
       }
       if (settings?.ci_org_slug?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/ci_org_slug`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_org_slug`))
       }
       if (settings?.github_verification?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/github_verification`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/github_verification`))
       }
       if (settings?.allow_deploy_from_default_branch?.source === 'db') {
-        updates.push(
-          api.delete(`/.gateway/api/apps/${app}/settings/allow_deploy_from_default_branch`)
-        )
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`))
       }
       if (settings?.require_pr_for_branch?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/require_pr_for_branch`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/require_pr_for_branch`))
       }
       if (settings?.default_branch?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/default_branch`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/default_branch`))
       }
       if (settings?.verify_git_commit_mode?.source === 'db') {
-        updates.push(api.delete(`/.gateway/api/apps/${app}/settings/verify_git_commit_mode`))
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/verify_git_commit_mode`))
       }
       await Promise.all(updates)
     },
@@ -506,7 +502,7 @@ function StringArrayCard({
     mutationFn: async () => {
       // Filter out empty strings
       const filtered = items.map((s) => s.trim()).filter((s) => s.length > 0)
-      await api.put(`/.gateway/api/apps/${app}/settings/${settingKey}`, filtered)
+      await api.put(`/api/v1/apps/${app}/settings/${settingKey}`, filtered)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -520,7 +516,7 @@ function StringArrayCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/.gateway/api/apps/${app}/settings/${settingKey}`)
+      await api.delete(`/api/v1/apps/${app}/settings/${settingKey}`)
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -626,7 +622,7 @@ function ServiceImagePatternsCard({
       if (value === null) return
       try {
         const parsed = JSON.parse(value)
-        await api.put(`/.gateway/api/apps/${app}/settings/service_image_patterns`, parsed)
+        await api.put(`/api/v1/apps/${app}/settings/service_image_patterns`, parsed)
       } catch (_err) {
         throw new Error('Invalid JSON format')
       }
@@ -644,7 +640,7 @@ function ServiceImagePatternsCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/.gateway/api/apps/${app}/settings/service_image_patterns`)
+      await api.delete(`/api/v1/apps/${app}/settings/service_image_patterns`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -738,7 +734,7 @@ export function AppSettingsPage() {
     error,
   } = useQuery({
     queryKey: ['appSettings', app],
-    queryFn: async () => api.get<AppSettingsResponse>(`/.gateway/api/apps/${app}/settings`),
+    queryFn: async () => api.get<AppSettingsResponse>(`/api/v1/apps/${app}/settings`),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,

@@ -168,7 +168,7 @@ export function UsersPage() {
   } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const response = await api.get<User[]>('/.gateway/api/admin/users')
+      const response = await api.get<User[]>('/api/v1/admin/users')
       return response
     },
     refetchOnMount: 'always',
@@ -188,7 +188,7 @@ export function UsersPage() {
   // Create user mutation
   const createUserMutation = useMutation({
     mutationFn: async (data: { email: string; name: string; roles: string[] }) => {
-      await api.post('/.gateway/api/admin/users', data)
+      await api.post('/api/v1/admin/users', data)
     },
     onSuccess: () => {
       // handled in handleSaveUser to sequence refetch/close deterministically
@@ -210,7 +210,7 @@ export function UsersPage() {
       email: string
       name: string
     }) => {
-      await api.put(`/.gateway/api/admin/users/${encodeURIComponent(originalEmail)}`, {
+      await api.put(`/api/v1/admin/users/${encodeURIComponent(originalEmail)}`, {
         email,
         name,
       })
@@ -220,7 +220,7 @@ export function UsersPage() {
   // Update user roles mutation
   const updateRolesMutation = useMutation({
     mutationFn: async ({ email, roles }: { email: string; roles: string[] }) => {
-      await api.put(`/.gateway/api/admin/users/${email}/roles`, { roles })
+      await api.put(`/api/v1/admin/users/${email}/roles`, { roles })
     },
     onSuccess: () => {
       // No-op: combined success handling happens in handleSaveUser
@@ -234,7 +234,7 @@ export function UsersPage() {
   // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (email: string) => {
-      await api.delete(`/.gateway/api/admin/users/${email}`)
+      await api.delete(`/api/v1/admin/users/${email}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'], refetchType: 'active' })

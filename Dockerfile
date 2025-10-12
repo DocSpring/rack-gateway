@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the web app and build
 COPY web/ ./
-RUN pnpm build -- --base=/.gateway/web/
+RUN pnpm build -- --base=/web/
 
 FROM golang:1.24-alpine AS builder
 

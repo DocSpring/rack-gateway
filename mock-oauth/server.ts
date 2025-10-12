@@ -270,6 +270,10 @@ export async function createApp(): Promise<Express> {
 }
 
 function registerRoutes(app: Express) {
+  app.get("/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok" });
+  });
+
   app.get("/.well-known/jwks", (_req: Request, res: Response) => {
     const { publicJwk: currentPublicJwk } = getSigningContext();
     res.json({ keys: [currentPublicJwk] });
@@ -524,7 +528,9 @@ export async function start(port = DEFAULT_PORT): Promise<void> {
 const modulePath = fileURLToPath(import.meta.url);
 const invokedPath = fileURLToPath(pathToFileURL(process.argv[1] ?? "").href);
 
-if (modulePath === invokedPath && process.env.NODE_ENV !== "test") {
+// Start the server unless explicitly told not to (e.g., when importing in test files)
+// Don't check NODE_ENV=test here because Docker containers may set that
+if (modulePath === invokedPath && process.env.SKIP_AUTOSTART !== "true") {
   const port = Number.parseInt(
     process.env.MOCK_OAUTH_PORT ?? process.env.PORT ?? String(DEFAULT_PORT),
     10

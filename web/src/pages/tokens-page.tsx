@@ -298,9 +298,7 @@ function TokensPageInner() {
   const { data: permissionMetadata, isLoading: isPermissionLoading } = useQuery({
     queryKey: ['token-permissions'],
     queryFn: async () => {
-      const response = await api.get<TokenPermissionMetadata>(
-        '/.gateway/api/admin/tokens/permissions'
-      )
+      const response = await api.get<TokenPermissionMetadata>('/api/v1/admin/tokens/permissions')
       return response
     },
     staleTime: 5 * 60 * 1000,
@@ -314,7 +312,7 @@ function TokensPageInner() {
   } = useQuery({
     queryKey: ['tokens'],
     queryFn: async () => {
-      const response = await api.get<APIToken[]>('/.gateway/api/admin/tokens')
+      const response = await api.get<APIToken[]>('/api/v1/admin/tokens')
       return response
     },
     refetchOnMount: 'always',
@@ -390,7 +388,7 @@ function TokensPageInner() {
   // Create token mutation
   const createTokenMutation = useMutation({
     mutationFn: async (payload: { name: string; permissions: string[] }) => {
-      const response = await api.post<APITokenResponse>('/.gateway/api/admin/tokens', {
+      const response = await api.post<APITokenResponse>('/api/v1/admin/tokens', {
         name: payload.name,
         permissions: payload.permissions,
       })
@@ -408,7 +406,7 @@ function TokensPageInner() {
   // Delete token mutation
   const deleteTokenMutation = useMutation({
     mutationFn: async (tokenPublicId: string) => {
-      await api.delete(`/.gateway/api/admin/tokens/${tokenPublicId}`)
+      await api.delete(`/api/v1/admin/tokens/${tokenPublicId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tokens'] })
@@ -428,7 +426,7 @@ function TokensPageInner() {
       name: string
       permissions: string[]
     }) => {
-      await api.put(`/.gateway/api/admin/tokens/${publicId}`, {
+      await api.put(`/api/v1/admin/tokens/${publicId}`, {
         name,
         permissions,
       })

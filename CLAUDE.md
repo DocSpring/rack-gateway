@@ -151,6 +151,7 @@ task go:build
 ```
 
 **Why This Works:**
+
 - ✅ Extracts complete function bodies with all comments and formatting
 - ✅ Works for functions of any size (even 200+ line functions)
 - ✅ Preserves exact code structure
@@ -200,16 +201,19 @@ task go:imports
 ### Key Learnings
 
 **1. File Extension Matters**
+
 - ast-grep ONLY processes `.go` files by default
 - Files with `.bak` or other extensions are ignored
 - Use `--no-ignore hidden` flag OR copy to a `.go` file first
 
 **2. Pattern Syntax**
+
 - `$VAR` - matches a single AST node (like `$FUNC`, `$TYPE`)
 - `$$` - matches zero or more AST nodes (parameters, statements, etc.)
 - Meta variables must be UPPERCASE: `$FUNC` ✅, `$func` ❌
 
 **3. Limitations**
+
 - `$$` CANNOT be used in return type positions - causes parse errors
 - Pattern must be valid Go code that tree-sitter can parse
 - For complex signatures, use concrete types instead of wildcards
@@ -250,6 +254,7 @@ This shows the AST tree and reveals `ERROR` nodes where the pattern is malformed
 **6. Best Practices**
 
 For extracting Go functions:
+
 1. Know the exact signature (return types, parameter types)
 2. Use specific types instead of `$$` for return values
 3. Use `$$` ONLY for parameter lists and function bodies
@@ -289,12 +294,14 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 7. ✅ **ONLY run `task lint:fix`** - Linting is safe for AI
 
 **Why AI cannot run E2E tests:**
+
 - E2E tests take 5-10 minutes to complete
 - They rebuild Docker containers and restart services
 - They require significant system resources
 - The human developer needs to run them manually when ready
 
 **What AI should do instead:**
+
 - Run `task go:test` to verify Go unit/integration tests pass
 - Run `task web:test` to verify web unit tests pass
 - Run `task lint:fix` to fix any linting issues
@@ -303,6 +310,7 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 **Two development modes:**
 
 1. **Overmind dev mode (Procfile.dev)** - Used by `task dev`, runs locally with hot reload via air:
+
    - Gateway API: `http://localhost:8447`
    - Web UI: `http://localhost:5223`
    - Mock OAuth: `http://localhost:3345`
@@ -317,7 +325,8 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
    - Database: Docker container (rack-gateway-postgres-1) on port 55432
 
 **Health checks (Overmind mode):**
-- `curl http://localhost:8447/.gateway/api/health` - Gateway health check passes
+
+- `curl http://localhost:8447/api/v1/health` - Gateway health check passes
 - `curl http://localhost:3345/health` - Mock OAuth health check passes
 - `curl http://localhost:5443/health` - Mock Convox health check passes
 
@@ -570,11 +579,13 @@ See `docs/DATABASE_MAINTENANCE.md` for complete database maintenance procedures 
 ### Running SQL Queries
 
 **Development database:**
+
 ```bash
 docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "YOUR_SQL_QUERY"
 ```
 
 **Test database:**
+
 ```bash
 docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_test -c "YOUR_SQL_QUERY"
 ```

@@ -77,7 +77,7 @@ export async function login(page: Page, options: LoginOptions = {}) {
     })
     .toBeTruthy()
 
-  await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
+  await page.waitForURL(/web(?:\/|$)/, { timeout: 15_000 })
 
   if (autoEnrollMfa) {
     await ensureMfaEnrollment(page, { email })

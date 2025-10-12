@@ -12,8 +12,8 @@ export default defineConfig(() => {
   }
 
   return {
-    // Serve UI consistently under /.gateway/web/ in all envs
-    base: '/.gateway/web/',
+    // Serve UI consistently under /app/ in all envs
+    base: '/app/',
     plugins: [
       react(),
       tailwindcss(),
@@ -53,7 +53,7 @@ export default defineConfig(() => {
       strictPort: true,
       hmr: process.env.VITE_DISABLE_HMR === 'true' ? false : undefined,
       proxy: {
-        '/.gateway/api': {
+        '/api': {
           target:
             process.env.VITE_API_BASE_URL ||
             `http://127.0.0.1:${process.env.GATEWAY_PORT || '8447'}`,

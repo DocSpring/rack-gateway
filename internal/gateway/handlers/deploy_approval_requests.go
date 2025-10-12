@@ -314,7 +314,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	} else {
 		gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
 	}
-	approvalURL := fmt.Sprintf("%s/.gateway/web/deploy_approval_requests/%s", gatewayURL, record.PublicID)
+	approvalURL := fmt.Sprintf("%s/app/deploy_approval_requests/%s", gatewayURL, record.PublicID)
 
 	// Extract PR number from URL
 	prNumber, err := github.ExtractPRNumber(prURL)

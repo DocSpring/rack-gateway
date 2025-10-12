@@ -15,8 +15,8 @@ func ExtractSettingsPermissions(c *gin.Context) []string {
 	path := c.Request.URL.Path
 	method := c.Request.Method
 
-	// Global settings: /.gateway/api/admin/settings or /admin/settings (tests)
-	if path == "/.gateway/api/admin/settings" || path == "/admin/settings" {
+	// Global settings: /api/v1/admin/settings or /admin/settings (tests)
+	if path == "/api/v1/admin/settings" || path == "/admin/settings" {
 		switch method {
 		case "PUT":
 			return extractGlobalSettingsFromPUT(c)
@@ -25,10 +25,10 @@ func ExtractSettingsPermissions(c *gin.Context) []string {
 		}
 	}
 
-	// App settings: /.gateway/api/apps/:app/settings or /apps/:app/settings (tests)
+	// App settings: /api/v1/apps/:app/settings or /apps/:app/settings (tests)
 	appName := c.Param("app")
 	if appName != "" {
-		expectedPath1 := "/.gateway/api/apps/" + appName + "/settings"
+		expectedPath1 := "/api/v1/apps/" + appName + "/settings"
 		expectedPath2 := "/apps/" + appName + "/settings"
 		if path == expectedPath1 || path == expectedPath2 {
 			switch method {

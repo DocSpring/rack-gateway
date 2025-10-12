@@ -30,7 +30,7 @@ export function RackPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['rack-info'],
     queryFn: async () => {
-      const res = await api.get<RackInfo>('/.gateway/api/rack')
+      const res = await api.get<RackInfo>('/api/v1/rack')
       return res
     },
   })

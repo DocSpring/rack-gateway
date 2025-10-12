@@ -94,7 +94,7 @@ test.describe('Global Settings', () => {
     // Step 2: Save (checked state)
     let updateResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/.gateway/api/admin/settings/allow_destructive_actions') &&
+        response.url().includes('/api/v1/admin/settings/allow_destructive_actions') &&
         response.request().method() === 'PUT'
     )
 
@@ -117,7 +117,7 @@ test.describe('Global Settings', () => {
     // Step 4: Save (unchecked state)
     updateResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/.gateway/api/admin/settings/allow_destructive_actions') &&
+        response.url().includes('/api/v1/admin/settings/allow_destructive_actions') &&
         response.request().method() === 'PUT'
     )
 
@@ -135,7 +135,7 @@ test.describe('Global Settings', () => {
     // Step 5: Clear to revert to default
     const clearResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/.gateway/api/admin/settings/allow_destructive_actions') &&
+        response.url().includes('/api/v1/admin/settings/allow_destructive_actions') &&
         response.request().method() === 'DELETE'
     )
     await clearButton.first().click()
@@ -172,7 +172,7 @@ test.describe('Global Settings', () => {
     // Wait for API responses (should update step-up window)
     const updateResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/.gateway/api/admin/settings/mfa_step_up_window_minutes') &&
+        response.url().includes('/api/v1/admin/settings/mfa_step_up_window_minutes') &&
         response.request().method() === 'PUT'
     )
 
@@ -194,7 +194,7 @@ test.describe('Global Settings', () => {
 
     // Logout admin
     await page.getByRole('button', { name: /^logout$/i }).click()
-    await page.waitForURL(/\.gateway\/web\/login$/)
+    await page.waitForURL(/web\/login$/)
 
     // Login as viewer
     await page.goto(WebRoute('login'))
@@ -211,7 +211,7 @@ test.describe('Global Settings', () => {
     const viewerCard = page.locator('text=Viewer User').first()
     await expect(viewerCard).toBeVisible()
     await viewerCard.click()
-    await page.waitForURL(/\.gateway\/web/, { timeout: 15_000 })
+    await page.waitForURL(/app/, { timeout: 15_000 })
 
     // Navigate to settings
     await navigateToSettings(page)

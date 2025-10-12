@@ -70,6 +70,7 @@ RGW_SETTING_DEFAULT_CI_ORG_SLUG=gh/DocSpring/docspring
 ```
 
 **Generate CircleCI API Token:**
+
 1. Visit https://app.circleci.com/settings/user/tokens
 2. Click "Create New Token"
 3. Name it "Rack Gateway Deploy Approvals"
@@ -122,10 +123,12 @@ The `ci_org_slug` setting specifies the VCS provider, organization, and reposito
 **Format:** `{vcs}/{org}/{repo}`
 
 **Examples:**
+
 - GitHub: `gh/DocSpring/docspring`
 - Bitbucket: `bb/mycompany/myrepo`
 
 This is used to build pipeline URLs like:
+
 ```
 https://app.circleci.com/pipelines/github/DocSpring/docspring/6279
 ```
@@ -220,10 +223,10 @@ The gateway requires specific metadata from CircleCI to enable auto-approval:
 
 **Fields:**
 
-| Field             | Source                      | Purpose                                     |
-| ----------------- | --------------------------- | ------------------------------------------- |
-| `workflow_id`     | `$CIRCLE_WORKFLOW_ID`       | Used to identify and approve the CI job     |
-| `pipeline_number` | `<< pipeline.number >>`     | Used to build the pipeline URL for display  |
+| Field             | Source                  | Purpose                                    |
+| ----------------- | ----------------------- | ------------------------------------------ |
+| `workflow_id`     | `$CIRCLE_WORKFLOW_ID`   | Used to identify and approve the CI job    |
+| `pipeline_number` | `<< pipeline.number >>` | Used to build the pipeline URL for display |
 
 **Note:** `pipeline.number` uses CircleCI's pipeline parameter syntax (`<< >>`), not environment variable syntax (`$`).
 
@@ -257,9 +260,11 @@ When an admin approves in the gateway:
 To auto-approve a CircleCI job, the gateway needs:
 
 1. **From CI metadata** (passed by CLI):
+
    - `workflow_id` - To identify the workflow
 
 2. **From app settings** (configured in gateway):
+
    - `circleci_approval_job_name` - To find the correct job to approve
 
 3. **From gateway config** (environment variable):
@@ -273,11 +278,13 @@ The gateway builds pipeline URLs for display in the web UI using:
 - `pipeline_number` from CI metadata
 
 **Built URL:**
+
 ```
 https://app.circleci.com/pipelines/{ci_org_slug}/{pipeline_number}
 ```
 
 **Example:**
+
 ```
 https://app.circleci.com/pipelines/github/DocSpring/docspring/6279
 ```
@@ -289,11 +296,13 @@ This provides a direct link to the CircleCI pipeline in the deploy approval requ
 For multiple deployment environments (staging, production), configure different approval job names per app:
 
 **Staging Gateway:**
+
 ```bash
 RGW_APP_MYAPP_SETTING_CIRCLECI_APPROVAL_JOB_NAME=approve_deploy_staging
 ```
 
 **Production Gateway:**
+
 ```bash
 RGW_APP_MYAPP_SETTING_CIRCLECI_APPROVAL_JOB_NAME=approve_deploy_production
 ```
@@ -355,11 +364,13 @@ workflows:
 ### CircleCI Integration Shows "Not Connected"
 
 **Check:**
+
 - `CIRCLECI_TOKEN` environment variable is set on gateway
 - Gateway has been restarted after adding env vars
 - Token has not expired
 
 **Verify token:**
+
 ```bash
 curl -H "Circle-Token: YOUR_TOKEN" https://circleci.com/api/v2/me
 ```
@@ -369,19 +380,23 @@ curl -H "Circle-Token: YOUR_TOKEN" https://circleci.com/api/v2/me
 **Check:**
 
 1. **App settings configured:**
+
    - `ci_provider` is set to `circleci`
    - `circleci_auto_approve_on_approval` is set to `true`
    - `circleci_approval_job_name` matches job name in workflow
 
 2. **CI metadata included:**
+
    - Approval request includes `ci_metadata` with `workflow_id`
    - Can verify in gateway database or API response
 
 3. **Job name matches exactly:**
+
    - `circleci_approval_job_name` setting must exactly match job name in `.circleci/config.yml`
    - Case-sensitive match required
 
 4. **Workflow ID is correct:**
+
    - Check that `$CIRCLE_WORKFLOW_ID` is being passed correctly in CI metadata
    - Verify in CircleCI UI or approval request details
 
@@ -391,6 +406,7 @@ curl -H "Circle-Token: YOUR_TOKEN" https://circleci.com/api/v2/me
    ```
 
 **Common errors:**
+
 - `"approval job 'approve_deploy_prod' not found in workflow"` - Job name mismatch
 - `"403 Forbidden"` - API token lacks permissions or has expired
 - `"workflow not found"` - Invalid workflow_id
@@ -416,6 +432,7 @@ If the job was already approved manually in CircleCI before gateway processes th
 If the pipeline URL shown in the UI is incorrect:
 
 **Check:**
+
 - `ci_org_slug` setting is correct format: `{vcs}/{org}/{repo}`
 - `pipeline_number` was included in CI metadata
 - VCS prefix matches your VCS (`gh` for GitHub, `bb` for Bitbucket)
@@ -462,6 +479,7 @@ docker logs rack-gateway-api-1 | grep -i circleci
 ```
 
 **Look for:**
+
 - `"INFO: Successfully approved CircleCI job ..."`
 - `"ERROR: Failed to approve CircleCI job: ..."`
 - `"WARN: CircleCI auto-approve enabled but no approval_job_name configured"`
@@ -472,10 +490,11 @@ Query the approval request directly:
 
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://gateway.example.com/.gateway/api/deploy-approval-requests/REQUEST_ID
+  https://gateway.example.com/api/v1/deploy-approval-requests/REQUEST_ID
 ```
 
 **Verify:**
+
 - `ci_metadata` contains `workflow_id`
 - `status` is `pending` before approval
 - `status` changes to `approved` after approval

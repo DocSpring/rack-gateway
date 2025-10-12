@@ -5,7 +5,7 @@ test('app tabs show active styling per route', async ({ page }) => {
   await login(page)
 
   // Go to Apps list
-  await page.goto('/.gateway/web/apps')
+  await page.goto('/app/apps')
   // Click first app link in table
   const firstAppLink = page.locator('table tbody tr a').first()
   await expect(firstAppLink).toBeVisible()

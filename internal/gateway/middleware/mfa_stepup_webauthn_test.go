@@ -74,7 +74,7 @@ func TestRequireMFAStepUp_AllowsInlineWebAuthn(t *testing.T) {
 	require.NoError(t, err)
 
 	router := gin.New()
-	router.POST("/.gateway/api/admin/tokens", func(c *gin.Context) {
+	router.POST("/api/v1/admin/tokens", func(c *gin.Context) {
 		authUser := &auth.AuthUser{
 			Email:      user.Email,
 			Name:       user.Name,
@@ -93,7 +93,7 @@ func TestRequireMFAStepUp_AllowsInlineWebAuthn(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/.gateway/api/admin/tokens", bytes.NewReader(bodyBytes))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tokens", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-MFA-WebAuthn", inlineHeader)
 

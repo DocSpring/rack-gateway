@@ -82,7 +82,7 @@ export function IntegrationsPage() {
     queryKey: ['slack-config'],
     queryFn: async () => {
       try {
-        await api.post('/.gateway/api/admin/integrations/slack/oauth/authorize')
+        await api.post('/api/v1/admin/integrations/slack/oauth/authorize')
         return { configured: true }
       } catch (error: unknown) {
         if (hasStatus(error, 503)) {
@@ -98,7 +98,7 @@ export function IntegrationsPage() {
     queryKey: ['circleci-settings'],
     queryFn: async (): Promise<CircleCISettings | null> => {
       try {
-        const response = await api.get<CircleCISettings>('/.gateway/api/admin/settings/circleci')
+        const response = await api.get<CircleCISettings>('/api/v1/admin/settings/circleci')
         return response
       } catch (error: unknown) {
         if (hasStatus(error, 404)) {
@@ -114,7 +114,7 @@ export function IntegrationsPage() {
     queryKey: ['github-settings'],
     queryFn: async (): Promise<GitHubSettings | null> => {
       try {
-        const response = await api.get<GitHubSettings>('/.gateway/api/admin/settings/github')
+        const response = await api.get<GitHubSettings>('/api/v1/admin/settings/github')
         return response
       } catch (error: unknown) {
         if (hasStatus(error, 404)) {
@@ -130,7 +130,7 @@ export function IntegrationsPage() {
     queryKey: ['slack-integration'],
     queryFn: async (): Promise<SlackIntegration | null> => {
       try {
-        const response = await api.get<SlackIntegration>('/.gateway/api/admin/integrations/slack')
+        const response = await api.get<SlackIntegration>('/api/v1/admin/integrations/slack')
         return response
       } catch (error: unknown) {
         if (hasStatus(error, 404)) {
@@ -146,7 +146,7 @@ export function IntegrationsPage() {
     queryKey: ['slack-channels'],
     queryFn: async () => {
       const response = await api.get<{ channels: SlackChannel[] }>(
-        '/.gateway/api/admin/integrations/slack/channels/list'
+        '/api/v1/admin/integrations/slack/channels/list'
       )
       return response.channels || []
     },
@@ -157,7 +157,7 @@ export function IntegrationsPage() {
   const connectMutation = useMutation({
     mutationFn: async () => {
       const response = await api.post<{ authorization_url: string }>(
-        '/.gateway/api/admin/integrations/slack/oauth/authorize'
+        '/api/v1/admin/integrations/slack/oauth/authorize'
       )
       return response.authorization_url
     },
@@ -174,7 +174,7 @@ export function IntegrationsPage() {
   // Disconnect mutation
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      await api.delete('/.gateway/api/admin/integrations/slack')
+      await api.delete('/api/v1/admin/integrations/slack')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['slack-integration'] })
@@ -189,7 +189,7 @@ export function IntegrationsPage() {
   // Update channels mutation
   const updateChannelsMutation = useMutation({
     mutationFn: async (channelActions: Record<string, ChannelConfig>) => {
-      await api.put('/.gateway/api/admin/integrations/slack/channels', {
+      await api.put('/api/v1/admin/integrations/slack/channels', {
         channel_actions: channelActions,
       })
     },
@@ -206,7 +206,7 @@ export function IntegrationsPage() {
   // Test notification mutation
   const testMutation = useMutation({
     mutationFn: async (channelId: string) => {
-      await api.post('/.gateway/api/admin/integrations/slack/test', { channel_id: channelId })
+      await api.post('/api/v1/admin/integrations/slack/test', { channel_id: channelId })
     },
     onSuccess: () => {
       toast.success('Test notification sent')

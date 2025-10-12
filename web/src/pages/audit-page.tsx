@@ -595,7 +595,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         total: number
         page: number
         limit: number
-      }>(`/.gateway/api/admin/audit?${params}`)
+      }>(`/api/v1/admin/audit?${params}`)
     },
     placeholderData: keepPreviousData,
     refetchOnMount: 'always',
@@ -633,7 +633,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
     params.append('format', 'csv')
 
     // Create download link
-    const url = `/.gateway/api/admin/audit/export?${params}`
+    const url = `/api/v1/admin/audit/export?${params}`
     const link = document.createElement('a')
     link.href = url
     link.download = `audit-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`

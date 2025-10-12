@@ -106,7 +106,7 @@ func TestCreateUserSendsWelcomeAndAdminEmails(t *testing.T) {
 		"roles": []string{"viewer"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newGinContext(http.MethodPost, "/.gateway/api/admin/users", body)
+	c, w := newGinContext(http.MethodPost, "/api/v1/admin/users", body)
 	attachUserContext(c, "admin@example.com", "Admin User")
 
 	handler.CreateUser(c)
@@ -151,7 +151,7 @@ func TestCreateAPITokenSendsOwnerAndAdminEmails(t *testing.T) {
 		"permissions": []string{"convox:app:list"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newGinContext(http.MethodPost, "/.gateway/api/admin/tokens", body)
+	c, w := newGinContext(http.MethodPost, "/api/v1/admin/tokens", body)
 	attachUserContext(c, "admin@example.com", "Admin User")
 
 	handler.CreateAPIToken(c)

@@ -19,7 +19,7 @@ func StartLogin(gatewayURL string) (*LoginStartResponse, error) {
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/.gateway/api/auth/cli/start", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/api/v1/auth/cli/start", strings.TrimSuffix(parsedURL, "/"))
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
@@ -52,7 +52,7 @@ func CompleteLogin(gatewayURL, state, codeVerifier string, device DeviceInfo) (*
 	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
 		parsedURL = "https://" + parsedURL
 	}
-	url := fmt.Sprintf("%s/.gateway/api/auth/cli/complete", strings.TrimSuffix(parsedURL, "/"))
+	url := fmt.Sprintf("%s/api/v1/auth/cli/complete", strings.TrimSuffix(parsedURL, "/"))
 
 	payload := map[string]string{
 		"state":          state,

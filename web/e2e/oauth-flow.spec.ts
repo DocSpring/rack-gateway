@@ -58,7 +58,7 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   const table = page.getByRole('table')
   await expect(empty.or(table)).toBeVisible()
 
-  // Now the cookie should be set; /.gateway/api/info should return the current user
+  // Now the cookie should be set; /api/v1/info should return the current user
   const meEndpoint = APIRoute('me')
   const me = await page.evaluate(async (endpoint) => {
     const r = await fetch(endpoint, { credentials: 'include' })

@@ -25,22 +25,15 @@ func (h *ProxyHandler) ProxyToRack(c *gin.Context) {
 	h.proxy.ProxyToRack(c.Writer, c.Request)
 }
 
-// ProxyStripPrefix strips the /.gateway/api/convox or /api/v1/convox prefix and proxies to rack
+// ProxyStripPrefix strips the /api/v1/rack-proxy prefix and proxies to rack
 func (h *ProxyHandler) ProxyStripPrefix(c *gin.Context) {
 	// Strip prefix from path (supports both old and new routing)
 	// This is used for CLI commands and safe GET-only endpoints exposed to the web UI
 	originalPath := c.Request.URL.Path
-	var trimmed string
-
-	if strings.HasPrefix(originalPath, "/api/v1/convox") {
-		trimmed = strings.TrimPrefix(originalPath, "/api/v1/convox")
-	} else if strings.HasPrefix(originalPath, "/.gateway/api/convox") {
-		trimmed = strings.TrimPrefix(originalPath, "/.gateway/api/convox")
-	}
-
-	if trimmed != "" {
+	if strings.HasPrefix(originalPath, "/api/v1/rack-proxy") {
+		trimmed := strings.TrimPrefix(originalPath, "/api/v1/rack-proxy")
 		if trimmed == "" || trimmed[0] != '/' {
-			trimmed = "/" + trimmed
+			trimmed = "/" + strings.TrimPrefix(trimmed, "/")
 		}
 		c.Request = c.Request.Clone(c.Request.Context())
 		c.Request.Header.Set("X-Original-Path", originalPath)

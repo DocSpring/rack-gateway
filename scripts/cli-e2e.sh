@@ -211,7 +211,7 @@ login_cli_as() {
     mfa_response=$(curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" \
       -H "Content-Type: application/json" \
       --data "{\"state\":\"${STATE}\",\"code\":\"${totp_code}\"}" \
-      "http://127.0.0.1:${GATEWAY_PORT}/.gateway/api/auth/cli/mfa")
+      "http://127.0.0.1:${GATEWAY_PORT}/api/v1/auth/cli/mfa")
     echo "    MFA response: $mfa_response"
   fi
 

@@ -34,13 +34,10 @@ Rack Gateway can send audit log notifications to Slack channels for security eve
   },
   "oauth_config": {
     "redirect_urls": [
-      "https://your-gateway-domain.com/.gateway/api/admin/integrations/slack/oauth/callback"
+      "https://your-gateway-domain.com/api/v1/admin/integrations/slack/oauth/callback"
     ],
     "scopes": {
-      "bot": [
-        "channels:read",
-        "chat:write"
-      ]
+      "bot": ["channels:read", "chat:write"]
     }
   },
   "settings": {
@@ -81,6 +78,7 @@ SLACK_CLIENT_SECRET="your-client-secret-here"
 The integration creates two default channel configurations:
 
 **#security** - Security-related events:
+
 - `login.complete` - Successful login attempts
 - `login.*_failed` - Failed login attempts (oauth_failed, user_not_authorized, etc.)
 - `mfa.*` - MFA enrollment, verification, backup code usage
@@ -88,6 +86,7 @@ The integration creates two default channel configurations:
 - `api-token.*` - API token creation, updates, deletion
 
 **#infrastructure** - Deployment and infrastructure events:
+
 - `deploy-approval-request.*` - Deploy approval requests, approvals, rejections
 - `release.promote` - Release promotions
 
@@ -96,12 +95,14 @@ The integration creates two default channel configurations:
 You can add, remove, or modify channel configurations through the web UI:
 
 1. **Add a new channel**:
+
    - Click **Add Channel**
    - Enter a name (e.g., `#security`, `#dev-ops`)
    - Select the Slack channel from the dropdown
    - Add action patterns
 
 2. **Add action patterns**:
+
    - Use glob patterns like `mfa.*` to match all MFA events
    - Or specific actions like `deploy-approval-request.approved`
    - Multiple patterns are supported per channel
@@ -114,22 +115,23 @@ You can add, remove, or modify channel configurations through the web UI:
 
 View the **Audit Logs** page to see all available action types. Common patterns:
 
-| Pattern | Matches |
-|---------|---------|
-| `mfa.*` | All MFA events (enroll, verify, backup-code-used) |
-| `auth.*` | All authentication events (login, logout, failed) |
-| `api-token.*` | All API token events (created, updated, deleted) |
-| `user.role.*` | User role changes (added, removed) |
-| `deploy-approval-request.*` | All deploy approval events |
-| `release.promote` | Release promotions |
-| `*.failed` | Any failed action |
-| `*.denied` | Any denied action |
+| Pattern                     | Matches                                           |
+| --------------------------- | ------------------------------------------------- |
+| `mfa.*`                     | All MFA events (enroll, verify, backup-code-used) |
+| `auth.*`                    | All authentication events (login, logout, failed) |
+| `api-token.*`               | All API token events (created, updated, deleted)  |
+| `user.role.*`               | User role changes (added, removed)                |
+| `deploy-approval-request.*` | All deploy approval events                        |
+| `release.promote`           | Release promotions                                |
+| `*.failed`                  | Any failed action                                 |
+| `*.denied`                  | Any denied action                                 |
 
 ## Message Formatting
 
 Messages include:
 
 - **Emoji indicators**: Different emojis for different event types
+
   - 🔐 MFA events
   - 🔑 Authentication and API tokens
   - 🚀 Deploy approvals
@@ -169,10 +171,12 @@ Messages include:
 ### Messages not appearing in Slack
 
 1. **Check channel configuration**:
+
    - Verify the channel is selected in the dropdown
    - Ensure action patterns match the events you want (check Audit Logs for action names)
 
 2. **Verify bot permissions**:
+
    - Bot must be invited to the channel (`/invite @Rack Gateway`)
    - Bot needs `chat:write` permission
 
@@ -227,13 +231,13 @@ Channel actions are stored as JSONB:
 
 All endpoints require admin authentication:
 
-- `POST /.gateway/api/admin/integrations/slack/oauth/authorize` - Start OAuth flow
-- `GET /.gateway/api/admin/integrations/slack/oauth/callback` - OAuth callback
-- `GET /.gateway/api/admin/integrations/slack` - Get integration status
-- `PUT /.gateway/api/admin/integrations/slack/channels` - Update channel configuration
-- `DELETE /.gateway/api/admin/integrations/slack` - Disconnect integration
-- `GET /.gateway/api/admin/integrations/slack/channels/list` - List available channels
-- `POST /.gateway/api/admin/integrations/slack/test` - Send test notification
+- `POST /api/v1/admin/integrations/slack/oauth/authorize` - Start OAuth flow
+- `GET /api/v1/admin/integrations/slack/oauth/callback` - OAuth callback
+- `GET /api/v1/admin/integrations/slack` - Get integration status
+- `PUT /api/v1/admin/integrations/slack/channels` - Update channel configuration
+- `DELETE /api/v1/admin/integrations/slack` - Disconnect integration
+- `GET /api/v1/admin/integrations/slack/channels/list` - List available channels
+- `POST /api/v1/admin/integrations/slack/test` - Send test notification
 
 ## Limitations
 

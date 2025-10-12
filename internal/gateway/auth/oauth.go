@@ -263,14 +263,14 @@ func deriveRedirects(input string) (base string, web string, cli string, err err
 	}
 	base = u.Scheme + "://" + u.Host
 	p := strings.TrimSuffix(u.Path, "/")
-	if strings.HasSuffix(p, "/.gateway/api/auth/web/callback") || strings.HasSuffix(p, "/.gateway/web/callback") {
+	if strings.HasSuffix(p, "/api/v1/auth/web/callback") || strings.HasSuffix(p, "/app/auth/callback") {
 		// Treat input as full web callback URL
 		web = u.String()
-		cli = base + "/.gateway/api/auth/cli/callback"
+		cli = base + "/api/v1/auth/cli/callback"
 		return
 	}
 	// Treat input as base URL
-	web = base + "/.gateway/api/auth/web/callback"
-	cli = base + "/.gateway/api/auth/cli/callback"
+	web = base + "/api/v1/auth/web/callback"
+	cli = base + "/api/v1/auth/cli/callback"
 	return
 }

@@ -35,12 +35,12 @@ export function AppBuildsPage() {
   } = useQuery({
     queryKey: ['app-builds', app],
     queryFn: async () => {
-      const items = await api.get<Build[]>(`/.gateway/api/convox/apps/${app}/builds`)
+      const items = await api.get<Build[]>(`/api/v1/convox/apps/${app}/builds`)
       try {
         const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
         if (ids) {
           const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/.gateway/api/created-by?type=build&ids=${encodeURIComponent(ids)}`
+            `/api/v1/created-by?type=build&ids=${encodeURIComponent(ids)}`
           )
           for (const b of items) {
             const m = map[b.id]

@@ -66,7 +66,7 @@ func TestRequireMFAStepUp_AllowsInlineTOTP(t *testing.T) {
 		return session
 	}
 
-	const endpoint = "/.gateway/api/auth/mfa/backup-codes/regenerate"
+	const endpoint = "/api/v1/auth/mfa/backup-codes/regenerate"
 
 	newRouter := func(session *db.UserSession) *gin.Engine {
 		router := gin.New()

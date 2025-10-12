@@ -3,7 +3,7 @@ import { expect, test } from './fixtures'
 test('login button triggers gateway OAuth redirect', async ({ page }) => {
   page.on('pageerror', (e) => console.log('pageerror:', e))
 
-  await page.goto('/.gateway/web/login')
+  await page.goto('/app/login')
 
   const btn = page
     .getByTestId('login-cta')

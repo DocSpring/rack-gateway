@@ -34,7 +34,7 @@ func WebCommand() *cobra.Command {
 			}
 
 			// Open the web UI URL
-			webURL := gatewayURL + "/.gateway/web"
+			webURL := gatewayURL + "/web"
 
 			fmt.Printf("Opening %s in your browser...\n", webURL)
 

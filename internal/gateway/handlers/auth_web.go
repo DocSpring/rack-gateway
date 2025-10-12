@@ -178,5 +178,5 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 		}
 	}
 
-	c.Redirect(http.StatusFound, "/.gateway/web/login")
+	c.Redirect(http.StatusFound, "/app/login")
 }

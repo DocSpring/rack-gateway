@@ -45,7 +45,7 @@ import type {
   HandlersWebAuthnEnrollmentResponse,
 } from '@/api/schemas'
 
-const API_PREFIX = '/.gateway/api'
+const API_PREFIX = '/api/v1'
 
 const gateway = getRackGatewayAPI()
 

@@ -10,7 +10,7 @@
         "contact": {},
         "version": "1.0"
     },
-    "basePath": "/.gateway/api",
+    "basePath": "/api/v1",
     "paths": {
         "/admin/audit": {
             "get": {

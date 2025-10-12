@@ -9,7 +9,7 @@ export function CLIAuthSuccessPage() {
       title="Authentication Complete"
     >
       <Button asChild className="w-full sm:w-auto">
-        <a href="/.gateway/web/">Open Web UI</a>
+        <a href="/app/">Open Web UI</a>
       </Button>
     </AuthResultCard>
   )

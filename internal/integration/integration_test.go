@@ -70,7 +70,7 @@ func TestIntegration(t *testing.T) {
 
 	// Wait for servers to be ready
 	waitForServer(t, "http://localhost:"+mockConvoxPort+"/health", 10*time.Second)
-	servers.waitForGateway(t, "http://localhost:"+gatewayPort+"/.gateway/api/health", 10*time.Second)
+	servers.waitForGateway(t, "http://localhost:"+gatewayPort+"/api/v1/health", 10*time.Second)
 
 	// Run tests
 	t.Run("HealthCheck", func(t *testing.T) {
@@ -276,7 +276,7 @@ func waitForServer(t *testing.T, url string, timeout time.Duration) {
 }
 
 func testHealthCheck(t *testing.T, s *TestServers) {
-	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/api/health")
+	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/api/v1/health")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -288,7 +288,7 @@ func testHealthCheck(t *testing.T, s *TestServers) {
 }
 
 func testUnauthenticatedAccess(t *testing.T, s *TestServers) {
-	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/.gateway/api/info")
+	resp, err := s.client.Get("http://localhost:" + gatewayPort + "/api/v1/info")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -347,7 +347,7 @@ func testProxyWithInvalidToken(t *testing.T, s *TestServers) {
 
 func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 	// Test login start endpoint
-	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/.gateway/api/auth/cli/start", "application/json", nil)
+	resp, err := s.client.Post("http://localhost:"+gatewayPort+"/api/v1/auth/cli/start", "application/json", nil)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -363,8 +363,8 @@ func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 
 func testAdminEndpointProtection(t *testing.T, s *TestServers) {
 	endpoints := []string{
-		"/.gateway/admin/users",
-		"/.gateway/admin/roles",
+		"/api/v1/admin/users",
+		"/api/v1/admin/roles",
 	}
 
 	for _, endpoint := range endpoints {

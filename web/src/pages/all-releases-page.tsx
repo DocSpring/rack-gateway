@@ -34,10 +34,10 @@ export function AllReleasesPage() {
   } = useQuery({
     queryKey: ['all-releases'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/.gateway/api/convox/apps')
+      const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const rs = await api.get<Release[]>(`/.gateway/api/convox/apps/${a.name}/releases`)
+          const rs = await api.get<Release[]>(`/api/v1/convox/apps/${a.name}/releases`)
           return rs.map((r) => ({ ...r, app: a.name }))
         })
       )
@@ -50,7 +50,7 @@ export function AllReleasesPage() {
         const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
         if (ids) {
           const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/.gateway/api/created-by?type=release&ids=${encodeURIComponent(ids)}`
+            `/api/v1/created-by?type=release&ids=${encodeURIComponent(ids)}`
           )
           for (const r of items) {
             const m = map[r.id]

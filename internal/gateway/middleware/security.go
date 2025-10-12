@@ -433,7 +433,7 @@ func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.H
 		if path == "" {
 			path = c.Request.URL.Path
 		}
-		if path == "/.gateway/api/health" {
+		if path == "/api/v1/health" {
 			return
 		}
 		if strings.HasPrefix(path, "/.well-known/") {
@@ -443,11 +443,15 @@ func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.H
 			return
 		}
 		// Skip noisy Vite dev server requests in development (static assets)
-		if devMode && strings.HasPrefix(path, "/.gateway/web/") {
-			remainder := path[len("/.gateway/web/"):]
-			// Skip if path contains a file extension or @ (for @vite, @fs, etc.)
-			if strings.Contains(remainder, ".") || strings.Contains(remainder, "@") {
-				return
+		if devMode {
+			if strings.HasPrefix(path, "/api/v1/") {
+				// Always log API requests in development
+			} else {
+				trimmed := strings.TrimPrefix(path, "/")
+				// Skip if path contains a file extension or @ (for @vite, @fs, etc.)
+				if strings.Contains(trimmed, ".") || strings.Contains(trimmed, "@") {
+					return
+				}
 			}
 		}
 		// RequestLogger is only for non-proxy routes (UI, auth, etc.)
@@ -456,7 +460,7 @@ func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.H
 			return
 		}
 		// Skip proxy routes - they handle their own logging
-		if strings.HasPrefix(path, "/api/v1/convox/") {
+		if strings.HasPrefix(path, "/api/v1/rack-proxy/") {
 			return
 		}
 		userEmail := strings.TrimSpace(c.Request.Header.Get("X-User-Email"))

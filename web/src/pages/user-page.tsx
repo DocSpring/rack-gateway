@@ -228,7 +228,7 @@ export function UserPage() {
       email: string
       name: string
     }) => {
-      await api.put(`/.gateway/api/admin/users/${encodeURIComponent(originalEmail)}`, {
+      await api.put(`/api/v1/admin/users/${encodeURIComponent(originalEmail)}`, {
         email: nextEmail,
         name,
       })
@@ -237,7 +237,7 @@ export function UserPage() {
 
   const updateRolesMutation = useMutation({
     mutationFn: async ({ email: targetEmail, roles }: { email: string; roles: string[] }) => {
-      await api.put(`/.gateway/api/admin/users/${encodeURIComponent(targetEmail)}/roles`, {
+      await api.put(`/api/v1/admin/users/${encodeURIComponent(targetEmail)}/roles`, {
         roles,
       })
     },
@@ -416,7 +416,7 @@ export function UserPage() {
   }
 
   const deleteUserMutation = useMutation({
-    mutationFn: () => api.delete(`/.gateway/api/admin/users/${encodeURIComponent(decodedEmail)}`),
+    mutationFn: () => api.delete(`/api/v1/admin/users/${encodeURIComponent(decodedEmail)}`),
     onSuccess: () => {
       toast.success('User deleted successfully')
       setIsDeleteOpen(false)

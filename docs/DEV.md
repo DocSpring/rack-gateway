@@ -47,7 +47,7 @@ task dev
 2. Verify services
 
 - Web UI: `http://localhost:$WEB_PORT` (default 5223)
-- Gateway health: `curl http://localhost:$PORT/.gateway/api/health`
+- Gateway health: `curl http://localhost:$PORT/api/v1/health`
 - Mock Convox: `curl http://localhost:$MOCK_CONVOX_PORT/health`
 
 3. Build CLI and log in
@@ -178,8 +178,8 @@ The database stores:
 3. Choose "Web application"
 4. Add authorized redirect URIs:
 
-- `http://localhost:8447/.gateway/api/auth/cli/callback` (development)
-- `https://your-production-domain.com/.gateway/api/auth/cli/callback` (production)
+- `http://localhost:8447/api/v1/auth/cli/callback` (development)
+- `https://your-production-domain.com/api/v1/auth/cli/callback` (production)
 
 5. Save and copy the Client ID and Client Secret
 6. Update your `mise.local.toml` with these values

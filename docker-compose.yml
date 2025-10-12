@@ -18,10 +18,7 @@ x-gateway-env: &gateway_common_env
 
 x-gateway-health: &gateway_healthcheck
   test:
-    [
-      "CMD-SHELL",
-      "curl -fsS http://localhost:$$PORT/.gateway/api/health || exit 1",
-    ]
+    ["CMD-SHELL", "curl -fsS http://localhost:$$PORT/api/v1/health || exit 1"]
   interval: 2s
   timeout: 5s
   retries: 3

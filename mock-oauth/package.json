@@ -8,7 +8,7 @@
     "build": "bunx tsc --project tsconfig.build.json",
     "start": "bun run build && bun dist/server.js",
     "dev": "bun --watch server.ts",
-    "test": "bun test tests",
+    "test": "SKIP_AUTOSTART=true bun test tests",
     "lint": "bunx biome check .",
     "lint:fix": "bunx biome check --write .",
     "format": "bunx biome format --write .",

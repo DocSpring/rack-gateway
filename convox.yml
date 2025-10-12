@@ -44,7 +44,7 @@ services:
     environment:
       - PORT=8080
       - PGSSLMODE=require
-    health: /.gateway/api/health
+    health: /api/v1/health
     internal: false
     port: 8080
     resources:

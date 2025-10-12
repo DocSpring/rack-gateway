@@ -1,30 +1,26 @@
 # syntax=docker/dockerfile:1.6
 
-FROM node:20-alpine AS base
+FROM oven/bun:1-alpine AS base
 
-ENV PNPM_HOME=/pnpm
-ENV PATH="$PNPM_HOME:$PATH"
-
-RUN apk add --no-cache curl \
-    && corepack enable
+RUN apk add --no-cache curl
 
 WORKDIR /app
 
 FROM base AS deps
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 FROM deps AS build
 
-COPY tsconfig.json ./
-COPY server.ts ./
-RUN pnpm run build
+COPY tsconfig.json tsconfig.build.json ./
+COPY server.ts logging.ts ./
+RUN bun run build
 
 FROM base AS prod-deps
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
 FROM base AS runtime
 
@@ -33,13 +29,13 @@ ENV MOCK_OAUTH_PORT=${MOCK_OAUTH_PORT}
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=prod-deps /app/package.json ./package.json
-COPY --from=prod-deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=prod-deps /app/bun.lock ./bun.lock
 COPY --from=build /app/dist ./dist
 
 EXPOSE ${MOCK_OAUTH_PORT}
 
-USER node
+USER bun
 
-RUN node dist/server.js --help
+RUN bun dist/server.js --help
 
-CMD ["node", "dist/server.js"]
+CMD ["bun", "dist/server.js"]

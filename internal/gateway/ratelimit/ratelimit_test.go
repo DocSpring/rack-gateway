@@ -154,9 +154,9 @@ func TestAuthEndpointsOnly(t *testing.T) {
 		{"/auth/login", "POST", true},
 		{"/auth/web/callback", "GET", true},
 		{"/logout", "GET", true},
-		{"/api/tokens", "POST", true},
-		{"/api/users", "GET", false},
-		{"/api/tokens", "GET", false}, // GET is not rate limited
+		{"/api/v1/tokens", "POST", true},
+		{"/api/v1/users", "GET", false},
+		{"/api/v1/tokens", "GET", false}, // GET is not rate limited
 		{"/health", "GET", false},
 		{"/apps", "GET", false},
 	}

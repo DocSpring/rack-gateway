@@ -43,7 +43,7 @@ export function LoginErrorPage() {
       </Alert>
       <div className="flex justify-center">
         <Button asChild className="w-full sm:w-auto">
-          <a href="/.gateway/web/login">
+          <a href="/app/login">
             <RefreshCcw className="mr-2 h-4 w-4" /> Try again
           </a>
         </Button>

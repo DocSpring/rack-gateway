@@ -3,7 +3,7 @@ import { login } from './helpers'
 
 test('visit global Processes page', async ({ page }) => {
   await login(page)
-  await page.goto('/.gateway/web/processes')
+  await page.goto('/app/processes')
   await expect(page.getByRole('heading', { name: /Processes/i })).toBeVisible()
   // Either table or empty/loading state should render without JS errors
   const table = page.getByRole('table')
@@ -13,7 +13,7 @@ test('visit global Processes page', async ({ page }) => {
 
 test('visit global Instances page', async ({ page }) => {
   await login(page)
-  await page.goto('/.gateway/web/instances')
+  await page.goto('/app/instances')
   await expect(page.getByRole('heading', { name: /Instances/i })).toBeVisible()
   const table = page.getByRole('table')
   const loading = page.getByText(/Loading instances/i)
@@ -22,7 +22,7 @@ test('visit global Instances page', async ({ page }) => {
 
 test('visit global Builds page', async ({ page }) => {
   await login(page)
-  await page.goto('/.gateway/web/builds')
+  await page.goto('/app/builds')
   await expect(page.getByRole('heading', { name: /Builds/i })).toBeVisible()
   const table = page.getByRole('table')
   const loading = page.getByText(/Loading builds/i)
@@ -31,7 +31,7 @@ test('visit global Builds page', async ({ page }) => {
 
 test('visit global Releases page', async ({ page }) => {
   await login(page)
-  await page.goto('/.gateway/web/releases')
+  await page.goto('/app/releases')
   await expect(page.getByRole('heading', { name: /Releases/i })).toBeVisible()
   const table = page.getByRole('table')
   const loading = page.getByText(/Loading releases/i)

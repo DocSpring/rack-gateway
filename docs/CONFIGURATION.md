@@ -34,8 +34,8 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - OIDC issuer base URL. Override in development for the mock OAuth server.
     Derived from `DOMAIN`. No separate redirect URL is needed.
   - OAuth callback URLs are derived from DOMAIN:
-    - Web: `https://gateway.example.com/.gateway/api/auth/web/callback`
-    - CLI: `https://gateway.example.com/.gateway/api/auth/cli/callback`
+    - Web: `https://gateway.example.com/api/v1/auth/web/callback`
+    - CLI: `https://gateway.example.com/api/v1/auth/cli/callback`
 - `ADMIN_USERS` (optional)
   - Comma-separated emails to bootstrap admin access on first run.
 - `SENTRY_DSN` (optional)

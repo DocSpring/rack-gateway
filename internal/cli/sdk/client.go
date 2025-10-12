@@ -38,7 +38,7 @@ func New(gatewayURL, token string) *Client {
 
 // request makes an authenticated HTTP request to the gateway API
 func (c *Client) request(method, path string, body interface{}, out interface{}) error {
-	fullURL := c.gatewayURL + "/api/v1/convox" + path
+	fullURL := c.gatewayURL + "/api/v1/rack-proxy" + path
 
 	var payload io.Reader
 	var requestBody []byte
@@ -129,7 +129,7 @@ func (c *Client) Get(path string, opts stdsdk.RequestOptions, out interface{}) e
 
 // Endpoint returns the gateway URL (required by sdk.Interface)
 func (c *Client) Endpoint() (*url.URL, error) {
-	return url.Parse(c.gatewayURL + "/api/v1/convox")
+	return url.Parse(c.gatewayURL + "/api/v1/rack-proxy")
 }
 
 // ClientType returns the client type (required by sdk.Interface)

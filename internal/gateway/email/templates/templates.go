@@ -12,7 +12,7 @@ const readmeURL = "https://github.com/DocSpring/rack-gateway/blob/main/README.md
 
 func WebURL(base string) string {
 	b := strings.TrimRight(base, "/")
-	return b + "/.gateway/web/"
+	return b + "/app/"
 }
 
 // Welcome (new user)

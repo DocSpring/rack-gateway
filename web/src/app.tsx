@@ -256,8 +256,8 @@ export function detectBasepath() {
   if (base === '/' && typeof window !== 'undefined') {
     try {
       const p = window.location.pathname || '/'
-      if (p.startsWith('/.gateway/web')) {
-        return '/.gateway/web'
+      if (p.startsWith('/web')) {
+        return '/web'
       }
     } catch {
       // Ignore errors in non-browser test environments
