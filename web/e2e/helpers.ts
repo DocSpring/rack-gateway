@@ -15,6 +15,7 @@ import { expect } from './fixtures'
 type E2EWindow = Window &
   typeof globalThis & {
     __e2e_totpSecret?: string | null
+    __e2e_clipboardStubbed?: boolean
   }
 
 export type LoginOptions = {
@@ -77,7 +78,7 @@ export async function login(page: Page, options: LoginOptions = {}) {
     })
     .toBeTruthy()
 
-  await page.waitForURL(/web(?:\/|$)/, { timeout: 15_000 })
+  await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
 
   if (autoEnrollMfa) {
     await ensureMfaEnrollment(page, { email })
@@ -121,10 +122,6 @@ export async function ensureMfaEnrollment(
   await expect(statusBadge).toBeVisible()
 
   return secret
-}
-
-export async function enableTotpMfaViaUi(page: Page, email = 'admin@example.com'): Promise<string> {
-  return await startTotpEnrollmentViaUi(page, email)
 }
 
 export async function satisfyStepUpModal(
@@ -172,10 +169,11 @@ export async function satisfyStepUpModal(
   return true
 }
 
-async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<string> {
+export async function startTotpEnrollmentViaUi(page: Page, email = 'admin@example.com'): Promise<string> {
   await page.evaluate(() => {
     const globalWindow = window as unknown as E2EWindow
     globalWindow.__e2e_totpSecret = null
+    if (globalWindow.__e2e_clipboardStubbed ) return
 
     const stub = (text: string) => {
       const win = window as unknown as E2EWindow
@@ -184,6 +182,7 @@ async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<stri
     }
 
     navigator.clipboard.writeText = stub as typeof navigator.clipboard.writeText
+    globalWindow.__e2e_clipboardStubbed = true
   })
 
   await page.getByRole('button', { name: /^Enable MFA$/ }).click()

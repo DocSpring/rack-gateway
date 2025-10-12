@@ -11,7 +11,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 )
 
 // verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided
@@ -26,7 +25,7 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 
 	// Look up the MFA level for this permission
 	// If not explicitly defined, default to MFANone (read-only operations don't require MFA)
-	mfaLevel, ok := routematch.GetMFALevelForPermission(permission)
+	mfaLevel, ok := rbac.MFARequirements[permission]
 	if !ok {
 		mfaLevel = rbac.MFANone
 	}

@@ -20,7 +20,6 @@ import (
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -55,7 +54,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	// Validate build manifests for ALL users (enforces image pattern security policy)
-	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/builds") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(original, "/apps/{app}/builds") {
 		if err := h.validateBuildManifestForAllUsers(r, bodyBytes); err != nil {
 			return 0, err
 		}
@@ -72,7 +71,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	// Validate process start commands for deploy approval flow
-	if r.Method == http.MethodPost && routematch.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
 			app := extractAppFromPath(original)
 			command := strings.TrimSpace(r.Header.Get("Command"))
@@ -124,7 +123,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	isJSON := strings.Contains(ct, "application/json")
 	pth := original
-	filterRelease := isJSON && (routematch.KeyMatch3(pth, "/apps/{app}/releases") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
+	filterRelease := isJSON && (rbac.KeyMatch3(pth, "/apps/{app}/releases") || rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
 	shouldCapture := false
 	captureProcess := false
 	if isJSON {
@@ -132,11 +131,11 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		case http.MethodPost:
 			shouldCapture = true
 			// Capture process creation for deploy approval tracking
-			if routematch.KeyMatch3(pth, "/apps/{app}/services/{service}/processes") {
+			if rbac.KeyMatch3(pth, "/apps/{app}/services/{service}/processes") {
 				captureProcess = true
 			}
 		case http.MethodGet:
-			if routematch.KeyMatch3(pth, "/apps/{app}/builds/{id}") || routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
+			if rbac.KeyMatch3(pth, "/apps/{app}/builds/{id}") || rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
 				shouldCapture = true
 			}
 		}
@@ -171,7 +170,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			}
 		}
 		// Mark deploy approval as deployed after successful release promotion
-		if r.Method == http.MethodPost && routematch.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if r.Method == http.MethodPost && rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
 				if h.database != nil {
 					if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
@@ -398,7 +397,7 @@ func (h *Handler) isProtectedKeyForApp(key, app string) bool {
 
 func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string, originalPath string) (int, error) {
 	// Validate and track exec commands for deploy approval flow
-	if routematch.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec") {
+	if rbac.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec") {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
 			app := extractAppFromPath(originalPath)
 			processID := extractProcessIDFromPath(originalPath)

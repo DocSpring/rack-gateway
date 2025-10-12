@@ -85,7 +85,8 @@ export function AccountSecurityPage() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { refresh: refreshUser, user } = useAuth()
-  const { openStepUp, requireStepUp, isVerifying: isGlobalStepUpVerifying } = useStepUp()
+  const { openStepUp, requireStepUp, handleStepUpError, isVerifying: isGlobalStepUpVerifying } =
+    useStepUp()
   const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
   const [enrollmentStep, setEnrollmentStep] = useState<'method-selection' | 'totp-setup'>(
     'method-selection'
@@ -101,6 +102,16 @@ export function AccountSecurityPage() {
   const [autoPrompted, setAutoPrompted] = useState(false)
   const [editingMethod, setEditingMethod] = useState<{ id: number; label: string } | null>(null)
   const [editLabel, setEditLabel] = useState('')
+
+  const closeEnrollmentModal = useCallback(() => {
+    setEnrollmentModalOpen(false)
+    setEnrollmentStep('method-selection')
+    setEnrollment(null)
+    setEnrollmentLabel(DEFAULT_MFA_LABEL)
+    setQrDataUrl(null)
+    setVerificationCode('')
+    setTrustEnrollmentDevice(true)
+  }, [])
 
   const searchParams = useMemo(() => new URLSearchParams(location.search ?? ''), [location.search])
   const promptMfa = searchParams.get('mfa') === 'verify'
@@ -211,8 +222,7 @@ export function AccountSecurityPage() {
         // Success!
         setRecentBackupCodes(data.backup_codes ?? null)
         toast.success('WebAuthn enrollment completed')
-        // Close modal - onOpenChange will clean up state after animation
-        setEnrollmentModalOpen(false)
+        closeEnrollmentModal()
         await invalidateStatus()
         refreshUser().catch(() => {
           /* noop */
@@ -253,8 +263,7 @@ export function AccountSecurityPage() {
     mutationFn: confirmTOTPEnrollment,
     onSuccess: async () => {
       toast.success('Multi-factor authentication enabled')
-      // Close modal first - onOpenChange will clean up state after animation
-      setEnrollmentModalOpen(false)
+      closeEnrollmentModal()
       await invalidateStatus()
       refreshUser().catch(() => {
         /* noop */
@@ -330,16 +339,27 @@ export function AccountSecurityPage() {
     },
   })
 
-  const runWithStepUp = (action: () => Promise<void>) => {
-    if (!needsStepUp) {
-      action().catch((error) => {
-        toast.error(getErrorMessage(error))
+  const runWithStepUp = (action: () => Promise<void>, options: { forcePrompt?: boolean } = {}) => {
+    const wrappedAction = async () => {
+      await action()
+    }
+
+    const actionWithStatusRefresh = async () => {
+      await invalidateStatus()
+      await wrappedAction()
+    }
+
+    if (!options.forcePrompt && !needsStepUp) {
+      wrappedAction().catch((error) => {
+        if (!handleStepUpError(error, actionWithStatusRefresh)) {
+          toast.error(getErrorMessage(error))
+        }
       })
       return
     }
+
     requireStepUp(async () => {
-      await invalidateStatus()
-      await action()
+      await actionWithStatusRefresh()
     })
   }
 
@@ -449,7 +469,7 @@ export function AccountSecurityPage() {
     }
 
     setDisableDialogOpen(false)
-    runWithStepUp(performDisable)
+    runWithStepUp(performDisable, { forcePrompt: true })
   }
 
   const isBusy =
@@ -693,7 +713,7 @@ export function AccountSecurityPage() {
                                   }
                                   runWithStepUp(async () => {
                                     await deleteMethodMutation.mutateAsync(method.id as number)
-                                  })
+                                  }, { forcePrompt: true })
                                 }}
                                 variant="destructive"
                               >
@@ -791,13 +811,10 @@ export function AccountSecurityPage() {
 
       <Dialog
         onOpenChange={(open) => {
-          if (!open) {
-            setEnrollmentModalOpen(false)
-            setEnrollmentStep('method-selection')
-            setEnrollment(null)
-            setEnrollmentLabel(DEFAULT_MFA_LABEL)
-            setQrDataUrl(null)
-            setVerificationCode('')
+          if (open) {
+            setEnrollmentModalOpen(true)
+          } else {
+            closeEnrollmentModal()
           }
         }}
         open={enrollmentModalOpen}
@@ -1021,12 +1038,15 @@ export function AccountSecurityPage() {
           <form
             onSubmit={(event) => {
               event.preventDefault()
-              if (editingMethod) {
-                updateMethodMutation.mutate({
+              if (!editingMethod) {
+                return
+              }
+              runWithStepUp(async () => {
+                await updateMethodMutation.mutateAsync({
                   methodId: editingMethod.id,
                   label: editLabel.trim(),
                 })
-              }
+              })
             }}
           >
             <div className="space-y-4">

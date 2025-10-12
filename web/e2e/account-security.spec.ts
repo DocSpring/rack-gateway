@@ -4,7 +4,7 @@ import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
-  enableTotpMfaViaUi,
+  startTotpEnrollmentViaUi,
   enforceMfaFor,
   login,
   resetMfaFor,
@@ -56,7 +56,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   const mfaDialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   const isVisible = await mfaDialog.isVisible({ timeout: 5000 }).catch(() => false)
   if (!isVisible) {
-    await page.waitForURL(/web(?:\/|$)/, { timeout: 15_000 })
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
     return
   }
 
@@ -71,7 +71,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   await mfaDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
   // Auto-submits on 6-digit code, no need to click Verify button
   await expect(mfaDialog).toBeHidden({ timeout: 5000 })
-  await page.waitForURL(/web(?:\/|$)/, { timeout: 15_000 })
+  await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
 }
 
 test.describe('Account security', () => {
@@ -103,16 +103,8 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
-    const secret = await enableTotpMfaViaUi(page)
-
+    const secret = await startTotpEnrollmentViaUi(page)
     await expect(mfaCard.getByText('Enabled', { exact: true })).toBeVisible()
-
-    // Close the auto-opened edit modal (QOL feature opens edit dialog after enrollment)
-    const editModal = page.getByText('Edit MFA Method Label')
-    if (await editModal.isVisible().catch(() => false)) {
-      await page.keyboard.press('Escape')
-      await expect(editModal).toHaveCount(0)
-    }
 
     let methodsCard: Locator = cardByTitle(page, 'Registered MFA Methods').first()
     await expect(methodsCard).toBeVisible()
@@ -166,43 +158,28 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+    await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled()
+    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Enrollment In Progress$/ })).toHaveCount(0)
 
-    // Wait for method selector and choose TOTP
-    await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
+    // Enroll again with a new TOTP method
+    const reEnrollSecret = await startTotpEnrollmentViaUi(page)
 
-    await page.evaluate(() => {
-      ;(window as unknown as Record<string, unknown>).__e2e_last_mfa_enroll = null
-    })
-    await page.getByRole('button', { name: /Authenticator app/i }).click()
-    const reEnrollHandle = await page.waitForFunction(() => {
-      const data = (window as unknown as Record<string, unknown>).__e2e_last_mfa_enroll as
-        | { secret?: string }
-        | null
-        | undefined
-      return data?.secret ? data : null
-    })
-    const reEnroll = (await reEnrollHandle.jsonValue()) as { secret: string }
-
-    await page
-      .getByLabel(/Enter the 6-digit code to confirm/i)
-      .fill(authenticator.generate(reEnroll.secret))
-    await page.getByRole('button', { name: /^Confirm$/ }).click()
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
-
-    await requireStepUp(page)
     const removeResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/methods/') && response.request().method() === 'DELETE'
     )
     methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
     await expect(methodsCard).toBeVisible()
+
     // Click the dropdown menu button and select "Remove Method"
     const dropdownButton = methodsCard.locator('tbody tr').first().getByRole('button')
     await dropdownButton.click()
     const removeMenuItem = page.getByText('Remove Method')
     await removeMenuItem.click()
-    await satisfyStepUpModal(page, { secret: reEnroll.secret, require: true })
+
+    await satisfyStepUpModal(page, { secret: reEnrollSecret, require: true })
+
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
@@ -332,7 +309,7 @@ test.describe('Account security', () => {
     await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/web\/login$/)
+    await page.waitForURL(/app\/login$/)
     await performLoginWithMfa(page, secret, true)
 
     await page.goto(WebRoute('account/security'))
@@ -371,7 +348,7 @@ test.describe('Account security', () => {
     await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/web\/login$/)
+    await page.waitForURL(/app\/login$/)
 
     const btn = page
       .getByTestId('login-cta')
@@ -481,7 +458,7 @@ test.describe('Account security', () => {
     // Enforce MFA and logout
     await enforceMfaFor(ADMIN_EMAIL)
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/web\/login$/)
+    await page.waitForURL(/app\/login$/)
 
     // Login and verify WebAuthn method is shown (not TOTP input)
     const btn = page

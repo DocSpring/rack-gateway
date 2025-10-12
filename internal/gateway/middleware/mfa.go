@@ -81,6 +81,48 @@ func RequireMFAForSettings(mfaService MFAVerifier, database *db.Database, settin
 	}
 }
 
+// EnforceMFARequirements applies MFA policy based on the canonical HTTP route permissions map.
+// It must run after authentication so the authenticated user is available on the context.
+func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		pattern := c.FullPath()
+		if pattern == "" {
+			c.Next()
+			return
+		}
+
+		method := c.Request.Method
+		permissions, ok := rbac.HTTPMFAPermissions(method, pattern)
+		if !ok {
+			panic(fmt.Sprintf("CRITICAL: Missing MFA permission mapping for route %s %s", method, pattern))
+		}
+
+		if rbac.HTTPRouteIsDynamic(method, pattern) {
+			if dynamic := ExtractSettingsPermissions(c); len(dynamic) > 0 {
+				permissions = dynamic
+			}
+		}
+
+		level := rbac.GetMFALevel(permissions)
+		switch level {
+		case rbac.MFANone:
+			c.Next()
+		case rbac.MFAStepUp:
+			if !checkStepUpMFA(c, mfaService, database, settings) {
+				return
+			}
+			c.Next()
+		case rbac.MFAAlways:
+			if !checkInlineMFA(c, mfaService, database) {
+				return
+			}
+			c.Next()
+		default:
+			panic(fmt.Sprintf("CRITICAL: Unknown MFALevel %d for route %s %s", level, method, pattern))
+		}
+	}
+}
+
 // checkStepUpMFA verifies the user has recently completed step-up MFA.
 func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) bool {
 	authUser, ok := auth.GetAuthUser(c.Request.Context())

@@ -25,7 +25,7 @@ pnpm test
 
 **What to test:**
 
-- Router basepath handling for `/web`, including `/login` and `/auth/callback` routes
+- Router basepath handling for `/app`, including `/login` and `/auth/callback` routes
 - Auth flows and API adapters (mock network; do not depend on browser)
 - Critical UI/behavior for Users, Tokens, and Audit pages
 

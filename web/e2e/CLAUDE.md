@@ -203,7 +203,7 @@ test("admin page requires authentication", async ({ page }) => {
   await page.goto(WebRoute("admin/users"));
 
   // Should redirect to login
-  await expect(page).toHaveURL(/login/);
+  await expect(page).toHaveURL(/app\/login/);
 });
 ```
 

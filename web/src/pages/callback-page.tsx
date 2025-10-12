@@ -46,7 +46,7 @@ export function CallbackPage() {
             <p className="mt-1 text-red-700 text-sm">{error}</p>
             <button
               className="mt-3 font-medium text-red-600 text-sm hover:text-red-500"
-              onClick={() => navigate({ to: '/login' })}
+              onClick={() => navigate({ to: '/app/login' })}
               type="button"
             >
               Back to login

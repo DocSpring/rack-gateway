@@ -12,7 +12,7 @@ type MFALevel int
 const (
 	// MFANone - No MFA required beyond enrollment
 	MFANone MFALevel = iota
-	// MFAStepUp - MFA required within time window (default 5 minutes)
+	// MFAStepUp - MFA required within time window (default 10 minutes)
 	MFAStepUp
 	// MFAAlways - MFA required immediately before action, no time window
 	MFAAlways
@@ -98,6 +98,9 @@ var MFARequirements = map[string]MFALevel{
 	Auth(ResourceMFAMethod, ActionDelete): MFAAlways, // Removing MFA is privileged
 	Auth(ResourceMFAMethod, ActionCreate): MFANone,   // Enrolling in MFA is encouraged
 	Auth(ResourceMFAMethod, ActionUpdate): MFAStepUp, // Updating MFA method settings
+	Auth(ResourceMFA, ActionGenerate):     MFAStepUp, // Regenerating backup codes
+	Auth(ResourceMFA, ActionDelete):       MFAStepUp, // Removing trusted devices
+	Auth(ResourceMFA, ActionUpdate):       MFAStepUp, // Updating MFA preferences
 
 	// MFA Verification - Step-up operations
 	Auth(ResourceMFA, ActionCreate): MFANone, // Verifying MFA is the action itself

@@ -163,30 +163,28 @@ func Setup(router *gin.Engine, cfg *Config) {
 		authenticated := api.Group("")
 		authenticated.Use(middleware.Authenticated(cfg.AuthService, cfg.RBACManager))
 		authenticated.Use(middleware.RequireMFAEnrollmentWeb(cfg.Database, cfg.MFASettings))
+		authenticated.Use(middleware.EnforceMFARequirements(cfg.MFAService, cfg.Database, cfg.MFASettings))
 		{
 			mfaGroup := authenticated.Group("/auth/mfa")
 			mfaGroup.Use(middleware.RateLimit(cfg.Config, cfg.SecurityNotifier))
 			if cfg.SessionManager != nil {
 				mfaGroup.Use(middleware.CSRF(cfg.SessionManager))
 			}
-			{
-				mfaGroup.GET("/status", authHandler.GetMFAStatus)
-				mfaGroup.POST("/enroll/totp/start", authHandler.StartTOTPEnrollment)
-				mfaGroup.POST("/enroll/totp/confirm", authHandler.ConfirmTOTPEnrollment)
-				mfaGroup.POST("/enroll/yubiotp/start", authHandler.StartYubiOTPEnrollment)
-				mfaGroup.POST("/enroll/webauthn/start", authHandler.StartWebAuthnEnrollment)
-				mfaGroup.POST("/enroll/webauthn/confirm", authHandler.ConfirmWebAuthnEnrollment)
-				mfaGroup.POST("/verify", authHandler.VerifyMFA)
-				mfaGroup.POST("/webauthn/assertion/start", authHandler.StartWebAuthnAssertion)
-				mfaGroup.POST("/webauthn/assertion/verify", authHandler.VerifyWebAuthnAssertion)
-				mfaGroup.PUT("/preferred-method", authHandler.UpdatePreferredMFAMethod)
-				mfaGroup.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
-				mfaStepUp := mfaGroup.Group("")
-				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFAService, cfg.Database, cfg.MFASettings))
-				mfaStepUp.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
-				mfaStepUp.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
-				mfaStepUp.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
-			}
+			mfaGroup.GET("/status", authHandler.GetMFAStatus)
+			mfaGroup.POST("/enroll/totp/start", authHandler.StartTOTPEnrollment)
+			mfaGroup.POST("/enroll/totp/confirm", authHandler.ConfirmTOTPEnrollment)
+			mfaGroup.POST("/enroll/yubiotp/start", authHandler.StartYubiOTPEnrollment)
+			mfaGroup.POST("/enroll/webauthn/start", authHandler.StartWebAuthnEnrollment)
+			mfaGroup.POST("/enroll/webauthn/confirm", authHandler.ConfirmWebAuthnEnrollment)
+			mfaGroup.POST("/verify", authHandler.VerifyMFA)
+			mfaGroup.POST("/webauthn/assertion/start", authHandler.StartWebAuthnAssertion)
+			mfaGroup.POST("/webauthn/assertion/verify", authHandler.VerifyWebAuthnAssertion)
+
+			mfaGroup.PUT("/preferred-method", authHandler.UpdatePreferredMFAMethod)
+			mfaGroup.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
+			mfaGroup.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
+			mfaGroup.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
+			mfaGroup.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
 			// User API
 			authenticated.GET("/info", apiHandler.GetInfo)
 			authenticated.GET("/created-by", apiHandler.GetCreatedBy)
@@ -195,9 +193,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 			deployApprovalRequests := authenticated.Group("/deploy-approval-requests")
 			{
 				deployApprovalRequests.GET("/:id", apiHandler.GetDeployApprovalRequest)
-				createDeploy := deployApprovalRequests.Group("")
-				createDeploy.Use(middleware.RequireMFAStepUp(cfg.MFAService, cfg.Database, cfg.MFASettings))
-				createDeploy.POST("", apiHandler.CreateDeployApprovalRequest)
+				deployApprovalRequests.POST("", apiHandler.CreateDeployApprovalRequest)
 			}
 			envMutations := authenticated.Group("")
 			if cfg.SessionManager != nil {
@@ -225,7 +221,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 				// New generic settings endpoints
 				admin.GET("/settings", settingsHandler.GetAllGlobalSettings)
 				settingsMutations := admin.Group("")
-				settingsMutations.Use(middleware.RequireMFAForSettings(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				settingsMutations.PUT("/settings", settingsHandler.UpdateGlobalSettings)
 				settingsMutations.DELETE("/settings", settingsHandler.DeleteGlobalSettings)
 
@@ -253,10 +248,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				deployAdmin := admin.Group("/deploy-approval-requests")
 				deployAdmin.GET("", adminHandler.ListDeployApprovalRequests)
 				deployAdmin.GET("/:id/audit-logs", adminHandler.GetDeployApprovalRequestAuditLogs)
-				// CRITICAL SECURITY: Deploy approvals are privileged operations that ALWAYS require
-				// MFA code in the request. Use RequireMFA, not RequireMFAStepUp.
 				deployApprove := deployAdmin.Group("")
-				deployApprove.Use(middleware.RequireMFA(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)
 				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 
@@ -268,7 +260,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
 
 				tokenSensitive := tokenGroup.Group("")
-				tokenSensitive.Use(middleware.RequireMFA(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
@@ -290,7 +281,6 @@ func Setup(router *gin.Engine, cfg *Config) {
 			{
 				apps.GET("/settings", settingsHandler.GetAllAppSettings)
 				appSettingsMutations := apps.Group("")
-				appSettingsMutations.Use(middleware.RequireMFAForSettings(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				appSettingsMutations.PUT("/settings", settingsHandler.UpdateAppSettings)
 				appSettingsMutations.DELETE("/settings", settingsHandler.DeleteAppSettings)
 			}

@@ -23,7 +23,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/getsentry/sentry-go"
 )
@@ -153,7 +152,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForAllow = "SOCKET"
 	}
-	if !routematch.IsAllowed(methodForAllow, path) {
+	if _, _, ok := rbac.MatchRackRoute(methodForAllow, path); !ok {
 		// Return 404 without writing an audit DB entry for non-Convox noise (e.g., .well-known, favicon, etc.)
 		http.NotFound(w, r)
 		return
@@ -169,7 +168,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
 	}
-	resource, action, ok := routematch.Match(methodForRBAC, path)
+	resource, action, ok := rbac.MatchRackRoute(methodForRBAC, path)
 	if !ok {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
 		http.NotFound(w, r)
@@ -284,7 +283,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-capture system parameters if this is a rack params update
 	var beforeParams map[string]string
-	isRackParamsUpdate := (r.Method == http.MethodPut && routematch.KeyMatch3(path, "/system"))
+	isRackParamsUpdate := (r.Method == http.MethodPut && rbac.KeyMatch3(path, "/system"))
 	if isRackParamsUpdate {
 		if params, err := h.fetchSystemParams(r.Context(), rackConfig); err == nil {
 			beforeParams = params
@@ -350,7 +349,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// On success, write detailed audit entries for each env change
 	if status >= 200 && status < 300 {
-		skipManualReleaseLog := r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/releases")
+		skipManualReleaseLog := r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/releases")
 		releaseIDs := r.Header.Values("X-Release-Created")
 		if len(releaseIDs) > 0 {
 			for _, rel := range releaseIDs {

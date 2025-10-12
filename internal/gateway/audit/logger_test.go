@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,8 +18,8 @@ func TestAuditLogger(t *testing.T) {
 	logger := NewLogger(database)
 
 	t.Run("ParseConvoxAction", func(t *testing.T) {
-		for _, spec := range routematch.Specs() {
-			path := routematch.ExamplePath(spec)
+		for _, spec := range rbac.RackRouteSpecs() {
+			path := rbac.RackRouteExample(spec)
 			method := spec.Method
 			if method == "SOCKET" {
 				method = http.MethodGet

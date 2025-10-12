@@ -194,7 +194,7 @@ test.describe('Global Settings', () => {
 
     // Logout admin
     await page.getByRole('button', { name: /^logout$/i }).click()
-    await page.waitForURL(/web\/login$/)
+    await page.waitForURL(/app\/login$/)
 
     // Login as viewer
     await page.goto(WebRoute('login'))

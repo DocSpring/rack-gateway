@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // recordResourceCreator stores the user->resource mapping if possible
@@ -56,13 +56,13 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
-	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps") {
 		if name := extractJSONString(obj["name"]); name != "" {
 			setResource("app", name, true)
 		}
 	}
 
-	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/builds") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/builds") {
 		buildID := extractJSONString(obj["id"])
 		releaseID := extractJSONString(obj["release"])
 
@@ -80,7 +80,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			h.updateBuildApprovalTracking(r, buildID, releaseID)
 		}
 	}
-	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
 		// Extract filename from path for audit logging
 		segments := strings.Split(strings.TrimSpace(path), "/")
 		if len(segments) > 0 {
@@ -112,7 +112,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if routematch.KeyMatch3(path, "/apps/{app}/builds/{id}") {
+	if rbac.KeyMatch3(path, "/apps/{app}/builds/{id}") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			h.recordResourceCreator("build", id, email)
 		}
@@ -123,7 +123,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/releases") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/releases") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			r.Header.Set("X-Audit-Resource", id)
 			if h.recordResourceCreator("release", id, email) {
@@ -132,7 +132,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		}
 	}
 
-	if r.Method == http.MethodPost && routematch.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
+	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
 		if id := extractJSONString(obj["id"]); id != "" {
 			r.Header.Set("X-Audit-Resource", id)
 			setResource("process", id, false)

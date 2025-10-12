@@ -9,7 +9,6 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	sentry "github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
@@ -194,7 +193,7 @@ func collectAllPermissions(rolePerms map[string][]string) []string {
 			known[perm] = struct{}{}
 		}
 	}
-	for _, perm := range routematch.AllPermissions() {
+	for _, perm := range rbac.RackAllPermissions() {
 		known[perm] = struct{}{}
 	}
 	known["convox:*:*"] = struct{}{}

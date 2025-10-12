@@ -18,7 +18,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +41,7 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACMana
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC
 func (h *Handler) pathToResourceAction(path, method string) (string, string) {
-	res, act, ok := routematch.Match(method, path)
+	res, act, ok := rbac.MatchRackRoute(method, path)
 	if !ok {
 		return "", ""
 	}
@@ -52,8 +51,8 @@ func (h *Handler) pathToResourceAction(path, method string) (string, string) {
 func TestPathToResourceActionMatchesRouteSpecs(t *testing.T) {
 	h := &Handler{}
 
-	for _, spec := range routematch.Specs() {
-		path := routematch.ExamplePath(spec)
+	for _, spec := range rbac.RackRouteSpecs() {
+		path := rbac.RackRouteExample(spec)
 		method := spec.Method
 		if method == "SOCKET" {
 			method = http.MethodGet

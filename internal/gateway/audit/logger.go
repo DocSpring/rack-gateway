@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/routematch"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/google/uuid"
 )
 
@@ -340,9 +340,9 @@ func getClientIP(r *http.Request) string {
 // If resourceIDOverride is provided, it will be used instead of parsing from the path.
 func (l *Logger) ParseConvoxAction(path, method, resourceIDOverride string) (action, resource string) {
 	// For audit purposes, treat WebSocket GET upgrades as SOCKET method for matching
-	res, act, ok := routematch.Match(method, path)
+	res, act, ok := rbac.MatchRackRoute(method, path)
 	if !ok && method == http.MethodGet && strings.Contains(path, "/logs") {
-		if r2, a2, ok2 := routematch.Match("SOCKET", path); ok2 {
+		if r2, a2, ok2 := rbac.MatchRackRoute("SOCKET", path); ok2 {
 			res, act, ok = r2, a2, true
 		}
 	}
