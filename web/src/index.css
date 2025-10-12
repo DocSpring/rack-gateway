@@ -87,11 +87,11 @@
   --rht-success-bg: var(--primary-green);
   --rht-success-fg: oklch(1 0 0);
   --rht-error-bg: var(--destructive);
-  --rht-error-fg: var(--destructive-foreground);
+  --rht-error-fg: oklch(1 0 0);
   --rht-warning-bg: #ea580c;
-  --rht-warning-fg: #ffffff;
+  --rht-warning-fg: oklch(1 0 0);
   --rht-info-bg: var(--primary);
-  --rht-info-fg: var(--primary-foreground);
+  --rht-info-fg: oklch(1 0 0);
 }
 
 .dark {
@@ -134,13 +134,13 @@
 
   /* react-hot-toast colors for dark mode */
   --rht-success-bg: var(--primary-green);
-  --rht-success-fg: oklch(0.1 0 0);
+  --rht-success-fg: oklch(1 0 0);
   --rht-error-bg: var(--destructive);
-  --rht-error-fg: var(--destructive-foreground);
+  --rht-error-fg: oklch(1 0 0);
   --rht-warning-bg: #ea580c;
-  --rht-warning-fg: #ffffff;
+  --rht-warning-fg: oklch(1 0 0);
   --rht-info-bg: var(--primary);
-  --rht-info-fg: var(--primary-foreground);
+  --rht-info-fg: oklch(1 0 0);
 }
 
 @layer base {

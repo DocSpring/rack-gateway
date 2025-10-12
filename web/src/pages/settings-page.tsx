@@ -61,24 +61,24 @@ function MfaConfigCard({
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const updates: Record<string, unknown> = {}
       if (requireMfa !== null) {
-        updates.push(api.put('/.gateway/api/admin/settings/mfa_require_all_users', requireMfa))
+        updates.mfa_require_all_users = requireMfa
       }
       if (trustedDeviceTtl !== null) {
-        updates.push(
-          api.put('/.gateway/api/admin/settings/mfa_trusted_device_ttl_days', trustedDeviceTtl)
-        )
+        updates.mfa_trusted_device_ttl_days = trustedDeviceTtl
       }
       if (stepUpWindow !== null) {
-        updates.push(
-          api.put('/.gateway/api/admin/settings/mfa_step_up_window_minutes', stepUpWindow)
-        )
+        updates.mfa_step_up_window_minutes = stepUpWindow
       }
-      await Promise.all(updates)
+      return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', updates)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+        ...old,
+        ...updatedSettings,
+      }))
       setRequireMfa(null)
       setTrustedDeviceTtl(null)
       setStepUpWindow(null)
@@ -92,20 +92,29 @@ function MfaConfigCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const keys: string[] = []
       if (settings?.mfa_require_all_users?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/mfa_require_all_users'))
+        keys.push('mfa_require_all_users')
       }
       if (settings?.mfa_trusted_device_ttl_days?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/mfa_trusted_device_ttl_days'))
+        keys.push('mfa_trusted_device_ttl_days')
       }
       if (settings?.mfa_step_up_window_minutes?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/mfa_step_up_window_minutes'))
+        keys.push('mfa_step_up_window_minutes')
       }
-      await Promise.all(updates)
+      if (keys.length > 0) {
+        const params = keys.map((k) => `key=${k}`).join('&')
+        return await api.delete<Record<string, SettingsSetting>>(`/.gateway/api/admin/settings?${params}`)
+      }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      if (updatedSettings) {
+        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }))
+      }
       setRequireMfa(null)
       setTrustedDeviceTtl(null)
       setStepUpWindow(null)
@@ -249,11 +258,19 @@ function DestructiveActionsCard({
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (allowDestructive !== null) {
-        await api.put('/.gateway/api/admin/settings/allow_destructive_actions', allowDestructive)
+        return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', {
+          allow_destructive_actions: allowDestructive,
+        })
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      if (updatedSettings) {
+        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }))
+      }
       setAllowDestructive(null)
       toast.success('Setting updated')
     },
@@ -265,10 +282,16 @@ function DestructiveActionsCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete('/.gateway/api/admin/settings/allow_destructive_actions')
+      return await api.delete<Record<string, SettingsSetting>>('/.gateway/api/admin/settings?key=allow_destructive_actions')
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      if (updatedSettings) {
+        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }))
+      }
       setAllowDestructive(null)
       toast.success('Setting cleared')
     },
@@ -372,23 +395,27 @@ function VCSCIProvidersCard({
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const updates: Record<string, unknown> = {}
       if (vcsProvider !== null) {
-        updates.push(api.put('/.gateway/api/admin/settings/default_vcs_provider', vcsProvider))
+        updates.default_vcs_provider = vcsProvider
       }
       if (vcsOrgName !== null) {
-        updates.push(api.put('/.gateway/api/admin/settings/default_vcs_org_name', vcsOrgName))
+        updates.default_vcs_org_name = vcsOrgName
       }
       if (ciProvider !== null) {
-        updates.push(api.put('/.gateway/api/admin/settings/default_ci_provider', ciProvider))
+        updates.default_ci_provider = ciProvider
       }
       if (ciOrgSlug !== null) {
-        updates.push(api.put('/.gateway/api/admin/settings/default_ci_org_slug', ciOrgSlug))
+        updates.default_ci_org_slug = ciOrgSlug
       }
-      await Promise.all(updates)
+      return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', updates)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+        ...old,
+        ...updatedSettings,
+      }))
       setVcsProvider(null)
       setVcsOrgName(null)
       setCiProvider(null)
@@ -403,23 +430,32 @@ function VCSCIProvidersCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const keys: string[] = []
       if (settings?.default_vcs_provider?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/default_vcs_provider'))
+        keys.push('default_vcs_provider')
       }
       if (settings?.default_vcs_org_name?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/default_vcs_org_name'))
+        keys.push('default_vcs_org_name')
       }
       if (settings?.default_ci_provider?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/default_ci_provider'))
+        keys.push('default_ci_provider')
       }
       if (settings?.default_ci_org_slug?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/default_ci_org_slug'))
+        keys.push('default_ci_org_slug')
       }
-      await Promise.all(updates)
+      if (keys.length > 0) {
+        const params = keys.map((k) => `key=${k}`).join('&')
+        return await api.delete<Record<string, SettingsSetting>>(`/.gateway/api/admin/settings?${params}`)
+      }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      if (updatedSettings) {
+        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }))
+      }
       setVcsProvider(null)
       setVcsOrgName(null)
       setCiProvider(null)
@@ -597,19 +633,21 @@ function DeployApprovalsCard({
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const updates: Record<string, unknown> = {}
       if (enabled !== null) {
-        updates.push(api.put('/.gateway/api/admin/settings/deploy_approvals_enabled', enabled))
+        updates.deploy_approvals_enabled = enabled
       }
       if (windowMinutes !== null) {
-        updates.push(
-          api.put('/.gateway/api/admin/settings/deploy_approval_window_minutes', windowMinutes)
-        )
+        updates.deploy_approval_window_minutes = windowMinutes
       }
-      await Promise.all(updates)
+      return await api.put<Record<string, SettingsSetting>>('/.gateway/api/admin/settings', updates)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+        ...old,
+        ...updatedSettings,
+      }))
       setEnabled(null)
       setWindowMinutes(null)
       toast.success('Deploy approval settings updated')
@@ -622,17 +660,26 @@ function DeployApprovalsCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const keys: string[] = []
       if (settings?.deploy_approvals_enabled?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/deploy_approvals_enabled'))
+        keys.push('deploy_approvals_enabled')
       }
       if (settings?.deploy_approval_window_minutes?.source === 'db') {
-        updates.push(api.delete('/.gateway/api/admin/settings/deploy_approval_window_minutes'))
+        keys.push('deploy_approval_window_minutes')
       }
-      await Promise.all(updates)
+      if (keys.length > 0) {
+        const params = keys.map((k) => `key=${k}`).join('&')
+        return await api.delete<Record<string, SettingsSetting>>(`/.gateway/api/admin/settings?${params}`)
+      }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['globalSettings'] })
+    onSuccess: (updatedSettings) => {
+      // Merge updated settings into cache instead of refetching
+      if (updatedSettings) {
+        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }))
+      }
       setEnabled(null)
       setWindowMinutes(null)
       toast.success('Deploy approval settings cleared')

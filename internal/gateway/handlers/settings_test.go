@@ -26,7 +26,7 @@ func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.RB
 	return handler, database, mgr
 }
 
-func TestUpdateGlobalSetting_Boolean(t *testing.T) {
+func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
 
 	// Create a test user
@@ -37,82 +37,92 @@ func TestUpdateGlobalSetting_Boolean(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		key            string
-		value          interface{}
+		updates        map[string]interface{}
 		expectedStatus int
-		expectedValue  interface{}
+		expectedValues map[string]interface{}
 		expectedSource settings.SettingSource
 	}{
 		{
-			name:           "set boolean to true",
-			key:            "allow_destructive_actions",
-			value:          true,
+			name: "set single boolean to true",
+			updates: map[string]interface{}{
+				"allow_destructive_actions": true,
+			},
 			expectedStatus: http.StatusOK,
-			expectedValue:  true,
+			expectedValues: map[string]interface{}{
+				"allow_destructive_actions": true,
+			},
 			expectedSource: settings.SourceDB,
 		},
 		{
-			name:           "set boolean to false",
-			key:            "allow_destructive_actions",
-			value:          false,
+			name: "set multiple settings",
+			updates: map[string]interface{}{
+				"allow_destructive_actions":   false,
+				"mfa_trusted_device_ttl_days": float64(60), // JSON numbers are float64
+			},
 			expectedStatus: http.StatusOK,
-			expectedValue:  false,
-			expectedSource: settings.SourceDB,
-		},
-		{
-			name:           "set number",
-			key:            "mfa_trusted_device_ttl_days",
-			value:          float64(60), // JSON numbers are float64
-			expectedStatus: http.StatusOK,
-			expectedValue:  float64(60),
+			expectedValues: map[string]interface{}{
+				"allow_destructive_actions":   false,
+				"mfa_trusted_device_ttl_days": float64(60),
+			},
 			expectedSource: settings.SourceDB,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up any previous setting
-			_ = database.DeleteSetting(nil, tt.key)
+			// Clean up any previous settings
+			for key := range tt.updates {
+				_ = database.DeleteSetting(nil, key)
+			}
 
 			gin.SetMode(gin.TestMode)
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 
-			body, err := json.Marshal(tt.value)
+			body, err := json.Marshal(tt.updates)
 			require.NoError(t, err)
 
-			c.Request = httptest.NewRequest(http.MethodPut, "/admin/settings/"+tt.key, bytes.NewReader(body))
+			c.Request = httptest.NewRequest(http.MethodPut, "/admin/settings", bytes.NewReader(body))
 			c.Request.Header.Set("Content-Type", "application/json")
 			c.Set("user_email", "admin@example.com")
-			c.Params = gin.Params{{Key: "key", Value: tt.key}}
 
-			handler.UpdateGlobalSetting(c)
+			handler.UpdateGlobalSettings(c)
 
 			require.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusOK {
-				var result settings.Setting
+				var result map[string]settings.Setting
 				err := json.Unmarshal(w.Body.Bytes(), &result)
 				require.NoError(t, err, "Response body: %s", w.Body.String())
-				require.Equal(t, tt.expectedValue, result.Value, "Response body: %s", w.Body.String())
-				require.Equal(t, tt.expectedSource, result.Source, "Response body: %s", w.Body.String())
+
+				for key, expectedValue := range tt.expectedValues {
+					setting, ok := result[key]
+					require.True(t, ok, "Expected key %s in response", key)
+					require.Equal(t, expectedValue, setting.Value, "Response body: %s", w.Body.String())
+					require.Equal(t, tt.expectedSource, setting.Source, "Response body: %s", w.Body.String())
+				}
 			}
 		})
 	}
 
-	// Test clearing a setting (reverting to default)
-	t.Run("clear setting reverts to default", func(t *testing.T) {
-		// First set a value
+	// Test clearing settings (reverting to default)
+	t.Run("clear settings reverts to default", func(t *testing.T) {
+		// First set values
 		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 
-		c.Request = httptest.NewRequest(http.MethodPut, "/admin/settings/allow_destructive_actions", bytes.NewReader([]byte("true")))
+		updates := map[string]interface{}{
+			"allow_destructive_actions": true,
+		}
+		body, err := json.Marshal(updates)
+		require.NoError(t, err)
+
+		c.Request = httptest.NewRequest(http.MethodPut, "/admin/settings", bytes.NewReader(body))
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("user_email", "admin@example.com")
-		c.Params = gin.Params{{Key: "key", Value: "allow_destructive_actions"}}
 
-		handler.UpdateGlobalSetting(c)
+		handler.UpdateGlobalSettings(c)
 		require.Equal(t, http.StatusOK, w.Code)
 
 		// Verify it's in DB
@@ -124,11 +134,10 @@ func TestUpdateGlobalSetting_Boolean(t *testing.T) {
 		// Now clear it with DELETE
 		w = httptest.NewRecorder()
 		c, _ = gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodDelete, "/admin/settings/allow_destructive_actions", nil)
+		c.Request = httptest.NewRequest(http.MethodDelete, "/admin/settings?key=allow_destructive_actions", nil)
 		c.Set("user_email", "admin@example.com")
-		c.Params = gin.Params{{Key: "key", Value: "allow_destructive_actions"}}
 
-		handler.DeleteGlobalSetting(c)
+		handler.DeleteGlobalSettings(c)
 		require.Equal(t, http.StatusOK, w.Code)
 
 		// Verify it's deleted from DB
@@ -137,10 +146,11 @@ func TestUpdateGlobalSetting_Boolean(t *testing.T) {
 		require.False(t, exists)
 
 		// Response should show default value with source "default"
-		var result settings.Setting
+		var result map[string]settings.Setting
 		err = json.Unmarshal(w.Body.Bytes(), &result)
 		require.NoError(t, err)
-		require.Equal(t, false, result.Value) // default is false
-		require.Equal(t, settings.SourceDefault, result.Source)
+		setting := result["allow_destructive_actions"]
+		require.Equal(t, false, setting.Value) // default is false
+		require.Equal(t, settings.SourceDefault, setting.Source)
 	})
 }

@@ -212,9 +212,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 				// New generic settings endpoints
 				admin.GET("/settings", settingsHandler.GetAllGlobalSettings)
-				admin.GET("/settings/:key", settingsHandler.GetGlobalSetting)
-				admin.PUT("/settings/:key", settingsHandler.UpdateGlobalSetting)
-				admin.DELETE("/settings/:key", settingsHandler.DeleteGlobalSetting)
+				admin.PUT("/settings", settingsHandler.UpdateGlobalSettings)
+				admin.DELETE("/settings", settingsHandler.DeleteGlobalSettings)
 
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
@@ -276,9 +275,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 			apps.Use(middleware.CSRF(cfg.SessionManager))
 			{
 				apps.GET("/settings", settingsHandler.GetAllAppSettings)
-				apps.GET("/settings/:key", settingsHandler.GetAppSetting)
-				apps.PUT("/settings/:key", settingsHandler.UpdateAppSetting)
-				apps.DELETE("/settings/:key", settingsHandler.DeleteAppSetting)
+				apps.PUT("/settings", settingsHandler.UpdateAppSettings)
+				apps.DELETE("/settings", settingsHandler.DeleteAppSettings)
 			}
 		}
 	}
