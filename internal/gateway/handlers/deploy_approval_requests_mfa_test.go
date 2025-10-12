@@ -100,7 +100,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		session.MFAVerifiedAt = &now
 
 		router := gin.New()
-		router.POST("/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
+		router.POST("/api/v1/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
 				Email:      admin.Email,
 				Name:       admin.Name,
@@ -113,13 +113,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", admin.Email)
 			c.Set("user_name", admin.Name)
 			c.Next()
-		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
 
 		// Make request WITHOUT MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/admin/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest("POST", "/api/v1/admin/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -161,7 +161,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		require.NoError(t, err)
 
 		router := gin.New()
-		router.POST("/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
+		router.POST("/api/v1/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
 				Email:      admin.Email,
 				Name:       admin.Name,
@@ -175,13 +175,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", admin.Email)
 			c.Set("user_name", admin.Name)
 			c.Next()
-		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
 
 		// Make request WITH valid MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/admin/deploy-approval-requests/"+req2.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest("POST", "/api/v1/admin/deploy-approval-requests/"+req2.PublicID+"/approve", bytes.NewReader(bodyBytes))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -204,7 +204,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		session.MFAVerifiedAt = &now
 
 		router := gin.New()
-		router.POST("/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
+		router.POST("/api/v1/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
 				Email:      admin.Email,
 				Name:       admin.Name,
@@ -218,13 +218,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", admin.Email)
 			c.Set("user_name", admin.Name)
 			c.Next()
-		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
 
 		// Make request WITH invalid MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/admin/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest("POST", "/api/v1/admin/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -238,7 +238,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 
 	t.Run("allows API tokens with proper permissions", func(t *testing.T) {
 		router := gin.New()
-		router.POST("/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
+		router.POST("/api/v1/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
 				Email:       admin.Email,
 				Name:        admin.Name,
@@ -251,13 +251,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", admin.Email)
 			c.Set("user_name", admin.Name)
 			c.Next()
-		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
 
 		// Make request as API token
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/admin/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest("POST", "/api/v1/admin/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -271,7 +271,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 }
 
 func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
-	// This test documents that API token creation correctly uses RequireMFA
+	// This test documents that API token creation correctly uses EnforceMFARequirements
 	// which always requires fresh MFA code with every request
 
 	gin.SetMode(gin.TestMode)
@@ -330,7 +330,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		session.MFAVerifiedAt = &now
 
 		router := gin.New()
-		router.POST("/admin/api-tokens", func(c *gin.Context) {
+		router.POST("/api/v1/admin/tokens", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
 				Email:      admin.Email,
 				Name:       admin.Name,
@@ -342,7 +342,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 			c.Set("user_email", admin.Email)
 			c.Next()
-		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.CreateAPIToken)
+		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
 			"name":        "new-token",
@@ -350,7 +350,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/admin/api-tokens", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest("POST", "/api/v1/admin/tokens", bytes.NewReader(bodyBytes))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -376,7 +376,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		require.NoError(t, err)
 
 		router := gin.New()
-		router.POST("/admin/api-tokens", func(c *gin.Context) {
+		router.POST("/api/v1/admin/tokens", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
 				Email:      admin.Email,
 				Name:       admin.Name,
@@ -389,7 +389,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 			c.Set("user_email", admin.Email)
 			c.Next()
-		}, middleware.RequireMFA(mfaService, database, mfaSettings), handler.CreateAPIToken)
+		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
 			"name":        "new-token",
@@ -397,7 +397,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/admin/api-tokens", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest("POST", "/api/v1/admin/tokens", bytes.NewReader(bodyBytes))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 

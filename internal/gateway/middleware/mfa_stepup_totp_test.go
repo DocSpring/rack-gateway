@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequireMFAStepUp_AllowsInlineTOTP(t *testing.T) {
+func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	database := dbtest.NewDatabase(t)
@@ -89,7 +89,7 @@ func TestRequireMFAStepUp_AllowsInlineTOTP(t *testing.T) {
 			c.Set("user_email", user.Email)
 			c.Set("user_name", user.Name)
 			c.Next()
-		}, RequireMFAStepUp(mfaService, database, mfaSettings), func(c *gin.Context) {
+		}, EnforceMFARequirements(mfaService, database, mfaSettings), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
 		return router

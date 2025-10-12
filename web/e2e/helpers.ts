@@ -169,11 +169,14 @@ export async function satisfyStepUpModal(
   return true
 }
 
-export async function startTotpEnrollmentViaUi(page: Page, email = 'admin@example.com'): Promise<string> {
+export async function startTotpEnrollmentViaUi(
+  page: Page,
+  email = 'admin@example.com'
+): Promise<string> {
   await page.evaluate(() => {
     const globalWindow = window as unknown as E2EWindow
     globalWindow.__e2e_totpSecret = null
-    if (globalWindow.__e2e_clipboardStubbed ) return
+    if (globalWindow.__e2e_clipboardStubbed) return
 
     const stub = (text: string) => {
       const win = window as unknown as E2EWindow

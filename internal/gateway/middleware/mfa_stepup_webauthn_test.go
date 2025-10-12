@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequireMFAStepUp_AllowsInlineWebAuthn(t *testing.T) {
+func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	database := dbtest.NewDatabase(t)
@@ -89,7 +89,7 @@ func TestRequireMFAStepUp_AllowsInlineWebAuthn(t *testing.T) {
 		c.Request.Header.Set("X-MFA-WebAuthn", inlineHeader)
 		c.Set("user_email", user.Email)
 		c.Next()
-	}, RequireMFAStepUp(mfaService, database, mfaSettings), func(c *gin.Context) {
+	}, EnforceMFARequirements(mfaService, database, mfaSettings), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
@@ -101,5 +101,5 @@ func TestRequireMFAStepUp_AllowsInlineWebAuthn(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	t.Logf("response body: %s", w.Body.String())
-	require.Equal(t, http.StatusOK, w.Code, "RequireMFAStepUp should accept inline WebAuthn verification in the same request")
+	require.Equal(t, http.StatusOK, w.Code, "EnforceMFARequirements should accept inline WebAuthn verification in the same request")
 }

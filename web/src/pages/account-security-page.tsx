@@ -85,8 +85,12 @@ export function AccountSecurityPage() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { refresh: refreshUser, user } = useAuth()
-  const { openStepUp, requireStepUp, handleStepUpError, isVerifying: isGlobalStepUpVerifying } =
-    useStepUp()
+  const {
+    openStepUp,
+    requireStepUp,
+    handleStepUpError,
+    isVerifying: isGlobalStepUpVerifying,
+  } = useStepUp()
   const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
   const [enrollmentStep, setEnrollmentStep] = useState<'method-selection' | 'totp-setup'>(
     'method-selection'
@@ -349,7 +353,7 @@ export function AccountSecurityPage() {
       await wrappedAction()
     }
 
-    if (!options.forcePrompt && !needsStepUp) {
+    if (!(options.forcePrompt || needsStepUp)) {
       wrappedAction().catch((error) => {
         if (!handleStepUpError(error, actionWithStatusRefresh)) {
           toast.error(getErrorMessage(error))
@@ -711,9 +715,12 @@ export function AccountSecurityPage() {
                                     toast.error('Unable to determine method identifier')
                                     return
                                   }
-                                  runWithStepUp(async () => {
-                                    await deleteMethodMutation.mutateAsync(method.id as number)
-                                  }, { forcePrompt: true })
+                                  runWithStepUp(
+                                    async () => {
+                                      await deleteMethodMutation.mutateAsync(method.id as number)
+                                    },
+                                    { forcePrompt: true }
+                                  )
                                 }}
                                 variant="destructive"
                               >

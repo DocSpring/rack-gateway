@@ -4,12 +4,12 @@ import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
-  startTotpEnrollmentViaUi,
   enforceMfaFor,
   login,
   resetMfaFor,
   satisfyStepUpModal,
   setupBothMfaMethods,
+  startTotpEnrollmentViaUi,
 } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
