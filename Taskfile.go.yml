@@ -134,6 +134,11 @@ tasks:
 
   imports:
     desc: Fix Go imports with goimports
+    sources:
+      - Taskfile.go.yml
+      - go.*
+      - cmd/**/*.go
+      - internal/**/*.go
     cmds:
       - goimports -w .
 
