@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // Command defines a known convox CLI command and its required permissions
@@ -25,55 +27,55 @@ var Commands = []Command{
 	// Apps
 	{
 		Command:      "apps",
-		Permissions:  []string{"convox:app:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List apps",
 	},
 	{
 		Command:      "apps create",
-		Permissions:  []string{"convox:app:create"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionCreate)},
 		AllowedFlags: []string{"generation", "lock"},
 		Description:  "Create an app",
 	},
 	{
 		Command:      "apps delete",
-		Permissions:  []string{"convox:app:delete"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionDelete)},
 		AllowedFlags: []string{},
 		Description:  "Delete an app",
 	},
 	{
 		Command:      "apps info",
-		Permissions:  []string{"convox:app:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about an app",
 	},
 	{
 		Command:      "apps cancel",
-		Permissions:  []string{"convox:app:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
 		Description:  "Cancel an app update",
 	},
 	{
 		Command:      "apps lock",
-		Permissions:  []string{"convox:app:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
 		Description:  "Enable termination protection",
 	},
 	{
 		Command:      "apps unlock",
-		Permissions:  []string{"convox:app:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
 		Description:  "Disable termination protection",
 	},
 	{
 		Command:      "apps params",
-		Permissions:  []string{"convox:app:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Display app parameters",
 	},
 	{
 		Command:      "apps params set",
-		Permissions:  []string{"convox:app:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
 		Description:  "Set app parameters",
 	},
@@ -81,37 +83,37 @@ var Commands = []Command{
 	// Builds
 	{
 		Command:      "build",
-		Permissions:  []string{"convox:build:create", "convox:object:create"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate), rbac.Convox(rbac.ResourceObject, rbac.ActionCreate)},
 		AllowedFlags: []string{"description", "file", "manifest", "no-cache"},
 		Description:  "Create a build",
 	},
 	{
 		Command:      "builds",
-		Permissions:  []string{"convox:build:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceBuild, rbac.ActionList)},
 		AllowedFlags: []string{"limit"},
 		Description:  "List builds",
 	},
 	{
 		Command:      "builds info",
-		Permissions:  []string{"convox:build:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceBuild, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about a build",
 	},
 	{
 		Command:      "builds logs",
-		Permissions:  []string{"convox:log:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceLog, rbac.ActionRead)},
 		AllowedFlags: []string{"follow", "since"},
 		Description:  "Get logs for a build",
 	},
 	{
 		Command:      "builds export",
-		Permissions:  []string{"convox:build:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceBuild, rbac.ActionRead)},
 		AllowedFlags: []string{"file"},
 		Description:  "Export a build",
 	},
 	{
 		Command:      "builds import",
-		Permissions:  []string{"convox:build:create"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceBuild, rbac.ActionImport)},
 		AllowedFlags: []string{"file"},
 		Description:  "Import a build",
 	},
@@ -120,11 +122,11 @@ var Commands = []Command{
 	{
 		Command: "deploy",
 		Permissions: []string{
-			"convox:build:create",
-			"convox:object:create",
-			"convox:release:create",
-			"convox:release:read",
-			"convox:release:promote",
+			rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceObject, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionRead),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote),
 		},
 		AllowedFlags: []string{"description", "file", "manifest", "no-cache", "replace", "wait"},
 		Description:  "Create and promote a build",
@@ -133,31 +135,31 @@ var Commands = []Command{
 	// Releases
 	{
 		Command:      "releases",
-		Permissions:  []string{"convox:release:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionList)},
 		AllowedFlags: []string{"limit"},
 		Description:  "List releases",
 	},
 	{
 		Command:      "releases info",
-		Permissions:  []string{"convox:release:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about a release",
 	},
 	{
 		Command:      "releases manifest",
-		Permissions:  []string{"convox:release:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get manifest for a release",
 	},
 	{
 		Command:      "releases promote",
-		Permissions:  []string{"convox:release:promote"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote)},
 		AllowedFlags: []string{"force", "idle-timeout", "increment", "timeout"},
 		Description:  "Promote a release",
 	},
 	{
 		Command:      "releases rollback",
-		Permissions:  []string{"convox:release:create", "convox:release:promote"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate), rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote)},
 		AllowedFlags: []string{},
 		Description:  "Copy an old release forward and promote it",
 	},
@@ -165,31 +167,31 @@ var Commands = []Command{
 	// Processes
 	{
 		Command:      "ps",
-		Permissions:  []string{"convox:process:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionList)},
 		AllowedFlags: []string{"all"},
 		Description:  "List app processes",
 	},
 	{
 		Command:      "ps info",
-		Permissions:  []string{"convox:process:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about a process",
 	},
 	{
 		Command:      "ps stop",
-		Permissions:  []string{"convox:process:terminate"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionTerminate)},
 		AllowedFlags: []string{},
 		Description:  "Stop a process",
 	},
 	{
 		Command:      "exec",
-		Permissions:  []string{"convox:process:exec"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionExec)},
 		AllowedFlags: []string{"detach", "entrypoint", "privileged"},
 		Description:  "Execute a command in a running process",
 	},
 	{
 		Command:      "run",
-		Permissions:  []string{"convox:process:exec"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionExec)},
 		AllowedFlags: []string{"detach", "entrypoint", "privileged", "release", "service"},
 		Description:  "Execute a command in a new process",
 	},
@@ -197,31 +199,31 @@ var Commands = []Command{
 	// Environment
 	{
 		Command:      "env",
-		Permissions:  []string{"convox:env:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "List env vars",
 	},
 	{
 		Command:      "env get",
-		Permissions:  []string{"convox:env:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionRead)},
 		AllowedFlags: []string{"release", "secrets"},
 		Description:  "Get an env var",
 	},
 	{
 		Command:      "env set",
-		Permissions:  []string{"convox:env:set", "convox:release:create"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionSet), rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate)},
 		AllowedFlags: []string{"promote", "replace"},
 		Description:  "Set env var(s)",
 	},
 	{
 		Command:      "env unset",
-		Permissions:  []string{"convox:env:unset", "convox:release:create"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionUnset), rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate)},
 		AllowedFlags: []string{"promote"},
 		Description:  "Unset env var(s)",
 	},
 	{
 		Command:      "env edit",
-		Permissions:  []string{"convox:env:set", "convox:release:create"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionSet), rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate)},
 		AllowedFlags: []string{"promote"},
 		Description:  "Edit env interactively",
 	},
@@ -229,7 +231,7 @@ var Commands = []Command{
 	// Logs
 	{
 		Command:      "logs",
-		Permissions:  []string{"convox:log:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceLog, rbac.ActionRead)},
 		AllowedFlags: []string{"filter", "follow", "since"},
 		Description:  "Get logs for an app",
 	},
@@ -237,7 +239,7 @@ var Commands = []Command{
 	// Restart
 	{
 		Command:      "restart",
-		Permissions:  []string{"convox:app:restart"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRestart)},
 		AllowedFlags: []string{},
 		Description:  "Restart an app",
 	},
@@ -245,7 +247,7 @@ var Commands = []Command{
 	// Scale
 	{
 		Command:      "scale",
-		Permissions:  []string{"convox:app:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate)},
 		AllowedFlags: []string{"count", "cpu", "memory"},
 		Description:  "Scale a service",
 	},
@@ -253,13 +255,13 @@ var Commands = []Command{
 	// Services
 	{
 		Command:      "services",
-		Permissions:  []string{"convox:app:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "List services for an app",
 	},
 	{
 		Command:      "services restart",
-		Permissions:  []string{"convox:process:start"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceProcess, rbac.ActionStart)},
 		AllowedFlags: []string{},
 		Description:  "Restart a service",
 	},
@@ -267,25 +269,25 @@ var Commands = []Command{
 	// Instances
 	{
 		Command:      "instances",
-		Permissions:  []string{"convox:instance:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List instances",
 	},
 	{
 		Command:      "instances ssh",
-		Permissions:  []string{"convox:instance:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Run a shell on an instance",
 	},
 	{
 		Command:      "instances terminate",
-		Permissions:  []string{"convox:instance:terminate"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionTerminate)},
 		AllowedFlags: []string{},
 		Description:  "Terminate an instance",
 	},
 	{
 		Command:      "instances keyroll",
-		Permissions:  []string{"convox:instance:keyroll"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceInstance, rbac.ActionKeyroll)},
 		AllowedFlags: []string{},
 		Description:  "Roll SSH key on instances",
 	},
@@ -293,37 +295,37 @@ var Commands = []Command{
 	// Rack
 	{
 		Command:      "rack",
-		Permissions:  []string{"convox:rack:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about the rack",
 	},
 	{
 		Command:      "rack logs",
-		Permissions:  []string{"convox:log:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceLog, rbac.ActionRead)},
 		AllowedFlags: []string{"filter", "follow", "since"},
 		Description:  "Get logs for the rack",
 	},
 	{
 		Command:      "rack ps",
-		Permissions:  []string{"convox:rack:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "List rack processes",
 	},
 	{
 		Command:      "rack params",
-		Permissions:  []string{"convox:rack:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Display rack parameters",
 	},
 	{
 		Command:      "rack params set",
-		Permissions:  []string{"convox:rack:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
 		Description:  "Set rack parameters",
 	},
 	{
 		Command:      "rack update",
-		Permissions:  []string{"convox:rack:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate)},
 		AllowedFlags: []string{"version"},
 		Description:  "Update the rack",
 	},
@@ -331,19 +333,19 @@ var Commands = []Command{
 	// Resources
 	{
 		Command:      "resources",
-		Permissions:  []string{"convox:resource:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceResource, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List resources",
 	},
 	{
 		Command:      "resources info",
-		Permissions:  []string{"convox:resource:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceResource, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get information about a resource",
 	},
 	{
 		Command:      "resources url",
-		Permissions:  []string{"convox:resource:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceResource, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "Get URL for a resource",
 	},
@@ -351,7 +353,7 @@ var Commands = []Command{
 	// Balancers
 	{
 		Command:      "balancers",
-		Permissions:  []string{"convox:app:read"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
 		AllowedFlags: []string{},
 		Description:  "List balancers for an app",
 	},
@@ -359,13 +361,13 @@ var Commands = []Command{
 	// SSL
 	{
 		Command:      "ssl",
-		Permissions:  []string{"convox:cert:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List certificate associates for an app",
 	},
 	{
 		Command:      "ssl update",
-		Permissions:  []string{"convox:cert:update"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionUpdate)},
 		AllowedFlags: []string{},
 		Description:  "Update certificate for an app",
 	},
@@ -373,25 +375,25 @@ var Commands = []Command{
 	// Certs
 	{
 		Command:      "certs",
-		Permissions:  []string{"convox:cert:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List certificates",
 	},
 	{
 		Command:      "certs delete",
-		Permissions:  []string{"convox:cert:delete"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionDelete)},
 		AllowedFlags: []string{},
 		Description:  "Delete a certificate",
 	},
 	{
 		Command:      "certs generate",
-		Permissions:  []string{"convox:cert:generate"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionGenerate)},
 		AllowedFlags: []string{"domains"},
 		Description:  "Generate a certificate",
 	},
 	{
 		Command:      "certs import",
-		Permissions:  []string{"convox:cert:import"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceCert, rbac.ActionImport)},
 		AllowedFlags: []string{"chain", "public", "private"},
 		Description:  "Import a certificate",
 	},
@@ -399,19 +401,19 @@ var Commands = []Command{
 	// Registries
 	{
 		Command:      "registries",
-		Permissions:  []string{"convox:registry:list"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRegistry, rbac.ActionList)},
 		AllowedFlags: []string{},
 		Description:  "List private registries",
 	},
 	{
 		Command:      "registries add",
-		Permissions:  []string{"convox:registry:add"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRegistry, rbac.ActionAdd)},
 		AllowedFlags: []string{"username", "password"},
 		Description:  "Add a private registry",
 	},
 	{
 		Command:      "registries remove",
-		Permissions:  []string{"convox:registry:remove"},
+		Permissions:  []string{rbac.Convox(rbac.ResourceRegistry, rbac.ActionRemove)},
 		AllowedFlags: []string{},
 		Description:  "Remove private registry",
 	},

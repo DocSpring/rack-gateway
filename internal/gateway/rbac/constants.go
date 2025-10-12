@@ -13,23 +13,23 @@ import (
 type Scope uint8
 
 const (
-	ScopeConvox Scope = iota
+	ScopeAuth Scope = iota
+	ScopeConvox
 	ScopeGateway
-	ScopeAuth
 	ScopeSecurity
 )
 
 const (
+	ScopeStringAuth     = "auth"
 	ScopeStringConvox   = "convox"
 	ScopeStringGateway  = "gateway"
-	ScopeStringAuth     = "auth"
 	ScopeStringSecurity = "security"
 )
 
 var scopeToString = [...]string{
+	ScopeStringAuth,
 	ScopeStringConvox,
 	ScopeStringGateway,
-	ScopeStringAuth,
 	ScopeStringSecurity,
 }
 
@@ -95,21 +95,24 @@ type Resource uint8
 const (
 	// Convox resources
 	ResourceApp Resource = iota
-	ResourceProcess
 	ResourceBuild
-	ResourceRelease
+	ResourceCert
+	ResourceDeploy
+	ResourceEnv
+	ResourceInstance
 	ResourceLog
 	ResourceObject
-	ResourceInstance
+	ResourceProcess
 	ResourceRack
-	ResourceEnv
-	ResourceDeploy
+	ResourceRegistry
+	ResourceRelease
+	ResourceResource
 	// Gateway resources
-	ResourceDeployApprovalRequest
 	ResourceAPIToken
-	ResourceUser
+	ResourceDeployApprovalRequest
 	ResourceIntegration
 	ResourceSecret
+	ResourceUser
 	// Auth/Security resources
 	ResourceAuth
 	ResourceMFA
@@ -118,21 +121,24 @@ const (
 
 const (
 	ResourceStringApp      = "app"
-	ResourceStringProcess  = "process"
 	ResourceStringBuild    = "build"
-	ResourceStringRelease  = "release"
+	ResourceStringCert     = "cert"
+	ResourceStringDeploy   = "deploy"
+	ResourceStringEnv      = "env"
+	ResourceStringInstance = "instance"
 	ResourceStringLog      = "log"
 	ResourceStringObject   = "object"
-	ResourceStringInstance = "instance"
+	ResourceStringProcess  = "process"
 	ResourceStringRack     = "rack"
-	ResourceStringEnv      = "env"
-	ResourceStringDeploy   = "deploy"
+	ResourceStringRegistry = "registry"
+	ResourceStringRelease  = "release"
+	ResourceStringResource = "resource"
 	// Gateway resources
-	ResourceStringDeployApprovalRequest = "deploy_approval_request"
 	ResourceStringAPIToken              = "api_token"
-	ResourceStringUser                  = "user"
+	ResourceStringDeployApprovalRequest = "deploy_approval_request"
 	ResourceStringIntegration           = "integration"
 	ResourceStringSecret                = "secret"
+	ResourceStringUser                  = "user"
 	// Auth/Security resources
 	ResourceStringAuth      = "auth"
 	ResourceStringMFA       = "mfa"
@@ -141,20 +147,25 @@ const (
 
 var resourceToString = [...]string{
 	ResourceStringApp,
-	ResourceStringProcess,
 	ResourceStringBuild,
-	ResourceStringRelease,
+	ResourceStringCert,
+	ResourceStringDeploy,
+	ResourceStringEnv,
+	ResourceStringInstance,
 	ResourceStringLog,
 	ResourceStringObject,
-	ResourceStringInstance,
+	ResourceStringProcess,
 	ResourceStringRack,
-	ResourceStringEnv,
-	ResourceStringDeploy,
-	ResourceStringDeployApprovalRequest,
+	ResourceStringRegistry,
+	ResourceStringRelease,
+	ResourceStringResource,
+
 	ResourceStringAPIToken,
-	ResourceStringUser,
+	ResourceStringDeployApprovalRequest,
 	ResourceStringIntegration,
 	ResourceStringSecret,
+	ResourceStringUser,
+
 	ResourceStringAuth,
 	ResourceStringMFA,
 	ResourceStringMFAMethod,
@@ -214,57 +225,75 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 type Action uint8
 
 const (
-	ActionList Action = iota
-	ActionRead
+	ActionAdd Action = iota
+	ActionApprove
 	ActionCreate
-	ActionUpdate
 	ActionDelete
-	ActionPromote
+	ActionDeployWithApproval
 	ActionExec
+	ActionGenerate
+	ActionImport
+	ActionKeyroll
+	ActionList
+	ActionManage
+	ActionPromote
+	ActionRead
+	ActionRemove
+	ActionRestart
+	ActionSet
 	ActionStart
 	ActionStop
 	ActionTerminate
-	ActionRestart
-	ActionApprove
-	ActionManage
-	ActionSet
-	ActionDeployWithApproval
+	ActionUnset
+	ActionUpdate
 )
 
 const (
-	ActionStringList               = "list"
-	ActionStringRead               = "read"
+	ActionStringAdd                = "add"
+	ActionStringApprove            = "approve"
 	ActionStringCreate             = "create"
-	ActionStringUpdate             = "update"
 	ActionStringDelete             = "delete"
-	ActionStringPromote            = "promote"
+	ActionStringDeployWithApproval = "deploy_with_approval"
 	ActionStringExec               = "exec"
+	ActionStringGenerate           = "generate"
+	ActionStringImport             = "import"
+	ActionStringKeyroll            = "keyroll"
+	ActionStringList               = "list"
+	ActionStringManage             = "manage"
+	ActionStringPromote            = "promote"
+	ActionStringRead               = "read"
+	ActionStringRemove             = "remove"
+	ActionStringRestart            = "restart"
+	ActionStringSet                = "set"
 	ActionStringStart              = "start"
 	ActionStringStop               = "stop"
 	ActionStringTerminate          = "terminate"
-	ActionStringRestart            = "restart"
-	ActionStringApprove            = "approve"
-	ActionStringManage             = "manage"
-	ActionStringSet                = "set"
-	ActionStringDeployWithApproval = "deploy_with_approval"
+	ActionStringUnset              = "unset"
+	ActionStringUpdate             = "update"
 )
 
 var actionToString = [...]string{
-	ActionStringList,
-	ActionStringRead,
+	ActionStringAdd,
+	ActionStringApprove,
 	ActionStringCreate,
-	ActionStringUpdate,
 	ActionStringDelete,
-	ActionStringPromote,
+	ActionStringDeployWithApproval,
 	ActionStringExec,
+	ActionStringGenerate,
+	ActionStringImport,
+	ActionStringKeyroll,
+	ActionStringList,
+	ActionStringManage,
+	ActionStringPromote,
+	ActionStringRead,
+	ActionStringRemove,
+	ActionStringRestart,
+	ActionStringSet,
 	ActionStringStart,
 	ActionStringStop,
 	ActionStringTerminate,
-	ActionStringRestart,
-	ActionStringApprove,
-	ActionStringManage,
-	ActionStringSet,
-	ActionStringDeployWithApproval,
+	ActionStringUnset,
+	ActionStringUpdate,
 }
 
 func (a Action) String() string {
@@ -274,7 +303,7 @@ func (a Action) String() string {
 	return fmt.Sprintf("Action(%d)", a)
 }
 
-func (a Action) IsValid() bool { return a <= ActionDeployWithApproval }
+func (a Action) IsValid() bool { return a <= ActionUpdate }
 
 func ParseAction(v string) (Action, error) {
 	for i, s := range actionToString {
