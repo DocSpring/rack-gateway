@@ -5,9 +5,11 @@ import { clearMfaAttempts } from './db'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
+  enableTotpMfaViaUi,
   enforceMfaFor,
   login,
   resetMfaFor,
+  satisfyStepUpModal,
   setupBothMfaMethods,
 } from './helpers'
 
@@ -35,19 +37,6 @@ async function requireStepUp(page: Page) {
   const loadingIndicator = page.getByText('Loading latest security information…', { exact: true })
   await expect(loadingIndicator).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toBeEnabled()
-}
-
-async function completeStepUp(page: Page, secret: string) {
-  const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
-  await expect(dialog).toBeVisible()
-
-  // Clear MFA attempts to allow code reuse within same TOTP window
-  await clearMfaAttempts()
-
-  const code = authenticator.generate(secret)
-  await dialog.getByLabel('Verification code').fill(code)
-  // Auto-submits on 6-digit code, no need to click Verify button
-  await expect(dialog).toBeHidden({ timeout: 4000 })
 }
 
 async function performLoginWithMfa(page: Page, secret: string, trustDevice: boolean) {
@@ -96,6 +85,12 @@ test.describe('Account security', () => {
   test('user can manage MFA enrollment, backup codes, trusted devices, and removal flows', async ({
     page,
   }) => {
+    page.on('request', (request) => {
+      if (request.url().includes('mfa')) {
+        console.log('[E2E request]', request.method(), request.url())
+      }
+    })
+
     await login(page, { autoEnrollMfa: false })
 
     await page.goto(WebRoute('account/security'))
@@ -109,36 +104,7 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
-    // Set up response listener BEFORE clicking Enable MFA
-    const enrollmentResponsePromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/enroll/totp/start') &&
-        response.request().method() === 'POST'
-    )
-
-    // Click Enable MFA button - may show method selector or auto-start TOTP
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
-
-    // Check if method selector appeared (WebAuthn available)
-    const methodSelector = cardByTitle(page, 'Choose MFA Method')
-    const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
-
-    if (methodSelectorVisible) {
-      // Method selector shown - click TOTP option
-      await methodSelector.getByRole('button', { name: /TOTP Authenticator/ }).click()
-    }
-
-    // Wait for enrollment response (from either auto-start or after clicking TOTP)
-    const enrollmentResponse = await enrollmentResponsePromise
-    const enrollment = (await enrollmentResponse.json()) as { secret: string }
-
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toBeVisible()
-
-    const secret = enrollment.secret
-    await page.getByLabel(/Enter the 6-digit code to confirm/i).fill(authenticator.generate(secret))
-    await page.getByRole('button', { name: /^Confirm$/ }).click()
-
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
+    const secret = await enableTotpMfaViaUi(page)
 
     await expect(mfaCard.getByText('Enabled', { exact: true })).toBeVisible()
 
@@ -169,7 +135,7 @@ test.describe('Account security', () => {
         response.request().method() === 'POST'
     )
     await page.getByRole('button', { name: /^Regenerate backup codes$/ }).click()
-    await completeStepUp(page, secret)
+    await satisfyStepUpModal(page, { secret, require: true })
     await regenResponsePromise
     await expect(backupCard.getByRole('button', { name: /Download latest codes/i })).toBeVisible()
 
@@ -181,7 +147,7 @@ test.describe('Account security', () => {
     )
     const revokeButton = trustedDevicesCard.getByRole('button', { name: /^Revoke$/ }).first()
     await revokeButton.click()
-    await completeStepUp(page, secret)
+    await satisfyStepUpModal(page, { secret, require: true })
     await revokeResponsePromise
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0)
 
@@ -195,7 +161,7 @@ test.describe('Account security', () => {
     await expect(disableDialog).toBeVisible()
     await disableDialog.getByLabel('Confirmation').fill('DISABLE')
     await disableDialog.getByRole('button', { name: 'Disable MFA' }).click()
-    await completeStepUp(page, secret)
+    await satisfyStepUpModal(page, { secret, require: true })
     await deleteResponsePromise
     await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
@@ -206,14 +172,18 @@ test.describe('Account security', () => {
     // Wait for method selector and choose TOTP
     await expect(cardByTitle(page, 'Choose MFA Method')).toBeVisible()
 
-    const reEnrollResponsePromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/enroll/totp/start') &&
-        response.request().method() === 'POST'
-    )
-    await page.getByRole('button', { name: /TOTP Authenticator/i }).click()
-    const reEnrollResponse = await reEnrollResponsePromise
-    const reEnroll = (await reEnrollResponse.json()) as { secret: string }
+    await page.evaluate(() => {
+      ;(window as unknown as Record<string, unknown>).__e2e_last_mfa_enroll = null
+    })
+    await page.getByRole('button', { name: /Authenticator app/i }).click()
+    const reEnrollHandle = await page.waitForFunction(() => {
+      const data = (window as unknown as Record<string, unknown>).__e2e_last_mfa_enroll as
+        | { secret?: string }
+        | null
+        | undefined
+      return data?.secret ? data : null
+    })
+    const reEnroll = (await reEnrollHandle.jsonValue()) as { secret: string }
 
     await page
       .getByLabel(/Enter the 6-digit code to confirm/i)
@@ -233,7 +203,7 @@ test.describe('Account security', () => {
     await dropdownButton.click()
     const removeMenuItem = page.getByText('Remove Method')
     await removeMenuItem.click()
-    await completeStepUp(page, reEnroll.secret)
+    await satisfyStepUpModal(page, { secret: reEnroll.secret, require: true })
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
@@ -260,8 +230,7 @@ test.describe('Account security', () => {
     const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
 
     if (methodSelectorVisible) {
-      // Method selector shown - click TOTP option
-      await methodSelector.getByRole('button', { name: /TOTP Authenticator/ }).click()
+      await methodSelector.getByRole('button', { name: /Authenticator app/i }).click()
     }
 
     // Wait for enrollment response (from either auto-start or after clicking TOTP)

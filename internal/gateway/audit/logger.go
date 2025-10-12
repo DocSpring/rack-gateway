@@ -451,7 +451,7 @@ func (l *Logger) MapHttpStatusToStatus(httpStatus int) string {
 	case httpStatus >= 500:
 		return "error"
 	default:
-		return "unknown"
+		panic(fmt.Sprintf("CRITICAL: Unknown HTTP status %d", httpStatus))
 	}
 }
 
@@ -489,5 +489,5 @@ func (l *Logger) InferResourceType(path, action string) string {
 	if action != "" {
 		return action
 	}
-	return "unknown"
+	panic(fmt.Sprintf("CRITICAL: Unknown path %s and action %s", path, action))
 }

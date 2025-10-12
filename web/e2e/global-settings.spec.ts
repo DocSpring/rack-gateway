@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
 import { clearAllGlobalSettings, setupBothMfaMethodsForUser } from './db'
 import { expect, test } from './fixtures'
-import { login } from './helpers'
+import { login, satisfyStepUpModal } from './helpers'
 
 const VIEWER_EMAIL = 'viewer@example.com'
 
@@ -100,6 +100,7 @@ test.describe('Global Settings', () => {
 
     let saveButton = page.getByRole('button', { name: /^save$/i }).first()
     await saveButton.click()
+    await satisfyStepUpModal(page)
     await updateResponsePromise
 
     // Save/Cancel buttons should disappear
@@ -122,6 +123,7 @@ test.describe('Global Settings', () => {
 
     saveButton = page.getByRole('button', { name: /^save$/i }).first()
     await saveButton.click()
+    await satisfyStepUpModal(page)
     await updateResponsePromise
 
     // Save/Cancel buttons should disappear
@@ -137,6 +139,7 @@ test.describe('Global Settings', () => {
         response.request().method() === 'DELETE'
     )
     await clearButton.first().click()
+    await satisfyStepUpModal(page)
     await clearResponsePromise
 
     // Checkbox should be back to default (false for allow_destructive_actions)
@@ -174,6 +177,7 @@ test.describe('Global Settings', () => {
     )
 
     await saveButton.click()
+    await satisfyStepUpModal(page)
     await updateResponsePromise
 
     // Reload page to verify change persisted

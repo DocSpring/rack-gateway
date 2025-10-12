@@ -313,7 +313,7 @@ func extractTrustedDeviceUserAgent(device *db.TrustedDevice) string {
 func shortDeviceID(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "unknown"
+		panic("CRITICAL: Empty device ID")
 	}
 	if len(id) <= 8 {
 		return id

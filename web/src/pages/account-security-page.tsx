@@ -831,6 +831,7 @@ export function AccountSecurityPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   {status?.webauthn_available && (
                     <button
+                      aria-label="Passkey or security key"
                       className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={startWebAuthnMutation.isPending}
                       onClick={() => handleStartEnrollment('webauthn')}
@@ -843,6 +844,7 @@ export function AccountSecurityPage() {
                     </button>
                   )}
                   <button
+                    aria-label="Authenticator app"
                     className="flex cursor-pointer flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={startTOTPMutation.isPending}
                     onClick={() => handleStartEnrollment('totp')}

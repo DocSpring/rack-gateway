@@ -92,8 +92,8 @@ export async function expireStepUpForAllSessions() {
     await client.query(
       `UPDATE user_sessions
           SET recent_step_up_at = NULL,
-              mfa_verified_at = NULL
-        WHERE recent_step_up_at IS NOT NULL OR mfa_verified_at IS NOT NULL;`
+              mfa_verified_at = COALESCE(mfa_verified_at, NOW())
+        WHERE recent_step_up_at IS NOT NULL OR mfa_verified_at IS NULL;`
     )
   })
 }
@@ -151,6 +151,22 @@ export async function getUserMfaSecret(email: string): Promise<string | null> {
     return result.rows[0]?.secret || null
   })
 }
+
+export async function getPendingTotpSecret(email: string): Promise<string | null> {
+  return await withDbClient(async (client) => {
+    const result = await client.query(
+      `SELECT secret FROM mfa_methods
+       WHERE user_id = (SELECT id FROM users WHERE email = $1)
+         AND type = 'totp'
+         AND confirmed_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1;`,
+      [email]
+    )
+    return result.rows[0]?.secret || null
+  })
+}
+
 
 export async function clearAllGlobalSettings() {
   await withDbClient(async (client) => {

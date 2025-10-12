@@ -5,6 +5,8 @@ import {
   clearMfaAttempts,
   enforceMfaForUser,
   expireStepUpForAllSessions,
+  getPendingTotpSecret,
+  getUserMfaSecret,
   resetMfaForUser,
   setupBothMfaMethodsForUser,
 } from './db'
@@ -17,6 +19,10 @@ export type LoginOptions = {
    */
   userCardText?: string
   /**
+   * Email address for the mock OAuth user card. Defaults to the email matching the card text.
+   */
+  email?: string
+  /**
    * When true (default), ensure the authenticated user has completed MFA enrollment
    * so gated routes remain accessible during tests. Disable for scenarios that
    * explicitly exercise the enrollment UX.
@@ -24,8 +30,16 @@ export type LoginOptions = {
   autoEnrollMfa?: boolean
 }
 
+const CARD_TEXT_TO_EMAIL: Record<string, string> = {
+  'Admin User': 'admin@example.com',
+  'Deployer User': 'deployer@example.com',
+  'Viewer User': 'viewer@example.com',
+  'Ops User': 'ops@example.com',
+}
+
 export async function login(page: Page, options: LoginOptions = {}) {
   const { userCardText = 'Admin User', autoEnrollMfa = true } = options
+  const email = options.email ?? CARD_TEXT_TO_EMAIL[userCardText] ?? 'admin@example.com'
 
   // Clear MFA rate limit attempts before each login to prevent test pollution
   await clearMfaAttempts()
@@ -61,7 +75,7 @@ export async function login(page: Page, options: LoginOptions = {}) {
   await page.waitForURL(/\.gateway\/web(?:\/|$)/, { timeout: 15_000 })
 
   if (autoEnrollMfa) {
-    await ensureMfaEnrollment(page)
+    await ensureMfaEnrollment(page, { email })
   }
 }
 
@@ -82,96 +96,138 @@ export async function setupBothMfaMethods(email: string) {
   await setupBothMfaMethodsForUser(email)
 }
 
-export async function ensureMfaEnrollment(page: Page) {
-  await page
-    .waitForFunction(
-      () => {
-        const meta = document.querySelector<HTMLMetaElement>('meta[name="rgw-csrf-token"]')
-        const value = meta?.content?.trim()
-        return Boolean(value && value !== 'RGW_CSRF_TOKEN')
-      },
-      undefined,
-      { timeout: 5000 }
-    )
-    .catch(() => {})
+export async function ensureMfaEnrollment(
+  page: Page,
+  options: { email?: string } = {}
+): Promise<string> {
+  const email = options.email ?? 'admin@example.com'
+  const existing = await getUserMfaSecret(email)
+  if (existing) {
+    return existing
+  }
 
-  const csrfToken = await page.evaluate(() => {
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="rgw-csrf-token"]')
-    const value = meta?.content?.trim()
-    if (!value || value === 'RGW_CSRF_TOKEN') {
-      return ''
+  await page.goto(WebRoute('account/security'))
+  await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+  const secret = await startTotpEnrollmentViaUi(page)
+
+  await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+  const statusBadge = page.locator('[data-slot="card"]').first().getByText('Enabled')
+  await expect(statusBadge).toBeVisible()
+
+  return secret
+}
+
+export async function enableTotpMfaViaUi(page: Page, email = 'admin@example.com'): Promise<string> {
+  return await startTotpEnrollmentViaUi(page, email)
+}
+
+export async function satisfyStepUpModal(
+  page: Page,
+  options: { email?: string; secret?: string; trustDevice?: boolean; require?: boolean } = {}
+): Promise<boolean> {
+  const { email = 'admin@example.com', secret: secretOverride, trustDevice = false, require = false } = options
+
+  const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
+  const visible = await dialog.isVisible().catch(() => false)
+  if (!visible) {
+    if (require) {
+      throw new Error('Expected MFA step-up dialog to appear, but it did not.')
     }
-    return value
-  })
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  }
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken
+    return false
   }
 
-  const startResp = await page.request.post(APIRoute('auth/mfa/enroll/totp/start'), {
-    headers,
-  })
-  if (startResp.status() >= 400) {
-    const detail = await startResp.text().catch(() => '')
-    if (startResp.status() === 409) {
-      return
-    }
-    throw new Error(
-      `failed to start MFA enrollment (${startResp.status()}): ${detail || 'no response body'}`
-    )
+  const secret = secretOverride ?? (await getUserMfaSecret(email))
+  if (!secret) {
+    throw new Error(`No confirmed TOTP secret found for ${email}. Ensure ensureMfaEnrollment ran.`)
   }
 
-  const startData = (await startResp.json()) as {
-    method_id: number
-    secret: string
-  }
-  if (!(startData?.method_id && startData?.secret)) {
-    return
-  }
+  await clearMfaAttempts()
 
-  const code = authenticator.generate(startData.secret)
-  const confirmResp = await page.request.post(APIRoute('auth/mfa/enroll/totp/confirm'), {
-    data: {
-      method_id: startData.method_id,
-      code,
-      trust_device: true,
-    },
-    headers,
-  })
-
-  if (confirmResp.status() >= 400) {
-    const detail = await confirmResp.text().catch(() => '')
-    throw new Error(
-      `failed to confirm MFA enrollment (${confirmResp.status()}): ${detail || 'no response body'}`
-    )
-  }
-
-  // Wait a bit for any navigation to settle before reloading
-  await page.waitForLoadState('domcontentloaded').catch(() => {})
-  await page.waitForTimeout(500)
-
-  try {
-    await page.reload({ waitUntil: 'networkidle' })
-  } catch (err) {
-    // If reload fails due to navigation, wait for it to complete
-    if (err instanceof Error && err.message.includes('ERR_ABORTED')) {
-      await page.waitForLoadState('networkidle')
-    } else {
-      throw err
+  const trustCheckbox = dialog.getByLabel(/Trust this/i)
+  const checkboxExists = await trustCheckbox.isVisible().catch(() => false)
+  if (checkboxExists) {
+    const checked = await trustCheckbox.isChecked().catch(() => false)
+    if (trustDevice && !checked) {
+      await trustCheckbox.check()
+    } else if (!trustDevice && checked) {
+      await trustCheckbox.uncheck()
     }
   }
+
+  const code = authenticator.generate(secret)
+  await dialog.getByLabel(/Verification code/i).fill(code)
+
+  await expect(dialog).toBeHidden({ timeout: 5000 })
+  return true
+}
+
+async function startTotpEnrollmentViaUi(page: Page, email: string): Promise<string> {
+  await page.evaluate(() => {
+    const global = window as Record<string, unknown>
+    global.__e2e_totpSecret = null
+
+    const stub = async (text: string) => {
+      global.__e2e_totpSecret = text
+      return Promise.resolve()
+    }
+
+    navigator.clipboard.writeText = stub as typeof navigator.clipboard.writeText
+  })
+
+  await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+
+  await page.getByRole('button', { name: 'Authenticator app', exact: true }).click()
+
+  const enrollmentDialog = page.getByRole('dialog', {
+    name: 'Enable Multi-Factor Authentication',
+  })
+  await expect(enrollmentDialog).toBeVisible()
+
+  const copySecretButton = enrollmentDialog.getByRole('button', {
+    name: 'Copy secret for manual entry',
+  })
+  await expect(copySecretButton).toBeVisible()
+  await copySecretButton.click()
 
   await expect
-    .poll(async () => {
-      const statusResp = await page.request.get(APIRoute('auth/mfa/status'))
-      if (statusResp.status() >= 400) {
-        return false
-      }
-      const payload = (await statusResp.json()) as { enrolled?: boolean }
-      return payload?.enrolled === true
-    })
-    .toBe(true)
+    .poll(async () =>
+      page.evaluate(() => (window as Record<string, unknown>).__e2e_totpSecret ?? '')
+    )
+    .not.toEqual('')
+
+  let secret = (await page.evaluate(
+    () => (window as Record<string, unknown>).__e2e_totpSecret
+  )) as string | null
+
+  if (!secret) {
+    secret = await pollPendingTotpSecret(email, 5000)
+  }
+
+  if (!secret) {
+    throw new Error(`Failed to retrieve pending TOTP secret during enrollment for ${email}`)
+  }
+
+  const codeInput = enrollmentDialog.getByLabel(/Enter the 6-digit code to confirm/i)
+  await expect(codeInput).toBeVisible()
+
+  const code = authenticator.generate(secret)
+  await codeInput.fill(code)
+  await enrollmentDialog.getByRole('button', { name: /^Confirm$/ }).click()
+
+  await expect(enrollmentDialog).toBeHidden()
+
+  return secret
+}
+
+async function pollPendingTotpSecret(email: string, timeoutMs = 5000): Promise<string | null> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const secret = await getPendingTotpSecret(email)
+    if (secret) {
+      return secret
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+  return null
 }

@@ -49,13 +49,17 @@ gatewayAxios.interceptors.request.use((request) => {
     }
   }
 
-  // Inject MFA headers if they're set (from step-up flow)
-  const mfaHeaders = getMFAHeaders()
-  if (mfaHeaders['X-MFA-TOTP']) {
-    headers.set('X-MFA-TOTP', mfaHeaders['X-MFA-TOTP'])
-  }
-  if (mfaHeaders['X-MFA-WebAuthn']) {
-    headers.set('X-MFA-WebAuthn', mfaHeaders['X-MFA-WebAuthn'])
+  // Inject MFA headers if they're set (from step-up flow). These headers should only be sent on
+  // mutating requests; sending them on reads (e.g., polling MFA status) would consume the code and
+  // cause the subsequent mutating request to fail its step-up check.
+  if (method && MUTATING_METHODS.has(method)) {
+    const mfaHeaders = getMFAHeaders()
+    if (mfaHeaders['X-MFA-TOTP']) {
+      headers.set('X-MFA-TOTP', mfaHeaders['X-MFA-TOTP'])
+    }
+    if (mfaHeaders['X-MFA-WebAuthn']) {
+      headers.set('X-MFA-WebAuthn', mfaHeaders['X-MFA-WebAuthn'])
+    }
   }
 
   request.headers = headers

@@ -1,6 +1,6 @@
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { login } from './helpers'
+import { login, satisfyStepUpModal } from './helpers'
 
 test('users: add, edit role, delete', async ({ page }) => {
   await login(page)
@@ -165,6 +165,7 @@ test('tokens: create, rename, delete', async ({ page }) => {
   // Submit the create token form - step-up window from login is still valid
   // so no MFA dialog will appear, token is created immediately
   await createDialog.getByRole('button', { name: /Create Token/i }).click()
+  await satisfyStepUpModal(page)
 
   // Token should be created successfully and success dialog appears
   await expect(page.getByText(/API token created successfully/i)).toBeVisible()
@@ -180,6 +181,7 @@ test('tokens: create, rename, delete', async ({ page }) => {
   const name2 = `${name1} Renamed`
   await page.getByLabel('Token Name').fill(name2)
   await page.getByRole('button', { name: /^Save$/ }).click()
+  await satisfyStepUpModal(page)
   await expect(page.locator('tr', { hasText: name2 })).toBeVisible()
 
   // Delete token - click dropdown and select "Delete Token"
@@ -190,6 +192,7 @@ test('tokens: create, rename, delete', async ({ page }) => {
   const confirmDialog = page.getByRole('dialog')
   await confirmDialog.getByLabel('Confirmation').fill('DELETE')
   await confirmDialog.getByRole('button', { name: /Delete Token/i }).click()
+  await satisfyStepUpModal(page)
   await expect(row2).toHaveCount(0)
 })
 
@@ -230,6 +233,7 @@ test('audit logs: view and filter', async ({ page }) => {
   // Submit the form - step-up window from login is still valid
   // so token is created immediately without MFA dialog
   await createDialog.getByRole('button', { name: /Create Token/i }).click()
+  await satisfyStepUpModal(page)
 
   // Token should be created successfully
   await expect(page.getByText('API token created successfully', { exact: true })).toBeVisible()

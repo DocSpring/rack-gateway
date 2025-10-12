@@ -58,6 +58,75 @@ export const test = base.extend({
     })
 
     const errors: string[] = []
+
+    await page.addInitScript(() => {
+      const globalObject = window as unknown as Record<string, unknown>
+      globalObject.__e2e_last_mfa_enroll = null
+
+      const originalFetch = window.fetch.bind(window)
+      window.fetch = async (...args) => {
+        const response = await originalFetch(...args)
+        try {
+          const requestInfo = args[0]
+          const url =
+            typeof requestInfo === 'string'
+              ? requestInfo
+              : requestInfo instanceof Request
+              ? requestInfo.url
+              : ''
+          if (
+            typeof url === 'string' &&
+            url.includes('/auth/mfa/enroll/totp/start') &&
+            response.ok
+          ) {
+            console.debug('[E2E] Intercepting TOTP enrollment response via fetch', url)
+            response
+              .clone()
+              .json()
+              .then((data) => {
+                globalObject.__e2e_last_mfa_enroll = data
+              })
+              .catch((err) => console.error('Failed to capture fetch TOTP response', err))
+          }
+        } catch (err) {
+          console.error('Failed to inspect fetch request', err)
+        }
+        return response
+      }
+
+      const originalOpen = XMLHttpRequest.prototype.open
+      XMLHttpRequest.prototype.open = function (method: string, url: string, ...rest) {
+        ;(this as any).__e2e_capture_totp =
+          typeof method === 'string' &&
+          method.toUpperCase() === 'POST' &&
+          typeof url === 'string' &&
+          url.includes('/auth/mfa/enroll/totp/start')
+        if ((this as any).__e2e_capture_totp) {
+          console.debug('[E2E] Observing TOTP enrollment request via XHR', method, url)
+        }
+        return originalOpen.call(this, method, url, ...rest)
+      }
+
+      const originalSend = XMLHttpRequest.prototype.send
+      XMLHttpRequest.prototype.send = function (...args) {
+        if ((this as any).__e2e_capture_totp) {
+          this.addEventListener('load', function () {
+            try {
+              const xhr = this as XMLHttpRequest
+              const raw = xhr.responseType && xhr.responseType !== 'text' ? xhr.response : xhr.responseText
+              if (!raw) return
+              const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+              globalObject.__e2e_last_mfa_enroll = parsed
+              console.debug('[E2E] Captured TOTP enrollment response via XHR')
+            } catch (err) {
+              console.error('Failed to capture TOTP enrollment response', err)
+            }
+          })
+        }
+        return originalSend.apply(this, args)
+      }
+    })
+
     // Log 4xx/5xx responses with URL and a short body snippet
     page.on('response', async (resp) => {
       const status = resp.status()
