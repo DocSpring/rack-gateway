@@ -1,24 +1,77 @@
 import { isAxiosError } from 'axios'
 
+import { toast } from '@/components/ui/use-toast'
+import { isStepUpError } from '@/contexts/step-up-context'
+
 export function getErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
-  if (typeof error === 'string' && error.trim() !== '') {
+  const resolved = resolveErrorMessage(error)
+  if (typeof resolved === 'string' && resolved.trim() !== '') {
+    return resolved
+  }
+  return fallback
+}
+
+export function toastAPIError(error: unknown, fallback = 'Something went wrong'): void {
+  if (isStepUpError(error)) {
+    return
+  }
+  toast.error(getErrorMessage(error, fallback))
+}
+
+export function withAPIErrorMessage(
+  error: unknown,
+  fallback: string,
+  handler: (message: string) => void
+): void {
+  if (isStepUpError(error)) {
+    return
+  }
+  handler(getErrorMessage(error, fallback))
+}
+
+function resolveErrorMessage(error: unknown): string | undefined {
+  if (typeof error === 'string') {
     return error
   }
-  if (isAxiosError<{ error?: string; message?: string }>(error)) {
-    const data = error.response?.data
-    const message = data?.message ?? data?.error
+
+  const axiosMessage = messageFromAxios(error)
+  if (axiosMessage) {
+    return axiosMessage
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const message = (error as { message?: string }).message
     if (typeof message === 'string' && message.trim() !== '') {
       return message
     }
   }
-  if (error instanceof Error && error.message.trim() !== '') {
-    return error.message
+
+  return
+}
+
+function messageFromAxios(error: unknown): string | undefined {
+  if (!isAxiosError<{ error?: string; message?: string }>(error)) {
+    return
   }
-  if (typeof error === 'object' && error !== null) {
-    const maybeMessage = (error as { message?: string }).message
-    if (typeof maybeMessage === 'string' && maybeMessage.trim() !== '') {
-      return maybeMessage
+  const data = error.response?.data as
+    | string
+    | { message?: string | undefined; error?: string | undefined }
+    | undefined
+
+  if (typeof data === 'string') {
+    return data.trim() !== '' ? data : undefined
+  }
+
+  if (data && typeof data === 'object') {
+    const message = typeof data.message === 'string' ? data.message : data.error
+    if (typeof message === 'string' && message.trim() !== '') {
+      return message
     }
   }
-  return fallback
+
+  return
 }

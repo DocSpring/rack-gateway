@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { isAxiosError } from 'axios'
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import type { SettingsSetting } from '@/api/schemas'
@@ -10,30 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { useAuth } from '../contexts/auth-context'
+import { useStepUp } from '../contexts/step-up-context'
 import { api } from '../lib/api'
-
-type SettingsErrorPayload = {
-  error?: string
-}
+import { toastAPIError } from '../lib/error-utils'
 
 type GlobalSettingsResponse = {
   [key: string]: SettingsSetting
-}
-
-function extractErrorMessage(error: unknown): string | undefined {
-  if (isAxiosError<SettingsErrorPayload>(error)) {
-    const payload = error.response?.data
-    if (typeof payload === 'string') {
-      return payload
-    }
-    if (payload && typeof payload.error === 'string') {
-      return payload.error
-    }
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return
 }
 
 function MfaConfigCard({
@@ -44,6 +25,7 @@ function MfaConfigCard({
   disabled: boolean
 }) {
   const qc = useQueryClient()
+  const { handleStepUpError } = useStepUp()
   const [requireMfa, setRequireMfa] = useState<boolean | null>(null)
   const [trustedDeviceTtl, setTrustedDeviceTtl] = useState<number | null>(null)
   const [stepUpWindow, setStepUpWindow] = useState<number | null>(null)
@@ -85,8 +67,7 @@ function MfaConfigCard({
       toast.success('MFA settings updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to update MFA settings')
+      toastAPIError(err, 'Failed to update MFA settings')
     },
   })
 
@@ -123,8 +104,7 @@ function MfaConfigCard({
       toast.success('MFA settings cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to clear MFA settings')
+      toastAPIError(err, 'Failed to clear MFA settings')
     },
   })
 
@@ -134,12 +114,26 @@ function MfaConfigCard({
     setStepUpWindow(null)
   }
 
-  const handleSave = () => {
-    updateMutation.mutate()
+  const handleSave = async () => {
+    try {
+      await updateMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
-  const handleClear = () => {
-    clearMutation.mutate()
+  const handleClear = async () => {
+    try {
+      await clearMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
   const hasDbSettings =
@@ -251,6 +245,7 @@ function DestructiveActionsCard({
   disabled: boolean
 }) {
   const qc = useQueryClient()
+  const { handleStepUpError } = useStepUp()
   const [allowDestructive, setAllowDestructive] = useState<boolean | null>(null)
 
   const currentValue = getSettingValue(settings?.allow_destructive_actions, false)
@@ -277,8 +272,7 @@ function DestructiveActionsCard({
       toast.success('Setting updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to update setting')
+      toastAPIError(err, 'Failed to update setting')
     },
   })
 
@@ -299,8 +293,7 @@ function DestructiveActionsCard({
       toast.success('Setting cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to clear setting')
+      toastAPIError(err, 'Failed to clear setting')
     },
   })
 
@@ -308,12 +301,26 @@ function DestructiveActionsCard({
     setAllowDestructive(null)
   }
 
-  const handleSave = () => {
-    updateMutation.mutate()
+  const handleSave = async () => {
+    try {
+      await updateMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
-  const handleClear = () => {
-    clearMutation.mutate()
+  const handleClear = async () => {
+    try {
+      await clearMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
   const hasDbSetting = settings?.allow_destructive_actions?.source === 'db'
@@ -378,6 +385,7 @@ function VCSCIProvidersCard({
   disabled: boolean
 }) {
   const qc = useQueryClient()
+  const { handleStepUpError } = useStepUp()
   const [vcsProvider, setVcsProvider] = useState<string | null>(null)
   const [vcsOrgName, setVcsOrgName] = useState<string | null>(null)
   const [ciProvider, setCiProvider] = useState<string | null>(null)
@@ -426,8 +434,7 @@ function VCSCIProvidersCard({
       toast.success('Provider settings updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to update settings')
+      toastAPIError(err, 'Failed to update settings')
     },
   })
 
@@ -468,8 +475,7 @@ function VCSCIProvidersCard({
       toast.success('Provider settings cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to clear settings')
+      toastAPIError(err, 'Failed to clear settings')
     },
   })
 
@@ -480,12 +486,26 @@ function VCSCIProvidersCard({
     setCiOrgSlug(null)
   }
 
-  const handleSave = () => {
-    updateMutation.mutate()
+  const handleSave = async () => {
+    try {
+      await updateMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
-  const handleClear = () => {
-    clearMutation.mutate()
+  const handleClear = async () => {
+    try {
+      await clearMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
   const hasDbSettings =
@@ -625,6 +645,7 @@ function DeployApprovalsCard({
   disabled: boolean
 }) {
   const qc = useQueryClient()
+  const { handleStepUpError } = useStepUp()
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [windowMinutes, setWindowMinutes] = useState<number | null>(null)
 
@@ -658,8 +679,7 @@ function DeployApprovalsCard({
       toast.success('Deploy approval settings updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to update deploy approval settings')
+      toastAPIError(err, 'Failed to update deploy approval settings')
     },
   })
 
@@ -692,8 +712,7 @@ function DeployApprovalsCard({
       toast.success('Deploy approval settings cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err)
-      toast.error(message ?? 'Failed to clear deploy approval settings')
+      toastAPIError(err, 'Failed to clear deploy approval settings')
     },
   })
 
@@ -702,12 +721,26 @@ function DeployApprovalsCard({
     setWindowMinutes(null)
   }
 
-  const handleSave = () => {
-    updateMutation.mutate()
+  const handleSave = async () => {
+    try {
+      await updateMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
-  const handleClear = () => {
-    clearMutation.mutate()
+  const handleClear = async () => {
+    try {
+      await clearMutation.mutateAsync()
+    } catch (err) {
+      if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
+        return // MFA modal shown, will retry after verification
+      }
+      // Error already handled by mutation's onError
+    }
   }
 
   const hasDbSettings =

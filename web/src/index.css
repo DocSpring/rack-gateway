@@ -160,6 +160,16 @@
     color: #fff;
   }
 
+  /* Toast text selection - dark semi-transparent background for visibility on colored toasts */
+  [data-rht-toaster] ::selection {
+    background-color: rgba(0, 0, 0, 0.3) !important;
+    color: #fff !important;
+  }
+  [data-rht-toaster] ::-moz-selection {
+    background-color: rgba(0, 0, 0, 0.3) !important;
+    color: #fff !important;
+  }
+
   /* Cursor pointer for interactive elements */
   input[type="checkbox"],
   label,

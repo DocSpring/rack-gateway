@@ -72,27 +72,19 @@ TRUNCATE TABLE trusted_devices RESTART IDENTITY CASCADE;
 TRUNCATE TABLE mfa_backup_codes RESTART IDENTITY CASCADE;
 TRUNCATE TABLE mfa_methods RESTART IDENTITY CASCADE;
 UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL;
-UPDATE settings
-   SET value = jsonb_set(value, '{require_all_users}', 'false'::jsonb, true),
-       updated_at = NOW()
- WHERE key = 'mfa';
-INSERT INTO settings (app_name, key, value, updated_at)
-     VALUES (NULL, 'mfa', jsonb_build_object('require_all_users', false), NOW())
-ON CONFLICT (app_name, key) DO UPDATE
-     SET value = jsonb_set(settings.value, '{require_all_users}', 'false'::jsonb, true),
-         updated_at = NOW();
--- Allow specific commands for E2E tests (deploy approvals)
-INSERT INTO settings (app_name, key, value, updated_at)
-     VALUES (NULL, 'approved_commands', '{"commands": ["echo rake db:migrate"]}'::jsonb, NOW())
-ON CONFLICT (app_name, key) DO UPDATE
-     SET value = '{"commands": ["echo rake db:migrate"]}'::jsonb,
-         updated_at = NOW();
--- Configure image tag pattern for manifest validation
-INSERT INTO settings (app_name, key, value, updated_at)
-     VALUES ('rack-gateway', 'service_image_patterns', '{"gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb, NOW())
-ON CONFLICT (app_name, key) DO UPDATE
-     SET value = '{"gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb,
-         updated_at = NOW();
+TRUNCATE TABLE settings RESTART IDENTITY CASCADE;
+INSERT INTO settings (app_name, key, value, updated_at) VALUES
+  (NULL, 'mfa_require_all_users', 'false'::jsonb, NOW()),
+  (NULL, 'mfa_trusted_device_ttl_days', '30'::jsonb, NOW()),
+  (NULL, 'mfa_step_up_window_minutes', '10'::jsonb, NOW()),
+  (NULL, 'allow_destructive_actions', 'false'::jsonb, NOW()),
+  (NULL, 'deploy_approvals_enabled', 'true'::jsonb, NOW()),
+  (NULL, 'deploy_approval_window_minutes', '15'::jsonb, NOW()),
+  ('rack-gateway', 'approved_deploy_commands', '{"commands": ["echo rake db:migrate"]}'::jsonb, NOW()),
+  ('rack-gateway', 'service_image_patterns', '{"gateway": ".*:{{GIT_COMMIT}}-amd64"}'::jsonb, NOW())
+ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+  SET value = EXCLUDED.value,
+      updated_at = NOW();
 SQL
   )
 
@@ -313,7 +305,7 @@ reset_all_test_state
 rm -f "${GATEWAY_CLI_CONFIG_DIR:-config/cli-e2e}/config.json"
 
 echo -e "${YELLOW}Enabling MFA enforcement...${NC}"
-psql_exec "UPDATE settings SET value = jsonb_set(value, '{require_all_users}', 'true'::jsonb, true), updated_at = NOW() WHERE key = 'mfa';"
+psql_exec "INSERT INTO settings (app_name, key, value, updated_at) VALUES (NULL, 'mfa_require_all_users', 'true'::jsonb, NOW()) ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE SET value = 'true'::jsonb, updated_at = NOW();"
 
 echo -e "${YELLOW}Restarting ${E2E_GATEWAY_SERVICE} to apply MFA setting...${NC}"
 docker compose restart "${E2E_GATEWAY_SERVICE}" >/dev/null

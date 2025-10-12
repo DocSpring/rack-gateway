@@ -97,7 +97,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = allowedOrigins
 	corsConfig.AllowCredentials = true
-	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization", "X-MFA-Code")
+	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization", "X-MFA-TOTP", "X-MFA-WebAuthn")
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
@@ -170,7 +170,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 				mfaGroup.PUT("/preferred-method", authHandler.UpdatePreferredMFAMethod)
 				mfaGroup.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
 				mfaStepUp := mfaGroup.Group("")
-				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				mfaStepUp.Use(middleware.RequireMFAStepUp(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				mfaStepUp.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
 				mfaStepUp.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
 				mfaStepUp.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
@@ -184,7 +184,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 			{
 				deployApprovalRequests.GET("/:id", apiHandler.GetDeployApprovalRequest)
 				createDeploy := deployApprovalRequests.Group("")
-				createDeploy.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				createDeploy.Use(middleware.RequireMFAStepUp(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				createDeploy.POST("", apiHandler.CreateDeployApprovalRequest)
 			}
 			envMutations := authenticated.Group("")
@@ -212,8 +212,10 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 				// New generic settings endpoints
 				admin.GET("/settings", settingsHandler.GetAllGlobalSettings)
-				admin.PUT("/settings", settingsHandler.UpdateGlobalSettings)
-				admin.DELETE("/settings", settingsHandler.DeleteGlobalSettings)
+				settingsMutations := admin.Group("")
+				settingsMutations.Use(middleware.RequireMFAForSettings(cfg.MFAService, cfg.Database, cfg.MFASettings))
+				settingsMutations.PUT("/settings", settingsHandler.UpdateGlobalSettings)
+				settingsMutations.DELETE("/settings", settingsHandler.DeleteGlobalSettings)
 
 				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
 				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
@@ -247,14 +249,14 @@ func Setup(router *gin.Engine, cfg *Config) {
 				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 
 				// API tokens (rate limit creation)
-				// SECURITY: API token operations require MFA step-up authentication
+				// SECURITY: API token operations require MFA code on every request
 				tokenGroup := admin.Group("/tokens")
 				tokenGroup.GET("", adminHandler.ListAPITokens)
 				tokenGroup.GET("/permissions", adminHandler.GetTokenPermissionMetadata)
 				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
 
 				tokenSensitive := tokenGroup.Group("")
-				tokenSensitive.Use(middleware.RequireMFAStepUp(cfg.MFASettings))
+				tokenSensitive.Use(middleware.RequireMFA(cfg.MFAService, cfg.Database, cfg.MFASettings))
 				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
 				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
 				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
@@ -275,8 +277,10 @@ func Setup(router *gin.Engine, cfg *Config) {
 			apps.Use(middleware.CSRF(cfg.SessionManager))
 			{
 				apps.GET("/settings", settingsHandler.GetAllAppSettings)
-				apps.PUT("/settings", settingsHandler.UpdateAppSettings)
-				apps.DELETE("/settings", settingsHandler.DeleteAppSettings)
+				appSettingsMutations := apps.Group("")
+				appSettingsMutations.Use(middleware.RequireMFAForSettings(cfg.MFAService, cfg.Database, cfg.MFASettings))
+				appSettingsMutations.PUT("/settings", settingsHandler.UpdateAppSettings)
+				appSettingsMutations.DELETE("/settings", settingsHandler.DeleteAppSettings)
 			}
 		}
 	}

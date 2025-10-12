@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsSetting } from '@/api/schemas'
+import { StepUpProvider } from '@/contexts/step-up-context'
 import { api } from '@/lib/api'
 import { SettingsPage } from './settings-page'
 
@@ -45,7 +46,9 @@ function renderSettingsPage(user = mockAuthUser) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <SettingsPage />
+      <StepUpProvider>
+        <SettingsPage />
+      </StepUpProvider>
     </QueryClientProvider>
   )
 }
@@ -265,10 +268,9 @@ describe('SettingsPage', () => {
       fireEvent.click(saveButton)
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith(
-          '/.gateway/api/admin/settings/allow_destructive_actions',
-          true
-        )
+        expect(api.put).toHaveBeenCalledWith('/.gateway/api/admin/settings', {
+          allow_destructive_actions: true,
+        })
       })
     })
 
@@ -370,14 +372,10 @@ describe('SettingsPage', () => {
       fireEvent.click(saveButtons[0])
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith(
-          '/.gateway/api/admin/settings/mfa_trusted_device_ttl_days',
-          60
-        )
-        expect(api.put).toHaveBeenCalledWith(
-          '/.gateway/api/admin/settings/mfa_step_up_window_minutes',
-          15
-        )
+        expect(api.put).toHaveBeenCalledWith('/.gateway/api/admin/settings', {
+          mfa_trusted_device_ttl_days: 60,
+          mfa_step_up_window_minutes: 15,
+        })
       })
     })
 
@@ -465,10 +463,10 @@ describe('SettingsPage', () => {
       fireEvent.click(clearButtons[0])
 
       await waitFor(() => {
-        // Check that api.delete was called for one of the settings
+        // Check that api.delete was called with query params for the settings
         expect(api.delete).toHaveBeenCalledWith(
           expect.stringMatching(
-            /\.gateway\/api\/admin\/settings\/(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/
+            /\.gateway\/api\/admin\/settings\?key=(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/
           )
         )
       })

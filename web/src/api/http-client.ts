@@ -7,8 +7,8 @@ import axios, {
 } from 'axios'
 
 import { toast } from '@/components/ui/use-toast'
+import { getMFAHeaders } from '@/contexts/step-up-context'
 import { authService, SESSION_EXPIRED_MESSAGE } from '@/lib/auth'
-
 import { getCsrfToken } from '@/lib/csrf'
 import { APIRoute } from '@/lib/routes'
 
@@ -39,16 +39,26 @@ export const gatewayAxios = axios.create({
 
 gatewayAxios.interceptors.request.use((request) => {
   const method = request.method?.toUpperCase()
+  const headers = toAxiosHeaders(request.headers)
+
+  // Inject CSRF token for mutating requests
   if (method && MUTATING_METHODS.has(method)) {
     const token = getCsrfToken()
-    if (token) {
-      const headers = toAxiosHeaders(request.headers)
-      if (!headers.has('X-CSRF-Token')) {
-        headers.set('X-CSRF-Token', token)
-      }
-      request.headers = headers
+    if (token && !headers.has('X-CSRF-Token')) {
+      headers.set('X-CSRF-Token', token)
     }
   }
+
+  // Inject MFA headers if they're set (from step-up flow)
+  const mfaHeaders = getMFAHeaders()
+  if (mfaHeaders['X-MFA-TOTP']) {
+    headers.set('X-MFA-TOTP', mfaHeaders['X-MFA-TOTP'])
+  }
+  if (mfaHeaders['X-MFA-WebAuthn']) {
+    headers.set('X-MFA-WebAuthn', mfaHeaders['X-MFA-WebAuthn'])
+  }
+
+  request.headers = headers
   return request
 })
 

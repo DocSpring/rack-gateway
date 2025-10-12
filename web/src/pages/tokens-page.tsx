@@ -38,7 +38,7 @@ import { useAuth } from '../contexts/auth-context'
 import { useStepUp } from '../contexts/step-up-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
-import { getErrorMessage } from '../lib/error-utils'
+import { toastAPIError } from '../lib/error-utils'
 import type { APIToken as APITokenModel, APITokenResponse } from '../lib/generated/gateway-types'
 import { toFieldErrorMap, tokenFormSchema } from '../lib/validation'
 
@@ -479,7 +479,7 @@ function TokensPageInner() {
       if (handleStepUpError(err, () => createTokenMutation.mutateAsync(payload))) {
         return
       }
-      toast.error(getErrorMessage(err, 'Failed to create token'))
+      toastAPIError(err, 'Failed to create token')
     }
   }
 
@@ -538,7 +538,7 @@ function TokensPageInner() {
       if (handleStepUpError(err, () => deleteTokenMutation.mutateAsync(tokenPublicId))) {
         return
       }
-      toast.error(getErrorMessage(err, 'Failed to delete token'))
+      toastAPIError(err, 'Failed to delete token')
     }
   }
 
@@ -642,7 +642,7 @@ function TokensPageInner() {
       if (handleStepUpError(err, () => updateTokenMutation.mutateAsync(args))) {
         return
       }
-      toast.error(getErrorMessage(err, 'Failed to update token'))
+      toastAPIError(err, 'Failed to update token')
     }
   }
 

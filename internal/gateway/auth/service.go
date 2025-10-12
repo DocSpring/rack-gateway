@@ -155,18 +155,14 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		return nil, "none", fmt.Errorf("missing authorization")
 	}
 
-	// Extract MFA code from X-MFA-Code header (web flow)
+	// Extract MFA code from headers (web flow)
 	// This is in addition to inline MFA in password (CLI flow)
-	if mfaCode := strings.TrimSpace(r.Header.Get("X-MFA-Code")); mfaCode != "" {
-		// Determine MFA type from the code format
-		// TOTP codes are 6-8 digits, WebAuthn assertions are longer base64 strings
-		if len(mfaCode) <= 8 {
-			user.MFAType = "totp"
-			user.MFAValue = mfaCode
-		} else {
-			user.MFAType = "webauthn"
-			user.MFAValue = mfaCode
-		}
+	if totpCode := strings.TrimSpace(r.Header.Get("X-MFA-TOTP")); totpCode != "" {
+		user.MFAType = "totp"
+		user.MFAValue = totpCode
+	} else if webauthnData := strings.TrimSpace(r.Header.Get("X-MFA-WebAuthn")); webauthnData != "" {
+		user.MFAType = "webauthn"
+		user.MFAValue = webauthnData
 	}
 
 	return user, source, nil

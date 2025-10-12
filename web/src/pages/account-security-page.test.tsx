@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StepUpProvider } from '@/contexts/step-up-context'
-import { AccountSecurityPage } from './account-security-page'
+import { AccountSecurityPage, DEFAULT_MFA_LABEL } from './account-security-page'
 
 vi.mock('qrcode', () => {
   const toDataURL = vi.fn().mockResolvedValue('data:image/png;base64,placeholder')
@@ -167,7 +167,7 @@ describe('AccountSecurityPage', () => {
 
     // Label should have default value in method selection step
     const labelInput = screen.getByLabelText(/Device name/i)
-    expect(labelInput).toHaveValue('Authenticator App')
+    expect(labelInput).toHaveValue(DEFAULT_MFA_LABEL)
 
     // Click "Authenticator app" button to start TOTP enrollment
     const totpButton = await screen.findByRole('button', { name: /Authenticator app/i })

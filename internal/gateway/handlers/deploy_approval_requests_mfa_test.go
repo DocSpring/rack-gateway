@@ -236,7 +236,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		require.Equal(t, "mfa_verification_failed", response["error"])
 	})
 
-	t.Run("denies API tokens from using MFA-protected operations", func(t *testing.T) {
+	t.Run("allows API tokens with proper permissions", func(t *testing.T) {
 		router := gin.New()
 		router.POST("/admin/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.AuthUser{
@@ -261,12 +261,12 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
-		// Should be denied - API tokens cannot bypass MFA
-		require.Equal(t, http.StatusForbidden, w.Code)
+		// Should succeed - API tokens don't need MFA if they have permissions
+		require.Equal(t, http.StatusOK, w.Code)
 		var response map[string]interface{}
 		err = json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
-		require.Equal(t, "api_token_not_allowed", response["error"])
+		require.Equal(t, "approved", response["status"])
 	})
 }
 

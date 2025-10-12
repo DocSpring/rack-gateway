@@ -68,7 +68,7 @@ const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
   webauthn: 'WebAuthn',
 }
-const DEFAULT_MFA_LABEL = 'Authenticator App'
+export const DEFAULT_MFA_LABEL = 'Security Key'
 
 function formatCodeForDownload(codes: string[]): string {
   const header = [

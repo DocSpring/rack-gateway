@@ -95,7 +95,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-Token': csrfToken,
-        'X-MFA-Code': mfaCode,
+        'X-MFA-TOTP': mfaCode,
       },
       data: {
         name: tokenName,

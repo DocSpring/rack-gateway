@@ -198,7 +198,17 @@ func (g GlobalSettingKey) String() string {
 	return fmt.Sprintf("GlobalSettingKey(%d)", g)
 }
 
-func (g GlobalSettingKey) IsValid() bool { return g <= GlobalSettingDeployApprovalWindowMinutes }
+func (g GlobalSettingKey) IsValid() bool { return g <= GlobalSettingTrustedDeviceTTLDays }
+
+// ParseGlobalSettingKey converts a string key to a GlobalSettingKey enum
+func ParseGlobalSettingKey(key string) (GlobalSettingKey, error) {
+	for i, s := range globalSettingKeyToString {
+		if s == key {
+			return GlobalSettingKey(i), nil
+		}
+	}
+	return 0, fmt.Errorf("invalid global setting key %q", key)
+}
 
 // AppSettingKey is an enum for app setting keys
 type AppSettingKey uint8
@@ -268,7 +278,17 @@ func (a AppSettingKey) String() string {
 	return fmt.Sprintf("AppSettingKey(%d)", a)
 }
 
-func (a AppSettingKey) IsValid() bool { return a <= AppSettingGitHubPostPRComment }
+func (a AppSettingKey) IsValid() bool { return a <= AppSettingVerifyGitCommitMode }
+
+// ParseAppSettingKey converts a string key to an AppSettingKey enum
+func ParseAppSettingKey(key string) (AppSettingKey, error) {
+	for i, s := range appSettingKeyToString {
+		if s == key {
+			return AppSettingKey(i), nil
+		}
+	}
+	return 0, fmt.Errorf("invalid app setting key %q", key)
+}
 
 // VerifyGitCommitMode represents valid values for verify_git_commit_mode setting
 const (

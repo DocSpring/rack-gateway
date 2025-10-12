@@ -13,8 +13,18 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
-import { verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
+
+// Store the MFA code/assertion in a closure that the action can access
+let currentMFAHeaders: { 'X-MFA-TOTP'?: string; 'X-MFA-WebAuthn'?: string } = {}
+
+export function getMFAHeaders() {
+  return currentMFAHeaders
+}
+
+export function clearMFAHeaders() {
+  currentMFAHeaders = {}
+}
 
 type StepUpAction = (() => Promise<void>) | (() => void) | null
 
@@ -33,7 +43,7 @@ type StepUpContextValue = {
 
 const StepUpContext = createContext<StepUpContextValue | undefined>(undefined)
 
-function isAxiosStepUpError(error: unknown): boolean {
+export function isStepUpError(error: unknown): boolean {
   if (!isAxiosError(error)) {
     return false
   }
@@ -52,7 +62,7 @@ function isAxiosStepUpError(error: unknown): boolean {
 }
 
 export function StepUpProvider({ children }: { children: ReactNode }) {
-  const { refresh, user } = useAuth()
+  const { user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [pendingAction, setPendingAction] = useState<StepUpAction>(null)
@@ -79,7 +89,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
 
   const handleStepUpError = useCallback(
     (error: unknown, action: NonNullable<StepUpAction>) => {
-      if (!isAxiosStepUpError(error)) {
+      if (!isStepUpError(error)) {
         return false
       }
       openStepUp({ action })
@@ -96,7 +106,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       try {
         await Promise.resolve(action())
       } catch (error) {
-        if (isAxiosStepUpError(error)) {
+        if (isStepUpError(error)) {
           openStepUp({ action })
           return
         }
@@ -112,14 +122,12 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     setPendingAction(null)
     setIsOpen(false)
 
-    try {
-      await refresh()
-    } catch {
-      /* ignore user refresh errors */
-    }
-
+    // Don't refresh - the MFA code is in headers and will be sent with the retry
     await runPendingAction(action)
-  }, [pendingAction, refresh, runPendingAction])
+
+    // Clear MFA headers after action completes
+    clearMFAHeaders()
+  }, [pendingAction, runPendingAction])
 
   const contextValue = useMemo<StepUpContextValue>(
     () => ({
@@ -161,16 +169,20 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
             onVerify={async (params) => {
               setIsVerifying(true)
               try {
+                // Store MFA credentials in headers object for the retry
+                clearMFAHeaders()
                 if (params.method === 'totp') {
-                  await verifyMFA({ code: params.code, trust_device: params.trust_device })
+                  currentMFAHeaders['X-MFA-TOTP'] = params.code
                 } else {
-                  await verifyWebAuthnAssertion({
+                  // For WebAuthn, encode the session_data and assertion_response as base64 JSON
+                  const webauthnData = JSON.stringify({
                     session_data: params.session_data,
                     assertion_response: params.assertion_response,
-                    trust_device: params.trust_device,
                   })
+                  currentMFAHeaders['X-MFA-WebAuthn'] = btoa(webauthnData)
                 }
-                toast.success('MFA verification successful')
+
+                // Retry the action with MFA headers set
                 await handleVerificationSuccess()
               } finally {
                 setIsVerifying(false)
@@ -240,8 +252,4 @@ export function useStepUp() {
     throw new Error('useStepUp must be used within a StepUpProvider')
   }
   return context
-}
-
-export function isStepUpError(error: unknown): boolean {
-  return isAxiosStepUpError(error)
 }

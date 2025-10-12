@@ -6,9 +6,59 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
+
+func TestMockCredentialGeneratesValidAssertion(t *testing.T) {
+	t.Parallel()
+
+	database := dbtest.NewDatabase(t)
+	pepper := []byte("test-pepper")
+
+	service, err := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "localhost", "http://localhost", nil)
+	if err != nil {
+		t.Fatalf("failed to create MFA service: %v", err)
+	}
+
+	user, err := database.CreateUser("mock-credential@example.com", "Mock Credential", []string{"admin"})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	credential, err := webauthntest.GenerateMockCredential()
+	if err != nil {
+		t.Fatalf("failed to generate mock credential: %v", err)
+	}
+
+	method, err := database.CreateMFAMethod(user.ID, "webauthn", "Test Credential", "", credential.ID, credential.PublicKey, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create MFA method: %v", err)
+	}
+	if err := database.ConfirmMFAMethod(method.ID, time.Now()); err != nil {
+		t.Fatalf("failed to confirm MFA method: %v", err)
+	}
+
+	_, sessionData, err := service.StartWebAuthnAssertion(user)
+	if err != nil {
+		t.Fatalf("failed to start assertion: %v", err)
+	}
+
+	assertionJSON, err := credential.GenerateAssertionForSession(sessionData, "http://localhost")
+	if err != nil {
+		t.Fatalf("failed to generate assertion: %v", err)
+	}
+
+	result, err := service.VerifyWebAuthnAssertion(user, sessionData, []byte(assertionJSON), "127.0.0.1", "test-agent", nil)
+	if err != nil {
+		t.Fatalf("failed to verify assertion: %v", err)
+	}
+
+	if result.MethodID != method.ID {
+		t.Fatalf("expected method ID %d, got %d", method.ID, result.MethodID)
+	}
+}
 
 func TestWebAuthnEnrollment(t *testing.T) {
 	t.Parallel()

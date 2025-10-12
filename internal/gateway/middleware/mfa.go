@@ -1,0 +1,299 @@
+package middleware
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/gin-gonic/gin"
+)
+
+// RequireMFA enforces MFA verification for sensitive operations like API token management
+// and deploy approvals.
+//
+// Unlike RequireMFAStepUp, this middleware:
+// - ALWAYS requires MFA code in the request (no grace period)
+// - API tokens don't have MFA - if they have permissions, they're allowed through
+//
+// MFA code can be provided in two ways:
+// - CLI: Inline in password as "session_token.totp.123456" or "session_token.webauthn.base64data"
+// - Web: In X-MFA-TOTP header (e.g., "123456") or X-MFA-WebAuthn header (base64 assertion data)
+//
+// The MFA code is extracted by the auth service and verified here.
+func RequireMFA(mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !checkInlineMFA(c, mfaService, database) {
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireMFAStepUp enforces a fresh MFA verification before allowing the request to proceed.
+func RequireMFAStepUp(mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !checkStepUpMFA(c, mfaService, database, settings) {
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireMFAForSettings is the unified MFA enforcement middleware for settings endpoints.
+// It dynamically determines MFA requirements based on RBAC permissions extracted from the request.
+func RequireMFAForSettings(mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Extract permissions from settings request
+		permissions := ExtractSettingsPermissions(c)
+		if len(permissions) == 0 {
+			// Not a settings request or couldn't parse - allow through
+			c.Next()
+			return
+		}
+
+		// Determine highest MFA level required
+		requiredLevel := rbac.GetMFALevel(permissions)
+
+		// Check MFA based on required level
+		switch requiredLevel {
+		case rbac.MFANone:
+			// No MFA required
+			c.Next()
+			return
+
+		case rbac.MFAStepUp:
+			if !checkStepUpMFA(c, mfaService, database, settings) {
+				return // checkStepUpMFA already sent error response
+			}
+
+		case rbac.MFAAlways:
+			if !checkInlineMFA(c, mfaService, database) {
+				return // checkInlineMFA already sent error response
+			}
+		}
+
+		c.Next()
+	}
+}
+
+// checkStepUpMFA verifies the user has recently completed step-up MFA.
+func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) bool {
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil {
+		denyStepUp(c)
+		return false
+	}
+
+	// API tokens bypass step-up MFA
+	if authUser.IsAPIToken {
+		return true
+	}
+
+	session := authUser.Session
+	if session == nil || session.MFAVerifiedAt == nil {
+		denyStepUp(c)
+		return false
+	}
+
+	window := stepUpWindow(settings)
+	if recent := session.RecentStepUpAt; recent != nil && time.Since(*recent) <= window {
+		return true
+	}
+
+	if tryInlineStepUp(c, mfaService, database, authUser) {
+		return true
+	}
+
+	if c.IsAborted() {
+		return false
+	}
+
+	denyStepUp(c)
+	return false
+}
+
+// checkInlineMFA verifies the user provided an MFA code with this request.
+// This is used for CLI clients that can send codes in auth headers.
+func checkInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database) bool {
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil {
+		denyMFA(c)
+		return false
+	}
+
+	// API tokens don't have MFA.
+	if authUser.IsAPIToken {
+		return true
+	}
+
+	session := authUser.Session
+	if session == nil || session.MFAVerifiedAt == nil {
+		denyMFA(c)
+		return false
+	}
+
+	// MFA code MUST be provided with this request
+	if authUser.MFAType == "" || authUser.MFAValue == "" {
+		denyMFA(c)
+		return false
+	}
+
+	// Get user record to verify MFA
+	user, err := database.GetUser(authUser.Email)
+	if err != nil || user == nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error":   "user_not_found",
+			"message": "User not found",
+		})
+		return false
+	}
+
+	// Verify the MFA code based on type
+	var verifyErr error
+	var sessionID *int64
+	if session != nil {
+		sessionID = &session.ID
+	}
+	switch authUser.MFAType {
+	case "totp":
+		_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
+	case "webauthn":
+		// WebAuthn inline format: base64(JSON{"session_data": "...", "assertion": {...}})
+		verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_mfa_type",
+			"message": "MFA type must be 'totp' or 'webauthn'",
+		})
+		return false
+	}
+
+	if verifyErr != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error":   "mfa_verification_failed",
+			"message": "Invalid MFA code",
+		})
+		return false
+	}
+
+	return true
+}
+
+func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.AuthUser) bool {
+	if mfaService == nil || database == nil || authUser == nil {
+		return false
+	}
+
+	session := authUser.Session
+	if session == nil || session.MFAVerifiedAt == nil {
+		return false
+	}
+
+	if authUser.MFAType == "" || authUser.MFAValue == "" {
+		return false
+	}
+
+	user, err := database.GetUser(authUser.Email)
+	if err != nil || user == nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error":   "user_not_found",
+			"message": "User not found",
+		})
+		return false
+	}
+
+	var verifyErr error
+	sessionID := &session.ID
+	switch authUser.MFAType {
+	case "totp":
+		_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
+	case "webauthn":
+		verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_mfa_type",
+			"message": "MFA type must be 'totp' or 'webauthn'",
+		})
+		return false
+	}
+
+	if verifyErr != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error":   "mfa_verification_failed",
+			"message": "Invalid MFA code",
+		})
+		return false
+	}
+
+	now := time.Now()
+	if err := database.UpdateSessionRecentStepUp(session.ID, now); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"error":   "mfa_step_up_record_failed",
+			"message": "Failed to record MFA verification. Please try again.",
+		})
+		return false
+	}
+	session.RecentStepUpAt = &now
+
+	return true
+}
+
+func stepUpWindow(settings *db.MFASettings) time.Duration {
+	if settings != nil && settings.StepUpWindowMinutes > 0 {
+		return time.Duration(settings.StepUpWindowMinutes) * time.Minute
+	}
+	return 10 * time.Minute
+}
+
+// denyStepUp sends a step-up MFA required response.
+func denyStepUp(c *gin.Context) {
+	c.Header("X-MFA-Required", "step-up")
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"error":   "mfa_step_up_required",
+		"message": "Multi-factor authentication is required for this action.",
+	})
+}
+
+// denyMFA sends an inline MFA required response.
+func denyMFA(c *gin.Context) {
+	c.Header("X-MFA-Required", "always")
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"error":   "mfa_required",
+		"message": "Multi-factor authentication is required for this sensitive operation.",
+	})
+}
+
+// verifyInlineWebAuthn decodes and verifies inline WebAuthn assertion data
+func verifyInlineWebAuthn(mfaService MFAVerifier, database *db.Database, user *db.User, encodedData, ipAddress, userAgent string, sessionID *int64) error {
+	// Decode base64
+	jsonData, err := base64.StdEncoding.DecodeString(encodedData)
+	if err != nil {
+		return err
+	}
+
+	// Parse JSON structure to extract session_data and assertion_response
+	var inlineData struct {
+		SessionData       string `json:"session_data"`
+		AssertionResponse string `json:"assertion_response"`
+	}
+
+	if err := json.Unmarshal(jsonData, &inlineData); err != nil {
+		return err
+	}
+
+	// Verify the WebAuthn assertion using the MFA service
+	_, err = mfaService.VerifyWebAuthnAssertion(
+		user,
+		[]byte(inlineData.SessionData),
+		[]byte(inlineData.AssertionResponse),
+		ipAddress,
+		userAgent,
+		sessionID,
+	)
+
+	return err
+}

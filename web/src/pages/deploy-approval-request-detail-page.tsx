@@ -21,7 +21,7 @@ import {
 } from '@/lib/api'
 import { buildCircleCIPipelineUrl, extractCircleCIMetadata } from '@/lib/ci-utils'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
-import { getErrorMessage } from '@/lib/error-utils'
+import { withAPIErrorMessage } from '@/lib/error-utils'
 
 type DetailRowProps = {
   label: string
@@ -134,8 +134,9 @@ export function DeployApprovalRequestDetailPage() {
         if (handleStepUpError(err, () => approveMutation.mutateAsync(requestId))) {
           return
         }
-        const description = getErrorMessage(err, 'Failed to approve request')
-        toast.error('Approval failed', { description })
+        withAPIErrorMessage(err, 'Failed to approve request', (message) =>
+          toast.error('Approval failed', { description: message })
+        )
       }
     },
     [approveMutation, handleStepUpError]
@@ -149,8 +150,9 @@ export function DeployApprovalRequestDetailPage() {
         if (handleStepUpError(err, () => rejectMutation.mutateAsync({ requestId, notes }))) {
           return
         }
-        const description = getErrorMessage(err, 'Failed to reject request')
-        toast.error('Rejection failed', { description })
+        withAPIErrorMessage(err, 'Failed to reject request', (message) =>
+          toast.error('Rejection failed', { description: message })
+        )
       }
     },
     [handleStepUpError, rejectMutation]

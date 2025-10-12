@@ -32,7 +32,7 @@ import {
   type UpdateDeployApprovalRequestStatusRequest,
 } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
-import { getErrorMessage } from '@/lib/error-utils'
+import { withAPIErrorMessage } from '@/lib/error-utils'
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'consumed'
 
@@ -156,8 +156,9 @@ export function DeployApprovalRequestsPage() {
         if (handleStepUpError(err, () => approveMutation.mutateAsync(id))) {
           return
         }
-        const description = getErrorMessage(err, 'Failed to approve request')
-        toast.error('Approval failed', { description })
+        withAPIErrorMessage(err, 'Failed to approve request', (message) =>
+          toast.error('Approval failed', { description: message })
+        )
       }
     },
     [approveMutation, handleStepUpError]
@@ -171,8 +172,9 @@ export function DeployApprovalRequestsPage() {
         if (handleStepUpError(err, () => rejectMutation.mutateAsync({ id, notes }))) {
           return
         }
-        const description = getErrorMessage(err, 'Failed to reject request')
-        toast.error('Rejection failed', { description })
+        withAPIErrorMessage(err, 'Failed to reject request', (message) =>
+          toast.error('Rejection failed', { description: message })
+        )
       }
     },
     [handleStepUpError, rejectMutation]
