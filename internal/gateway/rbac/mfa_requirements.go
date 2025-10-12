@@ -1,9 +1,7 @@
-package convox
+package rbac
 
 import (
 	"fmt"
-
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // MFALevel defines the MFA verification requirement level
@@ -28,35 +26,35 @@ var MFARequirements = map[string]MFALevel{
 	// ========================================================================
 
 	// DESTRUCTIVE OPERATIONS - Always require fresh MFA, no time window
-	rbac.Convox(rbac.ResourceApp, rbac.ActionDelete):         MFAAlways,
-	rbac.Convox(rbac.ResourceInstance, rbac.ActionTerminate): MFAAlways,
+	Convox(ResourceApp, ActionDelete):         MFAAlways,
+	Convox(ResourceInstance, ActionTerminate): MFAAlways,
 
 	// SENSITIVE OPERATIONS - Step-up within time window
 
 	// App lifecycle
-	rbac.Convox(rbac.ResourceApp, rbac.ActionCreate):  MFAStepUp,
-	rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate):  MFAStepUp,
-	rbac.Convox(rbac.ResourceApp, rbac.ActionRestart): MFAStepUp,
+	Convox(ResourceApp, ActionCreate):  MFAStepUp,
+	Convox(ResourceApp, ActionUpdate):  MFAStepUp,
+	Convox(ResourceApp, ActionRestart): MFAStepUp,
 
 	// Deployments and builds
-	rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate):    MFAStepUp,
-	rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate):  MFAStepUp,
-	rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote): MFAStepUp,
+	Convox(ResourceBuild, ActionCreate):    MFAStepUp,
+	Convox(ResourceRelease, ActionCreate):  MFAStepUp,
+	Convox(ResourceRelease, ActionPromote): MFAStepUp,
 
 	// Process control
-	rbac.Convox(rbac.ResourceProcess, rbac.ActionExec):      MFAStepUp,
-	rbac.Convox(rbac.ResourceProcess, rbac.ActionTerminate): MFAStepUp,
-	rbac.Convox(rbac.ResourceProcess, rbac.ActionStart):     MFAStepUp,
-	rbac.Convox(rbac.ResourceProcess, rbac.ActionStop):      MFAStepUp,
+	Convox(ResourceProcess, ActionExec):      MFAStepUp,
+	Convox(ResourceProcess, ActionTerminate): MFAStepUp,
+	Convox(ResourceProcess, ActionStart):     MFAStepUp,
+	Convox(ResourceProcess, ActionStop):      MFAStepUp,
 
 	// Environment variables (secrets)
-	rbac.Convox(rbac.ResourceEnv, rbac.ActionSet): MFAStepUp,
+	Convox(ResourceEnv, ActionSet): MFAStepUp,
 
 	// Rack operations
-	rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate): MFAStepUp,
+	Convox(ResourceRack, ActionUpdate): MFAStepUp,
 
 	// Object uploads for builds (write operation but low risk)
-	rbac.Convox(rbac.ResourceObject, rbac.ActionCreate): MFANone,
+	Convox(ResourceObject, ActionCreate): MFANone,
 
 	// ========================================================================
 	// GATEWAY RESOURCES - Gateway-specific operations
@@ -65,42 +63,42 @@ var MFARequirements = map[string]MFALevel{
 	// PRIVILEGED OPERATIONS - Always require fresh MFA
 
 	// Deploy Approvals - Granting permission to deploy
-	rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove): MFAAlways,
+	Gateway(ResourceDeployApprovalRequest, ActionApprove): MFAAlways,
 
 	// API Tokens - Creating/deleting long-lived credentials
-	rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionCreate): MFAAlways,
-	rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionUpdate): MFAAlways,
-	rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionDelete): MFAAlways,
+	Gateway(ResourceAPIToken, ActionCreate): MFAAlways,
+	Gateway(ResourceAPIToken, ActionUpdate): MFAAlways,
+	Gateway(ResourceAPIToken, ActionDelete): MFAAlways,
 
 	// User Management - Changing roles/permissions
-	rbac.Gateway(rbac.ResourceUser, rbac.ActionCreate): MFAAlways, // Creating users
-	rbac.Gateway(rbac.ResourceUser, rbac.ActionUpdate): MFAAlways, // Role changes
-	rbac.Gateway(rbac.ResourceUser, rbac.ActionDelete): MFAAlways,
+	Gateway(ResourceUser, ActionCreate): MFAAlways, // Creating users
+	Gateway(ResourceUser, ActionUpdate): MFAAlways, // Role changes
+	Gateway(ResourceUser, ActionDelete): MFAAlways,
 
 	// Security Settings - Modifying security configuration
-	rbac.Security(rbac.ResourceSecret, rbac.ActionUpdate): MFAAlways,
+	Security(ResourceSecret, ActionUpdate): MFAAlways,
 
 	// WRITE OPERATIONS - Need step-up
 
 	// Deploy Approvals - Creating request is safe (just asking for approval)
-	rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionCreate): MFANone,
+	Gateway(ResourceDeployApprovalRequest, ActionCreate): MFANone,
 
 	// Integrations - Configuring integrations
-	rbac.Gateway(rbac.ResourceIntegration, rbac.ActionUpdate): MFAStepUp,
-	rbac.Gateway(rbac.ResourceIntegration, rbac.ActionCreate): MFAStepUp,
-	rbac.Gateway(rbac.ResourceIntegration, rbac.ActionDelete): MFAStepUp,
+	Gateway(ResourceIntegration, ActionUpdate): MFAStepUp,
+	Gateway(ResourceIntegration, ActionCreate): MFAStepUp,
+	Gateway(ResourceIntegration, ActionDelete): MFAStepUp,
 
 	// ========================================================================
 	// AUTH RESOURCES - Authentication and MFA management
 	// ========================================================================
 
 	// MFA Methods - Deleting removes security, creating adds security
-	rbac.Auth(rbac.ResourceMFAMethod, rbac.ActionDelete): MFAAlways, // Removing MFA is privileged
-	rbac.Auth(rbac.ResourceMFAMethod, rbac.ActionCreate): MFANone,   // Enrolling in MFA is encouraged
-	rbac.Auth(rbac.ResourceMFAMethod, rbac.ActionUpdate): MFAStepUp, // Updating MFA method settings
+	Auth(ResourceMFAMethod, ActionDelete): MFAAlways, // Removing MFA is privileged
+	Auth(ResourceMFAMethod, ActionCreate): MFANone,   // Enrolling in MFA is encouraged
+	Auth(ResourceMFAMethod, ActionUpdate): MFAStepUp, // Updating MFA method settings
 
 	// MFA Verification - Step-up operations
-	rbac.Auth(rbac.ResourceMFA, rbac.ActionCreate): MFANone, // Verifying MFA is the action itself
+	Auth(ResourceMFA, ActionCreate): MFANone, // Verifying MFA is the action itself
 }
 
 // GetMFALevel returns the highest MFA level required by any of the given permissions
@@ -140,7 +138,7 @@ func isReadOnlyAction(permission string) bool {
 	}
 
 	action := permission[lastColon+1:]
-	return action == rbac.ActionStringList || action == rbac.ActionStringRead
+	return action == ActionStringList || action == ActionStringRead
 }
 
 // RequiresMFAStepUp returns true if any of the given permissions require MFA step-up (time window)

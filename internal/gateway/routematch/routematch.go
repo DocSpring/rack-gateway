@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -22,9 +21,9 @@ type RouteSpec struct {
 
 // GetMFALevel returns the MFA level required for this route
 // Panics if the permission is not defined in MFARequirements
-func (r *RouteSpec) GetMFALevel() convox.MFALevel {
+func (r *RouteSpec) GetMFALevel() rbac.MFALevel {
 	perm := fmt.Sprintf("convox:%s:%s", r.Resource, r.Action)
-	level, ok := convox.MFARequirements[perm]
+	level, ok := rbac.MFARequirements[perm]
 	if !ok {
 		panic(fmt.Sprintf("CRITICAL: Permission %q not found in MFARequirements - route %s %s", perm, r.Method, r.Pattern))
 	}
@@ -33,18 +32,18 @@ func (r *RouteSpec) GetMFALevel() convox.MFALevel {
 
 // RequiresMFAStepUp returns true if this route requires MFA step-up (time window)
 func (r *RouteSpec) RequiresMFAStepUp() bool {
-	return r.GetMFALevel() >= convox.MFAStepUp
+	return r.GetMFALevel() >= rbac.MFAStepUp
 }
 
 // RequiresMFAAlways returns true if this route requires immediate MFA
 func (r *RouteSpec) RequiresMFAAlways() bool {
-	return r.GetMFALevel() == convox.MFAAlways
+	return r.GetMFALevel() == rbac.MFAAlways
 }
 
 // GetMFALevelForPermission returns the MFA level for a given permission string
 // Returns (MFALevel, true) if found, or (MFANone, false) if not found
-func GetMFALevelForPermission(permission string) (convox.MFALevel, bool) {
-	level, ok := convox.MFARequirements[permission]
+func GetMFALevelForPermission(permission string) (rbac.MFALevel, bool) {
+	level, ok := rbac.MFARequirements[permission]
 	return level, ok
 }
 

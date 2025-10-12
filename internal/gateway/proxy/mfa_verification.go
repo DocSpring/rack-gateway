@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -29,11 +28,11 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 	// If not explicitly defined, default to MFANone (read-only operations don't require MFA)
 	mfaLevel, ok := routematch.GetMFALevelForPermission(permission)
 	if !ok {
-		mfaLevel = convox.MFANone
+		mfaLevel = rbac.MFANone
 	}
 
 	// No MFA required
-	if mfaLevel == convox.MFANone {
+	if mfaLevel == rbac.MFANone {
 		return nil
 	}
 

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/convox"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/spf13/cobra"
 )
 
@@ -355,7 +355,7 @@ func deleteAPIToken(cmd *cobra.Command, rack, id string) error {
 
 // gatewayMFAContext holds MFA requirement info for a gateway request
 type gatewayMFAContext struct {
-	mfaLevel convox.MFALevel
+	mfaLevel rbac.MFALevel
 	mfaAuth  string // inline MFA auth string (e.g., "totp.123456") for MFAAlways
 }
 
@@ -383,18 +383,18 @@ func checkAndPromptGatewayMFA(cmd *cobra.Command, baseURL, bearer, rack, method,
 
 	// If no permissions identified, no MFA required
 	if len(permissions) == 0 {
-		return &gatewayMFAContext{mfaLevel: convox.MFANone}, nil
+		return &gatewayMFAContext{mfaLevel: rbac.MFANone}, nil
 	}
 
-	mfaLevel := convox.GetMFALevel(permissions)
-	if mfaLevel == convox.MFANone {
-		return &gatewayMFAContext{mfaLevel: convox.MFANone}, nil
+	mfaLevel := rbac.GetMFALevel(permissions)
+	if mfaLevel == rbac.MFANone {
+		return &gatewayMFAContext{mfaLevel: rbac.MFANone}, nil
 	}
 
 	ctx := &gatewayMFAContext{mfaLevel: mfaLevel}
 
 	// For MFAAlways: always prompt upfront and get inline auth string
-	if mfaLevel == convox.MFAAlways {
+	if mfaLevel == rbac.MFAAlways {
 		mfaAuth, err := promptMFAForCommand(cmd, baseURL, bearer, rack)
 		if err != nil {
 			return nil, err

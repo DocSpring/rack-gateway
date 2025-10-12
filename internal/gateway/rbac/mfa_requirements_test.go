@@ -1,9 +1,7 @@
-package convox
+package rbac
 
 import (
 	"testing"
-
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 func TestMFARequirements_GatewayPermissions(t *testing.T) {
@@ -12,31 +10,31 @@ func TestMFARequirements_GatewayPermissions(t *testing.T) {
 		want       MFALevel
 	}{
 		// Deploy Approval - ALWAYS require fresh MFA (privileged action)
-		{rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove), MFAAlways},
-		{rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionCreate), MFANone}, // Creating request is safe
+		{Gateway(ResourceDeployApprovalRequest, ActionApprove), MFAAlways},
+		{Gateway(ResourceDeployApprovalRequest, ActionCreate), MFANone}, // Creating request is safe
 
 		// API Token - ALWAYS require fresh MFA (creates long-lived credentials)
-		{rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionCreate), MFAAlways},
-		{rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionUpdate), MFAAlways},
-		{rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionDelete), MFAAlways},
+		{Gateway(ResourceAPIToken, ActionCreate), MFAAlways},
+		{Gateway(ResourceAPIToken, ActionUpdate), MFAAlways},
+		{Gateway(ResourceAPIToken, ActionDelete), MFAAlways},
 
 		// User Management - ALWAYS require fresh MFA (privilege escalation)
-		{rbac.Gateway(rbac.ResourceUser, rbac.ActionCreate), MFAAlways},
-		{rbac.Gateway(rbac.ResourceUser, rbac.ActionUpdate), MFAAlways}, // Role changes
-		{rbac.Gateway(rbac.ResourceUser, rbac.ActionDelete), MFAAlways},
+		{Gateway(ResourceUser, ActionCreate), MFAAlways},
+		{Gateway(ResourceUser, ActionUpdate), MFAAlways}, // Role changes
+		{Gateway(ResourceUser, ActionDelete), MFAAlways},
 
 		// MFA Methods - ALWAYS require fresh MFA (disabling security)
-		{rbac.Auth(rbac.ResourceMFAMethod, rbac.ActionDelete), MFAAlways},
-		{rbac.Auth(rbac.ResourceMFAMethod, rbac.ActionCreate), MFANone},   // Enrolling is safe
-		{rbac.Auth(rbac.ResourceMFAMethod, rbac.ActionUpdate), MFAStepUp}, // Updating settings
+		{Auth(ResourceMFAMethod, ActionDelete), MFAAlways},
+		{Auth(ResourceMFAMethod, ActionCreate), MFANone},   // Enrolling is safe
+		{Auth(ResourceMFAMethod, ActionUpdate), MFAStepUp}, // Updating settings
 
 		// Security Settings - ALWAYS require fresh MFA
-		{rbac.Security(rbac.ResourceSecret, rbac.ActionUpdate), MFAAlways},
+		{Security(ResourceSecret, ActionUpdate), MFAAlways},
 
 		// Integrations - Step-up for configuration
-		{rbac.Gateway(rbac.ResourceIntegration, rbac.ActionCreate), MFAStepUp},
-		{rbac.Gateway(rbac.ResourceIntegration, rbac.ActionUpdate), MFAStepUp},
-		{rbac.Gateway(rbac.ResourceIntegration, rbac.ActionDelete), MFAStepUp},
+		{Gateway(ResourceIntegration, ActionCreate), MFAStepUp},
+		{Gateway(ResourceIntegration, ActionUpdate), MFAStepUp},
+		{Gateway(ResourceIntegration, ActionDelete), MFAStepUp},
 	}
 
 	for _, tt := range tests {
@@ -55,25 +53,25 @@ func TestMFARequirements_ConvoxPermissions(t *testing.T) {
 		want       MFALevel
 	}{
 		// Destructive operations - ALWAYS
-		{rbac.Convox(rbac.ResourceApp, rbac.ActionDelete), MFAAlways},
-		{rbac.Convox(rbac.ResourceInstance, rbac.ActionTerminate), MFAAlways},
+		{Convox(ResourceApp, ActionDelete), MFAAlways},
+		{Convox(ResourceInstance, ActionTerminate), MFAAlways},
 
 		// Sensitive operations - Step-up
-		{rbac.Convox(rbac.ResourceApp, rbac.ActionCreate), MFAStepUp},
-		{rbac.Convox(rbac.ResourceApp, rbac.ActionUpdate), MFAStepUp},
-		{rbac.Convox(rbac.ResourceApp, rbac.ActionRestart), MFAStepUp},
-		{rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), MFAStepUp},
-		{rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate), MFAStepUp},
-		{rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate), MFAStepUp},
-		{rbac.Convox(rbac.ResourceProcess, rbac.ActionExec), MFAStepUp},
-		{rbac.Convox(rbac.ResourceProcess, rbac.ActionStart), MFAStepUp},
-		{rbac.Convox(rbac.ResourceProcess, rbac.ActionStop), MFAStepUp},
-		{rbac.Convox(rbac.ResourceProcess, rbac.ActionTerminate), MFAStepUp},
-		{rbac.Convox(rbac.ResourceEnv, rbac.ActionSet), MFAStepUp},
-		{rbac.Convox(rbac.ResourceRack, rbac.ActionUpdate), MFAStepUp},
+		{Convox(ResourceApp, ActionCreate), MFAStepUp},
+		{Convox(ResourceApp, ActionUpdate), MFAStepUp},
+		{Convox(ResourceApp, ActionRestart), MFAStepUp},
+		{Convox(ResourceRelease, ActionPromote), MFAStepUp},
+		{Convox(ResourceRelease, ActionCreate), MFAStepUp},
+		{Convox(ResourceBuild, ActionCreate), MFAStepUp},
+		{Convox(ResourceProcess, ActionExec), MFAStepUp},
+		{Convox(ResourceProcess, ActionStart), MFAStepUp},
+		{Convox(ResourceProcess, ActionStop), MFAStepUp},
+		{Convox(ResourceProcess, ActionTerminate), MFAStepUp},
+		{Convox(ResourceEnv, ActionSet), MFAStepUp},
+		{Convox(ResourceRack, ActionUpdate), MFAStepUp},
 
 		// Low-risk write operations - None
-		{rbac.Convox(rbac.ResourceObject, rbac.ActionCreate), MFANone}, // Object uploads for builds
+		{Convox(ResourceObject, ActionCreate), MFANone}, // Object uploads for builds
 	}
 
 	for _, tt := range tests {
@@ -95,25 +93,25 @@ func TestGetMFALevel_MultiplePermissions(t *testing.T) {
 		{
 			name: "highest is MFAAlways",
 			permissions: []string{
-				rbac.Convox(rbac.ResourceApp, rbac.ActionList),         // None
-				rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote),  // Step-up
-				rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionCreate), // Always
+				Convox(ResourceApp, ActionList),         // None
+				Convox(ResourceRelease, ActionPromote),  // Step-up
+				Gateway(ResourceAPIToken, ActionCreate), // Always
 			},
 			want: MFAAlways,
 		},
 		{
 			name: "highest is MFAStepUp",
 			permissions: []string{
-				rbac.Convox(rbac.ResourceApp, rbac.ActionList),        // None
-				rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), // Step-up
+				Convox(ResourceApp, ActionList),        // None
+				Convox(ResourceRelease, ActionPromote), // Step-up
 			},
 			want: MFAStepUp,
 		},
 		{
 			name: "all MFANone",
 			permissions: []string{
-				rbac.Convox(rbac.ResourceApp, rbac.ActionList), // None
-				rbac.Convox(rbac.ResourceApp, rbac.ActionRead), // None
+				Convox(ResourceApp, ActionList), // None
+				Convox(ResourceApp, ActionRead), // None
 			},
 			want: MFANone,
 		},
@@ -137,22 +135,22 @@ func TestRequiresMFAAlways(t *testing.T) {
 	}{
 		{
 			name:        "deploy approval approve requires MFAAlways",
-			permissions: []string{rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)},
+			permissions: []string{Gateway(ResourceDeployApprovalRequest, ActionApprove)},
 			want:        true,
 		},
 		{
 			name:        "API token create requires MFAAlways",
-			permissions: []string{rbac.Gateway(rbac.ResourceAPIToken, rbac.ActionCreate)},
+			permissions: []string{Gateway(ResourceAPIToken, ActionCreate)},
 			want:        true,
 		},
 		{
 			name:        "release promote only requires MFAStepUp",
-			permissions: []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote)},
+			permissions: []string{Convox(ResourceRelease, ActionPromote)},
 			want:        false,
 		},
 		{
 			name:        "read operations don't require MFAAlways",
-			permissions: []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
+			permissions: []string{Convox(ResourceApp, ActionRead)},
 			want:        false,
 		},
 	}
@@ -175,17 +173,17 @@ func TestRequiresMFAStepUp(t *testing.T) {
 	}{
 		{
 			name:        "deploy approval approve requires step-up (actually MFAAlways)",
-			permissions: []string{rbac.Gateway(rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)},
+			permissions: []string{Gateway(ResourceDeployApprovalRequest, ActionApprove)},
 			want:        true, // MFAAlways >= MFAStepUp
 		},
 		{
 			name:        "release promote requires step-up",
-			permissions: []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote)},
+			permissions: []string{Convox(ResourceRelease, ActionPromote)},
 			want:        true,
 		},
 		{
 			name:        "read operations don't require step-up",
-			permissions: []string{rbac.Convox(rbac.ResourceApp, rbac.ActionRead)},
+			permissions: []string{Convox(ResourceApp, ActionRead)},
 			want:        false,
 		},
 	}
@@ -210,22 +208,22 @@ func TestGetMFALevel_AllowsReadListWithoutExplicitListing(t *testing.T) {
 	}{
 		{
 			name:       "convox:env:read defaults to MFANone",
-			permission: rbac.Convox(rbac.ResourceEnv, rbac.ActionRead),
+			permission: Convox(ResourceEnv, ActionRead),
 			want:       MFANone,
 		},
 		{
 			name:       "convox:env:list defaults to MFANone",
-			permission: rbac.Convox(rbac.ResourceEnv, rbac.ActionList),
+			permission: Convox(ResourceEnv, ActionList),
 			want:       MFANone,
 		},
 		{
 			name:       "convox:deploy:read defaults to MFANone",
-			permission: rbac.Convox(rbac.ResourceDeploy, rbac.ActionRead),
+			permission: Convox(ResourceDeploy, ActionRead),
 			want:       MFANone,
 		},
 		{
 			name:       "convox:deploy:list defaults to MFANone",
-			permission: rbac.Convox(rbac.ResourceDeploy, rbac.ActionList),
+			permission: Convox(ResourceDeploy, ActionList),
 			want:       MFANone,
 		},
 	}
@@ -249,11 +247,11 @@ func TestGetMFALevel_PanicsForUnlistedWriteOperations(t *testing.T) {
 	}{
 		{
 			name:       "unlisted deploy:create should panic",
-			permission: rbac.Convox(rbac.ResourceDeploy, rbac.ActionCreate),
+			permission: Convox(ResourceDeploy, ActionCreate),
 		},
 		{
 			name:       "unlisted env:update should panic",
-			permission: rbac.Convox(rbac.ResourceEnv, rbac.ActionUpdate),
+			permission: Convox(ResourceEnv, ActionUpdate),
 		},
 	}
 

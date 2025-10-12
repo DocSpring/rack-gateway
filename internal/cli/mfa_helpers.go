@@ -15,6 +15,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/DocSpring/rack-gateway/internal/convox"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -411,14 +412,14 @@ func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) 
 	}
 
 	// Check if MFA is required for this command
-	mfaLevel := convox.GetMFALevel(convoxCmd.Permissions)
-	if mfaLevel == convox.MFANone {
+	mfaLevel := rbac.GetMFALevel(convoxCmd.Permissions)
+	if mfaLevel == rbac.MFANone {
 		// No MFA required
 		return "", nil
 	}
 
 	// For MFAAlways: Always prompt upfront and return inline MFA auth
-	if mfaLevel == convox.MFAAlways {
+	if mfaLevel == rbac.MFAAlways {
 		return promptMFAForCommand(cmd, gatewayURL, bearer, rack)
 	}
 
