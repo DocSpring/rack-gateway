@@ -2,6 +2,8 @@ package rbac
 
 import (
 	"fmt"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // MFALevel defines the MFA verification requirement level
@@ -99,6 +101,41 @@ var MFARequirements = map[string]MFALevel{
 
 	// MFA Verification - Step-up operations
 	Auth(ResourceMFA, ActionCreate): MFANone, // Verifying MFA is the action itself
+
+	// ========================================================================
+	// SETTINGS RESOURCES - Gateway and app configuration
+	// Format: gateway:setting:{key} (applies to both update and delete)
+	// ========================================================================
+
+	// Global Settings - Security-critical configurations
+	GatewayGlobalSetting(settings.GlobalSettingAllowDestructiveActions):     MFAAlways, // Enabling destructive operations
+	GatewayGlobalSetting(settings.GlobalSettingDefaultCIOrgSlug):            MFANone,   // Just defaults
+	GatewayGlobalSetting(settings.GlobalSettingDefaultCIProvider):           MFANone,   // Just defaults
+	GatewayGlobalSetting(settings.GlobalSettingDefaultVCSOrgName):           MFANone,   // Just defaults
+	GatewayGlobalSetting(settings.GlobalSettingDefaultVCSProvider):          MFANone,   // Just defaults
+	GatewayGlobalSetting(settings.GlobalSettingDeployApprovalsEnabled):      MFAAlways, // Disabling approval workflow
+	GatewayGlobalSetting(settings.GlobalSettingDeployApprovalWindowMinutes): MFAStepUp, // Extending approval window
+	GatewayGlobalSetting(settings.GlobalSettingMFARequireAllUsers):          MFAAlways, // Disabling MFA globally
+	GatewayGlobalSetting(settings.GlobalSettingStepUpWindowMinutes):         MFAStepUp, // Extending step-up window
+	GatewayGlobalSetting(settings.GlobalSettingTrustedDeviceTTLDays):        MFAStepUp, // Extending trust window
+
+	// App Settings - Security controls
+	GatewayAppSetting(settings.AppSettingAllowDeployFromDefaultBranch):  MFAStepUp, // Allowing more deploys
+	GatewayAppSetting(settings.AppSettingApprovedDeployCommands):        MFAStepUp, // Defining allowed commands
+	GatewayAppSetting(settings.AppSettingCIOrgSlug):                     MFANone,   // Just configuration
+	GatewayAppSetting(settings.AppSettingCIProvider):                    MFANone,   // Just configuration
+	GatewayAppSetting(settings.AppSettingCircleCIApprovalJobName):       MFANone,   // Just configuration
+	GatewayAppSetting(settings.AppSettingCircleCIAutoApproveOnApproval): MFAStepUp, // Auto-approving
+	GatewayAppSetting(settings.AppSettingDefaultBranch):                 MFANone,   // Just configuration
+	GatewayAppSetting(settings.AppSettingGitHubPostPRComment):           MFANone,   // Just notification preference
+	GatewayAppSetting(settings.AppSettingGitHubVerification):            MFAAlways, // Disabling GitHub verification
+	GatewayAppSetting(settings.AppSettingProtectedEnvVars):              MFAStepUp, // Marking vars as protected
+	GatewayAppSetting(settings.AppSettingRequirePRForBranch):            MFAAlways, // Disabling PR requirement
+	GatewayAppSetting(settings.AppSettingSecretEnvVars):                 MFAStepUp, // Marking vars as secret
+	GatewayAppSetting(settings.AppSettingServiceImagePatterns):          MFAStepUp, // Restricting images
+	GatewayAppSetting(settings.AppSettingVCSProvider):                   MFANone,   // Just configuration
+	GatewayAppSetting(settings.AppSettingVCSRepo):                       MFANone,   // Just configuration
+	GatewayAppSetting(settings.AppSettingVerifyGitCommitMode):           MFAStepUp, // Changing verification level
 }
 
 // GetMFALevel returns the highest MFA level required by any of the given permissions

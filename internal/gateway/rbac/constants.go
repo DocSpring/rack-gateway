@@ -3,6 +3,8 @@ package rbac
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // ============================================================================
@@ -112,6 +114,7 @@ const (
 	ResourceDeployApprovalRequest
 	ResourceIntegration
 	ResourceSecret
+	ResourceSetting
 	ResourceUser
 	// Auth/Security resources
 	ResourceAuth
@@ -369,4 +372,14 @@ func Auth(resource Resource, action Action) string {
 // Security builds a Security permission
 func Security(resource Resource, action Action) string {
 	return Permission(ScopeSecurity, resource, action)
+}
+
+// GatewayGlobalSetting builds a global setting permission (gateway:setting:{key})
+func GatewayGlobalSetting(key settings.GlobalSettingKey) string {
+	return fmt.Sprintf("gateway:setting:%s", key)
+}
+
+// GatewayAppSetting builds an app setting permission (gateway:setting:{key})
+func GatewayAppSetting(key settings.AppSettingKey) string {
+	return fmt.Sprintf("gateway:setting:%s", key)
 }

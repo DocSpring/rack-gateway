@@ -148,39 +148,127 @@ func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (
 	return s.getSetting(&appName, key, defaultValue)
 }
 
-// Global setting keys
+// GlobalSettingKey is an enum for global setting keys
+type GlobalSettingKey uint8
+
 const (
-	KeyMFARequireAllUsers          = "mfa_require_all_users"
-	KeyTrustedDeviceTTLDays        = "mfa_trusted_device_ttl_days"
-	KeyStepUpWindowMinutes         = "mfa_step_up_window_minutes"
-	KeyAllowDestructiveActions     = "allow_destructive_actions"
-	KeyDefaultVCSProvider          = "default_vcs_provider"
-	KeyDefaultVCSOrgName           = "default_vcs_org_name"
-	KeyDefaultCIProvider           = "default_ci_provider"
-	KeyDefaultCIOrgSlug            = "default_ci_org_slug"
-	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
-	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
+	GlobalSettingAllowDestructiveActions GlobalSettingKey = iota
+	GlobalSettingDefaultCIOrgSlug
+	GlobalSettingDefaultCIProvider
+	GlobalSettingDefaultVCSOrgName
+	GlobalSettingDefaultVCSProvider
+	GlobalSettingDeployApprovalsEnabled
+	GlobalSettingDeployApprovalWindowMinutes
+	GlobalSettingMFARequireAllUsers
+	GlobalSettingStepUpWindowMinutes
+	GlobalSettingTrustedDeviceTTLDays
 )
 
-// App setting keys
+// Global setting key strings
 const (
+	KeyAllowDestructiveActions     = "allow_destructive_actions"
+	KeyDefaultCIOrgSlug            = "default_ci_org_slug"
+	KeyDefaultCIProvider           = "default_ci_provider"
+	KeyDefaultVCSOrgName           = "default_vcs_org_name"
+	KeyDefaultVCSProvider          = "default_vcs_provider"
+	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
+	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
+	KeyMFARequireAllUsers          = "mfa_require_all_users"
+	KeyStepUpWindowMinutes         = "mfa_step_up_window_minutes"
+	KeyTrustedDeviceTTLDays        = "mfa_trusted_device_ttl_days"
+)
+
+var globalSettingKeyToString = [...]string{
+	KeyAllowDestructiveActions,
+	KeyDefaultCIOrgSlug,
+	KeyDefaultCIProvider,
+	KeyDefaultVCSOrgName,
+	KeyDefaultVCSProvider,
+	KeyDeployApprovalsEnabled,
+	KeyDeployApprovalWindowMinutes,
+	KeyMFARequireAllUsers,
+	KeyStepUpWindowMinutes,
+	KeyTrustedDeviceTTLDays,
+}
+
+func (g GlobalSettingKey) String() string {
+	if int(g) < len(globalSettingKeyToString) {
+		return globalSettingKeyToString[g]
+	}
+	return fmt.Sprintf("GlobalSettingKey(%d)", g)
+}
+
+func (g GlobalSettingKey) IsValid() bool { return g <= GlobalSettingDeployApprovalWindowMinutes }
+
+// AppSettingKey is an enum for app setting keys
+type AppSettingKey uint8
+
+const (
+	AppSettingAllowDeployFromDefaultBranch AppSettingKey = iota
+	AppSettingApprovedDeployCommands
+	AppSettingCIOrgSlug
+	AppSettingCIProvider
+	AppSettingCircleCIApprovalJobName
+	AppSettingCircleCIAutoApproveOnApproval
+	AppSettingDefaultBranch
+	AppSettingGitHubPostPRComment
+	AppSettingGitHubVerification
+	AppSettingProtectedEnvVars
+	AppSettingRequirePRForBranch
+	AppSettingSecretEnvVars
+	AppSettingServiceImagePatterns
+	AppSettingVCSProvider
+	AppSettingVCSRepo
+	AppSettingVerifyGitCommitMode
+)
+
+// App setting key strings
+const (
+	KeyAllowDeployFromDefaultBranch  = "allow_deploy_from_default_branch"
 	KeyApprovedDeployCommands        = "approved_deploy_commands"
+	KeyCIOrgSlug                     = "ci_org_slug"
+	KeyCIProvider                    = "ci_provider"
+	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
+	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
+	KeyDefaultBranch                 = "default_branch"
+	KeyGitHubPostPRComment           = "github_post_pr_comment"
+	KeyGitHubVerification            = "github_verification"
 	KeyProtectedEnvVars              = "protected_env_vars"
+	KeyRequirePRForBranch            = "require_pr_for_branch"
 	KeySecretEnvVars                 = "secret_env_vars"
 	KeyServiceImagePatterns          = "service_image_patterns"
 	KeyVCSProvider                   = "vcs_provider"
 	KeyVCSRepo                       = "vcs_repo"
-	KeyCIProvider                    = "ci_provider"
-	KeyCIOrgSlug                     = "ci_org_slug"
-	KeyGitHubVerification            = "github_verification"
-	KeyAllowDeployFromDefaultBranch  = "allow_deploy_from_default_branch"
-	KeyDefaultBranch                 = "default_branch"
-	KeyRequirePRForBranch            = "require_pr_for_branch"
 	KeyVerifyGitCommitMode           = "verify_git_commit_mode"
-	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
-	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
-	KeyGitHubPostPRComment           = "github_post_pr_comment"
 )
+
+var appSettingKeyToString = [...]string{
+	KeyAllowDeployFromDefaultBranch,
+	KeyApprovedDeployCommands,
+	KeyCIOrgSlug,
+	KeyCIProvider,
+	KeyCircleCIApprovalJobName,
+	KeyCircleCIAutoApproveOnApproval,
+	KeyDefaultBranch,
+	KeyGitHubPostPRComment,
+	KeyGitHubVerification,
+	KeyProtectedEnvVars,
+	KeyRequirePRForBranch,
+	KeySecretEnvVars,
+	KeyServiceImagePatterns,
+	KeyVCSProvider,
+	KeyVCSRepo,
+	KeyVerifyGitCommitMode,
+}
+
+func (a AppSettingKey) String() string {
+	if int(a) < len(appSettingKeyToString) {
+		return appSettingKeyToString[a]
+	}
+	return fmt.Sprintf("AppSettingKey(%d)", a)
+}
+
+func (a AppSettingKey) IsValid() bool { return a <= AppSettingGitHubPostPRComment }
 
 // VerifyGitCommitMode represents valid values for verify_git_commit_mode setting
 const (
@@ -190,36 +278,36 @@ const (
 
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
-	KeyMFARequireAllUsers:          true,
-	KeyTrustedDeviceTTLDays:        30,
-	KeyStepUpWindowMinutes:         10,
 	KeyAllowDestructiveActions:     false,
-	KeyDefaultVCSProvider:          "github",
-	KeyDefaultVCSOrgName:           "",
-	KeyDefaultCIProvider:           "circleci",
 	KeyDefaultCIOrgSlug:            "",
+	KeyDefaultCIProvider:           "circleci",
+	KeyDefaultVCSOrgName:           "",
+	KeyDefaultVCSProvider:          "github",
 	KeyDeployApprovalsEnabled:      true,
 	KeyDeployApprovalWindowMinutes: 15,
+	KeyMFARequireAllUsers:          true,
+	KeyStepUpWindowMinutes:         10,
+	KeyTrustedDeviceTTLDays:        30,
 }
 
 // DefaultAppSettings defines all valid app-specific settings with their default values.
 var DefaultAppSettings = map[string]interface{}{
+	KeyAllowDeployFromDefaultBranch:  false,
 	KeyApprovedDeployCommands:        []string(nil),
+	KeyCIOrgSlug:                     nil, // nil means use global default
+	KeyCIProvider:                    nil, // nil means use global default
+	KeyCircleCIApprovalJobName:       "",
+	KeyCircleCIAutoApproveOnApproval: false,
+	KeyDefaultBranch:                 "main",
+	KeyGitHubPostPRComment:           true,
+	KeyGitHubVerification:            true,
 	KeyProtectedEnvVars:              []string(nil),
+	KeyRequirePRForBranch:            true,
 	KeySecretEnvVars:                 []string(nil),
 	KeyServiceImagePatterns:          map[string]string(nil),
 	KeyVCSProvider:                   nil, // nil means use global default
 	KeyVCSRepo:                       nil, // nil means not configured
-	KeyCIProvider:                    nil, // nil means use global default
-	KeyCIOrgSlug:                     nil, // nil means use global default
-	KeyGitHubVerification:            true,
-	KeyAllowDeployFromDefaultBranch:  false,
-	KeyDefaultBranch:                 "main",
-	KeyRequirePRForBranch:            true,
 	KeyVerifyGitCommitMode:           "latest",
-	KeyCircleCIApprovalJobName:       "",
-	KeyCircleCIAutoApproveOnApproval: false,
-	KeyGitHubPostPRComment:           true,
 }
 
 // IsValidGlobalSetting checks if a key is a valid global setting.

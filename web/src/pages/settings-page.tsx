@@ -104,7 +104,9 @@ function MfaConfigCard({
       }
       if (keys.length > 0) {
         const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(`/.gateway/api/admin/settings?${params}`)
+        return await api.delete<Record<string, SettingsSetting>>(
+          `/.gateway/api/admin/settings?${params}`
+        )
       }
     },
     onSuccess: (updatedSettings) => {
@@ -281,9 +283,10 @@ function DestructiveActionsCard({
   })
 
   const clearMutation = useMutation({
-    mutationFn: async () => {
-      return await api.delete<Record<string, SettingsSetting>>('/.gateway/api/admin/settings?key=allow_destructive_actions')
-    },
+    mutationFn: async () =>
+      await api.delete<Record<string, SettingsSetting>>(
+        '/.gateway/api/admin/settings?key=allow_destructive_actions'
+      ),
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
       if (updatedSettings) {
@@ -445,7 +448,9 @@ function VCSCIProvidersCard({
       }
       if (keys.length > 0) {
         const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(`/.gateway/api/admin/settings?${params}`)
+        return await api.delete<Record<string, SettingsSetting>>(
+          `/.gateway/api/admin/settings?${params}`
+        )
       }
     },
     onSuccess: (updatedSettings) => {
@@ -669,7 +674,9 @@ function DeployApprovalsCard({
       }
       if (keys.length > 0) {
         const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(`/.gateway/api/admin/settings?${params}`)
+        return await api.delete<Record<string, SettingsSetting>>(
+          `/.gateway/api/admin/settings?${params}`
+        )
       }
     },
     onSuccess: (updatedSettings) => {
