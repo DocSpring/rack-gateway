@@ -172,7 +172,7 @@ export function Layout() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
       {/* Sidebar */}
       <div className="flex w-64 flex-col border-r bg-card">
         {/* Logo */}
@@ -254,8 +254,8 @@ export function Layout() {
         <Separator className="shrink-0" />
 
         {/* User section */}
-        <div className="relative shrink-0 bg-card px-4 pb-4 pt-3">
-          <div className="pointer-events-none absolute -top-[43px] left-0 h-[42px] w-full bg-gradient-to-t from-card via-card/5 to-transparent" />
+        <div className="relative shrink-0 bg-card px-4 pt-3 pb-4">
+          <div className="-top-[43px] pointer-events-none absolute left-0 h-[42px] w-full bg-gradient-to-t from-card via-card/5 to-transparent" />
           <div className="mb-3 flex items-center justify-between gap-2">
             {currentUserHref ? (
               <Link
@@ -309,7 +309,7 @@ export function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         {needsMfaEnrollment ? (
           <div className="bg-destructive text-destructive-foreground">
             <div className="px-6 py-3 font-semibold text-sm">
