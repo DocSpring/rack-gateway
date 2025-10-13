@@ -1,7 +1,7 @@
 import { isAxiosError } from 'axios'
 
 import { toast } from '@/components/ui/use-toast'
-import { isStepUpError } from '@/contexts/step-up-context'
+import { isMFAError } from '@/contexts/step-up-context'
 
 export function getErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
   const resolved = resolveErrorMessage(error)
@@ -12,7 +12,7 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
 }
 
 export function toastAPIError(error: unknown, fallback = 'Something went wrong'): void {
-  if (isStepUpError(error)) {
+  if (isMFAError(error)) {
     return
   }
   toast.error(getErrorMessage(error, fallback))
@@ -23,7 +23,7 @@ export function withAPIErrorMessage(
   fallback: string,
   handler: (message: string) => void
 ): void {
-  if (isStepUpError(error)) {
+  if (isMFAError(error)) {
     return
   }
   handler(getErrorMessage(error, fallback))

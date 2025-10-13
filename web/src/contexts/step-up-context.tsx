@@ -43,7 +43,7 @@ type StepUpContextValue = {
 
 const StepUpContext = createContext<StepUpContextValue | undefined>(undefined)
 
-export function isStepUpError(error: unknown): boolean {
+export function isMFAError(error: unknown): boolean {
   if (!isAxiosError(error)) {
     return false
   }
@@ -89,7 +89,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
 
   const handleStepUpError = useCallback(
     (error: unknown, action: NonNullable<StepUpAction>) => {
-      if (!isStepUpError(error)) {
+      if (!isMFAError(error)) {
         return false
       }
       openStepUp({ action })
@@ -106,7 +106,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       try {
         await Promise.resolve(action())
       } catch (error) {
-        if (isStepUpError(error)) {
+        if (isMFAError(error)) {
           openStepUp({ action })
           return
         }
