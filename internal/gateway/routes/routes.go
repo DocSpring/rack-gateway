@@ -190,17 +190,45 @@ func Setup(router *gin.Engine, cfg *Config) {
 			authenticated.GET("/info", apiHandler.GetInfo)
 			authenticated.GET("/created-by", apiHandler.GetCreatedBy)
 			authenticated.GET("/rack", apiHandler.GetRackInfo)
-			authenticated.GET("/env", apiHandler.GetEnvValues)
+
+			// Environment management
+			apps := authenticated.Group("/apps/:app")
+			{
+				apps.GET("/env", apiHandler.GetEnvValues)
+
+				envMutations := apps.Group("")
+				if cfg.SessionManager != nil {
+					envMutations.Use(middleware.CSRF(cfg.SessionManager))
+				}
+				envMutations.PUT("/env", apiHandler.UpdateEnvValues)
+
+				apps.GET("/settings", settingsHandler.GetAllAppSettings)
+
+				appSettings := apps.Group("/settings")
+				if cfg.SessionManager != nil {
+					appSettings.Use(middleware.CSRF(cfg.SessionManager))
+				}
+				appSettings.PUT("/vcs-ci-deploy", settingsHandler.UpdateAppVCSCIDeploySettings)
+				appSettings.DELETE("/vcs-ci-deploy", settingsHandler.DeleteAppVCSCIDeploySettings)
+				appSettings.PUT("/:settingKey", settingsHandler.UpdateAppSettingValue)
+				appSettings.DELETE("/:settingKey", settingsHandler.DeleteAppSettingValue)
+			}
+
+			// Deploy approval requests
 			deployApprovalRequests := authenticated.Group("/deploy-approval-requests")
 			{
+				deployApprovalRequests.GET("", adminHandler.ListDeployApprovalRequests)
+				deployApprovalRequests.GET("/:id/audit-logs", adminHandler.GetDeployApprovalRequestAuditLogs)
 				deployApprovalRequests.GET("/:id", apiHandler.GetDeployApprovalRequest)
-				deployApprovalRequests.POST("", apiHandler.CreateDeployApprovalRequest)
+
+				deployApprove := deployApprovalRequests.Group("")
+				if cfg.SessionManager != nil {
+					deployApprove.Use(middleware.CSRF(cfg.SessionManager))
+				}
+				deployApprove.POST("", apiHandler.CreateDeployApprovalRequest)
+				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)
+				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
 			}
-			envMutations := authenticated.Group("")
-			if cfg.SessionManager != nil {
-				envMutations.Use(middleware.CSRF(cfg.SessionManager))
-			}
-			envMutations.PUT("/env", apiHandler.UpdateEnvValues)
 
 			// Convox proxy endpoints (safe GET only for web UI)
 			convox := authenticated.Group("/convox")
@@ -211,80 +239,83 @@ func Setup(router *gin.Engine, cfg *Config) {
 				convox.GET("/system/processes", proxyHandler.ProxyStripPrefix)
 			}
 
-			// Admin endpoints (with CSRF protection)
-			admin := authenticated.Group("/admin")
-			admin.Use(middleware.CSRF(cfg.SessionManager))
-			{
-				// Config and settings
-				admin.GET("/config", adminHandler.GetConfig)
-				admin.PUT("/config", adminHandler.UpdateConfig)
-
-				// New generic settings endpoints
-				admin.GET("/settings", settingsHandler.GetAllGlobalSettings)
-				settingsMutations := admin.Group("")
-				settingsMutations.PUT("/settings", settingsHandler.UpdateGlobalSettings)
-				settingsMutations.DELETE("/settings", settingsHandler.DeleteGlobalSettings)
-
-				admin.POST("/settings/rack_tls_cert/refresh", adminHandler.RefreshRackTLSCert)
-				admin.POST("/diagnostics/sentry", adminHandler.TriggerSentryTest)
-
-				// Users and roles
-				admin.GET("/roles", adminHandler.ListRoles)
-				admin.GET("/users", adminHandler.ListUsers)
-				admin.GET("/users/:email", adminHandler.GetUser)
-				admin.POST("/users", adminHandler.CreateUser)
-				admin.DELETE("/users/:email", adminHandler.DeleteUser)
-				admin.PUT("/users/:email", adminHandler.UpdateUserProfile)
-				admin.PUT("/users/:email/roles", adminHandler.UpdateUserRoles)
-				admin.GET("/users/:email/sessions", adminHandler.ListUserSessions)
-				admin.POST("/users/:email/sessions/:sessionID/revoke", adminHandler.RevokeUserSession)
-				admin.POST("/users/:email/sessions/revoke_all", adminHandler.RevokeAllUserSessions)
-				admin.POST("/users/:email/lock", adminHandler.LockUser)
-				admin.POST("/users/:email/unlock", adminHandler.UnlockUser)
-
-				// Audit logs
-				admin.GET("/audit", adminHandler.ListAuditLogs)
-				admin.GET("/audit/export", adminHandler.ExportAuditLogs)
-
-				deployAdmin := admin.Group("/deploy-approval-requests")
-				deployAdmin.GET("", adminHandler.ListDeployApprovalRequests)
-				deployAdmin.GET("/:id/audit-logs", adminHandler.GetDeployApprovalRequestAuditLogs)
-				deployApprove := deployAdmin.Group("")
-				deployApprove.POST("/:id/approve", adminHandler.ApproveDeployApprovalRequest)
-				deployApprove.POST("/:id/reject", adminHandler.RejectDeployApprovalRequest)
-
-				// API tokens (rate limit creation)
-				// SECURITY: API token operations require MFA code on every request
-				tokenGroup := admin.Group("/tokens")
-				tokenGroup.GET("", adminHandler.ListAPITokens)
-				tokenGroup.GET("/permissions", adminHandler.GetTokenPermissionMetadata)
-				tokenGroup.GET("/:tokenID", adminHandler.GetAPIToken)
-
-				tokenSensitive := tokenGroup.Group("")
-				tokenSensitive.POST("", middleware.RateLimit(cfg.Config, cfg.SecurityNotifier), adminHandler.CreateAPIToken)
-				tokenSensitive.PUT("/:tokenID", adminHandler.UpdateAPIToken)
-				tokenSensitive.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
-
-				// Slack integration
-				integrations := admin.Group("/integrations")
-				integrations.GET("/slack", adminHandler.GetSlackIntegrationHandler)
-				integrations.POST("/slack/oauth/authorize", adminHandler.SlackOAuthAuthorizeHandler)
-				integrations.GET("/slack/oauth/callback", adminHandler.SlackOAuthCallbackHandler)
-				integrations.PUT("/slack/channels", adminHandler.UpdateSlackChannelsHandler)
-				integrations.DELETE("/slack", adminHandler.DeleteSlackIntegrationHandler)
-				integrations.GET("/slack/channels/list", adminHandler.ListSlackChannelsHandler)
-				integrations.POST("/slack/test", adminHandler.TestSlackNotificationHandler)
+			// Global settings
+			authenticated.GET("/settings", settingsHandler.GetAllGlobalSettings)
+			settingsMutations := authenticated.Group("/settings")
+			if cfg.SessionManager != nil {
+				settingsMutations.Use(middleware.CSRF(cfg.SessionManager))
 			}
+			settingsMutations.PUT("/mfa-configuration", settingsHandler.UpdateGlobalMFAConfiguration)
+			settingsMutations.DELETE("/mfa-configuration", settingsHandler.DeleteGlobalMFAConfiguration)
+			settingsMutations.PUT("/allow-destructive-actions", settingsHandler.UpdateGlobalAllowDestructiveActions)
+			settingsMutations.DELETE("/allow-destructive-actions", settingsHandler.DeleteGlobalAllowDestructiveActions)
+			settingsMutations.PUT("/vcs-and-ci-defaults", settingsHandler.UpdateGlobalVCSAndCIDefaults)
+			settingsMutations.DELETE("/vcs-and-ci-defaults", settingsHandler.DeleteGlobalVCSAndCIDefaults)
+			settingsMutations.PUT("/deploy-approvals", settingsHandler.UpdateGlobalDeployApprovals)
+			settingsMutations.DELETE("/deploy-approvals", settingsHandler.DeleteGlobalDeployApprovals)
+			settingsMutations.POST("/rack-tls-cert/refresh", adminHandler.RefreshRackTLSCert)
 
-			// App-specific settings endpoints
-			apps := authenticated.Group("/apps/:app")
-			apps.Use(middleware.CSRF(cfg.SessionManager))
-			{
-				apps.GET("/settings", settingsHandler.GetAllAppSettings)
-				appSettingsMutations := apps.Group("")
-				appSettingsMutations.PUT("/settings", settingsHandler.UpdateAppSettings)
-				appSettingsMutations.DELETE("/settings", settingsHandler.DeleteAppSettings)
+			diagnostics := authenticated.Group("/diagnostics")
+			if cfg.SessionManager != nil {
+				diagnostics.Use(middleware.CSRF(cfg.SessionManager))
 			}
+			diagnostics.POST("/sentry", adminHandler.TriggerSentryTest)
+
+			// Roles and users
+			authenticated.GET("/roles", adminHandler.ListRoles)
+
+			users := authenticated.Group("/users")
+			if cfg.SessionManager != nil {
+				users.Use(middleware.CSRF(cfg.SessionManager))
+			}
+			users.GET("", adminHandler.ListUsers)
+			users.GET("/:email", adminHandler.GetUser)
+			users.POST("", adminHandler.CreateUser)
+			users.DELETE("/:email", adminHandler.DeleteUser)
+			users.PUT("/:email", adminHandler.UpdateUserProfile)
+			users.PUT("/:email/roles", adminHandler.UpdateUserRoles)
+			users.GET("/:email/sessions", adminHandler.ListUserSessions)
+			users.POST("/:email/sessions/:sessionID/revoke", adminHandler.RevokeUserSession)
+			users.POST("/:email/sessions/revoke_all", adminHandler.RevokeAllUserSessions)
+			users.POST("/:email/lock", adminHandler.LockUser)
+			users.POST("/:email/unlock", adminHandler.UnlockUser)
+
+			// Audit logs
+			auditLogs := authenticated.Group("/audit-logs")
+			if cfg.SessionManager != nil {
+				auditLogs.Use(middleware.CSRF(cfg.SessionManager))
+			}
+			auditLogs.GET("", adminHandler.ListAuditLogs)
+			auditLogs.GET("/export", adminHandler.ExportAuditLogs)
+
+			// API tokens (rate limit creation)
+			apiTokens := authenticated.Group("/api-tokens")
+			if cfg.SessionManager != nil {
+				apiTokens.Use(middleware.CSRF(cfg.SessionManager))
+			}
+			apiTokens.GET("", adminHandler.ListAPITokens)
+			apiTokens.GET("/permissions", adminHandler.GetTokenPermissionMetadata)
+			apiTokens.GET("/:tokenID", adminHandler.GetAPIToken)
+
+			apiTokenSensitive := apiTokens.Group("")
+			apiTokenSensitive.Use(middleware.RateLimit(cfg.Config, cfg.SecurityNotifier))
+			apiTokenSensitive.POST("", adminHandler.CreateAPIToken)
+			apiTokens.PUT("/:tokenID", adminHandler.UpdateAPIToken)
+			apiTokens.DELETE("/:tokenID", adminHandler.DeleteAPIToken)
+
+			// Slack integration
+			integrations := authenticated.Group("/integrations")
+			slack := integrations.Group("/slack")
+			if cfg.SessionManager != nil {
+				slack.Use(middleware.CSRF(cfg.SessionManager))
+			}
+			slack.GET("", adminHandler.GetSlackIntegrationHandler)
+			slack.POST("/oauth/authorize", adminHandler.SlackOAuthAuthorizeHandler)
+			slack.GET("/oauth/callback", adminHandler.SlackOAuthCallbackHandler)
+			slack.PUT("/channels", adminHandler.UpdateSlackChannelsHandler)
+			slack.DELETE("", adminHandler.DeleteSlackIntegrationHandler)
+			slack.GET("/channels/list", adminHandler.ListSlackChannelsHandler)
+			slack.POST("/test", adminHandler.TestSlackNotificationHandler)
 		}
 
 		convoxCLI := api.Group("/rack-proxy")

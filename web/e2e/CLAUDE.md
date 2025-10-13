@@ -187,7 +187,7 @@ import { WebRoute, APIRoute } from "@/lib/routes";
 
 // Web routes
 await page.goto(WebRoute("rack"));
-await page.goto(WebRoute("admin/users"));
+await page.goto(WebRoute("users"));
 await page.goto(WebRoute("account/security"));
 
 // API routes (for fetch calls in tests)
@@ -200,7 +200,7 @@ const response = await page.request.get(APIRoute("auth/mfa/status"));
 
 ```typescript
 test("admin page requires authentication", async ({ page }) => {
-  await page.goto(WebRoute("admin/users"));
+  await page.goto(WebRoute("users"));
 
   // Should redirect to login
   await expect(page).toHaveURL(/app\/login/);
@@ -214,7 +214,7 @@ test("sensitive action requires MFA code", async ({ page }) => {
   await login(page);
 
   // Navigate to sensitive page
-  await page.goto(WebRoute("admin/api-tokens"));
+  await page.goto(WebRoute("api-tokens"));
 
   // Try to create token without MFA code
   await page.getByRole("button", { name: /Create Token/i }).click();
@@ -230,7 +230,7 @@ test("sensitive action requires MFA code", async ({ page }) => {
 test("user can create API token", async ({ page }) => {
   await login(page);
 
-  await page.goto(WebRoute("admin/api-tokens"));
+  await page.goto(WebRoute("api-tokens"));
   await page.getByRole("button", { name: /Create Token/i }).click();
 
   // Fill form
@@ -253,10 +253,10 @@ test("sidebar navigation works", async ({ page }) => {
 
   // Navigate via sidebar
   await page.getByRole("link", { name: /Users/i }).click();
-  await expect(page).toHaveURL(WebRoute("admin/users"));
+  await expect(page).toHaveURL(WebRoute("users"));
 
   await page.getByRole("link", { name: /Audit Logs/i }).click();
-  await expect(page).toHaveURL(WebRoute("admin/audit"));
+  await expect(page).toHaveURL(WebRoute("audit-logs"));
 });
 ```
 

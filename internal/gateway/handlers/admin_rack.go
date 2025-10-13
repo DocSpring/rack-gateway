@@ -17,7 +17,7 @@ import (
 // @Failure 502 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/settings/rack_tls_cert/refresh [post]
+// @Router /settings/rack_tls_cert/refresh [post]
 func (h *AdminHandler) RefreshRackTLSCert(c *gin.Context) {
 	if h.config == nil || !h.config.RackTLSPinningEnabled || h.rackCertMgr == nil {
 		c.JSON(http.StatusNotImplemented, gin.H{"error": "rack certificate manager not configured"})

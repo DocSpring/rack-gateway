@@ -323,7 +323,7 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				var result struct {
 					Requests []deployApprovalRequest `json:"deploy_approval_requests"`
 				}
-				if err := gatewayRequest(cmd, info.name, http.MethodGet, "/admin/deploy-approval-requests?status=pending", nil, &result); err != nil {
+				if err := gatewayRequest(cmd, info.name, http.MethodGet, "/deploy-approval-requests?status=pending", nil, &result); err != nil {
 					return err
 				}
 
@@ -538,7 +538,7 @@ func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*d
 	}
 
 	var result deployApprovalRequest
-	if err := gatewayRequest(cmd, rack, http.MethodPost, fmt.Sprintf("/admin/deploy-approval-requests/%s/approve", requestID), payload, &result); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodPost, fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID), payload, &result); err != nil {
 		// Handle conflict error specially
 		if strings.Contains(err.Error(), "409") {
 			return &result, &deployApprovalRequestConflictError{request: &result}

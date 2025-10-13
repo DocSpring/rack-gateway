@@ -23,6 +23,25 @@ func NewSettingsHandler(settingsService *settings.Service, rbacMgr rbac.RBACMana
 	}
 }
 
+func buildKeySet(keys []string) map[string]struct{} {
+	if len(keys) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		set[key] = struct{}{}
+	}
+	return set
+}
+
+func isAllowedKey(allowed map[string]struct{}, key string) bool {
+	if allowed == nil {
+		return true
+	}
+	_, ok := allowed[key]
+	return ok
+}
+
 // GetAllGlobalSettings godoc
 // @Summary Get all global settings
 // @Description Returns all global settings with their sources (db, env, or default)
@@ -31,7 +50,7 @@ func NewSettingsHandler(settingsService *settings.Service, rbacMgr rbac.RBACMana
 // @Success 200 {object} map[string]settings.Setting
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/settings [get]
+// @Router /settings [get]
 func (h *SettingsHandler) GetAllGlobalSettings(c *gin.Context) {
 	allSettings, err := h.settingsService.GetAllGlobalSettings()
 	if err != nil {
@@ -52,7 +71,7 @@ func (h *SettingsHandler) GetAllGlobalSettings(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/settings/{key} [get]
+// @Router /settings/{key} [get]
 func (h *SettingsHandler) GetGlobalSetting(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
@@ -89,8 +108,28 @@ func (h *SettingsHandler) GetGlobalSetting(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/settings [put]
+// @Router /settings [put]
 func (h *SettingsHandler) UpdateGlobalSettings(c *gin.Context) {
+	h.updateGlobalSettings(c, nil)
+}
+
+func (h *SettingsHandler) UpdateGlobalMFAConfiguration(c *gin.Context) {
+	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration))
+}
+
+func (h *SettingsHandler) UpdateGlobalAllowDestructiveActions(c *gin.Context) {
+	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive))
+}
+
+func (h *SettingsHandler) UpdateGlobalVCSAndCIDefaults(c *gin.Context) {
+	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults))
+}
+
+func (h *SettingsHandler) UpdateGlobalDeployApprovals(c *gin.Context) {
+	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
+}
+
+func (h *SettingsHandler) updateGlobalSettings(c *gin.Context, allowedKeys []string) {
 	email := c.GetString("user_email")
 
 	// Parse request body as map of keys to values
@@ -105,8 +144,14 @@ func (h *SettingsHandler) UpdateGlobalSettings(c *gin.Context) {
 		return
 	}
 
+	allowed := buildKeySet(allowedKeys)
+
 	// Validate all keys first
 	for key := range updates {
+		if !isAllowedKey(allowed, key) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s is not managed by this endpoint", key)})
+			return
+		}
 		if !settings.IsValidGlobalSetting(key) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
 			return
@@ -161,8 +206,28 @@ func (h *SettingsHandler) UpdateGlobalSettings(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/settings [delete]
+// @Router /settings [delete]
 func (h *SettingsHandler) DeleteGlobalSettings(c *gin.Context) {
+	h.deleteGlobalSettings(c, nil)
+}
+
+func (h *SettingsHandler) DeleteGlobalMFAConfiguration(c *gin.Context) {
+	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration))
+}
+
+func (h *SettingsHandler) DeleteGlobalAllowDestructiveActions(c *gin.Context) {
+	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive))
+}
+
+func (h *SettingsHandler) DeleteGlobalVCSAndCIDefaults(c *gin.Context) {
+	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults))
+}
+
+func (h *SettingsHandler) DeleteGlobalDeployApprovals(c *gin.Context) {
+	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
+}
+
+func (h *SettingsHandler) deleteGlobalSettings(c *gin.Context, allowedKeys []string) {
 	// Get keys from query params (supports multiple ?key=foo&key=bar)
 	keys := c.QueryArray("key")
 	if len(keys) == 0 {
@@ -170,8 +235,14 @@ func (h *SettingsHandler) DeleteGlobalSettings(c *gin.Context) {
 		return
 	}
 
+	allowed := buildKeySet(allowedKeys)
+
 	// Validate all keys first
 	for _, key := range keys {
+		if !isAllowedKey(allowed, key) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s is not managed by this endpoint", key)})
+			return
+		}
 		if !settings.IsValidGlobalSetting(key) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
 			return
@@ -283,6 +354,14 @@ func (h *SettingsHandler) GetAppSetting(c *gin.Context) {
 // @Security CSRFToken
 // @Router /apps/{app}/settings [put]
 func (h *SettingsHandler) UpdateAppSettings(c *gin.Context) {
+	h.updateAppSettings(c, nil)
+}
+
+func (h *SettingsHandler) UpdateAppVCSCIDeploySettings(c *gin.Context) {
+	h.updateAppSettings(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
+}
+
+func (h *SettingsHandler) updateAppSettings(c *gin.Context, allowedKeys []string) {
 	email := c.GetString("user_email")
 	appName := c.Param("app")
 	if appName == "" {
@@ -302,8 +381,14 @@ func (h *SettingsHandler) UpdateAppSettings(c *gin.Context) {
 		return
 	}
 
+	allowed := buildKeySet(allowedKeys)
+
 	// Validate all keys first
 	for key := range updates {
+		if !isAllowedKey(allowed, key) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s is not managed by this endpoint", key)})
+			return
+		}
 		if !settings.IsValidAppSetting(key) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
 			return
@@ -360,6 +445,14 @@ func (h *SettingsHandler) UpdateAppSettings(c *gin.Context) {
 // @Security CSRFToken
 // @Router /apps/{app}/settings [delete]
 func (h *SettingsHandler) DeleteAppSettings(c *gin.Context) {
+	h.deleteAppSettings(c, nil)
+}
+
+func (h *SettingsHandler) DeleteAppVCSCIDeploySettings(c *gin.Context) {
+	h.deleteAppSettings(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
+}
+
+func (h *SettingsHandler) deleteAppSettings(c *gin.Context, allowedKeys []string) {
 	appName := c.Param("app")
 	if appName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "app name is required"})
@@ -373,8 +466,14 @@ func (h *SettingsHandler) DeleteAppSettings(c *gin.Context) {
 		return
 	}
 
+	allowed := buildKeySet(allowedKeys)
+
 	// Validate all keys first
 	for _, key := range keys {
+		if !isAllowedKey(allowed, key) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s is not managed by this endpoint", key)})
+			return
+		}
 		if !settings.IsValidAppSetting(key) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
 			return
@@ -406,4 +505,100 @@ func (h *SettingsHandler) DeleteAppSettings(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// UpdateAppSettingValue updates a single app setting identified by path parameter.
+func (h *SettingsHandler) UpdateAppSettingValue(c *gin.Context) {
+	appName := c.Param("app")
+	key := c.Param("settingKey")
+	if appName == "" || key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app name and setting key are required"})
+		return
+	}
+
+	if !settings.IsValidAppSetting(key) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
+		return
+	}
+
+	if settings.IsAppSettingInGroup(settings.AppSettingGroupVCSCIDeploy, key) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s must be updated via /settings/vcs_ci_deploy", key)})
+		return
+	}
+
+	var value interface{}
+	if err := c.ShouldBindJSON(&value); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	var uid *int64
+	if h.rbac != nil {
+		email := c.GetString("user_email")
+		if u, err := h.rbac.GetUserWithID(email); err == nil && u != nil {
+			uid = &u.ID
+		}
+	}
+
+	if err := h.settingsService.SetAppSetting(appName, key, value, uid); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save setting: %s", key)})
+		return
+	}
+
+	defaultValue, err := settings.GetAppSettingDefault(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get default for: %s", key)})
+		return
+	}
+
+	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get setting: %s", key)})
+		return
+	}
+
+	c.JSON(http.StatusOK, map[string]settings.Setting{
+		key: *setting,
+	})
+}
+
+// DeleteAppSettingValue deletes a single app setting identified by path parameter.
+func (h *SettingsHandler) DeleteAppSettingValue(c *gin.Context) {
+	appName := c.Param("app")
+	key := c.Param("settingKey")
+	if appName == "" || key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app name and setting key are required"})
+		return
+	}
+
+	if !settings.IsValidAppSetting(key) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
+		return
+	}
+
+	if settings.IsAppSettingInGroup(settings.AppSettingGroupVCSCIDeploy, key) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s must be updated via /settings/vcs_ci_deploy", key)})
+		return
+	}
+
+	if err := h.settingsService.DeleteAppSetting(appName, key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete setting: %s", key)})
+		return
+	}
+
+	defaultValue, err := settings.GetAppSettingDefault(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get default for: %s", key)})
+		return
+	}
+
+	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get setting: %s", key)})
+		return
+	}
+
+	c.JSON(http.StatusOK, map[string]settings.Setting{
+		key: *setting,
+	})
 }

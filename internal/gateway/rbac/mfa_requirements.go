@@ -106,22 +106,18 @@ var MFARequirements = map[string]MFALevel{
 
 	// ========================================================================
 	// SETTINGS RESOURCES - Gateway and app configuration
-	// Format: gateway:setting:{key} (applies to both update and delete)
+	// Format: gateway:setting_group:{group} for grouped endpoints, or
+	// gateway:setting:{key} for single-setting endpoints (applies to update/delete)
 	// ========================================================================
 
 	// Global Settings - Security-critical configurations
-	GatewayGlobalSetting(settings.GlobalSettingAllowDestructiveActions):     MFAAlways, // Enabling destructive operations
-	GatewayGlobalSetting(settings.GlobalSettingDefaultCIOrgSlug):            MFANone,   // Just defaults
-	GatewayGlobalSetting(settings.GlobalSettingDefaultCIProvider):           MFANone,   // Just defaults
-	GatewayGlobalSetting(settings.GlobalSettingDefaultVCSOrgName):           MFANone,   // Just defaults
-	GatewayGlobalSetting(settings.GlobalSettingDefaultVCSProvider):          MFANone,   // Just defaults
-	GatewayGlobalSetting(settings.GlobalSettingDeployApprovalsEnabled):      MFAAlways, // Disabling approval workflow
-	GatewayGlobalSetting(settings.GlobalSettingDeployApprovalWindowMinutes): MFAStepUp, // Extending approval window
-	GatewayGlobalSetting(settings.GlobalSettingMFARequireAllUsers):          MFAAlways, // Disabling MFA globally
-	GatewayGlobalSetting(settings.GlobalSettingStepUpWindowMinutes):         MFAStepUp, // Extending step-up window
-	GatewayGlobalSetting(settings.GlobalSettingTrustedDeviceTTLDays):        MFAStepUp, // Extending trust window
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive): MFAAlways, // Enabling destructive operations
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals):  MFAAlways, // Disabling approval workflow or extending approval window
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration): MFAAlways, // Disabling MFA globally or extending trust windows
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults): MFAStepUp, // Impacts repo/CI defaults
 
 	// App Settings - Security controls
+	GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy):         MFAAlways, // Covers GitHub verification and PR requirements
 	GatewayAppSetting(settings.AppSettingAllowDeployFromDefaultBranch):  MFAStepUp, // Allowing more deploys
 	GatewayAppSetting(settings.AppSettingApprovedDeployCommands):        MFAStepUp, // Defining allowed commands
 	GatewayAppSetting(settings.AppSettingCIOrgSlug):                     MFANone,   // Just configuration

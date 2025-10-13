@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import { Button } from './ui/button';
+import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Button } from './ui/button'
 import {
   Dialog,
   DialogContent,
@@ -8,26 +8,26 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+} from './ui/dialog'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
 
 export type ConfirmDeleteDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description: ReactNode;
-  onConfirm: () => void | Promise<void>;
-  busy?: boolean;
-  confirmText?: string;
-  confirmButtonText?: string;
-  busyText?: string;
-  inputLabel?: string;
-  inputPlaceholder?: string;
-  inputId?: string;
-};
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  description: ReactNode
+  onConfirm: () => void | Promise<void>
+  busy?: boolean
+  confirmText?: string
+  confirmButtonText?: string
+  busyText?: string
+  inputLabel?: string
+  inputPlaceholder?: string
+  inputId?: string
+}
 
-const normalize = (value: string) => value.trim().toUpperCase();
+const normalize = (value: string) => value.trim().toUpperCase()
 
 export function ConfirmDeleteDialog({
   open,
@@ -43,34 +43,31 @@ export function ConfirmDeleteDialog({
   inputPlaceholder,
   inputId = 'confirm-delete-input',
 }: ConfirmDeleteDialogProps) {
-  const [value, setValue] = useState('');
-  const normalizedConfirm = useMemo(
-    () => normalize(confirmText),
-    [confirmText],
-  );
+  const [value, setValue] = useState('')
+  const normalizedConfirm = useMemo(() => normalize(confirmText), [confirmText])
 
   useEffect(() => {
     if (!open) {
-      setValue('');
+      setValue('')
     }
-  }, [open]);
+  }, [open])
 
   const placeholder = useMemo(() => {
     if (inputPlaceholder) {
-      return inputPlaceholder;
+      return inputPlaceholder
     }
-    return `Type ${confirmText.toUpperCase()} to confirm`;
-  }, [confirmText, inputPlaceholder]);
+    return `Type ${confirmText.toUpperCase()} to confirm`
+  }, [confirmText, inputPlaceholder])
 
-  const disabled = busy || normalize(value) !== normalizedConfirm;
-  const confirmBusyLabel = busyText ?? `${confirmButtonText}...`;
+  const disabled = busy || normalize(value) !== normalizedConfirm
+  const confirmBusyLabel = busyText ?? `${confirmButtonText}...`
 
   const handleConfirm = () => {
     if (disabled) {
-      return;
+      return
     }
-    onConfirm();
-  };
+    onConfirm()
+  }
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -95,22 +92,14 @@ export function ConfirmDeleteDialog({
           />
         </div>
         <DialogFooter>
-          <Button
-            disabled={busy}
-            onClick={() => onOpenChange(false)}
-            variant="outline"
-          >
+          <Button disabled={busy} onClick={() => onOpenChange(false)} variant="outline">
             Cancel
           </Button>
-          <Button
-            disabled={disabled}
-            onClick={handleConfirm}
-            variant="destructive"
-          >
+          <Button disabled={disabled} onClick={handleConfirm} variant="destructive">
             {busy ? confirmBusyLabel : confirmButtonText}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

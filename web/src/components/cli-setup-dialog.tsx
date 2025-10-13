@@ -4,15 +4,15 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { CodeBlockCopy } from './code-block-copy';
+} from '@/components/ui/dialog'
+import { CodeBlockCopy } from './code-block-copy'
 
 type CliSetupDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  rackAlias: string;
-  gatewayOrigin: string;
-};
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  rackAlias: string
+  gatewayOrigin: string
+}
 
 export function CliSetupDialog({
   open,
@@ -44,9 +44,7 @@ export function CliSetupDialog({
           </CodeBlockCopy>
 
           <p className="pt-1">Authenticate the CLI against this gateway:</p>
-          <CodeBlockCopy
-            code={`rack-gateway login ${rackAlias.toLowerCase()} ${gatewayOrigin}`}
-          >
+          <CodeBlockCopy code={`rack-gateway login ${rackAlias.toLowerCase()} ${gatewayOrigin}`}>
             <div className="rounded-md border bg-muted p-3 font-mono text-xs">
               <div>
                 rack-gateway login {rackAlias.toLowerCase()} {gatewayOrigin}
@@ -72,5 +70,5 @@ export function CliSetupDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

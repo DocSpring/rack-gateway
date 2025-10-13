@@ -518,6 +518,6 @@ curl -X POST \
 
 - [CircleCI API Documentation](https://circleci.com/docs/api/v2/)
 - [CircleCI Approval Jobs](https://circleci.com/docs/workflows/#holding-a-workflow-for-a-manual-approval)
-- [CircleCI Personal API Tokens](https://circleci.com/docs/managing-api-tokens/)
+- [CircleCI Personal API Tokens](https://circleci.com/docs/managing-api_tokens/)
 - [Rack Gateway Deploy Approval System](./DEPLOY_APPROVALS.md)
 - [Configuration Reference](./CONFIGURATION.md)

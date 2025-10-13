@@ -41,7 +41,7 @@ var (
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/audit [get]
+// @Router /audit-logs [get]
 func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 	start := time.Now()
 	filters, page, limit, err := h.auditFiltersFromRequest(c)
@@ -116,7 +116,7 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/audit/export [get]
+// @Router /audit-logs/export [get]
 func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	start := time.Now()
 	filters, _, _, err := h.auditFiltersFromRequest(c)

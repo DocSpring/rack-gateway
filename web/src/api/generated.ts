@@ -10,20 +10,23 @@ import type {
   DbAPIToken,
   DbRackTLSCert,
   DbUser,
-  GetAdminAuditExportParams,
-  GetAdminAuditParams,
-  GetAdminConfig200,
-  GetAdminDeployApprovalRequestsIdAuditLogsParams,
-  GetAdminDeployApprovalRequestsParams,
-  GetAdminRoles200,
-  GetAdminSettings200,
+  DeleteAppsAppSettings200,
+  DeleteAppsAppSettingsParams,
+  DeleteSettings200,
+  DeleteSettingsParams,
+  GetAppsAppEnvParams,
   GetAppsAppSettings200,
+  GetAuditLogsExportParams,
+  GetAuditLogsParams,
   GetAuthCliCallbackParams,
   GetAuthWebCallbackParams,
   GetCreatedBy200,
   GetCreatedByParams,
-  GetEnvParams,
+  GetDeployApprovalRequestsIdAuditLogsParams,
+  GetDeployApprovalRequestsParams,
   GetRack200,
+  GetRoles200,
+  GetSettings200,
   HandlersAuditLogsResponse,
   HandlersBackupCodesResponse,
   HandlersCLILoginCompleteRequest,
@@ -64,8 +67,10 @@ import type {
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
+  PutAppsAppSettings200,
+  PutSettings200,
+  SettingsBody,
   SettingsSetting,
-  ValueBody,
 } from './schemas';
 
 import { createGatewayClient } from './http-client';
@@ -73,243 +78,14 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 export const getRackGatewayAPI = () => {
   /**
-   * Returns paginated audit logs filtered by optional query parameters.
-   * @summary List audit logs
-   */
-  const getAdminAudit = (
-    params?: GetAdminAuditParams,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersAuditLogsResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersAuditLogsResponse>(
-      { url: `/admin/audit`, method: 'GET', params },
-      options,
-    );
-  };
-
-  /**
-   * Streams the filtered audit log dataset as CSV.
-   * @summary Export audit logs as CSV
-   */
-  const getAdminAuditExport = (
-    params?: GetAdminAuditExportParams,
-    options?: SecondParameter<typeof createGatewayClient<Blob>>,
-  ) => {
-    return createGatewayClient<Blob>(
-      {
-        url: `/admin/audit/export`,
-        method: 'GET',
-        params,
-        responseType: 'blob',
-      },
-      options,
-    );
-  };
-
-  /**
-   * Returns the legacy user/domain configuration payload (deprecated).
-   * @summary Get legacy configuration
-   */
-  const getAdminConfig = (
-    options?: SecondParameter<typeof createGatewayClient<GetAdminConfig200>>,
-  ) => {
-    return createGatewayClient<GetAdminConfig200>(
-      { url: `/admin/config`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Placeholder endpoint retained for backwards compatibility. Always returns 501.
-   * @summary Update legacy configuration
-   */
-  const putAdminConfig = (
-    options?: SecondParameter<typeof createGatewayClient<unknown>>,
-  ) => {
-    return createGatewayClient<unknown>(
-      { url: `/admin/config`, method: 'PUT' },
-      options,
-    );
-  };
-
-  /**
-   * Lists deploy approval requests (admin).
-   * @summary List deploy approvals
-   */
-  const getAdminDeployApprovalRequests = (
-    params?: GetAdminDeployApprovalRequestsParams,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersDeployApprovalRequestList>
-    >,
-  ) => {
-    return createGatewayClient<HandlersDeployApprovalRequestList>(
-      { url: `/admin/deploy-approval-requests`, method: 'GET', params },
-      options,
-    );
-  };
-
-  /**
-   * Approves a pending deploy approval request.
-   * @summary Approve deploy approval request
-   */
-  const postAdminDeployApprovalRequestsIdApprove = (
-    id: string,
-    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-      {
-        url: `/admin/deploy-approval-requests/${id}/approve`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateDeployApprovalRequestStatusRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Returns audit logs associated with a specific deploy approval request.
-   * @summary Get audit logs for deploy approval request
-   */
-  const getAdminDeployApprovalRequestsIdAuditLogs = (
-    id: string,
-    params?: GetAdminDeployApprovalRequestsIdAuditLogsParams,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersAuditLogsResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersAuditLogsResponse>(
-      {
-        url: `/admin/deploy-approval-requests/${id}/audit-logs`,
-        method: 'GET',
-        params,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Rejects a pending deploy approval request.
-   * @summary Reject deploy approval request
-   */
-  const postAdminDeployApprovalRequestsIdReject = (
-    id: string,
-    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-      {
-        url: `/admin/deploy-approval-requests/${id}/reject`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateDeployApprovalRequestStatusRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Returns metadata and permissions for each gateway RBAC role.
-   * @summary List RBAC roles
-   */
-  const getAdminRoles = (
-    options?: SecondParameter<typeof createGatewayClient<GetAdminRoles200>>,
-  ) => {
-    return createGatewayClient<GetAdminRoles200>(
-      { url: `/admin/roles`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Returns all global settings with their sources (db, env, or default)
-   * @summary Get all global settings
-   */
-  const getAdminSettings = (
-    options?: SecondParameter<typeof createGatewayClient<GetAdminSettings200>>,
-  ) => {
-    return createGatewayClient<GetAdminSettings200>(
-      { url: `/admin/settings`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Fetches and stores the latest TLS certificate for the configured Convox rack.
-   * @summary Refresh rack TLS certificate
-   */
-  const postAdminSettingsRackTlsCertRefresh = (
-    options?: SecondParameter<typeof createGatewayClient<DbRackTLSCert>>,
-  ) => {
-    return createGatewayClient<DbRackTLSCert>(
-      { url: `/admin/settings/rack_tls_cert/refresh`, method: 'POST' },
-      options,
-    );
-  };
-
-  /**
-   * Returns a single global setting with its source
-   * @summary Get a specific global setting
-   */
-  const getAdminSettingsKey = (
-    key: string,
-    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
-  ) => {
-    return createGatewayClient<SettingsSetting>(
-      { url: `/admin/settings/${key}`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Updates a single global setting and stores it in the database
-   * @summary Update a global setting
-   */
-  const putAdminSettingsKey = (
-    key: string,
-    valueBody: ValueBody,
-    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
-  ) => {
-    return createGatewayClient<SettingsSetting>(
-      {
-        url: `/admin/settings/${key}`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: valueBody,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Deletes a global setting from the database, reverting to env or default value
-   * @summary Delete a global setting
-   */
-  const deleteAdminSettingsKey = (
-    key: string,
-    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
-  ) => {
-    return createGatewayClient<SettingsSetting>(
-      { url: `/admin/settings/${key}`, method: 'DELETE' },
-      options,
-    );
-  };
-
-  /**
    * Returns all API tokens configured in the system.
    * @summary List API tokens
    */
-  const getAdminTokens = (
+  const getApiTokens = (
     options?: SecondParameter<typeof createGatewayClient<DbAPIToken[]>>,
   ) => {
     return createGatewayClient<DbAPIToken[]>(
-      { url: `/admin/tokens`, method: 'GET' },
+      { url: `/api-tokens`, method: 'GET' },
       options,
     );
   };
@@ -318,7 +94,7 @@ export const getRackGatewayAPI = () => {
    * Generates a new API token for automation or CI/CD use.
    * @summary Create an API token
    */
-  const postAdminTokens = (
+  const postApiTokens = (
     handlersCreateAPITokenRequest: HandlersCreateAPITokenRequest,
     options?: SecondParameter<
       typeof createGatewayClient<HandlersCreateAPITokenResponse>
@@ -326,7 +102,7 @@ export const getRackGatewayAPI = () => {
   ) => {
     return createGatewayClient<HandlersCreateAPITokenResponse>(
       {
-        url: `/admin/tokens`,
+        url: `/api-tokens`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         data: handlersCreateAPITokenRequest,
@@ -339,13 +115,13 @@ export const getRackGatewayAPI = () => {
    * Returns the permission catalog and metadata used to build API token forms.
    * @summary Get token permission metadata
    */
-  const getAdminTokensPermissions = (
+  const getApiTokensPermissions = (
     options?: SecondParameter<
       typeof createGatewayClient<HandlersTokenPermissionMetadata>
     >,
   ) => {
     return createGatewayClient<HandlersTokenPermissionMetadata>(
-      { url: `/admin/tokens/permissions`, method: 'GET' },
+      { url: `/api-tokens/permissions`, method: 'GET' },
       options,
     );
   };
@@ -354,12 +130,12 @@ export const getRackGatewayAPI = () => {
    * Returns metadata for a specific API token.
    * @summary Get API token
    */
-  const getAdminTokensTokenID = (
+  const getApiTokensTokenID = (
     tokenID: string,
     options?: SecondParameter<typeof createGatewayClient<DbAPIToken>>,
   ) => {
     return createGatewayClient<DbAPIToken>(
-      { url: `/admin/tokens/${tokenID}`, method: 'GET' },
+      { url: `/api-tokens/${tokenID}`, method: 'GET' },
       options,
     );
   };
@@ -368,14 +144,14 @@ export const getRackGatewayAPI = () => {
    * Updates token metadata such as name and permissions.
    * @summary Update an API token
    */
-  const putAdminTokensTokenID = (
+  const putApiTokensTokenID = (
     tokenID: string,
     handlersUpdateAPITokenRequest: HandlersUpdateAPITokenRequest,
     options?: SecondParameter<typeof createGatewayClient<DbAPIToken>>,
   ) => {
     return createGatewayClient<DbAPIToken>(
       {
-        url: `/admin/tokens/${tokenID}`,
+        url: `/api-tokens/${tokenID}`,
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         data: handlersUpdateAPITokenRequest,
@@ -388,202 +164,51 @@ export const getRackGatewayAPI = () => {
    * Permanently removes an API token.
    * @summary Delete an API token
    */
-  const deleteAdminTokensTokenID = (
+  const deleteApiTokensTokenID = (
     tokenID: string,
     options?: SecondParameter<typeof createGatewayClient<string>>,
   ) => {
     return createGatewayClient<string>(
-      { url: `/admin/tokens/${tokenID}`, method: 'DELETE' },
+      { url: `/api-tokens/${tokenID}`, method: 'DELETE' },
       options,
     );
   };
 
   /**
-   * Returns every user configured in the gateway along with role assignments.
-   * @summary List all gateway users
+   * Returns environment variables for a Convox app, masking secrets unless authorized.
+   * @summary Get environment variables
    */
-  const getAdminUsers = (
-    options?: SecondParameter<typeof createGatewayClient<DbUser[]>>,
+  const getAppsAppEnv = (
+    app: string,
+    params?: GetAppsAppEnvParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersEnvValuesResponse>
+    >,
   ) => {
-    return createGatewayClient<DbUser[]>(
-      { url: `/admin/users`, method: 'GET' },
+    return createGatewayClient<HandlersEnvValuesResponse>(
+      { url: `/apps/${app}/env`, method: 'GET', params },
       options,
     );
   };
 
   /**
-   * Creates a new gateway user with the provided roles.
-   * @summary Create a user
+   * Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+   * @summary Update environment variables
    */
-  const postAdminUsers = (
-    handlersCreateUserRequest: HandlersCreateUserRequest,
-    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  const putAppsAppEnv = (
+    app: string,
+    handlersUpdateEnvValuesRequest: HandlersUpdateEnvValuesRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersUpdateEnvValuesResponse>
+    >,
   ) => {
-    return createGatewayClient<HandlersUserSummary>(
+    return createGatewayClient<HandlersUpdateEnvValuesResponse>(
       {
-        url: `/admin/users`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersCreateUserRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Returns details for a single gateway user.
-   * @summary Get a user
-   */
-  const getAdminUsersEmail = (
-    email: string,
-    options?: SecondParameter<typeof createGatewayClient<DbUser>>,
-  ) => {
-    return createGatewayClient<DbUser>(
-      { url: `/admin/users/${email}`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Updates a user's display name and/or email.
-   * @summary Update user profile
-   */
-  const putAdminUsersEmail = (
-    email: string,
-    handlersUpdateUserProfileRequest: HandlersUpdateUserProfileRequest,
-    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
-  ) => {
-    return createGatewayClient<HandlersUserSummary>(
-      {
-        url: `/admin/users/${email}`,
+        url: `/apps/${app}/env`,
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateUserProfileRequest,
+        data: handlersUpdateEnvValuesRequest,
       },
-      options,
-    );
-  };
-
-  /**
-   * Removes a gateway user and revokes all sessions they own.
-   * @summary Delete a user
-   */
-  const deleteAdminUsersEmail = (
-    email: string,
-    options?: SecondParameter<typeof createGatewayClient<string>>,
-  ) => {
-    return createGatewayClient<string>(
-      { url: `/admin/users/${email}`, method: 'DELETE' },
-      options,
-    );
-  };
-
-  /**
-   * Locks a user account to prevent login
-   * @summary Lock a user account
-   */
-  const postAdminUsersEmailLock = (
-    email: string,
-    handlersLockUserRequest: HandlersLockUserRequest,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      {
-        url: `/admin/users/${email}/lock`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersLockUserRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Replaces the role assignments for a user.
-   * @summary Update user roles
-   */
-  const putAdminUsersEmailRoles = (
-    email: string,
-    handlersUpdateUserRolesRequest: HandlersUpdateUserRolesRequest,
-    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
-  ) => {
-    return createGatewayClient<HandlersUserSummary>(
-      {
-        url: `/admin/users/${email}/roles`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateUserRolesRequest,
-      },
-      options,
-    );
-  };
-
-  /**
-   * Returns the active (non-revoked) web sessions for the specified user.
-   * @summary List active sessions for a user
-   */
-  const getAdminUsersEmailSessions = (
-    email: string,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersUserSessionResponse[]>
-    >,
-  ) => {
-    return createGatewayClient<HandlersUserSessionResponse[]>(
-      { url: `/admin/users/${email}/sessions`, method: 'GET' },
-      options,
-    );
-  };
-
-  /**
-   * Revokes every active session belonging to the specified user.
-   * @summary Revoke all sessions for a user
-   */
-  const postAdminUsersEmailSessionsRevokeAll = (
-    email: string,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersRevokeAllSessionsResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersRevokeAllSessionsResponse>(
-      { url: `/admin/users/${email}/sessions/revoke_all`, method: 'POST' },
-      options,
-    );
-  };
-
-  /**
-   * Revokes a single session for the specified user.
-   * @summary Revoke a user session
-   */
-  const postAdminUsersEmailSessionsSessionIDRevoke = (
-    email: string,
-    sessionID: number,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersRevokeSessionResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersRevokeSessionResponse>(
-      {
-        url: `/admin/users/${email}/sessions/${sessionID}/revoke`,
-        method: 'POST',
-      },
-      options,
-    );
-  };
-
-  /**
-   * Unlocks a previously locked user account
-   * @summary Unlock a user account
-   */
-  const postAdminUsersEmailUnlock = (
-    email: string,
-    options?: SecondParameter<
-      typeof createGatewayClient<HandlersStatusResponse>
-    >,
-  ) => {
-    return createGatewayClient<HandlersStatusResponse>(
-      { url: `/admin/users/${email}/unlock`, method: 'POST' },
       options,
     );
   };
@@ -605,6 +230,45 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * Updates multiple app settings atomically and stores them in the database
+   * @summary Update multiple app settings
+   */
+  const putAppsAppSettings = (
+    app: string,
+    settingsBody: SettingsBody,
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettings200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettings200>(
+      {
+        url: `/apps/${app}/settings`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: settingsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Deletes multiple app settings from the database, reverting to env or default values
+   * @summary Delete multiple app settings
+   */
+  const deleteAppsAppSettings = (
+    app: string,
+    params: DeleteAppsAppSettingsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettings200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettings200>(
+      { url: `/apps/${app}/settings`, method: 'DELETE', params },
+      options,
+    );
+  };
+
+  /**
    * Returns a single app setting with its source
    * @summary Get a specific app setting
    */
@@ -620,37 +284,36 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Updates a single app setting and stores it in the database
-   * @summary Update an app setting
+   * Returns paginated audit logs filtered by optional query parameters.
+   * @summary List audit logs
    */
-  const putAppsAppSettingsKey = (
-    app: string,
-    key: string,
-    valueBody: ValueBody,
-    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  const getAuditLogs = (
+    params?: GetAuditLogsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersAuditLogsResponse>
+    >,
   ) => {
-    return createGatewayClient<SettingsSetting>(
-      {
-        url: `/apps/${app}/settings/${key}`,
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        data: valueBody,
-      },
+    return createGatewayClient<HandlersAuditLogsResponse>(
+      { url: `/audit-logs`, method: 'GET', params },
       options,
     );
   };
 
   /**
-   * Deletes an app setting from the database, reverting to env or default value
-   * @summary Delete an app setting
+   * Streams the filtered audit log dataset as CSV.
+   * @summary Export audit logs as CSV
    */
-  const deleteAppsAppSettingsKey = (
-    app: string,
-    key: string,
-    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  const getAuditLogsExport = (
+    params?: GetAuditLogsExportParams,
+    options?: SecondParameter<typeof createGatewayClient<Blob>>,
   ) => {
-    return createGatewayClient<SettingsSetting>(
-      { url: `/apps/${app}/settings/${key}`, method: 'DELETE' },
+    return createGatewayClient<Blob>(
+      {
+        url: `/audit-logs/export`,
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      },
       options,
     );
   };
@@ -888,6 +551,21 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * Marks the current browser session as trusted by minting a trusted device cookie.
+   * @summary Trust the current device
+   */
+  const postAuthMfaTrustedDevicesTrust = (
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersVerifyMFAResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersVerifyMFAResponse>(
+      { url: `/auth/mfa/trusted-devices/trust`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
    * Revokes a trusted device, requiring MFA on next login from that device.
    * @summary Revoke a trusted device
    */
@@ -1015,6 +693,22 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * Lists deploy approval requests (admin).
+   * @summary List deploy approvals
+   */
+  const getDeployApprovalRequests = (
+    params?: GetDeployApprovalRequestsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestList>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestList>(
+      { url: `/deploy-approval-requests`, method: 'GET', params },
+      options,
+    );
+  };
+
+  /**
    * Creates a manual approval record tied to an API token.
    * @summary Request deploy approval
    */
@@ -1052,37 +746,65 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Returns environment variables for a Convox app, masking secrets unless authorized.
-   * @summary Get environment variables
+   * Approves a pending deploy approval request.
+   * @summary Approve deploy approval request
    */
-  const getEnv = (
-    params: GetEnvParams,
+  const postDeployApprovalRequestsIdApprove = (
+    id: string,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
     options?: SecondParameter<
-      typeof createGatewayClient<HandlersEnvValuesResponse>
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
     >,
   ) => {
-    return createGatewayClient<HandlersEnvValuesResponse>(
-      { url: `/env`, method: 'GET', params },
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      {
+        url: `/deploy-approval-requests/${id}/approve`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
+      },
       options,
     );
   };
 
   /**
-   * Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
-   * @summary Update environment variables
+   * Returns audit logs associated with a specific deploy approval request.
+   * @summary Get audit logs for deploy approval request
    */
-  const putEnv = (
-    handlersUpdateEnvValuesRequest: HandlersUpdateEnvValuesRequest,
+  const getDeployApprovalRequestsIdAuditLogs = (
+    id: string,
+    params?: GetDeployApprovalRequestsIdAuditLogsParams,
     options?: SecondParameter<
-      typeof createGatewayClient<HandlersUpdateEnvValuesResponse>
+      typeof createGatewayClient<HandlersAuditLogsResponse>
     >,
   ) => {
-    return createGatewayClient<HandlersUpdateEnvValuesResponse>(
+    return createGatewayClient<HandlersAuditLogsResponse>(
       {
-        url: `/env`,
-        method: 'PUT',
+        url: `/deploy-approval-requests/${id}/audit-logs`,
+        method: 'GET',
+        params,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Rejects a pending deploy approval request.
+   * @summary Reject deploy approval request
+   */
+  const postDeployApprovalRequestsIdReject = (
+    id: string,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      {
+        url: `/deploy-approval-requests/${id}/reject`,
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        data: handlersUpdateEnvValuesRequest,
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
       },
       options,
     );
@@ -1129,42 +851,294 @@ export const getRackGatewayAPI = () => {
     );
   };
 
+  /**
+   * Returns metadata and permissions for each gateway RBAC role.
+   * @summary List RBAC roles
+   */
+  const getRoles = (
+    options?: SecondParameter<typeof createGatewayClient<GetRoles200>>,
+  ) => {
+    return createGatewayClient<GetRoles200>(
+      { url: `/roles`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Returns all global settings with their sources (db, env, or default)
+   * @summary Get all global settings
+   */
+  const getSettings = (
+    options?: SecondParameter<typeof createGatewayClient<GetSettings200>>,
+  ) => {
+    return createGatewayClient<GetSettings200>(
+      { url: `/settings`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Updates multiple global settings atomically and stores them in the database
+   * @summary Update multiple global settings
+   */
+  const putSettings = (
+    settingsBody: SettingsBody,
+    options?: SecondParameter<typeof createGatewayClient<PutSettings200>>,
+  ) => {
+    return createGatewayClient<PutSettings200>(
+      {
+        url: `/settings`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: settingsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Deletes multiple global settings from the database, reverting to env or default values
+   * @summary Delete multiple global settings
+   */
+  const deleteSettings = (
+    params: DeleteSettingsParams,
+    options?: SecondParameter<typeof createGatewayClient<DeleteSettings200>>,
+  ) => {
+    return createGatewayClient<DeleteSettings200>(
+      { url: `/settings`, method: 'DELETE', params },
+      options,
+    );
+  };
+
+  /**
+   * Fetches and stores the latest TLS certificate for the configured Convox rack.
+   * @summary Refresh rack TLS certificate
+   */
+  const postSettingsRackTlsCertRefresh = (
+    options?: SecondParameter<typeof createGatewayClient<DbRackTLSCert>>,
+  ) => {
+    return createGatewayClient<DbRackTLSCert>(
+      { url: `/settings/rack_tls_cert/refresh`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Returns a single global setting with its source
+   * @summary Get a specific global setting
+   */
+  const getSettingsKey = (
+    key: string,
+    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+  ) => {
+    return createGatewayClient<SettingsSetting>(
+      { url: `/settings/${key}`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Returns every user configured in the gateway along with role assignments.
+   * @summary List all gateway users
+   */
+  const getUsers = (
+    options?: SecondParameter<typeof createGatewayClient<DbUser[]>>,
+  ) => {
+    return createGatewayClient<DbUser[]>(
+      { url: `/users`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Creates a new gateway user with the provided roles.
+   * @summary Create a user
+   */
+  const postUsers = (
+    handlersCreateUserRequest: HandlersCreateUserRequest,
+    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  ) => {
+    return createGatewayClient<HandlersUserSummary>(
+      {
+        url: `/users`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersCreateUserRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Returns details for a single gateway user.
+   * @summary Get a user
+   */
+  const getUsersEmail = (
+    email: string,
+    options?: SecondParameter<typeof createGatewayClient<DbUser>>,
+  ) => {
+    return createGatewayClient<DbUser>(
+      { url: `/users/${email}`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Updates a user's display name and/or email.
+   * @summary Update user profile
+   */
+  const putUsersEmail = (
+    email: string,
+    handlersUpdateUserProfileRequest: HandlersUpdateUserProfileRequest,
+    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  ) => {
+    return createGatewayClient<HandlersUserSummary>(
+      {
+        url: `/users/${email}`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateUserProfileRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes a gateway user and revokes all sessions they own.
+   * @summary Delete a user
+   */
+  const deleteUsersEmail = (
+    email: string,
+    options?: SecondParameter<typeof createGatewayClient<string>>,
+  ) => {
+    return createGatewayClient<string>(
+      { url: `/users/${email}`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+   * Locks a user account to prevent login
+   * @summary Lock a user account
+   */
+  const postUsersEmailLock = (
+    email: string,
+    handlersLockUserRequest: HandlersLockUserRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      {
+        url: `/users/${email}/lock`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersLockUserRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the role assignments for a user.
+   * @summary Update user roles
+   */
+  const putUsersEmailRoles = (
+    email: string,
+    handlersUpdateUserRolesRequest: HandlersUpdateUserRolesRequest,
+    options?: SecondParameter<typeof createGatewayClient<HandlersUserSummary>>,
+  ) => {
+    return createGatewayClient<HandlersUserSummary>(
+      {
+        url: `/users/${email}/roles`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateUserRolesRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Returns the active (non-revoked) web sessions for the specified user.
+   * @summary List active sessions for a user
+   */
+  const getUsersEmailSessions = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersUserSessionResponse[]>
+    >,
+  ) => {
+    return createGatewayClient<HandlersUserSessionResponse[]>(
+      { url: `/users/${email}/sessions`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
+   * Revokes every active session belonging to the specified user.
+   * @summary Revoke all sessions for a user
+   */
+  const postUsersEmailSessionsRevokeAll = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersRevokeAllSessionsResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersRevokeAllSessionsResponse>(
+      { url: `/users/${email}/sessions/revoke_all`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Revokes a single session for the specified user.
+   * @summary Revoke a user session
+   */
+  const postUsersEmailSessionsSessionIDRevoke = (
+    email: string,
+    sessionID: number,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersRevokeSessionResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersRevokeSessionResponse>(
+      { url: `/users/${email}/sessions/${sessionID}/revoke`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
+   * Unlocks a previously locked user account
+   * @summary Unlock a user account
+   */
+  const postUsersEmailUnlock = (
+    email: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersStatusResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersStatusResponse>(
+      { url: `/users/${email}/unlock`, method: 'POST' },
+      options,
+    );
+  };
+
   return {
-    getAdminAudit,
-    getAdminAuditExport,
-    getAdminConfig,
-    putAdminConfig,
-    getAdminDeployApprovalRequests,
-    postAdminDeployApprovalRequestsIdApprove,
-    getAdminDeployApprovalRequestsIdAuditLogs,
-    postAdminDeployApprovalRequestsIdReject,
-    getAdminRoles,
-    getAdminSettings,
-    postAdminSettingsRackTlsCertRefresh,
-    getAdminSettingsKey,
-    putAdminSettingsKey,
-    deleteAdminSettingsKey,
-    getAdminTokens,
-    postAdminTokens,
-    getAdminTokensPermissions,
-    getAdminTokensTokenID,
-    putAdminTokensTokenID,
-    deleteAdminTokensTokenID,
-    getAdminUsers,
-    postAdminUsers,
-    getAdminUsersEmail,
-    putAdminUsersEmail,
-    deleteAdminUsersEmail,
-    postAdminUsersEmailLock,
-    putAdminUsersEmailRoles,
-    getAdminUsersEmailSessions,
-    postAdminUsersEmailSessionsRevokeAll,
-    postAdminUsersEmailSessionsSessionIDRevoke,
-    postAdminUsersEmailUnlock,
+    getApiTokens,
+    postApiTokens,
+    getApiTokensPermissions,
+    getApiTokensTokenID,
+    putApiTokensTokenID,
+    deleteApiTokensTokenID,
+    getAppsAppEnv,
+    putAppsAppEnv,
     getAppsAppSettings,
+    putAppsAppSettings,
+    deleteAppsAppSettings,
     getAppsAppSettingsKey,
-    putAppsAppSettingsKey,
-    deleteAppsAppSettingsKey,
+    getAuditLogs,
+    getAuditLogsExport,
     getAuthCliCallback,
     postAuthCliComplete,
     postAuthCliStart,
@@ -1178,6 +1152,7 @@ export const getRackGatewayAPI = () => {
     deleteAuthMfaMethodsMethodID,
     putAuthMfaPreferredMethod,
     getAuthMfaStatus,
+    postAuthMfaTrustedDevicesTrust,
     deleteAuthMfaTrustedDevicesDeviceID,
     postAuthMfaVerify,
     postAuthMfaWebauthnAssertionStart,
@@ -1186,187 +1161,79 @@ export const getRackGatewayAPI = () => {
     getAuthWebLogin,
     getAuthWebLogout,
     getCreatedBy,
+    getDeployApprovalRequests,
     postDeployApprovalRequests,
     getDeployApprovalRequestsId,
-    getEnv,
-    putEnv,
+    postDeployApprovalRequestsIdApprove,
+    getDeployApprovalRequestsIdAuditLogs,
+    postDeployApprovalRequestsIdReject,
     getHealth,
     getInfo,
     getRack,
+    getRoles,
+    getSettings,
+    putSettings,
+    deleteSettings,
+    postSettingsRackTlsCertRefresh,
+    getSettingsKey,
+    getUsers,
+    postUsers,
+    getUsersEmail,
+    putUsersEmail,
+    deleteUsersEmail,
+    postUsersEmailLock,
+    putUsersEmailRoles,
+    getUsersEmailSessions,
+    postUsersEmailSessionsRevokeAll,
+    postUsersEmailSessionsSessionIDRevoke,
+    postUsersEmailUnlock,
   };
 };
-export type GetAdminAuditResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminAudit']>>
+export type GetApiTokensResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getApiTokens']>>
 >;
-export type GetAdminAuditExportResult = NonNullable<
+export type PostApiTokensResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postApiTokens']>>
+>;
+export type GetApiTokensPermissionsResult = NonNullable<
   Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminAuditExport']>
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getApiTokensPermissions']>
   >
 >;
-export type GetAdminConfigResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminConfig']>>
->;
-export type PutAdminConfigResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminConfig']>>
->;
-export type GetAdminDeployApprovalRequestsResult = NonNullable<
+export type GetApiTokensTokenIDResult = NonNullable<
   Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['getAdminDeployApprovalRequests']
-    >
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getApiTokensTokenID']>
   >
 >;
-export type PostAdminDeployApprovalRequestsIdApproveResult = NonNullable<
+export type PutApiTokensTokenIDResult = NonNullable<
   Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAdminDeployApprovalRequestsIdApprove']
-    >
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putApiTokensTokenID']>
   >
 >;
-export type GetAdminDeployApprovalRequestsIdAuditLogsResult = NonNullable<
+export type DeleteApiTokensTokenIDResult = NonNullable<
   Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['getAdminDeployApprovalRequestsIdAuditLogs']
-    >
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteApiTokensTokenID']>
   >
 >;
-export type PostAdminDeployApprovalRequestsIdRejectResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAdminDeployApprovalRequestsIdReject']
-    >
-  >
+export type GetAppsAppEnvResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAppsAppEnv']>>
 >;
-export type GetAdminRolesResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminRoles']>>
->;
-export type GetAdminSettingsResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettings']>>
->;
-export type PostAdminSettingsRackTlsCertRefreshResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAdminSettingsRackTlsCertRefresh']
-    >
-  >
->;
-export type GetAdminSettingsKeyResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminSettingsKey']>
-  >
->;
-export type PutAdminSettingsKeyResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminSettingsKey']>
-  >
->;
-export type DeleteAdminSettingsKeyResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminSettingsKey']>
-  >
->;
-export type GetAdminTokensResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminTokens']>>
->;
-export type PostAdminTokensResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAdminTokens']>>
->;
-export type GetAdminTokensPermissionsResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['getAdminTokensPermissions']
-    >
-  >
->;
-export type GetAdminTokensTokenIDResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminTokensTokenID']>
-  >
->;
-export type PutAdminTokensTokenIDResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminTokensTokenID']>
-  >
->;
-export type DeleteAdminTokensTokenIDResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminTokensTokenID']>
-  >
->;
-export type GetAdminUsersResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminUsers']>>
->;
-export type PostAdminUsersResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAdminUsers']>>
->;
-export type GetAdminUsersEmailResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAdminUsersEmail']>
-  >
->;
-export type PutAdminUsersEmailResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminUsersEmail']>
-  >
->;
-export type DeleteAdminUsersEmailResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAdminUsersEmail']>
-  >
->;
-export type PostAdminUsersEmailLockResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['postAdminUsersEmailLock']>
-  >
->;
-export type PutAdminUsersEmailRolesResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAdminUsersEmailRoles']>
-  >
->;
-export type GetAdminUsersEmailSessionsResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['getAdminUsersEmailSessions']
-    >
-  >
->;
-export type PostAdminUsersEmailSessionsRevokeAllResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAdminUsersEmailSessionsRevokeAll']
-    >
-  >
->;
-export type PostAdminUsersEmailSessionsSessionIDRevokeResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<
-        typeof getRackGatewayAPI
-      >['postAdminUsersEmailSessionsSessionIDRevoke']
-    >
-  >
->;
-export type PostAdminUsersEmailUnlockResult = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof getRackGatewayAPI>['postAdminUsersEmailUnlock']
-    >
-  >
+export type PutAppsAppEnvResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putAppsAppEnv']>>
 >;
 export type GetAppsAppSettingsResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['getAppsAppSettings']>
+  >
+>;
+export type PutAppsAppSettingsResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAppsAppSettings']>
+  >
+>;
+export type DeleteAppsAppSettingsResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAppsAppSettings']>
   >
 >;
 export type GetAppsAppSettingsKeyResult = NonNullable<
@@ -1374,14 +1241,12 @@ export type GetAppsAppSettingsKeyResult = NonNullable<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['getAppsAppSettingsKey']>
   >
 >;
-export type PutAppsAppSettingsKeyResult = NonNullable<
-  Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['putAppsAppSettingsKey']>
-  >
+export type GetAuditLogsResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuditLogs']>>
 >;
-export type DeleteAppsAppSettingsKeyResult = NonNullable<
+export type GetAuditLogsExportResult = NonNullable<
   Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAppsAppSettingsKey']>
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuditLogsExport']>
   >
 >;
 export type GetAuthCliCallbackResult = NonNullable<
@@ -1463,6 +1328,13 @@ export type PutAuthMfaPreferredMethodResult = NonNullable<
 export type GetAuthMfaStatusResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthMfaStatus']>>
 >;
+export type PostAuthMfaTrustedDevicesTrustResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postAuthMfaTrustedDevicesTrust']
+    >
+  >
+>;
 export type DeleteAuthMfaTrustedDevicesDeviceIDResult = NonNullable<
   Awaited<
     ReturnType<
@@ -1503,6 +1375,13 @@ export type GetAuthWebLogoutResult = NonNullable<
 export type GetCreatedByResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getCreatedBy']>>
 >;
+export type GetDeployApprovalRequestsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['getDeployApprovalRequests']
+    >
+  >
+>;
 export type PostDeployApprovalRequestsResult = NonNullable<
   Awaited<
     ReturnType<
@@ -1517,11 +1396,30 @@ export type GetDeployApprovalRequestsIdResult = NonNullable<
     >
   >
 >;
-export type GetEnvResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getEnv']>>
+export type PostDeployApprovalRequestsIdApproveResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postDeployApprovalRequestsIdApprove']
+    >
+  >
 >;
-export type PutEnvResult = NonNullable<
-  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putEnv']>>
+export type GetDeployApprovalRequestsIdAuditLogsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['getDeployApprovalRequestsIdAuditLogs']
+    >
+  >
+>;
+export type PostDeployApprovalRequestsIdRejectResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postDeployApprovalRequestsIdReject']
+    >
+  >
 >;
 export type GetHealthResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getHealth']>>
@@ -1531,4 +1429,77 @@ export type GetInfoResult = NonNullable<
 >;
 export type GetRackResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getRack']>>
+>;
+export type GetRolesResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getRoles']>>
+>;
+export type GetSettingsResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getSettings']>>
+>;
+export type PutSettingsResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putSettings']>>
+>;
+export type DeleteSettingsResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteSettings']>>
+>;
+export type PostSettingsRackTlsCertRefreshResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postSettingsRackTlsCertRefresh']
+    >
+  >
+>;
+export type GetSettingsKeyResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getSettingsKey']>>
+>;
+export type GetUsersResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getUsers']>>
+>;
+export type PostUsersResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postUsers']>>
+>;
+export type GetUsersEmailResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getUsersEmail']>>
+>;
+export type PutUsersEmailResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['putUsersEmail']>>
+>;
+export type DeleteUsersEmailResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteUsersEmail']>>
+>;
+export type PostUsersEmailLockResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['postUsersEmailLock']>
+  >
+>;
+export type PutUsersEmailRolesResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['putUsersEmailRoles']>
+  >
+>;
+export type GetUsersEmailSessionsResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['getUsersEmailSessions']>
+  >
+>;
+export type PostUsersEmailSessionsRevokeAllResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postUsersEmailSessionsRevokeAll']
+    >
+  >
+>;
+export type PostUsersEmailSessionsSessionIDRevokeResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['postUsersEmailSessionsSessionIDRevoke']
+    >
+  >
+>;
+export type PostUsersEmailUnlockResult = NonNullable<
+  Awaited<
+    ReturnType<ReturnType<typeof getRackGatewayAPI>['postUsersEmailUnlock']>
+  >
 >;

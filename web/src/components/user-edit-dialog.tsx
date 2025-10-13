@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { RoleName } from '../lib/api';
-import { AVAILABLE_ROLES } from '../lib/api';
-import { ROLE_PRIORITY } from '../lib/user-roles';
-import { Button } from './ui/button';
+import { useEffect, useMemo, useState } from 'react'
+import type { RoleName } from '../lib/api'
+import { AVAILABLE_ROLES } from '../lib/api'
+import { ROLE_PRIORITY } from '../lib/user-roles'
+import { Button } from './ui/button'
 import {
   Dialog,
   DialogContent,
@@ -10,36 +10,35 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+} from './ui/dialog'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
 
-export type UserEditDialogMode = 'create' | 'edit';
+export type UserEditDialogMode = 'create' | 'edit'
 
 export type UserEditDialogValues = {
-  email: string;
-  name: string;
-  role: RoleName;
-};
+  email: string
+  name: string
+  role: RoleName
+}
 
 type UserEditDialogProps = {
-  open: boolean;
-  mode: UserEditDialogMode;
-  initialEmail: string;
-  initialName: string;
-  initialRole: RoleName;
-  busy?: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (values: UserEditDialogValues) => Promise<void>;
-};
+  open: boolean
+  mode: UserEditDialogMode
+  initialEmail: string
+  initialName: string
+  initialRole: RoleName
+  busy?: boolean
+  onOpenChange: (open: boolean) => void
+  onSubmit: (values: UserEditDialogValues) => Promise<void>
+}
 
-const ROLE_ENTRIES = ROLE_PRIORITY.map((role) => [
-  role,
-  AVAILABLE_ROLES[role],
-]) as [RoleName, (typeof AVAILABLE_ROLES)[RoleName]][];
+const ROLE_ENTRIES = ROLE_PRIORITY.map((role) => [role, AVAILABLE_ROLES[role]]) as [
+  RoleName,
+  (typeof AVAILABLE_ROLES)[RoleName],
+][]
 
-const formatRoleName = (value: string) =>
-  value.replace(/\b\w/g, (char) => char.toUpperCase());
+const formatRoleName = (value: string) => value.replace(/\b\w/g, (char) => char.toUpperCase())
 
 export function UserEditDialog({
   open,
@@ -51,58 +50,55 @@ export function UserEditDialog({
   onOpenChange,
   onSubmit,
 }: UserEditDialogProps) {
-  const [email, setEmail] = useState(initialEmail);
-  const [name, setName] = useState(initialName);
-  const [role, setRole] = useState<RoleName>(initialRole);
-  const [submitting, setSubmitting] = useState(false);
+  const [email, setEmail] = useState(initialEmail)
+  const [name, setName] = useState(initialName)
+  const [role, setRole] = useState<RoleName>(initialRole)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!open) {
-      return;
+      return
     }
-    setEmail(initialEmail);
-    setName(initialName);
-    setRole(initialRole);
-  }, [open, initialEmail, initialName, initialRole]);
+    setEmail(initialEmail)
+    setName(initialName)
+    setRole(initialRole)
+  }, [open, initialEmail, initialName, initialRole])
 
-  const dialogTitle = useMemo(
-    () => (mode === 'create' ? 'Add User' : 'Edit User'),
-    [mode],
-  );
+  const dialogTitle = useMemo(() => (mode === 'create' ? 'Add User' : 'Edit User'), [mode])
 
   const dialogDescription = useMemo(
     () =>
       mode === 'create'
         ? 'Add a new user to the gateway and assign their initial role.'
         : 'Update account details and permissions for this user.',
-    [mode],
-  );
+    [mode]
+  )
 
-  const submitLabel = mode === 'create' ? 'Add User' : 'Save Changes';
-  const isBusy = submitting || busy;
+  const submitLabel = mode === 'create' ? 'Add User' : 'Save Changes'
+  const isBusy = submitting || busy
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+    event.preventDefault()
     if (isBusy) {
-      return;
+      return
     }
-    setSubmitting(true);
+    setSubmitting(true)
     try {
-      await onSubmit({ email: email.trim(), name: name.trim(), role });
-      onOpenChange(false);
+      await onSubmit({ email: email.trim(), name: name.trim(), role })
+      onOpenChange(false)
     } catch (_error) {
       // Parent is responsible for surfacing the error; keep dialog open.
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
-  };
+  }
 
   const handleCancel = () => {
     if (isBusy) {
-      return;
+      return
     }
-    onOpenChange(false);
-  };
+    onOpenChange(false)
+  }
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -154,9 +150,7 @@ export function UserEditDialog({
               {ROLE_ENTRIES.map(([roleKey, meta]) => (
                 <label
                   className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${
-                    role === roleKey
-                      ? 'border-primary bg-primary/10'
-                      : 'hover:bg-accent'
+                    role === roleKey ? 'border-primary bg-primary/10' : 'hover:bg-accent'
                   }`}
                   key={roleKey}
                 >
@@ -171,12 +165,8 @@ export function UserEditDialog({
                       value={roleKey}
                     />
                     <div>
-                      <div className="font-medium">
-                        {formatRoleName(meta.name)}
-                      </div>
-                      <div className="text-muted-foreground text-sm">
-                        {meta.description}
-                      </div>
+                      <div className="font-medium">{formatRoleName(meta.name)}</div>
+                      <div className="text-muted-foreground text-sm">{meta.description}</div>
                     </div>
                   </div>
                 </label>
@@ -195,5 +185,5 @@ export function UserEditDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

@@ -1,31 +1,31 @@
-import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
-import { MFAInput } from '@/components/mfa-input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { getMFAStatus, startWebAuthnAssertion } from '@/lib/api';
-import { getErrorMessage } from '@/lib/error-utils';
+import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { MFAInput } from '@/components/mfa-input'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { getMFAStatus, startWebAuthnAssertion } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error-utils'
 import {
   getCredential,
   prepareRequestOptions,
   serializeAssertionCredential,
-} from '@/lib/webauthn-utils';
+} from '@/lib/webauthn-utils'
 
-type MFAMethod = 'totp' | 'webauthn';
+type MFAMethod = 'totp' | 'webauthn'
 
 type VerificationParams =
   | {
-      method: 'totp';
-      code: string;
-      trust_device: boolean;
+      method: 'totp'
+      code: string
+      trust_device: boolean
     }
   | {
-      method: 'webauthn';
-      trust_device: boolean;
-      session_data: string;
-      assertion_response: string;
-    };
+      method: 'webauthn'
+      trust_device: boolean
+      session_data: string
+      assertion_response: string
+    }
 
 export type MFAVerificationFormProps = {
   /**
@@ -33,93 +33,91 @@ export type MFAVerificationFormProps = {
    * For TOTP: receives code and trust_device
    * For WebAuthn: receives session_data, assertion_response, and trust_device
    */
-  onVerify: (params: VerificationParams) => Promise<void>;
+  onVerify: (params: VerificationParams) => Promise<void>
 
   /**
    * Called after successful verification. Use for navigation, state updates, etc.
    */
-  onSuccess?: () => void | Promise<void>;
+  onSuccess?: () => void | Promise<void>
 
   /**
    * Called when verification fails. Use for error display or logging.
    */
-  onError?: (error: unknown) => void;
+  onError?: (error: unknown) => void
 
   /**
    * Called when MFA status is loaded. Use to check enrollment state.
    */
-  onMFAStatusLoaded?: (
-    mfaStatus: Awaited<ReturnType<typeof getMFAStatus>>,
-  ) => void;
+  onMFAStatusLoaded?: (mfaStatus: Awaited<ReturnType<typeof getMFAStatus>>) => void
 
   /**
    * Auto-focus the TOTP input when rendered
    * @default true
    */
-  autoFocus?: boolean;
+  autoFocus?: boolean
 
   /**
    * Show the "Trust this device" checkbox
    * @default true
    */
-  showTrustDevice?: boolean;
+  showTrustDevice?: boolean
 
   /**
    * Default value for trust device checkbox
    * @default true
    */
-  trustDeviceDefault?: boolean;
+  trustDeviceDefault?: boolean
 
   /**
    * Allow switching between TOTP and WebAuthn methods
    * @default true
    */
-  allowMethodSwitch?: boolean;
+  allowMethodSwitch?: boolean
 
   /**
    * Preferred method to show initially. 'auto' detects from MFA status.
    * @default 'auto'
    */
-  preferredMethod?: MFAMethod | 'auto';
+  preferredMethod?: MFAMethod | 'auto'
 
   /**
    * Auto-trigger WebAuthn verification when it's selected
    * @default false
    */
-  autoTriggerWebAuthn?: boolean;
+  autoTriggerWebAuthn?: boolean
 
   /**
    * Render function that receives state and components.
    * Allows full control over layout while reusing verification logic.
    */
-  children: (props: MFAVerificationFormRenderProps) => ReactNode;
-};
+  children: (props: MFAVerificationFormRenderProps) => ReactNode
+}
 
 export type MFAVerificationFormRenderProps = {
   // State
-  isVerifying: boolean;
-  error: string | null;
-  code: string;
-  trustDevice: boolean;
-  useWebAuthn: boolean;
-  hasWebAuthn: boolean;
-  hasTOTP: boolean;
+  isVerifying: boolean
+  error: string | null
+  code: string
+  trustDevice: boolean
+  useWebAuthn: boolean
+  hasWebAuthn: boolean
+  hasTOTP: boolean
 
   // Setters
-  setCode: (code: string) => void;
-  setTrustDevice: (trust: boolean) => void;
-  setUseWebAuthn: (use: boolean) => void;
-  setError: (error: string | null) => void;
+  setCode: (code: string) => void
+  setTrustDevice: (trust: boolean) => void
+  setUseWebAuthn: (use: boolean) => void
+  setError: (error: string | null) => void
 
   // Handlers
-  handleVerifyTotp: (codeOverride?: string) => Promise<void>;
-  handleVerifyWebAuthn: () => Promise<void>;
+  handleVerifyTotp: (codeOverride?: string) => Promise<void>
+  handleVerifyWebAuthn: () => Promise<void>
 
   // Pre-built components (optional, for convenience)
-  TOTPInput: ReactNode;
-  TrustDeviceCheckbox: ReactNode;
-  MethodSwitchButtons: ReactNode;
-};
+  TOTPInput: ReactNode
+  TrustDeviceCheckbox: ReactNode
+  MethodSwitchButtons: ReactNode
+}
 
 /**
  * Reusable MFA verification form component using render props pattern.
@@ -172,11 +170,11 @@ export function MFAVerificationForm({
   autoTriggerWebAuthn = false,
   children,
 }: MFAVerificationFormProps) {
-  const [code, setCode] = useState('');
-  const [trustDevice, setTrustDevice] = useState(trustDeviceDefault);
-  const [error, setError] = useState<string | null>(null);
-  const [useWebAuthn, setUseWebAuthn] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [code, setCode] = useState('')
+  const [trustDevice, setTrustDevice] = useState(trustDeviceDefault)
+  const [error, setError] = useState<string | null>(null)
+  const [useWebAuthn, setUseWebAuthn] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
 
   // Fetch MFA status to determine available methods
   const { data: mfaStatus } = useQuery({
@@ -184,119 +182,113 @@ export function MFAVerificationForm({
     queryFn: getMFAStatus,
     retry: false,
     staleTime: 30_000,
-  });
+  })
 
   // Notify parent when MFA status is loaded
   // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger when mfaStatus changes
   useEffect(() => {
     if (mfaStatus && onMFAStatusLoaded) {
-      onMFAStatusLoaded(mfaStatus);
+      onMFAStatusLoaded(mfaStatus)
     }
-  }, [mfaStatus]);
+  }, [mfaStatus])
 
-  const hasWebAuthn =
-    (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0;
-  const hasTOTP =
-    (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0;
+  const hasWebAuthn = (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0
+  const hasTOTP = (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0
 
   // Set initial method based on preferred method or available methods
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Method selection logic requires checking multiple conditions
   useEffect(() => {
-    if (!mfaStatus) return;
+    if (!mfaStatus) return
 
     if (preferredMethod === 'totp' && hasTOTP) {
-      setUseWebAuthn(false);
-      return;
+      setUseWebAuthn(false)
+      return
     }
 
     if (preferredMethod === 'webauthn' && hasWebAuthn) {
-      setUseWebAuthn(true);
-      return;
+      setUseWebAuthn(true)
+      return
     }
 
     // Auto-detect: Use server's preferred method if set
     if (preferredMethod === 'auto') {
       if (mfaStatus.preferred_method === 'webauthn' && hasWebAuthn) {
-        setUseWebAuthn(true);
-        return;
+        setUseWebAuthn(true)
+        return
       }
       if (mfaStatus.preferred_method === 'totp' && hasTOTP) {
-        setUseWebAuthn(false);
-        return;
+        setUseWebAuthn(false)
+        return
       }
     }
 
     // Fallback: If only WebAuthn available, use it
     if (hasWebAuthn && !hasTOTP) {
-      setUseWebAuthn(true);
-      return;
+      setUseWebAuthn(true)
+      return
     }
 
     // Default to TOTP
-    setUseWebAuthn(false);
-  }, [mfaStatus, hasWebAuthn, hasTOTP, preferredMethod]);
+    setUseWebAuthn(false)
+  }, [mfaStatus, hasWebAuthn, hasTOTP, preferredMethod])
 
   const handleVerifyTotp = useCallback(
     async (codeOverride?: string) => {
-      const codeToVerify = codeOverride ?? code;
+      const codeToVerify = codeOverride ?? code
       if (!codeToVerify || codeToVerify.trim().length < 6) {
-        setError('Enter a valid verification code');
-        return;
+        setError('Enter a valid verification code')
+        return
       }
 
-      setError(null);
-      setIsVerifying(true);
+      setError(null)
+      setIsVerifying(true)
 
       try {
         await onVerify({
           method: 'totp',
           code: codeToVerify.trim(),
           trust_device: trustDevice,
-        });
+        })
 
         // Success
-        await onSuccess?.();
+        await onSuccess?.()
       } catch (err) {
-        const message = getErrorMessage(err, 'Verification failed');
-        setError(message);
-        onError?.(err);
+        const message = getErrorMessage(err, 'Verification failed')
+        setError(message)
+        onError?.(err)
       } finally {
-        setIsVerifying(false);
+        setIsVerifying(false)
       }
     },
-    [code, trustDevice, onVerify, onSuccess, onError],
-  );
+    [code, trustDevice, onVerify, onSuccess, onError]
+  )
 
   const handleVerifyWebAuthn = useCallback(async () => {
-    setError(null);
-    setIsVerifying(true);
+    setError(null)
+    setIsVerifying(true)
 
     try {
       // Start WebAuthn assertion flow
-      const assertionStart = await startWebAuthnAssertion();
+      const assertionStart = await startWebAuthnAssertion()
 
       if (!assertionStart.options) {
-        throw new Error('No assertion options received from server');
+        throw new Error('No assertion options received from server')
       }
 
       // Convert server options to browser-compatible format
-      const credentialRequestOptions = prepareRequestOptions(
-        assertionStart.options,
-      );
+      const credentialRequestOptions = prepareRequestOptions(assertionStart.options)
 
       // Call browser WebAuthn API
       const credential = await getCredential({
         publicKey: credentialRequestOptions,
-      });
+      })
 
       if (!credential) {
-        throw new Error('No credential received from authenticator');
+        throw new Error('No credential received from authenticator')
       }
 
       // Serialize for backend
-      const assertionResponse = serializeAssertionCredential(
-        credential as PublicKeyCredential,
-      );
+      const assertionResponse = serializeAssertionCredential(credential as PublicKeyCredential)
 
       // Verify with backend
       await onVerify({
@@ -304,27 +296,27 @@ export function MFAVerificationForm({
         session_data: assertionStart.session_data ?? '',
         assertion_response: JSON.stringify(assertionResponse),
         trust_device: trustDevice,
-      });
+      })
 
       // Success
-      await onSuccess?.();
+      await onSuccess?.()
     } catch (err) {
-      const message = getErrorMessage(err, 'Verification failed');
-      setError(message);
-      onError?.(err);
+      const message = getErrorMessage(err, 'Verification failed')
+      setError(message)
+      onError?.(err)
     } finally {
-      setIsVerifying(false);
+      setIsVerifying(false)
     }
-  }, [trustDevice, onVerify, onSuccess, onError]);
+  }, [trustDevice, onVerify, onSuccess, onError])
 
   // Auto-trigger WebAuthn verification when it's the user's preferred method
   // Only triggers when server says preferred_method is webauthn, not when user manually switches
   // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on useWebAuthn change
   useEffect(() => {
     // Don't auto-trigger until MFA status is loaded
-    if (!mfaStatus) return;
+    if (!mfaStatus) return
     // Don't auto-trigger if user doesn't have WebAuthn enrolled
-    if (!hasWebAuthn) return;
+    if (!hasWebAuthn) return
 
     if (
       autoTriggerWebAuthn &&
@@ -335,9 +327,9 @@ export function MFAVerificationForm({
     ) {
       handleVerifyWebAuthn().catch(() => {
         /* errors handled in handleVerifyWebAuthn */
-      });
+      })
     }
-  }, [useWebAuthn, autoTriggerWebAuthn, hasWebAuthn, mfaStatus]);
+  }, [useWebAuthn, autoTriggerWebAuthn, hasWebAuthn, mfaStatus])
 
   // Pre-built components for convenience
   const TOTPInput = (
@@ -348,21 +340,21 @@ export function MFAVerificationForm({
         id="mfa-code"
         maxLength={6}
         onChange={(event) => {
-          setError(null);
-          setCode(event.target.value.trim());
+          setError(null)
+          setCode(event.target.value.trim())
         }}
         onComplete={(completedCode) => {
-          setCode(completedCode);
+          setCode(completedCode)
           handleVerifyTotp(completedCode).catch(() => {
             /* errors handled in handleVerifyTotp */
-          });
+          })
         }}
         placeholder="123456"
         required
         value={code}
       />
     </div>
-  );
+  )
 
   const TrustDeviceCheckbox = showTrustDevice ? (
     <label className="flex items-center gap-2 text-sm">
@@ -373,7 +365,7 @@ export function MFAVerificationForm({
       />
       Trust this device for 30 days
     </label>
-  ) : null;
+  ) : null
 
   const MethodSwitchButtons =
     allowMethodSwitch && hasTOTP && hasWebAuthn ? (
@@ -384,12 +376,10 @@ export function MFAVerificationForm({
           type="button"
           variant="outline"
         >
-          {useWebAuthn
-            ? 'Use authenticator app instead'
-            : 'Use security key instead'}
+          {useWebAuthn ? 'Use authenticator app instead' : 'Use security key instead'}
         </Button>
       </div>
-    ) : null;
+    ) : null
 
   return (
     <>
@@ -419,5 +409,5 @@ export function MFAVerificationForm({
         MethodSwitchButtons,
       })}
     </>
-  );
+  )
 }

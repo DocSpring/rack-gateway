@@ -29,7 +29,7 @@ import (
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/tokens [post]
+// @Router /api-tokens [post]
 func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	start := time.Now()
 	var req CreateAPITokenRequest
@@ -127,7 +127,7 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 // @Success 200 {array} db.APIToken
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/tokens [get]
+// @Router /api-tokens [get]
 func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 	// List all API tokens
 	tokens, err := h.database.ListAllAPITokens()
@@ -150,7 +150,7 @@ func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/tokens/{tokenID} [get]
+// @Router /api-tokens/{tokenID} [get]
 func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 	tokenID := strings.TrimSpace(c.Param("tokenID"))
 	if tokenID == "" {
@@ -181,7 +181,7 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/tokens/{tokenID} [put]
+// @Router /api-tokens/{tokenID} [put]
 func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
@@ -266,7 +266,7 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/tokens/{tokenID} [delete]
+// @Router /api-tokens/{tokenID} [delete]
 func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
@@ -305,7 +305,7 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 // @Success 200 {object} TokenPermissionMetadata
 // @Failure 401 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/tokens/permissions [get]
+// @Router /api-tokens/permissions [get]
 func (h *AdminHandler) GetTokenPermissionMetadata(c *gin.Context) {
 	email := strings.TrimSpace(c.GetString("user_email"))
 	if email == "" {

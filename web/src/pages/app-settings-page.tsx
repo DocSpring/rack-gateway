@@ -1,49 +1,41 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from '@tanstack/react-router';
-import { isAxiosError } from 'axios';
-import { RefreshCw } from 'lucide-react';
-import { useState } from 'react';
-import type { SettingsSetting } from '@/api/schemas';
-import {
-  getSettingValue,
-  SourceIndicator,
-} from '@/components/settings/source-indicator';
-import { StringArrayInput } from '@/components/settings/string-array-input';
-import { toast } from '@/components/ui/use-toast';
-import { Button } from '../components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { useAuth } from '../contexts/auth-context';
-import { api } from '../lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams } from '@tanstack/react-router'
+import { isAxiosError } from 'axios'
+import { RefreshCw } from 'lucide-react'
+import { useState } from 'react'
+import type { SettingsSetting } from '@/api/schemas'
+import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import { StringArrayInput } from '@/components/settings/string-array-input'
+import { toast } from '@/components/ui/use-toast'
+import { Button } from '../components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { useAuth } from '../contexts/auth-context'
+import { api } from '../lib/api'
 
 type SettingsErrorPayload = {
-  error?: string;
-};
+  error?: string
+}
 
 type AppSettingsResponse = {
-  [key: string]: SettingsSetting;
-};
+  [key: string]: SettingsSetting
+}
 
 function extractErrorMessage(error: unknown): string | undefined {
   if (isAxiosError<SettingsErrorPayload>(error)) {
-    const payload = error.response?.data;
+    const payload = error.response?.data
     if (typeof payload === 'string') {
-      return payload;
+      return payload
     }
     if (payload && typeof payload.error === 'string') {
-      return payload.error;
+      return payload.error
     }
   }
   if (error instanceof Error) {
-    return error.message;
+    return error.message
   }
-  return;
+  return
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
@@ -53,81 +45,55 @@ function VCSCIProvidersCard({
   disabled,
   integrations,
 }: {
-  app: string;
-  settings: AppSettingsResponse | undefined;
-  disabled: boolean;
-  integrations?: { github: boolean; circleci: boolean };
+  app: string
+  settings: AppSettingsResponse | undefined
+  disabled: boolean
+  integrations?: { github: boolean; circleci: boolean }
 }) {
-  const qc = useQueryClient();
+  const qc = useQueryClient()
 
-  const githubAvailable = integrations?.github ?? false;
-  const circleciAvailable = integrations?.circleci ?? false;
-  const [vcsProvider, setVcsProvider] = useState<string | null>(null);
-  const [vcsRepo, setVcsRepo] = useState<string | null>(null);
-  const [ciProvider, setCiProvider] = useState<string | null>(null);
-  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null);
-  const [githubVerification, setGithubVerification] = useState<boolean | null>(
-    null,
-  );
-  const [allowDeployFromDefaultBranch, setAllowDeployFromDefaultBranch] =
-    useState<boolean | null>(null);
-  const [requirePRForBranch, setRequirePRForBranch] = useState<boolean | null>(
-    null,
-  );
-  const [defaultBranch, setDefaultBranch] = useState<string | null>(null);
-  const [verifyGitCommitMode, setVerifyGitCommitMode] = useState<string | null>(
-    null,
-  );
+  const githubAvailable = integrations?.github ?? false
+  const circleciAvailable = integrations?.circleci ?? false
+  const [vcsProvider, setVcsProvider] = useState<string | null>(null)
+  const [vcsRepo, setVcsRepo] = useState<string | null>(null)
+  const [ciProvider, setCiProvider] = useState<string | null>(null)
+  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null)
+  const [githubVerification, setGithubVerification] = useState<boolean | null>(null)
+  const [allowDeployFromDefaultBranch, setAllowDeployFromDefaultBranch] = useState<boolean | null>(
+    null
+  )
+  const [requirePRForBranch, setRequirePRForBranch] = useState<boolean | null>(null)
+  const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
+  const [verifyGitCommitMode, setVerifyGitCommitMode] = useState<string | null>(null)
 
-  const currentVcsProvider = getSettingValue(settings?.vcs_provider, '');
-  const currentVcsRepo = getSettingValue(settings?.vcs_repo, '');
-  const currentCiProvider = getSettingValue(settings?.ci_provider, '');
-  const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '');
-  const currentGithubVerification = getSettingValue(
-    settings?.github_verification,
-    true,
-  );
+  const currentVcsProvider = getSettingValue(settings?.vcs_provider, '')
+  const currentVcsRepo = getSettingValue(settings?.vcs_repo, '')
+  const currentCiProvider = getSettingValue(settings?.ci_provider, '')
+  const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '')
+  const currentGithubVerification = getSettingValue(settings?.github_verification, true)
   const currentAllowDeployFromDefaultBranch = getSettingValue(
     settings?.allow_deploy_from_default_branch,
-    false,
-  );
-  const currentRequirePRForBranch = getSettingValue(
-    settings?.require_pr_for_branch,
-    true,
-  );
-  const currentDefaultBranch = getSettingValue(
-    settings?.default_branch,
-    'main',
-  );
-  const currentVerifyGitCommitMode = getSettingValue(
-    settings?.verify_git_commit_mode,
-    'latest',
-  );
+    false
+  )
+  const currentRequirePRForBranch = getSettingValue(settings?.require_pr_for_branch, true)
+  const currentDefaultBranch = getSettingValue(settings?.default_branch, 'main')
+  const currentVerifyGitCommitMode = getSettingValue(settings?.verify_git_commit_mode, 'latest')
 
-  const displayVcsProvider =
-    vcsProvider !== null ? vcsProvider : currentVcsProvider;
-  const displayVcsRepo = vcsRepo !== null ? vcsRepo : currentVcsRepo;
-  const displayCiProvider =
-    ciProvider !== null ? ciProvider : currentCiProvider;
-  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug;
+  const displayVcsProvider = vcsProvider !== null ? vcsProvider : currentVcsProvider
+  const displayVcsRepo = vcsRepo !== null ? vcsRepo : currentVcsRepo
+  const displayCiProvider = ciProvider !== null ? ciProvider : currentCiProvider
+  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug
   const displayGithubVerification =
-    githubVerification !== null
-      ? githubVerification
-      : currentGithubVerification;
+    githubVerification !== null ? githubVerification : currentGithubVerification
   const displayAllowDeployFromDefaultBranch =
     allowDeployFromDefaultBranch !== null
       ? allowDeployFromDefaultBranch
-      : currentAllowDeployFromDefaultBranch;
+      : currentAllowDeployFromDefaultBranch
   const displayRequirePRForBranch =
-    requirePRForBranch !== null
-      ? requirePRForBranch
-      : currentRequirePRForBranch;
-  const displayDefaultBranch =
-    defaultBranch !== null ? defaultBranch : currentDefaultBranch;
+    requirePRForBranch !== null ? requirePRForBranch : currentRequirePRForBranch
+  const displayDefaultBranch = defaultBranch !== null ? defaultBranch : currentDefaultBranch
   const displayVerifyGitCommitMode =
-    verifyGitCommitMode !== null
-      ? verifyGitCommitMode
-      : currentVerifyGitCommitMode;
+    verifyGitCommitMode !== null ? verifyGitCommitMode : currentVerifyGitCommitMode
 
   const hasChanges =
     vcsProvider !== null ||
@@ -138,180 +104,142 @@ function VCSCIProvidersCard({
     allowDeployFromDefaultBranch !== null ||
     requirePRForBranch !== null ||
     defaultBranch !== null ||
-    verifyGitCommitMode !== null;
+    verifyGitCommitMode !== null
 
   const updateMutation = useMutation({
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = [];
+      const updates: Promise<unknown>[] = []
       if (vcsProvider !== null) {
-        updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/vcs_provider`,
-            vcsProvider || null,
-          ),
-        );
+        updates.push(api.put(`/api/v1/apps/${app}/settings/vcs_provider`, vcsProvider || null))
       }
       if (vcsRepo !== null) {
-        updates.push(
-          api.put(`/api/v1/apps/${app}/settings/vcs_repo`, vcsRepo || null),
-        );
+        updates.push(api.put(`/api/v1/apps/${app}/settings/vcs_repo`, vcsRepo || null))
       }
       if (ciProvider !== null) {
-        updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/ci_provider`,
-            ciProvider || null,
-          ),
-        );
+        updates.push(api.put(`/api/v1/apps/${app}/settings/ci_provider`, ciProvider || null))
       }
       if (ciOrgSlug !== null) {
-        updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/ci_org_slug`,
-            ciOrgSlug || null,
-          ),
-        );
+        updates.push(api.put(`/api/v1/apps/${app}/settings/ci_org_slug`, ciOrgSlug || null))
       }
       if (githubVerification !== null) {
         updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/github_verification`,
-            githubVerification,
-          ),
-        );
+          api.put(`/api/v1/apps/${app}/settings/github_verification`, githubVerification)
+        )
       }
       if (allowDeployFromDefaultBranch !== null) {
         updates.push(
           api.put(
             `/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`,
-            allowDeployFromDefaultBranch,
-          ),
-        );
+            allowDeployFromDefaultBranch
+          )
+        )
       }
       if (requirePRForBranch !== null) {
         updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/require_pr_for_branch`,
-            requirePRForBranch,
-          ),
-        );
+          api.put(`/api/v1/apps/${app}/settings/require_pr_for_branch`, requirePRForBranch)
+        )
       }
       if (defaultBranch !== null) {
-        updates.push(
-          api.put(`/api/v1/apps/${app}/settings/default_branch`, defaultBranch),
-        );
+        updates.push(api.put(`/api/v1/apps/${app}/settings/default_branch`, defaultBranch))
       }
       if (verifyGitCommitMode !== null) {
         updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/verify_git_commit_mode`,
-            verifyGitCommitMode,
-          ),
-        );
+          api.put(`/api/v1/apps/${app}/settings/verify_git_commit_mode`, verifyGitCommitMode)
+        )
       }
-      await Promise.all(updates);
+      await Promise.all(updates)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] });
-      setVcsProvider(null);
-      setVcsRepo(null);
-      setCiProvider(null);
-      setCiOrgSlug(null);
-      setGithubVerification(null);
-      setAllowDeployFromDefaultBranch(null);
-      setRequirePRForBranch(null);
-      setDefaultBranch(null);
-      setVerifyGitCommitMode(null);
-      toast.success('Deploy settings updated');
+      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setVcsProvider(null)
+      setVcsRepo(null)
+      setCiProvider(null)
+      setCiOrgSlug(null)
+      setGithubVerification(null)
+      setAllowDeployFromDefaultBranch(null)
+      setRequirePRForBranch(null)
+      setDefaultBranch(null)
+      setVerifyGitCommitMode(null)
+      toast.success('Deploy settings updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err);
-      toast.error(message ?? 'Failed to update settings');
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to update settings')
     },
-  });
+  })
 
   const clearMutation = useMutation({
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = [];
+      const updates: Promise<unknown>[] = []
       if (settings?.vcs_provider?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_provider`));
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_provider`))
       }
       if (settings?.vcs_repo?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_repo`));
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_repo`))
       }
       if (settings?.ci_provider?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_provider`));
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_provider`))
       }
       if (settings?.ci_org_slug?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_org_slug`));
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_org_slug`))
       }
       if (settings?.github_verification?.source === 'db') {
-        updates.push(
-          api.delete(`/api/v1/apps/${app}/settings/github_verification`),
-        );
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/github_verification`))
       }
       if (settings?.allow_deploy_from_default_branch?.source === 'db') {
-        updates.push(
-          api.delete(
-            `/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`,
-          ),
-        );
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`))
       }
       if (settings?.require_pr_for_branch?.source === 'db') {
-        updates.push(
-          api.delete(`/api/v1/apps/${app}/settings/require_pr_for_branch`),
-        );
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/require_pr_for_branch`))
       }
       if (settings?.default_branch?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/default_branch`));
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/default_branch`))
       }
       if (settings?.verify_git_commit_mode?.source === 'db') {
-        updates.push(
-          api.delete(`/api/v1/apps/${app}/settings/verify_git_commit_mode`),
-        );
+        updates.push(api.delete(`/api/v1/apps/${app}/settings/verify_git_commit_mode`))
       }
-      await Promise.all(updates);
+      await Promise.all(updates)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] });
-      setVcsProvider(null);
-      setVcsRepo(null);
-      setCiProvider(null);
-      setCiOrgSlug(null);
-      setGithubVerification(null);
-      setAllowDeployFromDefaultBranch(null);
-      setRequirePRForBranch(null);
-      setDefaultBranch(null);
-      setVerifyGitCommitMode(null);
-      toast.success('Deploy settings cleared');
+      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setVcsProvider(null)
+      setVcsRepo(null)
+      setCiProvider(null)
+      setCiOrgSlug(null)
+      setGithubVerification(null)
+      setAllowDeployFromDefaultBranch(null)
+      setRequirePRForBranch(null)
+      setDefaultBranch(null)
+      setVerifyGitCommitMode(null)
+      toast.success('Deploy settings cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err);
-      toast.error(message ?? 'Failed to clear settings');
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to clear settings')
     },
-  });
+  })
 
   const handleCancel = () => {
-    setVcsProvider(null);
-    setVcsRepo(null);
-    setCiProvider(null);
-    setCiOrgSlug(null);
-    setGithubVerification(null);
-    setAllowDeployFromDefaultBranch(null);
-    setRequirePRForBranch(null);
-    setDefaultBranch(null);
-    setVerifyGitCommitMode(null);
-  };
+    setVcsProvider(null)
+    setVcsRepo(null)
+    setCiProvider(null)
+    setCiOrgSlug(null)
+    setGithubVerification(null)
+    setAllowDeployFromDefaultBranch(null)
+    setRequirePRForBranch(null)
+    setDefaultBranch(null)
+    setVerifyGitCommitMode(null)
+  }
 
   const handleSave = () => {
-    updateMutation.mutate();
-  };
+    updateMutation.mutate()
+  }
 
   const handleClear = () => {
-    clearMutation.mutate();
-  };
+    clearMutation.mutate()
+  }
 
   const hasDbSettings =
     settings?.vcs_provider?.source === 'db' ||
@@ -322,7 +250,7 @@ function VCSCIProvidersCard({
     settings?.allow_deploy_from_default_branch?.source === 'db' ||
     settings?.require_pr_for_branch?.source === 'db' ||
     settings?.default_branch?.source === 'db' ||
-    settings?.verify_git_commit_mode?.source === 'db';
+    settings?.verify_git_commit_mode?.source === 'db'
 
   return (
     <Card>
@@ -411,9 +339,7 @@ function VCSCIProvidersCard({
               />
               <SourceIndicator setting={settings?.ci_org_slug} />
             </div>
-            <p className="mt-1 text-muted-foreground text-xs">
-              Leave empty to use global default
-            </p>
+            <p className="mt-1 text-muted-foreground text-xs">Leave empty to use global default</p>
           </div>
         </div>
 
@@ -431,14 +357,11 @@ function VCSCIProvidersCard({
                   onChange={(e) => setGithubVerification(e.target.checked)}
                   type="checkbox"
                 />
-                <span className="font-medium text-sm">
-                  Enable GitHub verification
-                </span>
+                <span className="font-medium text-sm">Enable GitHub verification</span>
                 <SourceIndicator setting={settings?.github_verification} />
               </label>
               <p className="text-muted-foreground text-xs">
-                Verify git commits against GitHub when creating deploy approval
-                requests.
+                Verify git commits against GitHub when creating deploy approval requests.
               </p>
 
               <label
@@ -447,17 +370,11 @@ function VCSCIProvidersCard({
                 <input
                   checked={displayAllowDeployFromDefaultBranch}
                   disabled={disabled || !githubAvailable}
-                  onChange={(e) =>
-                    setAllowDeployFromDefaultBranch(e.target.checked)
-                  }
+                  onChange={(e) => setAllowDeployFromDefaultBranch(e.target.checked)}
                   type="checkbox"
                 />
-                <span className="font-medium text-sm">
-                  Allow deploy from default branch
-                </span>
-                <SourceIndicator
-                  setting={settings?.allow_deploy_from_default_branch}
-                />
+                <span className="font-medium text-sm">Allow deploy from default branch</span>
+                <SourceIndicator setting={settings?.allow_deploy_from_default_branch} />
               </label>
               <p className="text-muted-foreground text-xs">
                 When disabled, deployments must be from a non-default branch.
@@ -472,14 +389,11 @@ function VCSCIProvidersCard({
                   onChange={(e) => setRequirePRForBranch(e.target.checked)}
                   type="checkbox"
                 />
-                <span className="font-medium text-sm">
-                  Require PR for branch
-                </span>
+                <span className="font-medium text-sm">Require PR for branch</span>
                 <SourceIndicator setting={settings?.require_pr_for_branch} />
               </label>
               <p className="text-muted-foreground text-xs">
-                Require a GitHub pull request to exist for the branch being
-                deployed.
+                Require a GitHub pull request to exist for the branch being deployed.
               </p>
             </div>
 
@@ -503,9 +417,7 @@ function VCSCIProvidersCard({
               </div>
 
               <div className={disabled || !githubAvailable ? 'opacity-50' : ''}>
-                <Label htmlFor="verify-git-commit-mode">
-                  Git Commit Verification Mode
-                </Label>
+                <Label htmlFor="verify-git-commit-mode">Git Commit Verification Mode</Label>
                 <div className="flex items-center gap-2">
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -514,12 +426,8 @@ function VCSCIProvidersCard({
                     onChange={(e) => setVerifyGitCommitMode(e.target.value)}
                     value={displayVerifyGitCommitMode}
                   >
-                    <option value="branch">
-                      branch (commit must exist on branch)
-                    </option>
-                    <option value="latest">
-                      latest (commit must be latest on branch)
-                    </option>
+                    <option value="branch">branch (commit must exist on branch)</option>
+                    <option value="latest">latest (commit must be latest on branch)</option>
                   </select>
                   <SourceIndicator setting={settings?.verify_git_commit_mode} />
                 </div>
@@ -544,12 +452,7 @@ function VCSCIProvidersCard({
           )}
           {hasChanges && (
             <>
-              <Button
-                disabled={disabled}
-                onClick={handleCancel}
-                size="sm"
-                variant="outline"
-              >
+              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
                 Cancel
               </Button>
               <Button
@@ -564,7 +467,7 @@ function VCSCIProvidersCard({
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function StringArrayCard({
@@ -576,70 +479,70 @@ function StringArrayCard({
   description,
   placeholder,
 }: {
-  app: string;
-  settings: AppSettingsResponse | undefined;
-  disabled: boolean;
-  settingKey: string;
-  title: string;
-  description: string;
-  placeholder?: string;
+  app: string
+  settings: AppSettingsResponse | undefined
+  disabled: boolean
+  settingKey: string
+  title: string
+  description: string
+  placeholder?: string
 }) {
-  const qc = useQueryClient();
-  const setting = settings?.[settingKey];
-  const currentValue = getSettingValue<string[] | null>(setting, null) ?? [];
+  const qc = useQueryClient()
+  const setting = settings?.[settingKey]
+  const currentValue = getSettingValue<string[] | null>(setting, null) ?? []
 
-  const [items, setItems] = useState<string[]>(currentValue);
+  const [items, setItems] = useState<string[]>(currentValue)
 
   // Check if items differ from current value
   const hasChanges =
     items.length !== currentValue.length ||
-    items.some((item, i) => item.trim() !== currentValue[i]?.trim());
+    items.some((item, i) => item.trim() !== currentValue[i]?.trim())
 
   const updateMutation = useMutation({
     mutationFn: async () => {
       // Filter out empty strings
-      const filtered = items.map((s) => s.trim()).filter((s) => s.length > 0);
-      await api.put(`/api/v1/apps/${app}/settings/${settingKey}`, filtered);
+      const filtered = items.map((s) => s.trim()).filter((s) => s.length > 0)
+      await api.put(`/api/v1/apps/${app}/settings/${settingKey}`, filtered)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] });
-      toast.success('Setting updated');
+      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      toast.success('Setting updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err);
-      toast.error(message ?? 'Failed to update setting');
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to update setting')
     },
-  });
+  })
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/${settingKey}`);
+      await api.delete(`/api/v1/apps/${app}/settings/${settingKey}`)
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['appSettings', app] });
+      await qc.invalidateQueries({ queryKey: ['appSettings', app] })
       // Reset to empty array after clearing
-      setItems([]);
-      toast.success('Setting cleared');
+      setItems([])
+      toast.success('Setting cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err);
-      toast.error(message ?? 'Failed to clear setting');
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to clear setting')
     },
-  });
+  })
 
   const handleCancel = () => {
-    setItems(currentValue);
-  };
+    setItems(currentValue)
+  }
 
   const handleSave = () => {
-    updateMutation.mutate();
-  };
+    updateMutation.mutate()
+  }
 
   const handleClear = () => {
-    clearMutation.mutate();
-  };
+    clearMutation.mutate()
+  }
 
-  const hasDbSetting = setting?.source === 'db';
+  const hasDbSetting = setting?.source === 'db'
 
   return (
     <Card>
@@ -672,12 +575,7 @@ function StringArrayCard({
           )}
           {hasChanges && (
             <>
-              <Button
-                disabled={disabled}
-                onClick={handleCancel}
-                size="sm"
-                variant="outline"
-              >
+              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
                 Cancel
               </Button>
               <Button
@@ -692,7 +590,7 @@ function StringArrayCard({
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function ServiceImagePatternsCard({
@@ -700,80 +598,74 @@ function ServiceImagePatternsCard({
   settings,
   disabled,
 }: {
-  app: string;
-  settings: AppSettingsResponse | undefined;
-  disabled: boolean;
+  app: string
+  settings: AppSettingsResponse | undefined
+  disabled: boolean
 }) {
-  const qc = useQueryClient();
-  const [value, setValue] = useState<string | null>(null);
+  const qc = useQueryClient()
+  const [value, setValue] = useState<string | null>(null)
 
-  const setting = settings?.service_image_patterns;
-  const currentValue = getSettingValue<Record<string, string> | null>(
-    setting,
-    null,
-  );
+  const setting = settings?.service_image_patterns
+  const currentValue = getSettingValue<Record<string, string> | null>(setting, null)
 
-  let displayValue = '';
+  let displayValue = ''
   if (value !== null) {
-    displayValue = value;
+    displayValue = value
   } else if (currentValue) {
-    displayValue = JSON.stringify(currentValue, null, 2);
+    displayValue = JSON.stringify(currentValue, null, 2)
   }
 
-  const hasChanges = value !== null;
+  const hasChanges = value !== null
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      if (value === null) return;
+      if (value === null) return
       try {
-        const parsed = JSON.parse(value);
-        await api.put(
-          `/api/v1/apps/${app}/settings/service_image_patterns`,
-          parsed,
-        );
+        const parsed = JSON.parse(value)
+        await api.put(`/api/v1/apps/${app}/settings/service_image_patterns`, parsed)
       } catch (_err) {
-        throw new Error('Invalid JSON format');
+        throw new Error('Invalid JSON format')
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] });
-      setValue(null);
-      toast.success('Setting updated');
+      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setValue(null)
+      toast.success('Setting updated')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err);
-      toast.error(message ?? 'Failed to update setting');
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to update setting')
     },
-  });
+  })
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/service_image_patterns`);
+      await api.delete(`/api/v1/apps/${app}/settings/service_image_patterns`)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['appSettings', app] });
-      setValue(null);
-      toast.success('Setting cleared');
+      qc.invalidateQueries({ queryKey: ['appSettings', app] })
+      setValue(null)
+      toast.success('Setting cleared')
     },
     onError: (err: unknown) => {
-      const message = extractErrorMessage(err);
-      toast.error(message ?? 'Failed to clear setting');
+      const message = extractErrorMessage(err)
+      toast.error(message ?? 'Failed to clear setting')
     },
-  });
+  })
 
   const handleCancel = () => {
-    setValue(null);
-  };
+    setValue(null)
+  }
 
   const handleSave = () => {
-    updateMutation.mutate();
-  };
+    updateMutation.mutate()
+  }
 
   const handleClear = () => {
-    clearMutation.mutate();
-  };
+    clearMutation.mutate()
+  }
 
-  const hasDbSetting = setting?.source === 'db';
+  const hasDbSetting = setting?.source === 'db'
 
   return (
     <Card>
@@ -782,14 +674,11 @@ function ServiceImagePatternsCard({
       </CardHeader>
       <CardContent className="space-y-4 pb-6">
         <p className="text-muted-foreground text-sm">
-          Per-service regex patterns for validating Docker images in convox.yml.
-          Validates build commands to ensure only images matching the pattern
-          are allowed.
+          Per-service regex patterns for validating Docker images in convox.yml. Validates build
+          commands to ensure only images matching the pattern are allowed.
         </p>
         <div>
-          <Label htmlFor="service-image-patterns">
-            JSON object (service name → regex)
-          </Label>
+          <Label htmlFor="service-image-patterns">JSON object (service name → regex)</Label>
           <div className="flex flex-col gap-2">
             <textarea
               className="min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
@@ -816,12 +705,7 @@ function ServiceImagePatternsCard({
           )}
           {hasChanges && (
             <>
-              <Button
-                disabled={disabled}
-                onClick={handleCancel}
-                size="sm"
-                variant="outline"
-              >
+              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
                 Cancel
               </Button>
               <Button
@@ -836,13 +720,13 @@ function ServiceImagePatternsCard({
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 export function AppSettingsPage() {
-  const { app } = useParams({ from: '/apps/$app/settings' }) as { app: string };
-  const { user } = useAuth();
-  const isAdmin = !!user?.roles?.includes('admin');
+  const { app } = useParams({ from: '/apps/$app/settings' }) as { app: string }
+  const { user } = useAuth()
+  const isAdmin = !!user?.roles?.includes('admin')
 
   const {
     data: appSettings,
@@ -850,12 +734,11 @@ export function AppSettingsPage() {
     error,
   } = useQuery({
     queryKey: ['appSettings', app],
-    queryFn: async () =>
-      api.get<AppSettingsResponse>(`/api/v1/apps/${app}/settings`),
+    queryFn: async () => api.get<AppSettingsResponse>(`/api/v1/apps/${app}/settings`),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  });
+  })
 
   if (isLoading) {
     return (
@@ -864,7 +747,7 @@ export function AppSettingsPage() {
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -912,13 +795,9 @@ export function AppSettingsPage() {
             settings={appSettings}
             title="Approved Deploy Commands"
           />
-          <ServiceImagePatternsCard
-            app={app}
-            disabled={!isAdmin}
-            settings={appSettings}
-          />
+          <ServiceImagePatternsCard app={app} disabled={!isAdmin} settings={appSettings} />
         </div>
       </div>
     </div>
-  );
+  )
 }

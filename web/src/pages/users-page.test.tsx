@@ -1,27 +1,20 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider } from '../contexts/auth-context';
-import { api } from '../lib/api';
-import { UsersPage } from './users-page';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthProvider } from '../contexts/auth-context'
+import { api } from '../lib/api'
+import { UsersPage } from './users-page'
 
-const ADMIN_LABEL_RE = /^Admin\b/i;
+const ADMIN_LABEL_RE = /^Admin\b/i
 
-const ADD_USER_RE = /Add User/i;
-const UPDATE_USER_RE = /Save Changes/i;
+const ADD_USER_RE = /Add User/i
+const UPDATE_USER_RE = /Save Changes/i
 
 // Mock the API
 vi.mock('../lib/api', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/api')>('../lib/api');
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
   return {
     ...actual,
     api: {
@@ -31,23 +24,16 @@ vi.mock('../lib/api', async () => {
       put: vi.fn(),
       delete: vi.fn(),
     },
-  };
-});
+  }
+})
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({
-    to,
-    children,
-    ...props
-  }: {
-    to?: unknown;
-    children?: ReactNode;
-  }) => (
+  Link: ({ to, children, ...props }: { to?: unknown; children?: ReactNode }) => (
     <a href={typeof to === 'string' ? to : '#'} {...props}>
       {children}
     </a>
   ),
-}));
+}))
 
 // Mock toast controller
 vi.mock('@/components/ui/use-toast', () => ({
@@ -57,14 +43,14 @@ vi.mock('@/components/ui/use-toast', () => ({
     warning: vi.fn(),
     info: vi.fn(),
   },
-}));
+}))
 
 // Mock useAuth globally
-const mockUseAuth = vi.fn();
+const mockUseAuth = vi.fn()
 vi.mock('../contexts/auth-context', () => ({
   useAuth: () => mockUseAuth(),
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
+}))
 
 const mockUsers = [
   {
@@ -83,17 +69,15 @@ const mockUsers = [
     updated_at: '2024-01-01T00:00:00Z',
     suspended: false,
   },
-];
+]
 
-const createWrapper = (
-  user = { email: 'admin@example.com', roles: ['admin'] },
-) => {
+const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
-  });
+  })
 
   // Set up the mock for this test
   mockUseAuth.mockReturnValue({
@@ -101,81 +85,81 @@ const createWrapper = (
     isAuthenticated: true,
     login: vi.fn(),
     logout: vi.fn(),
-  });
+  })
 
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>{children}</AuthProvider>
     </QueryClientProvider>
-  );
-};
+  )
+}
 
 describe('UsersPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
   describe('Admin User', () => {
     it('renders users list for admin', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Admin User')).toBeInTheDocument();
-        expect(screen.getByText('Viewer User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Admin User')).toBeInTheDocument()
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
 
-      expect(screen.getByText('Add User')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Add User')).toBeInTheDocument()
+    })
 
     it('opens add user dialog when clicking Add User', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Admin User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Admin User')).toBeInTheDocument()
+      })
 
       // Click the Add User button
-      const addUserButton = screen.getByRole('button', { name: ADD_USER_RE });
-      fireEvent.click(addUserButton);
+      const addUserButton = screen.getByRole('button', { name: ADD_USER_RE })
+      fireEvent.click(addUserButton)
 
       // Check for the dialog title
       const dialogTitle = await screen.findByRole('heading', {
         name: ADD_USER_RE,
-      });
-      expect(dialogTitle).toBeInTheDocument();
-      expect(screen.getByLabelText('Email')).toBeInTheDocument();
-      expect(screen.getByLabelText('Name')).toBeInTheDocument();
-    });
+      })
+      expect(dialogTitle).toBeInTheDocument()
+      expect(screen.getByLabelText('Email')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toBeInTheDocument()
+    })
 
     it('creates a new user', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
-      vi.mocked(api.post).mockResolvedValueOnce({});
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
+      vi.mocked(api.post).mockResolvedValueOnce({})
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Admin User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Admin User')).toBeInTheDocument()
+      })
 
       // Open dialog
-      const addUserButton = screen.getByRole('button', { name: ADD_USER_RE });
-      fireEvent.click(addUserButton);
+      const addUserButton = screen.getByRole('button', { name: ADD_USER_RE })
+      fireEvent.click(addUserButton)
 
       // Fill form
-      const emailInput = screen.getByLabelText('Email');
-      const nameInput = screen.getByLabelText('Name');
+      const emailInput = screen.getByLabelText('Email')
+      const nameInput = screen.getByLabelText('Name')
 
       fireEvent.change(emailInput, {
         target: { value: 'newuser@example.com' },
-      });
-      fireEvent.change(nameInput, { target: { value: 'New User' } });
+      })
+      fireEvent.change(nameInput, { target: { value: 'New User' } })
 
       // The formData is already initialized with ['viewer'] role by default in handleAddUser
       // So we don't need to select it
@@ -183,164 +167,147 @@ describe('UsersPage', () => {
       // Submit - find all buttons with "Add User" text and click the last one (in dialog)
       const addUserButtons = screen.getAllByRole('button', {
         name: ADD_USER_RE,
-      });
-      const submitButton = addUserButtons.at(-1);
+      })
+      const submitButton = addUserButtons.at(-1)
       if (!submitButton) {
-        throw new Error('Submit button not found');
+        throw new Error('Submit button not found')
       }
-      fireEvent.click(submitButton);
+      fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(api.post).toHaveBeenCalledWith('/api/v1/admin/users', {
+        expect(api.post).toHaveBeenCalledWith('/api/v1/users', {
           email: 'newuser@example.com',
           name: 'New User',
           roles: ['viewer'],
-        });
-      });
-    });
+        })
+      })
+    })
 
     it('updates user roles', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
-      vi.mocked(api.put).mockResolvedValueOnce({});
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
+      vi.mocked(api.put).mockResolvedValueOnce({})
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Viewer User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
 
       // Click edit on viewer user
-      const rows = screen.getAllByRole('row');
-      const viewerRow = rows.find((row) =>
-        row.textContent?.includes('viewer@example.com'),
-      );
+      const rows = screen.getAllByRole('row')
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
       if (!viewerRow) {
-        throw new Error('Viewer row not found');
+        throw new Error('Viewer row not found')
       }
 
       // Find the dropdown menu button within that row
       const dropdownButton = within(viewerRow).getByRole('button', {
         name: /actions for viewer@example.com/i,
-      });
-      const user = userEvent.setup();
-      await user.click(dropdownButton);
+      })
+      const user = userEvent.setup()
+      await user.click(dropdownButton)
 
       // Click "Edit User" from the dropdown
-      const editMenuItem = await screen.findByText('Edit User');
-      await user.click(editMenuItem);
+      const editMenuItem = await screen.findByText('Edit User')
+      await user.click(editMenuItem)
 
       await waitFor(() => {
-        expect(
-          screen.getByRole('heading', { name: 'Edit User' }),
-        ).toBeInTheDocument();
-      });
+        expect(screen.getByRole('heading', { name: 'Edit User' })).toBeInTheDocument()
+      })
 
       // Select admin role via radio
-      const adminRadio = screen.getByRole('radio', { name: ADMIN_LABEL_RE });
-      fireEvent.click(adminRadio);
+      const adminRadio = screen.getByRole('radio', { name: ADMIN_LABEL_RE })
+      fireEvent.click(adminRadio)
 
       // Submit
-      fireEvent.click(screen.getByRole('button', { name: UPDATE_USER_RE }));
+      fireEvent.click(screen.getByRole('button', { name: UPDATE_USER_RE }))
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith(
-          '/api/v1/admin/users/viewer@example.com/roles',
-          {
-            roles: ['admin'],
-          },
-        );
-      });
-    });
+        expect(api.put).toHaveBeenCalledWith('/api/v1/users/viewer@example.com/roles', {
+          roles: ['admin'],
+        })
+      })
+    })
 
     // suspend/unsuspend removed from UI; no test required
 
     it('deletes a user with confirmation', async () => {
-      const mockedGet = vi.mocked(api.get);
+      const mockedGet = vi.mocked(api.get)
       mockedGet
         .mockResolvedValueOnce(mockUsers)
-        .mockResolvedValueOnce(
-          mockUsers.filter((u) => u.email !== 'viewer@example.com'),
-        );
-      mockedGet.mockResolvedValue(mockUsers);
-      vi.mocked(api.delete).mockResolvedValueOnce({});
+        .mockResolvedValueOnce(mockUsers.filter((u) => u.email !== 'viewer@example.com'))
+      mockedGet.mockResolvedValue(mockUsers)
+      vi.mocked(api.delete).mockResolvedValueOnce({})
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Viewer User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
 
       // Find delete button for viewer user
-      const rows = screen.getAllByRole('row');
-      const viewerRow = rows.find((row) =>
-        row.textContent?.includes('viewer@example.com'),
-      );
+      const rows = screen.getAllByRole('row')
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
       if (!viewerRow) {
-        throw new Error('Viewer row not found');
+        throw new Error('Viewer row not found')
       }
 
       // Open the dropdown menu
       const dropdownButton = within(viewerRow).getByRole('button', {
         name: /actions for viewer@example.com/i,
-      });
-      const user = userEvent.setup();
-      await user.click(dropdownButton);
+      })
+      const user = userEvent.setup()
+      await user.click(dropdownButton)
 
       // Click "Delete User" from the dropdown
-      const deleteMenuItem = await screen.findByText('Delete User');
-      await user.click(deleteMenuItem);
+      const deleteMenuItem = await screen.findByText('Delete User')
+      await user.click(deleteMenuItem)
 
-      const dialog = await screen.findByRole('dialog');
-      const confirmationInput = within(dialog).getByLabelText(/confirmation/i);
-      fireEvent.change(confirmationInput, { target: { value: 'DELETE' } });
+      const dialog = await screen.findByRole('dialog')
+      const confirmationInput = within(dialog).getByLabelText(/confirmation/i)
+      fireEvent.change(confirmationInput, { target: { value: 'DELETE' } })
 
       const confirmDeleteButton = within(dialog).getByRole('button', {
         name: /Delete User/i,
-      });
-      fireEvent.click(confirmDeleteButton);
+      })
+      fireEvent.click(confirmDeleteButton)
 
       await waitFor(() => {
-        expect(api.delete).toHaveBeenCalledWith(
-          '/api/v1/admin/users/viewer@example.com',
-        );
-      });
-    });
+        expect(api.delete).toHaveBeenCalledWith('/api/v1/users/viewer@example.com')
+      })
+    })
 
     it('prevents deleting own account', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Admin User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Admin User')).toBeInTheDocument()
+      })
 
       // Find dropdown menu for admin user (current user)
-      const rows = screen.getAllByRole('row');
-      const adminRow = rows.find((row) =>
-        row.textContent?.includes('admin@example.com'),
-      );
+      const rows = screen.getAllByRole('row')
+      const adminRow = rows.find((row) => row.textContent?.includes('admin@example.com'))
       if (!adminRow) {
-        throw new Error('Admin row not found');
+        throw new Error('Admin row not found')
       }
 
       // Open the dropdown menu
       const dropdownButton = within(adminRow).getByRole('button', {
         name: /actions for admin@example.com/i,
-      });
-      const user = userEvent.setup();
-      await user.click(dropdownButton);
+      })
+      const user = userEvent.setup()
+      await user.click(dropdownButton)
 
       // Find the "Delete User" menu item and verify it's disabled
-      const deleteMenuItem = await screen.findByText('Delete User');
-      const menuItem = deleteMenuItem.closest(
-        'div[data-slot="dropdown-menu-item"]',
-      );
-      expect(menuItem).toHaveAttribute('data-disabled');
-    });
+      const deleteMenuItem = await screen.findByText('Delete User')
+      const menuItem = deleteMenuItem.closest('div[data-slot="dropdown-menu-item"]')
+      expect(menuItem).toHaveAttribute('data-disabled')
+    })
 
     it('renders users without dates safely', async () => {
       const users = [
@@ -353,98 +320,94 @@ describe('UsersPage', () => {
           updated_at: '',
           suspended: false,
         },
-      ];
-      vi.mocked(api.get).mockResolvedValue(users);
+      ]
+      vi.mocked(api.get).mockResolvedValue(users)
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('No Dates')).toBeInTheDocument();
-      });
+        expect(screen.getByText('No Dates')).toBeInTheDocument()
+      })
 
       // Should not crash; placeholders should render
-      expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0);
-    });
-  });
+      expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0)
+    })
+  })
 
   describe('Non-Admin User', () => {
     it('renders list for viewer without admin actions', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper({
         email: 'viewer@example.com',
         roles: ['viewer'],
-      });
-      render(<UsersPage />, { wrapper: Wrapper });
+      })
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Viewer User')).toBeInTheDocument();
-      });
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
       // No Add User button for non-admin
-      expect(screen.queryByRole('button', { name: ADD_USER_RE })).toBeNull();
+      expect(screen.queryByRole('button', { name: ADD_USER_RE })).toBeNull()
       // No action buttons column
-      const rows = screen.getAllByRole('row');
-      const viewerRow = rows.find((row) =>
-        row.textContent?.includes('viewer@example.com'),
-      );
+      const rows = screen.getAllByRole('row')
+      const viewerRow = rows.find((row) => row.textContent?.includes('viewer@example.com'))
       if (!viewerRow) {
-        throw new Error('Viewer row not found');
+        throw new Error('Viewer row not found')
       }
-      expect(within(viewerRow).queryByRole('button')).toBeNull();
-    });
+      expect(within(viewerRow).queryByRole('button')).toBeNull()
+    })
 
     it('renders list for ops without admin actions', async () => {
-      vi.mocked(api.get).mockResolvedValue(mockUsers);
+      vi.mocked(api.get).mockResolvedValue(mockUsers)
 
       const Wrapper = createWrapper({
         email: 'ops@example.com',
         roles: ['ops'],
-      });
-      render(<UsersPage />, { wrapper: Wrapper });
+      })
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Viewer User')).toBeInTheDocument();
-      });
-      expect(screen.queryByRole('button', { name: ADD_USER_RE })).toBeNull();
-      const rows = screen.getAllByRole('row');
-      const adminRow = rows.find((row) =>
-        row.textContent?.includes('admin@example.com'),
-      );
+        expect(screen.getByText('Viewer User')).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('button', { name: ADD_USER_RE })).toBeNull()
+      const rows = screen.getAllByRole('row')
+      const adminRow = rows.find((row) => row.textContent?.includes('admin@example.com'))
       if (!adminRow) {
-        throw new Error('Admin row not found');
+        throw new Error('Admin row not found')
       }
-      expect(within(adminRow).queryByRole('button')).toBeNull();
-    });
-  });
+      expect(within(adminRow).queryByRole('button')).toBeNull()
+    })
+  })
 
   describe('Error Handling', () => {
     it('displays error when API fails', async () => {
-      vi.mocked(api.get).mockRejectedValueOnce(new Error('API Error'));
+      vi.mocked(api.get).mockRejectedValueOnce(new Error('API Error'))
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load users')).toBeInTheDocument();
-      });
-    });
+        expect(screen.getByText('Failed to load users')).toBeInTheDocument()
+      })
+    })
 
     it('shows loading state', () => {
       vi.mocked(api.get).mockImplementation(
         () =>
           new Promise(() => {
             /* never resolves in this test */
-          }),
-      );
+          })
+      )
 
-      const Wrapper = createWrapper();
-      render(<UsersPage />, { wrapper: Wrapper });
+      const Wrapper = createWrapper()
+      render(<UsersPage />, { wrapper: Wrapper })
 
       // Check for loading spinner by class
-      const spinner = document.querySelector('.animate-spin');
-      expect(spinner).toBeInTheDocument();
-    });
+      const spinner = document.querySelector('.animate-spin')
+      expect(spinner).toBeInTheDocument()
+    })
     // moved to top-level
-  });
-});
+  })
+})

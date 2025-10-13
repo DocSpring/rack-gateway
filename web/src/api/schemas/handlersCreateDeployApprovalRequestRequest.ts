@@ -10,11 +10,9 @@ import type { HandlersCreateDeployApprovalRequestRequestCiMetadata } from './han
 export interface HandlersCreateDeployApprovalRequestRequest {
   app: string;
   ci_metadata?: HandlersCreateDeployApprovalRequestRequestCiMetadata;
-  ci_provider?: string;
   git_branch?: string;
   git_commit_hash: string;
   message: string;
-  pipeline_url?: string;
   target_api_token?: string;
   target_api_token_id?: string;
 }

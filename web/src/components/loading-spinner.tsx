@@ -1,13 +1,13 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils'
 
-type LoadingSpinnerVariant = 'primary' | 'white';
+type LoadingSpinnerVariant = 'primary' | 'white'
 
 export function LoadingSpinner({
   className,
   variant = 'primary',
 }: {
-  className?: string;
-  variant?: LoadingSpinnerVariant;
+  className?: string
+  variant?: LoadingSpinnerVariant
 }) {
   return (
     <span
@@ -17,10 +17,10 @@ export function LoadingSpinner({
         variant === 'white'
           ? 'border-white/30 border-t-white'
           : 'border-primary/40 border-t-primary',
-        className,
+        className
       )}
     />
-  );
+  )
 }
 
-export default LoadingSpinner;
+export default LoadingSpinner

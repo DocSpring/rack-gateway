@@ -216,9 +216,9 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     // These gateway-specific endpoints SHOULD work with cookies
     const allowedEndpoints = [
       APIRoute('me'),
-      APIRoute('admin/users'),
+      APIRoute('users'),
       APIRoute('admin/roles'),
-      APIRoute('admin/audit'),
+      APIRoute('audit-logs'),
       APIRoute('admin/tokens'),
     ]
 

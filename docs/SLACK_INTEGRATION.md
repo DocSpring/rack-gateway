@@ -34,7 +34,7 @@ Rack Gateway can send audit log notifications to Slack channels for security eve
   },
   "oauth_config": {
     "redirect_urls": [
-      "https://your-gateway-domain.com/api/v1/admin/integrations/slack/oauth/callback"
+      "https://your-gateway-domain.com/api/v1/integrations/slack/oauth/callback"
     ],
     "scopes": {
       "bot": ["channels:read", "chat:write"]
@@ -231,13 +231,13 @@ Channel actions are stored as JSONB:
 
 All endpoints require admin authentication:
 
-- `POST /api/v1/admin/integrations/slack/oauth/authorize` - Start OAuth flow
-- `GET /api/v1/admin/integrations/slack/oauth/callback` - OAuth callback
-- `GET /api/v1/admin/integrations/slack` - Get integration status
-- `PUT /api/v1/admin/integrations/slack/channels` - Update channel configuration
-- `DELETE /api/v1/admin/integrations/slack` - Disconnect integration
-- `GET /api/v1/admin/integrations/slack/channels/list` - List available channels
-- `POST /api/v1/admin/integrations/slack/test` - Send test notification
+- `POST /api/v1/integrations/slack/oauth/authorize` - Start OAuth flow
+- `GET /api/v1/integrations/slack/oauth/callback` - OAuth callback
+- `GET /api/v1/integrations/slack` - Get integration status
+- `PUT /api/v1/integrations/slack/channels` - Update channel configuration
+- `DELETE /api/v1/integrations/slack` - Disconnect integration
+- `GET /api/v1/integrations/slack/channels/list` - List available channels
+- `POST /api/v1/integrations/slack/test` - Send test notification
 
 ## Limitations
 

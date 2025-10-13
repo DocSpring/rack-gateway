@@ -150,7 +150,7 @@ test('tokens: create, rename, delete', async ({ page }) => {
   await login(page)
 
   // Navigate to API Tokens
-  await page.goto(WebRoute('api_tokens'))
+  await page.goto(WebRoute('api-tokens'))
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
 
   const timestamp = Date.now()
@@ -199,7 +199,7 @@ test('tokens: create, rename, delete', async ({ page }) => {
 test('tokens: name length validation', async ({ page }) => {
   await login(page)
 
-  await page.goto(WebRoute('api_tokens'))
+  await page.goto(WebRoute('api-tokens'))
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
 
   await page.getByRole('button', { name: /Create Token/i }).click()
@@ -219,7 +219,7 @@ test('audit logs: view and filter', async ({ page }) => {
   await login(page)
 
   // Create a token to ensure we have a recent audit entry to filter
-  await page.goto(WebRoute('api_tokens'))
+  await page.goto(WebRoute('api-tokens'))
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
   const timestamp = Date.now()
   const tokenName = `E2E Web API Token ${timestamp}`
@@ -243,7 +243,7 @@ test('audit logs: view and filter', async ({ page }) => {
   await expect(tokenCell).toBeVisible()
 
   // Navigate to Audit Logs
-  await page.goto(WebRoute('audit_logs'))
+  await page.goto(WebRoute('audit-logs'))
   await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
 
   // Ensure table rendered
@@ -267,7 +267,7 @@ test('audit logs: view and filter', async ({ page }) => {
   await expect(filteredResourceCell).toBeVisible()
 
   // Clean up token to avoid test fixture buildup
-  await page.goto(WebRoute('api_tokens'))
+  await page.goto(WebRoute('api-tokens'))
   const row = page.locator('tr', { hasText: tokenName })
   await expect(row).toBeVisible()
   await row.getByRole('button', { name: /Actions for/i }).click()

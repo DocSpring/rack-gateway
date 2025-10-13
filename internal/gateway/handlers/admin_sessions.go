@@ -21,7 +21,7 @@ import (
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/users/{email}/sessions [get]
+// @Router /users/{email}/sessions [get]
 func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
@@ -93,7 +93,7 @@ func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email}/sessions/{sessionID}/revoke [post]
+// @Router /users/{email}/sessions/{sessionID}/revoke [post]
 func (h *AdminHandler) RevokeUserSession(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
@@ -157,7 +157,7 @@ func (h *AdminHandler) RevokeUserSession(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email}/sessions/revoke_all [post]
+// @Router /users/{email}/sessions/revoke_all [post]
 func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))

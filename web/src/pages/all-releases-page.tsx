@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
-import { PageLayout } from '../components/page-layout';
-import { TablePane } from '../components/table-pane';
-import { TimeAgo } from '../components/time-ago';
-import { Button } from '../components/ui/button';
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { useState } from 'react'
+import { PageLayout } from '../components/page-layout'
+import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
+import { Button } from '../components/ui/button'
 import {
   Table,
   TableBody,
@@ -12,19 +12,19 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table';
-import { api } from '../lib/api';
-import { DEFAULT_PER_PAGE } from '../lib/constants';
+} from '../components/ui/table'
+import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type App = { name: string };
+type App = { name: string }
 type Release = {
-  id: string;
-  description?: string;
-  version?: number;
-  app: string;
-  created?: string;
-  created_by?: string;
-};
+  id: string
+  description?: string
+  version?: number
+  app: string
+  created?: string
+  created_by?: string
+}
 
 export function AllReleasesPage() {
   const {
@@ -34,49 +34,47 @@ export function AllReleasesPage() {
   } = useQuery({
     queryKey: ['all-releases'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/api/v1/convox/apps');
+      const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const rs = await api.get<Release[]>(
-            `/api/v1/convox/apps/${a.name}/releases`,
-          );
-          return rs.map((r) => ({ ...r, app: a.name }));
-        }),
-      );
+          const rs = await api.get<Release[]>(`/api/v1/convox/apps/${a.name}/releases`)
+          return rs.map((r) => ({ ...r, app: a.name }))
+        })
+      )
       const items = lists.flat().sort((a, b) => {
-        const at = a.created ? new Date(a.created).getTime() : 0;
-        const bt = b.created ? new Date(b.created).getTime() : 0;
-        return bt - at;
-      });
+        const at = a.created ? new Date(a.created).getTime() : 0
+        const bt = b.created ? new Date(b.created).getTime() : 0
+        return bt - at
+      })
       try {
-        const ids = Array.from(new Set(items.map((r) => r.id))).join(',');
+        const ids = Array.from(new Set(items.map((r) => r.id))).join(',')
         if (ids) {
-          const map = await api.get<
-            Record<string, { email: string; name: string }>
-          >(`/api/v1/created-by?type=release&ids=${encodeURIComponent(ids)}`);
+          const map = await api.get<Record<string, { email: string; name: string }>>(
+            `/api/v1/created-by?type=release&ids=${encodeURIComponent(ids)}`
+          )
           for (const r of items) {
-            const m = map[r.id];
+            const m = map[r.id]
             if (m) {
-              r.created_by = m.email || m.name;
+              r.created_by = m.email || m.name
             }
           }
         }
       } catch (_e) {
         // ignore
       }
-      return items;
+      return items
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  });
-  const perPage = DEFAULT_PER_PAGE;
-  const total = data.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const [page, setPage] = useState(1);
-  const start = (page - 1) * perPage;
-  const end = Math.min(start + perPage, total);
-  const rows = data.slice(start, end);
+  })
+  const perPage = DEFAULT_PER_PAGE
+  const total = data.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const [page, setPage] = useState(1)
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const rows = data.slice(start, end)
 
   return (
     <PageLayout description="Releases across all apps" title="Releases">
@@ -115,9 +113,7 @@ export function AllReleasesPage() {
                 </TableCell>
                 <TableCell>{r.version ?? '—'}</TableCell>
                 <TableCell>{r.created_by || '—'}</TableCell>
-                <TableCell>
-                  {r.created ? <TimeAgo date={r.created} /> : '—'}
-                </TableCell>
+                <TableCell>{r.created ? <TimeAgo date={r.created} /> : '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -148,5 +144,5 @@ export function AllReleasesPage() {
         )}
       </TablePane>
     </PageLayout>
-  );
+  )
 }

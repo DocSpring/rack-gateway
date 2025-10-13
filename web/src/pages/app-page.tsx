@@ -1,18 +1,18 @@
-import { Link, Outlet, useLocation, useParams } from '@tanstack/react-router';
-import { useEffect } from 'react';
-import { PageLayout } from '../components/page-layout';
+import { Link, Outlet, useLocation, useParams } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { PageLayout } from '../components/page-layout'
 
 export function AppPage() {
-  const { app } = useParams({ from: '/apps/$app' }) as { app: string };
-  const location = useLocation();
+  const { app } = useParams({ from: '/apps/$app' }) as { app: string }
+  const location = useLocation()
 
   // Redirect /apps/:app to processes subpage
   useEffect(() => {
-    const base = `/apps/${app}`;
+    const base = `/apps/${app}`
     if (location.pathname === base) {
-      window.history.replaceState(null, '', `${base}/processes`);
+      window.history.replaceState(null, '', `${base}/processes`)
     }
-  }, [app, location.pathname]);
+  }, [app, location.pathname])
 
   const tabs = [
     {
@@ -24,7 +24,7 @@ export function AppPage() {
     { key: 'releases', name: 'Releases', to: '/apps/$app/releases' as const },
     { key: 'env', name: 'Environment', to: '/apps/$app/env' as const },
     { key: 'settings', name: 'Settings', to: '/apps/$app/settings' as const },
-  ];
+  ]
 
   return (
     <PageLayout title={`App: ${app}`}>
@@ -47,5 +47,5 @@ export function AppPage() {
       </div>
       <Outlet />
     </PageLayout>
-  );
+  )
 }

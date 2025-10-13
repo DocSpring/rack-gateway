@@ -17,7 +17,6 @@ export interface HandlersDeployApprovalRequestResponse {
   approved_by_name?: string;
   build_id?: string;
   ci_metadata?: HandlersDeployApprovalRequestResponseCiMetadata;
-  ci_provider?: string;
   created_at: string;
   created_by_api_token_id?: string;
   created_by_api_token_name?: string;
@@ -28,7 +27,6 @@ export interface HandlersDeployApprovalRequestResponse {
   git_commit_hash: string;
   message: string;
   object_url?: string;
-  pipeline_url?: string;
   pr_url?: string;
   process_ids?: string[];
   public_id: string;

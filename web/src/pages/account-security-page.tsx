@@ -1,21 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from '@tanstack/react-router';
-import { MoreVertical, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
-import QRCode from 'qrcode';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { MFAInput } from '@/components/mfa-input';
-import { TimeAgo } from '@/components/time-ago';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from '@tanstack/react-router'
+import { MoreVertical, Pencil, ShieldAlert, Trash2 } from 'lucide-react'
+import QRCode from 'qrcode'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
+import { MFAInput } from '@/components/mfa-input'
+import { TimeAgo } from '@/components/time-ago'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -23,20 +17,20 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/contexts/auth-context';
-import { useStepUp } from '@/contexts/step-up-context';
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { toast } from '@/components/ui/use-toast'
+import { useAuth } from '@/contexts/auth-context'
+import { useStepUp } from '@/contexts/step-up-context'
 import {
   type BackupCodesResponse,
   confirmTOTPEnrollment,
@@ -53,49 +47,44 @@ import {
   trustCurrentDevice,
   updateMFAMethod,
   updatePreferredMFAMethod,
-} from '@/lib/api';
-import { getErrorMessage } from '@/lib/error-utils';
-import { normalizeRedirectPath } from '@/lib/navigation';
-import { resolveWebRedirect } from '@/lib/routes';
+} from '@/lib/api'
+import { getErrorMessage } from '@/lib/error-utils'
+import { normalizeRedirectPath } from '@/lib/navigation'
+import { resolveWebRedirect } from '@/lib/routes'
 import {
   createCredential,
   prepareCreationOptions,
   serializeRegistrationCredential,
-} from '@/lib/webauthn-utils';
+} from '@/lib/webauthn-utils'
 
-type EnrollmentState = (
-  | StartTOTPEnrollmentResponse
-  | StartWebAuthnEnrollmentResponse
-) & {
-  qrDataUrl?: string | null;
-  enrollmentType?: 'totp' | 'webauthn';
-};
+type EnrollmentState = (StartTOTPEnrollmentResponse | StartWebAuthnEnrollmentResponse) & {
+  qrDataUrl?: string | null
+  enrollmentType?: 'totp' | 'webauthn'
+}
 
-type MFAMethodType = 'totp' | 'webauthn';
+type MFAMethodType = 'totp' | 'webauthn'
 
-const STEP_UP_QUERY_KEY = ['mfaStatus'] as const;
+const STEP_UP_QUERY_KEY = ['mfaStatus'] as const
 const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
   webauthn: 'WebAuthn',
-};
-export const DEFAULT_TOTP_LABEL = 'Security Key';
-export const DEFAULT_WEBAUTHN_LABEL = 'Security Key';
+}
+export const DEFAULT_TOTP_LABEL = 'Security Key'
+export const DEFAULT_WEBAUTHN_LABEL = 'Security Key'
 
 const DEFAULT_LABELS: Record<MFAMethodType, string> = {
   totp: DEFAULT_TOTP_LABEL,
   webauthn: DEFAULT_WEBAUTHN_LABEL,
-};
+}
 
-const getDefaultLabelForType = (
-  type?: MFAMethodType | string | null,
-): string => {
+const getDefaultLabelForType = (type?: MFAMethodType | string | null): string => {
   const normalized: MFAMethodType | null =
-    type === 'totp' || type === 'webauthn' ? (type as MFAMethodType) : null;
+    type === 'totp' || type === 'webauthn' ? (type as MFAMethodType) : null
   if (!normalized) {
-    return DEFAULT_TOTP_LABEL;
+    return DEFAULT_TOTP_LABEL
   }
-  return DEFAULT_LABELS[normalized];
-};
+  return DEFAULT_LABELS[normalized]
+}
 
 function formatCodeForDownload(codes: string[]): string {
   const header = [
@@ -103,66 +92,54 @@ function formatCodeForDownload(codes: string[]): string {
     '',
     'Each code can be used once. Store them securely.',
     '',
-  ];
-  return [...header, ...codes].join('\n');
+  ]
+  return [...header, ...codes].join('\n')
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: MFA management page coordinates multiple flows.
 export function AccountSecurityPage() {
-  const queryClient = useQueryClient();
-  const location = useLocation();
-  const { refresh: refreshUser, user } = useAuth();
-  const {
-    openStepUp,
-    handleStepUpError,
-    isVerifying: isGlobalStepUpVerifying,
-  } = useStepUp();
-  const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false);
-  const [enrollmentStep, setEnrollmentStep] = useState<
-    'method-selection' | 'totp-setup'
-  >('method-selection');
-  const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(
-    null,
-  );
-  const [disableDialogOpen, setDisableDialogOpen] = useState(false);
-  const [disableAllPending, setDisableAllPending] = useState(false);
-  const [autoPrompted, setAutoPrompted] = useState(false);
+  const queryClient = useQueryClient()
+  const location = useLocation()
+  const { refresh: refreshUser, user } = useAuth()
+  const { openStepUp, handleStepUpError, isVerifying: isGlobalStepUpVerifying } = useStepUp()
+  const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
+  const [enrollmentStep, setEnrollmentStep] = useState<'method-selection' | 'totp-setup'>(
+    'method-selection'
+  )
+  const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(null)
+  const [disableDialogOpen, setDisableDialogOpen] = useState(false)
+  const [disableAllPending, setDisableAllPending] = useState(false)
+  const [autoPrompted, setAutoPrompted] = useState(false)
   const [editingMethod, setEditingMethod] = useState<{
-    id: number;
-    label: string;
-  } | null>(null);
+    id: number
+    label: string
+  } | null>(null)
   const [pendingEditMethod, setPendingEditMethod] = useState<{
-    id: number;
-    type: MFAMethodType;
-  } | null>(null);
-  const [editLabel, setEditLabel] = useState('');
+    id: number
+    type: MFAMethodType
+  } | null>(null)
+  const [editLabel, setEditLabel] = useState('')
 
   const closeEnrollmentModal = useCallback(() => {
-    setEnrollmentModalOpen(false);
-    setEnrollmentStep('method-selection');
-    setEnrollment(null);
-    setQrDataUrl(null);
-    setVerificationCode('');
-    setTrustEnrollmentDevice(true);
-    setPendingEditMethod(null);
-  }, []);
+    setEnrollmentModalOpen(false)
+    setEnrollmentStep('method-selection')
+    setEnrollment(null)
+    setQrDataUrl(null)
+    setVerificationCode('')
+    setTrustEnrollmentDevice(true)
+    setPendingEditMethod(null)
+  }, [])
 
-  const searchParams = useMemo(
-    () => new URLSearchParams(location.search ?? ''),
-    [location.search],
-  );
-  const promptMfa = searchParams.get('mfa') === 'verify';
-  const redirectParam = searchParams.get('redirect');
-  const redirectTarget = useMemo(
-    () => normalizeRedirectPath(redirectParam),
-    [redirectParam],
-  );
-  const enrollmentRequiredFlag = searchParams.get('enrollment') === 'required';
-  const enrollmentChannel = searchParams.get('channel') ?? undefined;
+  const searchParams = useMemo(() => new URLSearchParams(location.search ?? ''), [location.search])
+  const promptMfa = searchParams.get('mfa') === 'verify'
+  const redirectParam = searchParams.get('redirect')
+  const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
+  const enrollmentRequiredFlag = searchParams.get('enrollment') === 'required'
+  const enrollmentChannel = searchParams.get('channel') ?? undefined
 
   const {
     data: status,
@@ -173,7 +150,7 @@ export function AccountSecurityPage() {
     queryFn: getMFAStatus,
     refetchOnWindowFocus: true,
     staleTime: 30_000,
-  });
+  })
 
   useEffect(() => {
     if (
@@ -182,53 +159,53 @@ export function AccountSecurityPage() {
       !('uri' in enrollment) ||
       !enrollment.uri
     ) {
-      setQrDataUrl(null);
-      return;
+      setQrDataUrl(null)
+      return
     }
-    let cancelled = false;
+    let cancelled = false
     QRCode.toDataURL(enrollment.uri, { margin: 1, scale: 5 })
       .then((data: string) => {
         if (!cancelled) {
-          setQrDataUrl(data);
+          setQrDataUrl(data)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setQrDataUrl(null);
+          setQrDataUrl(null)
         }
-      });
+      })
     return () => {
-      cancelled = true;
-    };
-  }, [enrollment]);
+      cancelled = true
+    }
+  }, [enrollment])
 
   const needsStepUp = useMemo(() => {
     if (!status?.recent_step_up_expires_at) {
-      return true;
+      return true
     }
-    const expires = new Date(status.recent_step_up_expires_at).getTime();
-    return Number.isNaN(expires) || expires <= Date.now();
-  }, [status?.recent_step_up_expires_at]);
+    const expires = new Date(status.recent_step_up_expires_at).getTime()
+    return Number.isNaN(expires) || expires <= Date.now()
+  }, [status?.recent_step_up_expires_at])
 
   const invalidateStatus = useCallback(
     () => queryClient.invalidateQueries({ queryKey: STEP_UP_QUERY_KEY }),
-    [queryClient],
-  );
+    [queryClient]
+  )
 
   const startTOTPMutation = useMutation({
     mutationFn: startTOTPEnrollment,
     onSuccess: (data) => {
-      setEnrollment({ ...data, enrollmentType: 'totp' });
-      setVerificationCode('');
-      setTrustEnrollmentDevice(true);
-      setRecentBackupCodes(data.backup_codes ?? null);
-      setEnrollmentStep('totp-setup');
-      toast.success('MFA enrollment started');
+      setEnrollment({ ...data, enrollmentType: 'totp' })
+      setVerificationCode('')
+      setTrustEnrollmentDevice(true)
+      setRecentBackupCodes(data.backup_codes ?? null)
+      setEnrollmentStep('totp-setup')
+      toast.success('MFA enrollment started')
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const startWebAuthnMutation = useMutation({
     mutationFn: startWebAuthnEnrollment,
@@ -236,245 +213,245 @@ export function AccountSecurityPage() {
       // Immediately trigger the WebAuthn browser prompt
       try {
         if (!data.public_key_options) {
-          throw new Error('No public key options received from server');
+          throw new Error('No public key options received from server')
         }
         // Convert server options to browser-compatible format
-        const webAuthnOptions = prepareCreationOptions(data.public_key_options);
+        const webAuthnOptions = prepareCreationOptions(data.public_key_options)
 
         // Call the browser WebAuthn API to create a credential
         const credential = await createCredential({
           publicKey: webAuthnOptions,
-        });
+        })
 
         if (!credential) {
-          throw new Error('No credential created');
+          throw new Error('No credential created')
         }
 
         // Serialize the credential for the backend
         const credentialForBackend = serializeRegistrationCredential(
-          credential as PublicKeyCredential,
-        );
+          credential as PublicKeyCredential
+        )
 
-        const webAuthnLabel = DEFAULT_WEBAUTHN_LABEL;
-        const methodId = data.method_id ?? 0;
+        const webAuthnLabel = DEFAULT_WEBAUTHN_LABEL
+        const methodId = data.method_id ?? 0
         await confirmWebAuthnEnrollment({
           method_id: methodId,
           credential: credentialForBackend,
           label: webAuthnLabel,
-        });
+        })
 
         // Success!
-        setRecentBackupCodes(data.backup_codes ?? null);
-        toast.success('WebAuthn enrollment completed');
+        setRecentBackupCodes(data.backup_codes ?? null)
+        toast.success('WebAuthn enrollment completed')
         if (methodId) {
-          setEditingMethod({ id: methodId, label: webAuthnLabel });
-          setEditLabel(webAuthnLabel);
+          setEditingMethod({ id: methodId, label: webAuthnLabel })
+          setEditLabel(webAuthnLabel)
         }
-        setPendingEditMethod(null);
-        closeEnrollmentModal();
-        await invalidateStatus();
+        setPendingEditMethod(null)
+        closeEnrollmentModal()
+        await invalidateStatus()
         refreshUser().catch(() => {
           /* noop */
-        });
+        })
       } catch (error) {
-        const msg = getErrorMessage(error);
-        toast.error(`WebAuthn enrollment failed: ${msg}`);
+        const msg = getErrorMessage(error)
+        toast.error(`WebAuthn enrollment failed: ${msg}`)
         // Reset state on error
-        setEnrollment(null);
+        setEnrollment(null)
       }
     },
     onError: (error) => {
-      const msg = getErrorMessage(error);
+      const msg = getErrorMessage(error)
       // If WebAuthn not configured, silently fall back to TOTP instead of showing error
       if (msg.includes('not configured') || msg.includes('WebAuthn')) {
-        startTOTPMutation.mutate();
+        startTOTPMutation.mutate()
       } else {
-        toast.error(msg);
+        toast.error(msg)
       }
     },
-  });
+  })
 
   const handleStartEnrollment = (method: MFAMethodType) => {
     switch (method) {
       case 'totp':
-        startTOTPMutation.mutate();
-        break;
+        startTOTPMutation.mutate()
+        break
       case 'webauthn':
-        startWebAuthnMutation.mutate();
-        break;
+        startWebAuthnMutation.mutate()
+        break
       default:
-        toast.error('Invalid MFA method');
-        break;
+        toast.error('Invalid MFA method')
+        break
     }
-  };
+  }
 
   const confirmEnrollmentMutation = useMutation({
     mutationFn: confirmTOTPEnrollment,
     onSuccess: async () => {
-      toast.success('Multi-factor authentication enabled');
+      toast.success('Multi-factor authentication enabled')
       if (pendingEditMethod) {
-        const defaultLabel = getDefaultLabelForType(pendingEditMethod.type);
-        setEditingMethod({ id: pendingEditMethod.id, label: defaultLabel });
-        setEditLabel(defaultLabel);
-        setPendingEditMethod(null);
+        const defaultLabel = getDefaultLabelForType(pendingEditMethod.type)
+        setEditingMethod({ id: pendingEditMethod.id, label: defaultLabel })
+        setEditLabel(defaultLabel)
+        setPendingEditMethod(null)
       }
-      closeEnrollmentModal();
-      await invalidateStatus();
+      closeEnrollmentModal()
+      await invalidateStatus()
       refreshUser().catch(() => {
         /* noop */
-      });
+      })
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
-      setPendingEditMethod(null);
+      toast.error(getErrorMessage(error))
+      setPendingEditMethod(null)
     },
-  });
+  })
 
   const updateMethodMutation = useMutation({
     mutationFn: ({ methodId, label }: { methodId: number; label: string }) =>
       updateMFAMethod(methodId, { label }),
     onSuccess: () => {
-      toast.success('MFA method updated');
-      invalidateStatus();
-      setEditingMethod(null);
-      setEditLabel('');
+      toast.success('MFA method updated')
+      invalidateStatus()
+      setEditingMethod(null)
+      setEditLabel('')
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const deleteMethodMutation = useMutation({
     mutationFn: deleteMFAMethod,
     onSuccess: () => {
-      toast.success('MFA method removed');
-      invalidateStatus();
+      toast.success('MFA method removed')
+      invalidateStatus()
       refreshUser().catch(() => {
         /* noop */
-      });
+      })
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const revokeDeviceMutation = useMutation({
     mutationFn: revokeTrustedDevice,
     onSuccess: () => {
-      toast.success('Trusted device revoked');
-      invalidateStatus();
+      toast.success('Trusted device revoked')
+      invalidateStatus()
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const regenerateCodesMutation = useMutation({
     mutationFn: regenerateBackupCodes,
     onSuccess: (response: BackupCodesResponse) => {
-      const codes = response.backup_codes ?? [];
-      setRecentBackupCodes(codes);
-      toast.success('Backup codes regenerated');
-      invalidateStatus();
+      const codes = response.backup_codes ?? []
+      setRecentBackupCodes(codes)
+      toast.success('Backup codes regenerated')
+      invalidateStatus()
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const trustDeviceMutation = useMutation({
     mutationFn: trustCurrentDevice,
     onSuccess: async (response) => {
       if (response.trusted_device_cookie) {
-        toast.success('This device is now trusted');
+        toast.success('This device is now trusted')
       } else {
-        toast.success('Device trusted');
+        toast.success('Device trusted')
       }
-      await invalidateStatus();
+      await invalidateStatus()
       refreshUser().catch(() => {
         /* noop */
-      });
+      })
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const updatePreferredMethodMutation = useMutation({
     mutationFn: updatePreferredMFAMethod,
     onSuccess: async () => {
       await refreshUser().catch(() => {
         /* noop */
-      });
-      toast.success('Preferred MFA method updated');
+      })
+      toast.success('Preferred MFA method updated')
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error));
+      toast.error(getErrorMessage(error))
     },
-  });
+  })
 
   const runWithStepUp = (action: () => Promise<void>) => {
     const wrappedAction = async () => {
-      await action();
-    };
+      await action()
+    }
 
     const actionWithStatusRefresh = async () => {
-      await invalidateStatus();
-      await wrappedAction();
-    };
+      await invalidateStatus()
+      await wrappedAction()
+    }
 
     wrappedAction().catch((error) => {
       if (!handleStepUpError(error, actionWithStatusRefresh)) {
-        toast.error(getErrorMessage(error));
+        toast.error(getErrorMessage(error))
       }
-    });
-  };
+    })
+  }
 
   const handleConfirmEnrollment = () => {
     if (!enrollment?.method_id) {
-      toast.error('Enrollment session expired. Start again.');
-      return;
+      toast.error('Enrollment session expired. Start again.')
+      return
     }
-    const methodType: MFAMethodType = 'totp';
-    setPendingEditMethod({ id: enrollment.method_id, type: methodType });
-    const normalizedLabel = getDefaultLabelForType(methodType);
+    const methodType: MFAMethodType = 'totp'
+    setPendingEditMethod({ id: enrollment.method_id, type: methodType })
+    const normalizedLabel = getDefaultLabelForType(methodType)
     confirmEnrollmentMutation.mutate({
       method_id: enrollment.method_id,
       code: verificationCode,
       trust_device: trustEnrollmentDevice,
       label: normalizedLabel,
-    });
-  };
+    })
+  }
 
   const handleDownloadCodes = (codes: string[]) => {
     const blob = new Blob([formatCodeForDownload(codes)], {
       type: 'text/plain;charset=utf-8',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'rack-gateway-backup-codes.txt';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rack-gateway-backup-codes.txt'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   const handleCopy = async (value: string) => {
     try {
-      await navigator.clipboard.writeText(value);
-      toast.success('Copied to clipboard');
+      await navigator.clipboard.writeText(value)
+      toast.success('Copied to clipboard')
     } catch {
-      toast.error('Failed to copy to clipboard');
+      toast.error('Failed to copy to clipboard')
     }
-  };
+  }
 
   const handleCopyCodes = async (codes: string[]) => {
     try {
-      await navigator.clipboard.writeText(codes.join('\n'));
-      toast.success('Backup codes copied');
+      await navigator.clipboard.writeText(codes.join('\n'))
+      toast.success('Backup codes copied')
     } catch {
-      toast.error('Unable to copy backup codes');
+      toast.error('Unable to copy backup codes')
     }
-  };
+  }
 
   useEffect(() => {
     if (
@@ -487,18 +464,18 @@ export function AccountSecurityPage() {
       !isFetching &&
       !isGlobalStepUpVerifying
     ) {
-      setAutoPrompted(true);
+      setAutoPrompted(true)
       openStepUp({
         action: async () => {
-          await invalidateStatus();
+          await invalidateStatus()
           if (promptMfa && redirectTarget) {
-            const destination = resolveWebRedirect(redirectTarget);
+            const destination = resolveWebRedirect(redirectTarget)
             if (typeof window !== 'undefined') {
-              window.location.assign(destination);
+              window.location.assign(destination)
             }
           }
         },
-      });
+      })
     }
   }, [
     promptMfa,
@@ -512,57 +489,57 @@ export function AccountSecurityPage() {
     openStepUp,
     invalidateStatus,
     redirectTarget,
-  ]);
+  ])
 
   const handleDisableAllMfa = () => {
     if (methods.length === 0) {
-      setDisableDialogOpen(false);
-      return;
+      setDisableDialogOpen(false)
+      return
     }
 
     const performDisable = async () => {
-      setDisableAllPending(true);
+      setDisableAllPending(true)
       try {
         for (const method of methods) {
           if (!method.id) {
-            toast.error('Unable to determine method identifier');
-            continue;
+            toast.error('Unable to determine method identifier')
+            continue
           }
-          await deleteMethodMutation.mutateAsync(method.id as number);
+          await deleteMethodMutation.mutateAsync(method.id as number)
         }
-        toast.success('Multi-factor authentication disabled');
+        toast.success('Multi-factor authentication disabled')
       } finally {
-        setDisableAllPending(false);
+        setDisableAllPending(false)
       }
-    };
+    }
 
-    setDisableDialogOpen(false);
-    runWithStepUp(performDisable);
-  };
+    setDisableDialogOpen(false)
+    runWithStepUp(performDisable)
+  }
 
   const isBusy =
     isLoading ||
     isFetching ||
     startTOTPMutation.isPending ||
     startWebAuthnMutation.isPending ||
-    confirmEnrollmentMutation.isPending;
+    confirmEnrollmentMutation.isPending
 
-  const methods = status?.methods ?? [];
-  const trustedDevices = status?.trusted_devices ?? [];
-  const backupSummary = status?.backup_codes;
-  const showBackupCard = Boolean(status?.enrolled);
+  const methods = status?.methods ?? []
+  const trustedDevices = status?.trusted_devices ?? []
+  const backupSummary = status?.backup_codes
+  const showBackupCard = Boolean(status?.enrolled)
 
   // Check if user has both TOTP and WebAuthn methods enrolled
-  const hasTOTP = methods.some((m) => m.type === 'totp');
-  const hasWebAuthn = methods.some((m) => m.type === 'webauthn');
-  const hasBothMethods = hasTOTP && hasWebAuthn;
+  const hasTOTP = methods.some((m) => m.type === 'totp')
+  const hasWebAuthn = methods.some((m) => m.type === 'webauthn')
+  const hasBothMethods = hasTOTP && hasWebAuthn
 
   const handlePreferredMethodChange = (value: string) => {
-    const method: string | undefined = value === 'none' ? undefined : value;
+    const method: string | undefined = value === 'none' ? undefined : value
     updatePreferredMethodMutation.mutate({
       preferred_method: method,
-    });
-  };
+    })
+  }
 
   return (
     <div className="space-y-8 p-8">
@@ -573,19 +550,13 @@ export function AccountSecurityPage() {
         </p>
       </div>
 
-      {enrollmentRequiredFlag &&
-      enrollmentChannel === 'cli' &&
-      !status?.enrolled ? (
+      {enrollmentRequiredFlag && enrollmentChannel === 'cli' && !status?.enrolled ? (
         <Alert className="border-amber-500 bg-amber-500/10">
           <ShieldAlert className="size-4" />
-          <div className="pl-7 font-semibold">
-            MFA enrollment required for CLI login
-          </div>
+          <div className="pl-7 font-semibold">MFA enrollment required for CLI login</div>
           <AlertDescription>
-            Set up multi-factor authentication below to continue. Once
-            enrollment is complete, rerun{' '}
-            <span className="font-mono">rack-gateway login</span> in your
-            terminal.
+            Set up multi-factor authentication below to continue. Once enrollment is complete, rerun{' '}
+            <span className="font-mono">rack-gateway login</span> in your terminal.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -601,9 +572,8 @@ export function AccountSecurityPage() {
           <CardContent className="flex-1 space-y-7">
             {status?.required && !status.enrolled ? (
               <div className="rounded-md border border-destructive bg-destructive/10 p-4 font-medium text-destructive-foreground text-sm">
-                Multi-factor authentication is required for all gateway users.
-                Enable MFA now to restore access to the CLI and the rest of the
-                web console.
+                Multi-factor authentication is required for all gateway users. Enable MFA now to
+                restore access to the CLI and the rest of the web console.
               </div>
             ) : null}
             {status?.enrolled ? (
@@ -612,8 +582,8 @@ export function AccountSecurityPage() {
               </p>
             ) : (
               <p className="text-muted-foreground text-sm">
-                Protect your account by requiring a TOTP code in addition to
-                your password for sensitive actions.
+                Protect your account by requiring a TOTP code in addition to your password for
+                sensitive actions.
               </p>
             )}
 
@@ -627,26 +597,20 @@ export function AccountSecurityPage() {
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem id="totp" value="totp" />
-                    <Label
-                      className="cursor-pointer font-normal"
-                      htmlFor="totp"
-                    >
+                    <Label className="cursor-pointer font-normal" htmlFor="totp">
                       TOTP Authenticator
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem id="webauthn" value="webauthn" />
-                    <Label
-                      className="cursor-pointer font-normal"
-                      htmlFor="webauthn"
-                    >
+                    <Label className="cursor-pointer font-normal" htmlFor="webauthn">
                       WebAuthn / Security Key
                     </Label>
                   </div>
                 </RadioGroup>
                 <p className="text-muted-foreground text-xs">
-                  This method will be used by default when signing in. You can
-                  always use the other method if needed.
+                  This method will be used by default when signing in. You can always use the other
+                  method if needed.
                 </p>
               </div>
             ) : null}
@@ -655,9 +619,7 @@ export function AccountSecurityPage() {
             {status?.enrolled ? (
               <Button
                 disabled={
-                  methods.length === 0 ||
-                  deleteMethodMutation.isPending ||
-                  disableAllPending
+                  methods.length === 0 || deleteMethodMutation.isPending || disableAllPending
                 }
                 onClick={() => setDisableDialogOpen(true)}
                 variant="destructive"
@@ -667,13 +629,11 @@ export function AccountSecurityPage() {
             ) : (
               <Button
                 disabled={
-                  startTOTPMutation.isPending ||
-                  startWebAuthnMutation.isPending ||
-                  !!enrollment
+                  startTOTPMutation.isPending || startWebAuthnMutation.isPending || !!enrollment
                 }
                 onClick={() => {
-                  setEnrollmentModalOpen(true);
-                  setEnrollmentStep('method-selection');
+                  setEnrollmentModalOpen(true)
+                  setEnrollmentStep('method-selection')
                 }}
               >
                 {enrollment ? 'Enrollment In Progress' : 'Enable MFA'}
@@ -693,9 +653,7 @@ export function AccountSecurityPage() {
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">
                     Unused codes
                   </p>
-                  <p className="font-semibold text-2xl">
-                    {backupSummary?.unused ?? 0}
-                  </p>
+                  <p className="font-semibold text-2xl">{backupSummary?.unused ?? 0}</p>
                 </div>
                 {backupSummary?.last_generated_at ? (
                   <div className="space-y-1">
@@ -714,17 +672,14 @@ export function AccountSecurityPage() {
                 disabled={regenerateCodesMutation.isPending}
                 onClick={() =>
                   runWithStepUp(async () => {
-                    await regenerateCodesMutation.mutateAsync();
+                    await regenerateCodesMutation.mutateAsync()
                   })
                 }
               >
                 Regenerate backup codes
               </Button>
               {recentBackupCodes && recentBackupCodes.length > 0 ? (
-                <Button
-                  onClick={() => handleDownloadCodes(recentBackupCodes)}
-                  variant="outline"
-                >
+                <Button onClick={() => handleDownloadCodes(recentBackupCodes)} variant="outline">
                   Download latest codes
                 </Button>
               ) : null}
@@ -754,9 +709,8 @@ export function AccountSecurityPage() {
                   {methods.map((method) => (
                     <tr className="border-b last:border-0" key={method.id}>
                       <td className="py-2 font-medium">
-                        {MFA_METHOD_TYPE_LABELS[
-                          (method.type ?? '').toLowerCase()
-                        ] ?? (method.type ? method.type.toUpperCase() : 'MFA')}
+                        {MFA_METHOD_TYPE_LABELS[(method.type ?? '').toLowerCase()] ??
+                          (method.type ? method.type.toUpperCase() : 'MFA')}
                       </td>
                       <td className="py-2">
                         {method.label ?? getDefaultLabelForType(method.type)}
@@ -765,11 +719,7 @@ export function AccountSecurityPage() {
                         <TimeAgo date={method.created_at ?? null} />
                       </td>
                       <td className="py-2">
-                        {method.last_used_at ? (
-                          <TimeAgo date={method.last_used_at} />
-                        ) : (
-                          'Never'
-                        )}
+                        {method.last_used_at ? <TimeAgo date={method.last_used_at} /> : 'Never'}
                       </td>
                       <td className="py-2 text-right">
                         <div className="flex justify-end">
@@ -787,21 +737,14 @@ export function AccountSecurityPage() {
                               <DropdownMenuItem
                                 onClick={() => {
                                   if (!method.id) {
-                                    toast.error(
-                                      'Unable to determine method identifier',
-                                    );
-                                    return;
+                                    toast.error('Unable to determine method identifier')
+                                    return
                                   }
                                   setEditingMethod({
                                     id: method.id as number,
-                                    label:
-                                      method.label ??
-                                      getDefaultLabelForType(method.type),
-                                  });
-                                  setEditLabel(
-                                    method.label ??
-                                      getDefaultLabelForType(method.type),
-                                  );
+                                    label: method.label ?? getDefaultLabelForType(method.type),
+                                  })
+                                  setEditLabel(method.label ?? getDefaultLabelForType(method.type))
                                 }}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -811,16 +754,12 @@ export function AccountSecurityPage() {
                               <DropdownMenuItem
                                 onClick={() => {
                                   if (!method.id) {
-                                    toast.error(
-                                      'Unable to determine method identifier',
-                                    );
-                                    return;
+                                    toast.error('Unable to determine method identifier')
+                                    return
                                   }
                                   runWithStepUp(async () => {
-                                    await deleteMethodMutation.mutateAsync(
-                                      method.id as number,
-                                    );
-                                  });
+                                    await deleteMethodMutation.mutateAsync(method.id as number)
+                                  })
                                 }}
                                 variant="destructive"
                               >
@@ -840,13 +779,11 @@ export function AccountSecurityPage() {
           <CardFooter>
             <Button
               disabled={
-                startTOTPMutation.isPending ||
-                startWebAuthnMutation.isPending ||
-                !!enrollment
+                startTOTPMutation.isPending || startWebAuthnMutation.isPending || !!enrollment
               }
               onClick={() => {
-                setEnrollmentModalOpen(true);
-                setEnrollmentStep('method-selection');
+                setEnrollmentModalOpen(true)
+                setEnrollmentStep('method-selection')
               }}
               variant="outline"
             >
@@ -862,9 +799,7 @@ export function AccountSecurityPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {trustedDevices.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No trusted devices on file.
-            </p>
+            <p className="text-muted-foreground text-sm">No trusted devices on file.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[320px] text-left text-sm">
@@ -898,16 +833,12 @@ export function AccountSecurityPage() {
                         <Button
                           onClick={() => {
                             if (!device.id) {
-                              toast.error(
-                                'Unable to determine device identifier',
-                              );
-                              return;
+                              toast.error('Unable to determine device identifier')
+                              return
                             }
                             runWithStepUp(async () => {
-                              await revokeDeviceMutation.mutateAsync(
-                                device.id as number,
-                              );
-                            });
+                              await revokeDeviceMutation.mutateAsync(device.id as number)
+                            })
                           }}
                           variant="destructive"
                         >
@@ -927,13 +858,11 @@ export function AccountSecurityPage() {
               disabled={trustDeviceMutation.isPending}
               onClick={() =>
                 runWithStepUp(async () => {
-                  await trustDeviceMutation.mutateAsync();
+                  await trustDeviceMutation.mutateAsync()
                 })
               }
             >
-              {trustDeviceMutation.isPending
-                ? 'Trusting…'
-                : 'Trust This Device'}
+              {trustDeviceMutation.isPending ? 'Trusting…' : 'Trust This Device'}
             </Button>
           </CardFooter>
         )}
@@ -942,9 +871,9 @@ export function AccountSecurityPage() {
       <Dialog
         onOpenChange={(open) => {
           if (open) {
-            setEnrollmentModalOpen(true);
+            setEnrollmentModalOpen(true)
           } else {
-            closeEnrollmentModal();
+            closeEnrollmentModal()
           }
         }}
         open={enrollmentModalOpen}
@@ -994,8 +923,8 @@ export function AccountSecurityPage() {
               <DialogFooter>
                 <Button
                   onClick={() => {
-                    setEnrollmentModalOpen(false);
-                    setEnrollmentStep('method-selection');
+                    setEnrollmentModalOpen(false)
+                    setEnrollmentStep('method-selection')
                   }}
                   variant="outline"
                 >
@@ -1028,11 +957,7 @@ export function AccountSecurityPage() {
                     <Button
                       className="w-fit"
                       onClick={() =>
-                        handleCopy(
-                          'secret' in enrollment
-                            ? (enrollment.secret ?? '')
-                            : '',
-                        )
+                        handleCopy('secret' in enrollment ? (enrollment.secret ?? '') : '')
                       }
                       size="sm"
                       variant="secondary"
@@ -1040,8 +965,7 @@ export function AccountSecurityPage() {
                       Copy secret for manual entry
                     </Button>
                     <p className="text-muted-foreground text-xs">
-                      Use this if your authenticator app cannot scan the QR
-                      code.
+                      Use this if your authenticator app cannot scan the QR code.
                     </p>
                   </div>
                 </div>
@@ -1050,15 +974,12 @@ export function AccountSecurityPage() {
                     <div>
                       <h3 className="font-semibold text-base">Backup codes</h3>
                       <p className="text-muted-foreground text-sm">
-                        Store these codes somewhere safe. Each code can be used
-                        once if you lose access to your authenticator.
+                        Store these codes somewhere safe. Each code can be used once if you lose
+                        access to your authenticator.
                       </p>
                       <ul className="mt-3 grid grid-cols-1 gap-1 font-mono text-sm">
                         {recentBackupCodes.slice(0, 6).map((code) => (
-                          <li
-                            className="rounded border bg-muted px-2 py-1"
-                            key={code}
-                          >
+                          <li className="rounded border bg-muted px-2 py-1" key={code}>
                             {code}
                           </li>
                         ))}
@@ -1084,26 +1005,20 @@ export function AccountSecurityPage() {
                 </div>
               </div>
               <div className="space-y-3">
-                <Label htmlFor="verification-code">
-                  Enter the 6-digit code to confirm
-                </Label>
+                <Label htmlFor="verification-code">Enter the 6-digit code to confirm</Label>
                 <MFAInput
                   autoFocus
                   className="max-w-64"
                   id="verification-code"
                   maxLength={6}
-                  onChange={(event) =>
-                    setVerificationCode(event.target.value.trim())
-                  }
+                  onChange={(event) => setVerificationCode(event.target.value.trim())}
                   placeholder="123456"
                   value={verificationCode}
                 />
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     checked={trustEnrollmentDevice}
-                    onChange={(event) =>
-                      setTrustEnrollmentDevice(event.target.checked)
-                    }
+                    onChange={(event) => setTrustEnrollmentDevice(event.target.checked)}
                     type="checkbox"
                   />
                   Trust this browser for 30 days
@@ -1112,25 +1027,20 @@ export function AccountSecurityPage() {
               <DialogFooter>
                 <Button
                   onClick={() => {
-                    setEnrollmentStep('method-selection');
-                    setEnrollment(null);
-                    setQrDataUrl(null);
-                    setVerificationCode('');
+                    setEnrollmentStep('method-selection')
+                    setEnrollment(null)
+                    setQrDataUrl(null)
+                    setVerificationCode('')
                   }}
                   variant="outline"
                 >
                   Back
                 </Button>
                 <Button
-                  disabled={
-                    verificationCode.length === 0 ||
-                    confirmEnrollmentMutation.isPending
-                  }
+                  disabled={verificationCode.length === 0 || confirmEnrollmentMutation.isPending}
                   onClick={handleConfirmEnrollment}
                 >
-                  {confirmEnrollmentMutation.isPending
-                    ? 'Confirming...'
-                    : 'Confirm'}
+                  {confirmEnrollmentMutation.isPending ? 'Confirming...' : 'Confirm'}
                 </Button>
               </DialogFooter>
             </div>
@@ -1145,8 +1055,7 @@ export function AccountSecurityPage() {
         confirmText="DISABLE"
         description={
           <>
-            Type DISABLE to remove all registered authenticators and turn off
-            MFA for your account.
+            Type DISABLE to remove all registered authenticators and turn off MFA for your account.
           </>
         }
         inputId="confirm-disable-mfa"
@@ -1159,8 +1068,8 @@ export function AccountSecurityPage() {
       <Dialog
         onOpenChange={(open) => {
           if (!open) {
-            setEditingMethod(null);
-            setEditLabel('');
+            setEditingMethod(null)
+            setEditLabel('')
           }
         }}
         open={!!editingMethod}
@@ -1168,22 +1077,20 @@ export function AccountSecurityPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit MFA Method Label</DialogTitle>
-            <DialogDescription>
-              Update the label for this MFA method.
-            </DialogDescription>
+            <DialogDescription>Update the label for this MFA method.</DialogDescription>
           </DialogHeader>
           <form
             onSubmit={(event) => {
-              event.preventDefault();
+              event.preventDefault()
               if (!editingMethod) {
-                return;
+                return
               }
               runWithStepUp(async () => {
                 await updateMethodMutation.mutateAsync({
                   methodId: editingMethod.id,
                   label: editLabel.trim(),
-                });
-              });
+                })
+              })
             }}
           >
             <div className="space-y-4">
@@ -1203,18 +1110,15 @@ export function AccountSecurityPage() {
             <DialogFooter className="mt-4">
               <Button
                 onClick={() => {
-                  setEditingMethod(null);
-                  setEditLabel('');
+                  setEditingMethod(null)
+                  setEditLabel('')
                 }}
                 type="button"
                 variant="outline"
               >
                 Cancel
               </Button>
-              <Button
-                disabled={updateMethodMutation.isPending || !editLabel.trim()}
-                type="submit"
-              >
+              <Button disabled={updateMethodMutation.isPending || !editLabel.trim()} type="submit">
                 {updateMethodMutation.isPending ? 'Saving...' : 'Save'}
               </Button>
             </DialogFooter>
@@ -1223,10 +1127,8 @@ export function AccountSecurityPage() {
       </Dialog>
 
       {isBusy ? (
-        <p className="text-muted-foreground text-sm">
-          Loading latest security information…
-        </p>
+        <p className="text-muted-foreground text-sm">Loading latest security information…</p>
       ) : null}
     </div>
-  );
+  )
 }

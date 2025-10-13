@@ -29,12 +29,6 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 			panic(fmt.Sprintf("CRITICAL: Missing MFA permission mapping for route %s %s", method, pattern))
 		}
 
-		if rbac.HTTPRouteIsDynamic(method, pattern) {
-			if dynamic := ExtractSettingsPermissions(c); len(dynamic) > 0 {
-				permissions = dynamic
-			}
-		}
-
 		level := rbac.GetMFALevel(permissions)
 		switch level {
 		case rbac.MFANone:

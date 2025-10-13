@@ -1,12 +1,12 @@
-import type { AxiosRequestConfig, AxiosResponse } from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 
-import { getHttpClientInstance } from '@/contexts/http-client-context';
+import { getHttpClientInstance } from '@/contexts/http-client-context'
 
 export function createGatewayClient<T>(
   config: AxiosRequestConfig,
-  options?: AxiosRequestConfig,
+  options?: AxiosRequestConfig
 ): Promise<AxiosResponse<T>> {
-  const client = getHttpClientInstance();
+  const client = getHttpClientInstance()
 
   const mergedConfig: AxiosRequestConfig = {
     ...config,
@@ -15,7 +15,7 @@ export function createGatewayClient<T>(
       ...(config.headers ?? {}),
       ...(options?.headers ?? {}),
     },
-  };
+  }
 
-  return client.request<T>(mergedConfig);
+  return client.request<T>(mergedConfig)
 }

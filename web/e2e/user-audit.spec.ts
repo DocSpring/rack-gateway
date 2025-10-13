@@ -22,13 +22,13 @@ test.describe('User Audit Logs', () => {
     const waitForCreate = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
-        response.url().includes('/api/v1/admin/users') &&
+        response.url().includes('/api/v1/users') &&
         (response.status() === 201 || response.status() === 200)
     )
     const waitForUsersRefresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url().includes('/api/v1/admin/users') &&
+        response.url().includes('/api/v1/users') &&
         response.status() === 200
     )
     await Promise.all([
@@ -72,13 +72,13 @@ test.describe('User Audit Logs', () => {
     const waitForDelete = page.waitForResponse(
       (response) =>
         response.request().method() === 'DELETE' &&
-        response.url().includes('/api/v1/admin/users/') &&
+        response.url().includes('/api/v1/users/') &&
         (response.status() === 204 || response.status() === 200)
     )
     const waitForUsersReload = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url().includes('/api/v1/admin/users') &&
+        response.url().includes('/api/v1/users') &&
         response.status() === 200
     )
     await Promise.all([

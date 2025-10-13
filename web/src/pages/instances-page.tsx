@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { PageLayout } from '../components/page-layout';
-import { TablePane } from '../components/table-pane';
-import { Button } from '../components/ui/button';
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { PageLayout } from '../components/page-layout'
+import { TablePane } from '../components/table-pane'
+import { Button } from '../components/ui/button'
 import {
   Table,
   TableBody,
@@ -10,26 +10,26 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table';
-import { api } from '../lib/api';
-import { DEFAULT_PER_PAGE } from '../lib/constants';
+} from '../components/ui/table'
+import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
 type Instance = {
-  id: string;
-  status: string;
-  private_ip?: string;
-  public_ip?: string;
-  instance_type?: string;
-};
+  id: string
+  status: string
+  private_ip?: string
+  public_ip?: string
+  instance_type?: string
+}
 
 export function InstancesPage() {
-  type RackInfo = { provider?: string; region?: string };
+  type RackInfo = { provider?: string; region?: string }
   const { data: rack } = useQuery({
     queryKey: ['rack-info'],
     queryFn: async () => api.get<RackInfo>('/api/v1/rack'),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
-  });
+  })
   const {
     data = [],
     isLoading,
@@ -40,20 +40,17 @@ export function InstancesPage() {
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  });
-  const perPage = DEFAULT_PER_PAGE;
-  const total = data.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const [page, setPage] = useState(1);
-  const start = (page - 1) * perPage;
-  const end = Math.min(start + perPage, total);
-  const rows = data.slice(start, end);
+  })
+  const perPage = DEFAULT_PER_PAGE
+  const total = data.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const [page, setPage] = useState(1)
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const rows = data.slice(start, end)
 
   return (
-    <PageLayout
-      description="Rack instances across the cluster"
-      title="Instances"
-    >
+    <PageLayout description="Rack instances across the cluster" title="Instances">
       <TablePane
         empty={total === 0}
         emptyMessage="No instances found"
@@ -75,12 +72,11 @@ export function InstancesPage() {
               <TableRow key={i.id}>
                 <TableCell className="font-mono text-xs">
                   {(() => {
-                    const isAws =
-                      (rack?.provider || '').toLowerCase() === 'aws';
-                    const region = rack?.region || '';
+                    const isAws = (rack?.provider || '').toLowerCase() === 'aws'
+                    const region = rack?.region || ''
                     const href = isAws
                       ? `https://console.aws.amazon.com/ec2/v2/home?region=${region}#InstanceDetails:instanceId=${i.id}`
-                      : '';
+                      : ''
                     return isAws && region ? (
                       <a
                         className="underline hover:no-underline"
@@ -93,7 +89,7 @@ export function InstancesPage() {
                       </a>
                     ) : (
                       i.id
-                    );
+                    )
                   })()}
                 </TableCell>
                 <TableCell>{i.status}</TableCell>
@@ -130,5 +126,5 @@ export function InstancesPage() {
         )}
       </TablePane>
     </PageLayout>
-  );
+  )
 }

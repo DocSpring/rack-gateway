@@ -455,7 +455,7 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 // @Description Returns environment variables for a Convox app, masking secrets unless authorized.
 // @Tags Environment
 // @Produce json
-// @Param app query string true "App name"
+// @Param app path string true "App name"
 // @Param key query string false "Specific key to fetch"
 // @Param secrets query bool false "Include secret values"
 // @Success 200 {object} EnvValuesResponse
@@ -464,9 +464,9 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 // @Failure 502 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /env [get]
+// @Router /apps/{app}/env [get]
 func (h *APIHandler) GetEnvValues(c *gin.Context) {
-	app := strings.TrimSpace(c.Query("app"))
+	app := strings.TrimSpace(c.Param("app"))
 	if app == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing app"})
 		return
@@ -604,6 +604,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 // @Tags Environment
 // @Accept json
 // @Produce json
+// @Param app path string true "App name"
 // @Param request body UpdateEnvValuesRequest true "Environment update payload"
 // @Success 200 {object} UpdateEnvValuesResponse
 // @Failure 400 {object} ErrorResponse
@@ -611,7 +612,7 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 // @Failure 502 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /env [put]
+// @Router /apps/{app}/env [put]
 func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 	start := time.Now()
 
@@ -621,7 +622,10 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 		return
 	}
 
-	app := strings.TrimSpace(req.App)
+	app := strings.TrimSpace(c.Param("app"))
+	if app == "" {
+		app = strings.TrimSpace(req.App)
+	}
 	if app == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
 		return

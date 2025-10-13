@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
-import { PageLayout } from '../components/page-layout';
-import { TablePane } from '../components/table-pane';
-import { TimeAgo } from '../components/time-ago';
-import { Button } from '../components/ui/button';
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { useState } from 'react'
+import { PageLayout } from '../components/page-layout'
+import { TablePane } from '../components/table-pane'
+import { TimeAgo } from '../components/time-ago'
+import { Button } from '../components/ui/button'
 import {
   Table,
   TableBody,
@@ -12,20 +12,20 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table';
-import { api } from '../lib/api';
-import { DEFAULT_PER_PAGE } from '../lib/constants';
+} from '../components/ui/table'
+import { api } from '../lib/api'
+import { DEFAULT_PER_PAGE } from '../lib/constants'
 
-type App = { name: string };
+type App = { name: string }
 type Proc = {
-  id: string;
-  service: string;
-  name?: string;
-  status: string;
-  release: string;
-  app: string;
-  started?: string;
-};
+  id: string
+  service: string
+  name?: string
+  status: string
+  release: string
+  app: string
+  started?: string
+}
 
 export function AllProcessesPage() {
   const {
@@ -35,62 +35,62 @@ export function AllProcessesPage() {
   } = useQuery({
     queryKey: ['all-procs'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/api/v1/convox/apps');
+      const apps = await api.get<App[]>('/api/v1/convox/apps')
       const lists = await Promise.all(
         apps.map(async (a) => {
           const ps = await api.get<
             {
-              id: string;
-              service?: string;
-              name?: string;
-              status: string;
-              release: string;
-              started?: string;
+              id: string
+              service?: string
+              name?: string
+              status: string
+              release: string
+              started?: string
             }[]
-          >(`/api/v1/convox/apps/${a.name}/processes`);
+          >(`/api/v1/convox/apps/${a.name}/processes`)
           return ps.map((p) => ({
             ...p,
             app: a.name,
             service: p.service ?? p.name ?? '',
-          })) as Proc[];
-        }),
-      );
+          })) as Proc[]
+        })
+      )
       // Also include system processes
-      let systemProcs: Proc[] = [];
+      let systemProcs: Proc[] = []
       try {
         const sys = await api.get<
           {
-            id: string;
-            service?: string;
-            name?: string;
-            status: string;
-            release: string;
-            app?: string;
-            started?: string;
+            id: string
+            service?: string
+            name?: string
+            status: string
+            release: string
+            app?: string
+            started?: string
           }[]
-        >('/api/v1/convox/system/processes');
+        >('/api/v1/convox/system/processes')
         systemProcs = (sys || []).map((p) => ({
           ...p,
           app: p.app || 'system',
           service: p.service ?? p.name ?? '',
-        })) as Proc[];
+        })) as Proc[]
       } catch (_e) {
         // ignore if rack doesn't provide system processes
       }
-      return lists.flat().concat(systemProcs);
+      return lists.flat().concat(systemProcs)
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  });
+  })
   // Simple client-side pagination like Audit page
-  const perPage = DEFAULT_PER_PAGE;
-  const total = data.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const [page, setPage] = useState(1);
-  const start = (page - 1) * perPage;
-  const end = Math.min(start + perPage, total);
-  const rows = data.slice(start, end);
+  const perPage = DEFAULT_PER_PAGE
+  const total = data.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const [page, setPage] = useState(1)
+  const start = (page - 1) * perPage
+  const end = Math.min(start + perPage, total)
+  const rows = data.slice(start, end)
 
   return (
     <PageLayout description="Aggregated across all apps" title="Processes">
@@ -127,9 +127,7 @@ export function AllProcessesPage() {
                 <TableCell>{p.service ?? p.name ?? '—'}</TableCell>
                 <TableCell>{p.status}</TableCell>
                 <TableCell>{p.release}</TableCell>
-                <TableCell>
-                  {p.started ? <TimeAgo date={p.started} /> : '—'}
-                </TableCell>
+                <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -160,5 +158,5 @@ export function AllProcessesPage() {
         )}
       </TablePane>
     </PageLayout>
-  );
+  )
 }

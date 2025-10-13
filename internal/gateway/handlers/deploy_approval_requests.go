@@ -487,7 +487,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-approval-requests [get]
+// @Router /deploy-approval-requests [get]
 func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
@@ -578,7 +578,7 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-approval-requests/{id}/approve [post]
+// @Router /deploy-approval-requests/{id}/approve [post]
 func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
@@ -760,7 +760,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-approval-requests/{id}/reject [post]
+// @Router /deploy-approval-requests/{id}/reject [post]
 func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
@@ -847,7 +847,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/deploy-approval-requests/{id}/audit-logs [get]
+// @Router /deploy-approval-requests/{id}/audit-logs [get]
 func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
 	if h == nil || h.database == nil || h.rbac == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})

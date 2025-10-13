@@ -160,7 +160,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			// No MFAType or MFAValue - MFANone doesn't require it
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/mfa-configuration/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"default_vcs_provider": "github",
@@ -169,7 +169,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -195,7 +195,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			// NO MFAType or MFAValue - this is the key
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -204,7 +204,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -234,7 +234,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			// No MFAType or MFAValue
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"default_vcs_provider":       "github",    // MFANone
@@ -245,7 +245,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -276,7 +276,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			// No MFAType or MFAValue
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"mfa_step_up_window_minutes":  float64(15),
@@ -286,7 +286,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -321,7 +321,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			MFAValue:   code,
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -330,7 +330,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("X-MFA-TOTP", code)
 		router.ServeHTTP(w, httpReq)
@@ -379,7 +379,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			c.Set("user_name", authUser.Name)
 			c.Next()
 		})
-		router.Handle(http.MethodPut, "/api/v1/admin/settings", middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler.UpdateGlobalSettings)
+		router.Handle(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -388,7 +388,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.SetBasicAuth("convox", passwordWithMFA)
 		router.ServeHTTP(w, httpReq)
@@ -425,7 +425,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 
 		// Use mock MFA service that always succeeds
 		mockMFA := &mockMFAService{}
-		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -434,7 +434,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("X-MFA-WebAuthn", webauthnValue)
 		router.ServeHTTP(w, httpReq)
@@ -488,7 +488,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			c.Set("user_name", authUser.Name)
 			c.Next()
 		})
-		router.Handle(http.MethodPut, "/api/v1/admin/settings", middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler.UpdateGlobalSettings)
+		router.Handle(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -497,7 +497,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.SetBasicAuth("convox", passwordWithMFA)
 		router.ServeHTTP(w, httpReq)
@@ -530,7 +530,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			},
 		}
 
-		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -539,7 +539,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -585,7 +585,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 			},
 		}
 
-		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/admin/settings", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
 
 		updates := map[string]interface{}{
 			"allow_destructive_actions": true,
@@ -594,7 +594,7 @@ func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -667,10 +667,10 @@ func TestDeleteGlobalSettings_MFAEnforcement(t *testing.T) {
 			// No MFAType or MFAValue
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodDelete, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.DeleteGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.DeleteGlobalSettings)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodDelete, "/api/v1/admin/settings?key=allow_destructive_actions", nil)
+		httpReq, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration?key=allow_destructive_actions", nil)
 		router.ServeHTTP(w, httpReq)
 
 		// Should be denied because MFAAlways requires fresh MFA code
@@ -704,10 +704,10 @@ func TestDeleteGlobalSettings_MFAEnforcement(t *testing.T) {
 			// No MFAType or MFAValue
 		}
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodDelete, "/api/v1/admin/settings", authUser, mfaService, database, mfaSettings, handler.DeleteGlobalSettings)
+		router := setupRouterWithMFAMiddleware(t, http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.DeleteGlobalSettings)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodDelete, "/api/v1/admin/settings?key=allow_destructive_actions&key=mfa_step_up_window_minutes&key=default_vcs_provider", nil)
+		httpReq, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration?key=allow_destructive_actions&key=mfa_step_up_window_minutes&key=default_vcs_provider", nil)
 		router.ServeHTTP(w, httpReq)
 
 		// MFAAlways (allow_destructive_actions) should take precedence
@@ -931,7 +931,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 			body, err := json.Marshal(tt.updates)
 			require.NoError(t, err)
 
-			c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+			c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 			c.Request.Header.Set("Content-Type", "application/json")
 			c.Set("user_email", "admin@example.com")
 
@@ -967,7 +967,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 		body, err := json.Marshal(updates)
 		require.NoError(t, err)
 
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(body))
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("user_email", "admin@example.com")
 
@@ -983,7 +983,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 		// Now clear it with DELETE
 		w = httptest.NewRecorder()
 		c, _ = gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/admin/settings?key=allow_destructive_actions", nil)
+		c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration?key=allow_destructive_actions", nil)
 		c.Set("user_email", "admin@example.com")
 
 		handler.DeleteGlobalSettings(c)

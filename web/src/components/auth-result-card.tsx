@@ -1,7 +1,7 @@
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 const STATUS_STYLES = {
   success: {
@@ -12,16 +12,16 @@ const STATUS_STYLES = {
     iconClass: 'bg-destructive/10 text-destructive',
     defaultIcon: <AlertTriangle className="size-7 sm:size-8" />,
   },
-};
+}
 
 type AuthResultCardProps = {
-  status: 'success' | 'error';
-  title: string;
-  description?: ReactNode;
-  icon?: ReactNode;
-  children?: ReactNode;
-  contentClassName?: string;
-};
+  status: 'success' | 'error'
+  title: string
+  description?: ReactNode
+  icon?: ReactNode
+  children?: ReactNode
+  contentClassName?: string
+}
 
 export function AuthResultCard({
   status,
@@ -31,7 +31,7 @@ export function AuthResultCard({
   children,
   contentClassName,
 }: AuthResultCardProps) {
-  const styles = STATUS_STYLES[status];
+  const styles = STATUS_STYLES[status]
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
@@ -41,7 +41,7 @@ export function AuthResultCard({
             aria-hidden="true"
             className={cn(
               'flex size-12 items-center justify-center rounded-full sm:size-14',
-              styles.iconClass,
+              styles.iconClass
             )}
           >
             {icon ?? styles.defaultIcon}
@@ -50,24 +50,17 @@ export function AuthResultCard({
             {title}
           </CardTitle>
           {description ? (
-            <p className="max-w-md text-muted-foreground text-sm">
-              {description}
-            </p>
+            <p className="max-w-md text-muted-foreground text-sm">{description}</p>
           ) : null}
         </CardHeader>
         {children ? (
-          <CardContent
-            className={cn(
-              'flex flex-col items-center gap-4 p-4',
-              contentClassName,
-            )}
-          >
+          <CardContent className={cn('flex flex-col items-center gap-4 p-4', contentClassName)}>
             {children}
           </CardContent>
         ) : null}
       </Card>
     </div>
-  );
+  )
 }
 
-export default AuthResultCard;
+export default AuthResultCard

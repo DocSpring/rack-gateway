@@ -1,16 +1,16 @@
-import type { ComponentPropsWithoutRef } from 'react';
-import { forwardRef } from 'react';
+import type { ComponentPropsWithoutRef } from 'react'
+import { forwardRef } from 'react'
 
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input'
 
-const SIX_DIGIT_REGEX = /^\d{6}$/;
+const SIX_DIGIT_REGEX = /^\d{6}$/
 
-type InputProps = ComponentPropsWithoutRef<typeof Input>;
+type InputProps = ComponentPropsWithoutRef<typeof Input>
 
 type MFAInputProps = Omit<InputProps, 'onChange'> & {
-  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onComplete?: (code: string) => void;
-};
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onComplete?: (code: string) => void
+}
 
 export const MFAInput = forwardRef<HTMLInputElement, MFAInputProps>(
   (
@@ -27,29 +27,25 @@ export const MFAInput = forwardRef<HTMLInputElement, MFAInputProps>(
       maxLength,
       ...rest
     },
-    ref,
+    ref
   ) => {
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      onChange?.(event);
-      const value = event.target.value.trim();
+      onChange?.(event)
+      const value = event.target.value.trim()
       // Auto-submit when 6 digits are entered
       if (onComplete && value.length === 6 && SIX_DIGIT_REGEX.test(value)) {
-        onComplete(value);
+        onComplete(value)
       }
-    };
+    }
 
     const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
-      const pastedText = event.clipboardData.getData('text').trim();
+      const pastedText = event.clipboardData.getData('text').trim()
       // Auto-submit when pasting 6 digits
-      if (
-        onComplete &&
-        pastedText.length === 6 &&
-        SIX_DIGIT_REGEX.test(pastedText)
-      ) {
+      if (onComplete && pastedText.length === 6 && SIX_DIGIT_REGEX.test(pastedText)) {
         // Let the paste happen first, then trigger completion
-        setTimeout(() => onComplete(pastedText), 0);
+        setTimeout(() => onComplete(pastedText), 0)
       }
-    };
+    }
 
     return (
       <Input
@@ -68,10 +64,10 @@ export const MFAInput = forwardRef<HTMLInputElement, MFAInputProps>(
         ref={ref}
         type={type ?? 'text'}
       />
-    );
-  },
-);
+    )
+  }
+)
 
-MFAInput.displayName = 'MFAInput';
+MFAInput.displayName = 'MFAInput'
 
-export default MFAInput;
+export default MFAInput

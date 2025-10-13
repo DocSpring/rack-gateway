@@ -1,22 +1,16 @@
-import { RefreshCw } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from './ui/card';
+import { RefreshCw } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 
 type TablePaneProps = {
-  title?: string;
-  description?: string;
-  headerRight?: React.ReactNode;
-  loading?: boolean;
-  error?: string | Error | null;
-  empty?: boolean;
-  emptyMessage: string;
-  children: React.ReactNode;
-};
+  title?: string
+  description?: string
+  headerRight?: React.ReactNode
+  loading?: boolean
+  error?: string | Error | null
+  empty?: boolean
+  emptyMessage: string
+  children: React.ReactNode
+}
 
 export function TablePane({
   title,
@@ -28,8 +22,7 @@ export function TablePane({
   emptyMessage,
   children,
 }: TablePaneProps) {
-  const errorMessage =
-    typeof error === 'string' ? error : (error as Error)?.message;
+  const errorMessage = typeof error === 'string' ? error : (error as Error)?.message
 
   return (
     <Card>
@@ -38,9 +31,7 @@ export function TablePane({
           <div className="flex items-center justify-between">
             <div>
               {title ? <CardTitle>{title}</CardTitle> : null}
-              {description ? (
-                <CardDescription>{description}</CardDescription>
-              ) : null}
+              {description ? <CardDescription>{description}</CardDescription> : null}
             </div>
             {headerRight ? <div>{headerRight}</div> : null}
           </div>
@@ -58,18 +49,14 @@ export function TablePane({
               <div className="flex h-64 items-center justify-center">
                 <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            );
+            )
           }
           if (empty) {
-            return (
-              <div className="py-8 text-center text-muted-foreground">
-                {emptyMessage}
-              </div>
-            );
+            return <div className="py-8 text-center text-muted-foreground">{emptyMessage}</div>
           }
-          return children;
+          return children
         })()}
       </CardContent>
     </Card>
-  );
+  )
 }

@@ -14,7 +14,7 @@ import (
 // @Produce json
 // @Success 200 {object} map[string]RoleDescriptor
 // @Security SessionCookie
-// @Router /admin/roles [get]
+// @Router /roles [get]
 func (h *AdminHandler) ListRoles(c *gin.Context) {
 	rolePerms := rbac.DefaultRolePermissions()
 	metaMap := rbac.RoleMetadataMap()

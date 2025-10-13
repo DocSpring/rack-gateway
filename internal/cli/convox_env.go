@@ -159,9 +159,17 @@ func envGetGateway(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build API URL
-	apiURL := fmt.Sprintf("%s/api/v1/env?app=%s&key=%s", gatewayURL, url.QueryEscape(app), url.QueryEscape(key))
+	base := fmt.Sprintf("%s/api/v1/apps/%s/env", gatewayURL, url.PathEscape(app))
+	queryValues := url.Values{}
+	if key != "" {
+		queryValues.Set("key", key)
+	}
 	if unmask {
-		apiURL += "&secrets=true"
+		queryValues.Set("secrets", "true")
+	}
+	apiURL := base
+	if encoded := queryValues.Encode(); encoded != "" {
+		apiURL = fmt.Sprintf("%s?%s", base, encoded)
 	}
 
 	// Create request
@@ -233,7 +241,8 @@ func envListGateway(cmd *cobra.Command) error {
 	}
 
 	// Build API URL (without --unmask flag, secrets are masked)
-	apiURL := fmt.Sprintf("%s/api/v1/env?app=%s", gatewayURL, url.QueryEscape(app))
+	apiBase := fmt.Sprintf("%s/api/v1/apps/%s/env", gatewayURL, url.PathEscape(app))
+	apiURL := apiBase
 
 	// Create request
 	req, err := http.NewRequest("GET", apiURL, nil)

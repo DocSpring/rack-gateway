@@ -305,7 +305,7 @@ func newAPITokenDeleteCommand() *cobra.Command {
 
 func fetchAPITokens(cmd *cobra.Command, rack string) ([]apiToken, error) {
 	var tokens []apiToken
-	if err := gatewayRequest(cmd, rack, http.MethodGet, "/admin/tokens", nil, &tokens); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/api-tokens", nil, &tokens); err != nil {
 		return nil, err
 	}
 	return tokens, nil
@@ -313,7 +313,7 @@ func fetchAPITokens(cmd *cobra.Command, rack string) ([]apiToken, error) {
 
 func fetchAPITokenByID(cmd *cobra.Command, rack, id string) (*apiToken, error) {
 	var token apiToken
-	if err := gatewayRequest(cmd, rack, http.MethodGet, "/admin/tokens/"+url.PathEscape(id), nil, &token); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/api-tokens/"+url.PathEscape(id), nil, &token); err != nil {
 		return nil, err
 	}
 	return &token, nil
@@ -321,7 +321,7 @@ func fetchAPITokenByID(cmd *cobra.Command, rack, id string) (*apiToken, error) {
 
 func fetchTokenPermissionMetadata(cmd *cobra.Command, rack string) (*tokenPermissionMetadata, error) {
 	var metadata tokenPermissionMetadata
-	if err := gatewayRequest(cmd, rack, http.MethodGet, "/admin/tokens/permissions", nil, &metadata); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/api-tokens/permissions", nil, &metadata); err != nil {
 		return nil, err
 	}
 	return &metadata, nil
@@ -340,7 +340,7 @@ func createAPIToken(cmd *cobra.Command, rack, name, userEmail string, permission
 	}
 
 	var resp apiTokenResponse
-	if err := gatewayRequest(cmd, rack, http.MethodPost, "/admin/tokens", payload, &resp); err != nil {
+	if err := gatewayRequest(cmd, rack, http.MethodPost, "/api-tokens", payload, &resp); err != nil {
 		return nil, err
 	}
 	if resp.APIToken == nil {
@@ -350,7 +350,7 @@ func createAPIToken(cmd *cobra.Command, rack, name, userEmail string, permission
 }
 
 func deleteAPIToken(cmd *cobra.Command, rack, id string) error {
-	return gatewayRequest(cmd, rack, http.MethodDelete, "/admin/tokens/"+url.PathEscape(id), nil, nil)
+	return gatewayRequest(cmd, rack, http.MethodDelete, "/api-tokens/"+url.PathEscape(id), nil, nil)
 }
 
 // gatewayMFAContext holds MFA requirement info for a gateway request
@@ -365,7 +365,7 @@ func checkAndPromptGatewayMFA(cmd *cobra.Command, baseURL, bearer, rack, method,
 	var permissions []string
 
 	// API Token operations
-	if strings.HasPrefix(path, "/admin/tokens") {
+	if strings.HasPrefix(path, "/api-tokens") {
 		switch method {
 		case http.MethodPost:
 			permissions = []string{"gateway:api_token:create"}

@@ -26,7 +26,7 @@ type LockUserRequest struct {
 // @Success 200 {array} db.User
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/users [get]
+// @Router /users [get]
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	users, err := h.database.ListUsers()
 	if err != nil {
@@ -48,7 +48,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
-// @Router /admin/users/{email} [get]
+// @Router /users/{email} [get]
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	email := strings.TrimSpace(c.Param("email"))
 	if email == "" {
@@ -82,7 +82,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users [post]
+// @Router /users [post]
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	start := time.Now()
 	var req CreateUserRequest
@@ -164,7 +164,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email} [delete]
+// @Router /users/{email} [delete]
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	start := time.Now()
 	email := c.Param("email")
@@ -199,7 +199,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email} [put]
+// @Router /users/{email} [put]
 func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 	start := time.Now()
 	originalEmail := strings.TrimSpace(c.Param("email"))
@@ -287,7 +287,7 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email}/roles [put]
+// @Router /users/{email}/roles [put]
 func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 	start := time.Now()
 	email := c.Param("email")
@@ -341,7 +341,7 @@ func (h *AdminHandler) UpdateUserRoles(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email}/lock [post]
+// @Router /users/{email}/lock [post]
 func (h *AdminHandler) LockUser(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
@@ -418,7 +418,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security SessionCookie
 // @Security CSRFToken
-// @Router /admin/users/{email}/unlock [post]
+// @Router /users/{email}/unlock [post]
 func (h *AdminHandler) UnlockUser(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))

@@ -145,6 +145,7 @@ const (
 	ResourceStringDeployApprovalRequest = "deploy_approval_request"
 	ResourceStringIntegration           = "integration"
 	ResourceStringSecret                = "secret"
+	ResourceStringSetting               = "setting"
 	ResourceStringUser                  = "user"
 	// Auth/Security resources
 	ResourceStringAuth            = "auth"
@@ -175,6 +176,7 @@ var resourceToString = [...]string{
 	ResourceStringDeployApprovalRequest,
 	ResourceStringIntegration,
 	ResourceStringSecret,
+	ResourceStringSetting,
 	ResourceStringUser,
 	// Auth/Security resources
 	ResourceStringAuth,
@@ -393,4 +395,14 @@ func GatewayGlobalSetting(key settings.GlobalSettingKey) string {
 // GatewayAppSetting builds an app setting permission (gateway:setting:{key})
 func GatewayAppSetting(key settings.AppSettingKey) string {
 	return fmt.Sprintf("gateway:setting:%s", key)
+}
+
+// GatewayGlobalSettingGroup builds a permission for grouped global settings updates.
+func GatewayGlobalSettingGroup(group settings.GlobalSettingGroup) string {
+	return fmt.Sprintf("gateway:setting_group:%s", group)
+}
+
+// GatewayAppSettingGroup builds a permission for grouped app settings updates.
+func GatewayAppSettingGroup(group settings.AppSettingGroup) string {
+	return fmt.Sprintf("gateway:setting_group:%s", group)
 }

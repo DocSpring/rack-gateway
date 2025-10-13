@@ -94,7 +94,7 @@ test.describe('Global Settings', () => {
     // Step 2: Save (checked state)
     let updateResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/api/v1/admin/settings/allow_destructive_actions') &&
+        response.url().includes('/api/v1/settings/allow-destructive-actions') &&
         response.request().method() === 'PUT'
     )
 
@@ -117,7 +117,7 @@ test.describe('Global Settings', () => {
     // Step 4: Save (unchecked state)
     updateResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/api/v1/admin/settings/allow_destructive_actions') &&
+        response.url().includes('/api/v1/settings/allow-destructive-actions') &&
         response.request().method() === 'PUT'
     )
 
@@ -135,7 +135,7 @@ test.describe('Global Settings', () => {
     // Step 5: Clear to revert to default
     const clearResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/api/v1/admin/settings/allow_destructive_actions') &&
+        response.url().includes('/api/v1/settings/allow-destructive-actions') &&
         response.request().method() === 'DELETE'
     )
     await clearButton.first().click()
@@ -172,7 +172,7 @@ test.describe('Global Settings', () => {
     // Wait for API responses (should update step-up window)
     const updateResponsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes('/api/v1/admin/settings/mfa_step_up_window_minutes') &&
+        response.url().includes('/api/v1/settings/mfa-configuration') &&
         response.request().method() === 'PUT'
     )
 

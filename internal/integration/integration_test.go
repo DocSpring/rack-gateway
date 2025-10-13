@@ -363,8 +363,8 @@ func testOAuthLoginFlow(t *testing.T, s *TestServers) {
 
 func testAdminEndpointProtection(t *testing.T, s *TestServers) {
 	endpoints := []string{
-		"/api/v1/admin/users",
-		"/api/v1/admin/roles",
+		"/api/v1/users",
+		"/api/v1/roles",
 	}
 
 	for _, endpoint := range endpoints {

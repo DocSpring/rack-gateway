@@ -28,7 +28,7 @@ tasks:
 
   generate:
     desc: Generate code
-    deps: [generate:types, generate:swagger]
+    deps: [generate:types, generate:swagger, generate:mfa]
 
   generate:types:
     desc: Generate TypeScript models from Go structs
@@ -59,6 +59,20 @@ tasks:
     cmds:
       - go generate ./internal/gateway/openapi
       - echo >> internal/gateway/openapi/generated/swagger.json
+
+  generate:mfa:
+    desc: Export MFA requirements for frontend consumption
+    deps: [deps]
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - internal/tools/exportmfa/**/*.go
+      - internal/gateway/rbac/**/*.go
+    generates:
+      - web/src/lib/generated/mfa-requirements.ts
+    cmds:
+      - go run ./internal/tools/exportmfa
+      - echo >> web/src/lib/generated/mfa-requirements.ts
 
   build:
     desc: Build Go binaries (gateway, cli, mock)

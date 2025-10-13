@@ -1,45 +1,29 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from '@tanstack/react-router';
-import { isAxiosError } from 'axios';
-import { Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/contexts/auth-context';
-import {
-  type EnvValuesMap,
-  fetchAppEnv,
-  fetchAppEnvValue,
-  updateAppEnv,
-} from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams } from '@tanstack/react-router'
+import { isAxiosError } from 'axios'
+import { Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { toast } from '@/components/ui/use-toast'
+import { useAuth } from '@/contexts/auth-context'
+import { type EnvValuesMap, fetchAppEnv, fetchAppEnvValue, updateAppEnv } from '@/lib/api'
 
-const MASKED_SECRET = '********************';
+const MASKED_SECRET = '********************'
 
 type EnvRowState = {
-  id: string;
-  key: string;
-  value: string;
-  initialValue: string;
-  isSecret: boolean;
-  revealed: boolean;
-  new: boolean;
-  fetchedSecret: boolean;
-};
+  id: string
+  key: string
+  value: string
+  initialValue: string
+  isSecret: boolean
+  revealed: boolean
+  new: boolean
+  fetchedSecret: boolean
+}
 
 function buildRowsFromEnv(env: EnvValuesMap): EnvRowState[] {
   return Object.entries(env)
@@ -53,94 +37,89 @@ function buildRowsFromEnv(env: EnvValuesMap): EnvRowState[] {
       revealed: value !== MASKED_SECRET,
       fetchedSecret: value !== MASKED_SECRET,
       new: false,
-    }));
+    }))
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (isAxiosError(error)) {
-    const message = error.response?.data?.error;
+    const message = error.response?.data?.error
     if (typeof message === 'string' && message.trim() !== '') {
-      return message;
+      return message
     }
   }
   if (error instanceof Error && error.message) {
-    return error.message;
+    return error.message
   }
-  return fallback;
+  return fallback
 }
 
 type EnvChangesSuccess = {
-  success: true;
-  setPayload: Record<string, string>;
-  finalRemove: string[];
-};
+  success: true
+  setPayload: Record<string, string>
+  finalRemove: string[]
+}
 
 type EnvChangesError = {
-  success: false;
-  message: string;
-};
+  success: false
+  message: string
+}
 
-type EnvChangesResult = EnvChangesSuccess | EnvChangesError;
+type EnvChangesResult = EnvChangesSuccess | EnvChangesError
 
-function prepareEnvChanges(
-  rows: EnvRowState[],
-  removedKeys: string[],
-): EnvChangesResult {
-  const setPayload: Record<string, string> = {};
-  const uniqueRemovals = Array.from(new Set(removedKeys));
-  const seenKeys = new Set<string>();
+function prepareEnvChanges(rows: EnvRowState[], removedKeys: string[]): EnvChangesResult {
+  const setPayload: Record<string, string> = {}
+  const uniqueRemovals = Array.from(new Set(removedKeys))
+  const seenKeys = new Set<string>()
 
   for (const row of rows) {
-    const trimmedKey = row.key.trim();
-    const value = row.value;
+    const trimmedKey = row.key.trim()
+    const value = row.value
 
     if (row.new && trimmedKey === '' && value === '') {
-      continue;
+      continue
     }
 
     if (trimmedKey === '') {
       return {
         success: false,
         message: 'Environment variable key is required.',
-      };
+      }
     }
 
     if (seenKeys.has(trimmedKey)) {
       return {
         success: false,
         message: `Duplicate environment variable key: ${trimmedKey}`,
-      };
+      }
     }
-    seenKeys.add(trimmedKey);
+    seenKeys.add(trimmedKey)
 
     if (!row.new && value === row.initialValue) {
-      continue;
+      continue
     }
 
     if (value === MASKED_SECRET && row.initialValue === MASKED_SECRET) {
-      continue;
+      continue
     }
 
-    setPayload[trimmedKey] = value;
+    setPayload[trimmedKey] = value
   }
 
-  const finalRemove = uniqueRemovals.filter(
-    (key) => !Object.hasOwn(setPayload, key),
-  );
+  const finalRemove = uniqueRemovals.filter((key) => !Object.hasOwn(setPayload, key))
 
-  return { success: true, setPayload, finalRemove };
+  return { success: true, setPayload, finalRemove }
 }
 
 type EnvRowProps = {
-  row: EnvRowState;
-  canEdit: boolean;
-  isSaving: boolean;
-  revealPending: boolean;
-  onKeyChange: (rowId: string, nextKey: string) => void;
-  onValueChange: (rowId: string, nextValue: string) => void;
-  onToggleSecretVisibility: (row: EnvRowState) => void;
-  onDeleteRow: (row: EnvRowState) => void;
-};
+  row: EnvRowState
+  canEdit: boolean
+  isSaving: boolean
+  revealPending: boolean
+  onKeyChange: (rowId: string, nextKey: string) => void
+  onValueChange: (rowId: string, nextValue: string) => void
+  onToggleSecretVisibility: (row: EnvRowState) => void
+  onDeleteRow: (row: EnvRowState) => void
+}
 
 function EnvRow({
   row,
@@ -152,27 +131,23 @@ function EnvRow({
   onToggleSecretVisibility,
   onDeleteRow,
 }: EnvRowProps) {
-  const keyDisabled = !(canEdit && row.new) || isSaving;
-  const valueDisabled = !canEdit || isSaving;
-  const toggleDisabled =
-    !canEdit || isSaving || (!row.revealed && revealPending);
+  const keyDisabled = !(canEdit && row.new) || isSaving
+  const valueDisabled = !canEdit || isSaving
+  const toggleDisabled = !canEdit || isSaving || (!row.revealed && revealPending)
 
-  let revealIcon: ReactNode = null;
+  let revealIcon: ReactNode = null
   if (revealPending) {
-    revealIcon = <Loader2 className="h-4 w-4 animate-spin" />;
+    revealIcon = <Loader2 className="h-4 w-4 animate-spin" />
   } else if (row.revealed) {
-    revealIcon = <EyeOff className="h-4 w-4" />;
+    revealIcon = <EyeOff className="h-4 w-4" />
   } else {
-    revealIcon = <Eye className="h-4 w-4" />;
+    revealIcon = <Eye className="h-4 w-4" />
   }
 
-  const revealAriaLabel = row.revealed ? 'Hide secret' : 'Reveal secret';
+  const revealAriaLabel = row.revealed ? 'Hide secret' : 'Reveal secret'
 
   return (
-    <div
-      className="flex flex-col gap-3 p-4 md:flex-row md:items-start"
-      data-env-key={row.key}
-    >
+    <div className="flex flex-col gap-3 p-4 md:flex-row md:items-start" data-env-key={row.key}>
       <div className="w-full md:w-1/4">
         <Input
           aria-label="Environment key"
@@ -225,74 +200,73 @@ function EnvRow({
         </Tooltip>
       </div>
     </div>
-  );
+  )
 }
 
 export function AppEnvPage() {
-  const { app } = useParams({ from: '/apps/$app/env' }) as { app: string };
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const { app } = useParams({ from: '/apps/$app/env' }) as { app: string }
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
 
-  const roles = user?.roles ?? [];
-  const canEdit = roles.includes('admin') || roles.includes('deployer');
+  const roles = user?.roles ?? []
+  const canEdit = roles.includes('admin') || roles.includes('deployer')
 
   const envQuery = useQuery({
     queryKey: ['app-env', app],
     queryFn: () => fetchAppEnv(app),
     refetchOnWindowFocus: false,
     staleTime: 0,
-  });
+  })
 
-  const [rows, setRows] = useState<EnvRowState[]>([]);
-  const [removedKeys, setRemovedKeys] = useState<string[]>([]);
-  const [lastReleaseId, setLastReleaseId] = useState<string | null>(null);
-  const [revealingKey, setRevealingKey] = useState<string | null>(null);
-  const shouldResyncRef = useRef(true);
-  const lastSyncedAtRef = useRef<number | null>(null);
-  const latestEnvData = envQuery.data;
-  const lastUpdatedAt = envQuery.dataUpdatedAt;
+  const [rows, setRows] = useState<EnvRowState[]>([])
+  const [removedKeys, setRemovedKeys] = useState<string[]>([])
+  const [lastReleaseId, setLastReleaseId] = useState<string | null>(null)
+  const [revealingKey, setRevealingKey] = useState<string | null>(null)
+  const shouldResyncRef = useRef(true)
+  const lastSyncedAtRef = useRef<number | null>(null)
+  const latestEnvData = envQuery.data
+  const lastUpdatedAt = envQuery.dataUpdatedAt
 
   const hasChanges = useMemo(() => {
     if (removedKeys.length > 0) {
-      return true;
+      return true
     }
     return rows.some((row) => {
       if (row.new) {
-        return row.key.trim() !== '' || row.value !== '';
+        return row.key.trim() !== '' || row.value !== ''
       }
       if (row.value === row.initialValue) {
-        return false;
+        return false
       }
       if (row.value === MASKED_SECRET && row.initialValue === MASKED_SECRET) {
-        return false;
+        return false
       }
-      return true;
-    });
-  }, [rows, removedKeys]);
+      return true
+    })
+  }, [rows, removedKeys])
 
   useEffect(() => {
     if (!latestEnvData) {
-      return;
+      return
     }
 
     const hasNewFetch =
-      typeof lastUpdatedAt === 'number' &&
-      lastSyncedAtRef.current !== lastUpdatedAt;
+      typeof lastUpdatedAt === 'number' && lastSyncedAtRef.current !== lastUpdatedAt
 
     if (!hasChanges || shouldResyncRef.current || hasNewFetch) {
-      setRows(buildRowsFromEnv(latestEnvData));
-      setRemovedKeys([]);
-      shouldResyncRef.current = false;
+      setRows(buildRowsFromEnv(latestEnvData))
+      setRemovedKeys([])
+      shouldResyncRef.current = false
       if (typeof lastUpdatedAt === 'number') {
-        lastSyncedAtRef.current = lastUpdatedAt;
+        lastSyncedAtRef.current = lastUpdatedAt
       }
     }
-  }, [latestEnvData, lastUpdatedAt, hasChanges]);
+  }, [latestEnvData, lastUpdatedAt, hasChanges])
 
   const revealMutation = useMutation({
     mutationFn: (key: string) => fetchAppEnvValue(app, key, true),
     onMutate: (key) => {
-      setRevealingKey(key);
+      setRevealingKey(key)
     },
     onSuccess: (value, key) => {
       setRows((current) =>
@@ -305,42 +279,38 @@ export function AppEnvPage() {
                 revealed: true,
                 fetchedSecret: true,
               }
-            : row,
-        ),
-      );
+            : row
+        )
+      )
     },
     onError: (err) => {
-      toast.error(getErrorMessage(err, 'Failed to reveal secret value.'));
+      toast.error(getErrorMessage(err, 'Failed to reveal secret value.'))
     },
     onSettled: () => {
-      setRevealingKey(null);
+      setRevealingKey(null)
     },
-  });
+  })
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: {
-      set: Record<string, string>;
-      remove: string[];
-    }) => updateAppEnv(app, payload.set, payload.remove),
+    mutationFn: async (payload: { set: Record<string, string>; remove: string[] }) =>
+      updateAppEnv(app, payload.set, payload.remove),
     onSuccess: async (data) => {
-      setLastReleaseId(data.release_id ?? null);
+      setLastReleaseId(data.release_id ?? null)
       toast.success(
-        data.release_id
-          ? `Environment updated (release ${data.release_id})`
-          : 'Environment updated',
-      );
-      setRemovedKeys([]);
-      shouldResyncRef.current = true;
-      await queryClient.invalidateQueries({ queryKey: ['app-env', app] });
+        data.release_id ? `Environment updated (release ${data.release_id})` : 'Environment updated'
+      )
+      setRemovedKeys([])
+      shouldResyncRef.current = true
+      await queryClient.invalidateQueries({ queryKey: ['app-env', app] })
     },
     onError: (err) => {
-      toast.error(getErrorMessage(err, 'Failed to update environment.'));
+      toast.error(getErrorMessage(err, 'Failed to update environment.'))
     },
-  });
+  })
 
   const handleAddRow = () => {
     if (!canEdit) {
-      return;
+      return
     }
     setRows((current) => [
       ...current,
@@ -354,100 +324,90 @@ export function AppEnvPage() {
         new: true,
         fetchedSecret: true,
       },
-    ]);
-  };
+    ])
+  }
 
   const handleDeleteRow = (row: EnvRowState) => {
     if (!canEdit) {
-      return;
+      return
     }
-    setRows((current) => current.filter((item) => item.id !== row.id));
+    setRows((current) => current.filter((item) => item.id !== row.id))
     if (!row.new) {
-      setRemovedKeys((prev) =>
-        prev.includes(row.key) ? prev : [...prev, row.key],
-      );
+      setRemovedKeys((prev) => (prev.includes(row.key) ? prev : [...prev, row.key]))
     }
-  };
+  }
 
   const handleKeyChange = (rowId: string, nextKey: string) => {
-    setRows((current) =>
-      current.map((row) => (row.id === rowId ? { ...row, key: nextKey } : row)),
-    );
-  };
+    setRows((current) => current.map((row) => (row.id === rowId ? { ...row, key: nextKey } : row)))
+  }
 
   const handleValueChange = (rowId: string, nextValue: string) => {
     setRows((current) =>
-      current.map((row) =>
-        row.id === rowId ? { ...row, value: nextValue } : row,
-      ),
-    );
-  };
+      current.map((row) => (row.id === rowId ? { ...row, value: nextValue } : row))
+    )
+  }
 
   const handleToggleSecretVisibility = (row: EnvRowState) => {
     if (!canEdit || isSaving) {
-      return;
+      return
     }
     if (row.revealed) {
       setRows((current) =>
-        current.map((item) =>
-          item.id === row.id ? { ...item, revealed: false } : item,
-        ),
-      );
-      return;
+        current.map((item) => (item.id === row.id ? { ...item, revealed: false } : item))
+      )
+      return
     }
     if (row.fetchedSecret) {
       setRows((current) =>
-        current.map((item) =>
-          item.id === row.id ? { ...item, revealed: true } : item,
-        ),
-      );
-      return;
+        current.map((item) => (item.id === row.id ? { ...item, revealed: true } : item))
+      )
+      return
     }
     if (revealMutation.isPending && revealingKey === row.key) {
-      return;
+      return
     }
-    revealMutation.mutate(row.key);
-  };
+    revealMutation.mutate(row.key)
+  }
 
   const handleCancel = async () => {
     if (envQuery.isLoading) {
-      return;
+      return
     }
-    setRemovedKeys([]);
-    setLastReleaseId(null);
-    shouldResyncRef.current = true;
-    await envQuery.refetch();
-  };
+    setRemovedKeys([])
+    setLastReleaseId(null)
+    shouldResyncRef.current = true
+    await envQuery.refetch()
+  }
 
   const handleSave = async () => {
     if (!canEdit || saveMutation.isPending) {
-      return;
+      return
     }
 
-    const result = prepareEnvChanges(rows, removedKeys);
+    const result = prepareEnvChanges(rows, removedKeys)
     if (!result.success) {
-      toast.error(result.message);
-      return;
+      toast.error(result.message)
+      return
     }
 
-    const { setPayload, finalRemove } = result;
+    const { setPayload, finalRemove } = result
 
     if (Object.keys(setPayload).length === 0 && finalRemove.length === 0) {
-      toast.success('No changes to save.');
-      return;
+      toast.success('No changes to save.')
+      return
     }
 
     try {
-      await saveMutation.mutateAsync({ set: setPayload, remove: finalRemove });
+      await saveMutation.mutateAsync({ set: setPayload, remove: finalRemove })
     } catch {
       // Error handled via mutation onError toast.
     }
-  };
+  }
 
-  const isSaving = saveMutation.isPending;
-  const saveDisabled = !(canEdit && hasChanges) || isSaving;
-  const isLoading = envQuery.isLoading;
-  const envError = envQuery.error as Error | null;
+  const isSaving = saveMutation.isPending
+  const saveDisabled = !(canEdit && hasChanges) || isSaving
+  const isLoading = envQuery.isLoading
+  const envError = envQuery.error as Error | null
 
   return (
     <TooltipProvider>
@@ -456,15 +416,9 @@ export function AppEnvPage() {
           <CardTitle>Environment</CardTitle>
           <div className="flex items-center gap-2">
             {!canEdit && (
-              <span className="text-muted-foreground text-sm">
-                You have read-only access.
-              </span>
+              <span className="text-muted-foreground text-sm">You have read-only access.</span>
             )}
-            <Button
-              disabled={!canEdit}
-              onClick={handleAddRow}
-              variant="outline"
-            >
+            <Button disabled={!canEdit} onClick={handleAddRow} variant="outline">
               <Plus className="mr-2 h-4 w-4" /> Add Variable
             </Button>
           </div>
@@ -474,24 +428,19 @@ export function AppEnvPage() {
             if (isLoading) {
               return (
                 <div className="flex h-full items-center justify-center p-6 text-muted-foreground">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading
-                  environment…
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading environment…
                 </div>
-              );
+              )
             }
 
             if (envError) {
-              return (
-                <div className="p-6 text-destructive">{envError.message}</div>
-              );
+              return <div className="p-6 text-destructive">{envError.message}</div>
             }
 
             if (rows.length === 0) {
               return (
-                <div className="p-6 text-muted-foreground">
-                  No environment variables found.
-                </div>
-              );
+                <div className="p-6 text-muted-foreground">No environment variables found.</div>
+              )
             }
 
             return (
@@ -505,21 +454,18 @@ export function AppEnvPage() {
                     onKeyChange={handleKeyChange}
                     onToggleSecretVisibility={handleToggleSecretVisibility}
                     onValueChange={handleValueChange}
-                    revealPending={
-                      revealMutation.isPending && revealingKey === row.key
-                    }
+                    revealPending={revealMutation.isPending && revealingKey === row.key}
                     row={row}
                   />
                 ))}
               </div>
-            );
+            )
           })()}
         </CardContent>
         <CardFooter className="sticky bottom-0 flex flex-col gap-2 border-t bg-card/95 p-4 backdrop-blur">
           {lastReleaseId && (
             <div className="text-muted-foreground text-sm">
-              Last update created release {lastReleaseId}. Releases are promoted
-              on the next deploy.
+              Last update created release {lastReleaseId}. Releases are promoted on the next deploy.
             </div>
           )}
           <div className="flex w-full items-center justify-end gap-2">
@@ -531,14 +477,12 @@ export function AppEnvPage() {
               Cancel
             </Button>
             <Button disabled={saveDisabled} onClick={handleSave}>
-              {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save Changes
             </Button>
           </div>
         </CardFooter>
       </Card>
     </TooltipProvider>
-  );
+  )
 }

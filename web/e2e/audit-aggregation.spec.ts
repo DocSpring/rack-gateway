@@ -11,7 +11,7 @@ test('aggregates repeated app list views into single audit entry', async ({ page
   }
 
   // Navigate to audit logs and confirm aggregation badge
-  await page.goto('/app/audit_logs')
+  await page.goto('/app/audit-logs')
   await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
 
   const table = page.getByRole('table')
