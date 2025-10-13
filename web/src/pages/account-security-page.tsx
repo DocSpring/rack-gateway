@@ -44,6 +44,7 @@ import {
   type StartWebAuthnEnrollmentResponse,
   startTOTPEnrollment,
   startWebAuthnEnrollment,
+  trustCurrentDevice,
   updateMFAMethod,
   updatePreferredMFAMethod,
 } from '@/lib/api'
@@ -68,7 +69,22 @@ const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
   webauthn: 'WebAuthn',
 }
-export const DEFAULT_MFA_LABEL = 'Security Key'
+export const DEFAULT_TOTP_LABEL = 'Security Key'
+export const DEFAULT_WEBAUTHN_LABEL = 'Security Key'
+
+const DEFAULT_LABELS: Record<MFAMethodType, string> = {
+  totp: DEFAULT_TOTP_LABEL,
+  webauthn: DEFAULT_WEBAUTHN_LABEL,
+}
+
+const getDefaultLabelForType = (type?: MFAMethodType | string | null): string => {
+  const normalized: MFAMethodType | null =
+    type === 'totp' || type === 'webauthn' ? (type as MFAMethodType) : null
+  if (!normalized) {
+    return DEFAULT_TOTP_LABEL
+  }
+  return DEFAULT_LABELS[normalized]
+}
 
 function formatCodeForDownload(codes: string[]): string {
   const header = [
@@ -85,12 +101,7 @@ export function AccountSecurityPage() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const { refresh: refreshUser, user } = useAuth()
-  const {
-    openStepUp,
-    requireStepUp,
-    handleStepUpError,
-    isVerifying: isGlobalStepUpVerifying,
-  } = useStepUp()
+  const { openStepUp, handleStepUpError, isVerifying: isGlobalStepUpVerifying } = useStepUp()
   const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
   const [enrollmentStep, setEnrollmentStep] = useState<'method-selection' | 'totp-setup'>(
     'method-selection'
@@ -100,21 +111,21 @@ export function AccountSecurityPage() {
   const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(null)
-  const [enrollmentLabel, setEnrollmentLabel] = useState(DEFAULT_MFA_LABEL)
   const [disableDialogOpen, setDisableDialogOpen] = useState(false)
   const [disableAllPending, setDisableAllPending] = useState(false)
   const [autoPrompted, setAutoPrompted] = useState(false)
   const [editingMethod, setEditingMethod] = useState<{ id: number; label: string } | null>(null)
+  const [pendingEditMethod, setPendingEditMethod] = useState<{ id: number; type: MFAMethodType } | null>(null)
   const [editLabel, setEditLabel] = useState('')
 
   const closeEnrollmentModal = useCallback(() => {
     setEnrollmentModalOpen(false)
     setEnrollmentStep('method-selection')
     setEnrollment(null)
-    setEnrollmentLabel(DEFAULT_MFA_LABEL)
     setQrDataUrl(null)
     setVerificationCode('')
     setTrustEnrollmentDevice(true)
+    setPendingEditMethod(null)
   }, [])
 
   const searchParams = useMemo(() => new URLSearchParams(location.search ?? ''), [location.search])
@@ -198,7 +209,6 @@ export function AccountSecurityPage() {
         if (!data.public_key_options) {
           throw new Error('No public key options received from server')
         }
-
         // Convert server options to browser-compatible format
         const webAuthnOptions = prepareCreationOptions(data.public_key_options)
 
@@ -216,16 +226,22 @@ export function AccountSecurityPage() {
           credential as PublicKeyCredential
         )
 
-        const normalizedLabel = enrollmentLabel.trim() || 'Security Key'
+        const webAuthnLabel = DEFAULT_WEBAUTHN_LABEL
+        const methodId = data.method_id ?? 0
         await confirmWebAuthnEnrollment({
-          method_id: data.method_id ?? 0,
+          method_id: methodId,
           credential: credentialForBackend,
-          label: normalizedLabel,
+          label: webAuthnLabel,
         })
 
         // Success!
         setRecentBackupCodes(data.backup_codes ?? null)
         toast.success('WebAuthn enrollment completed')
+        if (methodId) {
+          setEditingMethod({ id: methodId, label: webAuthnLabel })
+          setEditLabel(webAuthnLabel)
+        }
+        setPendingEditMethod(null)
         closeEnrollmentModal()
         await invalidateStatus()
         refreshUser().catch(() => {
@@ -267,6 +283,12 @@ export function AccountSecurityPage() {
     mutationFn: confirmTOTPEnrollment,
     onSuccess: async () => {
       toast.success('Multi-factor authentication enabled')
+      if (pendingEditMethod) {
+        const defaultLabel = getDefaultLabelForType(pendingEditMethod.type)
+        setEditingMethod({ id: pendingEditMethod.id, label: defaultLabel })
+        setEditLabel(defaultLabel)
+        setPendingEditMethod(null)
+      }
       closeEnrollmentModal()
       await invalidateStatus()
       refreshUser().catch(() => {
@@ -275,6 +297,7 @@ export function AccountSecurityPage() {
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
+      setPendingEditMethod(null)
     },
   })
 
@@ -330,6 +353,24 @@ export function AccountSecurityPage() {
     },
   })
 
+  const trustDeviceMutation = useMutation({
+    mutationFn: trustCurrentDevice,
+    onSuccess: async (response) => {
+      if (response.trusted_device_cookie) {
+        toast.success('This device is now trusted')
+      } else {
+        toast.success('Device trusted')
+      }
+      await invalidateStatus()
+      refreshUser().catch(() => {
+        /* noop */
+      })
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+    },
+  })
+
   const updatePreferredMethodMutation = useMutation({
     mutationFn: updatePreferredMFAMethod,
     onSuccess: async () => {
@@ -343,7 +384,7 @@ export function AccountSecurityPage() {
     },
   })
 
-  const runWithStepUp = (action: () => Promise<void>, options: { forcePrompt?: boolean } = {}) => {
+  const runWithStepUp = (action: () => Promise<void>) => {
     const wrappedAction = async () => {
       await action()
     }
@@ -353,17 +394,10 @@ export function AccountSecurityPage() {
       await wrappedAction()
     }
 
-    if (!(options.forcePrompt || needsStepUp)) {
-      wrappedAction().catch((error) => {
-        if (!handleStepUpError(error, actionWithStatusRefresh)) {
-          toast.error(getErrorMessage(error))
-        }
-      })
-      return
-    }
-
-    requireStepUp(async () => {
-      await actionWithStatusRefresh()
+    wrappedAction().catch((error) => {
+      if (!handleStepUpError(error, actionWithStatusRefresh)) {
+        toast.error(getErrorMessage(error))
+      }
     })
   }
 
@@ -372,7 +406,9 @@ export function AccountSecurityPage() {
       toast.error('Enrollment session expired. Start again.')
       return
     }
-    const normalizedLabel = enrollmentLabel.trim() || DEFAULT_MFA_LABEL
+    const methodType: MFAMethodType = 'totp'
+    setPendingEditMethod({ id: enrollment.method_id, type: methodType })
+    const normalizedLabel = getDefaultLabelForType(methodType)
     confirmEnrollmentMutation.mutate({
       method_id: enrollment.method_id,
       code: verificationCode,
@@ -473,7 +509,7 @@ export function AccountSecurityPage() {
     }
 
     setDisableDialogOpen(false)
-    runWithStepUp(performDisable, { forcePrompt: true })
+    runWithStepUp(performDisable)
   }
 
   const isBusy =
@@ -593,7 +629,6 @@ export function AccountSecurityPage() {
                 onClick={() => {
                   setEnrollmentModalOpen(true)
                   setEnrollmentStep('method-selection')
-                  setEnrollmentLabel(DEFAULT_MFA_LABEL)
                 }}
               >
                 {enrollment ? 'Enrollment In Progress' : 'Enable MFA'}
@@ -672,7 +707,7 @@ export function AccountSecurityPage() {
                         {MFA_METHOD_TYPE_LABELS[(method.type ?? '').toLowerCase()] ??
                           (method.type ? method.type.toUpperCase() : 'MFA')}
                       </td>
-                      <td className="py-2">{method.label ?? DEFAULT_MFA_LABEL}</td>
+                      <td className="py-2">{method.label ?? getDefaultLabelForType(method.type)}</td>
                       <td className="py-2">
                         <TimeAgo date={method.created_at ?? null} />
                       </td>
@@ -684,7 +719,7 @@ export function AccountSecurityPage() {
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
-                                aria-label={`Actions for ${method.label ?? DEFAULT_MFA_LABEL}`}
+                                aria-label={`Actions for ${method.label ?? getDefaultLabelForType(method.type)}`}
                                 size="sm"
                                 variant="ghost"
                               >
@@ -700,9 +735,9 @@ export function AccountSecurityPage() {
                                   }
                                   setEditingMethod({
                                     id: method.id as number,
-                                    label: method.label ?? DEFAULT_MFA_LABEL,
+                                    label: method.label ?? getDefaultLabelForType(method.type),
                                   })
-                                  setEditLabel(method.label ?? DEFAULT_MFA_LABEL)
+                                  setEditLabel(method.label ?? getDefaultLabelForType(method.type))
                                 }}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -715,12 +750,9 @@ export function AccountSecurityPage() {
                                     toast.error('Unable to determine method identifier')
                                     return
                                   }
-                                  runWithStepUp(
-                                    async () => {
-                                      await deleteMethodMutation.mutateAsync(method.id as number)
-                                    },
-                                    { forcePrompt: true }
-                                  )
+                                  runWithStepUp(async () => {
+                                    await deleteMethodMutation.mutateAsync(method.id as number)
+                                  })
                                 }}
                                 variant="destructive"
                               >
@@ -745,7 +777,6 @@ export function AccountSecurityPage() {
               onClick={() => {
                 setEnrollmentModalOpen(true)
                 setEnrollmentStep('method-selection')
-                setEnrollmentLabel(DEFAULT_MFA_LABEL)
               }}
               variant="outline"
             >
@@ -814,6 +845,20 @@ export function AccountSecurityPage() {
             </div>
           )}
         </CardContent>
+        {!user?.has_trusted_device ? (
+          <CardFooter className="flex flex-wrap gap-2">
+            <Button
+              disabled={trustDeviceMutation.isPending}
+              onClick={() =>
+                runWithStepUp(async () => {
+                  await trustDeviceMutation.mutateAsync()
+                })
+              }
+            >
+              {trustDeviceMutation.isPending ? 'Trusting…' : 'Trust This Device'}
+            </Button>
+          </CardFooter>
+        ) : null}
       </Card>
 
       <Dialog
@@ -836,20 +881,6 @@ export function AccountSecurityPage() {
 
           {enrollmentStep === 'method-selection' ? (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="mfa-method-label">Device name (optional)</Label>
-                <Input
-                  id="mfa-method-label"
-                  maxLength={150}
-                  onChange={(event) => setEnrollmentLabel(event.target.value)}
-                  placeholder={DEFAULT_MFA_LABEL}
-                  value={enrollmentLabel}
-                />
-                <p className="text-muted-foreground text-xs">
-                  Give this authenticator a memorable name
-                </p>
-              </div>
-
               <div className="space-y-3">
                 <Label>Choose authentication method</Label>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -887,7 +918,6 @@ export function AccountSecurityPage() {
                   onClick={() => {
                     setEnrollmentModalOpen(false)
                     setEnrollmentStep('method-selection')
-                    setEnrollmentLabel(DEFAULT_MFA_LABEL)
                   }}
                   variant="outline"
                 >

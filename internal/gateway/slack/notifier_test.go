@@ -20,7 +20,7 @@ func TestNotifyAuditEvent_NoIntegration(t *testing.T) {
 	notifier := NewNotifier(database)
 
 	auditLog := &db.AuditLog{
-		Action:    audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
+		Action:    audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 		UserEmail: "test@example.com",
 		Status:    "success",
 		Timestamp: time.Now(),
@@ -44,7 +44,7 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 		"security": map[string]interface{}{
 			"id":      "C123456",
 			"name":    "#security",
-			"actions": []string{"deploy.*"}, // Won't match mfa.enroll
+			"actions": []string{"deploy.*"}, // Won't match mfa_method.enroll
 		},
 	}
 	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
@@ -54,7 +54,7 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 	notifier := NewNotifier(database)
 
 	auditLog := &db.AuditLog{
-		Action:    audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
+		Action:    audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 		UserEmail: "test@example.com",
 		Status:    "success",
 		Timestamp: time.Now(),
@@ -71,14 +71,14 @@ func TestMatchGlob(t *testing.T) {
 		text    string
 		want    bool
 	}{
-		{"mfa.*", audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), true},
-		{"mfa.*", audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbVerify), true},
-		{"mfa.*", "auth.login", false},
+		{"mfa_method.*", audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll), true},
+		{"mfa_method.*", audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbVerify), true},
+		{"mfa_method.*", "auth.login", false},
 		{"auth.*", "auth.login", true},
 		{"auth.*", "auth.logout", true},
 		{"deploy-approval-request.*", "deploy-approval-request.created", true},
 		{"deploy-approval-request.*", "deploy-approval-request.approved", true},
-		{"deploy-approval-request.*", audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), false},
+		{"deploy-approval-request.*", audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll), false},
 		{"*.created", "deploy-approval-request.created", true},
 		{"*.created", "api-token.created", true},
 		{"*.created", "deploy-approval-request.approved", false},
@@ -102,7 +102,7 @@ func TestMatchActionToChannels(t *testing.T) {
 		"security": map[string]interface{}{
 			"id":      "C111",
 			"name":    "#security",
-			"actions": []interface{}{"mfa.*", "auth.*", "api-token.*"},
+			"actions": []interface{}{"mfa_method.*", "auth.*", "api-token.*"},
 		},
 		"infrastructure": map[string]interface{}{
 			"id":      "C222",
@@ -120,7 +120,7 @@ func TestMatchActionToChannels(t *testing.T) {
 		action   string
 		expected []string
 	}{
-		{audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), []string{"C111"}},
+		{audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll), []string{"C111"}},
 		{"auth.login", []string{"C111"}},
 		{"api-token.created", []string{"C111", "C222"}}, // Matches both security and infrastructure (*.created)
 		{"deploy-approval-request.created", []string{"C222"}},
@@ -152,7 +152,7 @@ func TestFormatAuditLogMessage(t *testing.T) {
 		{
 			name: "MFA enrollment success",
 			auditLog: &db.AuditLog{
-				Action:    audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
+				Action:    audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 				UserEmail: "user@example.com",
 				UserName:  "Test User",
 				Status:    audit.StatusSuccess,
@@ -160,7 +160,7 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				Details:   "TOTP enrolled",
 			},
 			expectEmoji:   "🔐",
-			expectInText:  []string{audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll), "user@example.com"},
+			expectInText:  []string{audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll), "user@example.com"},
 			expectInBlock: []string{"Test User", audit.StatusSuccess, "TOTP enrolled"},
 		},
 		{

@@ -146,13 +146,14 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Get the full path including query params
 	path := r.URL.Path
+	rackPath := rbac.NormalizeRackPath(path)
 
 	// Before any RBAC/audit, enforce an allowlist of Convox API paths.
 	methodForAllow := r.Method
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForAllow = "SOCKET"
 	}
-	if _, _, ok := rbac.MatchRackRoute(methodForAllow, path); !ok {
+	if _, _, ok := rbac.MatchRackRoute(methodForAllow, rackPath); !ok {
 		// Return 404 without writing an audit DB entry for non-Convox noise (e.g., .well-known, favicon, etc.)
 		http.NotFound(w, r)
 		return
@@ -168,7 +169,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
 	}
-	resource, action, ok := rbac.MatchRackRoute(methodForRBAC, path)
+	resource, action, ok := rbac.MatchRackRoute(methodForRBAC, rackPath)
 	if !ok {
 		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
 		http.NotFound(w, r)
@@ -215,7 +216,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Additional RBAC for release/environment set operations and body rewrite
 	var envDiffs []envutil.EnvDiff
-	if allowed && r.Method == http.MethodPost && strings.Contains(path, "/releases") {
+	if allowed && r.Method == http.MethodPost && strings.Contains(rackPath, "/releases") {
 		ok, diffs, err := h.prepareReleaseCreate(r, rackConfig, authUser.Email)
 		if err != nil {
 			if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
@@ -236,7 +237,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		if releaseID := extractReleaseIDFromPath(path); releaseID != "" {
+		if releaseID := extractReleaseIDFromPath(rackPath); releaseID != "" {
 			r.Header.Set("X-Audit-Resource", releaseID)
 		}
 	}
@@ -265,7 +266,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-validate audit log requirements BEFORE proxying to ensure we can return proper error
 	if !audit.HasAuditLogBeenCreated(r.Context()) {
-		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method, r.Header.Get("X-Audit-Resource"))
+		action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
 		if action == "unknown" || resource == "unknown" {
 			errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s", r.Method, r.URL.Path)
 			log.Printf(`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s"}`, errorMsg, r.Method, r.URL.Path, action, resource)
@@ -283,7 +284,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Pre-capture system parameters if this is a rack params update
 	var beforeParams map[string]string
-	isRackParamsUpdate := (r.Method == http.MethodPut && rbac.KeyMatch3(path, "/system"))
+	isRackParamsUpdate := (r.Method == http.MethodPut && rbac.KeyMatch3(rackPath, "/system"))
 	if isRackParamsUpdate {
 		if params, err := h.fetchSystemParams(r.Context(), rackConfig); err == nil {
 			beforeParams = params
@@ -291,7 +292,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Forward the request to the rack
-	status, err := h.forwardRequest(w, r, rackConfig, path, authUser)
+	status, err := h.forwardRequest(w, r, rackConfig, rackPath, authUser)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			logRackTLSMismatch("proxy_forward", fpErr)
@@ -309,7 +310,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	// Create generic audit log if no explicit audit logs were created during request handling
 	// (validation already happened before proxy, so action/resource/resourceType are guaranteed to be valid)
 	if !audit.HasAuditLogBeenCreated(r.Context()) {
-		action, resource := h.auditLogger.ParseConvoxAction(r.URL.Path, r.Method, r.Header.Get("X-Audit-Resource"))
+		action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
 		resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
 
 		var tokenIDPtr *int64

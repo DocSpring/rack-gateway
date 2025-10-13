@@ -22,7 +22,7 @@ var defaultChannelActions = map[string]interface{}{
 		"actions": []string{
 			audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbComplete),
 			audit.ActionScopeLogin + ".*_failed", // Matches oauth_failed, user_not_authorized, etc.
-			audit.ActionScopeMFA + ".*",          // Matches all MFA actions
+			audit.ActionScopeMFAMethod + ".*",    // MFA enrollment events
 			audit.BuildAction(rbac.ResourceStringUser, audit.ActionVerbUpdateRoles),
 			audit.ActionScopeAPIToken + ".*", // Matches all API token actions
 		},

@@ -120,15 +120,16 @@ var httpRouteSpecs = []HTTPRouteSpec{
 	{"POST", "/api/v1/auth/mfa/enroll/totp/confirm", []string{Auth(ResourceMFAMethod, ActionCreate)}, false},
 	{"POST", "/api/v1/auth/mfa/enroll/yubiotp/start", []string{Auth(ResourceMFAMethod, ActionCreate)}, false},
 	{"POST", "/api/v1/auth/mfa/enroll/webauthn/start", []string{Auth(ResourceMFAMethod, ActionCreate)}, false},
-	{"POST", "/api/v1/auth/mfa/enroll/webauthn/confirm", []string{Auth(ResourceMFAMethod, ActionUpdate)}, false},
-	{"POST", "/api/v1/auth/mfa/verify", []string{Auth(ResourceMFA, ActionCreate)}, false},
-	{"POST", "/api/v1/auth/mfa/webauthn/assertion/start", []string{Auth(ResourceMFA, ActionCreate)}, false},
-	{"POST", "/api/v1/auth/mfa/webauthn/assertion/verify", []string{Auth(ResourceMFA, ActionCreate)}, false},
-	{"PUT", "/api/v1/auth/mfa/preferred-method", []string{Auth(ResourceMFA, ActionUpdate)}, false},
+	{"POST", "/api/v1/auth/mfa/enroll/webauthn/confirm", []string{Auth(ResourceMFAMethod, ActionCreate)}, false},
+	{"POST", "/api/v1/auth/mfa/verify", []string{Auth(ResourceMFAVerification, ActionCreate)}, false},
+	{"POST", "/api/v1/auth/mfa/webauthn/assertion/start", []string{Auth(ResourceMFAVerification, ActionCreate)}, false},
+	{"POST", "/api/v1/auth/mfa/webauthn/assertion/verify", []string{Auth(ResourceMFAVerification, ActionCreate)}, false},
+	{"PUT", "/api/v1/auth/mfa/preferred-method", []string{Auth(ResourceMFAPreferences, ActionUpdate)}, false},
 	{"PUT", "/api/v1/auth/mfa/methods/:methodID", []string{Auth(ResourceMFAMethod, ActionUpdate)}, false},
-	{"POST", "/api/v1/auth/mfa/backup-codes/regenerate", []string{Auth(ResourceMFA, ActionGenerate)}, false},
+	{"POST", "/api/v1/auth/mfa/backup-codes/regenerate", []string{Auth(ResourceMFABackupCodes, ActionGenerate)}, false},
+	{"POST", "/api/v1/auth/mfa/trusted-devices/trust", []string{Auth(ResourceTrustedDevice, ActionCreate)}, false},
+	{"DELETE", "/api/v1/auth/mfa/trusted-devices/:deviceID", []string{Auth(ResourceTrustedDevice, ActionDelete)}, false},
 	{"DELETE", "/api/v1/auth/mfa/methods/:methodID", []string{Auth(ResourceMFAMethod, ActionDelete)}, false},
-	{"DELETE", "/api/v1/auth/mfa/trusted-devices/:deviceID", []string{Auth(ResourceMFA, ActionDelete)}, false},
 
 	// Authenticated info
 	{"GET", "/api/v1/info", []string{}, false},
@@ -230,10 +231,34 @@ func HTTPRouteIsDynamic(method, pattern string) bool {
 	return ok && spec.Dynamic
 }
 
+// NormalizeRackPath removes API prefixes and returns the canonical Convox path used for routing.
+func NormalizeRackPath(path string) string {
+	if path == "" {
+		return "/"
+	}
+
+	normalized := path
+	for _, prefix := range []string{"/api/v1/rack-proxy", "/api/v1/convox", "/rack-proxy", "/convox"} {
+		if strings.HasPrefix(normalized, prefix) {
+			normalized = strings.TrimPrefix(normalized, prefix)
+			break
+		}
+	}
+
+	if normalized == "" {
+		normalized = "/"
+	}
+	if !strings.HasPrefix(normalized, "/") {
+		normalized = "/" + normalized
+	}
+	return normalized
+}
+
 // MatchRackRoute returns the resource/action for a proxied Convox rack request.
 func MatchRackRoute(method, path string) (Resource, Action, bool) {
+	normalized := NormalizeRackPath(path)
 	for _, s := range rackRouteSpecs {
-		if s.Method == method && KeyMatch3(path, s.Pattern) {
+		if s.Method == method && KeyMatch3(normalized, s.Pattern) {
 			return s.Resource, s.Action, true
 		}
 	}

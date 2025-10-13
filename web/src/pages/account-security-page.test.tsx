@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StepUpProvider } from '@/contexts/step-up-context'
-import { AccountSecurityPage, DEFAULT_MFA_LABEL } from './account-security-page'
+import { AccountSecurityPage } from './account-security-page'
 
 vi.mock('qrcode', () => {
   const toDataURL = vi.fn().mockResolvedValue('data:image/png;base64,placeholder')
@@ -96,6 +96,7 @@ const { apiMocks } = vi.hoisted(() => ({
     deleteMFAMethod: vi.fn(),
     revokeTrustedDevice: vi.fn(),
     regenerateBackupCodes: vi.fn(),
+    trustCurrentDevice: vi.fn(),
     verifyMFA: vi.fn(),
     updatePreferredMFAMethod: vi.fn(),
   } satisfies Record<string, (...args: any[]) => unknown>,
@@ -162,12 +163,8 @@ describe('AccountSecurityPage', () => {
     // Modal should be open with method selection
     await waitFor(() => {
       expect(screen.getByText(/Enable Multi-Factor Authentication/i)).toBeInTheDocument()
-      expect(screen.getByText(/Device name/i)).toBeInTheDocument()
+      expect(screen.getByText(/Choose authentication method/i)).toBeInTheDocument()
     })
-
-    // Label should have default value in method selection step
-    const labelInput = screen.getByLabelText(/Device name/i)
-    expect(labelInput).toHaveValue(DEFAULT_MFA_LABEL)
 
     // Click "Authenticator app" button to start TOTP enrollment
     const totpButton = await screen.findByRole('button', { name: /Authenticator app/i })

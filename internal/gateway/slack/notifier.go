@@ -114,7 +114,11 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 	// Determine emoji based on action type and status
 	emoji := "📝"
 
-	if strings.HasPrefix(auditLog.Action, rbac.ResourceStringMFA+".") {
+	if strings.HasPrefix(auditLog.Action, audit.ActionScopeMFAMethod+".") ||
+		strings.HasPrefix(auditLog.Action, audit.ActionScopeMFAPreferences+".") ||
+		strings.HasPrefix(auditLog.Action, audit.ActionScopeMFAVerification+".") ||
+		strings.HasPrefix(auditLog.Action, audit.ActionScopeMFABackupCodes+".") ||
+		strings.HasPrefix(auditLog.Action, audit.ActionScopeTrustedDevice+".") {
 		emoji = "🔐"
 	} else if strings.HasPrefix(auditLog.Action, audit.ActionScopeLogin+".") || strings.HasPrefix(auditLog.Action, audit.ActionScopeLogout+".") {
 		emoji = "🔑"

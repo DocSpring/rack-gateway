@@ -296,7 +296,7 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       audit.BuildAction(rbac.ResourceStringMFA, rbac.ActionStringUpdate),
+			Action:       audit.BuildAction(audit.ActionScopeMFAPreferences, rbac.ActionStringUpdate),
 			ResourceType: "mfa_method",
 			Resource:     fmt.Sprintf("%d", method.ID),
 			Details:      string(details),
@@ -309,6 +309,82 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
+}
+
+// TrustCurrentDevice godoc
+// @Summary Trust the current device
+// @Description Marks the current browser session as trusted by minting a trusted device cookie.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} VerifyMFAResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /auth/mfa/trusted-devices/trust [post]
+func (h *AuthHandler) TrustCurrentDevice(c *gin.Context) {
+	if h.mfaService == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+		return
+	}
+
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil || authUser.IsAPIToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+		return
+	}
+
+	if authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+		return
+	}
+
+	userRecord, err := h.database.GetUser(authUser.Email)
+	if err != nil || userRecord == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+		return
+	}
+
+	payload, err := h.mfaService.MintTrustedDevice(
+		userRecord.ID,
+		c.ClientIP(),
+		c.GetHeader("User-Agent"),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to trust device"})
+		return
+	}
+
+	h.setTrustedDeviceCookie(c, payload.Token)
+	now := time.Now()
+	trustedDeviceID := &payload.RecordID
+
+	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
+		log.Printf("failed updating session after trusting device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
+		return
+	}
+	authUser.Session.MFAVerifiedAt = &now
+	authUser.Session.TrustedDeviceID = trustedDeviceID
+
+	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
+		log.Printf("failed updating step-up timestamp after trusting device: %v", err)
+	} else {
+		authUser.Session.RecentStepUpAt = &now
+	}
+
+	if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
+		log.Printf("failed attaching trusted device to session: %v", err)
+	}
+
+	response := VerifyMFAResponse{
+		MFAVerifiedAt:         now,
+		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
+		TrustedDeviceCookie:   true,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // RevokeTrustedDevice godoc

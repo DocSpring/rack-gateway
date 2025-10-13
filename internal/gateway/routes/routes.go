@@ -184,6 +184,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 			mfaGroup.PUT("/methods/:methodID", authHandler.UpdateMFAMethod)
 			mfaGroup.POST("/backup-codes/regenerate", authHandler.RegenerateBackupCodes)
 			mfaGroup.DELETE("/methods/:methodID", authHandler.DeleteMFAMethod)
+			mfaGroup.POST("/trusted-devices/trust", authHandler.TrustCurrentDevice)
 			mfaGroup.DELETE("/trusted-devices/:deviceID", authHandler.RevokeTrustedDevice)
 			// User API
 			authenticated.GET("/info", apiHandler.GetInfo)

@@ -25,11 +25,13 @@ func TestMFARequirements_GatewayPermissions(t *testing.T) {
 
 		// MFA Methods - ALWAYS require fresh MFA (disabling security)
 		{Auth(ResourceMFAMethod, ActionDelete), MFAAlways},
-		{Auth(ResourceMFAMethod, ActionCreate), MFANone},   // Enrolling is safe
-		{Auth(ResourceMFAMethod, ActionUpdate), MFAStepUp}, // Updating settings
-		{Auth(ResourceMFA, ActionGenerate), MFAStepUp},     // Backup codes regeneration
-		{Auth(ResourceMFA, ActionDelete), MFAStepUp},       // Trusted device removal
-		{Auth(ResourceMFA, ActionUpdate), MFAStepUp},       // Preferred method updates
+		{Auth(ResourceMFAMethod, ActionCreate), MFANone},          // Enrolling is safe
+		{Auth(ResourceMFAMethod, ActionUpdate), MFAStepUp},        // Updating settings
+		{Auth(ResourceMFABackupCodes, ActionGenerate), MFAStepUp}, // Backup codes regeneration
+		{Auth(ResourceTrustedDevice, ActionCreate), MFAStepUp},    // Trusting current device
+		{Auth(ResourceTrustedDevice, ActionDelete), MFAStepUp},    // Trusted device removal
+		{Auth(ResourceMFAPreferences, ActionUpdate), MFAStepUp},   // Preferred method updates
+		{Auth(ResourceMFAVerification, ActionCreate), MFANone},    // Inline verification
 
 		// Security Settings - ALWAYS require fresh MFA
 		{Security(ResourceSecret, ActionUpdate), MFAAlways},

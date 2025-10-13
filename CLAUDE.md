@@ -285,27 +285,16 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 
 **CRITICAL RULES - AI MUST FOLLOW:**
 
-1. ❌ **NEVER run `task dev`** - This is strictly for humans only
-2. ❌ **NEVER run `task go:e2e`** - E2E tests are run by humans only
-3. ❌ **NEVER run `task web:e2e`** - E2E tests are run by humans only
-4. ❌ **NEVER run `task e2e`** - E2E tests are run by humans only
-5. ✅ **ONLY run `task go:test`** - Unit and integration tests are safe for AI
-6. ✅ **ONLY run `task web:test`** - Unit tests are safe for AI
-7. ✅ **ONLY run `task lint:fix`** - Linting is safe for AI
+1. ❌ **NEVER run `task dev`** – that workflow wires up Overmind and long-lived services meant for humans only.
+2. ✅ You **may** run targeted test tasks (`task go:test`, `task web:test`, `task web:e2e`, `task go:e2e`, etc.) whenever they help validate the change. Be mindful of runtime and resource usage, but there is no blanket prohibition.
+3. ✅ `task lint:fix` (and other lint/format helpers) remain safe and encouraged.
 
-**Why AI cannot run E2E tests:**
+**Preferred workflow:**
 
-- E2E tests take 5-10 minutes to complete
-- They rebuild Docker containers and restart services
-- They require significant system resources
-- The human developer needs to run them manually when ready
-
-**What AI should do instead:**
-
-- Run `task go:test` to verify Go unit/integration tests pass
-- Run `task web:test` to verify web unit tests pass
-- Run `task lint:fix` to fix any linting issues
-- Tell the user "Please run `task go:e2e` to verify the E2E tests pass"
+- Use `task go:test` for Go unit/integration coverage.
+- Use `task web:test` for web unit coverage.
+- When an end-to-end scenario needs verification, run the focused command (for example `task web:e2e -- --grep "manage MFA"`).
+- Leverage `task ci` for the full pre-merge sweep once individual pieces are green.
 
 **Two development modes:**
 

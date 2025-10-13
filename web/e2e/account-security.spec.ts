@@ -191,33 +191,7 @@ test.describe('Account security', () => {
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-    // Set up response listener BEFORE clicking Enable MFA
-    const enrollmentResponsePromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/enroll/totp/start') &&
-        response.request().method() === 'POST'
-    )
-
-    // Click Enable MFA button - may show method selector or auto-start TOTP
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
-
-    // Check if method selector appeared (WebAuthn available)
-    const methodSelector = cardByTitle(page, 'Choose MFA Method')
-    const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
-
-    if (methodSelectorVisible) {
-      await methodSelector.getByRole('button', { name: /Authenticator app/i }).click()
-    }
-
-    // Wait for enrollment response (from either auto-start or after clicking TOTP)
-    const enrollmentResponse = await enrollmentResponsePromise
-    const enrollment = (await enrollmentResponse.json()) as { secret: string }
-    const secret = enrollment.secret
-
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toBeVisible()
-    await page.getByLabel(/Enter the 6-digit code to confirm/i).fill(authenticator.generate(secret))
-    await page.getByRole('button', { name: /^Confirm$/ }).click()
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
+    await startTotpEnrollmentViaUi(page)
 
     // Verify method was added
     const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
@@ -225,15 +199,19 @@ test.describe('Account security', () => {
     const methodsTable = methodsCard.locator('table').first()
     await expect(methodsTable.locator('tbody tr')).toHaveCount(1)
 
-    // Click the dropdown menu button and select "Edit Label"
-    const dropdownButton = methodsTable.locator('tbody tr').first().getByRole('button')
-    await dropdownButton.click()
-    const editMenuItem = page.getByText('Edit Label')
-    await editMenuItem.click()
+    let editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
+    const dialogAutoVisible = await editDialog.isVisible().catch(() => false)
 
-    const editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
+    if (!dialogAutoVisible) {
+      const dropdownButton = methodsTable.locator('tbody tr').first().getByRole('button')
+      await dropdownButton.click()
+      const editMenuItem = page.getByText('Edit Label')
+      await editMenuItem.click()
+      editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
+    }
+
     await expect(editDialog).toBeVisible()
-    await expect(editDialog.getByLabel('Label')).toHaveValue('Authenticator App')
+    await expect(editDialog.getByLabel('Label')).toHaveValue('Security Key')
 
     // Change the label
     await editDialog.getByLabel('Label').fill('My Personal Authenticator')

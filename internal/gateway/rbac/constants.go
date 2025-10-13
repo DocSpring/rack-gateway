@@ -118,11 +118,15 @@ const (
 	ResourceUser
 	// Auth/Security resources
 	ResourceAuth
-	ResourceMFA
+	ResourceMFABackupCodes
 	ResourceMFAMethod
+	ResourceMFAPreferences
+	ResourceMFAVerification
+	ResourceTrustedDevice
 )
 
 const (
+	// Convox resources
 	ResourceStringApp      = "app"
 	ResourceStringBuild    = "build"
 	ResourceStringCert     = "cert"
@@ -143,12 +147,16 @@ const (
 	ResourceStringSecret                = "secret"
 	ResourceStringUser                  = "user"
 	// Auth/Security resources
-	ResourceStringAuth      = "auth"
-	ResourceStringMFA       = "mfa"
-	ResourceStringMFAMethod = "mfa_method"
+	ResourceStringAuth            = "auth"
+	ResourceStringMFABackupCodes  = "mfa_backup_codes"
+	ResourceStringMFAMethod       = "mfa_method"
+	ResourceStringMFAPreferences  = "mfa_preferences"
+	ResourceStringMFAVerification = "mfa_verification"
+	ResourceStringTrustedDevice   = "trusted_device"
 )
 
 var resourceToString = [...]string{
+	// Convox resources
 	ResourceStringApp,
 	ResourceStringBuild,
 	ResourceStringCert,
@@ -162,16 +170,19 @@ var resourceToString = [...]string{
 	ResourceStringRegistry,
 	ResourceStringRelease,
 	ResourceStringResource,
-
+	// Gateway resources
 	ResourceStringAPIToken,
 	ResourceStringDeployApprovalRequest,
 	ResourceStringIntegration,
 	ResourceStringSecret,
 	ResourceStringUser,
-
+	// Auth/Security resources
 	ResourceStringAuth,
-	ResourceStringMFA,
+	ResourceStringMFABackupCodes,
 	ResourceStringMFAMethod,
+	ResourceStringMFAPreferences,
+	ResourceStringMFAVerification,
+	ResourceStringTrustedDevice,
 }
 
 func (r Resource) String() string {
@@ -181,7 +192,7 @@ func (r Resource) String() string {
 	return fmt.Sprintf("Resource(%d)", r)
 }
 
-func (r Resource) IsValid() bool { return r <= ResourceMFAMethod }
+func (r Resource) IsValid() bool { return r <= ResourceTrustedDevice }
 
 func ParseResource(v string) (Resource, error) {
 	for i, s := range resourceToString {

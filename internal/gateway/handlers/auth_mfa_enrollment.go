@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -152,6 +151,8 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
 		return
 	}
+	authUser.Session.MFAVerifiedAt = &now
+	authUser.Session.TrustedDeviceID = trustedDeviceID
 	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
 		log.Printf("failed updating session step-up timestamp: %v", err)
 	} else if authUser.Session != nil {
@@ -176,7 +177,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
+			Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "totp",
 			Details:      string(details),
@@ -184,7 +185,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),"error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`, err)
 		}
 	}
 
@@ -404,6 +405,25 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		log.Printf("failed to clear webauthn session: %v", err)
 	}
 
+	now := time.Now()
+
+	if authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+		return
+	}
+
+	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, authUser.Session.TrustedDeviceID); err != nil {
+		log.Printf("failed updating session mfa state: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
+		return
+	}
+	authUser.Session.MFAVerifiedAt = &now
+	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
+		log.Printf("failed updating session step-up timestamp: %v", err)
+	} else {
+		authUser.Session.RecentStepUpAt = &now
+	}
+
 	// Audit log for WebAuthn enrollment completion
 	if h.database != nil {
 		details, _ := json.Marshal(map[string]interface{}{
@@ -413,7 +433,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),
+			Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "webauthn",
 			Details:      string(details),
@@ -421,7 +441,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			IPAddress:    c.ClientIP(),
 			UserAgent:    c.GetHeader("User-Agent"),
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(rbac.ResourceStringMFA, audit.ActionVerbEnroll),"error":%q}`, err)
+			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`, err)
 		}
 	}
 

@@ -80,8 +80,6 @@ var MFARequirements = map[string]MFALevel{
 	// Security Settings - Modifying security configuration
 	Security(ResourceSecret, ActionUpdate): MFAAlways,
 
-	// WRITE OPERATIONS - Need step-up
-
 	// Deploy Approvals - Creating request is safe (just asking for approval)
 	Gateway(ResourceDeployApprovalRequest, ActionCreate): MFANone,
 
@@ -95,15 +93,16 @@ var MFARequirements = map[string]MFALevel{
 	// ========================================================================
 
 	// MFA Methods - Deleting removes security, creating adds security
-	Auth(ResourceMFAMethod, ActionDelete): MFAAlways, // Removing MFA is privileged
-	Auth(ResourceMFAMethod, ActionCreate): MFANone,   // Enrolling in MFA is encouraged
-	Auth(ResourceMFAMethod, ActionUpdate): MFAStepUp, // Updating MFA method settings
-	Auth(ResourceMFA, ActionGenerate):     MFAStepUp, // Regenerating backup codes
-	Auth(ResourceMFA, ActionDelete):       MFAStepUp, // Removing trusted devices
-	Auth(ResourceMFA, ActionUpdate):       MFAStepUp, // Updating MFA preferences
+	Auth(ResourceMFAMethod, ActionDelete):        MFAAlways, // Removing MFA is privileged
+	Auth(ResourceMFAMethod, ActionCreate):        MFANone,   // Enrolling in MFA is encouraged
+	Auth(ResourceMFAMethod, ActionUpdate):        MFAStepUp, // Updating MFA method settings
+	Auth(ResourceMFABackupCodes, ActionGenerate): MFAStepUp, // Regenerating backup codes
+	Auth(ResourceTrustedDevice, ActionDelete):    MFAStepUp, // Removing trusted devices
+	Auth(ResourceTrustedDevice, ActionCreate):    MFAStepUp, // Trusting a device requires fresh MFA
+	Auth(ResourceMFAPreferences, ActionUpdate):   MFAStepUp, // Updating MFA preferences
 
 	// MFA Verification - Step-up operations
-	Auth(ResourceMFA, ActionCreate): MFANone, // Verifying MFA is the action itself
+	Auth(ResourceMFAVerification, ActionCreate): MFANone, // Verifying MFA is the action itself
 
 	// ========================================================================
 	// SETTINGS RESOURCES - Gateway and app configuration

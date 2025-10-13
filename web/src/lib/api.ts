@@ -313,6 +313,9 @@ export const verifyWebAuthnAssertion = (
 export const regenerateBackupCodes = (): Promise<BackupCodesResponse> =>
   post<BackupCodesResponse>('/auth/mfa/backup-codes/regenerate')
 
+export const trustCurrentDevice = (): Promise<VerifyMFAResponse> =>
+  post<VerifyMFAResponse>('/auth/mfa/trusted-devices/trust')
+
 export const updatePreferredMFAMethod = (
   payload: HandlersUpdatePreferredMFAMethodRequest
 ): Promise<HandlersStatusResponse> =>
