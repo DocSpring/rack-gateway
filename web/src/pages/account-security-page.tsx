@@ -114,7 +114,10 @@ export function AccountSecurityPage() {
   const [disableDialogOpen, setDisableDialogOpen] = useState(false)
   const [disableAllPending, setDisableAllPending] = useState(false)
   const [autoPrompted, setAutoPrompted] = useState(false)
-  const [editingMethod, setEditingMethod] = useState<{ id: number; label: string } | null>(null)
+  const [editingMethod, setEditingMethod] = useState<{
+    id: number
+    label: string
+  } | null>(null)
   const [pendingEditMethod, setPendingEditMethod] = useState<{
     id: number
     type: MFAMethodType
@@ -421,7 +424,9 @@ export function AccountSecurityPage() {
   }
 
   const handleDownloadCodes = (codes: string[]) => {
-    const blob = new Blob([formatCodeForDownload(codes)], { type: 'text/plain;charset=utf-8' })
+    const blob = new Blob([formatCodeForDownload(codes)], {
+      type: 'text/plain;charset=utf-8',
+    })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
