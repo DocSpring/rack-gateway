@@ -10,7 +10,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { verifyCliMfa, verifyMFA, verifyWebAuthnAssertion } from '@/lib/api'
 import { authService } from '@/lib/auth'
 import { normalizeRedirectPath } from '@/lib/navigation'
-import { DEFAULT_WEB_ROUTE, WebRoute } from '@/lib/routes'
+import { resolveWebRedirect, WebRoute } from '@/lib/routes'
 
 type ChallengeMode = 'cli' | 'web'
 
@@ -125,9 +125,7 @@ async function handleWebAuthnWeb(
     assertion_response: assertionResponse,
     trust_device: trustDevice,
   })
-  return redirectTarget
-    ? WebRoute(redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget)
-    : DEFAULT_WEB_ROUTE
+  return resolveWebRedirect(redirectTarget)
 }
 
 export function MFAChallengePage() {
@@ -169,11 +167,8 @@ export function MFAChallengePage() {
         return
       }
 
-      const defaultDestination = redirectTarget
-        ? WebRoute(redirectTarget.startsWith('/') ? redirectTarget.slice(1) : redirectTarget)
-        : DEFAULT_WEB_ROUTE
-
-      window.location.assign(defaultDestination)
+      const destination = resolveWebRedirect(redirectTarget)
+      window.location.assign(destination)
     },
     onError: (err) => {
       setError(mapServerError(mode, err))
@@ -230,7 +225,10 @@ export function MFAChallengePage() {
             }}
             onVerify={async (params) => {
               if (params.method === 'totp') {
-                await mutation.mutateAsync({ code: params.code, trust_device: params.trust_device })
+                await mutation.mutateAsync({
+                  code: params.code,
+                  trust_device: params.trust_device,
+                })
                 return
               }
 

@@ -50,7 +50,7 @@ import {
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import { normalizeRedirectPath } from '@/lib/navigation'
-import { WebRoute } from '@/lib/routes'
+import { resolveWebRedirect } from '@/lib/routes'
 import {
   createCredential,
   prepareCreationOptions,
@@ -115,7 +115,10 @@ export function AccountSecurityPage() {
   const [disableAllPending, setDisableAllPending] = useState(false)
   const [autoPrompted, setAutoPrompted] = useState(false)
   const [editingMethod, setEditingMethod] = useState<{ id: number; label: string } | null>(null)
-  const [pendingEditMethod, setPendingEditMethod] = useState<{ id: number; type: MFAMethodType } | null>(null)
+  const [pendingEditMethod, setPendingEditMethod] = useState<{
+    id: number
+    type: MFAMethodType
+  } | null>(null)
   const [editLabel, setEditLabel] = useState('')
 
   const closeEnrollmentModal = useCallback(() => {
@@ -461,12 +464,9 @@ export function AccountSecurityPage() {
         action: async () => {
           await invalidateStatus()
           if (promptMfa && redirectTarget) {
-            const targetPath = redirectTarget.startsWith('/')
-              ? redirectTarget.slice(1)
-              : redirectTarget
-            const absolute = WebRoute(targetPath)
+            const destination = resolveWebRedirect(redirectTarget)
             if (typeof window !== 'undefined') {
-              window.location.assign(absolute)
+              window.location.assign(destination)
             }
           }
         },
@@ -707,7 +707,9 @@ export function AccountSecurityPage() {
                         {MFA_METHOD_TYPE_LABELS[(method.type ?? '').toLowerCase()] ??
                           (method.type ? method.type.toUpperCase() : 'MFA')}
                       </td>
-                      <td className="py-2">{method.label ?? getDefaultLabelForType(method.type)}</td>
+                      <td className="py-2">
+                        {method.label ?? getDefaultLabelForType(method.type)}
+                      </td>
                       <td className="py-2">
                         <TimeAgo date={method.created_at ?? null} />
                       </td>
@@ -845,7 +847,7 @@ export function AccountSecurityPage() {
             </div>
           )}
         </CardContent>
-        {!user?.has_trusted_device ? (
+        {user?.has_trusted_device ? null : (
           <CardFooter className="flex flex-wrap gap-2">
             <Button
               disabled={trustDeviceMutation.isPending}
@@ -858,7 +860,7 @@ export function AccountSecurityPage() {
               {trustDeviceMutation.isPending ? 'Trusting…' : 'Trust This Device'}
             </Button>
           </CardFooter>
-        ) : null}
+        )}
       </Card>
 
       <Dialog
