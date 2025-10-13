@@ -1,10 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SettingsSetting } from '@/api/schemas'
-import { StepUpProvider } from '@/contexts/step-up-context'
-import { api } from '@/lib/api'
-import { SettingsPage } from './settings-page'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SettingsSetting } from '@/api/schemas';
+import { StepUpProvider } from '@/contexts/step-up-context';
+import { api } from '@/lib/api';
+import { SettingsPage } from './settings-page';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -12,14 +12,14 @@ vi.mock('@/lib/api', () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
-}))
+}));
 
 // Mock useAuth
-const mockUseAuth = vi.fn()
+const mockUseAuth = vi.fn();
 vi.mock('@/contexts/auth-context', () => ({
   useAuth: () => mockUseAuth(),
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
+}));
 
 const mockAuthUser = {
   email: 'admin@example.com',
@@ -27,7 +27,7 @@ const mockAuthUser = {
   roles: ['admin'],
   mfa_enrolled: true,
   mfa_required: false,
-}
+};
 
 function renderSettingsPage(user = mockAuthUser) {
   const queryClient = new QueryClient({
@@ -35,28 +35,28 @@ function renderSettingsPage(user = mockAuthUser) {
       queries: { retry: false },
       mutations: { retry: false },
     },
-  })
+  });
 
   mockUseAuth.mockReturnValue({
     user,
     isAuthenticated: true,
     login: vi.fn(),
     logout: vi.fn(),
-  })
+  });
 
   return render(
     <QueryClientProvider client={queryClient}>
       <StepUpProvider>
         <SettingsPage />
       </StepUpProvider>
-    </QueryClientProvider>
-  )
+    </QueryClientProvider>,
+  );
 }
 
 describe('SettingsPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
   describe('Loading global settings', () => {
     it('displays settings from database', async () => {
@@ -81,22 +81,24 @@ describe('SettingsPage', () => {
           value: true,
           source: 'db',
         } as SettingsSetting,
-      })
+      });
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/require mfa for all users/i)).not.toBeChecked()
-      })
+        expect(
+          screen.getByLabelText(/require mfa for all users/i),
+        ).not.toBeChecked();
+      });
 
-      expect(screen.getByLabelText(/trusted device ttl/i)).toHaveValue(60)
-      expect(screen.getByLabelText(/step-up window/i)).toHaveValue(15)
-      expect(screen.getByLabelText(/allow destructive actions/i)).toBeChecked()
+      expect(screen.getByLabelText(/trusted device ttl/i)).toHaveValue(60);
+      expect(screen.getByLabelText(/step-up window/i)).toHaveValue(15);
+      expect(screen.getByLabelText(/allow destructive actions/i)).toBeChecked();
 
       // Should show Clear buttons since all settings are from DB
-      const clearButtons = screen.getAllByRole('button', { name: /clear/i })
-      expect(clearButtons.length).toBeGreaterThan(0)
-    })
+      const clearButtons = screen.getAllByRole('button', { name: /clear/i });
+      expect(clearButtons.length).toBeGreaterThan(0);
+    });
 
     it('displays settings from environment variables with source indicator', async () => {
       vi.mocked(api.get).mockResolvedValue({
@@ -121,18 +123,18 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       await waitFor(() => {
-        expect(screen.getByText(/from env/i)).toBeInTheDocument()
-      })
+        expect(screen.getByText(/from env/i)).toBeInTheDocument();
+      });
 
       // Should show "default" for default values
-      const defaults = screen.getAllByText(/\(default\)/i)
-      expect(defaults).toHaveLength(3) // trusted device TTL, step-up window, and allow destructive
-    })
+      const defaults = screen.getAllByText(/\(default\)/i);
+      expect(defaults).toHaveLength(3); // trusted device TTL, step-up window, and allow destructive
+    });
 
     it('displays default values when no settings in db or env', async () => {
       vi.mocked(api.get).mockResolvedValue({
@@ -156,23 +158,27 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/require mfa for all users/i)).toBeChecked() // default is true
-      })
+        expect(
+          screen.getByLabelText(/require mfa for all users/i),
+        ).toBeChecked(); // default is true
+      });
 
-      expect(screen.getByLabelText(/trusted device ttl/i)).toHaveValue(30) // default
-      expect(screen.getByLabelText(/step-up window/i)).toHaveValue(10) // default
-      expect(screen.getByLabelText(/allow destructive actions/i)).not.toBeChecked() // default is false
+      expect(screen.getByLabelText(/trusted device ttl/i)).toHaveValue(30); // default
+      expect(screen.getByLabelText(/step-up window/i)).toHaveValue(10); // default
+      expect(
+        screen.getByLabelText(/allow destructive actions/i),
+      ).not.toBeChecked(); // default is false
 
       // Should NOT show Clear buttons since nothing is in DB
-      const clearButtons = screen.queryAllByRole('button', { name: /clear/i })
-      expect(clearButtons).toHaveLength(0)
-    })
-  })
+      const clearButtons = screen.queryAllByRole('button', { name: /clear/i });
+      expect(clearButtons).toHaveLength(0);
+    });
+  });
 
   describe('Updating settings', () => {
     it('shows Save and Cancel buttons when value changes', async () => {
@@ -197,31 +203,41 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      }
+      };
 
-      vi.mocked(api.get).mockResolvedValue(mockData)
+      vi.mocked(api.get).mockResolvedValue(mockData);
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       // Wait for data to load by checking the value is set correctly
       await waitFor(() => {
-        expect(screen.getByLabelText(/allow destructive actions/i)).not.toBeChecked()
-      })
+        expect(
+          screen.getByLabelText(/allow destructive actions/i),
+        ).not.toBeChecked();
+      });
 
       // Initially no Save/Cancel buttons
-      expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /save/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /cancel/i }),
+      ).not.toBeInTheDocument();
 
       // Check the checkbox - use fireEvent to bypass disabled state in tests
-      const checkbox = screen.getByLabelText(/allow destructive actions/i)
-      fireEvent.click(checkbox)
+      const checkbox = screen.getByLabelText(/allow destructive actions/i);
+      fireEvent.click(checkbox);
 
       // Save and Cancel buttons should appear
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
-      })
-    })
+        expect(
+          screen.getByRole('button', { name: /save/i }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('button', { name: /cancel/i }),
+        ).toBeInTheDocument();
+      });
+    });
 
     it('updates setting when Save is clicked', async () => {
       vi.mocked(api.get).mockResolvedValue({
@@ -245,34 +261,36 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
       vi.mocked(api.put).mockResolvedValue({
         key: 'allow_destructive_actions',
         value: true,
         source: 'db',
-      } as SettingsSetting)
+      } as SettingsSetting);
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       // Wait for data to load by checking value
       await waitFor(() => {
-        expect(screen.getByLabelText(/allow destructive actions/i)).not.toBeChecked()
-      })
+        expect(
+          screen.getByLabelText(/allow destructive actions/i),
+        ).not.toBeChecked();
+      });
 
-      const checkbox = screen.getByLabelText(/allow destructive actions/i)
-      fireEvent.click(checkbox)
+      const checkbox = screen.getByLabelText(/allow destructive actions/i);
+      fireEvent.click(checkbox);
 
       // Click Save button
-      const saveButton = await screen.findByRole('button', { name: /save/i })
-      fireEvent.click(saveButton)
+      const saveButton = await screen.findByRole('button', { name: /save/i });
+      fireEvent.click(saveButton);
 
       await waitFor(() => {
         expect(api.put).toHaveBeenCalledWith('/api/v1/admin/settings', {
           allow_destructive_actions: true,
-        })
-      })
-    })
+        });
+      });
+    });
 
     it('discards changes when Cancel is clicked', async () => {
       vi.mocked(api.get).mockResolvedValue({
@@ -296,34 +314,42 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       // Wait for data to load by checking value
       await waitFor(() => {
-        expect(screen.getByLabelText(/allow destructive actions/i)).not.toBeChecked()
-      })
+        expect(
+          screen.getByLabelText(/allow destructive actions/i),
+        ).not.toBeChecked();
+      });
 
-      const checkbox = screen.getByLabelText(/allow destructive actions/i)
+      const checkbox = screen.getByLabelText(/allow destructive actions/i);
 
       // Check the checkbox
-      fireEvent.click(checkbox)
-      expect(checkbox).toBeChecked()
+      fireEvent.click(checkbox);
+      expect(checkbox).toBeChecked();
 
       // Click Cancel button
-      const cancelButton = await screen.findByRole('button', { name: /cancel/i })
-      fireEvent.click(cancelButton)
+      const cancelButton = await screen.findByRole('button', {
+        name: /cancel/i,
+      });
+      fireEvent.click(cancelButton);
 
       // Checkbox should be unchecked again
       await waitFor(() => {
-        expect(checkbox).not.toBeChecked()
-      })
+        expect(checkbox).not.toBeChecked();
+      });
 
       // Save/Cancel buttons should disappear
-      expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
-    })
+      expect(
+        screen.queryByRole('button', { name: /save/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /cancel/i }),
+      ).not.toBeInTheDocument();
+    });
 
     it('updates multiple MFA settings at once', async () => {
       vi.mocked(api.get).mockResolvedValue({
@@ -347,37 +373,43 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
-      vi.mocked(api.put).mockResolvedValue({})
+      vi.mocked(api.put).mockResolvedValue({});
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       // Wait for data to load by checking values
       await waitFor(() => {
-        expect(screen.getByLabelText(/trusted device ttl/i)).toHaveValue(30)
-      })
+        expect(screen.getByLabelText(/trusted device ttl/i)).toHaveValue(30);
+      });
 
-      const ttlInput = screen.getByLabelText(/trusted device ttl/i) as HTMLInputElement
-      fireEvent.change(ttlInput, { target: { value: '60' } })
+      const ttlInput = screen.getByLabelText(
+        /trusted device ttl/i,
+      ) as HTMLInputElement;
+      fireEvent.change(ttlInput, { target: { value: '60' } });
 
-      const windowInput = screen.getByLabelText(/step-up window/i) as HTMLInputElement
-      fireEvent.change(windowInput, { target: { value: '15' } })
+      const windowInput = screen.getByLabelText(
+        /step-up window/i,
+      ) as HTMLInputElement;
+      fireEvent.change(windowInput, { target: { value: '15' } });
 
       // Wait for Save button to appear after changes
       // The Save button should appear in the document after we make changes
-      const saveButtons = await screen.findAllByRole('button', { name: /save/i })
+      const saveButtons = await screen.findAllByRole('button', {
+        name: /save/i,
+      });
       // Should be Save button in MFA card (only one since we didn't change Destructive Actions)
-      expect(saveButtons.length).toBe(1)
-      fireEvent.click(saveButtons[0])
+      expect(saveButtons.length).toBe(1);
+      fireEvent.click(saveButtons[0]);
 
       await waitFor(() => {
         expect(api.put).toHaveBeenCalledWith('/api/v1/admin/settings', {
           mfa_trusted_device_ttl_days: 60,
           mfa_step_up_window_minutes: 15,
-        })
-      })
-    })
+        });
+      });
+    });
 
     it('handles API errors gracefully', async () => {
       vi.mocked(api.get).mockResolvedValue({
@@ -401,29 +433,31 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
-      vi.mocked(api.put).mockRejectedValue(new Error('Network error'))
+      vi.mocked(api.put).mockRejectedValue(new Error('Network error'));
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       // Wait for data to load by checking value
       await waitFor(() => {
-        expect(screen.getByLabelText(/allow destructive actions/i)).not.toBeChecked()
-      })
+        expect(
+          screen.getByLabelText(/allow destructive actions/i),
+        ).not.toBeChecked();
+      });
 
-      const checkbox = screen.getByLabelText(/allow destructive actions/i)
-      fireEvent.click(checkbox)
+      const checkbox = screen.getByLabelText(/allow destructive actions/i);
+      fireEvent.click(checkbox);
 
-      const saveButton = await screen.findByRole('button', { name: /save/i })
-      fireEvent.click(saveButton)
+      const saveButton = await screen.findByRole('button', { name: /save/i });
+      fireEvent.click(saveButton);
 
       // Should show error toast (we don't test toast here, just verify API was called)
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalled()
-      })
-    })
-  })
+        expect(api.put).toHaveBeenCalled();
+      });
+    });
+  });
 
   describe('Clearing settings', () => {
     it('clears DB setting and reverts to default', async () => {
@@ -448,30 +482,32 @@ describe('SettingsPage', () => {
           value: true,
           source: 'db',
         } as SettingsSetting,
-      })
+      });
 
-      vi.mocked(api.delete).mockResolvedValue({})
+      vi.mocked(api.delete).mockResolvedValue({});
 
-      renderSettingsPage()
+      renderSettingsPage();
 
       // Wait for data to load and Clear buttons to appear
-      const clearButtons = await screen.findAllByRole('button', { name: /clear/i })
-      expect(clearButtons.length).toBe(2) // MFA card + Destructive card
+      const clearButtons = await screen.findAllByRole('button', {
+        name: /clear/i,
+      });
+      expect(clearButtons.length).toBe(2); // MFA card + Destructive card
 
       // Click one of the Clear buttons (doesn't matter which for this test)
       // Let's click the first one
-      fireEvent.click(clearButtons[0])
+      fireEvent.click(clearButtons[0]);
 
       await waitFor(() => {
         // Check that api.delete was called with query params for the settings
         expect(api.delete).toHaveBeenCalledWith(
           expect.stringMatching(
-            /api\/v1\/admin\/settings\?key=(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/
-          )
-        )
-      })
-    })
-  })
+            /api\/v1\/admin\/settings\?key=(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/,
+          ),
+        );
+      });
+    });
+  });
 
   describe('Disabled state', () => {
     it('disables inputs when user is not admin', async () => {
@@ -496,26 +532,26 @@ describe('SettingsPage', () => {
           value: false,
           source: 'default',
         } as SettingsSetting,
-      })
+      });
 
       const nonAdminUser = {
         ...mockAuthUser,
         roles: ['deployer'],
-      }
+      };
 
-      renderSettingsPage(nonAdminUser)
+      renderSettingsPage(nonAdminUser);
 
       await waitFor(() => {
-        const checkboxes = screen.getAllByRole('checkbox')
+        const checkboxes = screen.getAllByRole('checkbox');
         for (const checkbox of checkboxes) {
-          expect(checkbox).toBeDisabled()
+          expect(checkbox).toBeDisabled();
         }
 
-        const numberInputs = screen.getAllByRole('spinbutton')
+        const numberInputs = screen.getAllByRole('spinbutton');
         for (const input of numberInputs) {
-          expect(input).toBeDisabled()
+          expect(input).toBeDisabled();
         }
-      })
-    })
-  })
-})
+      });
+    });
+  });
+});

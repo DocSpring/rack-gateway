@@ -1,4 +1,4 @@
-import { Toaster as HotToaster } from 'react-hot-toast'
+import { Toaster as HotToaster } from 'react-hot-toast';
 
 const Toaster = () => (
   <HotToaster
@@ -10,6 +10,6 @@ const Toaster = () => (
       className: 'select-text',
     }}
   />
-)
+);
 
-export { Toaster }
+export { Toaster };

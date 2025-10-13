@@ -1,23 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { authService } from './auth'
-import { APIRoute } from './routes'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { authService } from './auth';
+import { APIRoute } from './routes';
 
 describe('authService', () => {
   beforeEach(() => {
-    vi.restoreAllMocks()
-  })
+    vi.restoreAllMocks();
+  });
 
   it('logout calls server logout endpoint', () => {
     // Keep fetch pending to avoid triggering navigation in .finally()
-    const fetchSpy = vi.spyOn(globalThis as { fetch: typeof fetch }, 'fetch').mockImplementation(
-      () =>
-        new Promise(() => {
-          /* keep pending to avoid redirect in test */
-        }) as unknown as Promise<Response>
-    )
-    authService.logout()
+    const fetchSpy = vi
+      .spyOn(globalThis as { fetch: typeof fetch }, 'fetch')
+      .mockImplementation(
+        () =>
+          new Promise(() => {
+            /* keep pending to avoid redirect in test */
+          }) as unknown as Promise<Response>,
+      );
+    authService.logout();
     expect(fetchSpy).toHaveBeenCalledWith(APIRoute('auth/web/logout'), {
       credentials: 'include',
-    })
-  })
-})
+    });
+  });
+});

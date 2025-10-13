@@ -1,7 +1,7 @@
-import type { AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 
-import { getRackGatewayAPI } from '@/api/generated'
-import { gatewayAxios } from '@/api/http-client'
+import { getRackGatewayAPI } from '@/api/generated';
+import { getHttpClientInstance } from '@/contexts/http-client-context';
 import type {
   DbAPIToken,
   DbAuditLog,
@@ -43,73 +43,79 @@ import type {
   HandlersVerifyWebAuthnAssertionRequest,
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
-} from '@/api/schemas'
+} from '@/api/schemas';
 
-const API_PREFIX = '/api/v1'
+const API_PREFIX = '/api/v1';
 
-const gateway = getRackGatewayAPI()
+const gateway = getRackGatewayAPI();
 
-type GatewayResponse<T> = Promise<AxiosResponse<T>>
+type GatewayResponse<T> = Promise<AxiosResponse<T>>;
 
 const unwrap = async <T>(promise: GatewayResponse<T>): Promise<T> => {
-  const response = await promise
-  return response.data
-}
+  const response = await promise;
+  return response.data;
+};
 
 const normalizePath = (path: string): string => {
-  const withoutPrefix = path.startsWith(API_PREFIX) ? path.slice(API_PREFIX.length) : path
+  const withoutPrefix = path.startsWith(API_PREFIX)
+    ? path.slice(API_PREFIX.length)
+    : path;
   if (withoutPrefix === '' || withoutPrefix === '/') {
-    return '/'
+    return '/';
   }
-  return withoutPrefix.startsWith('/') ? withoutPrefix : `/${withoutPrefix}`
-}
+  return withoutPrefix.startsWith('/') ? withoutPrefix : `/${withoutPrefix}`;
+};
 
-export type GatewayUser = DbUser
-export type UserConfig = { name: string; roles: string[] }
-export type CreateUserRequest = HandlersCreateUserRequest
-export type UpdateUserProfileRequest = HandlersUpdateUserProfileRequest
-export type UpdateUserRolesRequest = HandlersUpdateUserRolesRequest
-export type UserSummary = HandlersUserSummary
-export type UserSessionSummary = HandlersUserSessionResponse
-export type RevokeSessionResponse = HandlersRevokeSessionResponse
-export type RevokeAllSessionsResponse = HandlersRevokeAllSessionsResponse
-export type AuditLogsResponse = HandlersAuditLogsResponse
-export type AuditLogEntry = DbAuditLog
-export type TokenPermissionMetadata = HandlersTokenPermissionMetadata
-export type CreateAPITokenRequest = HandlersCreateAPITokenRequest
-export type CreateAPITokenResponse = HandlersCreateAPITokenResponse
-export type APIToken = DbAPIToken
-export type UpdateAPITokenRequest = HandlersUpdateAPITokenRequest
-export type RackInfo = GetRack200
-export type InfoResponse = HandlersInfoResponse
-export type HealthResponse = HandlersHealthResponse
-export type EnvValuesMap = Record<string, string>
-export type StartTOTPEnrollmentResponse = HandlersStartTOTPEnrollmentResponse
-export type ConfirmTOTPEnrollmentRequest = HandlersConfirmTOTPEnrollmentRequest
-export type VerifyMFARequest = HandlersVerifyMFARequest
-export type VerifyMFAResponse = HandlersVerifyMFAResponse
-export type BackupCodesResponse = HandlersBackupCodesResponse
-export type MFAStatusResponse = HandlersMFAStatusResponse
-export type MFAMethod = HandlersMFAMethodResponse
-export type TrustedDevice = HandlersTrustedDeviceResponse
-export type StartYubiOTPEnrollmentRequest = HandlersStartYubiOTPEnrollmentRequest
-export type StartYubiOTPEnrollmentResponse = HandlersStartYubiOTPEnrollmentResponse
-export type StartWebAuthnEnrollmentResponse = HandlersStartWebAuthnEnrollmentResponse
-export type ConfirmWebAuthnEnrollmentRequest = HandlersConfirmWebAuthnEnrollmentRequest
-export type StatusResponse = HandlersStatusResponse
-export type DeployApprovalRequest = HandlersDeployApprovalRequestResponse
-export type DeployApprovalRequestList = HandlersDeployApprovalRequestList
+export type GatewayUser = DbUser;
+export type UserConfig = { name: string; roles: string[] };
+export type CreateUserRequest = HandlersCreateUserRequest;
+export type UpdateUserProfileRequest = HandlersUpdateUserProfileRequest;
+export type UpdateUserRolesRequest = HandlersUpdateUserRolesRequest;
+export type UserSummary = HandlersUserSummary;
+export type UserSessionSummary = HandlersUserSessionResponse;
+export type RevokeSessionResponse = HandlersRevokeSessionResponse;
+export type RevokeAllSessionsResponse = HandlersRevokeAllSessionsResponse;
+export type AuditLogsResponse = HandlersAuditLogsResponse;
+export type AuditLogEntry = DbAuditLog;
+export type TokenPermissionMetadata = HandlersTokenPermissionMetadata;
+export type CreateAPITokenRequest = HandlersCreateAPITokenRequest;
+export type CreateAPITokenResponse = HandlersCreateAPITokenResponse;
+export type APIToken = DbAPIToken;
+export type UpdateAPITokenRequest = HandlersUpdateAPITokenRequest;
+export type RackInfo = GetRack200;
+export type InfoResponse = HandlersInfoResponse;
+export type HealthResponse = HandlersHealthResponse;
+export type EnvValuesMap = Record<string, string>;
+export type StartTOTPEnrollmentResponse = HandlersStartTOTPEnrollmentResponse;
+export type ConfirmTOTPEnrollmentRequest = HandlersConfirmTOTPEnrollmentRequest;
+export type VerifyMFARequest = HandlersVerifyMFARequest;
+export type VerifyMFAResponse = HandlersVerifyMFAResponse;
+export type BackupCodesResponse = HandlersBackupCodesResponse;
+export type MFAStatusResponse = HandlersMFAStatusResponse;
+export type MFAMethod = HandlersMFAMethodResponse;
+export type TrustedDevice = HandlersTrustedDeviceResponse;
+export type StartYubiOTPEnrollmentRequest =
+  HandlersStartYubiOTPEnrollmentRequest;
+export type StartYubiOTPEnrollmentResponse =
+  HandlersStartYubiOTPEnrollmentResponse;
+export type StartWebAuthnEnrollmentResponse =
+  HandlersStartWebAuthnEnrollmentResponse;
+export type ConfirmWebAuthnEnrollmentRequest =
+  HandlersConfirmWebAuthnEnrollmentRequest;
+export type StatusResponse = HandlersStatusResponse;
+export type DeployApprovalRequest = HandlersDeployApprovalRequestResponse;
+export type DeployApprovalRequestList = HandlersDeployApprovalRequestList;
 export type UpdateDeployApprovalRequestStatusRequest =
-  HandlersUpdateDeployApprovalRequestStatusRequest
+  HandlersUpdateDeployApprovalRequestStatusRequest;
 
 type EnvValuesResponseShape = {
-  env?: EnvValuesMap
-}
+  env?: EnvValuesMap;
+};
 
 type UpdateEnvResponseShape = {
-  env?: EnvValuesMap
-  release_id?: string
-}
+  env?: EnvValuesMap;
+  release_id?: string;
+};
 
 export const AVAILABLE_ROLES = {
   viewer: {
@@ -128,214 +134,278 @@ export const AVAILABLE_ROLES = {
     name: 'admin',
     description: 'Complete access to all operations',
   },
-} as const
+} as const;
 
-export type RoleName = keyof typeof AVAILABLE_ROLES
+export type RoleName = keyof typeof AVAILABLE_ROLES;
 
-export const listUsers = (): Promise<GatewayUser[]> => unwrap(gateway.getAdminUsers())
+export const listUsers = (): Promise<GatewayUser[]> =>
+  unwrap(gateway.getAdminUsers());
 
 export const getUser = (email: string): Promise<GatewayUser> =>
-  unwrap(gateway.getAdminUsersEmail(email))
+  unwrap(gateway.getAdminUsersEmail(email));
 
 export const createUser = (payload: CreateUserRequest): Promise<UserSummary> =>
-  unwrap(gateway.postAdminUsers(payload))
+  unwrap(gateway.postAdminUsers(payload));
 
 export const updateUserProfile = (
   currentEmail: string,
-  payload: UpdateUserProfileRequest
-): Promise<UserSummary> => unwrap(gateway.putAdminUsersEmail(currentEmail, payload))
+  payload: UpdateUserProfileRequest,
+): Promise<UserSummary> =>
+  unwrap(gateway.putAdminUsersEmail(currentEmail, payload));
 
 export const updateUserRoles = (
   email: string,
-  payload: UpdateUserRolesRequest
-): Promise<UserSummary> => unwrap(gateway.putAdminUsersEmailRoles(email, payload))
+  payload: UpdateUserRolesRequest,
+): Promise<UserSummary> =>
+  unwrap(gateway.putAdminUsersEmailRoles(email, payload));
 
 export const deleteUser = async (email: string): Promise<void> => {
-  await unwrap(gateway.deleteAdminUsersEmail(email))
-}
+  await unwrap(gateway.deleteAdminUsersEmail(email));
+};
 
-export const listUserSessions = (email: string): Promise<UserSessionSummary[]> =>
-  unwrap(gateway.getAdminUsersEmailSessions(email))
+export const listUserSessions = (
+  email: string,
+): Promise<UserSessionSummary[]> =>
+  unwrap(gateway.getAdminUsersEmailSessions(email));
 
 export const revokeUserSession = (
   email: string,
-  sessionId: number
+  sessionId: number,
 ): Promise<RevokeSessionResponse> =>
-  unwrap(gateway.postAdminUsersEmailSessionsSessionIDRevoke(email, sessionId))
+  unwrap(gateway.postAdminUsersEmailSessionsSessionIDRevoke(email, sessionId));
 
-export const revokeAllUserSessions = (email: string): Promise<RevokeAllSessionsResponse> =>
-  unwrap(gateway.postAdminUsersEmailSessionsRevokeAll(email))
+export const revokeAllUserSessions = (
+  email: string,
+): Promise<RevokeAllSessionsResponse> =>
+  unwrap(gateway.postAdminUsersEmailSessionsRevokeAll(email));
 
-export const lockUser = (email: string, reason: string): Promise<StatusResponse> =>
-  unwrap(gateway.postAdminUsersEmailLock(email, { reason })) as Promise<StatusResponse>
+export const lockUser = (
+  email: string,
+  reason: string,
+): Promise<StatusResponse> =>
+  unwrap(
+    gateway.postAdminUsersEmailLock(email, { reason }),
+  ) as Promise<StatusResponse>;
 
 export const unlockUser = (email: string): Promise<StatusResponse> =>
-  unwrap(gateway.postAdminUsersEmailUnlock(email)) as Promise<StatusResponse>
+  unwrap(gateway.postAdminUsersEmailUnlock(email)) as Promise<StatusResponse>;
 
 export const listDeployApprovalRequests = (
-  params?: GetAdminDeployApprovalRequestsParams
-): Promise<DeployApprovalRequestList> => unwrap(gateway.getAdminDeployApprovalRequests(params))
+  params?: GetAdminDeployApprovalRequestsParams,
+): Promise<DeployApprovalRequestList> =>
+  unwrap(gateway.getAdminDeployApprovalRequests(params));
 
 export const approveDeployApprovalRequest = (
   id: string,
-  payload?: UpdateDeployApprovalRequestStatusRequest
+  payload?: UpdateDeployApprovalRequestStatusRequest,
 ): Promise<DeployApprovalRequest> =>
-  unwrap(gateway.postAdminDeployApprovalRequestsIdApprove(id, payload ?? {}))
+  unwrap(gateway.postAdminDeployApprovalRequestsIdApprove(id, payload ?? {}));
 
 export const rejectDeployApprovalRequest = (
   id: string,
-  payload?: UpdateDeployApprovalRequestStatusRequest
+  payload?: UpdateDeployApprovalRequestStatusRequest,
 ): Promise<DeployApprovalRequest> =>
-  unwrap(gateway.postAdminDeployApprovalRequestsIdReject(id, payload ?? {}))
+  unwrap(gateway.postAdminDeployApprovalRequestsIdReject(id, payload ?? {}));
 
 export type AuditLogQuery = Partial<{
-  search: string
-  action_type: string
-  resource_type: string
-  status: string
-  page: number
-  limit: number
-  start: string
-  end: string
-  user: string
-  range: string
-  user_id: string
-}>
+  search: string;
+  action_type: string;
+  resource_type: string;
+  status: string;
+  page: number;
+  limit: number;
+  start: string;
+  end: string;
+  user: string;
+  range: string;
+  user_id: string;
+}>;
 
-export const listAuditLogs = (params: AuditLogQuery): Promise<AuditLogsResponse> =>
-  unwrap(gateway.getAdminAudit(params))
+export const listAuditLogs = (
+  params: AuditLogQuery,
+): Promise<AuditLogsResponse> => unwrap(gateway.getAdminAudit(params));
 
 export const exportAuditLogs = (
-  params: Parameters<typeof gateway.getAdminAuditExport>[0]
-): Promise<Blob> => unwrap(gateway.getAdminAuditExport(params))
+  params: Parameters<typeof gateway.getAdminAuditExport>[0],
+): Promise<Blob> => unwrap(gateway.getAdminAuditExport(params));
 
-export type RolesResponse = GetAdminRoles200
+export type RolesResponse = GetAdminRoles200;
 
-export const listRoles = (): Promise<RolesResponse> => unwrap(gateway.getAdminRoles())
+export const listRoles = (): Promise<RolesResponse> =>
+  unwrap(gateway.getAdminRoles());
 
-export const getTokenPermissionMetadata = (): Promise<TokenPermissionMetadata> =>
-  unwrap(gateway.getAdminTokensPermissions())
+export const getTokenPermissionMetadata =
+  (): Promise<TokenPermissionMetadata> =>
+    unwrap(gateway.getAdminTokensPermissions());
 
-export const listAPITokens = (): Promise<APIToken[]> => unwrap(gateway.getAdminTokens())
+export const listAPITokens = (): Promise<APIToken[]> =>
+  unwrap(gateway.getAdminTokens());
 
 export const getAPIToken = (tokenPublicId: string): Promise<APIToken> =>
-  unwrap(gateway.getAdminTokensTokenID(tokenPublicId))
+  unwrap(gateway.getAdminTokensTokenID(tokenPublicId));
 
-export const createAPIToken = (payload: CreateAPITokenRequest): Promise<CreateAPITokenResponse> =>
-  unwrap(gateway.postAdminTokens(payload))
+export const createAPIToken = (
+  payload: CreateAPITokenRequest,
+): Promise<CreateAPITokenResponse> => unwrap(gateway.postAdminTokens(payload));
 
 export const updateAPIToken = (
   tokenPublicId: string,
-  payload: UpdateAPITokenRequest
-): Promise<APIToken> => unwrap(gateway.putAdminTokensTokenID(tokenPublicId, payload))
+  payload: UpdateAPITokenRequest,
+): Promise<APIToken> =>
+  unwrap(gateway.putAdminTokensTokenID(tokenPublicId, payload));
 
 export const deleteAPIToken = async (tokenPublicId: string): Promise<void> => {
-  await unwrap(gateway.deleteAdminTokensTokenID(tokenPublicId))
-}
+  await unwrap(gateway.deleteAdminTokensTokenID(tokenPublicId));
+};
 
-export const getInfo = (): Promise<InfoResponse> => unwrap(gateway.getInfo())
+export const getInfo = (): Promise<InfoResponse> => unwrap(gateway.getInfo());
 
-export const getHealth = (): Promise<HealthResponse> => unwrap(gateway.getHealth())
+export const getHealth = (): Promise<HealthResponse> =>
+  unwrap(gateway.getHealth());
 
-export const getRackInfo = (): Promise<RackInfo> => unwrap(gateway.getRack())
+export const getRackInfo = (): Promise<RackInfo> => unwrap(gateway.getRack());
 // Deprecated alias maintained for backward compatibility
-export const getUserSessions = listUserSessions
+export const getUserSessions = listUserSessions;
 
-export const getConvoxInstances = <T = unknown>(): Promise<T> =>
-  gatewayAxios.get<T>('/convox/instances').then((res) => res.data)
+export const getConvoxInstances = async <T = unknown>(): Promise<T> => {
+  const client = getHttpClientInstance();
+  const response = await client.get<T>('/convox/instances');
+  return response.data;
+};
 
-export const getConvoxApps = <T = unknown>(): Promise<T> =>
-  gatewayAxios.get<T>('/convox/apps').then((res) => res.data)
+export const getConvoxApps = async <T = unknown>(): Promise<T> => {
+  const client = getHttpClientInstance();
+  const response = await client.get<T>('/convox/apps');
+  return response.data;
+};
 
-export const getConvoxApp = <T = unknown>(path: string): Promise<T> =>
-  gatewayAxios.get<T>(normalizePath(path)).then((res) => res.data)
+export const getConvoxApp = async <T = unknown>(path: string): Promise<T> => {
+  const client = getHttpClientInstance();
+  const response = await client.get<T>(normalizePath(path));
+  return response.data;
+};
 
-export const get = <T = unknown>(path: string, config?: AxiosRequestConfig): Promise<T> =>
-  gatewayAxios.get<T>(normalizePath(path), config).then((res) => res.data)
+export const get = async <T = unknown>(
+  path: string,
+  config?: AxiosRequestConfig,
+): Promise<T> => {
+  const client = getHttpClientInstance();
+  const response = await client.get<T>(normalizePath(path), config);
+  return response.data;
+};
 
-export const getMFAStatus = (): Promise<MFAStatusResponse> => unwrap(gateway.getAuthMfaStatus())
+export const getMFAStatus = (): Promise<MFAStatusResponse> =>
+  unwrap(gateway.getAuthMfaStatus());
 
 export const deleteMFAMethod = (methodId: number): Promise<StatusResponse> =>
-  unwrap(gateway.deleteAuthMfaMethodsMethodID(methodId))
+  unwrap(gateway.deleteAuthMfaMethodsMethodID(methodId));
 
 export const updateMFAMethod = (
   methodId: number,
-  data: { label: string }
-): Promise<StatusResponse> => unwrap(gateway.putAuthMfaMethodsMethodID(methodId, data))
+  data: { label: string },
+): Promise<StatusResponse> =>
+  unwrap(gateway.putAuthMfaMethodsMethodID(methodId, data));
 
-export const revokeTrustedDevice = (deviceId: number): Promise<StatusResponse> =>
-  unwrap(gateway.deleteAuthMfaTrustedDevicesDeviceID(deviceId))
+export const revokeTrustedDevice = (
+  deviceId: number,
+): Promise<StatusResponse> =>
+  unwrap(gateway.deleteAuthMfaTrustedDevicesDeviceID(deviceId));
 
 export const startTOTPEnrollment = (): Promise<StartTOTPEnrollmentResponse> =>
-  post<StartTOTPEnrollmentResponse>('/auth/mfa/enroll/totp/start')
+  post<StartTOTPEnrollmentResponse>('/auth/mfa/enroll/totp/start');
 
 export const confirmTOTPEnrollment = (
-  payload: ConfirmTOTPEnrollmentRequest
-): Promise<VerifyMFAResponse> => post<VerifyMFAResponse>('/auth/mfa/enroll/totp/confirm', payload)
+  payload: ConfirmTOTPEnrollmentRequest,
+): Promise<VerifyMFAResponse> =>
+  post<VerifyMFAResponse>('/auth/mfa/enroll/totp/confirm', payload);
 
 export const startYubiOTPEnrollment = (
-  payload: HandlersStartYubiOTPEnrollmentRequest
+  payload: HandlersStartYubiOTPEnrollmentRequest,
 ): Promise<HandlersStartYubiOTPEnrollmentResponse> =>
-  post<HandlersStartYubiOTPEnrollmentResponse>('/auth/mfa/enroll/yubiotp/start', payload)
+  post<HandlersStartYubiOTPEnrollmentResponse>(
+    '/auth/mfa/enroll/yubiotp/start',
+    payload,
+  );
 
-export const startWebAuthnEnrollment = (): Promise<HandlersStartWebAuthnEnrollmentResponse> =>
-  post<HandlersStartWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/start')
+export const startWebAuthnEnrollment =
+  (): Promise<HandlersStartWebAuthnEnrollmentResponse> =>
+    post<HandlersStartWebAuthnEnrollmentResponse>(
+      '/auth/mfa/enroll/webauthn/start',
+    );
 
 export const confirmWebAuthnEnrollment = (
-  payload: HandlersConfirmWebAuthnEnrollmentRequest
+  payload: HandlersConfirmWebAuthnEnrollmentRequest,
 ): Promise<HandlersWebAuthnEnrollmentResponse> =>
-  post<HandlersWebAuthnEnrollmentResponse>('/auth/mfa/enroll/webauthn/confirm', payload)
+  post<HandlersWebAuthnEnrollmentResponse>(
+    '/auth/mfa/enroll/webauthn/confirm',
+    payload,
+  );
 
 export const verifyCliMfa = (payload: {
-  state: string
-  method?: string
-  code?: string
-  session_data?: string
-  assertion_response?: string
+  state: string;
+  method?: string;
+  code?: string;
+  session_data?: string;
+  assertion_response?: string;
 }): Promise<{ redirect: string }> =>
-  gatewayAxios
+  getHttpClientInstance()
     .post<{ redirect: string }>('/auth/cli/mfa', payload, {
       headers: { 'Content-Type': 'application/json' },
     })
-    .then((res) => res.data)
+    .then((res) => res.data);
 
-export const verifyMFA = (payload: VerifyMFARequest): Promise<VerifyMFAResponse> =>
-  post<VerifyMFAResponse>('/auth/mfa/verify', payload)
+export const verifyMFA = (
+  payload: VerifyMFARequest,
+): Promise<VerifyMFAResponse> =>
+  post<VerifyMFAResponse>('/auth/mfa/verify', payload);
 
-export const startWebAuthnAssertion = (): Promise<HandlersWebAuthnAssertionStartResponse> =>
-  post<HandlersWebAuthnAssertionStartResponse>('/auth/mfa/webauthn/assertion/start')
+export const startWebAuthnAssertion =
+  (): Promise<HandlersWebAuthnAssertionStartResponse> =>
+    post<HandlersWebAuthnAssertionStartResponse>(
+      '/auth/mfa/webauthn/assertion/start',
+    );
 
 export const verifyWebAuthnAssertion = (
-  payload: HandlersVerifyWebAuthnAssertionRequest
+  payload: HandlersVerifyWebAuthnAssertionRequest,
 ): Promise<HandlersVerifyMFAResponse> =>
-  post<HandlersVerifyMFAResponse>('/auth/mfa/webauthn/assertion/verify', payload)
+  post<HandlersVerifyMFAResponse>(
+    '/auth/mfa/webauthn/assertion/verify',
+    payload,
+  );
 
 export const regenerateBackupCodes = (): Promise<BackupCodesResponse> =>
-  post<BackupCodesResponse>('/auth/mfa/backup-codes/regenerate')
+  post<BackupCodesResponse>('/auth/mfa/backup-codes/regenerate');
 
 export const trustCurrentDevice = (): Promise<VerifyMFAResponse> =>
-  post<VerifyMFAResponse>('/auth/mfa/trusted-devices/trust')
+  post<VerifyMFAResponse>('/auth/mfa/trusted-devices/trust');
 
-export const updatePreferredMFAMethod = (
-  payload: HandlersUpdatePreferredMFAMethodRequest
-): Promise<HandlersStatusResponse> =>
-  gatewayAxios
-    .put<HandlersStatusResponse>('/auth/mfa/preferred-method', payload)
-    .then((res) => res.data)
+export const updatePreferredMFAMethod = async (
+  payload: HandlersUpdatePreferredMFAMethodRequest,
+): Promise<HandlersStatusResponse> => {
+  const client = getHttpClientInstance();
+  const response = await client.put<HandlersStatusResponse>(
+    '/auth/mfa/preferred-method',
+    payload,
+  );
+  return response.data;
+};
 
-export const post = <T = unknown>(
+export const post = async <T = unknown>(
   path: string,
   data?: unknown,
-  config?: AxiosRequestConfig
-): Promise<T> => gatewayAxios.post<T>(normalizePath(path), data, config).then((res) => res.data)
-
-export const put = <T = unknown>(
-  path: string,
-  data?: unknown,
-  config?: AxiosRequestConfig
+  config?: AxiosRequestConfig,
 ): Promise<T> => {
-  // Handle primitive JSON values (null, false, true, numbers, strings) by sending as JSON strings
-  // This avoids axios treating falsy values as "no data"
+  const client = getHttpClientInstance();
+  const response = await client.post<T>(normalizePath(path), data, config);
+  return response.data;
+};
+
+export const put = async <T = unknown>(
+  path: string,
+  data?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> => {
+  const client = getHttpClientInstance();
   if (
     data === null ||
     data === false ||
@@ -343,63 +413,72 @@ export const put = <T = unknown>(
     typeof data === 'number' ||
     typeof data === 'string'
   ) {
-    return gatewayAxios
-      .request<T>({
-        method: 'PUT',
-        url: normalizePath(path),
-        data: JSON.stringify(data),
-        headers: {
-          'Content-Type': 'application/json',
-          ...config?.headers,
-        },
-        transformRequest: [], // Don't transform the data, send raw JSON string
-        ...config,
-      })
-      .then((res) => res.data)
+    const response = await client.request<T>({
+      method: 'PUT',
+      url: normalizePath(path),
+      data: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json',
+        ...config?.headers,
+      },
+      transformRequest: [],
+      ...config,
+    });
+    return response.data;
   }
-  return gatewayAxios.put<T>(normalizePath(path), data, config).then((res) => res.data)
-}
+  const response = await client.put<T>(normalizePath(path), data, config);
+  return response.data;
+};
 
-export const destroy = <T = unknown>(path: string, config?: AxiosRequestConfig): Promise<T> =>
-  gatewayAxios.delete<T>(normalizePath(path), config).then((res) => res.data)
+export const destroy = async <T = unknown>(
+  path: string,
+  config?: AxiosRequestConfig,
+): Promise<T> => {
+  const client = getHttpClientInstance();
+  const response = await client.delete<T>(normalizePath(path), config);
+  return response.data;
+};
 
 export async function fetchAppEnv(app: string): Promise<EnvValuesMap> {
-  const response = await gatewayAxios.get<EnvValuesResponseShape>('env', {
+  const client = getHttpClientInstance();
+  const response = await client.get<EnvValuesResponseShape>('env', {
     params: { app },
-  })
-  return response.data.env ?? {}
+  });
+  return response.data.env ?? {};
 }
 
 export async function fetchAppEnvValue(
   app: string,
   key: string,
-  includeSecret = false
+  includeSecret = false,
 ): Promise<string | null> {
-  const response = await gatewayAxios.get<EnvValuesResponseShape>('env', {
+  const client = getHttpClientInstance();
+  const response = await client.get<EnvValuesResponseShape>('env', {
     params: {
       app,
       key,
       secrets: includeSecret ? 'true' : undefined,
     },
-  })
-  const env = response.data.env ?? {}
+  });
+  const env = response.data.env ?? {};
   if (Object.hasOwn(env, key)) {
-    return env[key]
+    return env[key];
   }
-  return null
+  return null;
 }
 
 export async function updateAppEnv(
   app: string,
   set: Record<string, string>,
-  remove: string[]
+  remove: string[],
 ): Promise<UpdateEnvResponseShape> {
-  const response = await gatewayAxios.put<UpdateEnvResponseShape>('env', {
+  const client = getHttpClientInstance();
+  const response = await client.put<UpdateEnvResponseShape>('env', {
     app,
     set,
     remove,
-  })
-  return response.data
+  });
+  return response.data;
 }
 
 export const api = {
@@ -434,4 +513,4 @@ export const api = {
   post,
   put,
   delete: destroy,
-}
+};

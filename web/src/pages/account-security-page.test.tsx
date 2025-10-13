@@ -1,21 +1,30 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { StepUpProvider } from '@/contexts/step-up-context'
-import { AccountSecurityPage } from './account-security-page'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StepUpProvider } from '@/contexts/step-up-context';
+import { AccountSecurityPage } from './account-security-page';
 
 vi.mock('qrcode', () => {
-  const toDataURL = vi.fn().mockResolvedValue('data:image/png;base64,placeholder')
+  const toDataURL = vi
+    .fn()
+    .mockResolvedValue('data:image/png;base64,placeholder');
   return {
     default: { toDataURL },
     toDataURL,
-  }
-})
+  };
+});
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ to, children, ...props }: { to?: unknown; children?: ReactNode }) => (
+  Link: ({
+    to,
+    children,
+    ...props
+  }: {
+    to?: unknown;
+    children?: ReactNode;
+  }) => (
     <a href={typeof to === 'string' ? to : '#'} {...props}>
       {children}
     </a>
@@ -27,7 +36,7 @@ vi.mock('@tanstack/react-router', () => ({
     hash: '',
     params: {},
   }),
-}))
+}));
 
 const { mockAuthValue } = vi.hoisted(() => ({
   mockAuthValue: {
@@ -42,40 +51,44 @@ const { mockAuthValue } = vi.hoisted(() => ({
     logout: vi.fn(),
     refresh: vi.fn().mockResolvedValue(null),
   },
-}))
+}));
 
 const { stepUpStub } = vi.hoisted(() => ({
   stepUpStub: {
     openStepUp: vi.fn(),
-    requireStepUp: vi.fn(async (action?: (() => void) | (() => Promise<void>)) => {
-      if (typeof action === 'function') {
-        await action()
-      }
-    }),
+    requireStepUp: vi.fn(
+      async (action?: (() => void) | (() => Promise<void>)) => {
+        if (typeof action === 'function') {
+          await action();
+        }
+      },
+    ),
     handleStepUpError: vi.fn().mockReturnValue(false),
     closeStepUp: vi.fn(),
     isOpen: false,
     isVerifying: false,
   },
-}))
+}));
 
 vi.mock('@/contexts/auth-context', () => ({
   useAuth: () => mockAuthValue,
-}))
+}));
 
 async function createStepUpMock() {
-  const React = await vi.importActual<typeof import('react')>('react')
-  const StepUpContext = React.createContext(stepUpStub)
+  const React = await vi.importActual<typeof import('react')>('react');
+  const StepUpContext = React.createContext(stepUpStub);
   const MockStepUpProvider = ({ children }: { children: ReactNode }) => (
-    <StepUpContext.Provider value={stepUpStub}>{children}</StepUpContext.Provider>
-  )
+    <StepUpContext.Provider value={stepUpStub}>
+      {children}
+    </StepUpContext.Provider>
+  );
   return {
     StepUpProvider: MockStepUpProvider,
     useStepUp: () => React.useContext(StepUpContext),
-  }
+  };
 }
 
-vi.mock('@/contexts/step-up-context', () => createStepUpMock())
+vi.mock('@/contexts/step-up-context', () => createStepUpMock());
 
 vi.mock('@/components/ui/use-toast', () => ({
   toast: {
@@ -84,7 +97,7 @@ vi.mock('@/components/ui/use-toast', () => ({
     warning: vi.fn(),
     info: vi.fn(),
   },
-}))
+}));
 
 const { apiMocks } = vi.hoisted(() => ({
   apiMocks: {
@@ -100,11 +113,11 @@ const { apiMocks } = vi.hoisted(() => ({
     verifyMFA: vi.fn(),
     updatePreferredMFAMethod: vi.fn(),
   } satisfies Record<string, (...args: any[]) => unknown>,
-}))
+}));
 
 vi.mock('@/lib/api', () => ({
   ...apiMocks,
-}))
+}));
 
 const createWrapper = () => {
   const queryClient = new QueryClient({
@@ -112,38 +125,40 @@ const createWrapper = () => {
       queries: { retry: false },
       mutations: { retry: false },
     },
-  })
+  });
 
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       <StepUpProvider>{children}</StepUpProvider>
     </QueryClientProvider>
-  )
-}
+  );
+};
 
 describe('AccountSecurityPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.clearAllMocks();
     apiMocks.getMFAStatus.mockResolvedValue({
       enrolled: false,
       required: false,
       methods: [],
       trusted_devices: [],
       backup_codes: { total: 10, unused: 10 },
-    })
-  })
+    });
+  });
 
   it('renders MFA status', async () => {
-    const Wrapper = createWrapper()
-    render(<AccountSecurityPage />, { wrapper: Wrapper })
+    const Wrapper = createWrapper();
+    render(<AccountSecurityPage />, { wrapper: Wrapper });
 
     await waitFor(() => {
-      expect(screen.getByText('Account Security')).toBeInTheDocument()
-      expect(screen.getByText('Multi-Factor Authentication')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Account Security')).toBeInTheDocument();
+      expect(
+        screen.getByText('Multi-Factor Authentication'),
+      ).toBeInTheDocument();
+    });
 
-    expect(apiMocks.getMFAStatus).toHaveBeenCalled()
-  })
+    expect(apiMocks.getMFAStatus).toHaveBeenCalled();
+  });
 
   it('starts enrollment when Enable MFA is clicked', async () => {
     apiMocks.startTOTPEnrollment.mockResolvedValue({
@@ -151,33 +166,41 @@ describe('AccountSecurityPage', () => {
       secret: 'ABC123',
       uri: 'otpauth://totp/Example',
       backup_codes: ['CODE1', 'CODE2'],
-    })
+    });
 
-    const Wrapper = createWrapper()
-    render(<AccountSecurityPage />, { wrapper: Wrapper })
+    const Wrapper = createWrapper();
+    render(<AccountSecurityPage />, { wrapper: Wrapper });
 
     // Click "Enable MFA" to open modal
-    const enableButton = await screen.findByRole('button', { name: /enable mfa/i })
-    await userEvent.click(enableButton)
+    const enableButton = await screen.findByRole('button', {
+      name: /enable mfa/i,
+    });
+    await userEvent.click(enableButton);
 
     // Modal should be open with method selection
     await waitFor(() => {
-      expect(screen.getByText(/Enable Multi-Factor Authentication/i)).toBeInTheDocument()
-      expect(screen.getByText(/Choose authentication method/i)).toBeInTheDocument()
-    })
+      expect(
+        screen.getByText(/Enable Multi-Factor Authentication/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Choose authentication method/i),
+      ).toBeInTheDocument();
+    });
 
     // Click "Authenticator app" button to start TOTP enrollment
-    const totpButton = await screen.findByRole('button', { name: /Authenticator app/i })
-    await userEvent.click(totpButton)
+    const totpButton = await screen.findByRole('button', {
+      name: /Authenticator app/i,
+    });
+    await userEvent.click(totpButton);
 
     // Should call startTOTPEnrollment and show TOTP setup
     await waitFor(() => {
-      expect(apiMocks.startTOTPEnrollment).toHaveBeenCalled()
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-    })
+      expect(apiMocks.startTOTPEnrollment).toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
 
     // Verify QR code section is visible in modal
-    const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveTextContent(/Scan the QR code/i)
-  })
-})
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(/Scan the QR code/i);
+  });
+});

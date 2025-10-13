@@ -1,5 +1,5 @@
-import { AuthResultCard } from '@/components/auth-result-card'
-import { Button } from '@/components/ui/button'
+import { AuthResultCard } from '@/components/auth-result-card';
+import { Button } from '@/components/ui/button';
 
 export function CLIAuthSuccessPage() {
   return (
@@ -12,7 +12,7 @@ export function CLIAuthSuccessPage() {
         <a href="/app/">Open Web UI</a>
       </Button>
     </AuthResultCard>
-  )
+  );
 }
 
-export default CLIAuthSuccessPage
+export default CLIAuthSuccessPage;

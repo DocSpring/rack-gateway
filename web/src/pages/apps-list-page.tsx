@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
-import { PageLayout } from '../components/page-layout'
-import { TablePane } from '../components/table-pane'
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { PageLayout } from '../components/page-layout';
+import { TablePane } from '../components/table-pane';
 import {
   Table,
   TableBody,
@@ -10,17 +10,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table'
-import { api } from '../lib/api'
-import { DEFAULT_PER_PAGE } from '../lib/constants'
+} from '../components/ui/table';
+import { api } from '../lib/api';
+import { DEFAULT_PER_PAGE } from '../lib/constants';
 
 type App = {
-  name: string
-  status: string
-  generation?: string
-  release?: string
-  created_by?: string
-}
+  name: string;
+  status: string;
+  generation?: string;
+  release?: string;
+  created_by?: string;
+};
 
 export function AppsListPage() {
   const {
@@ -30,36 +30,36 @@ export function AppsListPage() {
   } = useQuery({
     queryKey: ['apps-list'],
     queryFn: async () => {
-      const items = await api.get<App[]>('/api/v1/convox/apps')
+      const items = await api.get<App[]>('/api/v1/convox/apps');
       try {
-        const ids = Array.from(new Set(items.map((a) => a.name))).join(',')
+        const ids = Array.from(new Set(items.map((a) => a.name))).join(',');
         if (ids) {
-          const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/api/v1/created-by?type=app&ids=${encodeURIComponent(ids)}`
-          )
+          const map = await api.get<
+            Record<string, { email: string; name: string }>
+          >(`/api/v1/created-by?type=app&ids=${encodeURIComponent(ids)}`);
           for (const a of items) {
-            const m = map[a.name]
+            const m = map[a.name];
             if (m) {
-              a.created_by = m.email || m.name
+              a.created_by = m.email || m.name;
             }
           }
         }
       } catch (_e) {
         // ignore errors
       }
-      return items
+      return items;
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  })
-  const perPage = DEFAULT_PER_PAGE
-  const total = data.length
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const [page, setPage] = useState(1)
-  const start = (page - 1) * perPage
-  const end = Math.min(start + perPage, total)
-  const rows = data.slice(start, end)
+  });
+  const perPage = DEFAULT_PER_PAGE;
+  const total = data.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const [page, setPage] = useState(1);
+  const start = (page - 1) * perPage;
+  const end = Math.min(start + perPage, total);
+  const rows = data.slice(start, end);
 
   return (
     <PageLayout description="All apps on the rack" title="Apps">
@@ -125,5 +125,5 @@ export function AppsListPage() {
         )}
       </TablePane>
     </PageLayout>
-  )
+  );
 }

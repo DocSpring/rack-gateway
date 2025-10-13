@@ -1,15 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { UserEditModal } from './user-edit-modal'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { UserEditModal } from './user-edit-modal';
 
 // Move regex to top level as per ultracite rules
-const VIEWER_REGEX = /viewer/i
-const ADMIN_REGEX = /admin/i
+const VIEWER_REGEX = /viewer/i;
+const ADMIN_REGEX = /admin/i;
 
 describe('UserEditModal', () => {
-  const mockOnSave = vi.fn()
-  const mockOnClose = vi.fn()
+  const mockOnSave = vi.fn();
+  const mockOnClose = vi.fn();
 
   const defaultProps = {
     email: 'test@example.com',
@@ -17,42 +17,53 @@ describe('UserEditModal', () => {
     isNew: false,
     onSave: mockOnSave,
     onClose: mockOnClose,
-  }
+  };
 
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
   it('renders edit mode correctly', () => {
-    render(<UserEditModal {...defaultProps} />)
+    render(<UserEditModal {...defaultProps} />);
 
-    expect(screen.getByText('Edit User')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('test@example.com')).toBeDisabled()
-    expect(screen.getByDisplayValue('Test User')).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: VIEWER_REGEX })).toBeChecked()
-  })
+    expect(screen.getByText('Edit User')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('test@example.com')).toBeDisabled();
+    expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: VIEWER_REGEX })).toBeChecked();
+  });
 
   it('renders add mode correctly', () => {
-    render(<UserEditModal {...defaultProps} email="" isNew={true} />)
+    render(<UserEditModal {...defaultProps} email="" isNew={true} />);
 
-    expect(screen.getByRole('heading', { name: 'Add User' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Email')).not.toBeDisabled()
-  })
+    expect(
+      screen.getByRole('heading', { name: 'Add User' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).not.toBeDisabled();
+  });
 
   it('validates required fields', async () => {
-    render(<UserEditModal {...defaultProps} email="" isNew={true} user={{ name: '', roles: [] }} />)
+    render(
+      <UserEditModal
+        {...defaultProps}
+        email=""
+        isNew={true}
+        user={{ name: '', roles: [] }}
+      />,
+    );
 
-    const saveButton = screen.getByRole('button', { name: 'Add User' })
-    fireEvent.click(saveButton)
+    const saveButton = screen.getByRole('button', { name: 'Add User' });
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Email is required')).toBeInTheDocument()
-      expect(screen.getByText('Name is required')).toBeInTheDocument()
-      expect(screen.getByText('At least one role is required')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Email is required')).toBeInTheDocument();
+      expect(screen.getByText('Name is required')).toBeInTheDocument();
+      expect(
+        screen.getByText('At least one role is required'),
+      ).toBeInTheDocument();
+    });
 
-    expect(mockOnSave).not.toHaveBeenCalled()
-  })
+    expect(mockOnSave).not.toHaveBeenCalled();
+  });
 
   it('validates email format', async () => {
     render(
@@ -61,70 +72,77 @@ describe('UserEditModal', () => {
         email=""
         isNew={true}
         user={{ name: 'Test', roles: ['viewer'] }}
-      />
-    )
+      />,
+    );
 
     // Type invalid email
-    const emailInput = screen.getByLabelText('Email')
-    fireEvent.change(emailInput, { target: { value: 'invalid-email' } })
+    const emailInput = screen.getByLabelText('Email');
+    fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
 
     // Submit form by clicking button
-    const form = emailInput.closest('form')!
-    fireEvent.submit(form)
+    const form = emailInput.closest('form')!;
+    fireEvent.submit(form);
 
     // Check for validation error
     await waitFor(() => {
-      const errorElement = screen.getByText('Invalid email format')
-      expect(errorElement).toBeInTheDocument()
-    })
+      const errorElement = screen.getByText('Invalid email format');
+      expect(errorElement).toBeInTheDocument();
+    });
 
-    expect(mockOnSave).not.toHaveBeenCalled()
-  })
+    expect(mockOnSave).not.toHaveBeenCalled();
+  });
 
   it('calls onSave with correct data', async () => {
-    render(<UserEditModal {...defaultProps} email="" isNew={true} user={{ name: '', roles: [] }} />)
+    render(
+      <UserEditModal
+        {...defaultProps}
+        email=""
+        isNew={true}
+        user={{ name: '', roles: [] }}
+      />,
+    );
 
-    const emailInput = screen.getByLabelText('Email')
-    const nameInput = screen.getByLabelText('Name')
-    const adminCheckbox = screen.getByRole('checkbox', { name: ADMIN_REGEX })
+    const emailInput = screen.getByLabelText('Email');
+    const nameInput = screen.getByLabelText('Name');
+    const adminCheckbox = screen.getByRole('checkbox', { name: ADMIN_REGEX });
 
-    await userEvent.type(emailInput, 'new@example.com')
-    await userEvent.type(nameInput, 'New User')
-    await userEvent.click(adminCheckbox)
+    await userEvent.type(emailInput, 'new@example.com');
+    await userEvent.type(nameInput, 'New User');
+    await userEvent.click(adminCheckbox);
 
-    const saveButton = screen.getByRole('button', { name: 'Add User' })
-    fireEvent.click(saveButton)
+    const saveButton = screen.getByRole('button', { name: 'Add User' });
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(mockOnSave).toHaveBeenCalledWith('new@example.com', {
         name: 'New User',
         roles: ['admin'],
-      })
-    })
-  })
+      });
+    });
+  });
 
   it('calls onClose when cancel is clicked', () => {
-    render(<UserEditModal {...defaultProps} />)
+    render(<UserEditModal {...defaultProps} />);
 
-    const cancelButton = screen.getByText('Cancel')
-    fireEvent.click(cancelButton)
+    const cancelButton = screen.getByText('Cancel');
+    fireEvent.click(cancelButton);
 
-    expect(mockOnClose).toHaveBeenCalled()
-  })
+    expect(mockOnClose).toHaveBeenCalled();
+  });
 
   it('toggles roles correctly', async () => {
-    render(<UserEditModal {...defaultProps} />)
+    render(<UserEditModal {...defaultProps} />);
 
-    const adminCheckbox = screen.getByRole('checkbox', { name: ADMIN_REGEX })
-    const viewerCheckbox = screen.getByRole('checkbox', { name: VIEWER_REGEX })
+    const adminCheckbox = screen.getByRole('checkbox', { name: ADMIN_REGEX });
+    const viewerCheckbox = screen.getByRole('checkbox', { name: VIEWER_REGEX });
 
-    expect(viewerCheckbox).toBeChecked()
-    expect(adminCheckbox).not.toBeChecked()
+    expect(viewerCheckbox).toBeChecked();
+    expect(adminCheckbox).not.toBeChecked();
 
-    await userEvent.click(adminCheckbox)
-    expect(adminCheckbox).toBeChecked()
+    await userEvent.click(adminCheckbox);
+    expect(adminCheckbox).toBeChecked();
 
-    await userEvent.click(viewerCheckbox)
-    expect(viewerCheckbox).not.toBeChecked()
-  })
-})
+    await userEvent.click(viewerCheckbox);
+    expect(viewerCheckbox).not.toBeChecked();
+  });
+});

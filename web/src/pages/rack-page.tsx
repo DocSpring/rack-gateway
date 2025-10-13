@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { CardGrid } from '../components/card-grid'
-import { PageLayout } from '../components/page-layout'
+import { useQuery } from '@tanstack/react-query';
+import { CardGrid } from '../components/card-grid';
+import { PageLayout } from '../components/page-layout';
 // import { TablePane } from '../components/table-pane'
 // import {
 //   Table,
@@ -10,40 +10,45 @@ import { PageLayout } from '../components/page-layout'
 //   TableHeader,
 //   TableRow,
 // } from '../components/ui/table'
-import { api } from '../lib/api'
+import { api } from '../lib/api';
 
 type RackInfo = {
-  name?: string
-  domain?: string
-  provider?: string
-  region?: string
-  status?: string
-  type?: string
-  version?: string
-  count?: number
-  'rack-domain'?: string
-  outputs?: Record<string, string>
-  parameters?: Record<string, string>
-}
+  name?: string;
+  domain?: string;
+  provider?: string;
+  region?: string;
+  status?: string;
+  type?: string;
+  version?: string;
+  count?: number;
+  'rack-domain'?: string;
+  outputs?: Record<string, string>;
+  parameters?: Record<string, string>;
+};
 
 export function RackPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['rack-info'],
     queryFn: async () => {
-      const res = await api.get<RackInfo>('/api/v1/rack')
-      return res
+      const res = await api.get<RackInfo>('/api/v1/rack');
+      return res;
     },
-  })
+  });
   // Parameters come from the rack info response (/system)
 
   return (
-    <PageLayout description="Overview, parameters, and outputs for the selected rack" title="Rack">
+    <PageLayout
+      description="Overview, parameters, and outputs for the selected rack"
+      title="Rack"
+    >
       {error && (
         <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm">
           {(error as Error).message}
         </div>
       )}
-      {isLoading && <div className="text-muted-foreground">Loading rack info…</div>}
+      {isLoading && (
+        <div className="text-muted-foreground">Loading rack info…</div>
+      )}
       {data && (
         <div className="space-y-8">
           <CardGrid
@@ -74,7 +79,7 @@ export function RackPage() {
         </div>
       )}
     </PageLayout>
-  )
+  );
 }
 
 // function KvTable({ obj }: { obj: Record<string, string> }) {

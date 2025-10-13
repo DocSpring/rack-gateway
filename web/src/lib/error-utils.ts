@@ -1,77 +1,84 @@
-import { isAxiosError } from 'axios'
+import { isAxiosError } from 'axios';
 
-import { toast } from '@/components/ui/use-toast'
-import { isMFAError } from '@/contexts/step-up-context'
+import { toast } from '@/components/ui/use-toast';
+import { isMFAError } from '@/contexts/step-up-context';
 
-export function getErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
-  const resolved = resolveErrorMessage(error)
+export function getErrorMessage(
+  error: unknown,
+  fallback = 'Something went wrong',
+): string {
+  const resolved = resolveErrorMessage(error);
   if (typeof resolved === 'string' && resolved.trim() !== '') {
-    return resolved
+    return resolved;
   }
-  return fallback
+  return fallback;
 }
 
-export function toastAPIError(error: unknown, fallback = 'Something went wrong'): void {
+export function toastAPIError(
+  error: unknown,
+  fallback = 'Something went wrong',
+): void {
   if (isMFAError(error)) {
-    return
+    return;
   }
-  toast.error(getErrorMessage(error, fallback))
+  toast.error(getErrorMessage(error, fallback));
 }
 
 export function withAPIErrorMessage(
   error: unknown,
   fallback: string,
-  handler: (message: string) => void
+  handler: (message: string) => void,
 ): void {
   if (isMFAError(error)) {
-    return
+    return;
   }
-  handler(getErrorMessage(error, fallback))
+  handler(getErrorMessage(error, fallback));
 }
 
 function resolveErrorMessage(error: unknown): string | undefined {
   if (typeof error === 'string') {
-    return error
+    return error;
   }
 
-  const axiosMessage = messageFromAxios(error)
+  const axiosMessage = messageFromAxios(error);
   if (axiosMessage) {
-    return axiosMessage
+    return axiosMessage;
   }
 
   if (error instanceof Error) {
-    return error.message
+    return error.message;
   }
 
   if (typeof error === 'object' && error !== null) {
-    const message = (error as { message?: string }).message
+    const message = (error as { message?: string }).message;
     if (typeof message === 'string' && message.trim() !== '') {
-      return message
+      return message;
     }
   }
 
-  return
+  return;
 }
 
 function messageFromAxios(error: unknown): string | undefined {
   if (!isAxiosError<{ error?: string; message?: string }>(error)) {
-    return
+    return;
   }
   const data = error.response?.data as
     | string
     | { message?: string | undefined; error?: string | undefined }
-    | undefined
+    | undefined;
 
   if (typeof data === 'string') {
-    return data.trim() !== '' ? data : undefined
+    return data.trim() !== '' ? data : undefined;
   }
 
   if (data && typeof data === 'object') {
-    const message = typeof data.message === 'string' ? data.message : data.error
+    const message =
+      typeof data.message === 'string' ? data.message : data.error;
     if (typeof message === 'string' && message.trim() !== '') {
-      return message
+      return message;
     }
   }
 
-  return
+  return;
 }

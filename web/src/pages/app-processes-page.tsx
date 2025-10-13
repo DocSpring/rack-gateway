@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
-import { useState } from 'react'
-import { TablePane } from '../components/table-pane'
-import { TimeAgo } from '../components/time-ago'
-import { Button } from '../components/ui/button'
+import { useQuery } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { useState } from 'react';
+import { TablePane } from '../components/table-pane';
+import { TimeAgo } from '../components/time-ago';
+import { Button } from '../components/ui/button';
 import {
   Table,
   TableBody,
@@ -11,24 +11,24 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table'
-import { api } from '../lib/api'
-import { DEFAULT_PER_PAGE } from '../lib/constants'
+} from '../components/ui/table';
+import { api } from '../lib/api';
+import { DEFAULT_PER_PAGE } from '../lib/constants';
 
 type Process = {
-  id: string
-  service: string
-  name?: string
-  status: string
-  release: string
-  command?: string
-  started?: string
-}
+  id: string;
+  service: string;
+  name?: string;
+  status: string;
+  release: string;
+  command?: string;
+  started?: string;
+};
 
 export function AppProcessesPage() {
   const { app } = useParams({ from: '/apps/$app/processes' }) as {
-    app: string
-  }
+    app: string;
+  };
   const {
     data = [],
     isLoading,
@@ -38,31 +38,31 @@ export function AppProcessesPage() {
     queryFn: async () => {
       const ps = await api.get<
         {
-          id: string
-          service?: string
-          name?: string
-          status: string
-          release: string
-          command?: string
-          started?: string
+          id: string;
+          service?: string;
+          name?: string;
+          status: string;
+          release: string;
+          command?: string;
+          started?: string;
         }[]
-      >(`/api/v1/convox/apps/${app}/processes`)
+      >(`/api/v1/convox/apps/${app}/processes`);
       return ps.map((p) => ({
         ...p,
         service: p.service ?? p.name ?? '',
-      })) as Process[]
+      })) as Process[];
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  })
-  const perPage = DEFAULT_PER_PAGE
-  const total = data.length
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const [page, setPage] = useState(1)
-  const start = (page - 1) * perPage
-  const end = Math.min(start + perPage, total)
-  const rows = data.slice(start, end)
+  });
+  const perPage = DEFAULT_PER_PAGE;
+  const total = data.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const [page, setPage] = useState(1);
+  const start = (page - 1) * perPage;
+  const end = Math.min(start + perPage, total);
+  const rows = data.slice(start, end);
 
   return (
     <TablePane
@@ -88,7 +88,9 @@ export function AppProcessesPage() {
               <TableCell>{p.service}</TableCell>
               <TableCell>{p.status}</TableCell>
               <TableCell>{p.release}</TableCell>
-              <TableCell>{p.started ? <TimeAgo date={p.started} /> : '—'}</TableCell>
+              <TableCell>
+                {p.started ? <TimeAgo date={p.started} /> : '—'}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -117,5 +119,5 @@ export function AppProcessesPage() {
         </div>
       )}
     </TablePane>
-  )
+  );
 }

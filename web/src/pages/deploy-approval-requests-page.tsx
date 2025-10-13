@@ -1,15 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Navigate, useNavigate } from '@tanstack/react-router'
-import { Check, Loader2, Timer, X } from 'lucide-react'
-import type { KeyboardEvent } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DeployApprovalRejectDialog } from '@/components/deploy-approval-reject-dialog'
-import { DeployApprovalStatusBadge } from '@/components/deploy-approval-status-badge'
-import { PageLayout } from '@/components/page-layout'
-import { TablePane } from '@/components/table-pane'
-import { TimeAgo } from '@/components/time-ago'
-import { Button } from '@/components/ui/button'
-import { NativeSelect } from '@/components/ui/native-select'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Navigate, useNavigate } from '@tanstack/react-router';
+import { Check, Loader2, Timer, X } from 'lucide-react';
+import type { KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DeployApprovalRejectDialog } from '@/components/deploy-approval-reject-dialog';
+import { DeployApprovalStatusBadge } from '@/components/deploy-approval-status-badge';
+import { PageLayout } from '@/components/page-layout';
+import { TablePane } from '@/components/table-pane';
+import { TimeAgo } from '@/components/time-ago';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   Table,
   TableBody,
@@ -17,24 +17,29 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { toast } from '@/components/ui/use-toast'
-import { UserMetaCell } from '@/components/user-meta-cell'
-import { UuidCell } from '@/components/uuid-cell'
-import { useAuth } from '@/contexts/auth-context'
-import { useStepUp } from '@/contexts/step-up-context'
+} from '@/components/ui/table';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { toast } from '@/components/ui/use-toast';
+import { UserMetaCell } from '@/components/user-meta-cell';
+import { UuidCell } from '@/components/uuid-cell';
+import { useAuth } from '@/contexts/auth-context';
+import { useStepUp } from '@/contexts/step-up-context';
 import {
   approveDeployApprovalRequest,
   type DeployApprovalRequest,
   listDeployApprovalRequests,
   rejectDeployApprovalRequest,
   type UpdateDeployApprovalRequestStatusRequest,
-} from '@/lib/api'
-import { DEFAULT_PER_PAGE } from '@/lib/constants'
-import { withAPIErrorMessage } from '@/lib/error-utils'
+} from '@/lib/api';
+import { DEFAULT_PER_PAGE } from '@/lib/constants';
+import { withAPIErrorMessage } from '@/lib/error-utils';
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'consumed'
+type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'consumed';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -42,42 +47,47 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'consumed', label: 'Consumed' },
-]
+];
 
-function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest | undefined {
-  const trimmed = notes.trim()
-  return trimmed ? { notes: trimmed } : undefined
+function toNotesPayload(
+  notes: string,
+): UpdateDeployApprovalRequestStatusRequest | undefined {
+  const trimmed = notes.trim();
+  return trimmed ? { notes: trimmed } : undefined;
 }
 
 type PaginationResult<T> = {
-  page: number
-  setPage: (value: number | ((prev: number) => number)) => void
-  total: number
-  totalPages: number
-  start: number
-  end: number
-  items: T[]
-}
+  page: number;
+  setPage: (value: number | ((prev: number) => number)) => void;
+  total: number;
+  totalPages: number;
+  start: number;
+  end: number;
+  items: T[];
+};
 
 function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
-  const [page, setPage] = useState(1)
-  const total = items.length
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const start = (page - 1) * perPage
-  const end = Math.min(start + perPage, total)
-  const visibleItems = useMemo(() => items.slice(start, end), [items, start, end])
+  const [page, setPage] = useState(1);
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const start = (page - 1) * perPage;
+  const end = Math.min(start + perPage, total);
+  const visibleItems = useMemo(
+    () => items.slice(start, end),
+    [items, start, end],
+  );
 
   useEffect(() => {
     if (total === 0) {
       if (page !== 1) {
-        setPage(1)
+        setPage(1);
       }
-      return
+      return;
     }
     if (page > totalPages) {
-      setPage(totalPages)
+      setPage(totalPages);
     }
-  }, [page, total, totalPages])
+  }, [page, total, totalPages]);
 
   return {
     page,
@@ -87,51 +97,55 @@ function usePagination<T>(items: T[], perPage: number): PaginationResult<T> {
     start,
     end,
     items: visibleItems,
-  }
+  };
 }
 
 export function DeployApprovalRequestsPage() {
-  const { user, isLoading: isAuthLoading } = useAuth()
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
-  const [rejectRequestId, setRejectRequestId] = useState<string | null>(null)
-  const queryClient = useQueryClient()
-  const { handleStepUpError } = useStepUp()
-  const navigate = useNavigate()
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectRequestId, setRejectRequestId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { handleStepUpError } = useStepUp();
+  const navigate = useNavigate();
 
-  const queryKey = useMemo(() => ['deploy-approval-requests', statusFilter], [statusFilter])
+  const queryKey = useMemo(
+    () => ['deploy-approval-requests', statusFilter],
+    [statusFilter],
+  );
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey,
     queryFn: () => {
-      const params = statusFilter === 'all' ? undefined : { status: statusFilter }
-      return listDeployApprovalRequests(params)
+      const params =
+        statusFilter === 'all' ? undefined : { status: statusFilter };
+      return listDeployApprovalRequests(params);
     },
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnReconnect: 'always',
     refetchOnWindowFocus: true,
-  })
+  });
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => approveDeployApprovalRequest(id, {}),
     onSuccess: (_data, id) => {
-      toast.success(`Request ${id} was approved`)
-      queryClient.invalidateQueries({ queryKey })
+      toast.success(`Request ${id} was approved`);
+      queryClient.invalidateQueries({ queryKey });
     },
-  })
+  });
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, notes }: { id: string; notes: string }) =>
       rejectDeployApprovalRequest(id, toNotesPayload(notes)),
     onSuccess: (_data, { id }) => {
-      toast.success(`Request ${id} was rejected`)
-      setRejectDialogOpen(false)
-      queryClient.invalidateQueries({ queryKey })
+      toast.success(`Request ${id} was rejected`);
+      setRejectDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey });
     },
-  })
+  });
 
-  const requests = data?.deploy_approval_requests ?? []
+  const requests = data?.deploy_approval_requests ?? [];
 
   const {
     page,
@@ -141,74 +155,81 @@ export function DeployApprovalRequestsPage() {
     start,
     end,
     items: visibleRequests,
-  } = usePagination(requests, DEFAULT_PER_PAGE)
+  } = usePagination(requests, DEFAULT_PER_PAGE);
 
-  const isEmpty = !isLoading && total === 0
+  const isEmpty = !isLoading && total === 0;
 
-  const approveDisabled = approveMutation.isPending || rejectMutation.isPending
-  const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
+  const approveDisabled = approveMutation.isPending || rejectMutation.isPending;
+  const rejectDisabled = rejectMutation.isPending || approveMutation.isPending;
 
   const approveRequest = useCallback(
     async (id: string) => {
       try {
-        await approveMutation.mutateAsync(id)
+        await approveMutation.mutateAsync(id);
       } catch (err) {
         if (handleStepUpError(err, () => approveMutation.mutateAsync(id))) {
-          return
+          return;
         }
         withAPIErrorMessage(err, 'Failed to approve request', (message) =>
-          toast.error('Approval failed', { description: message })
-        )
+          toast.error('Approval failed', { description: message }),
+        );
       }
     },
-    [approveMutation, handleStepUpError]
-  )
+    [approveMutation, handleStepUpError],
+  );
 
   const submitRejection = useCallback(
     async (id: string, notes: string) => {
       try {
-        await rejectMutation.mutateAsync({ id, notes })
+        await rejectMutation.mutateAsync({ id, notes });
       } catch (err) {
-        if (handleStepUpError(err, () => rejectMutation.mutateAsync({ id, notes }))) {
-          return
+        if (
+          handleStepUpError(err, () =>
+            rejectMutation.mutateAsync({ id, notes }),
+          )
+        ) {
+          return;
         }
         withAPIErrorMessage(err, 'Failed to reject request', (message) =>
-          toast.error('Rejection failed', { description: message })
-        )
+          toast.error('Rejection failed', { description: message }),
+        );
       }
     },
-    [handleStepUpError, rejectMutation]
-  )
+    [handleStepUpError, rejectMutation],
+  );
 
   const handleApprove = useCallback(
     (id: string) => {
       approveRequest(id).catch(() => {
         /* errors handled within approveRequest */
-      })
+      });
     },
-    [approveRequest]
-  )
+    [approveRequest],
+  );
 
   const handleRejectClick = (request: DeployApprovalRequest) => {
-    setRejectRequestId(request.public_id)
-    setRejectDialogOpen(true)
-  }
+    setRejectRequestId(request.public_id);
+    setRejectDialogOpen(true);
+  };
 
   const handleRejectSubmit = (notes: string) => {
-    if (!rejectRequestId) return
+    if (!rejectRequestId) return;
     submitRejection(rejectRequestId, notes).catch(() => {
       /* errors handled within submitRejection */
-    })
-  }
+    });
+  };
 
   // Deploy approvals are always available now, no need to check for feature flag
   // Just ensure user is authenticated
   if (!(isAuthLoading || user)) {
-    return <Navigate replace to="/" />
+    return <Navigate replace to="/" />;
   }
 
   return (
-    <PageLayout description="Manual review queue for CI/CD deploys" title="Deploy Approvals">
+    <PageLayout
+      description="Manual review queue for CI/CD deploys"
+      title="Deploy Approvals"
+    >
       <div className="space-y-6">
         <TablePane
           empty={isEmpty}
@@ -219,8 +240,8 @@ export function DeployApprovalRequestsPage() {
               <NativeSelect
                 className="h-9 w-40"
                 onChange={(event) => {
-                  setStatusFilter(event.target.value as StatusFilter)
-                  setPage(1)
+                  setStatusFilter(event.target.value as StatusFilter);
+                  setPage(1);
                 }}
                 value={statusFilter}
               >
@@ -305,19 +326,19 @@ export function DeployApprovalRequestsPage() {
         requestId={rejectRequestId ?? ''}
       />
     </PageLayout>
-  )
+  );
 }
 
 type DeployApprovalRequestRowProps = {
-  request: DeployApprovalRequest
-  approveDisabled: boolean
-  approvePending: boolean
-  rejectDisabled: boolean
-  rejectPending: boolean
-  onApprove: (id: string) => void
-  onReject: (request: DeployApprovalRequest) => void
-  onSelect: (request: DeployApprovalRequest) => void
-}
+  request: DeployApprovalRequest;
+  approveDisabled: boolean;
+  approvePending: boolean;
+  rejectDisabled: boolean;
+  rejectPending: boolean;
+  onApprove: (id: string) => void;
+  onReject: (request: DeployApprovalRequest) => void;
+  onSelect: (request: DeployApprovalRequest) => void;
+};
 
 function DeployApprovalRequestRow({
   request,
@@ -329,42 +350,43 @@ function DeployApprovalRequestRow({
   onReject,
   onSelect,
 }: DeployApprovalRequestRowProps) {
-  const publicId = request.public_id
-  const message = request.message
-  const tokenName = request.target_api_token_name ?? 'Unknown token'
-  const tokenId = request.target_api_token_id
-  const status = request.status ?? 'unknown'
-  const normalizedStatus = status.toLowerCase()
-  const canApprove = normalizedStatus === 'pending'
-  const canReject = normalizedStatus === 'pending' || normalizedStatus === 'approved'
+  const publicId = request.public_id;
+  const message = request.message;
+  const tokenName = request.target_api_token_name ?? 'Unknown token';
+  const tokenId = request.target_api_token_id;
+  const status = request.status ?? 'unknown';
+  const normalizedStatus = status.toLowerCase();
+  const canApprove = normalizedStatus === 'pending';
+  const canReject =
+    normalizedStatus === 'pending' || normalizedStatus === 'approved';
 
-  const showExpiresAt = request.approval_expires_at && canReject
+  const showExpiresAt = request.approval_expires_at && canReject;
   const decidedBy = (() => {
     if (request.approved_by_email || request.approved_by_name) {
       return {
         name: request.approved_by_name ?? undefined,
         email: request.approved_by_email ?? undefined,
-      }
+      };
     }
     if (request.rejected_by_email || request.rejected_by_name) {
       return {
         name: request.rejected_by_name ?? undefined,
         email: request.rejected_by_email ?? undefined,
-      }
+      };
     }
-    return null
-  })()
+    return null;
+  })();
 
-  const handleRowClick = () => onSelect(request)
+  const handleRowClick = () => onSelect(request);
   const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onSelect(request)
+      event.preventDefault();
+      onSelect(request);
     }
-  }
+  };
 
-  const shortCommit = request.git_commit_hash.substring(0, 7)
-  const gitBranch = request.git_branch ?? '—'
+  const shortCommit = request.git_commit_hash.substring(0, 7);
+  const gitBranch = request.git_branch ?? '—';
 
   return (
     <TableRow
@@ -430,8 +452,8 @@ function DeployApprovalRequestRow({
               aria-label={`Approve request ${publicId}`}
               disabled={approveDisabled}
               onClick={(event) => {
-                event.stopPropagation()
-                onApprove(publicId)
+                event.stopPropagation();
+                onApprove(publicId);
               }}
               size="sm"
               variant="ghost"
@@ -448,8 +470,8 @@ function DeployApprovalRequestRow({
               aria-label={`Reject request ${publicId}`}
               disabled={rejectDisabled}
               onClick={(event) => {
-                event.stopPropagation()
-                onReject(request)
+                event.stopPropagation();
+                onReject(request);
               }}
               size="sm"
               variant="ghost"
@@ -464,5 +486,5 @@ function DeployApprovalRequestRow({
         </div>
       </TableCell>
     </TableRow>
-  )
+  );
 }

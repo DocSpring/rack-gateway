@@ -1,37 +1,43 @@
-import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { GoogleIcon } from '@/components/google-icon'
-import { ModeToggle } from '@/components/mode-toggle'
-import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { toast } from '@/components/ui/use-toast'
-import { useAuth } from '@/contexts/auth-context'
+import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { GoogleIcon } from '@/components/google-icon';
+import { ModeToggle } from '@/components/mode-toggle';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/auth-context';
 
 export function LoginPage() {
-  const { login } = useAuth()
-  const [isLoading, setIsLoading] = useState(false)
+  const { login } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Show any persisted auth error (from 401 redirects)
   useEffect(() => {
     try {
-      const msg = sessionStorage.getItem('auth_error')
+      const msg = sessionStorage.getItem('auth_error');
       if (msg) {
-        toast.error(msg)
-        sessionStorage.removeItem('auth_error')
+        toast.error(msg);
+        sessionStorage.removeItem('auth_error');
       }
     } catch (_e) {
       /* ignore */
     }
-  }, [])
+  }, []);
 
   const handleLogin = async () => {
-    setIsLoading(true)
+    setIsLoading(true);
     try {
-      await login()
+      await login();
     } catch (_error) {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
@@ -50,7 +56,9 @@ export function LoginPage() {
               src="/app/logo.svg"
               width={52}
             />
-            <h1 className="font-bold text-4xl text-foreground tracking-tight">Rack Gateway</h1>
+            <h1 className="font-bold text-4xl text-foreground tracking-tight">
+              Rack Gateway
+            </h1>
           </div>
 
           <p className="text-muted-foreground text-sm">
@@ -91,5 +99,5 @@ export function LoginPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

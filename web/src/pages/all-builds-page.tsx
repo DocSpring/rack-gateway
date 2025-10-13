@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
-import { PageLayout } from '../components/page-layout'
-import { TablePane } from '../components/table-pane'
-import { TimeAgo } from '../components/time-ago'
-import { Button } from '../components/ui/button'
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { useState } from 'react';
+import { PageLayout } from '../components/page-layout';
+import { TablePane } from '../components/table-pane';
+import { TimeAgo } from '../components/time-ago';
+import { Button } from '../components/ui/button';
 import {
   Table,
   TableBody,
@@ -12,22 +12,22 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table'
-import { api } from '../lib/api'
-import { DEFAULT_PER_PAGE } from '../lib/constants'
-import { formatElapsed } from '../lib/time'
+} from '../components/ui/table';
+import { api } from '../lib/api';
+import { DEFAULT_PER_PAGE } from '../lib/constants';
+import { formatElapsed } from '../lib/time';
 
-type App = { name: string }
+type App = { name: string };
 type Build = {
-  id: string
-  description?: string
-  status: string
-  release: string
-  started?: string
-  ended?: string
-  app: string
-  created_by?: string
-}
+  id: string;
+  description?: string;
+  status: string;
+  release: string;
+  started?: string;
+  ended?: string;
+  app: string;
+  created_by?: string;
+};
 
 export function AllBuildsPage() {
   const {
@@ -37,48 +37,50 @@ export function AllBuildsPage() {
   } = useQuery({
     queryKey: ['all-builds'],
     queryFn: async () => {
-      const apps = await api.get<App[]>('/api/v1/convox/apps')
+      const apps = await api.get<App[]>('/api/v1/convox/apps');
       const lists = await Promise.all(
         apps.map(async (a) => {
-          const bs = await api.get<Build[]>(`/api/v1/convox/apps/${a.name}/builds`)
-          return bs.map((b) => ({ ...b, app: a.name }))
-        })
-      )
+          const bs = await api.get<Build[]>(
+            `/api/v1/convox/apps/${a.name}/builds`,
+          );
+          return bs.map((b) => ({ ...b, app: a.name }));
+        }),
+      );
       const items = lists.flat().sort((a, b) => {
-        const at = a.started ? new Date(a.started).getTime() : 0
-        const bt = b.started ? new Date(b.started).getTime() : 0
-        return bt - at
-      })
+        const at = a.started ? new Date(a.started).getTime() : 0;
+        const bt = b.started ? new Date(b.started).getTime() : 0;
+        return bt - at;
+      });
       // Fetch created-by mapping
       try {
-        const ids = Array.from(new Set(items.map((b) => b.id))).join(',')
+        const ids = Array.from(new Set(items.map((b) => b.id))).join(',');
         if (ids) {
-          const map = await api.get<Record<string, { email: string; name: string }>>(
-            `/api/v1/created-by?type=build&ids=${encodeURIComponent(ids)}`
-          )
+          const map = await api.get<
+            Record<string, { email: string; name: string }>
+          >(`/api/v1/created-by?type=build&ids=${encodeURIComponent(ids)}`);
           for (const b of items) {
-            const m = map[b.id]
+            const m = map[b.id];
             if (m) {
-              b.created_by = m.email || m.name
+              b.created_by = m.email || m.name;
             }
           }
         }
       } catch (_e) {
         // ignore
       }
-      return items
+      return items;
     },
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  })
-  const perPage = DEFAULT_PER_PAGE
-  const total = data.length
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const [page, setPage] = useState(1)
-  const start = (page - 1) * perPage
-  const end = Math.min(start + perPage, total)
-  const rows = data.slice(start, end)
+  });
+  const perPage = DEFAULT_PER_PAGE;
+  const total = data.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const [page, setPage] = useState(1);
+  const start = (page - 1) * perPage;
+  const end = Math.min(start + perPage, total);
+  const rows = data.slice(start, end);
 
   return (
     <PageLayout description="Builds across all apps" title="Builds">
@@ -120,7 +122,9 @@ export function AllBuildsPage() {
                 <TableCell>{b.status}</TableCell>
                 <TableCell>{b.release}</TableCell>
                 <TableCell>{b.created_by || '—'}</TableCell>
-                <TableCell>{b.started ? <TimeAgo date={b.started} /> : '—'}</TableCell>
+                <TableCell>
+                  {b.started ? <TimeAgo date={b.started} /> : '—'}
+                </TableCell>
                 <TableCell>{formatElapsed(b.started, b.ended)}</TableCell>
               </TableRow>
             ))}
@@ -152,5 +156,5 @@ export function AllBuildsPage() {
         )}
       </TablePane>
     </PageLayout>
-  )
+  );
 }

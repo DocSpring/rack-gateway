@@ -1,33 +1,35 @@
-import { RefreshCcw } from 'lucide-react'
-import { useMemo } from 'react'
-import { AuthResultCard } from '@/components/auth-result-card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { RefreshCcw } from 'lucide-react';
+import { useMemo } from 'react';
+import { AuthResultCard } from '@/components/auth-result-card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
-const REASON_MESSAGES: Record<string, { title: string; description: string }> = {
-  'mfa-finalize': {
-    title: 'Multi-factor verification failed',
-    description:
-      "We couldn't finish verifying your authenticator. Try signing in again and complete the MFA prompt.",
-  },
-}
+const REASON_MESSAGES: Record<string, { title: string; description: string }> =
+  {
+    'mfa-finalize': {
+      title: 'Multi-factor verification failed',
+      description:
+        "We couldn't finish verifying your authenticator. Try signing in again and complete the MFA prompt.",
+    },
+  };
 
 export function LoginErrorPage() {
   const { reason, message } = useMemo(() => {
     if (typeof window === 'undefined') {
-      return { reason: null as string | null, message: null as string | null }
+      return { reason: null as string | null, message: null as string | null };
     }
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(window.location.search);
     return {
       reason: params.get('reason'),
       message: params.get('message'),
-    }
-  }, [])
+    };
+  }, []);
 
   const info = (reason && REASON_MESSAGES[reason]) || {
     title: 'Unable to sign in',
-    description: 'Something went wrong while completing your login. Please try again.',
-  }
+    description:
+      'Something went wrong while completing your login. Please try again.',
+  };
 
   return (
     <AuthResultCard
@@ -49,7 +51,7 @@ export function LoginErrorPage() {
         </Button>
       </div>
     </AuthResultCard>
-  )
+  );
 }
 
-export default LoginErrorPage
+export default LoginErrorPage;

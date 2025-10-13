@@ -7,18 +7,20 @@
 /**
  * Extract CircleCI metadata from generic CI metadata
  */
-export function extractCircleCIMetadata(ciMetadata?: { [key: string]: unknown }): {
-  workflowId?: string
-  pipelineNumber?: string | number
+export function extractCircleCIMetadata(ciMetadata?: {
+  [key: string]: unknown;
+}): {
+  workflowId?: string;
+  pipelineNumber?: string | number;
 } {
   if (!ciMetadata) {
-    return {}
+    return {};
   }
 
   return {
     workflowId: ciMetadata.workflow_id as string | undefined,
     pipelineNumber: ciMetadata.pipeline_number as string | number | undefined,
-  }
+  };
 }
 
 /**
@@ -30,9 +32,9 @@ export function extractCircleCIMetadata(ciMetadata?: { [key: string]: unknown })
  */
 export function buildCircleCIPipelineUrl(
   ciOrgSlug: string,
-  pipelineNumber: string | number
+  pipelineNumber: string | number,
 ): string {
-  return `https://app.circleci.com/pipelines/${ciOrgSlug}/${pipelineNumber}`
+  return `https://app.circleci.com/pipelines/${ciOrgSlug}/${pipelineNumber}`;
 }
 
 /**
@@ -46,7 +48,7 @@ export function buildCircleCIPipelineUrl(
 export function buildCircleCIWorkflowUrl(
   ciOrgSlug: string,
   pipelineNumber: string | number,
-  workflowId: string
+  workflowId: string,
 ): string {
-  return `https://app.circleci.com/pipelines/${ciOrgSlug}/${pipelineNumber}/workflows/${workflowId}`
+  return `https://app.circleci.com/pipelines/${ciOrgSlug}/${pipelineNumber}/workflows/${workflowId}`;
 }

@@ -1,14 +1,14 @@
-import axios from 'axios'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { authService } from './auth'
-import { APIRoute } from './routes'
+import axios from 'axios';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { authService } from './auth';
+import { APIRoute } from './routes';
 
-vi.mock('axios')
+vi.mock('axios');
 
 describe('getCurrentUser', () => {
   beforeEach(() => {
-    vi.resetAllMocks()
-  })
+    vi.resetAllMocks();
+  });
 
   it('uses withCredentials and returns user', async () => {
     const mockResp = {
@@ -16,30 +16,32 @@ describe('getCurrentUser', () => {
         user: { email: 'admin@example.com', name: 'Admin', roles: ['admin'] },
         rack: { name: 'test-rack' },
       },
-    }
-    vi.mocked(axios.get).mockResolvedValueOnce(mockResp as unknown as never)
+    };
+    vi.mocked(axios.get).mockResolvedValueOnce(mockResp as unknown as never);
 
-    const user = await authService.getCurrentUser()
-    expect(axios.get).toHaveBeenCalledWith(APIRoute('info'), { withCredentials: true })
-    expect(user?.email).toBe('admin@example.com')
-  })
+    const user = await authService.getCurrentUser();
+    expect(axios.get).toHaveBeenCalledWith(APIRoute('info'), {
+      withCredentials: true,
+    });
+    expect(user?.email).toBe('admin@example.com');
+  });
 
   it('returns null on error', async () => {
-    vi.mocked(axios.get).mockRejectedValueOnce(new Error('nope'))
-    const user = await authService.getCurrentUser()
-    expect(user).toBeNull()
-  })
+    vi.mocked(axios.get).mockRejectedValueOnce(new Error('nope'));
+    const user = await authService.getCurrentUser();
+    expect(user).toBeNull();
+  });
 
   it('suppresses 401 auth error storage when requested', async () => {
-    const setItem = vi.spyOn(window.sessionStorage, 'setItem')
+    const setItem = vi.spyOn(window.sessionStorage, 'setItem');
     vi.mocked(axios.get).mockRejectedValueOnce({
       response: { status: 401 },
-    } as never)
+    } as never);
 
-    const user = await authService.getCurrentUser({ suppressAuthError: true })
+    const user = await authService.getCurrentUser({ suppressAuthError: true });
 
-    expect(user).toBeNull()
-    expect(setItem).not.toHaveBeenCalled()
-    setItem.mockRestore()
-  })
-})
+    expect(user).toBeNull();
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
+  });
+});

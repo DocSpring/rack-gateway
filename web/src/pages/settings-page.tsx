@@ -1,143 +1,174 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
-import { useState } from 'react'
-import type { SettingsSetting } from '@/api/schemas'
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
-import { toast } from '@/components/ui/use-toast'
-import { Button } from '../components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import { useAuth } from '../contexts/auth-context'
-import { useStepUp } from '../contexts/step-up-context'
-import { api } from '../lib/api'
-import { toastAPIError } from '../lib/error-utils'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import type { SettingsSetting } from '@/api/schemas';
+import {
+  getSettingValue,
+  SourceIndicator,
+} from '@/components/settings/source-indicator';
+import { toast } from '@/components/ui/use-toast';
+import { Button } from '../components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { useAuth } from '../contexts/auth-context';
+import { useStepUp } from '../contexts/step-up-context';
+import { api } from '../lib/api';
+import { toastAPIError } from '../lib/error-utils';
 
 type GlobalSettingsResponse = {
-  [key: string]: SettingsSetting
-}
+  [key: string]: SettingsSetting;
+};
 
 function MfaConfigCard({
   settings,
   disabled,
 }: {
-  settings: GlobalSettingsResponse | undefined
-  disabled: boolean
+  settings: GlobalSettingsResponse | undefined;
+  disabled: boolean;
 }) {
-  const qc = useQueryClient()
-  const { handleStepUpError } = useStepUp()
-  const [requireMfa, setRequireMfa] = useState<boolean | null>(null)
-  const [trustedDeviceTtl, setTrustedDeviceTtl] = useState<number | null>(null)
-  const [stepUpWindow, setStepUpWindow] = useState<number | null>(null)
+  const qc = useQueryClient();
+  const { handleStepUpError } = useStepUp();
+  const [requireMfa, setRequireMfa] = useState<boolean | null>(null);
+  const [trustedDeviceTtl, setTrustedDeviceTtl] = useState<number | null>(null);
+  const [stepUpWindow, setStepUpWindow] = useState<number | null>(null);
 
-  const currentRequireMfa = getSettingValue(settings?.mfa_require_all_users, true)
-  const currentTrustedDeviceTtl = getSettingValue(settings?.mfa_trusted_device_ttl_days, 30)
-  const currentStepUpWindow = getSettingValue(settings?.mfa_step_up_window_minutes, 10)
+  const currentRequireMfa = getSettingValue(
+    settings?.mfa_require_all_users,
+    true,
+  );
+  const currentTrustedDeviceTtl = getSettingValue(
+    settings?.mfa_trusted_device_ttl_days,
+    30,
+  );
+  const currentStepUpWindow = getSettingValue(
+    settings?.mfa_step_up_window_minutes,
+    10,
+  );
 
-  const displayRequireMfa = requireMfa !== null ? requireMfa : currentRequireMfa
+  const displayRequireMfa =
+    requireMfa !== null ? requireMfa : currentRequireMfa;
   const displayTrustedDeviceTtl =
-    trustedDeviceTtl !== null ? trustedDeviceTtl : currentTrustedDeviceTtl
-  const displayStepUpWindow = stepUpWindow !== null ? stepUpWindow : currentStepUpWindow
+    trustedDeviceTtl !== null ? trustedDeviceTtl : currentTrustedDeviceTtl;
+  const displayStepUpWindow =
+    stepUpWindow !== null ? stepUpWindow : currentStepUpWindow;
 
-  const hasChanges = requireMfa !== null || trustedDeviceTtl !== null || stepUpWindow !== null
+  const hasChanges =
+    requireMfa !== null || trustedDeviceTtl !== null || stepUpWindow !== null;
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updates: Record<string, unknown> = {}
+      const updates: Record<string, unknown> = {};
       if (requireMfa !== null) {
-        updates.mfa_require_all_users = requireMfa
+        updates.mfa_require_all_users = requireMfa;
       }
       if (trustedDeviceTtl !== null) {
-        updates.mfa_trusted_device_ttl_days = trustedDeviceTtl
+        updates.mfa_trusted_device_ttl_days = trustedDeviceTtl;
       }
       if (stepUpWindow !== null) {
-        updates.mfa_step_up_window_minutes = stepUpWindow
+        updates.mfa_step_up_window_minutes = stepUpWindow;
       }
-      return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', updates)
+      return await api.put<Record<string, SettingsSetting>>(
+        '/api/v1/admin/settings',
+        updates,
+      );
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
-      qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-        ...old,
-        ...updatedSettings,
-      }))
-      setRequireMfa(null)
-      setTrustedDeviceTtl(null)
-      setStepUpWindow(null)
-      toast.success('MFA settings updated')
+      qc.setQueryData(
+        ['globalSettings'],
+        (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }),
+      );
+      setRequireMfa(null);
+      setTrustedDeviceTtl(null);
+      setStepUpWindow(null);
+      toast.success('MFA settings updated');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to update MFA settings')
+      toastAPIError(err, 'Failed to update MFA settings');
     },
-  })
+  });
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const keys: string[] = []
+      const keys: string[] = [];
       if (settings?.mfa_require_all_users?.source === 'db') {
-        keys.push('mfa_require_all_users')
+        keys.push('mfa_require_all_users');
       }
       if (settings?.mfa_trusted_device_ttl_days?.source === 'db') {
-        keys.push('mfa_trusted_device_ttl_days')
+        keys.push('mfa_trusted_device_ttl_days');
       }
       if (settings?.mfa_step_up_window_minutes?.source === 'db') {
-        keys.push('mfa_step_up_window_minutes')
+        keys.push('mfa_step_up_window_minutes');
       }
       if (keys.length > 0) {
-        const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(`/api/v1/admin/settings?${params}`)
+        const params = keys.map((k) => `key=${k}`).join('&');
+        return await api.delete<Record<string, SettingsSetting>>(
+          `/api/v1/admin/settings?${params}`,
+        );
       }
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
       if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
+        qc.setQueryData(
+          ['globalSettings'],
+          (old: GlobalSettingsResponse | undefined) => ({
+            ...old,
+            ...updatedSettings,
+          }),
+        );
       }
-      setRequireMfa(null)
-      setTrustedDeviceTtl(null)
-      setStepUpWindow(null)
-      toast.success('MFA settings cleared')
+      setRequireMfa(null);
+      setTrustedDeviceTtl(null);
+      setStepUpWindow(null);
+      toast.success('MFA settings cleared');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to clear MFA settings')
+      toastAPIError(err, 'Failed to clear MFA settings');
     },
-  })
+  });
 
   const handleCancel = () => {
-    setRequireMfa(null)
-    setTrustedDeviceTtl(null)
-    setStepUpWindow(null)
-  }
+    setRequireMfa(null);
+    setTrustedDeviceTtl(null);
+    setStepUpWindow(null);
+  };
 
   const handleSave = async () => {
     try {
-      await updateMutation.mutateAsync()
+      await updateMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const handleClear = async () => {
     try {
-      await clearMutation.mutateAsync()
+      await clearMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const hasDbSettings =
     settings?.mfa_require_all_users?.source === 'db' ||
     settings?.mfa_trusted_device_ttl_days?.source === 'db' ||
-    settings?.mfa_step_up_window_minutes?.source === 'db'
+    settings?.mfa_step_up_window_minutes?.source === 'db';
 
   return (
     <Card>
@@ -165,9 +196,9 @@ function MfaConfigCard({
               id="trusted-device-ttl"
               min={1}
               onChange={(e) => {
-                const val = Number.parseInt(e.target.value, 10)
+                const val = Number.parseInt(e.target.value, 10);
                 if (!Number.isNaN(val) && val >= 1) {
-                  setTrustedDeviceTtl(val)
+                  setTrustedDeviceTtl(val);
                 }
               }}
               type="number"
@@ -189,9 +220,9 @@ function MfaConfigCard({
               id="step-up-window"
               min={1}
               onChange={(e) => {
-                const val = Number.parseInt(e.target.value, 10)
+                const val = Number.parseInt(e.target.value, 10);
                 if (!Number.isNaN(val) && val >= 1) {
-                  setStepUpWindow(val)
+                  setStepUpWindow(val);
                 }
               }}
               type="number"
@@ -200,7 +231,8 @@ function MfaConfigCard({
             <SourceIndicator setting={settings?.mfa_step_up_window_minutes} />
           </div>
           <p className="mt-1 text-muted-foreground text-xs">
-            Duration of MFA step-up authentication window for sensitive operations
+            Duration of MFA step-up authentication window for sensitive
+            operations
           </p>
         </div>
 
@@ -217,7 +249,12 @@ function MfaConfigCard({
           )}
           {hasChanges && (
             <>
-              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+              <Button
+                disabled={disabled}
+                onClick={handleCancel}
+                size="sm"
+                variant="outline"
+              >
                 Cancel
               </Button>
               <Button
@@ -232,96 +269,111 @@ function MfaConfigCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function DestructiveActionsCard({
   settings,
   disabled,
 }: {
-  settings: GlobalSettingsResponse | undefined
-  disabled: boolean
+  settings: GlobalSettingsResponse | undefined;
+  disabled: boolean;
 }) {
-  const qc = useQueryClient()
-  const { handleStepUpError } = useStepUp()
-  const [allowDestructive, setAllowDestructive] = useState<boolean | null>(null)
+  const qc = useQueryClient();
+  const { handleStepUpError } = useStepUp();
+  const [allowDestructive, setAllowDestructive] = useState<boolean | null>(
+    null,
+  );
 
-  const currentValue = getSettingValue(settings?.allow_destructive_actions, false)
-  const displayValue = allowDestructive !== null ? allowDestructive : currentValue
-  const hasChanges = allowDestructive !== null
+  const currentValue = getSettingValue(
+    settings?.allow_destructive_actions,
+    false,
+  );
+  const displayValue =
+    allowDestructive !== null ? allowDestructive : currentValue;
+  const hasChanges = allowDestructive !== null;
 
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (allowDestructive !== null) {
-        return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', {
-          allow_destructive_actions: allowDestructive,
-        })
+        return await api.put<Record<string, SettingsSetting>>(
+          '/api/v1/admin/settings',
+          {
+            allow_destructive_actions: allowDestructive,
+          },
+        );
       }
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
       if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
+        qc.setQueryData(
+          ['globalSettings'],
+          (old: GlobalSettingsResponse | undefined) => ({
+            ...old,
+            ...updatedSettings,
+          }),
+        );
       }
-      setAllowDestructive(null)
-      toast.success('Setting updated')
+      setAllowDestructive(null);
+      toast.success('Setting updated');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to update setting')
+      toastAPIError(err, 'Failed to update setting');
     },
-  })
+  });
 
   const clearMutation = useMutation({
     mutationFn: async () =>
       await api.delete<Record<string, SettingsSetting>>(
-        '/api/v1/admin/settings?key=allow_destructive_actions'
+        '/api/v1/admin/settings?key=allow_destructive_actions',
       ),
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
       if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
+        qc.setQueryData(
+          ['globalSettings'],
+          (old: GlobalSettingsResponse | undefined) => ({
+            ...old,
+            ...updatedSettings,
+          }),
+        );
       }
-      setAllowDestructive(null)
-      toast.success('Setting cleared')
+      setAllowDestructive(null);
+      toast.success('Setting cleared');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to clear setting')
+      toastAPIError(err, 'Failed to clear setting');
     },
-  })
+  });
 
   const handleCancel = () => {
-    setAllowDestructive(null)
-  }
+    setAllowDestructive(null);
+  };
 
   const handleSave = async () => {
     try {
-      await updateMutation.mutateAsync()
+      await updateMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const handleClear = async () => {
     try {
-      await clearMutation.mutateAsync()
+      await clearMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
-  const hasDbSetting = settings?.allow_destructive_actions?.source === 'db'
+  const hasDbSetting = settings?.allow_destructive_actions?.source === 'db';
 
   return (
     <Card>
@@ -330,8 +382,9 @@ function DestructiveActionsCard({
       </CardHeader>
       <CardContent>
         <p className="mb-3 text-muted-foreground text-sm">
-          When disabled, dangerous delete operations are banned globally (e.g. deleting apps).
-          Enable to allow destructive actions (you will still need the required permissions).
+          When disabled, dangerous delete operations are banned globally (e.g.
+          deleting apps). Enable to allow destructive actions (you will still
+          need the required permissions).
         </p>
         <label className="flex items-center gap-3">
           <input
@@ -357,7 +410,12 @@ function DestructiveActionsCard({
           )}
           {hasChanges && (
             <>
-              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+              <Button
+                disabled={disabled}
+                onClick={handleCancel}
+                size="sm"
+                variant="outline"
+              >
                 Cancel
               </Button>
               <Button
@@ -372,143 +430,166 @@ function DestructiveActionsCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function VCSCIProvidersCard({
   settings,
   disabled,
 }: {
-  settings: GlobalSettingsResponse | undefined
-  disabled: boolean
+  settings: GlobalSettingsResponse | undefined;
+  disabled: boolean;
 }) {
-  const qc = useQueryClient()
-  const { handleStepUpError } = useStepUp()
-  const [vcsProvider, setVcsProvider] = useState<string | null>(null)
-  const [vcsOrgName, setVcsOrgName] = useState<string | null>(null)
-  const [ciProvider, setCiProvider] = useState<string | null>(null)
-  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null)
+  const qc = useQueryClient();
+  const { handleStepUpError } = useStepUp();
+  const [vcsProvider, setVcsProvider] = useState<string | null>(null);
+  const [vcsOrgName, setVcsOrgName] = useState<string | null>(null);
+  const [ciProvider, setCiProvider] = useState<string | null>(null);
+  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null);
 
-  const currentVcsProvider = getSettingValue(settings?.default_vcs_provider, 'github')
-  const currentVcsOrgName = getSettingValue(settings?.default_vcs_org_name, '')
-  const currentCiProvider = getSettingValue(settings?.default_ci_provider, 'circleci')
-  const currentCiOrgSlug = getSettingValue(settings?.default_ci_org_slug, '')
+  const currentVcsProvider = getSettingValue(
+    settings?.default_vcs_provider,
+    'github',
+  );
+  const currentVcsOrgName = getSettingValue(settings?.default_vcs_org_name, '');
+  const currentCiProvider = getSettingValue(
+    settings?.default_ci_provider,
+    'circleci',
+  );
+  const currentCiOrgSlug = getSettingValue(settings?.default_ci_org_slug, '');
 
-  const displayVcsProvider = vcsProvider !== null ? vcsProvider : currentVcsProvider
-  const displayVcsOrgName = vcsOrgName !== null ? vcsOrgName : currentVcsOrgName
-  const displayCiProvider = ciProvider !== null ? ciProvider : currentCiProvider
-  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug
+  const displayVcsProvider =
+    vcsProvider !== null ? vcsProvider : currentVcsProvider;
+  const displayVcsOrgName =
+    vcsOrgName !== null ? vcsOrgName : currentVcsOrgName;
+  const displayCiProvider =
+    ciProvider !== null ? ciProvider : currentCiProvider;
+  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug;
 
   const hasChanges =
-    vcsProvider !== null || vcsOrgName !== null || ciProvider !== null || ciOrgSlug !== null
+    vcsProvider !== null ||
+    vcsOrgName !== null ||
+    ciProvider !== null ||
+    ciOrgSlug !== null;
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updates: Record<string, unknown> = {}
+      const updates: Record<string, unknown> = {};
       if (vcsProvider !== null) {
-        updates.default_vcs_provider = vcsProvider
+        updates.default_vcs_provider = vcsProvider;
       }
       if (vcsOrgName !== null) {
-        updates.default_vcs_org_name = vcsOrgName
+        updates.default_vcs_org_name = vcsOrgName;
       }
       if (ciProvider !== null) {
-        updates.default_ci_provider = ciProvider
+        updates.default_ci_provider = ciProvider;
       }
       if (ciOrgSlug !== null) {
-        updates.default_ci_org_slug = ciOrgSlug
+        updates.default_ci_org_slug = ciOrgSlug;
       }
-      return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', updates)
+      return await api.put<Record<string, SettingsSetting>>(
+        '/api/v1/admin/settings',
+        updates,
+      );
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
-      qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-        ...old,
-        ...updatedSettings,
-      }))
-      setVcsProvider(null)
-      setVcsOrgName(null)
-      setCiProvider(null)
-      setCiOrgSlug(null)
-      toast.success('Provider settings updated')
+      qc.setQueryData(
+        ['globalSettings'],
+        (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }),
+      );
+      setVcsProvider(null);
+      setVcsOrgName(null);
+      setCiProvider(null);
+      setCiOrgSlug(null);
+      toast.success('Provider settings updated');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to update settings')
+      toastAPIError(err, 'Failed to update settings');
     },
-  })
+  });
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const keys: string[] = []
+      const keys: string[] = [];
       if (settings?.default_vcs_provider?.source === 'db') {
-        keys.push('default_vcs_provider')
+        keys.push('default_vcs_provider');
       }
       if (settings?.default_vcs_org_name?.source === 'db') {
-        keys.push('default_vcs_org_name')
+        keys.push('default_vcs_org_name');
       }
       if (settings?.default_ci_provider?.source === 'db') {
-        keys.push('default_ci_provider')
+        keys.push('default_ci_provider');
       }
       if (settings?.default_ci_org_slug?.source === 'db') {
-        keys.push('default_ci_org_slug')
+        keys.push('default_ci_org_slug');
       }
       if (keys.length > 0) {
-        const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(`/api/v1/admin/settings?${params}`)
+        const params = keys.map((k) => `key=${k}`).join('&');
+        return await api.delete<Record<string, SettingsSetting>>(
+          `/api/v1/admin/settings?${params}`,
+        );
       }
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
       if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
+        qc.setQueryData(
+          ['globalSettings'],
+          (old: GlobalSettingsResponse | undefined) => ({
+            ...old,
+            ...updatedSettings,
+          }),
+        );
       }
-      setVcsProvider(null)
-      setVcsOrgName(null)
-      setCiProvider(null)
-      setCiOrgSlug(null)
-      toast.success('Provider settings cleared')
+      setVcsProvider(null);
+      setVcsOrgName(null);
+      setCiProvider(null);
+      setCiOrgSlug(null);
+      toast.success('Provider settings cleared');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to clear settings')
+      toastAPIError(err, 'Failed to clear settings');
     },
-  })
+  });
 
   const handleCancel = () => {
-    setVcsProvider(null)
-    setVcsOrgName(null)
-    setCiProvider(null)
-    setCiOrgSlug(null)
-  }
+    setVcsProvider(null);
+    setVcsOrgName(null);
+    setCiProvider(null);
+    setCiOrgSlug(null);
+  };
 
   const handleSave = async () => {
     try {
-      await updateMutation.mutateAsync()
+      await updateMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const handleClear = async () => {
     try {
-      await clearMutation.mutateAsync()
+      await clearMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const hasDbSettings =
     settings?.default_vcs_provider?.source === 'db' ||
     settings?.default_vcs_org_name?.source === 'db' ||
     settings?.default_ci_provider?.source === 'db' ||
-    settings?.default_ci_org_slug?.source === 'db'
+    settings?.default_ci_org_slug?.source === 'db';
 
   return (
     <Card>
@@ -517,8 +598,8 @@ function VCSCIProvidersCard({
       </CardHeader>
       <CardContent className="space-y-4 pb-6">
         <p className="text-muted-foreground text-sm">
-          Configure default version control and CI/CD providers for all apps. Apps can override
-          these in their individual settings.
+          Configure default version control and CI/CD providers for all apps.
+          Apps can override these in their individual settings.
         </p>
 
         <div className="grid grid-cols-2 gap-12">
@@ -615,7 +696,12 @@ function VCSCIProvidersCard({
           )}
           {hasChanges && (
             <>
-              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+              <Button
+                disabled={disabled}
+                onClick={handleCancel}
+                size="sm"
+                variant="outline"
+              >
                 Cancel
               </Button>
               <Button
@@ -630,116 +716,134 @@ function VCSCIProvidersCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function DeployApprovalsCard({
   settings,
   disabled,
 }: {
-  settings: GlobalSettingsResponse | undefined
-  disabled: boolean
+  settings: GlobalSettingsResponse | undefined;
+  disabled: boolean;
 }) {
-  const qc = useQueryClient()
-  const { handleStepUpError } = useStepUp()
-  const [enabled, setEnabled] = useState<boolean | null>(null)
-  const [windowMinutes, setWindowMinutes] = useState<number | null>(null)
+  const qc = useQueryClient();
+  const { handleStepUpError } = useStepUp();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [windowMinutes, setWindowMinutes] = useState<number | null>(null);
 
-  const currentEnabled = getSettingValue(settings?.deploy_approvals_enabled, true)
-  const currentWindowMinutes = getSettingValue(settings?.deploy_approval_window_minutes, 15)
+  const currentEnabled = getSettingValue(
+    settings?.deploy_approvals_enabled,
+    true,
+  );
+  const currentWindowMinutes = getSettingValue(
+    settings?.deploy_approval_window_minutes,
+    15,
+  );
 
-  const displayEnabled = enabled !== null ? enabled : currentEnabled
-  const displayWindowMinutes = windowMinutes !== null ? windowMinutes : currentWindowMinutes
+  const displayEnabled = enabled !== null ? enabled : currentEnabled;
+  const displayWindowMinutes =
+    windowMinutes !== null ? windowMinutes : currentWindowMinutes;
 
-  const hasChanges = enabled !== null || windowMinutes !== null
+  const hasChanges = enabled !== null || windowMinutes !== null;
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      const updates: Record<string, unknown> = {}
+      const updates: Record<string, unknown> = {};
       if (enabled !== null) {
-        updates.deploy_approvals_enabled = enabled
+        updates.deploy_approvals_enabled = enabled;
       }
       if (windowMinutes !== null) {
-        updates.deploy_approval_window_minutes = windowMinutes
+        updates.deploy_approval_window_minutes = windowMinutes;
       }
-      return await api.put<Record<string, SettingsSetting>>('/api/v1/admin/settings', updates)
+      return await api.put<Record<string, SettingsSetting>>(
+        '/api/v1/admin/settings',
+        updates,
+      );
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
-      qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-        ...old,
-        ...updatedSettings,
-      }))
-      setEnabled(null)
-      setWindowMinutes(null)
-      toast.success('Deploy approval settings updated')
+      qc.setQueryData(
+        ['globalSettings'],
+        (old: GlobalSettingsResponse | undefined) => ({
+          ...old,
+          ...updatedSettings,
+        }),
+      );
+      setEnabled(null);
+      setWindowMinutes(null);
+      toast.success('Deploy approval settings updated');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to update deploy approval settings')
+      toastAPIError(err, 'Failed to update deploy approval settings');
     },
-  })
+  });
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      const keys: string[] = []
+      const keys: string[] = [];
       if (settings?.deploy_approvals_enabled?.source === 'db') {
-        keys.push('deploy_approvals_enabled')
+        keys.push('deploy_approvals_enabled');
       }
       if (settings?.deploy_approval_window_minutes?.source === 'db') {
-        keys.push('deploy_approval_window_minutes')
+        keys.push('deploy_approval_window_minutes');
       }
       if (keys.length > 0) {
-        const params = keys.map((k) => `key=${k}`).join('&')
-        return await api.delete<Record<string, SettingsSetting>>(`/api/v1/admin/settings?${params}`)
+        const params = keys.map((k) => `key=${k}`).join('&');
+        return await api.delete<Record<string, SettingsSetting>>(
+          `/api/v1/admin/settings?${params}`,
+        );
       }
     },
     onSuccess: (updatedSettings) => {
       // Merge updated settings into cache instead of refetching
       if (updatedSettings) {
-        qc.setQueryData(['globalSettings'], (old: GlobalSettingsResponse | undefined) => ({
-          ...old,
-          ...updatedSettings,
-        }))
+        qc.setQueryData(
+          ['globalSettings'],
+          (old: GlobalSettingsResponse | undefined) => ({
+            ...old,
+            ...updatedSettings,
+          }),
+        );
       }
-      setEnabled(null)
-      setWindowMinutes(null)
-      toast.success('Deploy approval settings cleared')
+      setEnabled(null);
+      setWindowMinutes(null);
+      toast.success('Deploy approval settings cleared');
     },
     onError: (err: unknown) => {
-      toastAPIError(err, 'Failed to clear deploy approval settings')
+      toastAPIError(err, 'Failed to clear deploy approval settings');
     },
-  })
+  });
 
   const handleCancel = () => {
-    setEnabled(null)
-    setWindowMinutes(null)
-  }
+    setEnabled(null);
+    setWindowMinutes(null);
+  };
 
   const handleSave = async () => {
     try {
-      await updateMutation.mutateAsync()
+      await updateMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => updateMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const handleClear = async () => {
     try {
-      await clearMutation.mutateAsync()
+      await clearMutation.mutateAsync();
     } catch (err) {
       if (handleStepUpError(err, () => clearMutation.mutateAsync())) {
-        return // MFA modal shown, will retry after verification
+        return; // MFA modal shown, will retry after verification
       }
       // Error already handled by mutation's onError
     }
-  }
+  };
 
   const hasDbSettings =
     settings?.deploy_approvals_enabled?.source === 'db' ||
-    settings?.deploy_approval_window_minutes?.source === 'db'
+    settings?.deploy_approval_window_minutes?.source === 'db';
 
   return (
     <Card>
@@ -748,8 +852,9 @@ function DeployApprovalsCard({
       </CardHeader>
       <CardContent className="space-y-6 pb-6">
         <p className="text-muted-foreground text-sm">
-          Configure manual deploy approval workflow for CI/CD pipelines. When enabled, API tokens
-          with deploy_with_approval permission require admin approval before deploying.
+          Configure manual deploy approval workflow for CI/CD pipelines. When
+          enabled, API tokens with deploy_with_approval permission require admin
+          approval before deploying.
         </p>
 
         <label className="flex items-center gap-3">
@@ -772,15 +877,17 @@ function DeployApprovalsCard({
               id="approval-window"
               min={1}
               onChange={(e) => {
-                const val = Number.parseInt(e.target.value, 10)
+                const val = Number.parseInt(e.target.value, 10);
                 if (!Number.isNaN(val) && val >= 1) {
-                  setWindowMinutes(val)
+                  setWindowMinutes(val);
                 }
               }}
               type="number"
               value={displayWindowMinutes}
             />
-            <SourceIndicator setting={settings?.deploy_approval_window_minutes} />
+            <SourceIndicator
+              setting={settings?.deploy_approval_window_minutes}
+            />
           </div>
           <p className="mt-1 text-muted-foreground text-xs">
             How long approvals remain valid after admin approval
@@ -800,7 +907,12 @@ function DeployApprovalsCard({
           )}
           {hasChanges && (
             <>
-              <Button disabled={disabled} onClick={handleCancel} size="sm" variant="outline">
+              <Button
+                disabled={disabled}
+                onClick={handleCancel}
+                size="sm"
+                variant="outline"
+              >
                 Cancel
               </Button>
               <Button
@@ -815,12 +927,12 @@ function DeployApprovalsCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 export function SettingsPage() {
-  const { user } = useAuth()
-  const isAdmin = !!user?.roles?.includes('admin')
+  const { user } = useAuth();
+  const isAdmin = !!user?.roles?.includes('admin');
 
   const {
     data: globalSettings,
@@ -828,11 +940,12 @@ export function SettingsPage() {
     error,
   } = useQuery({
     queryKey: ['globalSettings'],
-    queryFn: async () => api.get<GlobalSettingsResponse>('/api/v1/admin/settings'),
+    queryFn: async () =>
+      api.get<GlobalSettingsResponse>('/api/v1/admin/settings'),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
-  })
+  });
 
   if (isLoading) {
     return (
@@ -847,7 +960,7 @@ export function SettingsPage() {
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -868,11 +981,14 @@ export function SettingsPage() {
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2">
           <MfaConfigCard disabled={!isAdmin} settings={globalSettings} />
-          <DestructiveActionsCard disabled={!isAdmin} settings={globalSettings} />
+          <DestructiveActionsCard
+            disabled={!isAdmin}
+            settings={globalSettings}
+          />
         </div>
         <VCSCIProvidersCard disabled={!isAdmin} settings={globalSettings} />
         <DeployApprovalsCard disabled={!isAdmin} settings={globalSettings} />
       </div>
     </div>
-  )
+  );
 }
