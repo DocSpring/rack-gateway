@@ -28,7 +28,7 @@ COPY internal ./internal
 COPY cmd/gateway ./cmd/gateway
 
 # Build the gateway binary directly in this stage
-RUN CGO_ENABLED=1 go build -o /out/rack-gateway-api ./cmd/gateway \
+RUN CGO_ENABLED=0 go build -o /out/rack-gateway-api ./cmd/gateway \
     && /out/rack-gateway-api help
 
 FROM alpine:latest

@@ -82,6 +82,7 @@ tasks:
     desc: Build gateway API server -> bin/rack-gateway-api
     deps: [deps]
     env:
+      CGO_ENABLED: "0"
       CGO_CFLAGS: "-Wno-deprecated-declarations"
     sources:
       - go.*
@@ -98,6 +99,7 @@ tasks:
     desc: Build gateway CLI -> bin/rack-gateway
     deps: [deps]
     env:
+      CGO_ENABLED: "1"
       CGO_CFLAGS: "-Wno-deprecated-declarations"
     sources:
       - go.*
@@ -113,6 +115,7 @@ tasks:
     desc: Build mock Convox server -> bin/mock-convox
     deps: [deps]
     env:
+      CGO_ENABLED: "0"
       CGO_CFLAGS: "-Wno-deprecated-declarations"
     sources:
       - go.*

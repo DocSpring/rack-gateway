@@ -44,6 +44,9 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
 
+      - name: Go deps (lint warmup)
+        run: task go:deps
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:

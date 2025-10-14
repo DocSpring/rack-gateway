@@ -28,8 +28,6 @@ builds:
   - id: cli
     main: ./cmd/rack-gateway
     binary: rack-gateway
-    env:
-      - CGO_ENABLED=0
     goos:
       - linux
       - darwin
