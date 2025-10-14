@@ -24,8 +24,105 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.RBACManager) {
+type settingsTestEnv struct {
+	t              *testing.T
+	handler        *SettingsHandler
+	database       *db.Database
+	rbac           rbac.RBACManager
+	sessionManager *auth.SessionManager
+	mfaService     *mfa.Service
+	mfaSettings    *db.MFASettings
+	admin          *db.User
+	totpKey        *otp.Key
+}
+
+func newSettingsTestEnv(t *testing.T) *settingsTestEnv {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
 	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() {
+		dbtest.Reset(t, database)
+	})
+
+	mgr, err := rbac.NewDBManager(database, "example.com")
+	require.NoError(t, err)
+
+	settingsService := settings.NewService(database)
+	handler := NewSettingsHandler(settingsService, mgr)
+
+	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	pepper := []byte("test-pepper")
+	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	require.NoError(t, err)
+
+	mfaSettings, err := settingsService.GetMFASettings()
+	require.NoError(t, err)
+
+	admin, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+	require.NoError(t, err)
+
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Test",
+		AccountName: admin.Email,
+		Period:      30,
+		Digits:      otp.DigitsSix,
+	})
+	require.NoError(t, err)
+
+	method, err := database.CreateMFAMethod(admin.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, database.ConfirmMFAMethod(method.ID, time.Now()))
+
+	return &settingsTestEnv{
+		t:              t,
+		handler:        handler,
+		database:       database,
+		rbac:           mgr,
+		sessionManager: sessionManager,
+		mfaService:     mfaService,
+		mfaSettings:    mfaSettings,
+		admin:          admin,
+		totpKey:        key,
+	}
+}
+
+func (e *settingsTestEnv) newWebAuthUser(t *testing.T) (*auth.AuthUser, *db.UserSession) {
+	t.Helper()
+	_, session, err := e.sessionManager.CreateSession(e.admin, auth.SessionMetadata{Channel: "web"})
+	require.NoError(t, err)
+
+	now := time.Now()
+	session.MFAVerifiedAt = &now
+
+	authUser := &auth.AuthUser{
+		Email:      e.admin.Email,
+		Name:       e.admin.Name,
+		Roles:      e.admin.Roles,
+		IsAPIToken: false,
+		Session:    session,
+	}
+	return authUser, session
+}
+
+func (e *settingsTestEnv) totpCode(t *testing.T) string {
+	t.Helper()
+	code, err := totp.GenerateCode(e.totpKey.Secret(), time.Now())
+	require.NoError(t, err)
+	return code
+}
+
+func (e *settingsTestEnv) markRecentStepUp(t *testing.T, session *db.UserSession, when time.Time) {
+	t.Helper()
+	session.RecentStepUpAt = &when
+	require.NoError(t, e.database.UpdateSessionRecentStepUp(session.ID, when))
+}
+
+func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.RBACManager) {
+	t.Helper()
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 
@@ -55,830 +152,494 @@ func (m *mockMFAService) VerifyWebAuthnAssertion(user *db.User, sessionJSON []by
 	return &mfa.VerificationResult{MethodID: 1}, nil
 }
 
-// setupRouterWithMFAMiddleware creates a router with the MFA middleware applied.
-// This is needed because the middleware is what enforces MFA, not the handlers.
 func setupRouterWithMFAMiddleware(
 	t *testing.T,
 	method string,
-	path string,
+	pattern string,
 	authUser *auth.AuthUser,
-	mfaService *mfa.Service,
+	mfaService middleware.MFAVerifier,
 	database *db.Database,
 	mfaSettings *db.MFASettings,
 	handler gin.HandlerFunc,
+	params gin.Params,
 ) *gin.Engine {
 	router := gin.New()
-	router.Handle(method, path, func(c *gin.Context) {
+	router.Handle(method, pattern, func(c *gin.Context) {
 		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 		c.Set("user_email", authUser.Email)
 		if authUser.Name != "" {
 			c.Set("user_name", authUser.Name)
+		}
+		if len(params) > 0 {
+			c.Params = append(gin.Params{}, params...)
 		}
 		c.Next()
 	}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler)
 	return router
 }
 
-// setupRouterWithMockMFAMiddleware creates a router with mocked MFA verification.
 func setupRouterWithMockMFAMiddleware(
 	t *testing.T,
 	method string,
-	path string,
+	pattern string,
 	authUser *auth.AuthUser,
-	mockMFA middleware.MFAVerifier,
+	mockVerifier middleware.MFAVerifier,
 	database *db.Database,
 	mfaSettings *db.MFASettings,
 	handler gin.HandlerFunc,
+	params gin.Params,
 ) *gin.Engine {
 	router := gin.New()
-	router.Handle(method, path, func(c *gin.Context) {
+	router.Handle(method, pattern, func(c *gin.Context) {
 		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 		c.Set("user_email", authUser.Email)
 		if authUser.Name != "" {
 			c.Set("user_name", authUser.Name)
 		}
+		if len(params) > 0 {
+			c.Params = append(gin.Params{}, params...)
+		}
 		c.Next()
-	}, middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler)
+	}, middleware.EnforceMFARequirements(mockVerifier, database, mfaSettings), handler)
 	return router
 }
 
-func TestUpdateGlobalSettings_MFAEnforcement(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
+func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
+	env := newSettingsTestEnv(t)
 
-	// Create admin user
-	admin, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
-	require.NoError(t, err)
+	t.Run("requires step-up when none provided", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
 
-	// Create handler and services
-	mgr, err := rbac.NewDBManager(database, "example.com")
-	require.NoError(t, err)
-	settingsService := settings.NewService(database)
-	handler := NewSettingsHandler(settingsService, mgr)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/vcs-and-ci-defaults",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalVCSAndCIDefaults,
+			nil,
+		)
 
-	// Create MFA service
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-
-	// Get MFA settings
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
-
-	// Create TOTP MFA method for testing MFAAlways
-	totpKey, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Test",
-		AccountName: admin.Email,
-		Period:      30,
-		Digits:      otp.DigitsSix,
-	})
-	require.NoError(t, err)
-
-	method, err := database.CreateMFAMethod(admin.ID, "totp", "Authenticator", totpKey.Secret(), nil, nil, nil, nil)
-	require.NoError(t, err)
-
-	err = database.ConfirmMFAMethod(method.ID, time.Now())
-	require.NoError(t, err)
-
-	t.Run("MFANone setting succeeds without MFA", func(t *testing.T) {
-		// Create a session for the admin user
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		// Set MFA verified but NO MFA code
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue - MFANone doesn't require it
+		payload := map[string]interface{}{
+			"default_ci_provider": "github",
 		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/mfa-configuration/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
-			"default_vcs_provider": "github",
-		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/vcs-and-ci-defaults", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// MFANone should succeed without fresh MFA code
-		require.Equal(t, http.StatusOK, w.Code)
-	})
-
-	t.Run("MFAAlways setting requires MFA code", func(t *testing.T) {
-		// Create a session for the admin user
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		// Set MFA verified but NO MFA code in request
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// NO MFAType or MFAValue - this is the key
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		body, err := json.Marshal(updates)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
-
-		// Should be denied because MFAAlways requires fresh MFA code
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_required", response["error"])
-	})
-
-	t.Run("Batch with mixed MFA levels uses highest (MFAAlways)", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
-			"default_vcs_provider":       "github",    // MFANone
-			"allow_destructive_actions":  true,        // MFAAlways
-			"mfa_step_up_window_minutes": float64(15), // MFAStepUp
-		}
-		body, err := json.Marshal(updates)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
-
-		// MFAAlways should take precedence over MFAStepUp and MFANone
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_required", response["error"])
-	})
-
-	t.Run("Batch with only MFAStepUp requires step-up", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-		// No RecentStepUpAt set - outside window
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
-			"mfa_step_up_window_minutes":  float64(15),
-			"mfa_trusted_device_ttl_days": float64(60),
-		}
-		body, err := json.Marshal(updates)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
-
-		// Should require step-up
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "step-up", w.Header().Get("X-MFA-Required"))
 
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_step_up_required", response["error"])
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		require.Equal(t, "mfa_step_up_required", resp["error"])
 	})
 
-	t.Run("MFAAlways with X-MFA-TOTP header succeeds", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
+	t.Run("accepts inline TOTP for step-up", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
+		code := env.totpCode(t)
+		authUser.MFAType = "totp"
+		authUser.MFAValue = code
 
-		now := time.Now()
-		session.MFAVerifiedAt = &now
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/vcs-and-ci-defaults",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalVCSAndCIDefaults,
+			nil,
+		)
 
-		// Generate valid TOTP code
-		code, err := totp.GenerateCode(totpKey.Secret(), time.Now())
-		require.NoError(t, err)
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			MFAType:    "totp",
-			MFAValue:   code,
+		payload := map[string]interface{}{
+			"default_ci_provider": "github",
 		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("X-MFA-TOTP", code)
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/vcs-and-ci-defaults", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// Should succeed with valid MFA code
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("MFAAlways with basic auth TOTP inline succeeds", func(t *testing.T) {
-		sessionToken, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "cli"})
-		require.NoError(t, err)
+	t.Run("succeeds with recent step-up", func(t *testing.T) {
+		authUser, session := env.newWebAuthUser(t)
+		env.markRecentStepUp(t, session, time.Now())
 
-		now := time.Now()
-		err = database.UpdateSessionMFAVerified(session.ID, now, nil)
-		require.NoError(t, err)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/vcs-and-ci-defaults",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalVCSAndCIDefaults,
+			nil,
+		)
 
-		// Reload session with MFA verified
-		session, err = database.GetSessionByID(session.ID)
-		require.NoError(t, err)
-
-		// Generate valid TOTP code
-		code, err := totp.GenerateCode(totpKey.Secret(), time.Now())
-		require.NoError(t, err)
-
-		// Format: session_token.totp.123456
-		passwordWithMFA := sessionToken + ".totp." + code
-
-		// Use mock MFA service that always succeeds
-		mockMFA := &mockMFAService{}
-
-		router := gin.New()
-		router.Use(func(c *gin.Context) {
-			// Simulate auth middleware extracting inline MFA
-			authUser := &auth.AuthUser{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
-				IsAPIToken: false,
-				MFAType:    "totp",
-				MFAValue:   code,
-				Session:    session,
-			}
-
-			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", authUser.Email)
-			c.Set("user_name", authUser.Name)
-			c.Next()
-		})
-		router.Handle(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
-			"allow_destructive_actions": true,
+		payload := map[string]interface{}{
+			"default_ci_org_slug": "example",
 		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.SetBasicAuth("convox", passwordWithMFA)
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/vcs-and-ci-defaults", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// Should succeed with valid inline MFA
 		require.Equal(t, http.StatusOK, w.Code)
 	})
+}
 
-	t.Run("MFAAlways with X-MFA-WebAuthn header succeeds", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
+func TestGlobalSettingsAllowDestructive_MFA(t *testing.T) {
+	env := newSettingsTestEnv(t)
 
-		now := time.Now()
-		session.MFAVerifiedAt = &now
+	t.Run("requires inline MFA", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
 
-		// Create mock WebAuthn data (base64-encoded JSON)
-		webauthnData := map[string]string{
-			"session_data":       `{"challenge":"test","rpId":"example.com"}`,
-			"assertion_response": `{"id":"test","response":{}}`,
-		}
-		webauthnJSON, err := json.Marshal(webauthnData)
-		require.NoError(t, err)
-		webauthnValue := base64.StdEncoding.EncodeToString(webauthnJSON)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/allow-destructive-actions",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalAllowDestructiveActions,
+			nil,
+		)
 
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			MFAType:    "webauthn",
-			MFAValue:   webauthnValue,
-		}
-
-		// Use mock MFA service that always succeeds
-		mockMFA := &mockMFAService{}
-		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
+		payload := map[string]interface{}{
 			"allow_destructive_actions": true,
 		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("X-MFA-WebAuthn", webauthnValue)
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// Should succeed with valid WebAuthn assertion
-		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		require.Equal(t, "mfa_required", resp["error"])
 	})
 
-	t.Run("MFAAlways with basic auth WebAuthn inline succeeds", func(t *testing.T) {
-		sessionToken, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "cli"})
-		require.NoError(t, err)
+	t.Run("succeeds with valid TOTP", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
+		code := env.totpCode(t)
+		authUser.MFAType = "totp"
+		authUser.MFAValue = code
 
-		now := time.Now()
-		err = database.UpdateSessionMFAVerified(session.ID, now, nil)
-		require.NoError(t, err)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/allow-destructive-actions",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalAllowDestructiveActions,
+			nil,
+		)
 
-		// Reload session with MFA verified
-		session, err = database.GetSessionByID(session.ID)
-		require.NoError(t, err)
-
-		// Create mock WebAuthn data (base64-encoded JSON)
-		webauthnData := map[string]string{
-			"session_data":       `{"challenge":"test","rpId":"example.com"}`,
-			"assertion_response": `{"id":"test","response":{}}`,
-		}
-		webauthnJSON, err := json.Marshal(webauthnData)
-		require.NoError(t, err)
-		webauthnValue := base64.StdEncoding.EncodeToString(webauthnJSON)
-
-		// Format: session_token.webauthn.base64data
-		passwordWithMFA := sessionToken + ".webauthn." + webauthnValue
-
-		// Use mock MFA service that always succeeds
-		mockMFA := &mockMFAService{}
-
-		router := gin.New()
-		router.Use(func(c *gin.Context) {
-			// Simulate auth middleware extracting inline MFA
-			authUser := &auth.AuthUser{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
-				IsAPIToken: false,
-				MFAType:    "webauthn",
-				MFAValue:   webauthnValue,
-				Session:    session,
-			}
-
-			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", authUser.Email)
-			c.Set("user_name", authUser.Name)
-			c.Next()
-		})
-		router.Handle(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", middleware.EnforceMFARequirements(mockMFA, database, mfaSettings), handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
+		payload := map[string]interface{}{
 			"allow_destructive_actions": true,
 		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.SetBasicAuth("convox", passwordWithMFA)
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-MFA-TOTP", code)
+		router.ServeHTTP(w, req)
 
-		// Should succeed with valid inline WebAuthn
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("MFAAlways with invalid TOTP code fails", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
+	t.Run("invalid TOTP fails verification", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
+		authUser.MFAType = "totp"
+		authUser.MFAValue = "000000"
 
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			MFAType:    "totp",
-			MFAValue:   "invalid-code",
-		}
-
-		// Use mock MFA service that always fails
-		mockMFA := &mockMFAService{
+		mockVerifier := &mockMFAService{
 			verifyTOTPFunc: func(*db.User, string, string, string, *int64) (*mfa.VerificationResult, error) {
-				return nil, fmt.Errorf("invalid TOTP code")
+				return nil, fmt.Errorf("invalid code")
 			},
 		}
 
-		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
+		router := setupRouterWithMockMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/allow-destructive-actions",
+			authUser,
+			mockVerifier,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalAllowDestructiveActions,
+			nil,
+		)
 
-		updates := map[string]interface{}{
+		payload := map[string]interface{}{
 			"allow_destructive_actions": true,
 		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// Should be denied with invalid MFA code
 		require.Equal(t, http.StatusUnauthorized, w.Code)
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_verification_failed", response["error"])
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		require.Equal(t, "mfa_verification_failed", resp["error"])
 	})
 
-	t.Run("MFAAlways with invalid WebAuthn assertion fails", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
+	t.Run("succeeds with WebAuthn assertion", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
 
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		// Create mock WebAuthn data
 		webauthnData := map[string]string{
 			"session_data":       `{"challenge":"test","rpId":"example.com"}`,
-			"assertion_response": `{"id":"invalid","response":{}}`,
+			"assertion_response": `{"id":"test","response":{}}`,
 		}
-		webauthnJSON, err := json.Marshal(webauthnData)
+		raw, err := json.Marshal(webauthnData)
 		require.NoError(t, err)
-		webauthnValue := base64.StdEncoding.EncodeToString(webauthnJSON)
+		authUser.MFAType = "webauthn"
+		authUser.MFAValue = base64.StdEncoding.EncodeToString(raw)
 
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			MFAType:    "webauthn",
-			MFAValue:   webauthnValue,
-		}
+		mockVerifier := &mockMFAService{}
+		router := setupRouterWithMockMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/allow-destructive-actions",
+			authUser,
+			mockVerifier,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateGlobalAllowDestructiveActions,
+			nil,
+		)
 
-		// Use mock MFA service that always fails
-		mockMFA := &mockMFAService{
-			verifyWebAuthnFunc: func(*db.User, []byte, []byte, string, string, *int64) (*mfa.VerificationResult, error) {
-				return nil, fmt.Errorf("invalid WebAuthn assertion")
-			},
-		}
-
-		router := setupRouterWithMockMFAMiddleware(t, http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mockMFA, database, mfaSettings, handler.UpdateGlobalSettings)
-
-		updates := map[string]interface{}{
+		payload := map[string]interface{}{
 			"allow_destructive_actions": true,
 		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-MFA-WebAuthn", authUser.MFAValue)
+		router.ServeHTTP(w, req)
 
-		// Should be denied with invalid WebAuthn assertion
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_verification_failed", response["error"])
+		require.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
-func TestDeleteGlobalSettings_MFAEnforcement(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
+func TestDeleteGlobalSettingsAllowDestructive_MFA(t *testing.T) {
+	env := newSettingsTestEnv(t)
 
-	// Create admin user
-	admin, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
-	require.NoError(t, err)
+	t.Run("requires inline MFA to delete", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
 
-	// Create handler and services
-	mgr, err := rbac.NewDBManager(database, "example.com")
-	require.NoError(t, err)
-	settingsService := settings.NewService(database)
-	handler := NewSettingsHandler(settingsService, mgr)
-
-	// Create MFA service
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-
-	// Get MFA settings
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
-
-	// Create TOTP MFA method
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Test",
-		AccountName: admin.Email,
-		Period:      30,
-		Digits:      otp.DigitsSix,
-	})
-	require.NoError(t, err)
-
-	method, err := database.CreateMFAMethod(admin.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
-	require.NoError(t, err)
-
-	err = database.ConfirmMFAMethod(method.ID, time.Now())
-	require.NoError(t, err)
-
-	t.Run("Delete MFAAlways setting requires MFA code", func(t *testing.T) {
-		// First set the value
-		_ = settingsService.SetGlobalSetting("allow_destructive_actions", true, &admin.ID)
-
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.DeleteGlobalSettings)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodDelete,
+			"/api/v1/settings/allow-destructive-actions",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.DeleteGlobalAllowDestructiveActions,
+			nil,
+		)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration?key=allow_destructive_actions", nil)
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions", nil)
+		router.ServeHTTP(w, req)
 
-		// Should be denied because MFAAlways requires fresh MFA code
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_required", response["error"])
 	})
 
-	t.Run("Delete batch with MFAAlways takes precedence", func(t *testing.T) {
-		// Set some values first
-		_ = settingsService.SetGlobalSetting("allow_destructive_actions", true, &admin.ID)
-		_ = settingsService.SetGlobalSetting("mfa_step_up_window_minutes", 15, &admin.ID)
-		_ = settingsService.SetGlobalSetting("default_vcs_provider", "github", &admin.ID)
+	t.Run("succeeds with TOTP code", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
+		code := env.totpCode(t)
+		authUser.MFAType = "totp"
+		authUser.MFAValue = code
 
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", authUser, mfaService, database, mfaSettings, handler.DeleteGlobalSettings)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodDelete,
+			"/api/v1/settings/allow-destructive-actions",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.DeleteGlobalAllowDestructiveActions,
+			nil,
+		)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration?key=allow_destructive_actions&key=mfa_step_up_window_minutes&key=default_vcs_provider", nil)
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions", nil)
+		req.Header.Set("X-MFA-TOTP", code)
+		router.ServeHTTP(w, req)
 
-		// MFAAlways (allow_destructive_actions) should take precedence
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_required", response["error"])
+		require.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
-func TestUpdateAppSettings_MFAEnforcement(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
+func TestAppSettingsVCSCIDeploy_MFA(t *testing.T) {
+	env := newSettingsTestEnv(t)
 
-	// Create admin user
-	admin, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
-	require.NoError(t, err)
+	t.Run("requires inline MFA", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
 
-	// Create handler and services
-	mgr, err := rbac.NewDBManager(database, "example.com")
-	require.NoError(t, err)
-	settingsService := settings.NewService(database)
-	handler := NewSettingsHandler(settingsService, mgr)
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/apps/:app/settings/vcs-ci-deploy",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateAppVCSCIDeploySettings,
+			gin.Params{{Key: "app", Value: "test-app"}},
+		)
 
-	// Create MFA service
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-
-	// Get MFA settings
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
-
-	// Create TOTP MFA method
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Test",
-		AccountName: admin.Email,
-		Period:      30,
-		Digits:      otp.DigitsSix,
-	})
-	require.NoError(t, err)
-
-	method, err := database.CreateMFAMethod(admin.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
-	require.NoError(t, err)
-
-	err = database.ConfirmMFAMethod(method.ID, time.Now())
-	require.NoError(t, err)
-
-	t.Run("MFANone app setting succeeds without MFA", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-
-		now := time.Now()
-		session.MFAVerifiedAt = &now
-
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/apps/:app/settings", authUser, mfaService, database, mfaSettings, handler.UpdateAppSettings)
-
-		updates := map[string]interface{}{
+		payload := map[string]interface{}{
 			"vcs_provider": "github",
 		}
-		body, err := json.Marshal(updates)
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/vcs-ci-deploy", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// MFANone should succeed without fresh MFA code
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
+	})
+
+	t.Run("accepts inline TOTP", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
+		code := env.totpCode(t)
+		authUser.MFAType = "totp"
+		authUser.MFAValue = code
+
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/apps/:app/settings/vcs-ci-deploy",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateAppVCSCIDeploySettings,
+			gin.Params{{Key: "app", Value: "test-app"}},
+		)
+
+		payload := map[string]interface{}{
+			"vcs_provider": "github",
+		}
+		body, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/vcs-ci-deploy", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-MFA-TOTP", code)
+		router.ServeHTTP(w, req)
+
 		require.Equal(t, http.StatusOK, w.Code)
 	})
+}
 
-	t.Run("MFAAlways app setting requires MFA code", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
+func TestAppSettingProtectedEnvVars_MFA(t *testing.T) {
+	env := newSettingsTestEnv(t)
 
-		now := time.Now()
-		session.MFAVerifiedAt = &now
+	t.Run("requires recent step-up", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
 
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/apps/:app/settings/protected-env-vars",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateAppProtectedEnvVars,
+			gin.Params{{Key: "app", Value: "test-app"}},
+		)
 
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/apps/:app/settings", authUser, mfaService, database, mfaSettings, handler.UpdateAppSettings)
-
-		updates := map[string]interface{}{
-			"github_verification": false, // MFAAlways - disabling security feature
-		}
-		body, err := json.Marshal(updates)
+		payload := []string{"DATABASE_URL"}
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/protected-env-vars", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// Should be denied because MFAAlways requires fresh MFA code
 		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_required", response["error"])
+		require.Equal(t, "step-up", w.Header().Get("X-MFA-Required"))
 	})
 
-	t.Run("Batch app settings with MFAAlways takes precedence", func(t *testing.T) {
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
+	t.Run("succeeds after inline step-up verification", func(t *testing.T) {
+		authUser, _ := env.newWebAuthUser(t)
+		code := env.totpCode(t)
+		authUser.MFAType = "totp"
+		authUser.MFAValue = code
 
-		now := time.Now()
-		session.MFAVerifiedAt = &now
+		router := setupRouterWithMFAMiddleware(
+			t,
+			http.MethodPut,
+			"/api/v1/apps/:app/settings/protected-env-vars",
+			authUser,
+			env.mfaService,
+			env.database,
+			env.mfaSettings,
+			env.handler.UpdateAppProtectedEnvVars,
+			gin.Params{{Key: "app", Value: "test-app"}},
+		)
 
-		authUser := &auth.AuthUser{
-			Email:      admin.Email,
-			Name:       admin.Name,
-			Roles:      admin.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			// No MFAType or MFAValue
-		}
-
-		router := setupRouterWithMFAMiddleware(t, http.MethodPut, "/api/v1/apps/:app/settings", authUser, mfaService, database, mfaSettings, handler.UpdateAppSettings)
-
-		updates := map[string]interface{}{
-			"vcs_provider":        "github",        // MFANone
-			"protected_env_vars":  []string{"FOO"}, // MFAStepUp
-			"github_verification": false,           // MFAAlways
-		}
-		body, err := json.Marshal(updates)
+		payload := []string{"DATABASE_URL"}
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings", bytes.NewReader(body))
-		httpReq.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, httpReq)
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/protected-env-vars", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
 
-		// MFAAlways should take precedence
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
-
-		var response map[string]interface{}
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-		require.Equal(t, "mfa_required", response["error"])
+		require.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
 func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 	handler, database, mgr := setupSettingsHandler(t)
 
-	// Create a test user
 	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
@@ -906,7 +667,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 			name: "set multiple settings",
 			updates: map[string]interface{}{
 				"allow_destructive_actions":   false,
-				"mfa_trusted_device_ttl_days": float64(60), // JSON numbers are float64
+				"mfa_trusted_device_ttl_days": float64(60),
 			},
 			expectedStatus: http.StatusOK,
 			expectedValues: map[string]interface{}{
@@ -919,19 +680,17 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up any previous settings
 			for key := range tt.updates {
 				_ = database.DeleteSetting(nil, key)
 			}
 
-			gin.SetMode(gin.TestMode)
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 
 			body, err := json.Marshal(tt.updates)
 			require.NoError(t, err)
 
-			c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
+			c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
 			c.Request.Header.Set("Content-Type", "application/json")
 			c.Set("user_email", "admin@example.com")
 
@@ -941,8 +700,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 
 			if tt.expectedStatus == http.StatusOK {
 				var result map[string]settings.Setting
-				err := json.Unmarshal(w.Body.Bytes(), &result)
-				require.NoError(t, err, "Response body: %s", w.Body.String())
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result), "Response body: %s", w.Body.String())
 
 				for key, expectedValue := range tt.expectedValues {
 					setting, ok := result[key]
@@ -954,10 +712,7 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 		})
 	}
 
-	// Test clearing settings (reverting to default)
 	t.Run("clear settings reverts to default", func(t *testing.T) {
-		// First set values
-		gin.SetMode(gin.TestMode)
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 
@@ -967,39 +722,34 @@ func TestUpdateGlobalSettings_Boolean(t *testing.T) {
 		body, err := json.Marshal(updates)
 		require.NoError(t, err)
 
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration", bytes.NewReader(body))
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
 		c.Request.Header.Set("Content-Type", "application/json")
 		c.Set("user_email", "admin@example.com")
 
 		handler.UpdateGlobalSettings(c)
 		require.Equal(t, http.StatusOK, w.Code)
 
-		// Verify it's in DB
 		valueBytes, exists, err := database.GetSetting(nil, "allow_destructive_actions")
 		require.NoError(t, err)
 		require.True(t, exists)
 		require.NotNil(t, valueBytes)
 
-		// Now clear it with DELETE
 		w = httptest.NewRecorder()
 		c, _ = gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/settings/deploy-approvals/vcs-and-ci-defaults/mfa-configuration?key=allow_destructive_actions", nil)
+		c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/settings?key=allow_destructive_actions", nil)
 		c.Set("user_email", "admin@example.com")
 
 		handler.DeleteGlobalSettings(c)
 		require.Equal(t, http.StatusOK, w.Code)
 
-		// Verify it's deleted from DB
 		_, exists, err = database.GetSetting(nil, "allow_destructive_actions")
 		require.NoError(t, err)
 		require.False(t, exists)
 
-		// Response should show default value with source "default"
 		var result map[string]settings.Setting
-		err = json.Unmarshal(w.Body.Bytes(), &result)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
 		setting := result["allow_destructive_actions"]
-		require.Equal(t, false, setting.Value) // default is false
+		require.Equal(t, false, setting.Value)
 		require.Equal(t, settings.SourceDefault, setting.Source)
 	})
 }

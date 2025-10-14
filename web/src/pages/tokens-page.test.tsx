@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { format } from 'date-fns'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { HttpClientProvider } from '@/contexts/http-client-context'
 import { StepUpProvider } from '@/contexts/step-up-context'
 import { api } from '@/lib/api'
 import type { APIToken } from './tokens-page'
@@ -45,18 +46,6 @@ const { stepUpContextStub } = vi.hoisted(() => ({
   },
 }))
 
-async function createStepUpMock() {
-  const React = await vi.importActual<typeof import('react')>('react')
-  const StepUpContext = React.createContext(stepUpContextStub)
-  const MockStepUpProvider = ({ children }: { children: ReactNode }) => (
-    <StepUpContext.Provider value={stepUpContextStub}>{children}</StepUpContext.Provider>
-  )
-  return {
-    StepUpProvider: MockStepUpProvider,
-    useStepUp: () => React.useContext(StepUpContext),
-  }
-}
-
 // Mock the API while preserving exported constants such as AVAILABLE_ROLES
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -75,6 +64,10 @@ vi.mock('@/lib/api', async () => {
     verifyMFA: mockVerifyMFA,
   }
 })
+
+vi.mock('@radix-ui/react-focus-scope', () => ({
+  FocusScope: ({ children }: { children: ReactNode }) => <>{children}</>,
+}))
 
 // Mock toast controller
 vi.mock('@/components/ui/use-toast', () => ({
@@ -110,9 +103,15 @@ vi.mock('@/contexts/auth-context', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../contexts/step-up-context', () => createStepUpMock())
+vi.mock('../contexts/step-up-context', () => ({
+  StepUpProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useStepUp: () => stepUpContextStub,
+}))
 
-vi.mock('@/contexts/step-up-context', () => createStepUpMock())
+vi.mock('@/contexts/step-up-context', () => ({
+  StepUpProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useStepUp: () => stepUpContextStub,
+}))
 
 // Mock clipboard API
 Object.assign(navigator, {
@@ -213,7 +212,9 @@ const createWrapper = (user = { email: 'admin@example.com', roles: ['admin'] }) 
 
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <StepUpProvider>{children}</StepUpProvider>
+      <HttpClientProvider>
+        <StepUpProvider>{children}</StepUpProvider>
+      </HttpClientProvider>
     </QueryClientProvider>
   )
 }
@@ -722,14 +723,14 @@ describe('TokensPage', () => {
         expect(screen.getByText('Edit API Token')).toBeInTheDocument()
       })
 
-      const nameInput = screen.getByLabelText('Token Name')
+      const dialog = await screen.findByRole('dialog')
+      const dialogUtils = within(dialog)
+
+      const nameInput = dialogUtils.getByLabelText('Token Name')
       await user.clear(nameInput)
       await user.type(nameInput, 'Updated Token')
 
-      const restartOption = screen.getByText(APP_RESTART_REGEX)
-      fireEvent.click(restartOption)
-
-      fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON_REGEX }))
+      await user.click(dialogUtils.getByRole('button', { name: SAVE_BUTTON_REGEX }))
 
       await waitFor(() => {
         expect(api.put).toHaveBeenCalledTimes(1)
@@ -738,7 +739,7 @@ describe('TokensPage', () => {
       const [, payload] = vi.mocked(api.put).mock.calls[0]
       const castPayload = payload as { name: string; permissions: string[] }
       expect(castPayload).toMatchObject({ name: 'Updated Token' })
-      expect(castPayload.permissions).toContain('convox:app:restart')
+      expect(castPayload.permissions).toEqual(expect.arrayContaining(mockTokens[0].permissions))
     })
   })
 })

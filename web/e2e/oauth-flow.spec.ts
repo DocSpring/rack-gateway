@@ -2,7 +2,7 @@ import { APIRoute, WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
 import { ensureMfaEnrollment } from './helpers'
 
-test('full OAuth login flow succeeds and /me returns user', async ({ page }) => {
+test('full OAuth login flow succeeds and /info returns user', async ({ page }) => {
   // Hit login
   await page.goto(WebRoute('login'))
 
@@ -30,7 +30,7 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   }
 
   // After authorize, wait for the app to fetch the current user successfully
-  await page.waitForResponse((r) => r.url().includes(APIRoute('me')) && r.status() === 200, {
+  await page.waitForResponse((r) => r.url().includes(APIRoute('info')) && r.status() === 200, {
     timeout: 20_000,
   })
 
@@ -59,16 +59,16 @@ test('full OAuth login flow succeeds and /me returns user', async ({ page }) => 
   await expect(empty.or(table)).toBeVisible()
 
   // Now the cookie should be set; /api/v1/info should return the current user
-  const meEndpoint = APIRoute('me')
-  const me = await page.evaluate(async (endpoint) => {
+  const infoEndpoint = APIRoute('info')
+  const info = await page.evaluate(async (endpoint) => {
     const r = await fetch(endpoint, { credentials: 'include' })
     let data: Record<string, unknown> | null = null
     try {
       data = await r.json()
     } catch {}
     return { ok: r.ok, status: r.status, data }
-  }, meEndpoint)
-  expect(me.ok).toBeTruthy()
-  expect(me.status).toBe(200)
-  expect(me.data?.email).toBeTruthy()
+  }, infoEndpoint)
+  expect(info.ok).toBeTruthy()
+  expect(info.status).toBe(200)
+  expect(info.data?.user?.email).toBeTruthy()
 })

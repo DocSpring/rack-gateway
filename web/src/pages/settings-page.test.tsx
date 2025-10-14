@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsSetting } from '@/api/schemas'
+import { HttpClientProvider } from '@/contexts/http-client-context'
 import { StepUpProvider } from '@/contexts/step-up-context'
 import { api } from '@/lib/api'
 import { SettingsPage } from './settings-page'
@@ -46,9 +47,11 @@ function renderSettingsPage(user = mockAuthUser) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <StepUpProvider>
-        <SettingsPage />
-      </StepUpProvider>
+      <HttpClientProvider>
+        <StepUpProvider>
+          <SettingsPage />
+        </StepUpProvider>
+      </HttpClientProvider>
     </QueryClientProvider>
   )
 }
@@ -469,11 +472,9 @@ describe('SettingsPage', () => {
       fireEvent.click(clearButtons[0])
 
       await waitFor(() => {
-        // Check that api.delete was called with query params for the settings
+        // Check that api.delete was called with the grouped endpoint for MFA settings
         expect(api.delete).toHaveBeenCalledWith(
-          expect.stringMatching(
-            /api\/v1\/admin\/settings\?key=(mfa_require_all_users|mfa_trusted_device_ttl_days|mfa_step_up_window_minutes|allow_destructive_actions)/
-          )
+          '/api/v1/settings/mfa-configuration?key=mfa_require_all_users&key=mfa_trusted_device_ttl_days&key=mfa_step_up_window_minutes'
         )
       })
     })

@@ -124,32 +124,37 @@ export async function ensureMfaEnrollment(
   return secret
 }
 
-export async function satisfyStepUpModal(
+export async function satisfyMFAStepUpModal(
   page: Page,
-  options: { email?: string; secret?: string; trustDevice?: boolean; require?: boolean } = {}
+  options: { email?: string; secret?: string; trustDevice?: boolean } = {}
 ): Promise<boolean> {
-  const {
-    email = 'admin@example.com',
-    secret: secretOverride,
-    trustDevice = false,
-    require = false,
-  } = options
+  const { email = 'admin@example.com', secret: secretOverride, trustDevice = false } = options
 
   const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
-  const visible = await dialog.isVisible().catch(() => false)
-  if (!visible) {
-    if (require) {
-      throw new Error('Expected MFA step-up dialog to appear, but it did not.')
-    }
-    return false
-  }
+  await dialog.waitFor({ state: 'visible', timeout: 5000 })
+
+  // Wait for the input field to be ready
+  const input = dialog.getByLabel(/Verification code/i)
+  await expect(input).toBeVisible({ timeout: 2000 })
 
   const secret = secretOverride ?? (await getUserMfaSecret(email))
   if (!secret) {
     throw new Error(`No confirmed TOTP secret found for ${email}. Ensure ensureMfaEnrollment ran.`)
   }
 
-  await clearMfaAttempts()
+  // Check if the modal is in WebAuthn mode (showing "Authenticate with Security Key" button)
+  // If so, switch to TOTP mode by clicking "Use authenticator app instead"
+  const webAuthnButton = dialog.getByRole('button', { name: /Authenticate with Security Key/i })
+  const isWebAuthnMode = await webAuthnButton.isVisible().catch(() => false)
+
+  if (isWebAuthnMode) {
+    const switchToTotpButton = dialog.getByRole('button', {
+      name: /Use authenticator app instead/i,
+    })
+    await switchToTotpButton.click()
+    // Wait for the verification code input to appear after switching modes
+    await expect(dialog.getByLabel(/Verification code/i)).toBeVisible({ timeout: 2000 })
+  }
 
   const trustCheckbox = dialog.getByLabel(/Trust this/i)
   const checkboxExists = await trustCheckbox.isVisible().catch(() => false)
@@ -163,8 +168,18 @@ export async function satisfyStepUpModal(
   }
 
   const code = authenticator.generate(secret)
-  await dialog.getByLabel(/Verification code/i).fill(code)
 
+  // Clear any existing value first
+  await input.clear()
+
+  // Click to focus the input
+  await input.click()
+
+  // Type the code to trigger onChange events (simulates real user input)
+  // Should auto-submit on 6-digit code
+  await input.fill(code)
+
+  // Wait for the dialog to close after auto-submit
   await expect(dialog).toBeHidden({ timeout: 5000 })
   return true
 }
@@ -233,6 +248,15 @@ export async function startTotpEnrollmentViaUi(
   await enrollmentDialog.getByRole('button', { name: /^Confirm$/ }).click()
 
   await expect(enrollmentDialog).toBeHidden()
+
+  const editLabelDialog = page
+    .getByRole('dialog', { name: 'Edit MFA Method Label' })
+    .filter({ has: page.getByRole('heading', { name: 'Edit MFA Method Label' }) })
+  const labelDialogVisible = await editLabelDialog.isVisible({ timeout: 1000 }).catch(() => false)
+  if (labelDialogVisible) {
+    await editLabelDialog.getByRole('button', { name: /^Save$/ }).click()
+    await expect(editLabelDialog).toBeHidden()
+  }
 
   return secret
 }

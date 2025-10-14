@@ -142,6 +142,7 @@ services:
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
       LOG_LEVEL: debug
+      DEBUG_TOPICS: "mfa,http.request.info,http.request.headers"
       # Test settings via environment variables
       RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS: "45"
       RGW_APP_API_SETTING_DEFAULT_BRANCH: "develop"

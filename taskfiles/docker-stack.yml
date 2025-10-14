@@ -26,12 +26,6 @@ tasks:
         STACK="{{.STACK}}" \
         PROFILE="{{.PROFILE}}" \
         bash scripts/docker-up.sh
-    sources:
-      - Taskfile.docker.yml
-      - taskfiles/docker-stack.yml
-      - cmd/gateway/*.go
-      - internal/**/*
-      - web/src/**/*
 
   up:gateway:
     desc: Up {{.STACK}} gateway

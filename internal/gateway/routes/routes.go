@@ -210,8 +210,14 @@ func Setup(router *gin.Engine, cfg *Config) {
 				}
 				appSettings.PUT("/vcs-ci-deploy", settingsHandler.UpdateAppVCSCIDeploySettings)
 				appSettings.DELETE("/vcs-ci-deploy", settingsHandler.DeleteAppVCSCIDeploySettings)
-				appSettings.PUT("/:settingKey", settingsHandler.UpdateAppSettingValue)
-				appSettings.DELETE("/:settingKey", settingsHandler.DeleteAppSettingValue)
+				appSettings.PUT("/protected-env-vars", settingsHandler.UpdateAppProtectedEnvVars)
+				appSettings.DELETE("/protected-env-vars", settingsHandler.DeleteAppProtectedEnvVars)
+				appSettings.PUT("/secret-env-vars", settingsHandler.UpdateAppSecretEnvVars)
+				appSettings.DELETE("/secret-env-vars", settingsHandler.DeleteAppSecretEnvVars)
+				appSettings.PUT("/approved-deploy-commands", settingsHandler.UpdateAppApprovedDeployCommands)
+				appSettings.DELETE("/approved-deploy-commands", settingsHandler.DeleteAppApprovedDeployCommands)
+				appSettings.PUT("/service-image-patterns", settingsHandler.UpdateAppServiceImagePatterns)
+				appSettings.DELETE("/service-image-patterns", settingsHandler.DeleteAppServiceImagePatterns)
 			}
 
 			// Deploy approval requests

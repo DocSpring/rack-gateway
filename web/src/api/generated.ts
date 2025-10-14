@@ -11,7 +11,11 @@ import type {
   DbRackTLSCert,
   DbUser,
   DeleteAppsAppSettings200,
+  DeleteAppsAppSettingsApprovedDeployCommands200,
   DeleteAppsAppSettingsParams,
+  DeleteAppsAppSettingsProtectedEnvVars200,
+  DeleteAppsAppSettingsSecretEnvVars200,
+  DeleteAppsAppSettingsServiceImagePatterns200,
   DeleteSettings200,
   DeleteSettingsParams,
   GetAppsAppEnvParams,
@@ -68,6 +72,11 @@ import type {
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
   PutAppsAppSettings200,
+  PutAppsAppSettingsApprovedDeployCommands200,
+  PutAppsAppSettingsProtectedEnvVars200,
+  PutAppsAppSettingsSecretEnvVars200,
+  PutAppsAppSettingsServiceImagePatterns200,
+  PutAppsAppSettingsServiceImagePatternsBody,
   PutSettings200,
   SettingsBody,
   SettingsSetting,
@@ -269,16 +278,156 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Returns a single app setting with its source
-   * @summary Get a specific app setting
+   * Replaces the approved deploy commands for the specified app
+   * @summary Update approved deploy commands
    */
-  const getAppsAppSettingsKey = (
+  const putAppsAppSettingsApprovedDeployCommands = (
     app: string,
-    key: string,
-    options?: SecondParameter<typeof createGatewayClient<SettingsSetting>>,
+    putAppsAppSettingsApprovedDeployCommandsBody: string[],
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsApprovedDeployCommands200>
+    >,
   ) => {
-    return createGatewayClient<SettingsSetting>(
-      { url: `/apps/${app}/settings/${key}`, method: 'GET' },
+    return createGatewayClient<PutAppsAppSettingsApprovedDeployCommands200>(
+      {
+        url: `/apps/${app}/settings/approved-deploy-commands`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: putAppsAppSettingsApprovedDeployCommandsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes approved deploy command overrides for the specified app
+   * @summary Delete approved deploy commands
+   */
+  const deleteAppsAppSettingsApprovedDeployCommands = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsApprovedDeployCommands200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsApprovedDeployCommands200>(
+      {
+        url: `/apps/${app}/settings/approved-deploy-commands`,
+        method: 'DELETE',
+      },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the list of protected environment variables for the specified app
+   * @summary Update protected environment variables
+   */
+  const putAppsAppSettingsProtectedEnvVars = (
+    app: string,
+    putAppsAppSettingsProtectedEnvVarsBody: string[],
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsProtectedEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsProtectedEnvVars200>(
+      {
+        url: `/apps/${app}/settings/protected-env-vars`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: putAppsAppSettingsProtectedEnvVarsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes protected environment variable overrides for the specified app
+   * @summary Delete protected environment variables
+   */
+  const deleteAppsAppSettingsProtectedEnvVars = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsProtectedEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsProtectedEnvVars200>(
+      { url: `/apps/${app}/settings/protected-env-vars`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+   * Replaces the list of secret environment variables for the specified app
+   * @summary Update secret environment variables
+   */
+  const putAppsAppSettingsSecretEnvVars = (
+    app: string,
+    putAppsAppSettingsSecretEnvVarsBody: string[],
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsSecretEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsSecretEnvVars200>(
+      {
+        url: `/apps/${app}/settings/secret-env-vars`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: putAppsAppSettingsSecretEnvVarsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes secret environment variable overrides for the specified app
+   * @summary Delete secret environment variables
+   */
+  const deleteAppsAppSettingsSecretEnvVars = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsSecretEnvVars200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsSecretEnvVars200>(
+      { url: `/apps/${app}/settings/secret-env-vars`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+   * Replaces service image constraints for the specified app
+   * @summary Update service image patterns
+   */
+  const putAppsAppSettingsServiceImagePatterns = (
+    app: string,
+    putAppsAppSettingsServiceImagePatternsBody: PutAppsAppSettingsServiceImagePatternsBody,
+    options?: SecondParameter<
+      typeof createGatewayClient<PutAppsAppSettingsServiceImagePatterns200>
+    >,
+  ) => {
+    return createGatewayClient<PutAppsAppSettingsServiceImagePatterns200>(
+      {
+        url: `/apps/${app}/settings/service-image-patterns`,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        data: putAppsAppSettingsServiceImagePatternsBody,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Removes service image pattern overrides for the specified app
+   * @summary Delete service image patterns
+   */
+  const deleteAppsAppSettingsServiceImagePatterns = (
+    app: string,
+    options?: SecondParameter<
+      typeof createGatewayClient<DeleteAppsAppSettingsServiceImagePatterns200>
+    >,
+  ) => {
+    return createGatewayClient<DeleteAppsAppSettingsServiceImagePatterns200>(
+      { url: `/apps/${app}/settings/service-image-patterns`, method: 'DELETE' },
       options,
     );
   };
@@ -1136,7 +1285,14 @@ export const getRackGatewayAPI = () => {
     getAppsAppSettings,
     putAppsAppSettings,
     deleteAppsAppSettings,
-    getAppsAppSettingsKey,
+    putAppsAppSettingsApprovedDeployCommands,
+    deleteAppsAppSettingsApprovedDeployCommands,
+    putAppsAppSettingsProtectedEnvVars,
+    deleteAppsAppSettingsProtectedEnvVars,
+    putAppsAppSettingsSecretEnvVars,
+    deleteAppsAppSettingsSecretEnvVars,
+    putAppsAppSettingsServiceImagePatterns,
+    deleteAppsAppSettingsServiceImagePatterns,
     getAuditLogs,
     getAuditLogsExport,
     getAuthCliCallback,
@@ -1236,9 +1392,70 @@ export type DeleteAppsAppSettingsResult = NonNullable<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteAppsAppSettings']>
   >
 >;
-export type GetAppsAppSettingsKeyResult = NonNullable<
+export type PutAppsAppSettingsApprovedDeployCommandsResult = NonNullable<
   Awaited<
-    ReturnType<ReturnType<typeof getRackGatewayAPI>['getAppsAppSettingsKey']>
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['putAppsAppSettingsApprovedDeployCommands']
+    >
+  >
+>;
+export type DeleteAppsAppSettingsApprovedDeployCommandsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['deleteAppsAppSettingsApprovedDeployCommands']
+    >
+  >
+>;
+export type PutAppsAppSettingsProtectedEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAppsAppSettingsProtectedEnvVars']
+    >
+  >
+>;
+export type DeleteAppsAppSettingsProtectedEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['deleteAppsAppSettingsProtectedEnvVars']
+    >
+  >
+>;
+export type PutAppsAppSettingsSecretEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['putAppsAppSettingsSecretEnvVars']
+    >
+  >
+>;
+export type DeleteAppsAppSettingsSecretEnvVarsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['deleteAppsAppSettingsSecretEnvVars']
+    >
+  >
+>;
+export type PutAppsAppSettingsServiceImagePatternsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['putAppsAppSettingsServiceImagePatterns']
+    >
+  >
+>;
+export type DeleteAppsAppSettingsServiceImagePatternsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['deleteAppsAppSettingsServiceImagePatterns']
+    >
   >
 >;
 export type GetAuditLogsResult = NonNullable<

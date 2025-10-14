@@ -9,6 +9,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 )
@@ -53,44 +54,60 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) bool {
 	authUser, ok := auth.GetAuthUser(c.Request.Context())
 	if !ok || authUser == nil {
-		fmt.Printf("[mfa][step-up] no auth user on context, method=%s path=%s\n", c.Request.Method, c.FullPath())
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "no auth user on context, method=%s path=%s", c.Request.Method, c.FullPath())
 		denyStepUp(c)
 		return false
 	}
 
-	fmt.Printf("[mfa][step-up] evaluating user=%s method=%s path=%s\n", authUser.Email, c.Request.Method, c.FullPath())
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "evaluating user=%s method=%s path=%s", authUser.Email, c.Request.Method, c.FullPath())
 
 	// API tokens bypass step-up MFA
 	if authUser.IsAPIToken {
-		fmt.Printf("[mfa][step-up] user=%s is API token, bypassing\n", authUser.Email)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s is API token, bypassing", authUser.Email)
 		return true
 	}
 
 	session := authUser.Session
 	if session == nil || session.MFAVerifiedAt == nil {
-		fmt.Printf("[mfa][step-up] user=%s missing session or mfa verified timestamp\n", authUser.Email)
-		denyMFAEnrollment(c)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s missing session or mfa verified timestamp", authUser.Email)
+		// Check if user has MFA enrolled to determine correct error response
+		user := auth.GetAuthUserRecord(c.Request.Context())
+		if user == nil && database != nil {
+			loadedUser, err := database.GetUser(authUser.Email)
+			if err == nil && loadedUser != nil {
+				user = loadedUser
+			}
+		}
+		// If user has MFA enrolled, they just need to verify (step-up)
+		// If not enrolled, they need to enroll first
+		if user != nil && user.MFAEnrolled {
+			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s is enrolled but not verified, sending step-up required", authUser.Email)
+			denyStepUp(c)
+		} else {
+			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s not enrolled, sending enrollment required", authUser.Email)
+			denyMFAEnrollment(c)
+		}
 		return false
 	}
 
 	window := stepUpWindow(settings)
 	if recent := session.RecentStepUpAt; recent != nil && time.Since(*recent) <= window {
-		fmt.Printf("[mfa][step-up] user=%s has recent step up at %s (window %s)\n", authUser.Email, recent.UTC().Format(time.RFC3339Nano), window)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s has recent step up at %s (window %s)", authUser.Email, recent.UTC().Format(time.RFC3339Nano), window)
 		return true
 	}
 
-	fmt.Printf("[mfa][step-up] user=%s no recent step up, attempting inline verification\n", authUser.Email)
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s no recent step up, attempting inline verification", authUser.Email)
 	if tryInlineStepUp(c, mfaService, database, authUser) {
-		fmt.Printf("[mfa][step-up] user=%s inline verification succeeded\n", authUser.Email)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s inline verification succeeded", authUser.Email)
 		return true
 	}
 
 	if c.IsAborted() {
-		fmt.Printf("[mfa][step-up] user=%s request aborted inside inline verification\n", authUser.Email)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s request aborted inside inline verification", authUser.Email)
 		return false
 	}
 
-	fmt.Printf("[mfa][step-up] user=%s inline verification missing or failed, denying\n", authUser.Email)
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s inline verification missing or failed, denying", authUser.Email)
 	denyStepUp(c)
 	return false
 }
@@ -164,24 +181,24 @@ func checkInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 
 func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.AuthUser) bool {
 	if mfaService == nil || database == nil || authUser == nil {
-		fmt.Printf("[mfa][step-up-inline] missing dependencies service=%v database=%v user=%v\n", mfaService != nil, database != nil, authUser != nil)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: missing dependencies service=%v database=%v user=%v", mfaService != nil, database != nil, authUser != nil)
 		return false
 	}
 
 	session := authUser.Session
 	if session == nil || session.MFAVerifiedAt == nil {
-		fmt.Printf("[mfa][step-up-inline] user=%s missing session or verified timestamp\n", authUser.Email)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user=%s missing session or verified timestamp", authUser.Email)
 		return false
 	}
 
 	if authUser.MFAType == "" || authUser.MFAValue == "" {
-		fmt.Printf("[mfa][step-up-inline] user=%s missing inline MFA data type=%q valueEmpty=%t\n", authUser.Email, authUser.MFAType, authUser.MFAValue == "")
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user=%s missing inline MFA data type=%q valueEmpty=%t", authUser.Email, authUser.MFAType, authUser.MFAValue == "")
 		return false
 	}
 
 	user, err := database.GetUser(authUser.Email)
 	if err != nil || user == nil {
-		fmt.Printf("[mfa][step-up-inline] user lookup failed email=%s err=%v\n", authUser.Email, err)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user lookup failed email=%s err=%v", authUser.Email, err)
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 			"error":   "user_not_found",
 			"message": "User not found",
@@ -193,13 +210,13 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 	sessionID := &session.ID
 	switch authUser.MFAType {
 	case "totp":
-		fmt.Printf("[mfa][step-up-inline] verifying TOTP user=%s code=%s trustDevice=%v sessionID=%d\n", authUser.Email, authUser.MFAValue, session.TrustedDeviceID != nil, session.ID)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verifying TOTP user=%s code=%s trustDevice=%v sessionID=%d", authUser.Email, authUser.MFAValue, session.TrustedDeviceID != nil, session.ID)
 		_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
 	case "webauthn":
-		fmt.Printf("[mfa][step-up-inline] verifying WebAuthn user=%s sessionID=%d\n", authUser.Email, session.ID)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verifying WebAuthn user=%s sessionID=%d", authUser.Email, session.ID)
 		verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
 	default:
-		fmt.Printf("[mfa][step-up-inline] user=%s provided invalid mfa type=%s\n", authUser.Email, authUser.MFAType)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user=%s provided invalid mfa type=%s", authUser.Email, authUser.MFAType)
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid_mfa_type",
 			"message": "MFA type must be 'totp' or 'webauthn'",
@@ -208,7 +225,7 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 	}
 
 	if verifyErr != nil {
-		fmt.Printf("[mfa][step-up-inline] verification failed user=%s err=%v\n", authUser.Email, verifyErr)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verification failed user=%s err=%v", authUser.Email, verifyErr)
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 			"error":   "mfa_verification_failed",
 			"message": "Invalid MFA code",
@@ -218,7 +235,7 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 
 	now := time.Now()
 	if err := database.UpdateSessionRecentStepUp(session.ID, now); err != nil {
-		fmt.Printf("[mfa][step-up-inline] failed to update recent step up user=%s session=%d err=%v\n", authUser.Email, session.ID, err)
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: failed to update recent step up user=%s session=%d err=%v", authUser.Email, session.ID, err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 			"error":   "mfa_step_up_record_failed",
 			"message": "Failed to record MFA verification. Please try again.",
@@ -226,7 +243,7 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 		return false
 	}
 	session.RecentStepUpAt = &now
-	fmt.Printf("[mfa][step-up-inline] success user=%s session=%d newRecent=%s\n", authUser.Email, session.ID, now.UTC().Format(time.RFC3339Nano))
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: success user=%s session=%d newRecent=%s", authUser.Email, session.ID, now.UTC().Format(time.RFC3339Nano))
 
 	return true
 }

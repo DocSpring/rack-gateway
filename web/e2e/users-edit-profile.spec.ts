@@ -1,9 +1,12 @@
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { login } from './helpers'
+import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
 
-test('users: edit name and email', async ({ page }) => {
+test('users: edit name and email with MFA always required', async ({ page }) => {
   await login(page)
+
+  // Clear step-up sessions to force MFA prompts for this test
+  await clearStepUpSessions()
 
   // Navigate to Users
   await page.goto(WebRoute('users'))
@@ -17,6 +20,9 @@ test('users: edit name and email', async ({ page }) => {
   await page.getByLabel('Email').fill(email1)
   await page.getByLabel('Name').fill(name1)
   await page.getByRole('button', { name: /Add User/i }).click()
+
+  // Creating a user always requires MFA
+  await satisfyMFAStepUpModal(page)
 
   // Verify initial row appears
   let row = page.locator('tr', { hasText: email1 })
@@ -37,6 +43,9 @@ test('users: edit name and email', async ({ page }) => {
   // Save
   await dialog.getByRole('button', { name: /Save Changes/i }).click()
 
+  // Updating a user always requires MFA (because roles/permissions can change)
+  await satisfyMFAStepUpModal(page)
+
   // Verify row updated to new email and name
   row = page.locator('tr', { hasText: email2 })
   await expect(row).toBeVisible()
@@ -48,12 +57,16 @@ test('users: edit name and email', async ({ page }) => {
   await expect(row).toBeVisible()
   await expect(row).toContainText(name2)
 
-  // Cleanup: delete the user - open dropdown and click Delete User
+  // Delete the user - open dropdown and click Delete User
   await row.getByRole('button', { name: /Actions for/i }).click()
   await page.getByRole('menuitem', { name: 'Delete User' }).click()
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
+
+  // Deleting a user always requires MFA
+  await satisfyMFAStepUpModal(page)
+
   const waitForDelete = page.waitForResponse(
     (response) =>
       response.request().method() === 'DELETE' &&

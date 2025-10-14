@@ -302,42 +302,6 @@ func (h *SettingsHandler) GetAllAppSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, allSettings)
 }
 
-// GetAppSetting godoc
-// @Summary Get a specific app setting
-// @Description Returns a single app setting with its source
-// @Tags Settings
-// @Produce json
-// @Param app path string true "App name"
-// @Param key path string true "Setting key"
-// @Success 200 {object} settings.Setting
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security SessionCookie
-// @Router /apps/{app}/settings/{key} [get]
-func (h *SettingsHandler) GetAppSetting(c *gin.Context) {
-	appName := c.Param("app")
-	key := c.Param("key")
-	if appName == "" || key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app name and key are required"})
-		return
-	}
-
-	// Get default value based on key
-	defaultValue, err := settings.GetAppSettingDefault(key)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "unknown setting key"})
-		return
-	}
-
-	setting, err := h.settingsService.GetAppSetting(appName, key, defaultValue)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get setting"})
-		return
-	}
-
-	c.JSON(http.StatusOK, setting)
-}
-
 // UpdateAppSettings godoc
 // @Summary Update multiple app settings
 // @Description Updates multiple app settings atomically and stores them in the database
@@ -507,22 +471,11 @@ func (h *SettingsHandler) deleteAppSettings(c *gin.Context, allowedKeys []string
 	c.JSON(http.StatusOK, result)
 }
 
-// UpdateAppSettingValue updates a single app setting identified by path parameter.
-func (h *SettingsHandler) UpdateAppSettingValue(c *gin.Context) {
+// updateAppSettingValue persists a single app setting identified by key.
+func (h *SettingsHandler) updateAppSettingValue(c *gin.Context, key string) {
 	appName := c.Param("app")
-	key := c.Param("settingKey")
-	if appName == "" || key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app name and setting key are required"})
-		return
-	}
-
-	if !settings.IsValidAppSetting(key) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
-		return
-	}
-
-	if settings.IsAppSettingInGroup(settings.AppSettingGroupVCSCIDeploy, key) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s must be updated via /settings/vcs_ci_deploy", key)})
+	if appName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app name is required"})
 		return
 	}
 
@@ -562,22 +515,11 @@ func (h *SettingsHandler) UpdateAppSettingValue(c *gin.Context) {
 	})
 }
 
-// DeleteAppSettingValue deletes a single app setting identified by path parameter.
-func (h *SettingsHandler) DeleteAppSettingValue(c *gin.Context) {
+// deleteAppSettingValue removes a single app setting identified by key.
+func (h *SettingsHandler) deleteAppSettingValue(c *gin.Context, key string) {
 	appName := c.Param("app")
-	key := c.Param("settingKey")
-	if appName == "" || key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app name and setting key are required"})
-		return
-	}
-
-	if !settings.IsValidAppSetting(key) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
-		return
-	}
-
-	if settings.IsAppSettingInGroup(settings.AppSettingGroupVCSCIDeploy, key) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s must be updated via /settings/vcs_ci_deploy", key)})
+	if appName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app name is required"})
 		return
 	}
 
@@ -601,4 +543,140 @@ func (h *SettingsHandler) DeleteAppSettingValue(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]settings.Setting{
 		key: *setting,
 	})
+}
+
+// UpdateAppProtectedEnvVars godoc
+// @Summary Update protected environment variables
+// @Description Replaces the list of protected environment variables for the specified app
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body []string true "Protected environment variable names"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/protected-env-vars [put]
+func (h *SettingsHandler) UpdateAppProtectedEnvVars(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeyProtectedEnvVars)
+}
+
+// DeleteAppProtectedEnvVars godoc
+// @Summary Delete protected environment variables
+// @Description Removes protected environment variable overrides for the specified app
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/protected-env-vars [delete]
+func (h *SettingsHandler) DeleteAppProtectedEnvVars(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeyProtectedEnvVars)
+}
+
+// UpdateAppSecretEnvVars godoc
+// @Summary Update secret environment variables
+// @Description Replaces the list of secret environment variables for the specified app
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body []string true "Secret environment variable names"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/secret-env-vars [put]
+func (h *SettingsHandler) UpdateAppSecretEnvVars(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeySecretEnvVars)
+}
+
+// DeleteAppSecretEnvVars godoc
+// @Summary Delete secret environment variables
+// @Description Removes secret environment variable overrides for the specified app
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/secret-env-vars [delete]
+func (h *SettingsHandler) DeleteAppSecretEnvVars(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeySecretEnvVars)
+}
+
+// UpdateAppApprovedDeployCommands godoc
+// @Summary Update approved deploy commands
+// @Description Replaces the approved deploy commands for the specified app
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body []string true "Approved command list"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/approved-deploy-commands [put]
+func (h *SettingsHandler) UpdateAppApprovedDeployCommands(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeyApprovedDeployCommands)
+}
+
+// DeleteAppApprovedDeployCommands godoc
+// @Summary Delete approved deploy commands
+// @Description Removes approved deploy command overrides for the specified app
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/approved-deploy-commands [delete]
+func (h *SettingsHandler) DeleteAppApprovedDeployCommands(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeyApprovedDeployCommands)
+}
+
+// UpdateAppServiceImagePatterns godoc
+// @Summary Update service image patterns
+// @Description Replaces service image constraints for the specified app
+// @Tags Settings
+// @Accept json
+// @Produce json
+// @Param app path string true "App name"
+// @Param body body map[string]string true "Service image patterns"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/service-image-patterns [put]
+func (h *SettingsHandler) UpdateAppServiceImagePatterns(c *gin.Context) {
+	h.updateAppSettingValue(c, settings.KeyServiceImagePatterns)
+}
+
+// DeleteAppServiceImagePatterns godoc
+// @Summary Delete service image patterns
+// @Description Removes service image pattern overrides for the specified app
+// @Tags Settings
+// @Produce json
+// @Param app path string true "App name"
+// @Success 200 {object} map[string]settings.Setting
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Security CSRFToken
+// @Router /apps/{app}/settings/service-image-patterns [delete]
+func (h *SettingsHandler) DeleteAppServiceImagePatterns(c *gin.Context) {
+	h.deleteAppSettingValue(c, settings.KeyServiceImagePatterns)
 }

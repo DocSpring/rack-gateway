@@ -109,46 +109,39 @@ function VCSCIProvidersCard({
   const updateMutation = useMutation({
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const payload: Record<string, unknown> = {}
       if (vcsProvider !== null) {
-        updates.push(api.put(`/api/v1/apps/${app}/settings/vcs_provider`, vcsProvider || null))
+        payload.vcs_provider = vcsProvider || null
       }
       if (vcsRepo !== null) {
-        updates.push(api.put(`/api/v1/apps/${app}/settings/vcs_repo`, vcsRepo || null))
+        payload.vcs_repo = vcsRepo || null
       }
       if (ciProvider !== null) {
-        updates.push(api.put(`/api/v1/apps/${app}/settings/ci_provider`, ciProvider || null))
+        payload.ci_provider = ciProvider || null
       }
       if (ciOrgSlug !== null) {
-        updates.push(api.put(`/api/v1/apps/${app}/settings/ci_org_slug`, ciOrgSlug || null))
+        payload.ci_org_slug = ciOrgSlug || null
       }
       if (githubVerification !== null) {
-        updates.push(
-          api.put(`/api/v1/apps/${app}/settings/github_verification`, githubVerification)
-        )
+        payload.github_verification = githubVerification
       }
       if (allowDeployFromDefaultBranch !== null) {
-        updates.push(
-          api.put(
-            `/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`,
-            allowDeployFromDefaultBranch
-          )
-        )
+        payload.allow_deploy_from_default_branch = allowDeployFromDefaultBranch
       }
       if (requirePRForBranch !== null) {
-        updates.push(
-          api.put(`/api/v1/apps/${app}/settings/require_pr_for_branch`, requirePRForBranch)
-        )
+        payload.require_pr_for_branch = requirePRForBranch
       }
       if (defaultBranch !== null) {
-        updates.push(api.put(`/api/v1/apps/${app}/settings/default_branch`, defaultBranch))
+        payload.default_branch = defaultBranch
       }
       if (verifyGitCommitMode !== null) {
-        updates.push(
-          api.put(`/api/v1/apps/${app}/settings/verify_git_commit_mode`, verifyGitCommitMode)
-        )
+        payload.verify_git_commit_mode = verifyGitCommitMode
       }
-      await Promise.all(updates)
+      const keys = Object.keys(payload)
+      if (keys.length === 0) {
+        return
+      }
+      await api.put(`/api/v1/apps/${app}/settings/vcs-ci-deploy`, payload)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -172,35 +165,39 @@ function VCSCIProvidersCard({
   const clearMutation = useMutation({
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
-      const updates: Promise<unknown>[] = []
+      const keys: string[] = []
       if (settings?.vcs_provider?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_provider`))
+        keys.push('vcs_provider')
       }
       if (settings?.vcs_repo?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/vcs_repo`))
+        keys.push('vcs_repo')
       }
       if (settings?.ci_provider?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_provider`))
+        keys.push('ci_provider')
       }
       if (settings?.ci_org_slug?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/ci_org_slug`))
+        keys.push('ci_org_slug')
       }
       if (settings?.github_verification?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/github_verification`))
+        keys.push('github_verification')
       }
       if (settings?.allow_deploy_from_default_branch?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/allow_deploy_from_default_branch`))
+        keys.push('allow_deploy_from_default_branch')
       }
       if (settings?.require_pr_for_branch?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/require_pr_for_branch`))
+        keys.push('require_pr_for_branch')
       }
       if (settings?.default_branch?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/default_branch`))
+        keys.push('default_branch')
       }
       if (settings?.verify_git_commit_mode?.source === 'db') {
-        updates.push(api.delete(`/api/v1/apps/${app}/settings/verify_git_commit_mode`))
+        keys.push('verify_git_commit_mode')
       }
-      await Promise.all(updates)
+      if (keys.length === 0) {
+        return
+      }
+      const params = keys.map((key) => `key=${encodeURIComponent(key)}`).join('&')
+      await api.delete(`/api/v1/apps/${app}/settings/vcs-ci-deploy?${params}`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -475,6 +472,7 @@ function StringArrayCard({
   settings,
   disabled,
   settingKey,
+  pathSegment,
   title,
   description,
   placeholder,
@@ -483,6 +481,7 @@ function StringArrayCard({
   settings: AppSettingsResponse | undefined
   disabled: boolean
   settingKey: string
+  pathSegment: string
   title: string
   description: string
   placeholder?: string
@@ -502,7 +501,7 @@ function StringArrayCard({
     mutationFn: async () => {
       // Filter out empty strings
       const filtered = items.map((s) => s.trim()).filter((s) => s.length > 0)
-      await api.put(`/api/v1/apps/${app}/settings/${settingKey}`, filtered)
+      await api.put(`/api/v1/apps/${app}/settings/${pathSegment}`, filtered)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -516,7 +515,7 @@ function StringArrayCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/${settingKey}`)
+      await api.delete(`/api/v1/apps/${app}/settings/${pathSegment}`)
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -622,7 +621,7 @@ function ServiceImagePatternsCard({
       if (value === null) return
       try {
         const parsed = JSON.parse(value)
-        await api.put(`/api/v1/apps/${app}/settings/service_image_patterns`, parsed)
+        await api.put(`/api/v1/apps/${app}/settings/service-image-patterns`, parsed)
       } catch (_err) {
         throw new Error('Invalid JSON format')
       }
@@ -640,7 +639,7 @@ function ServiceImagePatternsCard({
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/api/v1/apps/${app}/settings/service_image_patterns`)
+      await api.delete(`/api/v1/apps/${app}/settings/service-image-patterns`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
@@ -772,6 +771,7 @@ export function AppSettingsPage() {
             disabled={!isAdmin}
             placeholder="e.g. DATABASE_URL"
             settingKey="protected_env_vars"
+            pathSegment="protected-env-vars"
             settings={appSettings}
             title="Protected Environment Variables"
           />
@@ -781,6 +781,7 @@ export function AppSettingsPage() {
             disabled={!isAdmin}
             placeholder="e.g. API_KEY"
             settingKey="secret_env_vars"
+            pathSegment="secret-env-vars"
             settings={appSettings}
             title="Secret Environment Variables"
           />
@@ -792,6 +793,7 @@ export function AppSettingsPage() {
             disabled={!isAdmin}
             placeholder="e.g. bundle exec rake db:migrate"
             settingKey="approved_deploy_commands"
+            pathSegment="approved-deploy-commands"
             settings={appSettings}
             title="Approved Deploy Commands"
           />

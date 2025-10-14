@@ -380,10 +380,17 @@ function TokensPageInner() {
     if (!(isEditOpen && editToken)) {
       return
     }
+
     const normalized = normalizePermissions(editToken.permissions ?? [])
-    setEditPermissions(normalized)
-    setEditActiveRole(findMatchingRole(normalized, roleShortcuts))
-  }, [isEditOpen, editToken, roleShortcuts])
+    if (!permissionsEqual(normalized, editPermissions)) {
+      setEditPermissions(normalized)
+    }
+
+    const nextRole = findMatchingRole(normalized, roleShortcuts)
+    if (nextRole !== editActiveRole) {
+      setEditActiveRole(nextRole)
+    }
+  }, [isEditOpen, editToken, roleShortcuts, editPermissions, editActiveRole])
 
   // Create token mutation
   const createTokenMutation = useMutation({

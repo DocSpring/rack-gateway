@@ -144,7 +144,7 @@ export const test = base.extend({
         const method = req.method()
         const url = resp.url()
         const debugAuth = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug'
-        if (status === 401 && url.includes(APIRoute('me')) && !debugAuth) {
+        if (status === 401 && url.includes(APIRoute('info')) && !debugAuth) {
           return
         }
 
@@ -163,7 +163,7 @@ export const test = base.extend({
           return
         }
 
-        if (status === 401 && url.includes(APIRoute('me'))) return
+        if (status === 401 && url.includes(APIRoute('info'))) return
 
         // Suppress expected 400s from WebAuthn verify when no method enrolled (E2E mode)
         if (status === 400 && url.includes('/mfa/webauthn/verify')) {

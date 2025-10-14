@@ -131,9 +131,9 @@ export async function enforceMfaForUser(email: string) {
 
 export async function clearMfaAttempts() {
   await withDbClient(async (client) => {
-    await client.query('DELETE FROM mfa_totp_attempts;')
-    await client.query('DELETE FROM mfa_webauthn_attempts;')
-    await client.query('DELETE FROM used_totp_steps;')
+    await client.query(
+      'DELETE FROM mfa_totp_attempts; DELETE FROM mfa_webauthn_attempts; DELETE FROM used_totp_steps;'
+    )
   })
 }
 
@@ -175,6 +175,13 @@ export async function clearAllGlobalSettings() {
        WHERE app_name IS NULL
        AND key NOT IN ('mfa', 'approved_commands', 'service_image_patterns')`
     )
+  })
+}
+
+export async function getUserMfaEnrolled(email: string): Promise<boolean> {
+  return await withDbClient(async (client) => {
+    const result = await client.query(`SELECT mfa_enrolled FROM users WHERE email = $1;`, [email])
+    return result.rows[0]?.mfa_enrolled || false
   })
 }
 

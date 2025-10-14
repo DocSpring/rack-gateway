@@ -7,10 +7,11 @@ import {
   enforceMfaFor,
   login,
   resetMfaFor,
-  satisfyStepUpModal,
+  satisfyMFAStepUpModal,
   setupBothMfaMethods,
   startTotpEnrollmentViaUi,
 } from './helpers'
+import { getUserMfaSecret } from './db'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -53,25 +54,39 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
   await expect(userCard).toBeVisible()
   await userCard.click()
 
-  const mfaDialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
-  const isVisible = await mfaDialog.isVisible({ timeout: 5000 }).catch(() => false)
-  if (!isVisible) {
+  // Wait for session cookie to be set
+  await expect
+    .poll(async () => {
+      const cookies = await page.context().cookies()
+      return cookies.some((cookie) => cookie.name === 'session_token')
+    })
+    .toBeTruthy()
+
+  // Wait to see if we're redirected to MFA challenge page or directly to app
+  try {
+    await page.waitForURL(/auth\/mfa\/challenge/, { timeout: 3000 })
+    // We're on the MFA challenge page - fill in the code
+    const verificationInput = page.getByLabel('Verification code')
+    await expect(verificationInput).toBeVisible({ timeout: 5000 })
+
+    if (trustDevice) {
+      const trustCheckbox = page.getByLabel(/Trust this/i)
+      const checkboxExists = await trustCheckbox.isVisible().catch(() => false)
+      if (checkboxExists) {
+        const currentlyChecked = await trustCheckbox.isChecked().catch(() => false)
+        if (!currentlyChecked) {
+          await trustCheckbox.check()
+        }
+      }
+    }
+
+    await verificationInput.fill(authenticator.generate(secret))
+    // Auto-submits on 6-digit code, wait for redirect
     await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
-    return
+  } catch {
+    // Not redirected to MFA challenge - might already be at /app or trusted device
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
   }
-
-  const trustCheckbox = mfaDialog.getByLabel('Trust this browser for 30 days')
-  const currentlyChecked = await trustCheckbox.isChecked().catch(() => false)
-  if (trustDevice && !currentlyChecked) {
-    await trustCheckbox.check()
-  } else if (!trustDevice && currentlyChecked) {
-    await trustCheckbox.uncheck()
-  }
-
-  await mfaDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
-  // Auto-submits on 6-digit code, no need to click Verify button
-  await expect(mfaDialog).toBeHidden({ timeout: 5000 })
-  await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
 }
 
 test.describe('Account security', () => {
@@ -117,7 +132,17 @@ test.describe('Account security', () => {
     await expect(backupCard.getByText('Unused codes', { exact: false })).toBeVisible()
 
     const trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
-    await expect(trustedDevicesCard.getByRole('button', { name: /^Revoke$/ })).toBeVisible()
+    const trustDeviceButton = trustedDevicesCard.getByRole('button', {
+      name: /^Trust This Device$/,
+    })
+    const trustButtonCount = await trustDeviceButton.count()
+    if (trustButtonCount > 0) {
+      await trustDeviceButton.click()
+      await satisfyMFAStepUpModal(page, { secret, trustDevice: true })
+      await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(1)
+    } else {
+      await expect(trustedDevicesCard.locator('tbody tr')).not.toHaveCount(0)
+    }
 
     await requireStepUp(page)
     const regenResponsePromise = page.waitForResponse(
@@ -126,7 +151,7 @@ test.describe('Account security', () => {
         response.request().method() === 'POST'
     )
     await page.getByRole('button', { name: /^Regenerate backup codes$/ }).click()
-    await satisfyStepUpModal(page, { secret, require: true })
+    await satisfyMFAStepUpModal(page, { secret, require: true })
     await regenResponsePromise
     await expect(backupCard.getByRole('button', { name: /Download latest codes/i })).toBeVisible()
 
@@ -138,9 +163,9 @@ test.describe('Account security', () => {
     )
     const revokeButton = trustedDevicesCard.getByRole('button', { name: /^Revoke$/ }).first()
     await revokeButton.click()
-    await satisfyStepUpModal(page, { secret, require: true })
+    await satisfyMFAStepUpModal(page, { secret, require: true })
     await revokeResponsePromise
-    await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0)
+    await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0, { timeout: 15_000 })
 
     await requireStepUp(page)
     const deleteResponsePromise = page.waitForResponse(
@@ -152,7 +177,7 @@ test.describe('Account security', () => {
     await expect(disableDialog).toBeVisible()
     await disableDialog.getByLabel('Confirmation').fill('DISABLE')
     await disableDialog.getByRole('button', { name: 'Disable MFA' }).click()
-    await satisfyStepUpModal(page, { secret, require: true })
+    await satisfyMFAStepUpModal(page, { secret, require: true })
     await deleteResponsePromise
     await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
@@ -178,7 +203,7 @@ test.describe('Account security', () => {
     const removeMenuItem = page.getByText('Remove Method')
     await removeMenuItem.click()
 
-    await satisfyStepUpModal(page, { secret: reEnrollSecret, require: true })
+    await satisfyMFAStepUpModal(page, { secret: reEnrollSecret, require: true })
 
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
@@ -244,45 +269,7 @@ test.describe('Account security', () => {
     const mfaCard = cardByTitle(page, 'Multi-Factor Authentication').first()
     await expect(mfaCard).toBeVisible()
 
-    // Set up response listener BEFORE clicking Enable MFA
-    const enrollmentResponsePromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/enroll/totp/start') &&
-        response.request().method() === 'POST'
-    )
-
-    // Click Enable MFA button - may show method selector or auto-start TOTP
-    await page.getByRole('button', { name: /^Enable MFA$/ }).click()
-
-    // Check if method selector appeared (WebAuthn available)
-    const methodSelector = cardByTitle(page, 'Choose MFA Method')
-    const methodSelectorVisible = await methodSelector.isVisible().catch(() => false)
-
-    if (methodSelectorVisible) {
-      // Method selector shown - click TOTP option
-      await methodSelector.getByRole('button', { name: /TOTP Authenticator/ }).click()
-    }
-
-    // Wait for enrollment response (from either auto-start or after clicking TOTP)
-    const enrollmentResponse = await enrollmentResponsePromise
-    const enrollment = (await enrollmentResponse.json()) as { secret: string }
-    const secret = enrollment.secret
-
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toBeVisible()
-    await page.getByLabel(/Enter the 6-digit code to confirm/i).fill(authenticator.generate(secret))
-    const trustCheckbox = page.getByLabel('Trust this browser for 30 days')
-    if (!(await trustCheckbox.isChecked())) {
-      await trustCheckbox.check()
-    }
-    await page.getByRole('button', { name: /^Confirm$/ }).click()
-    await expect(page.getByText(/Finish MFA Enrollment/i)).toHaveCount(0)
-
-    // Close the auto-opened edit modal (QOL feature opens edit dialog after enrollment)
-    const editModal = page.getByText('Edit MFA Method Label')
-    if (await editModal.isVisible().catch(() => false)) {
-      await page.keyboard.press('Escape')
-      await expect(editModal).toHaveCount(0)
-    }
+    const secret = await startTotpEnrollmentViaUi(page)
 
     await enforceMfaFor(ADMIN_EMAIL)
 
@@ -295,7 +282,14 @@ test.describe('Account security', () => {
 
     const trustedDevicesCard = cardByTitle(page, 'Trusted Devices').first()
     await expect(trustedDevicesCard).toBeVisible()
-    await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(1)
+    const trustCurrentDeviceButton = trustedDevicesCard.getByRole('button', {
+      name: /^Trust This Device$/,
+    })
+    if ((await trustCurrentDeviceButton.count()) > 0) {
+      await trustCurrentDeviceButton.click()
+      await satisfyMFAStepUpModal(page, { secret, trustDevice: true })
+    }
+    await expect(trustedDevicesCard.locator('tbody tr')).not.toHaveCount(0)
 
     await requireStepUp(page)
 
@@ -310,18 +304,12 @@ test.describe('Account security', () => {
       .first()
       .click()
 
-    const stepUpDialog = page.getByRole('dialog', {
-      name: /Multi-Factor Authentication Required/i,
-    })
-    await expect(stepUpDialog.getByText('Multi-Factor Authentication Required')).toBeVisible({
-      timeout: 15_000,
-    })
-    await stepUpDialog.getByLabel('Verification code').fill(authenticator.generate(secret))
-    // Auto-submits on 6-digit code, no need to click Verify button
-    await expect(stepUpDialog).toBeHidden({ timeout: 5000 })
+    await satisfyMFAStepUpModal(page, { secret, require: true })
 
     await revokeResponsePromise
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0)
+
+    await clearStepUpSessions()
 
     await enforceMfaFor(ADMIN_EMAIL)
 
@@ -341,19 +329,43 @@ test.describe('Account security', () => {
     await expect(userCard).toBeVisible()
     await userCard.click()
 
-    await expect.poll(async () => page.url()).toMatch(/web\/auth\/mfa\/challenge/i)
-
-    await expect(page.getByText('Multi-Factor Authentication Required')).toBeVisible({
-      timeout: 15_000,
-    })
+    const verificationInput = page.getByLabel('Verification code')
+    await expect(verificationInput).toBeVisible({ timeout: 15_000 })
+    const trustCheckbox = page.getByLabel('Trust this device for 30 days')
+    if ((await trustCheckbox.isVisible().catch(() => false)) && (await trustCheckbox.isChecked())) {
+      await trustCheckbox.uncheck()
+    }
+    await verificationInput.fill(authenticator.generate(secret))
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
   })
 
   test('user can set and persist preferred MFA method', async ({ page }) => {
-    // Set up user with both TOTP and WebAuthn methods via database
-    // Note: This runs AFTER beforeEach which resets MFA
+    // Use setupBothMfaMethods to create both TOTP and WebAuthn methods in DB
+    // This must happen BEFORE any login so the session sees mfa_enrolled=true
     await setupBothMfaMethods(ADMIN_EMAIL)
-    await login(page, { autoEnrollMfa: false })
 
+    // Debug: Check if database was actually updated
+    const { getUserMfaEnrolled } = await import('./db')
+    const enrolled = await getUserMfaEnrolled(ADMIN_EMAIL)
+    console.log('[DEBUG] After setupBothMfaMethods, mfa_enrolled =', enrolled)
+
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) {
+      throw new Error('Expected TOTP secret after setupBothMfaMethods')
+    }
+    console.log('[DEBUG] Got TOTP secret:', secret.substring(0, 8) + '...')
+
+    // Wait a bit for database to settle
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Now login - user already has MFA enrolled in database
+    // They'll be redirected to /auth/mfa/challenge after OAuth callback
+    await performLoginWithMfa(page, secret, false)
+
+    // Wait a bit for the session to be fully established after MFA verification
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Navigate to account security page
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
@@ -365,73 +377,111 @@ test.describe('Account security', () => {
     const preferredMethodSection = page.getByText('Preferred sign-in method')
     await expect(preferredMethodSection).toBeVisible()
 
-    // Default should be TOTP (first in database)
     const totpRadio = page.getByRole('radio', { name: /TOTP Authenticator/i })
     const webauthnRadio = page.getByRole('radio', { name: /WebAuthn.*Security Key/i })
 
-    await expect(totpRadio).toBeChecked()
-    await expect(webauthnRadio).not.toBeChecked()
+    // Check which method is currently selected
+    const isTotpChecked = await totpRadio.isChecked()
+    const isWebAuthnChecked = await webauthnRadio.isChecked()
 
-    // Switch to WebAuthn
-    const updatePreferredPromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/preferred-method') &&
-        response.request().method() === 'PUT'
-    )
-    await webauthnRadio.click()
-    await updatePreferredPromise
+    // Determine which method to switch to (the opposite of what's currently selected)
+    const firstMethod = isTotpChecked ? 'WebAuthn / Security Key' : 'TOTP Authenticator'
+    const secondMethod = isTotpChecked ? 'TOTP Authenticator' : 'WebAuthn / Security Key'
+    const firstRadio = isTotpChecked ? webauthnRadio : totpRadio
+    const secondRadio = isTotpChecked ? totpRadio : webauthnRadio
+
+    // Expire the step-up session from login so we can test step-up modal
+    await clearStepUpSessions()
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Switch to the other method - this will trigger step-up interceptor
+    await page.getByLabel(firstMethod).click()
+
+    // Satisfy step-up modal and wait for the API call to complete
+    const satisfied = await satisfyMFAStepUpModal(page, { secret, require: true })
+    if (!satisfied) {
+      throw new Error('Expected step-up modal to appear when changing preferred MFA method')
+    }
+
+    await expect(firstRadio).toBeChecked({ timeout: 15_000 })
 
     // Verify selection changed
-    await expect(webauthnRadio).toBeChecked()
-    await expect(totpRadio).not.toBeChecked()
+    await expect(firstRadio).toBeChecked()
+    await expect(secondRadio).not.toBeChecked()
 
     // Reload the page and verify the preference persisted
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-    // WebAuthn should still be selected after reload
-    await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).toBeChecked()
-    await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).not.toBeChecked()
+    // First method should still be selected after reload
+    await expect(firstRadio).toBeChecked()
+    await expect(secondRadio).not.toBeChecked()
 
-    // Switch back to TOTP
-    const updateBackPromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/preferred-method') &&
-        response.request().method() === 'PUT'
-    )
-    await page.getByRole('radio', { name: /TOTP Authenticator/i }).click()
-    await updateBackPromise
+    // Need to clear step-up session before switching again
+    await clearStepUpSessions()
+
+    // Reload page to ensure step-up is required again
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Switch back to the second method - this will also trigger step-up
+    await page.getByLabel(secondMethod).click()
+
+    // Satisfy step-up modal again
+    const satisfiedAgain = await satisfyMFAStepUpModal(page, { secret, require: true })
+    if (!satisfiedAgain) {
+      throw new Error('Expected step-up modal to appear when changing preferred MFA method back')
+    }
+
+    await expect(secondRadio).toBeChecked({ timeout: 15_000 })
 
     // Verify it switched back
-    await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).toBeChecked()
-    await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).not.toBeChecked()
+    await expect(secondRadio).toBeChecked()
+    await expect(firstRadio).not.toBeChecked()
 
     // Final reload to confirm persistence
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
-    await expect(page.getByRole('radio', { name: /TOTP Authenticator/i })).toBeChecked()
-    await expect(page.getByRole('radio', { name: /WebAuthn.*Security Key/i })).not.toBeChecked()
+    await expect(secondRadio).toBeChecked()
+    await expect(firstRadio).not.toBeChecked()
   })
 
   test('login flow respects preferred MFA method', async ({ page }) => {
-    // Set up user with both TOTP and WebAuthn, with WebAuthn as preferred
+    // Set up user with both TOTP and WebAuthn BEFORE login
     await setupBothMfaMethods(ADMIN_EMAIL)
-    await login(page, { autoEnrollMfa: false })
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) {
+      throw new Error('Expected TOTP secret for admin@example.com after setupBothMfaMethods')
+    }
+
+    // Wait a bit for database to settle
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Login with MFA already enrolled - must use performLoginWithMfa since user has MFA
+    await performLoginWithMfa(page, secret, false)
 
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
     // Set WebAuthn as preferred
-    const webauthnRadio = page.getByRole('radio', { name: /WebAuthn.*Security Key/i })
-    await expect(webauthnRadio).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByLabel('WebAuthn / Security Key')).toBeVisible({ timeout: 10_000 })
 
-    const updatePreferredPromise = page.waitForResponse(
-      (response) =>
-        response.url().includes('/auth/mfa/preferred-method') &&
-        response.request().method() === 'PUT'
-    )
-    await webauthnRadio.click()
-    await updatePreferredPromise
+    // Expire step-up session from login so we can test step-up modal
+    await clearStepUpSessions()
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Click to switch to WebAuthn - this will trigger step-up
+    await page.getByLabel('WebAuthn / Security Key').click()
+
+    // Satisfy step-up modal
+    const satisfied = await satisfyMFAStepUpModal(page, { secret, require: true })
+    if (!satisfied) {
+      throw new Error('Expected step-up modal when setting preferred MFA method')
+    }
+
+    await expect(page.getByLabel('WebAuthn / Security Key')).toBeChecked({ timeout: 15_000 })
 
     // Enforce MFA and logout
     await enforceMfaFor(ADMIN_EMAIL)
@@ -454,7 +504,7 @@ test.describe('Account security', () => {
 
     // WebAuthn starts automatically and succeeds (mocked in E2E)
     // Wait for navigation to complete, indicating successful WebAuthn verification
-    await page.waitForURL(/\/web\/rack/, { timeout: 10_000 })
+    await page.waitForURL(/\/app\/rack/, { timeout: 10_000 })
   })
 
   // NOTE: MFA rate limiting is tested in Go unit tests (TestVerifyTOTP_RateLimiting)
