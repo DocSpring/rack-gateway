@@ -1,6 +1,6 @@
 import { WebRoute } from '@/lib/routes'
-import { expect, test } from './fixtures'
 import { getUserMfaSecret } from './db'
+import { expect, test } from './fixtures'
 import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
 
 test('users: add, edit role, delete', async ({ page }) => {

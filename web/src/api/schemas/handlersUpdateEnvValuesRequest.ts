@@ -8,7 +8,6 @@
 import type { HandlersUpdateEnvValuesRequestSet } from './handlersUpdateEnvValuesRequestSet';
 
 export interface HandlersUpdateEnvValuesRequest {
-  app: string;
   remove?: string[];
   set?: HandlersUpdateEnvValuesRequestSet;
 }

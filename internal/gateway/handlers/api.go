@@ -616,19 +616,23 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 	start := time.Now()
 
+	app := strings.TrimSpace(c.Param("app"))
+	if app == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+		return
+	}
+
 	var req UpdateEnvValuesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
 
-	app := strings.TrimSpace(c.Param("app"))
-	if app == "" {
-		app = strings.TrimSpace(req.App)
+	if req.Set == nil {
+		req.Set = map[string]string{}
 	}
-	if app == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
-		return
+	if req.Remove == nil {
+		req.Remove = []string{}
 	}
 
 	email := c.GetString("user_email")

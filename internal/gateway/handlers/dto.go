@@ -174,7 +174,6 @@ type EnvValuesResponse struct {
 
 // UpdateEnvValuesRequest defines the payload for updating environment variables.
 type UpdateEnvValuesRequest struct {
-	App    string            `json:"app" binding:"required"`
 	Set    map[string]string `json:"set"`
 	Remove []string          `json:"remove"`
 }

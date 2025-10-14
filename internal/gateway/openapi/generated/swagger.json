@@ -4800,13 +4800,7 @@
         },
         "handlers.UpdateEnvValuesRequest": {
             "type": "object",
-            "required": [
-                "app"
-            ],
             "properties": {
-                "app": {
-                    "type": "string"
-                },
                 "remove": {
                     "type": "array",
                     "items": {

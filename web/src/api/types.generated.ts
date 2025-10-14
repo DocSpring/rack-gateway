@@ -4679,7 +4679,6 @@ export interface components {
             notes?: string;
         };
         "handlers.UpdateEnvValuesRequest": {
-            app: string;
             remove?: string[];
             set?: {
                 [key: string]: string;
