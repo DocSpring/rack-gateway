@@ -769,9 +769,9 @@ export function AppSettingsPage() {
             app={app}
             description="Environment variables that are protected (values masked) and cannot be changed."
             disabled={!isAdmin}
+            pathSegment="protected-env-vars"
             placeholder="e.g. DATABASE_URL"
             settingKey="protected_env_vars"
-            pathSegment="protected-env-vars"
             settings={appSettings}
             title="Protected Environment Variables"
           />
@@ -779,9 +779,9 @@ export function AppSettingsPage() {
             app={app}
             description="Environment variables that are treated as secrets (values masked) but can still be changed."
             disabled={!isAdmin}
+            pathSegment="secret-env-vars"
             placeholder="e.g. API_KEY"
             settingKey="secret_env_vars"
-            pathSegment="secret-env-vars"
             settings={appSettings}
             title="Secret Environment Variables"
           />
@@ -791,9 +791,9 @@ export function AppSettingsPage() {
             app={app}
             description="Commands that a CI/CD token can run during an approved deploy request."
             disabled={!isAdmin}
+            pathSegment="approved-deploy-commands"
             placeholder="e.g. bundle exec rake db:migrate"
             settingKey="approved_deploy_commands"
-            pathSegment="approved-deploy-commands"
             settings={appSettings}
             title="Approved Deploy Commands"
           />

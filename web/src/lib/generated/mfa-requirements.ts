@@ -482,9 +482,9 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "PUT",
-    pattern: "/api/v1/users/:email/roles",
-    permissions: ["gateway:user:update"],
-    mfaLevel: "always",
+    pattern: "/api/v1/users/:email/name",
+    permissions: ["gateway:user:update_name"],
+    mfaLevel: "step_up",
   },
 ];
 

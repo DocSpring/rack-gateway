@@ -29,6 +29,9 @@ for (const requirement of HTTP_ROUTE_MFA_REQUIREMENTS) {
 }
 
 const PARAM_SEGMENT = /^:([A-Za-z0-9_]+)$/
+const QUERY_SPLIT_REGEX = /[?#]/
+const PROTOCOL_PREFIX_REGEX = /^https?:\/\/[^/]+/i
+const TRAILING_SLASH_REGEX = /\/+$/
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -61,16 +64,16 @@ function getRegex(requirement: RequirementWithRegex): RegExp {
 }
 
 function normalizePath(input: string, baseUrl?: string): string {
-  const [cleanInput] = input.split(/[?#]/, 1)
+  const [cleanInput] = input.split(QUERY_SPLIT_REGEX, 1)
   let path = cleanInput.startsWith('/') ? cleanInput : `/${cleanInput}`
 
   if (baseUrl) {
-    const [cleanBase] = baseUrl.split(/[?#]/, 1)
-    let basePath = cleanBase.replace(/^https?:\/\/[^/]+/i, '')
+    const [cleanBase] = baseUrl.split(QUERY_SPLIT_REGEX, 1)
+    let basePath = cleanBase.replace(PROTOCOL_PREFIX_REGEX, '')
     if (basePath && !basePath.startsWith('/')) {
       basePath = `/${basePath}`
     }
-    basePath = basePath.replace(/\/+$/, '')
+    basePath = basePath.replace(TRAILING_SLASH_REGEX, '')
 
     if (basePath && basePath !== '/' && !path.startsWith(basePath)) {
       path = `${basePath}${path}`
@@ -110,7 +113,7 @@ function findRequirement(
     if (candidate.pattern === normalizedPath) {
       return candidate
     }
-    if (!candidate.pattern.includes(':') && !candidate.pattern.includes('*')) {
+    if (!(candidate.pattern.includes(':') || candidate.pattern.includes('*'))) {
       continue
     }
     if (getRegex(candidate).test(normalizedPath)) {
@@ -126,7 +129,7 @@ export function shouldPreemptMfaRequest(
   url: string | undefined,
   baseUrl?: string
 ): boolean {
-  if (!method || !url) {
+  if (!(method && url)) {
     return false
   }
   const requirement = findRequirement(method, url, baseUrl)
@@ -141,7 +144,7 @@ export function getMfaRequirementForRequest(
   url: string | undefined,
   baseUrl?: string
 ): RequirementWithRegex | null {
-  if (!method || !url) {
+  if (!(method && url)) {
     return null
   }
   return findRequirement(method, url, baseUrl)

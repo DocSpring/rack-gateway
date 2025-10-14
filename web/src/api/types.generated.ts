@@ -3829,8 +3829,8 @@ export interface paths {
             };
         };
         /**
-         * Update user profile
-         * @description Updates a user's display name and/or email.
+         * Update user
+         * @description Updates a user's email, name, and/or roles in a single request.
          */
         put: {
             parameters: {
@@ -3842,10 +3842,10 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            /** @description User profile */
+            /** @description User update payload */
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["handlers.UpdateUserProfileRequest"];
+                    "application/json": components["schemas"]["handlers.UpdateUserRequest"];
                 };
             };
             responses: {
@@ -4021,7 +4021,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/users/{email}/roles": {
+    "/users/{email}/name": {
         parameters: {
             query?: never;
             header?: never;
@@ -4030,8 +4030,8 @@ export interface paths {
         };
         get?: never;
         /**
-         * Update user roles
-         * @description Replaces the role assignments for a user.
+         * Update user name
+         * @description Updates only a user's display name.
          */
         put: {
             parameters: {
@@ -4043,10 +4043,10 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            /** @description Role payload */
+            /** @description Name payload */
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["handlers.UpdateUserRolesRequest"];
+                    "application/json": components["schemas"]["handlers.UpdateUserNameRequest"];
                 };
             };
             responses: {
@@ -4698,12 +4698,13 @@ export interface components {
             /** @description "totp", "webauthn", or null to clear */
             preferred_method?: string;
         };
-        "handlers.UpdateUserProfileRequest": {
+        "handlers.UpdateUserNameRequest": {
+            name: string;
+        };
+        "handlers.UpdateUserRequest": {
             email?: string;
             name?: string;
-        };
-        "handlers.UpdateUserRolesRequest": {
-            roles: string[];
+            roles?: string[];
         };
         "handlers.UserInfo": {
             email: string;

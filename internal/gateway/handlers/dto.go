@@ -225,15 +225,16 @@ type CreateUserRequest struct {
 	Roles []string `json:"roles" binding:"required,min=1"`
 }
 
-// UpdateUserProfileRequest defines the payload for updating user profile information.
-type UpdateUserProfileRequest struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+// UpdateUserRequest defines the payload for updating user profile and roles.
+type UpdateUserRequest struct {
+	Name  *string  `json:"name,omitempty"`
+	Email *string  `json:"email,omitempty"`
+	Roles []string `json:"roles,omitempty"`
 }
 
-// UpdateUserRolesRequest defines the payload for updating user roles.
-type UpdateUserRolesRequest struct {
-	Roles []string `json:"roles" binding:"required,min=1"`
+// UpdateUserNameRequest defines the payload for updating only a user's name.
+type UpdateUserNameRequest struct {
+	Name string `json:"name" binding:"required"`
 }
 
 // CreateAPITokenRequest represents the request body for creating a new API token.

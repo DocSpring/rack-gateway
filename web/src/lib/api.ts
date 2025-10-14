@@ -1,14 +1,13 @@
 import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 
 import { getRackGatewayAPI } from '@/api/generated'
-import { getHttpClientInstance } from '@/contexts/http-client-context'
 import type {
   DbAPIToken,
   DbAuditLog,
   DbUser,
   GetDeployApprovalRequestsParams,
-  GetRoles200,
   GetRack200,
+  GetRoles200,
   HandlersAuditLogsResponse,
   HandlersBackupCodesResponse,
   HandlersConfirmTOTPEnrollmentRequest,
@@ -34,8 +33,8 @@ import type {
   HandlersUpdateAPITokenRequest,
   HandlersUpdateDeployApprovalRequestStatusRequest,
   HandlersUpdatePreferredMFAMethodRequest,
-  HandlersUpdateUserProfileRequest,
-  HandlersUpdateUserRolesRequest,
+  HandlersUpdateUserNameRequest,
+  HandlersUpdateUserRequest,
   HandlersUserSessionResponse,
   HandlersUserSummary,
   HandlersVerifyMFARequest,
@@ -44,6 +43,7 @@ import type {
   HandlersWebAuthnAssertionStartResponse,
   HandlersWebAuthnEnrollmentResponse,
 } from '@/api/schemas'
+import { getHttpClientInstance } from '@/contexts/http-client-context'
 
 const API_PREFIX = '/api/v1'
 
@@ -67,8 +67,8 @@ const normalizePath = (path: string): string => {
 export type GatewayUser = DbUser
 export type UserConfig = { name: string; roles: string[] }
 export type CreateUserRequest = HandlersCreateUserRequest
-export type UpdateUserProfileRequest = HandlersUpdateUserProfileRequest
-export type UpdateUserRolesRequest = HandlersUpdateUserRolesRequest
+export type UpdateUserRequest = HandlersUpdateUserRequest
+export type UpdateUserNameRequest = HandlersUpdateUserNameRequest
 export type UserSummary = HandlersUserSummary
 export type UserSessionSummary = HandlersUserSessionResponse
 export type RevokeSessionResponse = HandlersRevokeSessionResponse
@@ -139,15 +139,15 @@ export const getUser = (email: string): Promise<GatewayUser> => unwrap(gateway.g
 export const createUser = (payload: CreateUserRequest): Promise<UserSummary> =>
   unwrap(gateway.postUsers(payload))
 
-export const updateUserProfile = (
+export const updateUser = (
   currentEmail: string,
-  payload: UpdateUserProfileRequest
-): Promise<UserSummary> => unwrap(gateway.putUsersEmail(currentEmail, payload))
+  payload: UpdateUserRequest
+): Promise<UserSummary> => unwrap(gateway.putUsersEmail(encodeURIComponent(currentEmail), payload))
 
-export const updateUserRoles = (
+export const updateUserName = (
   email: string,
-  payload: UpdateUserRolesRequest
-): Promise<UserSummary> => unwrap(gateway.putUsersEmailRoles(email, payload))
+  payload: UpdateUserNameRequest
+): Promise<UserSummary> => unwrap(gateway.putUsersEmailName(encodeURIComponent(email), payload))
 
 export const deleteUser = async (email: string): Promise<void> => {
   await unwrap(gateway.deleteUsersEmail(email))
@@ -426,8 +426,8 @@ export const api = {
   listUsers,
   getUser,
   createUser,
-  updateUserProfile,
-  updateUserRoles,
+  updateUser,
+  updateUserName,
   deleteUser,
   listUserSessions,
   revokeUserSession,

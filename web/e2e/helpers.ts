@@ -126,12 +126,28 @@ export async function ensureMfaEnrollment(
 
 export async function satisfyMFAStepUpModal(
   page: Page,
-  options: { email?: string; secret?: string; trustDevice?: boolean } = {}
+  options: {
+    email?: string
+    secret?: string
+    trustDevice?: boolean
+    clearMfaAttempts?: boolean
+    require?: boolean
+  } = {}
 ): Promise<boolean> {
-  const { email = 'admin@example.com', secret: secretOverride, trustDevice = false } = options
+  const {
+    email = 'admin@example.com',
+    secret: secretOverride,
+    trustDevice = false,
+    require: requireDialog = true,
+  } = options
+  const shouldClearMfaAttempts = options.clearMfaAttempts ?? true
+
+  if (shouldClearMfaAttempts) {
+    await clearMfaAttempts()
+  }
 
   const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
-  await dialog.waitFor({ state: 'visible', timeout: 5000 })
+  await dialog.waitFor({ state: 'visible', timeout: requireDialog ? 5000 : 2000 })
 
   // Wait for the input field to be ready
   const input = dialog.getByLabel(/Verification code/i)

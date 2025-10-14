@@ -73,9 +73,10 @@ var MFARequirements = map[string]MFALevel{
 	Gateway(ResourceAPIToken, ActionDelete): MFAAlways,
 
 	// User Management - Changing roles/permissions
-	Gateway(ResourceUser, ActionCreate): MFAAlways, // Creating users
-	Gateway(ResourceUser, ActionUpdate): MFAAlways, // Role changes
-	Gateway(ResourceUser, ActionDelete): MFAAlways,
+	Gateway(ResourceUser, ActionCreate):     MFAAlways, // Creating users
+	Gateway(ResourceUser, ActionUpdate):     MFAAlways, // Role changes
+	Gateway(ResourceUser, ActionUpdateName): MFAStepUp, // Name-only updates
+	Gateway(ResourceUser, ActionDelete):     MFAAlways,
 
 	// Security Settings - Modifying security configuration
 	Security(ResourceSecret, ActionUpdate): MFAAlways,

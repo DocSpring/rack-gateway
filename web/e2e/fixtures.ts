@@ -79,7 +79,6 @@ export const test = base.extend({
             url.includes('/auth/mfa/enroll/totp/start') &&
             response.ok
           ) {
-            console.debug('[E2E] Intercepting TOTP enrollment response via fetch', url)
             response
               .clone()
               .json()
@@ -108,7 +107,6 @@ export const test = base.extend({
           urlString.includes('/auth/mfa/enroll/totp/start')
 
         if ((this as any).__e2e_capture_totp === true) {
-          console.debug('[E2E] Observing TOTP enrollment request via XHR', method, urlString)
         }
 
         return originalOpen.apply(this, args)
@@ -126,7 +124,6 @@ export const test = base.extend({
               if (!raw) return
               const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
               globalObject.__e2e_last_mfa_enroll = parsed
-              console.debug('[E2E] Captured TOTP enrollment response via XHR')
             } catch (err) {
               console.error('Failed to capture TOTP enrollment response', err)
             }

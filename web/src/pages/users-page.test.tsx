@@ -23,6 +23,8 @@ vi.mock('../lib/api', async () => {
       post: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      updateUser: vi.fn(),
+      updateUserName: vi.fn(),
     },
   }
 })
@@ -185,7 +187,7 @@ describe('UsersPage', () => {
 
     it('updates user roles', async () => {
       vi.mocked(api.get).mockResolvedValue(mockUsers)
-      vi.mocked(api.put).mockResolvedValueOnce({})
+      vi.mocked(api.updateUser).mockResolvedValueOnce({} as any)
 
       const Wrapper = createWrapper()
       render(<UsersPage />, { wrapper: Wrapper })
@@ -224,7 +226,7 @@ describe('UsersPage', () => {
       fireEvent.click(screen.getByRole('button', { name: UPDATE_USER_RE }))
 
       await waitFor(() => {
-        expect(api.put).toHaveBeenCalledWith('/api/v1/users/viewer@example.com/roles', {
+        expect(api.updateUser).toHaveBeenCalledWith('viewer@example.com', {
           roles: ['admin'],
         })
       })

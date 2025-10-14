@@ -60,13 +60,18 @@ test('full OAuth login flow succeeds and /info returns user', async ({ page }) =
 
   // Now the cookie should be set; /api/v1/info should return the current user
   const infoEndpoint = APIRoute('info')
-  const info = await page.evaluate(async (endpoint) => {
-    const r = await fetch(endpoint, { credentials: 'include' })
-    let data: Record<string, unknown> | null = null
+  type InfoResult = {
+    ok: boolean
+    status: number
+    data: { user?: { email?: string | null } } | null
+  }
+  const info = await page.evaluate<InfoResult, string>(async (endpoint) => {
+    const response = await fetch(endpoint, { credentials: 'include' })
+    let data: InfoResult['data'] = null
     try {
-      data = await r.json()
+      data = await response.json()
     } catch {}
-    return { ok: r.ok, status: r.status, data }
+    return { ok: response.ok, status: response.status, data }
   }, infoEndpoint)
   expect(info.ok).toBeTruthy()
   expect(info.status).toBe(200)

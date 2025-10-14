@@ -4045,11 +4045,11 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Updates a user's display name and/or email.",
+                "description": "Updates a user's email, name, and/or roles in a single request.",
                 "tags": [
                     "Users"
                 ],
-                "summary": "Update user profile",
+                "summary": "Update user",
                 "parameters": [
                     {
                         "description": "Current email",
@@ -4065,11 +4065,11 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateUserProfileRequest"
+                                "$ref": "#/components/schemas/handlers.UpdateUserRequest"
                             }
                         }
                     },
-                    "description": "User profile",
+                    "description": "User update payload",
                     "required": true
                 },
                 "responses": {
@@ -4265,7 +4265,7 @@
                 }
             }
         },
-        "/users/{email}/roles": {
+        "/users/{email}/name": {
             "put": {
                 "security": [
                     {
@@ -4275,11 +4275,11 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Replaces the role assignments for a user.",
+                "description": "Updates only a user's display name.",
                 "tags": [
                     "Users"
                 ],
-                "summary": "Update user roles",
+                "summary": "Update user name",
                 "parameters": [
                     {
                         "description": "User email",
@@ -4295,11 +4295,11 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/handlers.UpdateUserRolesRequest"
+                                "$ref": "#/components/schemas/handlers.UpdateUserNameRequest"
                             }
                         }
                     },
-                    "description": "Role payload",
+                    "description": "Name payload",
                     "required": true
                 },
                 "responses": {
@@ -5770,7 +5770,18 @@
                     }
                 }
             },
-            "handlers.UpdateUserProfileRequest": {
+            "handlers.UpdateUserNameRequest": {
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.UpdateUserRequest": {
                 "type": "object",
                 "properties": {
                     "email": {
@@ -5778,18 +5789,9 @@
                     },
                     "name": {
                         "type": "string"
-                    }
-                }
-            },
-            "handlers.UpdateUserRolesRequest": {
-                "type": "object",
-                "required": [
-                    "roles"
-                ],
-                "properties": {
+                    },
                     "roles": {
                         "type": "array",
-                        "minItems": 1,
                         "items": {
                             "type": "string"
                         }

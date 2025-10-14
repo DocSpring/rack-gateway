@@ -1,4 +1,4 @@
-import { AxiosHeaders, isAxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { type AxiosError, AxiosHeaders, type InternalAxiosRequestConfig, isAxiosError } from 'axios'
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -15,8 +15,8 @@ import {
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useHttpClient } from '@/contexts/http-client-context'
-import { getErrorMessage } from '@/lib/error-utils'
 import { getMFAStatus } from '@/lib/api'
+import { getErrorMessage } from '@/lib/error-utils'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
 type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null
@@ -143,7 +143,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
 
   const runAction = useCallback(async (action: StepUpAction) => {
     if (!action) {
-      return undefined
+      return
     }
     return await Promise.resolve(action())
   }, [])
@@ -162,7 +162,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
           statusFetchRef.current = null
         })
     }
-    return statusFetchRef.current
+    return await statusFetchRef.current
   }, [])
 
   const needsStepUpPrompt = useCallback(async (): Promise<boolean> => {
@@ -219,7 +219,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       clearMFAHeaders()
       processQueue()
     }
-  }, [processQueue, runAction])
+  }, [processQueue, refreshStepUpExpiry, runAction])
 
   const runWithMFAGuard = useCallback(
     async <T,>(fn: () => Promise<T>): Promise<T> => {
@@ -243,61 +243,66 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   useEffect(() => {
-    const requestInterceptor = client.interceptors.request.use(async (config) => {
+    const resolveRequirement = (config: InternalAxiosRequestConfig) => {
       const baseUrl =
         typeof config.baseURL === 'string'
           ? config.baseURL
           : (client.defaults.baseURL as string | undefined)
-      const requirement = getMfaRequirementForRequest(
-        config.method?.toUpperCase(),
-        config.url,
-        baseUrl
-      )
+      return getMfaRequirementForRequest(config.method?.toUpperCase(), config.url, baseUrl)
+    }
 
-      if (!requirement) {
-        return config
+    const applyMfaRequirement = async (
+      internal: InternalRequestConfig,
+      requirement: NonNullable<ReturnType<typeof getMfaRequirementForRequest>>
+    ): Promise<InternalAxiosRequestConfig> => {
+      if (!internal.headers) {
+        internal.headers = AxiosHeaders.from({})
       }
-
-      const internal = config as InternalRequestConfig
       if (internal.__skipMfaInterceptor) {
-        delete internal.__skipMfaInterceptor
-        return config
+        internal.__skipMfaInterceptor = undefined
+        return internal
       }
 
       if (requirement.mfaLevel === 'always') {
         return promptForMfaConfig(internal)
       }
 
-      if (requirement.mfaLevel === 'step_up') {
-        const prompt = await needsStepUpPrompt()
-        if (!prompt) {
-          return config
-        }
+      if (requirement.mfaLevel === 'step_up' && (await needsStepUpPrompt())) {
         return promptForMfaConfig(internal)
       }
 
-      return config
+      return internal
+    }
+
+    const requestInterceptor = client.interceptors.request.use((config) => {
+      const requirement = resolveRequirement(config)
+      if (!requirement) {
+        return config
+      }
+      return applyMfaRequirement(config as InternalRequestConfig, requirement)
     })
 
     const responseInterceptor = client.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (!isMFAError(error)) {
-          return Promise.reject(error)
+        type AxiosStepUpError = AxiosError<unknown, InternalRequestConfig> & {
+          suppressToast?: boolean
+        }
+        const axiosError = error as AxiosStepUpError
+        if (!isMFAError(axiosError)) {
+          return Promise.reject(axiosError)
         }
 
-        const originalConfig: InternalRequestConfig = {
-          ...(error.config ?? {}),
-        }
+        const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
 
         if (originalConfig.__skipMfaInterceptor) {
-          return Promise.reject(error)
+          return Promise.reject(axiosError)
         }
 
-        if (error?.config) {
-          ;(error.config as InternalRequestConfig).__suppressGlobalError = true
+        if (axiosError.config) {
+          ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
         }
-        ;(error as any).suppressToast = true
+        axiosError.suppressToast = true
 
         return new Promise((resolve, reject) => {
           openStepUp({

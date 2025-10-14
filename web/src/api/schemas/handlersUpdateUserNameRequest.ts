@@ -6,8 +6,6 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface AuthLoginStartResponse {
-  auth_url: string;
-  code_verifier: string;
-  state: string;
+export interface HandlersUpdateUserNameRequest {
+  name: string;
 }

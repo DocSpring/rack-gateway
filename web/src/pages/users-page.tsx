@@ -28,7 +28,7 @@ import { UserEditDialog } from '../components/user-edit-dialog'
 import { UserLockDialog, useUnlockUser } from '../components/user-lock-dialog'
 import { UserMetaCell } from '../components/user-meta-cell'
 import { useAuth } from '../contexts/auth-context'
-import { api, type RoleName } from '../lib/api'
+import { api, type RoleName, type UpdateUserRequest } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
 import { pickPrimaryRole } from '../lib/user-roles'
 
@@ -77,6 +77,41 @@ function isUserLocked(user: User): boolean {
 
 function canModifyUser(user: User, currentUserEmail?: string): boolean {
   return user.email !== currentUserEmail
+}
+
+type UserUpdatePlan =
+  | { type: 'none' }
+  | { type: 'nameOnly'; name: string }
+  | { type: 'full'; payload: UpdateUserRequest }
+
+function determineUserUpdatePlan(original: User, values: UserEditDialogValues): UserUpdatePlan {
+  const desiredRoles: RoleName[] = [values.role]
+  const changedEmail = values.email !== original.email
+  const changedName = values.name !== original.name
+  const rolesChanged =
+    original.roles.length !== desiredRoles.length ||
+    desiredRoles.some((role) => !original.roles.includes(role))
+
+  if (!changedEmail && changedName && !rolesChanged) {
+    return { type: 'nameOnly', name: values.name }
+  }
+
+  if (!(changedEmail || changedName || rolesChanged)) {
+    return { type: 'none' }
+  }
+
+  const payload: UpdateUserRequest = {}
+  if (changedEmail) {
+    payload.email = values.email
+  }
+  if (changedName) {
+    payload.name = values.name
+  }
+  if (rolesChanged) {
+    payload.roles = desiredRoles
+  }
+
+  return { type: 'full', payload }
 }
 
 type UserActionsProps = {
@@ -199,35 +234,31 @@ export function UsersPage() {
     },
   })
 
-  // Update user profile (name/email) mutation
-  const updateProfileMutation = useMutation({
+  // Update user mutation (email/name/roles)
+  const updateUserMutation = useMutation({
     mutationFn: async ({
       originalEmail,
-      email,
-      name,
+      payload,
     }: {
       originalEmail: string
-      email: string
-      name: string
+      payload: UpdateUserRequest
     }) => {
-      await api.put(`/api/v1/users/${encodeURIComponent(originalEmail)}`, {
-        email,
-        name,
-      })
-    },
-  })
-
-  // Update user roles mutation
-  const updateRolesMutation = useMutation({
-    mutationFn: async ({ email, roles }: { email: string; roles: string[] }) => {
-      await api.put(`/api/v1/users/${email}/roles`, { roles })
-    },
-    onSuccess: () => {
-      // No-op: combined success handling happens in handleSaveUser
+      await api.updateUser(originalEmail, payload)
     },
     onError: (err: unknown) => {
       const message = err instanceof Error ? err.message : ''
-      toast.error(message || 'Failed to update roles')
+      toast.error(message || 'Failed to update user')
+    },
+  })
+
+  // Update user name mutation (step-up only)
+  const updateUserNameMutation = useMutation({
+    mutationFn: async ({ email, name }: { email: string; name: string }) => {
+      await api.updateUserName(email, { name })
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : ''
+      toast.error(message || 'Failed to update user name')
     },
   })
 
@@ -307,21 +338,19 @@ export function UsersPage() {
   }
 
   const updateExistingUser = async (original: User, values: UserEditDialogValues) => {
-    const { email, name, role } = values
-    const originalEmail = original.email
-    const changedEmail = email !== originalEmail
-    const changedName = name !== original.name
-    const desiredRoles: RoleName[] = [role]
-    const rolesChanged =
-      original.roles.length !== desiredRoles.length ||
-      desiredRoles.some((r) => !original.roles.includes(r))
+    const plan = determineUserUpdatePlan(original, values)
+    if (plan.type === 'none') {
+      return
+    }
 
     try {
-      if (changedEmail || changedName) {
-        await updateProfileMutation.mutateAsync({ originalEmail, email, name })
-      }
-      if (rolesChanged || changedEmail) {
-        await updateRolesMutation.mutateAsync({ email, roles: desiredRoles })
+      if (plan.type === 'nameOnly') {
+        await updateUserNameMutation.mutateAsync({ email: original.email, name: plan.name })
+      } else {
+        await updateUserMutation.mutateAsync({
+          originalEmail: original.email,
+          payload: plan.payload,
+        })
       }
       await queryClient.invalidateQueries({
         queryKey: ['users'],
@@ -406,7 +435,7 @@ export function UsersPage() {
   const dialogBusy =
     dialogMode === 'create'
       ? createUserMutation.isPending
-      : updateProfileMutation.isPending || updateRolesMutation.isPending
+      : updateUserMutation.isPending || updateUserNameMutation.isPending
 
   // All authenticated users can view this page; actions are gated by role.
 

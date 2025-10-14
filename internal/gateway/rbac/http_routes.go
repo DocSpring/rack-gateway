@@ -217,7 +217,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("POST", "/api/v1/users", Gateway(ResourceUser, ActionCreate)),
 	newHTTPRoute("DELETE", "/api/v1/users/:email", Gateway(ResourceUser, ActionDelete)),
 	newHTTPRoute("PUT", "/api/v1/users/:email", Gateway(ResourceUser, ActionUpdate)),
-	newHTTPRoute("PUT", "/api/v1/users/:email/roles", Gateway(ResourceUser, ActionUpdate)),
+	newHTTPRoute("PUT", "/api/v1/users/:email/name", Gateway(ResourceUser, ActionUpdateName)),
 	newHTTPRoute("GET", "/api/v1/users/:email/sessions"),
 	newHTTPRoute("POST", "/api/v1/users/:email/sessions/:sessionID/revoke", Gateway(ResourceUser, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/users/:email/sessions/revoke_all", Gateway(ResourceUser, ActionUpdate)),

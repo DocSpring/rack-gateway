@@ -180,8 +180,8 @@ export async function clearAllGlobalSettings() {
 
 export async function getUserMfaEnrolled(email: string): Promise<boolean> {
   return await withDbClient(async (client) => {
-    const result = await client.query(`SELECT mfa_enrolled FROM users WHERE email = $1;`, [email])
-    return result.rows[0]?.mfa_enrolled || false
+    const result = await client.query('SELECT mfa_enrolled FROM users WHERE email = $1;', [email])
+    return result.rows[0]?.mfa_enrolled ?? false
   })
 }
 

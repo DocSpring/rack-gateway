@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
+import { getUserMfaSecret } from './db'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
@@ -11,7 +12,6 @@ import {
   setupBothMfaMethods,
   startTotpEnrollmentViaUi,
 } from './helpers'
-import { getUserMfaSecret } from './db'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -99,12 +99,6 @@ test.describe('Account security', () => {
   test('user can manage MFA enrollment, backup codes, trusted devices, and removal flows', async ({
     page,
   }) => {
-    page.on('request', (request) => {
-      if (request.url().includes('mfa')) {
-        console.log('[E2E request]', request.method(), request.url())
-      }
-    })
-
     await login(page, { autoEnrollMfa: false })
 
     await page.goto(WebRoute('account/security'))
@@ -346,14 +340,12 @@ test.describe('Account security', () => {
 
     // Debug: Check if database was actually updated
     const { getUserMfaEnrolled } = await import('./db')
-    const enrolled = await getUserMfaEnrolled(ADMIN_EMAIL)
-    console.log('[DEBUG] After setupBothMfaMethods, mfa_enrolled =', enrolled)
+    await getUserMfaEnrolled(ADMIN_EMAIL)
 
     const secret = await getUserMfaSecret(ADMIN_EMAIL)
     if (!secret) {
       throw new Error('Expected TOTP secret after setupBothMfaMethods')
     }
-    console.log('[DEBUG] Got TOTP secret:', secret.substring(0, 8) + '...')
 
     // Wait a bit for database to settle
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -382,8 +374,6 @@ test.describe('Account security', () => {
 
     // Check which method is currently selected
     const isTotpChecked = await totpRadio.isChecked()
-    const isWebAuthnChecked = await webauthnRadio.isChecked()
-
     // Determine which method to switch to (the opposite of what's currently selected)
     const firstMethod = isTotpChecked ? 'WebAuthn / Security Key' : 'TOTP Authenticator'
     const secondMethod = isTotpChecked ? 'TOTP Authenticator' : 'WebAuthn / Security Key'

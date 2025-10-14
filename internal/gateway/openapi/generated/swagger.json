@@ -3287,7 +3287,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Updates a user's display name and/or email.",
+                "description": "Updates a user's email, name, and/or roles in a single request.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3297,7 +3297,7 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Update user profile",
+                "summary": "Update user",
                 "parameters": [
                     {
                         "type": "string",
@@ -3307,12 +3307,12 @@
                         "required": true
                     },
                     {
-                        "description": "User profile",
+                        "description": "User update payload",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.UpdateUserProfileRequest"
+                            "$ref": "#/definitions/handlers.UpdateUserRequest"
                         }
                     }
                 ],
@@ -3461,7 +3461,7 @@
                 }
             }
         },
-        "/users/{email}/roles": {
+        "/users/{email}/name": {
             "put": {
                 "security": [
                     {
@@ -3471,7 +3471,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Replaces the role assignments for a user.",
+                "description": "Updates only a user's display name.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3481,7 +3481,7 @@
                 "tags": [
                     "Users"
                 ],
-                "summary": "Update user roles",
+                "summary": "Update user name",
                 "parameters": [
                     {
                         "type": "string",
@@ -3491,12 +3491,12 @@
                         "required": true
                     },
                     {
-                        "description": "Role payload",
+                        "description": "Name payload",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.UpdateUserRolesRequest"
+                            "$ref": "#/definitions/handlers.UpdateUserNameRequest"
                         }
                     }
                 ],
@@ -4859,7 +4859,18 @@
                 }
             }
         },
-        "handlers.UpdateUserProfileRequest": {
+        "handlers.UpdateUserNameRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateUserRequest": {
             "type": "object",
             "properties": {
                 "email": {
@@ -4867,18 +4878,9 @@
                 },
                 "name": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.UpdateUserRolesRequest": {
-            "type": "object",
-            "required": [
-                "roles"
-            ],
-            "properties": {
+                },
                 "roles": {
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }

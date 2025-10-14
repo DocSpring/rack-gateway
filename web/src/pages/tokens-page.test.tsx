@@ -162,7 +162,6 @@ const RELEASE_PROMOTE_REGEX = /convox:release:promote/i
 const RACK_UPDATE_REGEX = /convox:rack:update/i
 const WILDCARD_REGEX = /convox:\*:\*/i
 const ALL_HEADING_REGEX = /^All$/i
-const APP_RESTART_REGEX = /convox:app:restart/i
 const SAVE_BUTTON_REGEX = /save/i
 
 const mockPermissionMetadata = {

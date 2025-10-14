@@ -262,6 +262,7 @@ const (
 	ActionTerminate
 	ActionUnset
 	ActionUpdate
+	ActionUpdateName
 )
 
 const (
@@ -286,6 +287,7 @@ const (
 	ActionStringTerminate          = "terminate"
 	ActionStringUnset              = "unset"
 	ActionStringUpdate             = "update"
+	ActionStringUpdateName         = "update_name"
 )
 
 var actionToString = [...]string{
@@ -310,6 +312,7 @@ var actionToString = [...]string{
 	ActionStringTerminate,
 	ActionStringUnset,
 	ActionStringUpdate,
+	ActionStringUpdateName,
 }
 
 func (a Action) String() string {
@@ -319,7 +322,7 @@ func (a Action) String() string {
 	return fmt.Sprintf("Action(%d)", a)
 }
 
-func (a Action) IsValid() bool { return a <= ActionUpdate }
+func (a Action) IsValid() bool { return a <= ActionUpdateName }
 
 func ParseAction(v string) (Action, error) {
 	for i, s := range actionToString {
