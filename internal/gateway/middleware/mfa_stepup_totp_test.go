@@ -144,10 +144,10 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "enrollment", w.Header().Get("X-MFA-Required"))
+		require.Equal(t, "step-up", w.Header().Get("X-MFA-Required"))
 
 		var resp map[string]string
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		require.Equal(t, "mfa_enrollment_required", resp["error"])
+		require.Equal(t, "mfa_step_up_required", resp["error"])
 	})
 }
