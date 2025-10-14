@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
-import { login } from './helpers'
+import { getUserMfaSecret } from './db'
+import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -15,10 +16,17 @@ test.describe('User Audit Logs', () => {
     const timestamp = Date.now()
     const targetEmail = `e2e-user-audit-${timestamp}@example.com`
     const targetName = `E2E Audit User ${timestamp}`
+    const adminSecret = await getUserMfaSecret('admin@example.com')
+    if (!adminSecret) {
+      throw new Error('admin@example.com missing TOTP secret')
+    }
 
     await page.getByRole('button', { name: /Add User/i }).click()
-    await page.getByLabel('Email').fill(targetEmail)
-    await page.getByLabel('Name').fill(targetName)
+    const addDialog = page.getByRole('dialog', { name: 'Add User' })
+    await expect(addDialog).toBeVisible()
+    await addDialog.getByLabel('Email').fill(targetEmail)
+    await addDialog.getByLabel('Name').fill(targetName)
+    await clearStepUpSessions()
     const waitForCreate = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
@@ -34,9 +42,13 @@ test.describe('User Audit Logs', () => {
     await Promise.all([
       waitForCreate,
       waitForUsersRefresh,
-      page.getByRole('button', { name: /Add User/i }).click(),
+      addDialog.getByRole('button', { name: /Add User/i }).click(),
+      satisfyMFAStepUpModal(page, {
+        email: 'admin@example.com',
+        secret: adminSecret,
+        require: true,
+      }),
     ])
-    await expect(page.locator('text=User created successfully').first()).toBeVisible()
 
     const userRow = page.locator('table tbody tr', { hasText: targetEmail }).first()
     await expect(userRow).toBeVisible()
@@ -69,6 +81,7 @@ test.describe('User Audit Logs', () => {
     await page.getByRole('menuitem', { name: 'Delete User' }).click()
     const deleteDialog = page.getByRole('dialog')
     await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
+    await clearStepUpSessions()
     const waitForDelete = page.waitForResponse(
       (response) =>
         response.request().method() === 'DELETE' &&
@@ -84,7 +97,14 @@ test.describe('User Audit Logs', () => {
     await Promise.all([
       waitForDelete,
       waitForUsersReload,
-      deleteDialog.getByRole('button', { name: /Delete User/i }).click(),
+      (async () => {
+        await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+        await satisfyMFAStepUpModal(page, {
+          email: 'admin@example.com',
+          secret: adminSecret,
+          require: true,
+        })
+      })(),
     ])
     await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
     await expect(cleanupRow).toHaveCount(0)

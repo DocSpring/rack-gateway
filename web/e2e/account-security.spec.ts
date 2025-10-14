@@ -381,9 +381,7 @@ test.describe('Account security', () => {
     const secondRadio = isTotpChecked ? totpRadio : webauthnRadio
 
     // Expire the step-up session from login so we can test step-up modal
-    await clearStepUpSessions()
-    await page.reload()
-    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+    await requireStepUp(page)
 
     // Switch to the other method - this will trigger step-up interceptor
     await page.getByLabel(firstMethod).click()
@@ -409,11 +407,7 @@ test.describe('Account security', () => {
     await expect(secondRadio).not.toBeChecked()
 
     // Need to clear step-up session before switching again
-    await clearStepUpSessions()
-
-    // Reload page to ensure step-up is required again
-    await page.reload()
-    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+    await requireStepUp(page)
 
     // Switch back to the second method - this will also trigger step-up
     await page.getByLabel(secondMethod).click()

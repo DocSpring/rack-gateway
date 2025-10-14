@@ -1,10 +1,11 @@
 import type { Page } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
-import { clearAllGlobalSettings, setupBothMfaMethodsForUser } from './db'
+import { clearAllGlobalSettings, getUserMfaSecret, setupBothMfaMethodsForUser } from './db'
 import { expect, test } from './fixtures'
-import { login, satisfyMFAStepUpModal } from './helpers'
+import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
 
 const VIEWER_EMAIL = 'viewer@example.com'
+const ADMIN_EMAIL = 'admin@example.com'
 
 async function navigateToSettings(page: Page) {
   await page.goto(WebRoute('settings'))
@@ -30,7 +31,7 @@ test.describe('Global Settings', () => {
 
     // Check for environment variable source indicator
     // The E2E test has RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS=45 set
-    await expect(page.getByText('from env: RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS')).toBeVisible()
+    await expect(page.getByText(/\(from env var\)/i)).toBeVisible()
 
     // Verify the value from env is displayed
     const ttlInput = page.getByLabel(/trusted device ttl/i)
@@ -83,6 +84,10 @@ test.describe('Global Settings', () => {
     await expect(page.getByText('Allow Destructive Actions').first()).toBeVisible()
 
     const allowDestructiveCheckbox = page.getByLabel(/allow destructive actions/i)
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) {
+      throw new Error('admin@example.com missing TOTP secret')
+    }
 
     // Verify default state (unchecked)
     await expect(allowDestructiveCheckbox).not.toBeChecked()
@@ -99,8 +104,9 @@ test.describe('Global Settings', () => {
     )
 
     let saveButton = page.getByRole('button', { name: /^save$/i }).first()
+    await clearStepUpSessions()
     await saveButton.click()
-    await satisfyMFAStepUpModal(page)
+    await satisfyMFAStepUpModal(page, { email: ADMIN_EMAIL, secret, require: true })
     await updateResponsePromise
 
     // Save/Cancel buttons should disappear
@@ -122,8 +128,9 @@ test.describe('Global Settings', () => {
     )
 
     saveButton = page.getByRole('button', { name: /^save$/i }).first()
+    await clearStepUpSessions()
     await saveButton.click()
-    await satisfyMFAStepUpModal(page)
+    await satisfyMFAStepUpModal(page, { email: ADMIN_EMAIL, secret, require: true })
     await updateResponsePromise
 
     // Save/Cancel buttons should disappear
@@ -138,8 +145,9 @@ test.describe('Global Settings', () => {
         response.url().includes('/api/v1/settings/allow-destructive-actions') &&
         response.request().method() === 'DELETE'
     )
+    await clearStepUpSessions()
     await clearButton.first().click()
-    await satisfyMFAStepUpModal(page)
+    await satisfyMFAStepUpModal(page, { email: ADMIN_EMAIL, secret, require: true })
     await clearResponsePromise
 
     // Checkbox should be back to default (false for allow_destructive_actions)
@@ -176,8 +184,13 @@ test.describe('Global Settings', () => {
         response.request().method() === 'PUT'
     )
 
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) {
+      throw new Error('admin@example.com missing TOTP secret')
+    }
+    await clearStepUpSessions()
     await saveButton.click()
-    await satisfyMFAStepUpModal(page)
+    await satisfyMFAStepUpModal(page, { email: ADMIN_EMAIL, secret, require: true })
     await updateResponsePromise
 
     // Reload page to verify change persisted

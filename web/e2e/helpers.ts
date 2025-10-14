@@ -149,10 +149,6 @@ export async function satisfyMFAStepUpModal(
   const dialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
   await dialog.waitFor({ state: 'visible', timeout: requireDialog ? 5000 : 2000 })
 
-  // Wait for the input field to be ready
-  const input = dialog.getByLabel(/Verification code/i)
-  await expect(input).toBeVisible({ timeout: 2000 })
-
   const secret = secretOverride ?? (await getUserMfaSecret(email))
   if (!secret) {
     throw new Error(`No confirmed TOTP secret found for ${email}. Ensure ensureMfaEnrollment ran.`)
@@ -168,9 +164,12 @@ export async function satisfyMFAStepUpModal(
       name: /Use authenticator app instead/i,
     })
     await switchToTotpButton.click()
-    // Wait for the verification code input to appear after switching modes
     await expect(dialog.getByLabel(/Verification code/i)).toBeVisible({ timeout: 2000 })
   }
+
+  // Wait for the input field to be ready (after switching if needed)
+  const input = dialog.getByLabel(/Verification code/i)
+  await expect(input).toBeVisible({ timeout: 2000 })
 
   const trustCheckbox = dialog.getByLabel(/Trust this/i)
   const checkboxExists = await trustCheckbox.isVisible().catch(() => false)

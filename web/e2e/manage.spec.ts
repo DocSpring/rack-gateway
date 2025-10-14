@@ -1,6 +1,7 @@
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { login, satisfyMFAStepUpModal } from './helpers'
+import { getUserMfaSecret } from './db'
+import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
 
 test('users: add, edit role, delete', async ({ page }) => {
   await login(page)
@@ -11,13 +12,45 @@ test('users: add, edit role, delete', async ({ page }) => {
 
   const timestamp = Date.now()
   const email = `e2e-web-user-${timestamp}@example.com`
+  const adminSecret = await getUserMfaSecret('admin@example.com')
+  if (!adminSecret) {
+    throw new Error('admin@example.com missing TOTP secret')
+  }
 
   // Add user
   await page.getByRole('button', { name: /Add User/i }).click()
-  await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Name').fill(`E2E Web User ${timestamp}`)
+  const addDialog = page.getByRole('dialog', { name: 'Add User' })
+  await expect(addDialog).toBeVisible()
+  await addDialog.getByLabel('Email').fill(email)
+  await addDialog.getByLabel('Name').fill(`E2E Web User ${timestamp}`)
   // Role defaults to viewer; save
-  await page.getByRole('button', { name: /Add User/i }).click()
+  await clearStepUpSessions()
+  const createUserResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().includes('/api/v1/users') &&
+      (response.status() === 201 || response.status() === 200)
+  )
+  const usersReload = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/v1/users') &&
+      response.status() === 200
+  )
+  await Promise.all([
+    createUserResponse,
+    usersReload,
+    (async () => {
+      await addDialog.getByRole('button', { name: /Add User/i }).click()
+      await satisfyMFAStepUpModal(page, {
+        email: 'admin@example.com',
+        secret: adminSecret,
+        require: true,
+      })
+    })(),
+  ])
+
+  await expect(page.locator('text=User created successfully').first()).toBeVisible()
 
   // Verify row appears
   const row = page.locator('tr', { hasText: email })
@@ -38,7 +71,19 @@ test('users: add, edit role, delete', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Edit User' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('radio', { name: /^Admin\b/i }).check()
+  await clearStepUpSessions()
+  const updateRoleResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      response.url().includes(`/api/v1/users/${encodeURIComponent(email)}`)
+  )
   await dialog.getByRole('button', { name: /Save Changes/i }).click()
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
+  await updateRoleResponse
   // Role badge should show Administrator
   await expect(row.getByText('Administrator')).toBeVisible()
 
@@ -48,7 +93,13 @@ test('users: add, edit role, delete', async ({ page }) => {
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
+  await clearStepUpSessions()
   await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
   await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
   await expect(row).toHaveCount(0)
 })
@@ -103,12 +154,44 @@ test('users: add shows all fields and persists after refresh', async ({ page }) 
 
   const timestamp = Date.now()
   const email = `e2e-web-user-${timestamp}@example.com`
+  const adminSecret = await getUserMfaSecret('admin@example.com')
+  if (!adminSecret) {
+    throw new Error('admin@example.com missing TOTP secret')
+  }
 
   // Add user
   await page.getByRole('button', { name: /Add User/i }).click()
-  await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Name').fill(`E2E Web User ${timestamp}`)
-  await page.getByRole('button', { name: /Add User/i }).click()
+  const addDialog = page.getByRole('dialog', { name: 'Add User' })
+  await expect(addDialog).toBeVisible()
+  await addDialog.getByLabel('Email').fill(email)
+  await addDialog.getByLabel('Name').fill(`E2E Web User ${timestamp}`)
+  await clearStepUpSessions()
+  const createUserResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().includes('/api/v1/users') &&
+      (response.status() === 201 || response.status() === 200)
+  )
+  const usersReload = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/v1/users') &&
+      response.status() === 200
+  )
+  await Promise.all([
+    createUserResponse,
+    usersReload,
+    (async () => {
+      await addDialog.getByRole('button', { name: /Add User/i }).click()
+      await satisfyMFAStepUpModal(page, {
+        email: 'admin@example.com',
+        secret: adminSecret,
+        require: true,
+      })
+    })(),
+  ])
+
+  await expect(page.locator('text=User created successfully').first()).toBeVisible()
 
   // Verify row appears with expected fields
   let row = page.locator('tr', { hasText: email })
@@ -141,7 +224,13 @@ test('users: add shows all fields and persists after refresh', async ({ page }) 
   const deleteDialog = page.getByRole('dialog')
   await expect(deleteDialog).toBeVisible()
   await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
+  await clearStepUpSessions()
   await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
   await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
   await expect(row).toHaveCount(0)
 })
@@ -155,6 +244,10 @@ test('tokens: create, rename, delete', async ({ page }) => {
 
   const timestamp = Date.now()
   const name1 = `E2E Web API Token ${timestamp}`
+  const adminSecret = await getUserMfaSecret('admin@example.com')
+  if (!adminSecret) {
+    throw new Error('admin@example.com missing TOTP secret')
+  }
 
   // Create token - opens create dialog
   await page.getByRole('button', { name: /Create Token/i }).click()
@@ -164,8 +257,18 @@ test('tokens: create, rename, delete', async ({ page }) => {
 
   // Submit the create token form - step-up window from login is still valid
   // so no MFA dialog will appear, token is created immediately
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && response.url().includes('/api/v1/api-tokens')
+  )
+  await clearStepUpSessions()
   await createDialog.getByRole('button', { name: /Create Token/i }).click()
-  await satisfyMFAStepUpModal(page)
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
+  await createResponse
 
   // Token should be created successfully and success dialog appears
   await expect(page.getByText(/API token created successfully/i)).toBeVisible()
@@ -180,8 +283,18 @@ test('tokens: create, rename, delete', async ({ page }) => {
   await page.getByText('Edit Token').click()
   const name2 = `${name1} Renamed`
   await page.getByLabel('Token Name').fill(name2)
+  await clearStepUpSessions()
+  const renameResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' && response.url().includes('/api/v1/api-tokens')
+  )
   await page.getByRole('button', { name: /^Save$/ }).click()
-  await satisfyMFAStepUpModal(page)
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
+  await renameResponse
   await expect(page.locator('tr', { hasText: name2 })).toBeVisible()
 
   // Delete token - click dropdown and select "Delete Token"
@@ -191,8 +304,18 @@ test('tokens: create, rename, delete', async ({ page }) => {
   // Confirm modal: type DELETE then confirm
   const confirmDialog = page.getByRole('dialog')
   await confirmDialog.getByLabel('Confirmation').fill('DELETE')
+  await clearStepUpSessions()
+  const deleteResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' && response.url().includes('/api/v1/api-tokens')
+  )
   await confirmDialog.getByRole('button', { name: /Delete Token/i }).click()
-  await satisfyMFAStepUpModal(page)
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
+  await deleteResponse
   await expect(row2).toHaveCount(0)
 })
 
@@ -223,6 +346,10 @@ test('audit logs: view and filter', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
   const timestamp = Date.now()
   const tokenName = `E2E Web API Token ${timestamp}`
+  const adminSecret = await getUserMfaSecret('admin@example.com')
+  if (!adminSecret) {
+    throw new Error('admin@example.com missing TOTP secret')
+  }
 
   // Open create token dialog
   await page.getByRole('button', { name: /Create Token/i }).click()
@@ -230,10 +357,18 @@ test('audit logs: view and filter', async ({ page }) => {
   await expect(createDialog).toBeVisible()
   await createDialog.getByLabel('Token Name').fill(tokenName)
 
-  // Submit the form - step-up window from login is still valid
-  // so token is created immediately without MFA dialog
+  await clearStepUpSessions()
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && response.url().includes('/api/v1/api-tokens')
+  )
   await createDialog.getByRole('button', { name: /Create Token/i }).click()
-  await satisfyMFAStepUpModal(page)
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
+  await createResponse
 
   // Token should be created successfully
   await expect(page.getByText('API token created successfully', { exact: true })).toBeVisible()
@@ -274,6 +409,12 @@ test('audit logs: view and filter', async ({ page }) => {
   await page.getByText('Delete Token').click()
   const confirmDialog = page.getByRole('dialog')
   await confirmDialog.getByLabel('Confirmation').fill('DELETE')
+  await clearStepUpSessions()
   await confirmDialog.getByRole('button', { name: /Delete Token/i }).click()
+  await satisfyMFAStepUpModal(page, {
+    email: 'admin@example.com',
+    secret: adminSecret,
+    require: true,
+  })
   await expect(row).toHaveCount(0)
 })

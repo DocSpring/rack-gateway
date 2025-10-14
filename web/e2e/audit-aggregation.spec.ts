@@ -1,8 +1,13 @@
+import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
 import { login } from './helpers'
 
 test('aggregates repeated app list views into single audit entry', async ({ page }) => {
   await login(page)
+
+  // Ensure initial navigation settles on the Rack page before issuing API requests
+  await page.goto(WebRoute('rack'))
+  await expect(page.getByRole('heading', { name: 'Rack', exact: true })).toBeVisible()
 
   // Trigger three consecutive app list fetches directly to avoid interleaving logs
   for (let i = 0; i < 3; i += 1) {
@@ -11,7 +16,7 @@ test('aggregates repeated app list views into single audit entry', async ({ page
   }
 
   // Navigate to audit logs and confirm aggregation badge
-  await page.goto('/app/audit-logs')
+  await page.goto(WebRoute('audit-logs'))
   await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
 
   const table = page.getByRole('table')
@@ -20,7 +25,9 @@ test('aggregates repeated app list views into single audit entry', async ({ page
   // Scroll to table to ensure it's in screenshot
   await table.scrollIntoViewIfNeeded()
 
-  const targetRow = table.getByRole('row', { name: /app\.list/i }).filter({ hasText: /×\d+/i })
+  const targetRow = table
+    .getByRole('row', { name: /(app\.list|convox:app:list)/i })
+    .filter({ hasText: /×\d+/i })
   await expect(targetRow).toHaveCount(1)
 
   const countBadge = targetRow.getByText(/×\d+/)

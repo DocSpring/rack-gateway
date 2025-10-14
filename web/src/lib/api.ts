@@ -416,6 +416,7 @@ export async function updateAppEnv(
 ): Promise<UpdateEnvResponseShape> {
   const client = getHttpClientInstance()
   const response = await client.put<UpdateEnvResponseShape>(`apps/${encodeURIComponent(app)}/env`, {
+    app,
     set,
     remove,
   })

@@ -54,6 +54,8 @@ PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test --grep "user
 
 - `task web:e2e` automatically rebuilds the gateway and restarts containers
 - Running Playwright manually does NOT rebuild - you must run `task web:e2e` or `task docker:test:up` first
+- 🚫 **Never** pass `--debug` (or any flag that opens the inspector) when running Playwright in automation — it blocks execution waiting for user interaction and will hang unattended runs.
+- ⏱️ Always run Playwright under an explicit timeout (the automation harness sets `timeout_ms` on every command) so a stalled browser never hangs the job.
 
 **When to use manual Playwright commands:**
 
