@@ -5,9 +5,9 @@
 ✅ **Completed:**
 
 - Removed Yubico OTP from UI (requires cloud validation or self-hosted server)
-- Selected `github.com/go-ctap/ctaphid` for FIDO2/CTAP2 client library
-- Added system library checks to `scripts/install.sh` for Linux (libudev-dev, libusb-1.0-0-dev)
-- Added go-ctap/ctaphid dependency to go.mod (v0.8.1)
+- Switched CLI WebAuthn implementation to `github.com/keys-pub/go-libfido2`
+- Added system library checks to `scripts/install.sh` for Linux (libfido2-dev, libudev-dev, libusb-1.0-0-dev)
+- GitHub Actions installs libfido2, enables CGO, and builds/tests the CLI with hardware support enabled by default
 - **Gateway API endpoints for WebAuthn assertion:**
   - `POST /api/v1/auth/mfa/webauthn/assertion/start` - Start WebAuthn assertion ceremony
   - `POST /api/v1/auth/mfa/webauthn/assertion/verify` - Verify WebAuthn assertion response
@@ -43,13 +43,12 @@
 
 ## Architecture Notes
 
-**Library Choice: `go-ctap/ctaphid`**
+**Library Choice: `github.com/keys-pub/go-libfido2`**
 
-- Pure Go FIDO2/CTAP2 protocol implementation
-- CGO only for macOS HID transport
-- Linux requires: libudev-dev, libusb-1.0-0-dev
-- macOS: works out of the box
-- Windows: not yet tested
+- Thin CGO wrapper around Yubico's libfido2 with stable device support
+- Linux requires libfido2 development headers (`libfido2-dev`) plus udev/usb libs
+- macOS ships libfido2 already; builds succeed with CGO enabled
+- The library is a hard dependency: builds fail immediately if the native headers are missing
 
 **Flow:**
 
@@ -60,11 +59,11 @@
 5. Gateway validates → returns success/failure
 6. On WebAuthn failure → CLI falls back to TOTP prompt
 
-**Alternative Considered:**
+**Build Requirements:**
 
-- `github.com/keys-pub/go-libfido2` - wraps Yubico's libfido2 C library
-- Rejected because it requires libfido2 system library on all platforms
-- go-ctap/ctaphid only needs system libs on Linux, macOS works natively
+- Ensure `CGO_ENABLED=1` (Go defaults to this when a C toolchain is present)
+- Install libfido2 + libudev + libusb development headers before running `go build ./cmd/rack-gateway`
+- CI and release pipelines install the packages and compile with real hardware support to keep the path green
 
 ## Related Files
 
