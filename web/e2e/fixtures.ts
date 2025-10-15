@@ -18,6 +18,7 @@ export const test = base.extend({
   // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
   baseURL: async ({}, use, testInfo) => {
     const ports = parseList(process.env.E2E_GATEWAY_PORTS)
+    const databaseUrls = parseList(process.env.E2E_DATABASE_URLS)
 
     // If E2E_GATEWAY_PORTS not set, use single port for all workers
     if (ports.length === 0) {
@@ -30,7 +31,22 @@ export const test = base.extend({
     const workerIndex = testInfo.parallelIndex
     const index = workerIndex % ports.length
     const baseURL = `http://localhost:${ports[index]}`
+
+    // CRITICAL: Set E2E_DATABASE_URL for this worker so database helpers connect to the right shard
+    const originalDatabaseUrl = process.env.E2E_DATABASE_URL
+    if (databaseUrls.length > 0) {
+      process.env.E2E_DATABASE_URL = databaseUrls[index]
+    }
+
     await use(baseURL)
+
+    // Restore original database URL
+    if (originalDatabaseUrl) {
+      process.env.E2E_DATABASE_URL = originalDatabaseUrl
+    } else {
+      // biome-ignore lint/performance/noDelete: Need to delete env var to prevent "undefined" string
+      delete process.env.E2E_DATABASE_URL
+    }
   },
 
   page: async ({ page }, use, testInfo) => {
