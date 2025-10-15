@@ -590,25 +590,28 @@ export function AccountSecurityPage() {
 
             {status?.enrolled && hasBothMethods ? (
               <div className="space-y-5">
-                <Label>Preferred sign-in method</Label>
-                <RadioGroup
-                  disabled={updatePreferredMethodMutation.isPending}
-                  onValueChange={handlePreferredMethodChange}
-                  value={user?.preferred_mfa_method || 'totp'}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem id="totp" value="totp" />
-                    <Label className="cursor-pointer font-normal" htmlFor="totp">
-                      TOTP Authenticator
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem id="webauthn" value="webauthn" />
-                    <Label className="cursor-pointer font-normal" htmlFor="webauthn">
-                      WebAuthn / Security Key
-                    </Label>
-                  </div>
-                </RadioGroup>
+                <div className="space-y-3">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Preferred sign-in method
+                  </p>
+                  <RadioGroup
+                    disabled={updatePreferredMethodMutation.isPending}
+                    onValueChange={handlePreferredMethodChange}
+                    value={user?.preferred_mfa_method || 'totp'}
+                  >
+                    <label className="flex cursor-pointer items-center space-x-2" htmlFor="totp">
+                      <RadioGroupItem id="totp" value="totp" />
+                      <span className="font-normal">TOTP Authenticator</span>
+                    </label>
+                    <label
+                      className="flex cursor-pointer items-center space-x-2"
+                      htmlFor="webauthn"
+                    >
+                      <RadioGroupItem id="webauthn" value="webauthn" />
+                      <span className="font-normal">WebAuthn / Security Key</span>
+                    </label>
+                  </RadioGroup>
+                </div>
                 <p className="text-muted-foreground text-xs">
                   This method will be used by default when signing in. You can always use the other
                   method if needed.

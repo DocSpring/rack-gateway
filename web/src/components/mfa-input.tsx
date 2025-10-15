@@ -1,68 +1,69 @@
 import type { ComponentPropsWithoutRef } from 'react'
-import { forwardRef } from 'react'
+import { forwardRef, useState } from 'react'
 
-import { Input } from '@/components/ui/input'
+import { OTPInput } from '@/components/otp-input'
 
-const SIX_DIGIT_REGEX = /^\d{6}$/
+type OTPInputProps = ComponentPropsWithoutRef<typeof OTPInput>
 
-type InputProps = ComponentPropsWithoutRef<typeof Input>
-
-type MFAInputProps = Omit<InputProps, 'onChange'> & {
+type MFAInputProps = Omit<OTPInputProps, 'onChange' | 'value' | 'length'> & {
+  value?: string
   onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
   onComplete?: (code: string) => void
+  maxLength?: number
+  // Legacy props that are ignored (for backward compatibility)
+  placeholder?: string
+  id?: string
+  required?: boolean
 }
 
-export const MFAInput = forwardRef<HTMLInputElement, MFAInputProps>(
+/**
+ * MFA Input component that wraps OTPInput to maintain backward compatibility.
+ * Converts the new OTPInput API (value/onChange with string) to the old API
+ * (onChange with event).
+ */
+export const MFAInput = forwardRef<HTMLDivElement, MFAInputProps>(
   (
     {
-      autoCapitalize,
-      autoComplete,
-      autoCorrect,
-      inputMode,
-      pattern,
-      type,
-      name,
+      value: externalValue,
       onChange,
       onComplete,
-      maxLength,
+      maxLength = 6,
+      autoFocus,
+      placeholder,
+      id,
+      required,
       ...rest
     },
     ref
   ) => {
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      onChange?.(event)
-      const value = event.target.value.trim()
-      // Auto-submit when 6 digits are entered
-      if (onComplete && value.length === 6 && SIX_DIGIT_REGEX.test(value)) {
-        onComplete(value)
-      }
-    }
+    const [internalValue, setInternalValue] = useState('')
+    const value = externalValue ?? internalValue
 
-    const handlePaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
-      const pastedText = event.clipboardData.getData('text').trim()
-      // Auto-submit when pasting 6 digits
-      if (onComplete && pastedText.length === 6 && SIX_DIGIT_REGEX.test(pastedText)) {
-        // Let the paste happen first, then trigger completion
-        setTimeout(() => onComplete(pastedText), 0)
+    const handleChange = (newValue: string) => {
+      // Update internal state if not controlled
+      if (externalValue === undefined) {
+        setInternalValue(newValue)
+      }
+
+      // Call onChange with synthetic event for backward compatibility
+      if (onChange) {
+        const syntheticEvent = {
+          target: { value: newValue },
+          currentTarget: { value: newValue },
+        } as React.ChangeEvent<HTMLInputElement>
+        onChange(syntheticEvent)
       }
     }
 
     return (
-      <Input
+      <OTPInput
         {...rest}
-        autoCapitalize={autoCapitalize ?? 'none'}
-        autoComplete={autoComplete ?? 'one-time-code'}
-        autoCorrect={autoCorrect ?? 'off'}
-        data-1p-ignore="true"
-        data-lpignore="true"
-        inputMode={inputMode ?? 'numeric'}
-        maxLength={maxLength ?? 6}
-        name={name ?? 'otp_entry'}
+        autoFocus={autoFocus}
+        length={maxLength}
         onChange={handleChange}
-        onPaste={handlePaste}
-        pattern={pattern ?? '[0-9]*'}
+        onComplete={onComplete}
         ref={ref}
-        type={type ?? 'text'}
+        value={value}
       />
     )
   }

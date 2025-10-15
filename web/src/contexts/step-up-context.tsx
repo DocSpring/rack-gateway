@@ -2,7 +2,6 @@ import { type AxiosError, AxiosHeaders, type InternalAxiosRequestConfig, isAxios
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
-import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAVerificationForm } from '@/components/mfa-verification-form'
 import { Button } from '@/components/ui/button'
 import {
@@ -439,14 +438,13 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
         open={isOpen}
       >
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Multi-Factor Authentication Required</DialogTitle>
-            <DialogDescription>
-              Verify your identity to continue with this sensitive action.
-            </DialogDescription>
+          <DialogHeader className="text-center sm:text-center">
+            <DialogTitle className="text-center">Multi-Factor Authentication Required</DialogTitle>
           </DialogHeader>
 
+          <DialogDescription className="text-center" />
           <MFAVerificationForm
+            mode="step-up"
             onError={(error) => {
               toast.error(getErrorMessage(error, 'Verification failed'))
             }}
@@ -469,52 +467,13 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
                 setIsVerifying(false)
               }
             }}
-            showTrustDevice={!user?.has_trusted_device}
-          >
-            {({
-              TOTPInput,
-              TrustDeviceCheckbox,
-              MethodSwitchButtons,
-              useWebAuthn,
-              isVerifying: formVerifying,
-              handleVerifyWebAuthn,
-            }) => (
-              <div className="space-y-4">
-                {useWebAuthn ? (
-                  <>
-                    <Button
-                      className="w-full"
-                      disabled={formVerifying}
-                      onClick={() => {
-                        handleVerifyWebAuthn().catch(() => {
-                          /* errors handled by onError */
-                        })
-                      }}
-                    >
-                      {formVerifying ? (
-                        <LoadingSpinner className="size-4" variant="white" />
-                      ) : (
-                        'Authenticate with Security Key'
-                      )}
-                    </Button>
-                    {TrustDeviceCheckbox}
-                    {MethodSwitchButtons}
-                  </>
-                ) : (
-                  <>
-                    {TOTPInput}
-                    {TrustDeviceCheckbox}
-                    {MethodSwitchButtons}
-                  </>
-                )}
-                <div className="flex justify-end">
-                  <Button onClick={closeStepUp} type="button" variant="outline">
-                    Cancel
-                  </Button>
-                </div>
-              </div>
+            renderCancelButton={() => (
+              <Button onClick={closeStepUp} type="button" variant="outline">
+                Cancel
+              </Button>
             )}
-          </MFAVerificationForm>
+            showTrustDevice={!user?.has_trusted_device}
+          />
         </DialogContent>
       </Dialog>
     </StepUpContext.Provider>

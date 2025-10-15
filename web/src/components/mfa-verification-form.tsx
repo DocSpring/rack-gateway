@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { getMFAStatus, startWebAuthnAssertion } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/lib/webauthn-utils'
 
 type MFAMethod = 'totp' | 'webauthn'
+type MFAMode = 'step-up' | 'cli' | 'web'
 
 type VerificationParams =
   | {
@@ -87,56 +88,34 @@ export type MFAVerificationFormProps = {
   autoTriggerWebAuthn?: boolean
 
   /**
-   * Render function that receives state and components.
-   * Allows full control over layout while reusing verification logic.
+   * Mode determines the description text shown to the user
+   * @default 'web'
    */
-  children: (props: MFAVerificationFormRenderProps) => ReactNode
-}
+  mode?: MFAMode
 
-export type MFAVerificationFormRenderProps = {
-  // State
-  isVerifying: boolean
-  error: string | null
-  code: string
-  trustDevice: boolean
-  useWebAuthn: boolean
-  hasWebAuthn: boolean
-  hasTOTP: boolean
-
-  // Setters
-  setCode: (code: string) => void
-  setTrustDevice: (trust: boolean) => void
-  setUseWebAuthn: (use: boolean) => void
-  setError: (error: string | null) => void
-
-  // Handlers
-  handleVerifyTotp: (codeOverride?: string) => Promise<void>
-  handleVerifyWebAuthn: () => Promise<void>
-
-  // Pre-built components (optional, for convenience)
-  TOTPInput: ReactNode
-  TrustDeviceCheckbox: ReactNode
-  MethodSwitchButtons: ReactNode
+  /**
+   * Optional cancel button to render at the bottom right (e.g., for dialog)
+   */
+  renderCancelButton?: () => ReactNode
 }
 
 /**
- * Reusable MFA verification form component using render props pattern.
+ * Reusable MFA verification form component.
  *
- * Handles all the common logic for MFA verification:
+ * Handles all the common logic and UI for MFA verification:
  * - Fetching MFA status
  * - Managing TOTP/WebAuthn method selection
  * - TOTP input with auto-submit
  * - WebAuthn assertion flow
  * - Trust device checkbox
  * - Method switching UI
- * - Error handling
- *
- * The render props pattern allows consumers to control the layout completely
- * while reusing all verification logic.
+ * - Dynamic descriptions based on mode
+ * - Consistent spacing and layout
  *
  * @example
  * ```tsx
  * <MFAVerificationForm
+ *   mode="step-up"
  *   onVerify={async (params) => {
  *     if (params.method === 'totp') {
  *       await verifyMFA({ code: params.code, trust_device: params.trust_device })
@@ -145,16 +124,8 @@ export type MFAVerificationFormRenderProps = {
  *     }
  *   }}
  *   onSuccess={() => navigate('/dashboard')}
- * >
- *   {({ TOTPInput, TrustDeviceCheckbox, useWebAuthn }) => (
- *     <Card>
- *       <CardContent>
- *         {useWebAuthn ? <WebAuthnButton /> : TOTPInput}
- *         {TrustDeviceCheckbox}
- *       </CardContent>
- *     </Card>
- *   )}
- * </MFAVerificationForm>
+ *   renderCancelButton={() => <Button onClick={close}>Cancel</Button>}
+ * />
  * ```
  */
 export function MFAVerificationForm({
@@ -168,7 +139,8 @@ export function MFAVerificationForm({
   allowMethodSwitch = true,
   preferredMethod = 'auto',
   autoTriggerWebAuthn = false,
-  children,
+  mode = 'web',
+  renderCancelButton,
 }: MFAVerificationFormProps) {
   const [code, setCode] = useState('')
   const [trustDevice, setTrustDevice] = useState(trustDeviceDefault)
@@ -331,83 +303,128 @@ export function MFAVerificationForm({
     }
   }, [useWebAuthn, autoTriggerWebAuthn, hasWebAuthn, mfaStatus])
 
-  // Pre-built components for convenience
-  const TOTPInput = (
-    <div className="space-y-2">
-      <Label htmlFor="mfa-code">Verification code</Label>
-      <MFAInput
-        autoFocus={autoFocus}
-        id="mfa-code"
-        maxLength={6}
-        onChange={(event) => {
-          setError(null)
-          setCode(event.target.value.trim())
-        }}
-        onComplete={(completedCode) => {
-          setCode(completedCode)
-          handleVerifyTotp(completedCode).catch(() => {
-            /* errors handled in handleVerifyTotp */
-          })
-        }}
-        placeholder="123456"
-        required
-        value={code}
-      />
-    </div>
-  )
+  // Generate dynamic description based on mode and method
+  const getDescription = () => {
+    if (useWebAuthn) {
+      if (mode === 'step-up') {
+        return 'Use your security key or biometric device to continue with this sensitive action.'
+      }
+      if (mode === 'cli') {
+        return 'Use your security key or Touch ID to approve this CLI login request.'
+      }
+      return 'Click the button below to authenticate with your security key or biometric device.'
+    }
 
-  const TrustDeviceCheckbox = showTrustDevice ? (
-    <label className="flex items-center gap-2 text-sm">
-      <input
-        checked={trustDevice}
-        onChange={(event) => setTrustDevice(event.target.checked)}
-        type="checkbox"
-      />
-      Trust this device for 30 days
-    </label>
-  ) : null
-
-  const MethodSwitchButtons =
-    allowMethodSwitch && hasTOTP && hasWebAuthn ? (
-      <div className="border-t pt-4">
-        <Button
-          className="w-full"
-          onClick={() => setUseWebAuthn(!useWebAuthn)}
-          type="button"
-          variant="outline"
-        >
-          {useWebAuthn ? 'Use authenticator app instead' : 'Use security key instead'}
-        </Button>
-      </div>
-    ) : null
+    // TOTP descriptions
+    if (mode === 'step-up') {
+      return 'Enter the 6-digit verification code from your authenticator app to continue with this sensitive action.'
+    }
+    if (mode === 'cli') {
+      return 'Enter the 6-digit code from your authenticator app to approve this CLI login request.'
+    }
+    return 'Enter the 6-digit code from your authenticator app to finish signing in.'
+  }
 
   return (
-    <>
-      {children({
-        // State
-        isVerifying,
-        error,
-        code,
-        trustDevice,
-        useWebAuthn,
-        hasWebAuthn,
-        hasTOTP,
-
-        // Setters
-        setCode,
-        setTrustDevice,
-        setUseWebAuthn,
-        setError,
-
-        // Handlers
-        handleVerifyTotp,
-        handleVerifyWebAuthn,
-
-        // Components
-        TOTPInput,
-        TrustDeviceCheckbox,
-        MethodSwitchButtons,
-      })}
-    </>
+    <div className="space-y-6">
+      <p className="text-center text-muted-foreground text-sm">{getDescription()}</p>
+      {useWebAuthn ? (
+        <div className="space-y-6">
+          <div className="space-y-6">
+            <div className="py-[10px]">
+              <Button
+                className="w-full"
+                disabled={isVerifying}
+                onClick={() => {
+                  handleVerifyWebAuthn().catch(() => {
+                    /* errors handled by onError */
+                  })
+                }}
+              >
+                {isVerifying ? (
+                  <LoadingSpinner className="size-4" variant="white" />
+                ) : (
+                  'Authenticate with Security Key'
+                )}
+              </Button>
+            </div>
+            {showTrustDevice && (
+              <div className="flex justify-center">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    checked={trustDevice}
+                    onChange={(event) => setTrustDevice(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Trust this device for 30 days
+                </label>
+              </div>
+            )}
+          </div>
+          {allowMethodSwitch && hasTOTP && hasWebAuthn && (
+            <div className="space-y-6">
+              <div className="border-t" />
+              <Button
+                className="w-full"
+                onClick={() => setUseWebAuthn(false)}
+                type="button"
+                variant="outline"
+              >
+                Use authenticator app instead
+              </Button>
+            </div>
+          )}
+          {renderCancelButton && <div className="flex justify-end">{renderCancelButton()}</div>}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="space-y-6">
+            <div className="flex flex-col items-center">
+              <MFAInput
+                autoFocus={autoFocus}
+                maxLength={6}
+                onChange={(event) => {
+                  setError(null)
+                  setCode(event.target.value.trim())
+                }}
+                onComplete={(completedCode) => {
+                  setCode(completedCode)
+                  handleVerifyTotp(completedCode).catch(() => {
+                    /* errors handled in handleVerifyTotp */
+                  })
+                }}
+                value={code}
+              />
+            </div>
+            {showTrustDevice && (
+              <div className="flex justify-center">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    checked={trustDevice}
+                    onChange={(event) => setTrustDevice(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Trust this device for 30 days
+                </label>
+              </div>
+            )}
+          </div>
+          {allowMethodSwitch && hasTOTP && hasWebAuthn && (
+            <div className="space-y-6">
+              <div className="border-t" />
+              <Button
+                className="w-full"
+                onClick={() => setUseWebAuthn(true)}
+                type="button"
+                variant="outline"
+              >
+                Use security key instead
+              </Button>
+            </div>
+          )}
+          {renderCancelButton && <div className="flex justify-end">{renderCancelButton()}</div>}
+        </div>
+      )}
+    </div>
   )
 }

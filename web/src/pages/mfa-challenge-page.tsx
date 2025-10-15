@@ -2,7 +2,6 @@ import { useMutation } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { AlertCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAVerificationForm } from '@/components/mfa-verification-form'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -191,9 +190,9 @@ export function MFAChallengePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="space-y-3">
-          <CardTitle>{title}</CardTitle>
+      <Card className="w-full max-w-xl">
+        <CardHeader className="space-y-3 text-center">
+          <CardTitle className="text-center">{title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {error ? (
@@ -205,6 +204,7 @@ export function MFAChallengePage() {
 
           <MFAVerificationForm
             autoTriggerWebAuthn={mode === 'web'}
+            mode={mode}
             onError={(err) => setError(mapServerError(mode, err))}
             onMFAStatusLoaded={(mfaStatus) => {
               // If user has no MFA methods enrolled, redirect to account security
@@ -245,61 +245,9 @@ export function MFAChallengePage() {
               window.location.assign(destination)
             }}
             showTrustDevice={mode === 'web'}
-          >
-            {({
-              TOTPInput,
-              TrustDeviceCheckbox,
-              MethodSwitchButtons,
-              useWebAuthn,
-              isVerifying,
-              handleVerifyWebAuthn,
-            }) => (
-              <>
-                {useWebAuthn ? (
-                  <>
-                    <div className="space-y-4">
-                      <p className="text-muted-foreground text-sm">
-                        {mode === 'cli'
-                          ? 'Use your security key or Touch ID to approve this CLI login request.'
-                          : 'Click the button below to authenticate with your security key or biometric device.'}
-                      </p>
-                      <Button
-                        className="w-full"
-                        disabled={isVerifying}
-                        onClick={() => {
-                          setError(null)
-                          handleVerifyWebAuthn().catch(() => {
-                            /* errors handled by onError */
-                          })
-                        }}
-                      >
-                        {isVerifying ? (
-                          <LoadingSpinner className="size-4" variant="white" />
-                        ) : (
-                          'Authenticate with Security Key'
-                        )}
-                      </Button>
-                    </div>
-                    {TrustDeviceCheckbox}
-                    {MethodSwitchButtons}
-                  </>
-                ) : (
-                  <>
-                    <p className="text-muted-foreground text-sm">
-                      {mode === 'cli'
-                        ? 'Enter the 6-digit code from your authenticator app to approve this CLI login request.'
-                        : 'Enter the 6-digit code from your authenticator app to finish signing in.'}
-                    </p>
-                    {TOTPInput}
-                    {TrustDeviceCheckbox}
-                    {MethodSwitchButtons}
-                  </>
-                )}
-              </>
-            )}
-          </MFAVerificationForm>
+          />
         </CardContent>
-        <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:gap-4">
+        <CardFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-4">
           {mode === 'web' ? (
             <Button
               className="w-full sm:w-auto"
