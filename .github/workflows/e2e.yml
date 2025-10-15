@@ -45,7 +45,7 @@ jobs:
       GATEWAY_DEBUG_OAUTH: "false"
       CHECK_VITE_PROXY: "false"
       GATEWAY_IMAGE: rack-gateway-api:e2e-${{ github.sha }}
-      E2E_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable
+      E2E_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
       CGO_ENABLED: 1
     steps:
       - name: Checkout
