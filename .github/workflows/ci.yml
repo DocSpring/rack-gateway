@@ -59,7 +59,7 @@ jobs:
         with:
           version: v2.5
         env:
-          CGO_ENABLED: 0
+          CGO_ENABLED: 1
 
       - name: Install Convox CLI
         run: |
