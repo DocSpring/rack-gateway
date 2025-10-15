@@ -46,6 +46,8 @@ jobs:
       CHECK_VITE_PROXY: "false"
       GATEWAY_IMAGE: rack-gateway-api:e2e-${{ github.sha }}
       E2E_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable
+      WEB_E2E_SHARDS: 1
+      PLAYWRIGHT_WORKERS: 1
       CGO_ENABLED: 1
     steps:
       - name: Checkout

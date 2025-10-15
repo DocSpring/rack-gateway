@@ -102,6 +102,8 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
   - `gateway_dev` for the dev/preview stacks.
   - `gateway_test` for the isolated test stack. Task automation ensures both exist when the Docker stack starts.
 - `TEST_DATABASE_URL` – optional override for test workflows (defaults to the same host as `DATABASE_URL` but points at `gateway_test`). The Go and web test harnesses automatically prefer this when present.
+- `WEB_E2E_SHARDS` (default: `7` locally, `1` on CI)
+  - Controls how many isolated gateway/database pairs the web Playwright suite will launch. When greater than one, helper scripts derive `E2E_GATEWAY_PORTS` and `E2E_DATABASE_URLS` automatically so each worker receives a unique target.
 
 - `LOG_RETENTION_DAYS` (required for production deploys)
 

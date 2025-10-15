@@ -1,30 +1,68 @@
 import { Client } from 'pg'
 
-const FALLBACK_DATABASE_URL = (
-  process.env.E2E_DATABASE_URL ||
-  'postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable'
-).trim()
+function getFallbackDatabaseUrl(): string {
+  const e2eUrl = process.env.E2E_DATABASE_URL
 
-function resolveConnectionString() {
+  if (e2eUrl && e2eUrl !== 'undefined' && e2eUrl.trim().length > 0) {
+    return e2eUrl.trim()
+  }
+
+  return 'postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable'
+}
+
+const parseDatabaseUrlList = (value?: string) =>
+  value
+    ? value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    : []
+
+export function listE2eDatabaseUrls(): string[] {
+  const urls = new Set<string>()
+  for (const value of parseDatabaseUrlList(process.env.E2E_DATABASE_URLS)) {
+    urls.add(value)
+  }
+
+  // Only use E2E-specific database URLs, not the dev database
+  const fallbacks = [
+    process.env.E2E_DATABASE_URL,
+    process.env.TEST_DATABASE_URL,
+    process.env.RGW_DATABASE_URL,
+    process.env.GATEWAY_DATABASE_URL,
+    getFallbackDatabaseUrl(),
+  ]
+
+  for (const fallback of fallbacks) {
+    if (fallback && fallback.trim().length > 0 && fallback !== 'undefined') {
+      urls.add(fallback.trim())
+    }
+  }
+
+  // Filter out dev database and "undefined" string - only return test databases
+  return Array.from(urls).filter((url) => !url.includes('/gateway_dev') && url !== 'undefined')
+}
+
+export function resolveConnectionString() {
   const candidates = [
     process.env.E2E_DATABASE_URL,
     process.env.TEST_DATABASE_URL,
-    process.env.DATABASE_URL,
     process.env.RGW_DATABASE_URL,
     process.env.GATEWAY_DATABASE_URL,
+    process.env.DATABASE_URL,
   ]
     .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value && value.length > 0))
+    .filter((value): value is string => Boolean(value && value.length > 0 && value !== 'undefined'))
 
   const defaultPlaceholder = /postgres:\/\/[^@]*@?localhost:5432\/postgres(?:\?|$)/i
 
   if (candidates.length === 0) {
-    return FALLBACK_DATABASE_URL
+    return getFallbackDatabaseUrl()
   }
 
   const selected = candidates[0]
   if (defaultPlaceholder.test(selected)) {
-    return FALLBACK_DATABASE_URL
+    return getFallbackDatabaseUrl()
   }
 
   return selected
@@ -40,7 +78,6 @@ function resolveSslConfig() {
 
 async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise<T> {
   const connectionString = resolveConnectionString()
-  // console.log(`[withDbClient] Using connection string: ${connectionString}`)
 
   const client = new Client({
     connectionString,

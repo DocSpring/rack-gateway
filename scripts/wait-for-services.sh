@@ -6,6 +6,7 @@ WEB_PORT="${WEB_PORT:-5223}"
 WEB_UI_PATH="${WEB_UI_PATH:-/app/}"
 GATEWAY_PORT="${GATEWAY_PORT:-8447}"
 OAUTH_PORT="${MOCK_OAUTH_PORT:-3345}"
+SHARD_PORTS_RAW="${E2E_GATEWAY_PORTS:-}"
 # Max total wait (seconds)
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-120}"
 
@@ -22,20 +23,43 @@ retry() {
   done
 }
 
-echo "Waiting for Gateway on http://127.0.0.1:${GATEWAY_PORT}/api/v1/health"
-retry "http://127.0.0.1:${GATEWAY_PORT}/api/v1/health"
+if [ -n "$SHARD_PORTS_RAW" ]; then
+  IFS=',' read -r -a SHARD_PORTS <<<"$SHARD_PORTS_RAW"
+  if [ "${#SHARD_PORTS[@]}" -eq 0 ]; then
+    SHARD_PORTS=("$GATEWAY_PORT")
+  fi
 
-echo "Waiting for Web UI on http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
-retry "http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
+  for port in "${SHARD_PORTS[@]}"; do
+    port="$(echo "$port" | tr -d ' ')"
+    if [ -z "$port" ]; then
+      continue
+    fi
+    echo "Waiting for Gateway on http://127.0.0.1:${port}/api/v1/health"
+    retry "http://127.0.0.1:${port}/api/v1/health"
+
+    echo "Waiting for Web UI on http://127.0.0.1:${port}${WEB_UI_PATH}"
+    retry "http://127.0.0.1:${port}${WEB_UI_PATH}"
+  done
+else
+  echo "Waiting for Gateway on http://127.0.0.1:${GATEWAY_PORT}/api/v1/health"
+  retry "http://127.0.0.1:${GATEWAY_PORT}/api/v1/health"
+
+  echo "Waiting for Web UI on http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
+  retry "http://127.0.0.1:${WEB_PORT}${WEB_UI_PATH}"
+fi
 
 echo "Waiting for Mock OAuth on http://127.0.0.1:${OAUTH_PORT}/health"
 retry "http://127.0.0.1:${OAUTH_PORT}/health"
 
-echo "Waiting for Gateway via Vite proxy at http://127.0.0.1:${WEB_PORT}/api/v1/health"
-if [ "${CHECK_VITE_PROXY:-true}" = "true" ]; then
-  retry "http://127.0.0.1:${WEB_PORT}/api/v1/health"
+if [ -z "$SHARD_PORTS_RAW" ]; then
+  echo "Waiting for Gateway via Vite proxy at http://127.0.0.1:${WEB_PORT}/api/v1/health"
+  if [ "${CHECK_VITE_PROXY:-true}" = "true" ]; then
+    retry "http://127.0.0.1:${WEB_PORT}/api/v1/health"
+  else
+    echo "Skipping Vite proxy check (CHECK_VITE_PROXY=${CHECK_VITE_PROXY:-unset})"
+  fi
 else
-  echo "Skipping Vite proxy check (CHECK_VITE_PROXY=${CHECK_VITE_PROXY:-unset})"
+  echo "Skipping Vite proxy check for sharded test stack"
 fi
 
 echo "All services are up"

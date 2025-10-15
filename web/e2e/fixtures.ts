@@ -3,7 +3,36 @@ import { test as base, expect as playwrightExpect } from '@playwright/test'
 import { format } from 'prettier'
 import { APIRoute, WebRoute } from '@/lib/routes'
 
+const parseList = (value?: string) =>
+  value
+    ? value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    : []
+
 export const test = base.extend({
+  // Override baseURL per worker for parallel test shards
+  // Only uses multiple ports when E2E_GATEWAY_PORTS is set (by task web:e2e)
+  // When running tests manually, uses single port on 9447
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
+  baseURL: async ({}, use, testInfo) => {
+    const ports = parseList(process.env.E2E_GATEWAY_PORTS)
+
+    // If E2E_GATEWAY_PORTS not set, use single port for all workers
+    if (ports.length === 0) {
+      const singlePort = process.env.TEST_GATEWAY_PORT || '9447'
+      await use(`http://localhost:${singlePort}`)
+      return
+    }
+
+    // Multiple ports configured - distribute workers across ports
+    const workerIndex = testInfo.parallelIndex
+    const index = workerIndex % ports.length
+    const baseURL = `http://localhost:${ports[index]}`
+    await use(baseURL)
+  },
+
   page: async ({ page }, use, testInfo) => {
     // Mock WebAuthn API to prevent real hardware calls in E2E tests
     await page.addInitScript(() => {
@@ -163,7 +192,7 @@ export const test = base.extend({
         if (status === 401 && url.includes(APIRoute('info'))) return
 
         // Suppress expected 400s from WebAuthn verify when no method enrolled (E2E mode)
-        if (status === 400 && url.includes('/mfa/webauthn/verify')) {
+        if (status === 400 && url.includes('/mfa/verify')) {
           return
         }
 

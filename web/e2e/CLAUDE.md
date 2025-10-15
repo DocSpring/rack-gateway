@@ -99,6 +99,13 @@ When tests run, services are available at:
 
 The `PLAYWRIGHT_BASE_URL` is automatically set to `http://localhost:9447` by the test configuration.
 
+### Parallel Shards (Local vs CI)
+
+- **Local (`task web:e2e`)**: spins up **7 gateway instances** (`gateway-api-test[1-7]`) backed by **7 isolated databases** (`gateway_test`, `gateway_test_2`, …, `gateway_test_7`). Playwright fans out across the shards with seven workers by default, eliminating test cross-talk while keeping the runtime short.
+- **CI (`task web:e2e` on GitHub Actions)**: automatically drops to a **single gateway/database** to reduce resource usage while preserving deterministic behaviour. Shard counts can be overridden via `WEB_E2E_SHARDS` if needed.
+
+Each shard exposes the gateway + SPA on successive ports starting at `9447`. The Playwright fixtures automatically route each worker to its assigned shard and switch the per-worker database URL, so tests stay independent without any extra plumbing in spec files.
+
 ## Writing Tests
 
 ### Test Structure

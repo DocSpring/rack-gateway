@@ -16,7 +16,7 @@
     "test": "pnpm exec vitest",
     "test:ui": "pnpm exec vitest --ui",
     "test:coverage": "pnpm exec vitest --coverage",
-    "e2e": "node ./scripts/print-e2e-env.mjs && pnpm exec playwright test",
+    "e2e": "node ./scripts/run-e2e.mjs",
     "e2e:ui": "pnpm exec playwright test --ui",
     "generate:openapi": "pnpm swagger2openapi ../internal/gateway/openapi/generated/swagger.json --outfile src/api/openapi.json --yaml=false && echo >> src/api/openapi.json",
     "generate:types": "pnpm openapi-typescript src/api/openapi.json --output src/api/types.generated.ts",

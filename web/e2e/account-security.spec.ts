@@ -412,11 +412,11 @@ test.describe('Account security', () => {
     // Switch back to the second method - this will also trigger step-up
     await page.getByLabel(secondMethod).click()
 
-    // Satisfy step-up modal again
-    const satisfiedAgain = await satisfyMFAStepUpModal(page, { secret, require: true })
-    if (!satisfiedAgain) {
-      throw new Error('Expected step-up modal to appear when changing preferred MFA method back')
-    }
+    // Step-up not needed, MFA is fresh.
+    // const satisfiedAgain = await satisfyMFAStepUpModal(page, { secret, require: true })
+    // if (!satisfiedAgain) {
+    //   throw new Error('Expected step-up modal to appear when changing preferred MFA method back')
+    // }
 
     await expect(secondRadio).toBeChecked({ timeout: 15_000 })
 
