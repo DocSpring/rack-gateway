@@ -34,6 +34,13 @@ jobs:
         with:
           go-version: "1.23.x"
 
+      - name: Cache golangci-lint cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/golangci-lint
+          key: golangci-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+
       - name: Install libfido2 dependencies
         run: |
           sudo apt-get update
@@ -51,6 +58,8 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.5
+        env:
+          CGO_ENABLED: 0
 
       - name: Install Convox CLI
         run: |
