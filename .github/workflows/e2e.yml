@@ -38,13 +38,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-image
     env:
-      WEB_PORT: 5173
-      GATEWAY_PORT: 8447
-      MOCK_OAUTH_PORT: 3345
+      WEB_PORT: 9447
+      GATEWAY_PORT: 9447
+      MOCK_OAUTH_PORT: 9345
+      MOCK_CONVOX_PORT: 6443
       GATEWAY_DEBUG_OAUTH: "false"
       CHECK_VITE_PROXY: "false"
       GATEWAY_IMAGE: rack-gateway-api:e2e-${{ github.sha }}
       E2E_DATABASE_URL: postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable
+      CGO_ENABLED: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +55,11 @@ jobs:
         run: |
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
+
+      - name: Install libfido2 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfido2-dev libudev-dev pkg-config
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -86,7 +93,7 @@ jobs:
         run: task db:ensure
 
       - name: Start stack (gateway serves UI)
-        run: task docker:preview:up
+        run: task docker:test:up
 
       - name: Wait for services
         run: |
@@ -112,7 +119,7 @@ jobs:
 
       - name: Docker logs (on failure)
         if: failure()
-        run: docker compose --profile preview logs --no-color --timestamps
+        run: docker compose --profile test logs --no-color --timestamps
 
       - name: Teardown
         if: always()
@@ -128,6 +135,7 @@ jobs:
       GATEWAY_TEST_IMAGE: rack-gateway-api:e2e-${{ github.sha }}
       WEB_UI_PATH: "/app/"
       CHECK_VITE_PROXY: false
+      CGO_ENABLED: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,6 +144,11 @@ jobs:
         run: |
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
+
+      - name: Install libfido2 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfido2-dev libudev-dev pkg-config
 
       - name: Setup Go
         uses: actions/setup-go@v5
