@@ -121,12 +121,8 @@ if [ -n "$DEPENDENCY_SERVICES" ]; then
   docker compose --profile "$PROFILE" up -d $BUILD_FLAG $DEPENDENCY_SERVICES
 fi
 
-# Start main services
-echo "Starting main services: $SERVICES"
-docker compose --profile "$PROFILE" up -d $BUILD_FLAG $SERVICES
-
-# Wait for postgres and create databases
-echo "Waiting for postgres and creating databases..."
+# Wait for postgres and ensure databases exist before starting main services
+echo "Waiting for postgres and ensuring databases exist..."
 if docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
   for _ in $(seq 1 20); do
     if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
@@ -144,6 +140,25 @@ if docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
     sleep 1
   done
 fi
+
+# Determine gateway service in this stack
+GATEWAY_SERVICE=""
+for service in $SERVICES; do
+  if [[ $service == gateway-api* ]]; then
+    GATEWAY_SERVICE="$service"
+    break
+  fi
+done
+
+# Run database migrations before bringing the gateway online
+if [ -n "$GATEWAY_SERVICE" ]; then
+  echo "Running migrations for $GATEWAY_SERVICE..."
+  docker compose --profile "$PROFILE" run --rm "$GATEWAY_SERVICE" ./rack-gateway-api migrate
+fi
+
+# Start main services
+echo "Starting main services: $SERVICES"
+docker compose --profile "$PROFILE" up -d $BUILD_FLAG $SERVICES
 
 echo ""
 echo "Dev stack started successfully!"
