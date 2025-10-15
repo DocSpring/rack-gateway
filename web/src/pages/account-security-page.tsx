@@ -380,6 +380,7 @@ export function AccountSecurityPage() {
   const updatePreferredMethodMutation = useMutation({
     mutationFn: updatePreferredMFAMethod,
     onSuccess: async () => {
+      await invalidateStatus()
       await refreshUser().catch(() => {
         /* noop */
       })

@@ -7,6 +7,8 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // CreateUserSession stores a new authenticated session for a user.
@@ -443,14 +445,18 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 }
 
 func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
-	_, err := d.exec(
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "db_update_step_up_before session_id=%d when=%q", sessionID, when.Format(time.RFC3339))
+	res, err := d.exec(
 		"UPDATE user_sessions SET recent_step_up_at = ?, updated_at = NOW() WHERE id = ?",
 		when,
 		sessionID,
 	)
 	if err != nil {
+		gtwlog.Errorf("db_update_step_up_failed session_id=%d error=%q", sessionID, err.Error())
 		return fmt.Errorf("failed to update session step-up timestamp: %w", err)
 	}
+	rows, _ := res.RowsAffected()
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "db_update_step_up_after session_id=%d rows_affected=%d", sessionID, rows)
 	return nil
 }
 

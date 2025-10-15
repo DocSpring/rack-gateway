@@ -11,18 +11,36 @@ const parseList = (value?: string) =>
         .filter((entry) => entry.length > 0)
     : []
 
-export const test = base.extend({
+// Type for expected errors that tests can specify
+export type ExpectedError = {
+  pattern: RegExp
+  description?: string
+}
+
+export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
+  // Allow tests to specify expected console errors that should be ignored
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
+  expectedErrors: async ({}, use) => {
+    await use([])
+  },
+
   // Override baseURL per worker for parallel test shards
   // Only uses multiple ports when E2E_GATEWAY_PORTS is set (by task web:e2e)
   // When running tests manually, uses single port on 9447
   // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
   baseURL: async ({}, use, testInfo) => {
+    // console.log('[FIXTURE baseURL] Starting baseURL fixture')
     const ports = parseList(process.env.E2E_GATEWAY_PORTS)
     const databaseUrls = parseList(process.env.E2E_DATABASE_URLS)
+
+    // console.log(`[FIXTURE baseURL] E2E_GATEWAY_PORTS=${process.env.E2E_GATEWAY_PORTS}`)
+    // console.log(`[FIXTURE baseURL] Parsed ports: ${JSON.stringify(ports)}`)
+    // console.log(`[FIXTURE baseURL] workerIndex=${testInfo.parallelIndex}`)
 
     // If E2E_GATEWAY_PORTS not set, use single port for all workers
     if (ports.length === 0) {
       const singlePort = process.env.TEST_GATEWAY_PORT || '9447'
+      // console.log(`[FIXTURE baseURL] No ports configured, using single port: ${singlePort}`)
       await use(`http://localhost:${singlePort}`)
       return
     }
@@ -32,10 +50,13 @@ export const test = base.extend({
     const index = workerIndex % ports.length
     const baseURL = `http://localhost:${ports[index]}`
 
+    // console.log(`[FIXTURE baseURL] Worker ${workerIndex} using port ${ports[index]} (index ${index}), baseURL: ${baseURL}`)
+
     // CRITICAL: Set E2E_DATABASE_URL for this worker so database helpers connect to the right shard
     const originalDatabaseUrl = process.env.E2E_DATABASE_URL
     if (databaseUrls.length > 0) {
       process.env.E2E_DATABASE_URL = databaseUrls[index]
+      // console.log(`[FIXTURE baseURL] Worker ${workerIndex} set E2E_DATABASE_URL to: ${databaseUrls[index]}`)
     }
 
     await use(baseURL)
@@ -49,7 +70,7 @@ export const test = base.extend({
     }
   },
 
-  page: async ({ page }, use, testInfo) => {
+  page: async ({ page, expectedErrors }, use, testInfo) => {
     // Mock WebAuthn API to prevent real hardware calls in E2E tests
     await page.addInitScript(() => {
       // Override navigator.credentials to return mock responses
@@ -243,6 +264,12 @@ export const test = base.extend({
       }
 
       if (msg.type() === 'error') {
+        // Check if error matches any expected error patterns
+        if (expectedErrors) {
+          const isExpected = expectedErrors.some((expected) => expected.pattern.test(text))
+          if (isExpected) return
+        }
+
         // Ignore all 401/Unauthorized console errors (expected before login)
         const is401 = /\b401\b/i.test(text) || /Unauthorized/i.test(text)
         if (is401) return

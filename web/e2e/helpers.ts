@@ -47,6 +47,8 @@ export async function login(page: Page, options: LoginOptions = {}) {
   const { userCardText = 'Admin User', autoEnrollMfa = true } = options
   const email = options.email ?? CARD_TEXT_TO_EMAIL[userCardText] ?? 'admin@example.com'
 
+  // console.log(`[LOGIN] Starting login for ${email}, page.context().baseURL = ${(page.context() as any)._options?.baseURL}`)
+
   // Clear MFA rate limit attempts before each login to prevent test pollution
   await clearMfaAttempts()
 
@@ -203,6 +205,7 @@ export async function startTotpEnrollmentViaUi(
   page: Page,
   email = 'admin@example.com'
 ): Promise<string> {
+  // console.log(`[START_TOTP_ENROLLMENT] Starting for ${email}`)
   await page.evaluate(() => {
     const globalWindow = window as unknown as E2EWindow
     globalWindow.__e2e_totpSecret = null

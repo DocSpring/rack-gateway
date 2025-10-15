@@ -19,6 +19,15 @@ import { getMFAStatus } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
+const DEBUG_STEP_UP = false
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_STEP_UP) {
+    // biome-ignore lint/suspicious/noConsole: debug logs
+    console.log('[STEP_UP]', ...args)
+  }
+}
+
 type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null
 
 type StepUpRequest = {
@@ -87,9 +96,35 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   const statusFetchRef = useRef<Promise<Date | null> | null>(null)
 
   useEffect(() => {
-    stepUpExpiresAtRef.current = user?.recent_step_up_expires_at
+    const newExpiry = user?.recent_step_up_expires_at
       ? new Date(user.recent_step_up_expires_at)
       : null
+    debugLog(
+      'useEffect[user.recent_step_up_expires_at] - updating ref from user object:',
+      newExpiry?.toISOString(),
+      'current ref:',
+      stepUpExpiresAtRef.current?.toISOString()
+    )
+
+    // Only update if:
+    // 1. Current ref is null/undefined AND new value exists (initial sync)
+    // 2. New value is NEWER than current ref (user object was refreshed with newer data)
+    // NEVER let undefined/null from user object overwrite a valid ref value
+    if (!stepUpExpiresAtRef.current && newExpiry) {
+      stepUpExpiresAtRef.current = newExpiry
+      debugLog(
+        'useEffect[user.recent_step_up_expires_at] - updated ref to:',
+        newExpiry?.toISOString()
+      )
+    } else if (newExpiry && stepUpExpiresAtRef.current && newExpiry > stepUpExpiresAtRef.current) {
+      stepUpExpiresAtRef.current = newExpiry
+      debugLog(
+        'useEffect[user.recent_step_up_expires_at] - updated ref to newer value:',
+        newExpiry?.toISOString()
+      )
+    } else {
+      debugLog('useEffect[user.recent_step_up_expires_at] - skipping update, keeping current ref')
+    }
   }, [user?.recent_step_up_expires_at])
 
   const processQueue = useCallback(() => {
@@ -149,12 +184,14 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   }, [])
 
   const refreshStepUpExpiry = useCallback(async (): Promise<Date | null> => {
+    debugLog('refreshStepUpExpiry called')
     if (!statusFetchRef.current) {
       statusFetchRef.current = getMFAStatus()
         .then((status) => {
           const expires = status.recent_step_up_expires_at
             ? new Date(status.recent_step_up_expires_at)
             : null
+          debugLog('refreshStepUpExpiry - fetched status, expires:', expires?.toISOString())
           stepUpExpiresAtRef.current = expires
           return expires
         })
@@ -168,10 +205,21 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   const needsStepUpPrompt = useCallback(async (): Promise<boolean> => {
     const bufferMs = 10_000
     let expires = stepUpExpiresAtRef.current
+    debugLog(
+      'needsStepUpPrompt - current expires:',
+      expires?.toISOString(),
+      'now:',
+      new Date().toISOString()
+    )
+
     if (!expires || expires.getTime() - Date.now() <= bufferMs) {
+      debugLog('needsStepUpPrompt - expires stale or missing, refreshing...')
       expires = await refreshStepUpExpiry()
     }
-    return !expires || expires.getTime() - Date.now() <= bufferMs
+
+    const needs = !expires || expires.getTime() - Date.now() <= bufferMs
+    debugLog('needsStepUpPrompt - result:', needs, 'expires:', expires?.toISOString())
+    return needs
   }, [refreshStepUpExpiry])
 
   const promptForMfaConfig = useCallback(
@@ -205,6 +253,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   const handleVerificationSuccess = useCallback(async () => {
+    debugLog('handleVerificationSuccess called')
     const request = activeRef.current
     activeRef.current = null
     setIsOpen(false)
@@ -212,8 +261,11 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
     try {
       const result = await runAction(request?.action ?? null)
       request?.onResolve?.(result)
+      debugLog('handleVerificationSuccess - action succeeded, refreshing expiry...')
       await refreshStepUpExpiry()
+      debugLog('handleVerificationSuccess - expiry refreshed')
     } catch (error) {
+      debugLog('handleVerificationSuccess - action failed:', error)
       request?.onReject?.(error)
     } finally {
       clearMFAHeaders()
@@ -251,6 +303,16 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       return getMfaRequirementForRequest(config.method?.toUpperCase(), config.url, baseUrl)
     }
 
+    const shouldPromptForStepUp = async (mfaLevel: string): Promise<boolean> => {
+      if (mfaLevel === 'always') {
+        return true
+      }
+      if (mfaLevel === 'step_up') {
+        return await needsStepUpPrompt()
+      }
+      return false
+    }
+
     const applyMfaRequirement = async (
       internal: InternalRequestConfig,
       requirement: NonNullable<ReturnType<typeof getMfaRequirementForRequest>>
@@ -263,11 +325,14 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
         return internal
       }
 
-      if (requirement.mfaLevel === 'always') {
-        return promptForMfaConfig(internal)
-      }
+      debugLog('applyMfaRequirement', {
+        method: internal.method,
+        url: internal.url,
+        mfaLevel: requirement.mfaLevel,
+      })
 
-      if (requirement.mfaLevel === 'step_up' && (await needsStepUpPrompt())) {
+      const needsPrompt = await shouldPromptForStepUp(requirement.mfaLevel)
+      if (needsPrompt) {
         return promptForMfaConfig(internal)
       }
 

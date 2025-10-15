@@ -1,5 +1,6 @@
-import { expect, request, test } from '@playwright/test'
+import { request } from '@playwright/test'
 import { APIRoute, WebRoute } from '@/lib/routes'
+import { expect, test } from './fixtures'
 import { login, resetMfaFor, satisfyMFAStepUpModal } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
@@ -47,7 +48,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     }
   })
 
-  test('CLI with Authorization header can access proxy routes', async ({ page }) => {
+  test('CLI with Authorization header can access proxy routes', async ({ page, baseURL }) => {
     await login(page)
 
     // Navigate to API tokens page
@@ -84,7 +85,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
 
     // Now test that the CLI can use this token to access proxy routes
     const cliContext = await request.newContext({
-      baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8447',
+      baseURL,
     })
 
     const response = await cliContext.get('/api/v1/rack-proxy/system', {
@@ -122,7 +123,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     await expect(row).toHaveCount(0)
   })
 
-  test('malicious site cannot trigger Convox operations via CSRF', async ({ page }) => {
+  test('malicious site cannot trigger Convox operations via CSRF', async ({ page, baseURL }) => {
     // Login to get a valid session
     await login(page)
 
@@ -133,7 +134,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
         <head><title>Evil Site</title></head>
         <body>
           <h1>Malicious Site Attempting CSRF</h1>
-          <form id="csrf-form" method="POST" action="${process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8447'}/api/v1/rack-proxy/apps/production/builds">
+          <form id="csrf-form" method="POST" action="${baseURL}/api/v1/rack-proxy/apps/production/builds">
             <input type="hidden" name="description" value="malicious-build">
           </form>
           <script>
@@ -156,7 +157,6 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     // verify by checking console errors or network activity
 
     // Instead, let's do a more direct test with fetch
-    const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8447'
     const result = await page.evaluate(async (url) => {
       try {
         // Try to make a state-changing request using fetch (which sends cookies)
@@ -175,7 +175,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
       } catch (error: any) {
         return { error: error.message }
       }
-    }, baseUrl)
+    }, baseURL)
 
     // Should be rejected with 401
     expect(result).toHaveProperty('status', 401)

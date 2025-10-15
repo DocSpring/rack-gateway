@@ -19,6 +19,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -249,14 +250,22 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 		userInfo.MFARequired = true
 	}
 
+	// Debug logging for step-up state
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_check user_email=%q has_auth_user=%t has_session=%t", email, authUser != nil, authUser != nil && authUser.Session != nil)
 	if authUser != nil && authUser.Session != nil {
+		var recentStepUpAt *time.Time
 		if authUser.Session.RecentStepUpAt != nil {
+			recentStepUpAt = authUser.Session.RecentStepUpAt
 			expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
 			userInfo.RecentStepUpExpiresAt = &expires
+			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_set user_email=%q recent_step_up_at=%q expires_at=%q", email, authUser.Session.RecentStepUpAt.Format(time.RFC3339), expires.Format(time.RFC3339))
+		} else {
+			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_nil user_email=%q session_id=%d", email, authUser.Session.ID)
 		}
 		if authUser.Session.TrustedDeviceID != nil && *authUser.Session.TrustedDeviceID > 0 {
 			userInfo.HasTrustedDevice = true
 		}
+		_ = recentStepUpAt // Avoid unused variable warning
 	}
 
 	// Build rack info

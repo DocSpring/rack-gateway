@@ -1,7 +1,9 @@
-import { expect, test } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
 import { getUserMfaSecret } from './db'
+import { test as base, type ExpectedError, expect } from './fixtures'
 import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
+
+const test = base
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -82,35 +84,53 @@ test.describe('User Audit Logs', () => {
     const deleteDialog = page.getByRole('dialog')
     await deleteDialog.getByLabel('Confirmation', { exact: false }).fill('DELETE')
     await clearStepUpSessions()
+
+    // Set up response waiters BEFORE clicking the button
     const waitForDelete = page.waitForResponse(
       (response) =>
         response.request().method() === 'DELETE' &&
         response.url().includes('/api/v1/users/') &&
-        (response.status() === 204 || response.status() === 200)
+        (response.status() === 204 || response.status() === 200),
+      { timeout: 15_000 }
     )
     const waitForUsersReload = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
         response.url().includes('/api/v1/users') &&
-        response.status() === 200
+        response.status() === 200,
+      { timeout: 15_000 }
     )
-    await Promise.all([
-      waitForDelete,
-      waitForUsersReload,
-      (async () => {
-        await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
-        await satisfyMFAStepUpModal(page, {
-          email: 'admin@example.com',
-          secret: adminSecret,
-          require: true,
-        })
-      })(),
-    ])
+
+    // Click delete button to trigger MFA modal
+    await deleteDialog.getByRole('button', { name: /Delete User/i }).click()
+
+    // Satisfy MFA modal, which will trigger the DELETE request
+    await satisfyMFAStepUpModal(page, {
+      email: 'admin@example.com',
+      secret: adminSecret,
+      require: true,
+    })
+
+    // Wait for both requests to complete
+    await Promise.all([waitForDelete, waitForUsersReload])
     await expect(page.getByText('User deleted successfully', { exact: true })).toBeVisible()
     await expect(cleanupRow).toHaveCount(0)
   })
 
-  test('invalid user email shows error state', async ({ page }) => {
+  const testWith404 = test.extend<{ expectedErrors: ExpectedError[] }>({
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires empty destructure
+    expectedErrors: async ({}, use) => {
+      await use([
+        {
+          pattern:
+            /Failed to load resource: the server responded with a status of 404 \(Not Found\)/i,
+          description: 'Expected 404 for missing user',
+        },
+      ])
+    },
+  })
+
+  testWith404('invalid user email shows error state', async ({ page }) => {
     await login(page)
     const missingEmail = encodeURIComponent('missing-user@example.com')
     await page.goto(WebRoute(`users/${missingEmail}`))

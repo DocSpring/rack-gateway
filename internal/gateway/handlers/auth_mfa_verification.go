@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/gin-gonic/gin"
 )
 
@@ -96,10 +97,12 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
 		return
 	}
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "before_update_step_up user_email=%q session_id=%d now=%q", userRecord.Email, authUser.Session.ID, now.Format(time.RFC3339))
 	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		log.Printf("failed updating session step-up timestamp: %v", err)
+		gtwlog.Errorf("update_step_up_failed user_email=%q session_id=%d error=%q", userRecord.Email, authUser.Session.ID, err.Error())
 	} else if authUser.Session != nil {
 		authUser.Session.RecentStepUpAt = &now
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q", userRecord.Email, authUser.Session.ID, now.Format(time.RFC3339))
 	}
 	if trustedDeviceID != nil && trustedCookieSet {
 		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {

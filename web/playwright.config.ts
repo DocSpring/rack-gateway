@@ -1,22 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const parseList = (value?: string) =>
-  value
-    ? value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : []
-
-const pickFirstNonEmpty = (...lists: string[][]) => {
-  for (const list of lists) {
-    if (list.length > 0) {
-      return list
-    }
-  }
-  return []
-}
-
 const inferredWorkers = (() => {
   if (process.env.PLAYWRIGHT_WORKERS) {
     const configured = Number.parseInt(process.env.PLAYWRIGHT_WORKERS, 10)
@@ -34,15 +17,6 @@ const inferredWorkers = (() => {
   return 1
 })()
 
-const gatewayPorts = pickFirstNonEmpty(
-  parseList(process.env.E2E_GATEWAY_PORTS),
-  parseList(process.env.E2E_GATEWAY_PORT),
-  parseList(process.env.TEST_GATEWAY_PORT),
-  parseList(process.env.GATEWAY_PORT),
-  parseList(process.env.WEB_PORT)
-)
-const basePort = gatewayPorts[0] || process.env.TEST_GATEWAY_PORT || '9447'
-
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: inferredWorkers > 1,
@@ -53,8 +27,8 @@ export default defineConfig({
   globalSetup: './e2e/e2e-global-setup.ts',
   globalTeardown: './e2e/e2e-global-teardown.ts',
   use: {
-    // Use localhost to match OAuth + cookie host set by the gateway
-    baseURL: `http://localhost:${basePort}`,
+    // baseURL is set per-worker by the fixture in fixtures.ts for parallel test shards
+    // DO NOT set it here or it will override the per-worker baseURL
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

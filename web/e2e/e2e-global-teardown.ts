@@ -3,13 +3,13 @@ import { cleanupE2eArtifacts, listE2eDatabaseUrls, resetAllMfaState } from './db
 
 export default async function globalTeardown(_config: FullConfig) {
   const databaseUrls = listE2eDatabaseUrls()
-  console.log('[teardown] Database URLs:', databaseUrls)
+  // console.log('[teardown] Database URLs:', databaseUrls)
   if (databaseUrls.length === 0) return
 
   try {
     const originalUrl = process.env.E2E_DATABASE_URL
     for (const url of databaseUrls) {
-      console.log('[teardown] Processing database:', url)
+      // console.log('[teardown] Processing database:', url)
       process.env.E2E_DATABASE_URL = url
 
       try {

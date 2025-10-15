@@ -21,7 +21,7 @@ function cardByTitle(page: Page, title: string): Locator {
   })
 }
 
-async function requireStepUp(page: Page) {
+async function clearStepUpSessionsAndReload(page: Page) {
   await clearStepUpSessions()
   const statusResponsePromise = page.waitForResponse(
     (response) =>
@@ -138,7 +138,7 @@ test.describe('Account security', () => {
       await expect(trustedDevicesCard.locator('tbody tr')).not.toHaveCount(0)
     }
 
-    await requireStepUp(page)
+    await clearStepUpSessionsAndReload(page)
     const regenResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/backup-codes/regenerate') &&
@@ -149,7 +149,7 @@ test.describe('Account security', () => {
     await regenResponsePromise
     await expect(backupCard.getByRole('button', { name: /Download latest codes/i })).toBeVisible()
 
-    await requireStepUp(page)
+    await clearStepUpSessionsAndReload(page)
     const revokeResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/trusted-devices/') &&
@@ -161,7 +161,7 @@ test.describe('Account security', () => {
     await revokeResponsePromise
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0, { timeout: 15_000 })
 
-    await requireStepUp(page)
+    await clearStepUpSessionsAndReload(page)
     const deleteResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/methods/') && response.request().method() === 'DELETE'
@@ -285,7 +285,7 @@ test.describe('Account security', () => {
     }
     await expect(trustedDevicesCard.locator('tbody tr')).not.toHaveCount(0)
 
-    await requireStepUp(page)
+    await clearStepUpSessionsAndReload(page)
 
     const revokeResponsePromise = page.waitForResponse(
       (response) =>
@@ -381,7 +381,7 @@ test.describe('Account security', () => {
     const secondRadio = isTotpChecked ? totpRadio : webauthnRadio
 
     // Expire the step-up session from login so we can test step-up modal
-    await requireStepUp(page)
+    await clearStepUpSessionsAndReload(page)
 
     // Switch to the other method - this will trigger step-up interceptor
     await page.getByLabel(firstMethod).click()
@@ -406,17 +406,16 @@ test.describe('Account security', () => {
     await expect(firstRadio).toBeChecked()
     await expect(secondRadio).not.toBeChecked()
 
-    // Need to clear step-up session before switching again
-    await requireStepUp(page)
+    // Need to clear step-up session before switching again to force MFA challenge
+    await clearStepUpSessionsAndReload(page)
 
     // Switch back to the second method - this will also trigger step-up
     await page.getByLabel(secondMethod).click()
 
-    // Step-up not needed, MFA is fresh.
-    // const satisfiedAgain = await satisfyMFAStepUpModal(page, { secret, require: true })
-    // if (!satisfiedAgain) {
-    //   throw new Error('Expected step-up modal to appear when changing preferred MFA method back')
-    // }
+    const satisfiedAgain = await satisfyMFAStepUpModal(page, { secret, require: true })
+    if (!satisfiedAgain) {
+      throw new Error('Expected step-up modal to appear when changing preferred MFA method back')
+    }
 
     await expect(secondRadio).toBeChecked({ timeout: 15_000 })
 
