@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { isAxiosError } from 'axios'
 import { Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react'
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
+import { useMutation } from '@/hooks/use-mutation'
 import { type EnvValuesMap, fetchAppEnv, fetchAppEnvValue, updateAppEnv } from '@/lib/api'
 
 const MASKED_SECRET = '********************'

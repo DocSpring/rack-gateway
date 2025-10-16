@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
+import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
 import { Button } from './ui/button'
 import {

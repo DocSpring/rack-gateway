@@ -21,7 +21,7 @@ type MFAInputProps = Omit<OTPInputProps, 'onChange' | 'value' | 'length'> & {
  * Converts the new OTPInput API (value/onChange with string) to the old API
  * (onChange with event).
  */
-export const MFAInput = forwardRef<HTMLDivElement, MFAInputProps>(
+export const MFAInput = forwardRef<HTMLFieldSetElement, MFAInputProps>(
   (
     {
       value: externalValue,
@@ -59,6 +59,7 @@ export const MFAInput = forwardRef<HTMLDivElement, MFAInputProps>(
       <OTPInput
         {...rest}
         autoFocus={autoFocus}
+        id={id}
         length={maxLength}
         onChange={handleChange}
         onComplete={onComplete}

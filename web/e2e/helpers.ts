@@ -100,6 +100,25 @@ export async function clearStepUpSessions() {
   await clearMfaAttempts()
 }
 
+/**
+ * Types an OTP code digit by digit into the verification code input.
+ * This properly triggers the auto-advance logic in the OTPInput component.
+ * Looks for the input within the provided context (page or dialog).
+ */
+export async function typeOtpCode(
+  page: Page,
+  context: Page | ReturnType<Page['getByRole']>,
+  code: string
+) {
+  const fieldset = context.locator('[aria-label="Verification code"]')
+  const firstInput = fieldset.locator('input').first()
+  await firstInput.clear()
+  await firstInput.click()
+  for (const digit of code) {
+    await page.keyboard.type(digit)
+  }
+}
+
 export async function setupBothMfaMethods(email: string) {
   await setupBothMfaMethodsForUser(email)
 }
@@ -185,16 +204,7 @@ export async function satisfyMFAStepUpModal(
   }
 
   const code = authenticator.generate(secret)
-
-  // Clear any existing value first
-  await input.clear()
-
-  // Click to focus the input
-  await input.click()
-
-  // Type the code to trigger onChange events (simulates real user input)
-  // Should auto-submit on 6-digit code
-  await input.fill(code)
+  await typeOtpCode(page, dialog, code)
 
   // Wait for the dialog to close after auto-submit
   await expect(dialog).toBeHidden({ timeout: 5000 })
@@ -258,11 +268,10 @@ export async function startTotpEnrollmentViaUi(
     throw new Error(`Failed to retrieve pending TOTP secret during enrollment for ${email}`)
   }
 
-  const codeInput = enrollmentDialog.getByLabel(/Enter the 6-digit code to confirm/i)
-  await expect(codeInput).toBeVisible()
-
   const code = authenticator.generate(secret)
-  await codeInput.fill(code)
+  await typeOtpCode(page, enrollmentDialog, code)
+
+  // Click the Confirm button (enrollment doesn't have auto-submit)
   await enrollmentDialog.getByRole('button', { name: /^Confirm$/ }).click()
 
   await expect(enrollmentDialog).toBeHidden()

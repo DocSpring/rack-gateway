@@ -11,6 +11,7 @@ import {
   satisfyMFAStepUpModal,
   setupBothMfaMethods,
   startTotpEnrollmentViaUi,
+  typeOtpCode,
 } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
@@ -80,7 +81,10 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
       }
     }
 
-    await verificationInput.fill(authenticator.generate(secret))
+    // Type the code digit by digit to trigger auto-submit
+    const code = authenticator.generate(secret)
+    await typeOtpCode(page, page, code)
+
     // Auto-submits on 6-digit code, wait for redirect
     await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
   } catch {
@@ -329,7 +333,11 @@ test.describe('Account security', () => {
     if ((await trustCheckbox.isVisible().catch(() => false)) && (await trustCheckbox.isChecked())) {
       await trustCheckbox.uncheck()
     }
-    await verificationInput.fill(authenticator.generate(secret))
+
+    // Type code digit by digit
+    const code = authenticator.generate(secret)
+    await typeOtpCode(page, page, code)
+
     await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
   })
 
@@ -490,6 +498,88 @@ test.describe('Account security', () => {
     await page.waitForURL(/\/app\/rack/, { timeout: 10_000 })
   })
 
-  // NOTE: MFA rate limiting is tested in Go unit tests (TestVerifyTOTP_RateLimiting)
-  // E2E test was removed because it's complex to set up with the serial test mode and beforeEach cleanup
+  test('invalid MFA code shows inline error and keeps dialog open for retry', async ({ page }) => {
+    // This test verifies that when a user enters an invalid MFA code during step-up authentication:
+    // 1. An inline error appears in the dialog (not a toast)
+    // 2. The MFA dialog stays open (doesn't disappear)
+    // 3. The user can retry with a valid code
+
+    // First, login and enroll in MFA
+    await login(page)
+
+    // Navigate to account security page
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    // Get the user's TOTP secret
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) {
+      throw new Error('Expected TOTP secret after login with autoEnrollMfa')
+    }
+
+    // Clear step-up session to trigger MFA modal on next sensitive action
+    await clearStepUpSessionsAndReload(page)
+
+    const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
+    await expect(methodsCard).toBeVisible()
+
+    // Click the dropdown menu button and select "Remove Method"
+    const dropdownButton = methodsCard.locator('tbody tr').first().getByRole('button')
+    await dropdownButton.click()
+    const removeMenuItem = page.getByText('Remove Method')
+    await removeMenuItem.click()
+
+    // Wait for step-up modal to appear
+    const stepUpDialog = page.getByRole('dialog', {
+      name: 'Multi-Factor Authentication Required',
+    })
+    await expect(stepUpDialog).toBeVisible()
+
+    // Generate valid codes for current time window and adjacent windows to avoid false negatives
+    // TOTP uses 30-second windows, so we check current, previous, and next window
+    const generateCodeForTime = (timeOffset: number) => {
+      const originalDate = Date.now
+      const originalTime = originalDate()
+      try {
+        Date.now = () => originalTime + timeOffset * 1000
+        return authenticator.generate(secret)
+      } finally {
+        Date.now = originalDate
+      }
+    }
+
+    const validCodes = new Set([
+      authenticator.generate(secret), // Current window
+      generateCodeForTime(-30), // Previous window
+      generateCodeForTime(30), // Next window
+    ])
+
+    // Find an invalid code by incrementing from 0 until we find one that's not valid
+    let invalidCodeNum = 0
+    while (validCodes.has(invalidCodeNum.toString().padStart(6, '0'))) {
+      invalidCodeNum = (invalidCodeNum + 1) % 1_000_000
+    }
+    const invalidCode = invalidCodeNum.toString().padStart(6, '0')
+
+    // Enter INVALID code - this will auto-submit on 6 digits
+    await typeOtpCode(page, stepUpDialog, invalidCode)
+
+    // The MFA header will be inlined in the DELETE request, which will fail with 401
+    await page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/methods/') &&
+        response.request().method() === 'DELETE' &&
+        response.status() === 401
+    )
+
+    // Wait a moment for any toasts or errors to appear
+    await page.waitForTimeout(1000)
+
+    // Check that NO error toasts appear
+    const errorToasts = page.locator('[role="status"]', { hasText: /Invalid|MFA|code|failed/i })
+    await expect(errorToasts).toHaveCount(0)
+
+    // Check that the dialog is still visible for retry
+    await expect(stepUpDialog).toBeVisible()
+  })
 })

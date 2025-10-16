@@ -3,13 +3,14 @@ import { cn } from '@/lib/utils'
 
 const DIGIT_REGEX = /^\d+$/
 
-type OTPInputProps = Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> & {
+type OTPInputProps = Omit<ComponentPropsWithoutRef<'fieldset'>, 'onChange'> & {
   value: string
   onChange: (value: string) => void
   onComplete?: (code: string) => void
   length?: number
   autoFocus?: boolean
   disabled?: boolean
+  id?: string
 }
 
 /**
@@ -21,7 +22,7 @@ type OTPInputProps = Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> & {
  * - Auto-submit when all digits entered
  * - Keyboard navigation with arrow keys
  */
-export const OTPInput = forwardRef<HTMLDivElement, OTPInputProps>(
+export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
   (
     {
       value = '',
@@ -30,6 +31,7 @@ export const OTPInput = forwardRef<HTMLDivElement, OTPInputProps>(
       length = 6,
       autoFocus = false,
       disabled = false,
+      id,
       className,
       ...rest
     },
@@ -116,6 +118,7 @@ export const OTPInput = forwardRef<HTMLDivElement, OTPInputProps>(
       <fieldset
         aria-label="Verification code"
         className={cn('flex justify-center gap-2', className)}
+        id={id}
         ref={ref}
         {...rest}
       >

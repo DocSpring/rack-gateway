@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { MoreVertical, Pencil, ShieldAlert, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
@@ -31,6 +31,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useStepUp } from '@/contexts/step-up-context'
+import { useMutation } from '@/hooks/use-mutation'
 import {
   type BackupCodesResponse,
   confirmTOTPEnrollment,
@@ -202,13 +203,11 @@ export function AccountSecurityPage() {
       setEnrollmentStep('totp-setup')
       toast.success('MFA enrollment started')
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
-    },
   })
 
   const startWebAuthnMutation = useMutation({
     mutationFn: startWebAuthnEnrollment,
+    showToastError: false, // Custom error handling with fallback to TOTP
     onSuccess: async (data) => {
       // Immediately trigger the WebAuthn browser prompt
       try {
@@ -301,8 +300,7 @@ export function AccountSecurityPage() {
         /* noop */
       })
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
+    onError: () => {
       setPendingEditMethod(null)
     },
   })
@@ -316,9 +314,6 @@ export function AccountSecurityPage() {
       setEditingMethod(null)
       setEditLabel('')
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
-    },
   })
 
   const deleteMethodMutation = useMutation({
@@ -330,9 +325,6 @@ export function AccountSecurityPage() {
         /* noop */
       })
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
-    },
   })
 
   const revokeDeviceMutation = useMutation({
@@ -340,9 +332,6 @@ export function AccountSecurityPage() {
     onSuccess: () => {
       toast.success('Trusted device revoked')
       invalidateStatus()
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
     },
   })
 
@@ -353,9 +342,6 @@ export function AccountSecurityPage() {
       setRecentBackupCodes(codes)
       toast.success('Backup codes regenerated')
       invalidateStatus()
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
     },
   })
 
@@ -372,9 +358,6 @@ export function AccountSecurityPage() {
         /* noop */
       })
     },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
-    },
   })
 
   const updatePreferredMethodMutation = useMutation({
@@ -385,9 +368,6 @@ export function AccountSecurityPage() {
         /* noop */
       })
       toast.success('Preferred MFA method updated')
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
     },
   })
 
@@ -402,9 +382,9 @@ export function AccountSecurityPage() {
     }
 
     wrappedAction().catch((error) => {
-      if (!handleStepUpError(error, actionWithStatusRefresh)) {
-        toast.error(getErrorMessage(error))
-      }
+      // MFA errors trigger step-up prompt
+      // Non-MFA errors are already handled by mutation toast
+      handleStepUpError(error, actionWithStatusRefresh)
     })
   }
 

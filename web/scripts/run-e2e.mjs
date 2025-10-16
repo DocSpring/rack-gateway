@@ -78,8 +78,11 @@ env.DATABASE_URL = databaseUrls[0]
 
 await import('./print-e2e-env.mjs')
 
+// Forward any CLI arguments passed to this script to Playwright
+const playwrightArgs = process.argv.slice(2)
+
 await new Promise((resolve, reject) => {
-  const child = spawn('pnpm', ['exec', 'playwright', 'test'], {
+  const child = spawn('pnpm', ['exec', 'playwright', 'test', ...playwrightArgs], {
     stdio: 'inherit',
     env,
     shell: process.platform === 'win32',

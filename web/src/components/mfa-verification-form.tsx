@@ -328,6 +328,11 @@ export function MFAVerificationForm({
   return (
     <div className="space-y-6">
       <p className="text-center text-muted-foreground text-sm">{getDescription()}</p>
+      {error && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-center text-destructive text-sm">
+          {error}
+        </div>
+      )}
       {useWebAuthn ? (
         <div className="space-y-6">
           <div className="space-y-6">
@@ -414,11 +419,16 @@ export function MFAVerificationForm({
               <div className="border-t" />
               <Button
                 className="w-full"
-                onClick={() => setUseWebAuthn(true)}
+                disabled={isVerifying}
+                onClick={() => {
+                  handleVerifyWebAuthn().catch(() => {
+                    /* errors handled by onError */
+                  })
+                }}
                 type="button"
                 variant="outline"
               >
-                Use security key instead
+                {isVerifying ? <LoadingSpinner className="size-4" /> : 'Use security key instead'}
               </Button>
             </div>
           )}

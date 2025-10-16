@@ -57,6 +57,15 @@ PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test --grep "user
 - 🚫 **Never** pass `--debug` (or any flag that opens the inspector) when running Playwright in automation — it blocks execution waiting for user interaction and will hang unattended runs.
 - ⏱️ Always run Playwright under an explicit timeout (the automation harness sets `timeout_ms` on every command) so a stalled browser never hangs the job.
 
+**Tip: Run specific tests with rebuild:**
+
+```bash
+# Run specific test(s) with automatic rebuild
+task web:e2e -- --grep "test name pattern"
+```
+
+This rebuilds the app and runs only the tests matching the pattern.
+
 **When to use manual Playwright commands:**
 
 - ✅ Iterating on test selectors or assertions

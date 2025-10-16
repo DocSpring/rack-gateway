@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { Check, Loader2, X } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/components/ui/use-toast'
 import { useStepUp } from '@/contexts/step-up-context'
+import { useMutation } from '@/hooks/use-mutation'
 import {
   type AuditLogsResponse,
   api,

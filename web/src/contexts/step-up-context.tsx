@@ -11,11 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useHttpClient } from '@/contexts/http-client-context'
 import { getMFAStatus } from '@/lib/api'
-import { getErrorMessage } from '@/lib/error-utils'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
 const DEBUG_STEP_UP = false
@@ -71,6 +69,7 @@ export function isMFAError(error: unknown): boolean {
   return (
     errorCode === 'mfa_step_up_required' ||
     errorCode === 'mfa_required' ||
+    errorCode === 'mfa_verification_failed' ||
     header === 'step-up' ||
     header === 'always'
   )
@@ -254,21 +253,30 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   const handleVerificationSuccess = useCallback(async () => {
     debugLog('handleVerificationSuccess called')
     const request = activeRef.current
-    activeRef.current = null
-    setIsOpen(false)
 
     try {
       const result = await runAction(request?.action ?? null)
+
+      // Only close dialog and clear state AFTER action succeeds
+      activeRef.current = null
+      setIsOpen(false)
+
       request?.onResolve?.(result)
       debugLog('handleVerificationSuccess - action succeeded, refreshing expiry...')
       await refreshStepUpExpiry()
       debugLog('handleVerificationSuccess - expiry refreshed')
     } catch (error) {
       debugLog('handleVerificationSuccess - action failed:', error)
+      // Don't close dialog or clear activeRef on error - allow user to retry
+      // Suppress flags are set in the response interceptor
       request?.onReject?.(error)
+      throw error // Re-throw so the error handler can show appropriate message
     } finally {
       clearMFAHeaders()
-      processQueue()
+      // Only process queue if we successfully completed (activeRef was cleared)
+      if (!activeRef.current) {
+        processQueue()
+      }
     }
   }, [processQueue, refreshStepUpExpiry, runAction])
 
@@ -357,16 +365,17 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
           return Promise.reject(axiosError)
         }
 
+        // Suppress toasts for ALL MFA errors since we handle them in the step-up dialog
+        if (axiosError.config) {
+          ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
+        }
+        axiosError.suppressToast = true
+
         const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
 
         if (originalConfig.__skipMfaInterceptor) {
           return Promise.reject(axiosError)
         }
-
-        if (axiosError.config) {
-          ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
-        }
-        axiosError.suppressToast = true
 
         return new Promise((resolve, reject) => {
           openStepUp({
@@ -445,9 +454,6 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
           <DialogDescription className="text-center" />
           <MFAVerificationForm
             mode="step-up"
-            onError={(error) => {
-              toast.error(getErrorMessage(error, 'Verification failed'))
-            }}
             onVerify={async (params) => {
               setIsVerifying(true)
               try {

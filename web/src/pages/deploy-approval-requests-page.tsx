@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate, useNavigate } from '@tanstack/react-router'
 import { Check, Loader2, Timer, X } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
@@ -24,6 +24,7 @@ import { UserMetaCell } from '@/components/user-meta-cell'
 import { UuidCell } from '@/components/uuid-cell'
 import { useAuth } from '@/contexts/auth-context'
 import { useStepUp } from '@/contexts/step-up-context'
+import { useMutation } from '@/hooks/use-mutation'
 import {
   approveDeployApprovalRequest,
   type DeployApprovalRequest,

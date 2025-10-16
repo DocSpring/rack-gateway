@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { toast } from '@/components/ui/use-toast'
+import { useMutation } from '@/hooks/use-mutation'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
@@ -38,7 +39,6 @@ import { useAuth } from '../contexts/auth-context'
 import { useStepUp } from '../contexts/step-up-context'
 import { api } from '../lib/api'
 import { DEFAULT_PER_PAGE } from '../lib/constants'
-import { toastAPIError } from '../lib/error-utils'
 import type { APIToken as APITokenModel, APITokenResponse } from '../lib/generated/gateway-types'
 import { toFieldErrorMap, tokenFormSchema } from '../lib/validation'
 
@@ -481,10 +481,9 @@ function TokensPageInner() {
     try {
       await createTokenMutation.mutateAsync(payload)
     } catch (err) {
-      if (handleStepUpError(err, () => createTokenMutation.mutateAsync(payload))) {
-        return
-      }
-      toastAPIError(err, 'Failed to create token')
+      // MFA errors trigger step-up prompt
+      // Non-MFA errors are already handled by mutation toast
+      handleStepUpError(err, () => createTokenMutation.mutateAsync(payload))
     }
   }
 
@@ -540,10 +539,9 @@ function TokensPageInner() {
     try {
       await deleteTokenMutation.mutateAsync(tokenPublicId)
     } catch (err) {
-      if (handleStepUpError(err, () => deleteTokenMutation.mutateAsync(tokenPublicId))) {
-        return
-      }
-      toastAPIError(err, 'Failed to delete token')
+      // MFA errors trigger step-up prompt
+      // Non-MFA errors are already handled by mutation toast
+      handleStepUpError(err, () => deleteTokenMutation.mutateAsync(tokenPublicId))
     }
   }
 
@@ -644,10 +642,9 @@ function TokensPageInner() {
     try {
       await updateTokenMutation.mutateAsync(args)
     } catch (err) {
-      if (handleStepUpError(err, () => updateTokenMutation.mutateAsync(args))) {
-        return
-      }
-      toastAPIError(err, 'Failed to update token')
+      // MFA errors trigger step-up prompt
+      // Non-MFA errors are already handled by mutation toast
+      handleStepUpError(err, () => updateTokenMutation.mutateAsync(args))
     }
   }
 

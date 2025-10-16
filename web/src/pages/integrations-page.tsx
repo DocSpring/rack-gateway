@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
+import { useMutation } from '@/hooks/use-mutation'
 import { StringArrayInput } from '../components/settings/string-array-input'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
