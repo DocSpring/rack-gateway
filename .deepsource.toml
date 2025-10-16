@@ -1,10 +1,18 @@
 version = 1
 
 [[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  plugins = ["react"]
+  environment = [
+    "vitest",
+    "nodejs"
+  ]
+
+[[analyzers]]
 name = "go"
 
   [analyzers.meta]
   import_root = "github.com/DocSpring/rack-gateway"
-
-[[transformers]]
-name = "gofmt"
+  import_paths = ["github.com/DocSpring/rack-gateway/cmd", "github.com/DocSpring/rack-gateway/internal"]
