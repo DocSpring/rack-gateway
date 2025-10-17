@@ -59,6 +59,11 @@ pre-commit:
       glob: "**/*.{ts,tsx}"
       run: pnpm tsc --noEmit
 
+    web-knip:
+      root: "web/"
+      # Run across the web project every commit
+      run: pnpm knip
+
     mock-oauth-test:
       glob: "mock-oauth/**/*.{ts,tsx}"
       run: task mock-oauth:test

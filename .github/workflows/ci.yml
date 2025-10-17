@@ -102,7 +102,7 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
 
-      - name: Web lint (Typecheck and Biome)
+      - name: Web lint (Typecheck, Biome, and knip)
         run: task web:lint
 
       - name: Web tests

@@ -77,12 +77,12 @@ tasks:
     cmds: [pnpm build]
 
   lint:
-    desc: Run TypeScript typecheck and Biome lint
-    deps: [lint:typecheck, lint:biome]
+    desc: Run TypeScript typecheck, Biome lint, and knip
+    deps: [lint:typecheck, lint:biome, lint:knip]
 
   lint:fix:
-    desc: Run TypeScript typecheck and auto-fix Biome issues (safe)
-    deps: [lint:typecheck, lint:biome:fix]
+    desc: Run TypeScript typecheck, auto-fix Biome issues, and knip (safe)
+    deps: [lint:typecheck, lint:biome:fix, lint:knip]
 
   lint:typecheck:
     dir: web
@@ -101,6 +101,12 @@ tasks:
     desc: Run Biome lint
     deps: [deps]
     cmds: [pnpm lint:fix]
+
+  lint:knip:
+    dir: web
+    desc: Run knip to find unused files and exports
+    deps: [deps]
+    cmds: [pnpm knip]
 
   format:
     dir: web
