@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useMutation } from '@/hooks/use-mutation'
 import { type EnvValuesMap, fetchAppEnv, fetchAppEnvValue, updateAppEnv } from '@/lib/api'
+import { QUERY_KEYS } from '@/lib/query-keys'
 
 const MASKED_SECRET = '********************'
 
@@ -213,7 +214,7 @@ export function AppEnvPage() {
   const canEdit = roles.includes('admin') || roles.includes('deployer')
 
   const envQuery = useQuery({
-    queryKey: ['app-env', app],
+    queryKey: [...QUERY_KEYS.APP_ENV, app],
     queryFn: () => fetchAppEnv(app),
     refetchOnWindowFocus: false,
     staleTime: 0,
@@ -302,7 +303,7 @@ export function AppEnvPage() {
       )
       setRemovedKeys([])
       shouldResyncRef.current = true
-      await queryClient.invalidateQueries({ queryKey: ['app-env', app] })
+      await queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.APP_ENV, app] })
     },
     onError: (err) => {
       toast.error(getErrorMessage(err, 'Failed to update environment.'))

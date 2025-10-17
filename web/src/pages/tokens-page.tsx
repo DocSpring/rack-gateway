@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TimeAgo } from '@/components/time-ago'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { Badge } from '../components/ui/badge'
@@ -310,7 +311,7 @@ function TokensPageInner() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['tokens'],
+    queryKey: QUERY_KEYS.TOKENS,
     queryFn: async () => {
       const response = await api.get<APIToken[]>('/api/v1/api-tokens')
       return response
@@ -404,7 +405,7 @@ function TokensPageInner() {
     onSuccess: (data) => {
       setCreatedToken(data.token || '')
       setCreatedTokenUuid(data.api_token?.public_id || null)
-      queryClient.invalidateQueries({ queryKey: ['tokens'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOKENS })
       toast.success('API token created successfully')
       setCreateErrors({ name: undefined, permissions: undefined })
     },
@@ -416,7 +417,7 @@ function TokensPageInner() {
       await api.delete(`/api/v1/api-tokens/${tokenPublicId}`)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tokens'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOKENS })
       toast.success('Token deleted successfully')
       handleDeleteDialogOpenChange(false)
     },
@@ -439,7 +440,7 @@ function TokensPageInner() {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tokens'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOKENS })
       toast.success('Token updated successfully')
       setIsEditOpen(false)
       setEditToken(null)

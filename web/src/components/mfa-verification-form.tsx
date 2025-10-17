@@ -12,6 +12,9 @@ import {
   serializeAssertionCredential,
 } from '@/lib/webauthn-utils'
 
+const DIGITS_ONLY_REGEX = /^\d+$/
+const SIX_DIGITS_REGEX = /^\d{6}$/
+
 type MFAMethod = 'totp' | 'webauthn'
 type MFAMode = 'step-up' | 'cli' | 'web'
 
@@ -221,7 +224,6 @@ export function MFAVerificationForm({
 
       setError(null)
       setIsVerifying(true)
-      console.log('[MFAVerificationForm] verify', codeToVerify)
       ;(globalThis as { __verifyCalls?: number }).__verifyCalls =
         ((globalThis as { __verifyCalls?: number }).__verifyCalls ?? 0) + 1
 
@@ -253,12 +255,6 @@ export function MFAVerificationForm({
 
   const trySubmitCode = useCallback(() => {
     const pending = pendingCodeRef.current
-    console.log('[MFAVerificationForm] trySubmit check', {
-      pending,
-      isVerifying,
-      useWebAuthn,
-      lastSubmitted: lastSubmittedCodeRef.current,
-    })
     if (useWebAuthn) {
       return
     }
@@ -266,14 +262,13 @@ export function MFAVerificationForm({
       return
     }
 
-    if (!pending || pending.length !== 6 || !/^\d+$/.test(pending)) {
+    if (!pending || pending.length !== 6 || !DIGITS_ONLY_REGEX.test(pending)) {
       return
     }
     if (lastSubmittedCodeRef.current === pending) {
       return
     }
 
-    console.log('[MFAVerificationForm] auto-submit', pending)
     pendingCodeRef.current = null
     handleVerifyTotp(pending).catch(() => {
       /* errors handled in handleVerifyTotp */
@@ -449,8 +444,7 @@ export function MFAVerificationForm({
                   ;(globalThis as { __lastOnChange?: string }).__lastOnChange = normalized
                   setError(null)
                   setCode(normalized)
-                  if (normalized.length === 6 && /^\d+$/.test(normalized)) {
-                    console.log('[MFAVerificationForm] pending code from onChange', normalized)
+                  if (normalized.length === 6 && DIGITS_ONLY_REGEX.test(normalized)) {
                     pendingCodeRef.current = normalized
                     trySubmitCode()
                   } else {
@@ -462,8 +456,7 @@ export function MFAVerificationForm({
                     return
                   }
                   setCode(completedCode)
-                  if (/^\d{6}$/.test(completedCode)) {
-                    console.log('[MFAVerificationForm] pending code from onComplete', completedCode)
+                  if (SIX_DIGITS_REGEX.test(completedCode)) {
                     pendingCodeRef.current = completedCode
                     trySubmitCode()
                   }

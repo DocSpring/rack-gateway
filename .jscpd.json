@@ -1,0 +1,6 @@
+{
+  "minLines": 10,
+  "ignore": ["**/convox_source/**", "**/reference/**"],
+  "gitignore": true,
+  "absolute": false
+}

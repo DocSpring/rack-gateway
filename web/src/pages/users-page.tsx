@@ -4,6 +4,7 @@ import { Edit2, Eye, Lock, MoreVertical, Plus, Trash2, Unlock } from 'lucide-rea
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TablePane } from '../components/table-pane'
 import { TimeAgo } from '../components/time-ago'
@@ -202,7 +203,7 @@ export function UsersPage() {
     isLoading,
     error: queryError,
   } = useQuery({
-    queryKey: ['users'],
+    queryKey: QUERY_KEYS.USERS,
     queryFn: async () => {
       const response = await api.get<User[]>('/api/v1/users')
       return response
@@ -270,7 +271,7 @@ export function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['users'],
+        queryKey: QUERY_KEYS.USERS,
         refetchType: 'active',
       })
       toast.success('User deleted successfully')
@@ -326,10 +327,10 @@ export function UsersPage() {
         return arr
       })
       await queryClient.invalidateQueries({
-        queryKey: ['users'],
+        queryKey: QUERY_KEYS.USERS,
         refetchType: 'active',
       })
-      await queryClient.refetchQueries({ queryKey: ['users'] })
+      await queryClient.refetchQueries({ queryKey: QUERY_KEYS.USERS })
       toast.success('User created successfully')
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
@@ -354,7 +355,7 @@ export function UsersPage() {
         })
       }
       await queryClient.invalidateQueries({
-        queryKey: ['users'],
+        queryKey: QUERY_KEYS.USERS,
         refetchType: 'active',
       })
       toast.success('User updated successfully')

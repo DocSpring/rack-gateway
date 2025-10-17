@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { MoreVertical, Pencil, ShieldAlert, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { MFAInput } from '@/components/mfa-input'
 import { TimeAgo } from '@/components/time-ago'
@@ -51,6 +51,7 @@ import {
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import { normalizeRedirectPath } from '@/lib/navigation'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { resolveWebRedirect } from '@/lib/routes'
 import {
   createCredential,
@@ -65,7 +66,6 @@ type EnrollmentState = (StartTOTPEnrollmentResponse | StartWebAuthnEnrollmentRes
 
 type MFAMethodType = 'totp' | 'webauthn'
 
-const STEP_UP_QUERY_KEY = ['mfaStatus'] as const
 const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
   webauthn: 'WebAuthn',
@@ -148,7 +148,7 @@ export function AccountSecurityPage() {
     isLoading,
     isFetching,
   } = useQuery<MFAStatusResponse>({
-    queryKey: STEP_UP_QUERY_KEY,
+    queryKey: QUERY_KEYS.MFA_STATUS,
     queryFn: getMFAStatus,
     refetchOnWindowFocus: true,
     staleTime: 30_000,
@@ -190,7 +190,7 @@ export function AccountSecurityPage() {
   }, [status?.recent_step_up_expires_at])
 
   const invalidateStatus = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: STEP_UP_QUERY_KEY }),
+    () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.MFA_STATUS }),
     [queryClient]
   )
 
@@ -322,8 +322,6 @@ export function AccountSecurityPage() {
     onSuccess: () => {
       toast.success('MFA method removed')
       invalidateStatus()
-      // Invalidate step-up dialog's MFA status query
-      queryClient.invalidateQueries({ queryKey: ['mfa-status'] })
       refreshUser().catch(() => {
         /* noop */
       })
@@ -734,10 +732,6 @@ export function AccountSecurityPage() {
                               align="end"
                               onCloseAutoFocus={(e) => {
                                 // Prevent dropdown from focusing trigger when closing
-                                e.preventDefault()
-                              }}
-                              onOpenAutoFocus={(e) => {
-                                // Prevent dropdown from auto-focusing
                                 e.preventDefault()
                               }}
                             >

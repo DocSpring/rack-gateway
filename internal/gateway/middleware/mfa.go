@@ -40,7 +40,20 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 			}
 			c.Next()
 		case rbac.MFAAlways:
-			if !checkInlineMFA(c, mfaService, database) {
+			authUser, ok := auth.GetAuthUser(c.Request.Context())
+			if !ok || authUser == nil {
+				denyMFA(c)
+				return
+			}
+			// API tokens don't have MFA
+			if authUser.IsAPIToken {
+				c.Next()
+				return
+			}
+			if !verifyInlineMFA(c, mfaService, database, authUser) {
+				if !c.IsAborted() {
+					denyMFA(c)
+				}
 				return
 			}
 			c.Next()
@@ -97,7 +110,7 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 	}
 
 	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s no recent step up, attempting inline verification", authUser.Email)
-	if tryInlineStepUp(c, mfaService, database, authUser) {
+	if verifyInlineMFA(c, mfaService, database, authUser) {
 		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s inline verification succeeded", authUser.Email)
 		return true
 	}
@@ -112,29 +125,20 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 	return false
 }
 
-// checkInlineMFA verifies the user provided an MFA code with this request.
-// This is used for CLI clients that can send codes in auth headers.
-func checkInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database) bool {
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil {
-		denyMFA(c)
+// verifyInlineMFA verifies the user provided an MFA code with this request and updates step-up timestamp.
+// This is used for both MFAAlways and MFAStepUp routes when MFA is provided inline.
+func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.AuthUser) bool {
+	if mfaService == nil || database == nil || authUser == nil {
 		return false
-	}
-
-	// API tokens don't have MFA.
-	if authUser.IsAPIToken {
-		return true
 	}
 
 	session := authUser.Session
 	if session == nil || session.MFAVerifiedAt == nil {
-		denyMFA(c)
 		return false
 	}
 
 	// MFA code MUST be provided with this request
 	if authUser.MFAType == "" || authUser.MFAValue == "" {
-		denyMFA(c)
 		return false
 	}
 
@@ -150,73 +154,13 @@ func checkInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 
 	// Verify the MFA code based on type
 	var verifyErr error
-	var sessionID *int64
-	if session != nil {
-		sessionID = &session.ID
-	}
-	switch authUser.MFAType {
-	case "totp":
-		_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
-	case "webauthn":
-		// WebAuthn inline format: base64(JSON{"session_data": "...", "assertion": {...}})
-		verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
-	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"error":   "invalid_mfa_type",
-			"message": "MFA type must be 'totp' or 'webauthn'",
-		})
-		return false
-	}
-
-	if verifyErr != nil {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error":   "mfa_verification_failed",
-			"message": "Verification code is incorrect or has expired. Please try again.",
-		})
-		return false
-	}
-
-	return true
-}
-
-func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.AuthUser) bool {
-	if mfaService == nil || database == nil || authUser == nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: missing dependencies service=%v database=%v user=%v", mfaService != nil, database != nil, authUser != nil)
-		return false
-	}
-
-	session := authUser.Session
-	if session == nil || session.MFAVerifiedAt == nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user=%s missing session or verified timestamp", authUser.Email)
-		return false
-	}
-
-	if authUser.MFAType == "" || authUser.MFAValue == "" {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user=%s missing inline MFA data type=%q valueEmpty=%t", authUser.Email, authUser.MFAType, authUser.MFAValue == "")
-		return false
-	}
-
-	user, err := database.GetUser(authUser.Email)
-	if err != nil || user == nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user lookup failed email=%s err=%v", authUser.Email, err)
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error":   "user_not_found",
-			"message": "User not found",
-		})
-		return false
-	}
-
-	var verifyErr error
 	sessionID := &session.ID
 	switch authUser.MFAType {
 	case "totp":
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verifying TOTP user=%s code=%s trustDevice=%v sessionID=%d", authUser.Email, authUser.MFAValue, session.TrustedDeviceID != nil, session.ID)
 		_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
 	case "webauthn":
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verifying WebAuthn user=%s sessionID=%d", authUser.Email, session.ID)
 		verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
 	default:
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: user=%s provided invalid mfa type=%s", authUser.Email, authUser.MFAType)
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid_mfa_type",
 			"message": "MFA type must be 'totp' or 'webauthn'",
@@ -225,17 +169,20 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 	}
 
 	if verifyErr != nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verification failed user=%s err=%v", authUser.Email, verifyErr)
+		message := "Verification code is incorrect or has expired. Please try again."
+		if authUser.MFAType == "webauthn" {
+			message = "Security key verification failed. Please try again."
+		}
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 			"error":   "mfa_verification_failed",
-			"message": "Verification code is incorrect or has expired. Please try again.",
+			"message": message,
 		})
 		return false
 	}
 
+	// Update step-up timestamp - any successful MFA verification refreshes the step-up window
 	now := time.Now()
 	if err := database.UpdateSessionRecentStepUp(session.ID, now); err != nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: failed to update recent step up user=%s session=%d err=%v", authUser.Email, session.ID, err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 			"error":   "mfa_step_up_record_failed",
 			"message": "Failed to record MFA verification. Please try again.",
@@ -243,7 +190,6 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 		return false
 	}
 	session.RecentStepUpAt = &now
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: success user=%s session=%d newRecent=%s", authUser.Email, session.ID, now.UTC().Format(time.RFC3339Nano))
 
 	return true
 }

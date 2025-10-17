@@ -4,6 +4,7 @@ import { Edit2, Lock, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { type AuditLogRecord, AuditLogsPane } from '../components/audit-logs-pane'
 import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
 import { TimeAgo } from '../components/time-ago'
@@ -149,7 +150,7 @@ export function UserPage() {
     isLoading: userLoading,
     error: userError,
   } = useQuery<GatewayUser, Error>({
-    queryKey: ['user', decodedEmail],
+    queryKey: [...QUERY_KEYS.USER, decodedEmail],
     queryFn: () => api.getUser(decodedEmail),
     retry: 1,
   })
@@ -161,7 +162,7 @@ export function UserPage() {
     isLoading: sessionsLoading,
     error: sessionsError,
   } = useQuery<UserSessionSummary[], Error>({
-    queryKey: ['userSessions', decodedEmail],
+    queryKey: [...QUERY_KEYS.USER_SESSIONS, decodedEmail],
     queryFn: () => api.listUserSessions(decodedEmail),
     enabled: !!user,
     refetchOnWindowFocus: true,
@@ -174,7 +175,7 @@ export function UserPage() {
     isLoading: auditTableLoading,
     error: auditTableError,
   } = useQuery<AuditLogsResponse, Error>({
-    queryKey: ['userAuditLogs', decodedEmail, auditPageIndex, DEFAULT_PER_PAGE],
+    queryKey: [...QUERY_KEYS.USER_AUDIT_LOGS, decodedEmail, auditPageIndex, DEFAULT_PER_PAGE],
     queryFn: () =>
       api.listAuditLogs({
         user: decodedEmail,
@@ -282,12 +283,12 @@ export function UserPage() {
 
   const invalidateUserData = async (targetEmail: string) => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['user', targetEmail] }),
+      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.USER, targetEmail] }),
       queryClient.invalidateQueries({
-        queryKey: ['userSessions', targetEmail],
+        queryKey: [...QUERY_KEYS.USER_SESSIONS, targetEmail],
       }),
       queryClient.invalidateQueries({
-        queryKey: ['userAuditLogs', targetEmail],
+        queryKey: [...QUERY_KEYS.USER_AUDIT_LOGS, targetEmail],
       }),
     ])
   }
@@ -341,7 +342,7 @@ export function UserPage() {
     await applyRoleUpdate(plan.shouldUpdateRoles, plan.trimmedEmail, plan.desiredRoles)
 
     const invalidations: Promise<unknown>[] = [
-      queryClient.invalidateQueries({ queryKey: ['users'] }),
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USERS }),
       invalidateUserData(plan.routeEmail),
     ]
     if (plan.emailChanged) {
@@ -394,7 +395,7 @@ export function UserPage() {
     onSuccess: () => {
       toast.success('Session revoked')
       queryClient.invalidateQueries({
-        queryKey: ['userSessions', decodedEmail],
+        queryKey: [...QUERY_KEYS.USER_SESSIONS, decodedEmail],
       })
     },
     onError: () => {
@@ -410,7 +411,7 @@ export function UserPage() {
     onSuccess: () => {
       toast.success('All sessions revoked')
       queryClient.invalidateQueries({
-        queryKey: ['userSessions', decodedEmail],
+        queryKey: [...QUERY_KEYS.USER_SESSIONS, decodedEmail],
       })
     },
     onError: () => {
@@ -437,10 +438,10 @@ export function UserPage() {
     onSuccess: () => {
       toast.success('User deleted successfully')
       setIsDeleteOpen(false)
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      queryClient.removeQueries({ queryKey: ['user', decodedEmail] })
-      queryClient.removeQueries({ queryKey: ['userSessions', decodedEmail] })
-      queryClient.removeQueries({ queryKey: ['userAuditLogs', decodedEmail] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USERS })
+      queryClient.removeQueries({ queryKey: [...QUERY_KEYS.USER, decodedEmail] })
+      queryClient.removeQueries({ queryKey: [...QUERY_KEYS.USER_SESSIONS, decodedEmail] })
+      queryClient.removeQueries({ queryKey: [...QUERY_KEYS.USER_AUDIT_LOGS, decodedEmail] })
       navigate({ to: '/users', replace: true })
     },
     onError: (error: unknown) => {

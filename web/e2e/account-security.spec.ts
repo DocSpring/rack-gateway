@@ -94,13 +94,13 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
 }
 
 test.describe('Account security', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(({ page }) => {
     page.on('console', (message) => {
       // eslint-disable-next-line no-console
       console.log('[browser]', message.type(), message.text())
     })
   })
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(({ page }) => {
     page.on('console', (message) => {
       // eslint-disable-next-line no-console
       console.log('[browser console]', message.type(), message.text())

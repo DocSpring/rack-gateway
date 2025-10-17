@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { Button } from './ui/button'
 import {
   Dialog,
@@ -30,8 +31,8 @@ export function UserLockDialog({ userEmail, open, onOpenChange }: UserLockDialog
       api.lockUser(email, reason),
     onSuccess: () => {
       toast.success('User account locked successfully')
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      queryClient.invalidateQueries({ queryKey: ['user', userEmail] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USERS })
+      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.USER, userEmail] })
       onOpenChange(false)
       setLockReason('')
     },
@@ -110,8 +111,8 @@ export function useUnlockUser() {
     mutationFn: (email: string) => api.unlockUser(email),
     onSuccess: (_, email) => {
       toast.success('User account unlocked successfully')
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-      queryClient.invalidateQueries({ queryKey: ['user', email] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USERS })
+      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.USER, email] })
     },
     onError: (error: Error) => {
       const message = error.message

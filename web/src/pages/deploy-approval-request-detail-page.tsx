@@ -23,6 +23,7 @@ import {
 import { buildCircleCIPipelineUrl, extractCircleCIMetadata } from '@/lib/ci-utils'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { withAPIErrorMessage } from '@/lib/error-utils'
+import { QUERY_KEYS } from '@/lib/query-keys'
 
 type DetailRowProps = {
   label: string
@@ -69,7 +70,7 @@ export function DeployApprovalRequestDetailPage() {
     isLoading: requestLoading,
     error: requestError,
   } = useQuery<DeployApprovalRequest, Error>({
-    queryKey: ['deploy-approval-request', id],
+    queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id],
     queryFn: () => api.get(`/api/v1/deploy-approval-requests/${id}`),
     retry: 1,
   })
@@ -108,9 +109,9 @@ export function DeployApprovalRequestDetailPage() {
     onSuccess: () => {
       toast.success('Request approved')
       queryClient.invalidateQueries({
-        queryKey: ['deploy-approval-request', id],
+        queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id],
       })
-      queryClient.invalidateQueries({ queryKey: ['deploy-approval-requests'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DEPLOY_APPROVAL_REQUESTS })
     },
   })
 
@@ -121,9 +122,9 @@ export function DeployApprovalRequestDetailPage() {
       toast.success('Request rejected')
       setRejectDialogOpen(false)
       queryClient.invalidateQueries({
-        queryKey: ['deploy-approval-request', id],
+        queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id],
       })
-      queryClient.invalidateQueries({ queryKey: ['deploy-approval-requests'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DEPLOY_APPROVAL_REQUESTS })
     },
   })
 

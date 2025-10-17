@@ -169,6 +169,10 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
 		return nil, fmt.Errorf("user suspended")
 	}
+	if user.LockedAt != nil {
+		_, _ = m.db.RevokeUserSession(session.ID, nil)
+		return nil, fmt.Errorf("user locked")
+	}
 
 	// Refresh idle timeout to enforce sliding expiration on activity.
 	if err := m.db.TouchUserSession(session.ID, ipAddress, userAgent, now, now.Add(ttl)); err == nil {

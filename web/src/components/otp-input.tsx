@@ -62,8 +62,6 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
       newValue[index] = digit
       const finalValue = newValue.join('').slice(0, length)
 
-      console.log('[OTPInput] change', index, inputValue, finalValue)
-
       onChange(finalValue)
 
       // Auto-focus next input if digit was entered

@@ -218,6 +218,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   useEffect(() => {
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: very complex logic
     const requestInterceptor = client.interceptors.request.use(async (config) => {
       const internalConfig = config as InternalRequestConfig
 
@@ -300,6 +301,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
 
     const responseInterceptor = client.interceptors.response.use(
       (response) => response,
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: very complex logic
       (error) => {
         type AxiosStepUpError = AxiosError<unknown, InternalRequestConfig> & {
           suppressToast?: boolean
@@ -315,17 +317,19 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
 
           return new Promise((resolve, reject) => {
             openStepUp({
+              // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: very complex logic
               action: async () => {
                 const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
                 const mfaHeaders = getMFAHeaders()
                 debugLog('Action getting MFA headers', mfaHeaders)
-                const headers = AxiosHeaders.from(originalConfig.headers ?? {})
 
+                // Clone headers to avoid mutating original request
+                const headers = new AxiosHeaders(originalConfig.headers ?? {})
+
+                // Add MFA headers
                 for (const [key, value] of Object.entries(mfaHeaders)) {
                   if (value) {
                     headers.set(key, value)
-                  } else {
-                    headers.delete(key)
                   }
                 }
 
@@ -343,7 +347,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
                   hasXMfaTotp: headers.has('X-MFA-TOTP'),
                   xMfaTotpValue: headers.get('X-MFA-TOTP'),
                   hasXMfaWebAuthn: headers.has('X-MFA-WebAuthn'),
-                  xMfaWebAuthnLength: headers.get('X-MFA-WebAuthn')?.length,
+                  xMfaWebAuthnLength: String(headers.get('X-MFA-WebAuthn') || '').length,
                   skipMfaHandling: retryConfig.__skipMfaHandling,
                 })
 
@@ -385,14 +389,16 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
           return new Promise((resolve, reject) => {
             openStepUp({
               action: async () => {
-                const headers = AxiosHeaders.from(originalConfig.headers ?? {})
+                // Clone headers to avoid mutating original request
+                const headers = new AxiosHeaders(originalConfig.headers ?? {})
+
                 const mfaHeaders = getMFAHeaders()
                 debugLog('Action getting MFA headers (401 fallback)', mfaHeaders)
+
+                // Add MFA headers
                 for (const [key, value] of Object.entries(mfaHeaders)) {
                   if (value) {
                     headers.set(key, value)
-                  } else {
-                    headers.delete(key)
                   }
                 }
 

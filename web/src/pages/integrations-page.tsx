@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Circle, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useMutation } from '@/hooks/use-mutation'
+import { QUERY_KEYS } from '@/lib/query-keys'
 import { StringArrayInput } from '../components/settings/string-array-input'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
@@ -128,7 +129,7 @@ export function IntegrationsPage() {
 
   // Fetch Slack integration status
   const { data: integration, isLoading } = useQuery<SlackIntegration | null>({
-    queryKey: ['slack-integration'],
+    queryKey: QUERY_KEYS.SLACK_INTEGRATION,
     queryFn: async (): Promise<SlackIntegration | null> => {
       try {
         const response = await api.get<SlackIntegration>('/api/v1/integrations/slack')
@@ -178,7 +179,7 @@ export function IntegrationsPage() {
       await api.delete('/api/v1/integrations/slack')
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['slack-integration'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
       toast.success('Disconnected from Slack')
     },
     onError: (error: unknown) => {
@@ -195,7 +196,7 @@ export function IntegrationsPage() {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['slack-integration'] })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
       toast.success('Channel configuration updated')
     },
     onError: (error: unknown) => {
