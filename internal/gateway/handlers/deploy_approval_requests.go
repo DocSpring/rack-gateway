@@ -900,7 +900,7 @@ func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, AuditLogsResponse{
+	c.JSON(http.StatusOK, RawAuditLogsResponse{
 		Logs:  logs,
 		Total: len(logs),
 		Page:  1,

@@ -5,11 +5,11 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
-import type { DbAuditLog } from './dbAuditLog';
+import type { DbAuditLogAggregated } from './dbAuditLogAggregated';
 
 export interface HandlersAuditLogsResponse {
   limit: number;
-  logs: DbAuditLog[];
+  logs: DbAuditLogAggregated[];
   page: number;
   total: number;
 }

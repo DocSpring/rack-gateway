@@ -59,7 +59,7 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 		return
 	}
 
-	logs, total, err := h.database.GetAuditLogsPaged(filters)
+	logs, total, err := h.database.GetAuditLogsAggregated(filters)
 	if err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "audit.list", "", err.Error(), start, nil)
 		return
@@ -67,11 +67,7 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 
 	eventTotal := 0
 	for _, log := range logs {
-		if log.EventCount > 0 {
-			eventTotal += log.EventCount
-		} else {
-			eventTotal++
-		}
+		eventTotal += log.EventCount
 	}
 
 	payload := AuditLogsResponse{
@@ -139,7 +135,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	}
 	filters.Offset = 0
 
-	logs, _, err := h.database.GetAuditLogsPaged(filters)
+	logs, _, err := h.database.GetAuditLogsAggregated(filters)
 	if err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", err.Error(), start, nil)
 		return
@@ -153,10 +149,11 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	writer := csv.NewWriter(c.Writer)
 	defer writer.Flush()
 
-	// Header row
+	// Header row - aggregated format with time range
 	header := []string{
-		"timestamp", "user_email", "user_name", "action_type", "action",
-		"command", "resource", "status", "event_count", "response_time_ms", "ip_address", "user_agent",
+		"first_seen", "last_seen", "user_email", "user_name", "action_type", "action",
+		"command", "resource", "status", "event_count",
+		"min_response_ms", "max_response_ms", "avg_response_ms", "ip_address", "user_agent",
 	}
 	if err := writer.Write(header); err != nil {
 		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to write CSV header", start, nil)
@@ -166,13 +163,10 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	// Data rows
 	totalEvents := 0
 	for _, log := range logs {
-		count := log.EventCount
-		if count <= 0 {
-			count = 1
-		}
-		totalEvents += count
+		totalEvents += log.EventCount
 		row := []string{
-			log.Timestamp.Format(time.RFC3339),
+			log.FirstSeen.Format(time.RFC3339),
+			log.LastSeen.Format(time.RFC3339),
 			log.UserEmail,
 			log.UserName,
 			log.ActionType,
@@ -180,8 +174,10 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 			log.Command,
 			log.Resource,
 			log.Status,
-			strconv.Itoa(count),
-			strconv.Itoa(log.ResponseTimeMs),
+			strconv.Itoa(log.EventCount),
+			strconv.Itoa(log.MinResponseTimeMs),
+			strconv.Itoa(log.MaxResponseTimeMs),
+			strconv.Itoa(log.AvgResponseTimeMs),
 			log.IPAddress,
 			log.UserAgent,
 		}

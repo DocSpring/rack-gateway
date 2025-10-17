@@ -16,13 +16,14 @@ import { useHttpClient } from '@/contexts/http-client-context'
 import { getMFAStatus } from '@/lib/api'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
-const DEBUG_STEP_UP = true
-
+// Change to true to debug step-up dialog flow
+const DEBUG_STEP_UP = false
 function debugLog(...args: unknown[]) {
-  if (DEBUG_STEP_UP) {
-    // biome-ignore lint/suspicious/noConsole: debug logs
-    console.log('[STEP_UP]', ...args)
+  if (!DEBUG_STEP_UP) {
+    return
   }
+  // biome-ignore lint/suspicious/noConsole: debug logs
+  console.log('[STEP_UP]', ...args)
 }
 
 type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null

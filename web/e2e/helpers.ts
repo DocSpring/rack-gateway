@@ -112,7 +112,6 @@ export async function typeOtpCode(
 ) {
   const fieldset = context.locator('[aria-label="Verification code"]')
   const inputs = fieldset.locator('input')
-  console.log('[typeOtpCode] filling code', code)
   const firstInput = inputs.first()
   await firstInput.click()
   const inputCount = await inputs.count()

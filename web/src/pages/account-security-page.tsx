@@ -70,8 +70,8 @@ const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
   webauthn: 'WebAuthn',
 }
-export const DEFAULT_TOTP_LABEL = 'Authenticator App'
-export const DEFAULT_WEBAUTHN_LABEL = 'Security Key'
+const DEFAULT_TOTP_LABEL = 'Authenticator App'
+const DEFAULT_WEBAUTHN_LABEL = 'Security Key'
 
 const DEFAULT_LABELS: Record<MFAMethodType, string> = {
   totp: DEFAULT_TOTP_LABEL,

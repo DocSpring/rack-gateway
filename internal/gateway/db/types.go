@@ -80,10 +80,15 @@ type RackTLSCert struct {
 	FetchedAt   time.Time `json:"fetched_at" ts_type:"string"`
 }
 
-// AuditLog represents an audit log entry
+// AuditLog represents an audit log entry with cryptographic chain
 type AuditLog struct {
 	ID                      int64     `json:"id"`
 	Timestamp               time.Time `json:"timestamp"`
+	ChainIndex              int64     `json:"chain_index"`
+	PreviousHash            []byte    `json:"previous_hash,omitempty"` // NULL for genesis event
+	EventHash               []byte    `json:"event_hash"`
+	CheckpointID            string    `json:"checkpoint_id,omitempty"`
+	CheckpointHash          []byte    `json:"checkpoint_hash,omitempty"`
 	UserEmail               string    `json:"user_email"`
 	UserName                string    `json:"user_name,omitempty"`
 	APITokenID              *int64    `json:"api_token_id,omitempty"`
@@ -94,13 +99,14 @@ type AuditLog struct {
 	Resource                string    `json:"resource,omitempty"`
 	ResourceType            string    `json:"resource_type,omitempty"`
 	Details                 string    `json:"details,omitempty"` // JSON string
+	RequestID               string    `json:"request_id,omitempty"`
 	IPAddress               string    `json:"ip_address,omitempty"`
 	UserAgent               string    `json:"user_agent,omitempty"`
 	Status                  string    `json:"status"`                  // "success", "denied", "error", "blocked"
 	RBACDecision            string    `json:"rbac_decision,omitempty"` // "allow" or "deny"
 	HTTPStatus              int       `json:"http_status,omitempty"`
 	ResponseTimeMs          int       `json:"response_time_ms"`
-	EventCount              int       `json:"event_count"`
+	EventCount              int       `json:"event_count"` // Always 1 (aggregation removed)
 	DeployApprovalRequestID *int64    `json:"deploy_approval_request_id,omitempty"`
 }
 

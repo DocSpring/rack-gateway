@@ -4731,15 +4731,13 @@
                     }
                 }
             },
-            "db.AuditLog": {
+            "db.AuditLogAggregated": {
                 "type": "object",
                 "properties": {
                     "action": {
-                        "description": "e.g., \"env.read\", \"user.create\", \"login.oauth_failed\"",
                         "type": "string"
                     },
                     "action_type": {
-                        "description": "\"convox\", \"users\", \"auth\"",
                         "type": "string"
                     },
                     "api_token_id": {
@@ -4748,6 +4746,9 @@
                     "api_token_name": {
                         "type": "string"
                     },
+                    "avg_response_time_ms": {
+                        "type": "integer"
+                    },
                     "command": {
                         "type": "string"
                     },
@@ -4755,11 +4756,22 @@
                         "type": "integer"
                     },
                     "details": {
-                        "description": "JSON string",
                         "type": "string"
                     },
                     "event_count": {
                         "type": "integer"
+                    },
+                    "first_event_id": {
+                        "type": "integer"
+                    },
+                    "first_hash": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "first_seen": {
+                        "type": "string"
                     },
                     "http_status": {
                         "type": "integer"
@@ -4770,8 +4782,25 @@
                     "ip_address": {
                         "type": "string"
                     },
+                    "last_event_id": {
+                        "type": "integer"
+                    },
+                    "last_hash": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "last_seen": {
+                        "type": "string"
+                    },
+                    "max_response_time_ms": {
+                        "type": "integer"
+                    },
+                    "min_response_time_ms": {
+                        "type": "integer"
+                    },
                     "rbac_decision": {
-                        "description": "\"allow\" or \"deny\"",
                         "type": "string"
                     },
                     "resource": {
@@ -4780,14 +4809,7 @@
                     "resource_type": {
                         "type": "string"
                     },
-                    "response_time_ms": {
-                        "type": "integer"
-                    },
                     "status": {
-                        "description": "\"success\", \"denied\", \"error\", \"blocked\"",
-                        "type": "string"
-                    },
-                    "timestamp": {
                         "type": "string"
                     },
                     "user_agent": {
@@ -4906,7 +4928,7 @@
                     "logs": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/db.AuditLog"
+                            "$ref": "#/components/schemas/db.AuditLogAggregated"
                         }
                     },
                     "page": {

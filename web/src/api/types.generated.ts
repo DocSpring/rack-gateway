@@ -4395,29 +4395,31 @@ export interface components {
             public_id?: string;
             user_id?: number;
         };
-        "db.AuditLog": {
-            /** @description e.g., "env.read", "user.create", "login.oauth_failed" */
+        "db.AuditLogAggregated": {
             action?: string;
-            /** @description "convox", "users", "auth" */
             action_type?: string;
             api_token_id?: number;
             api_token_name?: string;
+            avg_response_time_ms?: number;
             command?: string;
             deploy_approval_request_id?: number;
-            /** @description JSON string */
             details?: string;
             event_count?: number;
+            first_event_id?: number;
+            first_hash?: number[];
+            first_seen?: string;
             http_status?: number;
             id?: number;
             ip_address?: string;
-            /** @description "allow" or "deny" */
+            last_event_id?: number;
+            last_hash?: number[];
+            last_seen?: string;
+            max_response_time_ms?: number;
+            min_response_time_ms?: number;
             rbac_decision?: string;
             resource?: string;
             resource_type?: string;
-            response_time_ms?: number;
-            /** @description "success", "denied", "error", "blocked" */
             status?: string;
-            timestamp?: string;
             user_agent?: string;
             user_email?: string;
             user_name?: string;
@@ -4454,7 +4456,7 @@ export interface components {
         };
         "handlers.AuditLogsResponse": {
             limit: number;
-            logs: components["schemas"]["db.AuditLog"][];
+            logs: components["schemas"]["db.AuditLogAggregated"][];
             page: number;
             total: number;
         };

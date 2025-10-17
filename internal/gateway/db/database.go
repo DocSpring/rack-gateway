@@ -334,12 +334,16 @@ func (d *Database) ResetDatabase() error {
 		}
 	}
 
+	// Drop audit schema (includes audit_event and audit_event_aggregated tables)
+	if _, err := d.exec("DROP SCHEMA IF EXISTS audit CASCADE"); err != nil {
+		return fmt.Errorf("failed to drop audit schema: %w", err)
+	}
+
 	// Drop dependent tables first to satisfy foreign keys.
 	for _, table := range []string{
 		"user_resources",
 		"deploy_approval_requests",
 		"api_tokens",
-		"audit_logs",
 		"cli_login_states",
 		"mfa_backup_codes",
 		"mfa_methods",

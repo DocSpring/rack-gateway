@@ -105,10 +105,18 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
 - `WEB_E2E_SHARDS` (default: `7` locally, `1` on CI)
   - Controls how many isolated gateway/database pairs the web Playwright suite will launch. When greater than one, helper scripts derive `E2E_GATEWAY_PORTS` and `E2E_DATABASE_URLS` automatically so each worker receives a unique target.
 
+- `AUDIT_HMAC_SECRET` (required for production)
+  - Secret key used for HMAC-SHA256 cryptographic chain of audit logs.
+  - Must be a secure random value (at least 32 bytes). Generate with: `openssl rand -hex 32`
+  - WARNING: Changing this value will break the audit chain. Only rotate during planned maintenance with proper documentation.
+  - In development/test, a default value is used (logged as a warning). NEVER use the default in production.
+  - See [docs/S3_WORM_STORE.md](S3_WORM_STORE.md) for details on audit log anchoring and verification.
+
 - `LOG_RETENTION_DAYS` (required for production deploys)
 
   - Number of days to retain CloudWatch logs for the gateway service.
-  - Recommended value: `2557` (7 years).
+  - Recommended value: `400` (~13 months, covers annual audits + buffer).
+  - For specific compliance requirements (SOX, FINRA), use `2557` (7 years).
   - This must be set before deployment on Convox to configure log retention properly.
 
 - Protected Env Vars

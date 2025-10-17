@@ -118,19 +118,9 @@ func (d *Database) UpdateUserRoles(email string, roles []string) error {
 
 // DeleteUser removes a user from the database
 func (d *Database) deleteUserAuditLogs(email string) error {
-	var uid sql.NullInt64
-	if err := d.queryRow("SELECT id FROM users WHERE email = ?", email).Scan(&uid); err != nil {
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		return fmt.Errorf("failed to load user id for audit cleanup: %w", err)
-	}
-	if !uid.Valid {
-		return nil
-	}
-	if _, err := d.exec("DELETE FROM audit_logs WHERE user_email = ?", email); err != nil {
-		return fmt.Errorf("failed to delete audit logs for user: %w", err)
-	}
+	// Audit logs are immutable and should never be deleted
+	// The audit.audit_event table has triggers that block DELETE operations
+	// We preserve audit trail even after user deletion for compliance
 	return nil
 }
 

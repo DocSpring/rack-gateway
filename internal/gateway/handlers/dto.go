@@ -276,8 +276,17 @@ type RoleDescriptor struct {
 	Permissions []string `json:"permissions" validate:"required"`
 }
 
-// AuditLogsResponse wraps paginated audit logs.
+// AuditLogsResponse wraps paginated aggregated audit logs.
 type AuditLogsResponse struct {
+	Logs  []*db.AuditLogAggregated `json:"logs" validate:"required"`
+	Total int                      `json:"total" validate:"required"`
+	Page  int                      `json:"page" validate:"required"`
+	Limit int                      `json:"limit" validate:"required"`
+}
+
+// RawAuditLogsResponse wraps paginated raw (non-aggregated) audit logs.
+// Used for specific filtered views like deploy approval request audit logs.
+type RawAuditLogsResponse struct {
 	Logs  []*db.AuditLog `json:"logs" validate:"required"`
 	Total int            `json:"total" validate:"required"`
 	Page  int            `json:"page" validate:"required"`

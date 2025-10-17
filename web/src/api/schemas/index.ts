@@ -9,6 +9,7 @@
 export * from './authLoginStartResponse';
 export * from './dbAPIToken';
 export * from './dbAuditLog';
+export * from './dbAuditLogAggregated';
 export * from './dbCircleCISettings';
 export * from './dbCreatorInfo';
 export * from './dbRackTLSCert';

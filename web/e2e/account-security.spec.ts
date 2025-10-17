@@ -94,30 +94,6 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
 }
 
 test.describe('Account security', () => {
-  test.beforeEach(({ page }) => {
-    page.on('console', (message) => {
-      // eslint-disable-next-line no-console
-      console.log('[browser]', message.type(), message.text())
-    })
-  })
-  test.beforeEach(({ page }) => {
-    page.on('console', (message) => {
-      // eslint-disable-next-line no-console
-      console.log('[browser console]', message.type(), message.text())
-    })
-    page.on('request', (request) => {
-      if (request.url().includes('/auth/mfa/methods/')) {
-        // eslint-disable-next-line no-console
-        console.log('[request]', request.method(), request.url())
-      }
-    })
-    page.on('response', (response) => {
-      if (response.url().includes('/auth/mfa/methods/')) {
-        // eslint-disable-next-line no-console
-        console.log('[response]', response.request().method(), response.status(), response.url())
-      }
-    })
-  })
   test.describe.configure({ mode: 'serial' })
 
   test.beforeEach(async () => {
@@ -258,7 +234,7 @@ test.describe('Account security', () => {
     }
 
     await expect(editDialog).toBeVisible()
-    await expect(editDialog.getByLabel('Label')).toHaveValue('Security Key')
+    await expect(editDialog.getByLabel('Label')).toHaveValue('Authenticator App')
 
     // Change the label
     await editDialog.getByLabel('Label').fill('My Personal Authenticator')
@@ -596,12 +572,6 @@ test.describe('Account security', () => {
         response.status() === 401
     )
 
-    const verifyCallsAfterFirst = await page.evaluate(
-      () => (globalThis as { __verifyCalls?: number }).__verifyCalls ?? null
-    )
-    // eslint-disable-next-line no-console
-    console.log('verifyCallsAfterFirst', verifyCallsAfterFirst)
-
     // Wait a moment for any toasts or errors to appear
     await page.waitForTimeout(1000)
 
@@ -679,8 +649,6 @@ test.describe('Account security', () => {
     }
 
     const [invalidCode1, invalidCode2] = invalidCodes
-    // eslint-disable-next-line no-console
-    console.log('invalid codes picked', invalidCode1, invalidCode2)
 
     await typeOtpCode(page, stepUpDialog, invalidCode1)
 
@@ -705,37 +673,8 @@ test.describe('Account security', () => {
     const errorToasts2 = page.locator('[role="status"]', { hasText: /Invalid|MFA|code|failed/i })
     await expect(errorToasts2).toHaveCount(0)
 
-    const codeAfterSecond = await page.evaluate(
-      () => (globalThis as { __mfaCodeValue?: string }).__mfaCodeValue ?? null
-    )
-    // eslint-disable-next-line no-console
-    console.log('code after second invalid', codeAfterSecond)
-    const lastOnChange = await page.evaluate(
-      () => (globalThis as { __lastOnChange?: string }).__lastOnChange ?? null
-    )
-    // eslint-disable-next-line no-console
-    console.log('last onChange value', lastOnChange)
-    const lastVerifyAfterSecond = await page.evaluate(
-      () => (globalThis as { __lastVerifyCode?: string }).__lastVerifyCode ?? null
-    )
-    // eslint-disable-next-line no-console
-    console.log('last verify after second', lastVerifyAfterSecond)
-
     const validCode = authenticator.generate(secret)
-    // eslint-disable-next-line no-console
-    console.log('valid code', validCode)
     await typeOtpCode(page, stepUpDialog, validCode)
-
-    const codeAfterValid = await page.evaluate(
-      () => (globalThis as { __mfaCodeValue?: string }).__mfaCodeValue ?? null
-    )
-    // eslint-disable-next-line no-console
-    console.log('code after valid', codeAfterValid)
-    const lastVerifyAfterValid = await page.evaluate(
-      () => (globalThis as { __lastVerifyCode?: string }).__lastVerifyCode ?? null
-    )
-    // eslint-disable-next-line no-console
-    console.log('last verify after valid', lastVerifyAfterValid)
 
     await page.waitForResponse(
       (response) =>

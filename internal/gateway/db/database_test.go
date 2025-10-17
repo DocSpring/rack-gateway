@@ -115,7 +115,7 @@ func TestDatabase(t *testing.T) {
 
 		// Verify the first log was created by counting
 		var count int
-		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count)
+		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit.audit_event").Scan(&count)
 		require.NoError(t, err)
 		t.Logf("After log1: %d audit logs in database", count)
 
@@ -128,7 +128,7 @@ func TestDatabase(t *testing.T) {
 		require.NoError(t, err, "Failed to create log3: %v", err)
 
 		// Count total logs before query
-		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count)
+		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit.audit_event").Scan(&count)
 		require.NoError(t, err)
 		t.Logf("Total audit logs before GetAuditLogs: %d", count)
 
@@ -202,19 +202,26 @@ func TestDatabase(t *testing.T) {
 		}
 		require.NoError(t, db.CreateAuditLog(follow))
 
-		logs, err := db.GetAuditLogs(base.UserEmail, time.Time{}, 0)
+		// Aggregated view should combine events with same fields (different request_id)
+		aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+			UserEmail: base.UserEmail,
+			Limit:     50,
+		})
 		require.NoError(t, err)
-		require.Len(t, logs, 1)
-		assert.Equal(t, 2, logs[0].EventCount)
-		assert.Equal(t, follow.ResponseTimeMs, logs[0].ResponseTimeMs)
-		assert.Contains(t, logs[0].Details, "req-002")
+		require.Equal(t, 1, total, "should have 1 aggregated entry")
+		require.Len(t, aggs, 1)
+		assert.Equal(t, 2, aggs[0].EventCount, "event count should be 2")
+		assert.Equal(t, 95, aggs[0].MinResponseTimeMs)
+		assert.Equal(t, 128, aggs[0].MaxResponseTimeMs)
+		assert.Contains(t, aggs[0].Details, "/apps/app-123/processes/process-abc", "details should contain path")
 
+		// Create event with different resource (should NOT aggregate)
 		different := &gwdb.AuditLog{
 			UserEmail:      base.UserEmail,
 			UserName:       base.UserName,
 			ActionType:     base.ActionType,
 			Action:         base.Action,
-			Resource:       "app-123/process-def",
+			Resource:       "app-123/process-def", // Different resource
 			ResourceType:   base.ResourceType,
 			Details:        `{"path":"/apps/app-123/processes/process-def","request_id":"req-003"}`,
 			IPAddress:      base.IPAddress,
@@ -226,18 +233,27 @@ func TestDatabase(t *testing.T) {
 		}
 		require.NoError(t, db.CreateAuditLog(different))
 
-		all, err := db.GetAuditLogs(base.UserEmail, time.Time{}, 0)
+		// Should now have 2 aggregated entries
+		all, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+			UserEmail: base.UserEmail,
+			Limit:     50,
+		})
 		require.NoError(t, err)
+		require.Equal(t, 2, total)
 		require.Len(t, all, 2)
-		assert.Equal(t, 1, all[0].EventCount)
-		assert.Equal(t, 2, all[1].EventCount)
+		// Ordered by last_seen DESC, so newest first
+		assert.Equal(t, 1, all[0].EventCount, "different resource should have event count 1")
+		assert.Equal(t, 2, all[1].EventCount, "aggregated events should have event count 2")
 	})
 
-	t.Run("AuditAggregationTimeWindow", func(t *testing.T) {
+	t.Run("AuditAggregationNoTimeWindow", func(t *testing.T) {
 		dbtest.Reset(t, db)
 
-		// Create first audit log
+		base := time.Now().UTC()
+
+		// Create first audit log with old timestamp
 		first := &gwdb.AuditLog{
+			Timestamp:      base.Add(-15 * time.Second),
 			UserEmail:      "test@example.com",
 			ActionType:     "convox",
 			Action:         audit.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList),
@@ -248,12 +264,9 @@ func TestDatabase(t *testing.T) {
 		}
 		require.NoError(t, db.CreateAuditLog(first))
 
-		// Manually set timestamp to 11 seconds ago to simulate old entry
-		_, err = db.DB().Exec(`UPDATE audit_logs SET timestamp = NOW() - INTERVAL '11 seconds' WHERE user_email = $1`, first.UserEmail)
-		require.NoError(t, err)
-
-		// Create second audit log (should NOT aggregate due to time window)
+		// Create second audit log with current timestamp (same fields, different timestamp)
 		second := &gwdb.AuditLog{
+			Timestamp:      base,
 			UserEmail:      "test@example.com",
 			ActionType:     "convox",
 			Action:         audit.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList),
@@ -264,12 +277,22 @@ func TestDatabase(t *testing.T) {
 		}
 		require.NoError(t, db.CreateAuditLog(second))
 
-		// Should have 2 separate entries (not aggregated due to time window)
+		// Raw table should have 2 separate entries
 		logs, err := db.GetAuditLogs(first.UserEmail, time.Time{}, 0)
 		require.NoError(t, err)
-		require.Len(t, logs, 2, "logs should not aggregate when outside 10 second window")
+		require.Len(t, logs, 2, "raw audit_event table should have 2 entries")
 		assert.Equal(t, 1, logs[0].EventCount)
 		assert.Equal(t, 1, logs[1].EventCount)
+
+		// Aggregated table should combine them (no time window restriction)
+		aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+			UserEmail: first.UserEmail,
+			Limit:     50,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, total, "aggregated table should combine events regardless of timestamp")
+		require.Len(t, aggs, 1)
+		assert.Equal(t, 2, aggs[0].EventCount)
 	})
 }
 
@@ -278,8 +301,11 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
+	base := time.Now().UTC()
+
 	logs := []*gwdb.AuditLog{
 		{
+			Timestamp:      base.Add(-48 * time.Hour),
 			UserEmail:      "admin@example.com",
 			UserName:       "Admin User",
 			ActionType:     "convox",
@@ -290,6 +316,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 			ResponseTimeMs: 10,
 		},
 		{
+			Timestamp:      base.Add(-2 * time.Hour),
 			UserEmail:      "viewer@example.com",
 			UserName:       "Viewer User",
 			ActionType:     "tokens",
@@ -302,6 +329,7 @@ func TestGetAuditLogsPaged(t *testing.T) {
 			ResponseTimeMs: 20,
 		},
 		{
+			Timestamp:      base.Add(-1 * time.Hour),
 			UserEmail:      "viewer@example.com",
 			UserName:       "Viewer User",
 			ActionType:     "tokens",
@@ -317,20 +345,6 @@ func TestGetAuditLogsPaged(t *testing.T) {
 
 	for _, log := range logs {
 		require.NoError(t, db.CreateAuditLog(log))
-	}
-
-	base := time.Now().UTC()
-	updates := []struct {
-		action string
-		ts     time.Time
-	}{
-		{audit.BuildAction(rbac.ResourceStringApp, rbac.ActionStringList), base.Add(-48 * time.Hour)},
-		{audit.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringCreate), base.Add(-2 * time.Hour)},
-		{audit.BuildAction(rbac.ResourceStringAPIToken, rbac.ActionStringDelete), base.Add(-1 * time.Hour)},
-	}
-	for _, upd := range updates {
-		_, err := db.DB().Exec(`UPDATE audit_logs SET timestamp = $1 WHERE action = $2`, upd.ts, upd.action)
-		require.NoError(t, err)
 	}
 
 	filters := gwdb.AuditLogFilters{
@@ -394,7 +408,7 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	require.NoError(t, err, "expected postgres inet column to accept value after NULL initialization")
 
 	var stored string
-	require.NoError(t, db.DB().QueryRow(`SELECT host(ip_address) FROM audit_logs WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`).Scan(&stored))
+	require.NoError(t, db.DB().QueryRow(`SELECT host(ip_address) FROM audit.audit_event WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`).Scan(&stored))
 	assert.Equal(t, "203.0.113.10", stored)
 }
 
@@ -432,10 +446,10 @@ func TestAuditLogIndexes(t *testing.T) {
 	dbtest.Reset(t, db)
 
 	indexes := []string{
-		"idx_audit_logs_status",
-		"idx_audit_logs_resource_type",
-		"idx_audit_logs_user_timestamp",
-		"idx_audit_logs_status_action_resource_ts",
+		"audit.idx_audit_event_status",
+		"audit.idx_audit_event_resource_type",
+		"audit.idx_audit_event_user_timestamp",
+		"audit.idx_audit_event_status_action_resource_ts",
 	}
 
 	for _, idx := range indexes {
