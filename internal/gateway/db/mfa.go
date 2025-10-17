@@ -289,14 +289,29 @@ func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
 	if _, err := d.execTx(tx, "DELETE FROM mfa_backup_codes WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("failed to clear backup codes: %w", err)
 	}
+
+	// Filter empty hashes
+	validHashes := make([]string, 0, len(codeHashes))
 	for _, hash := range codeHashes {
-		if strings.TrimSpace(hash) == "" {
-			continue
-		}
-		if _, err := d.execTx(tx, "INSERT INTO mfa_backup_codes (user_id, code_hash) VALUES (?, ?)", userID, hash); err != nil {
-			return fmt.Errorf("failed to insert backup code: %w", err)
+		if strings.TrimSpace(hash) != "" {
+			validHashes = append(validHashes, hash)
 		}
 	}
+
+	// Bulk insert all backup codes in a single query
+	if len(validHashes) > 0 {
+		placeholders := make([]string, len(validHashes))
+		args := make([]interface{}, 0, len(validHashes)*2)
+		for i, hash := range validHashes {
+			placeholders[i] = "(?, ?)"
+			args = append(args, userID, hash)
+		}
+		query := "INSERT INTO mfa_backup_codes (user_id, code_hash) VALUES " + strings.Join(placeholders, ", ")
+		if _, err := d.execTx(tx, query, args...); err != nil {
+			return fmt.Errorf("failed to insert backup codes: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit backup code replacement: %w", err)
 	}

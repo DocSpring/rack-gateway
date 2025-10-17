@@ -16,7 +16,7 @@ import { useHttpClient } from '@/contexts/http-client-context'
 import { getMFAStatus } from '@/lib/api'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
-const DEBUG_STEP_UP = false
+const DEBUG_STEP_UP = true
 
 function debugLog(...args: unknown[]) {
   if (DEBUG_STEP_UP) {
@@ -76,8 +76,9 @@ export function isMFAError(error: unknown): boolean {
 }
 
 type InternalRequestConfig = InternalAxiosRequestConfig & {
-  __skipMfaInterceptor?: boolean
   __suppressGlobalError?: boolean
+  __abortedForMfa?: boolean
+  __skipMfaHandling?: boolean
 }
 
 export function StepUpProvider({ children }: { children: ReactNode }): React.ReactElement {
@@ -86,75 +87,33 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   const [isOpen, setIsOpen] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
 
-  const queueRef = useRef<StepUpRequest[]>([])
-  const activeRef = useRef<StepUpRequest | null>(null)
-  const stepUpExpiresAtRef = useRef<Date | null>(
-    user?.recent_step_up_expires_at ? new Date(user.recent_step_up_expires_at) : null
-  )
-  const statusFetchRef = useRef<Promise<Date | null> | null>(null)
-
-  useEffect(() => {
-    const newExpiry = user?.recent_step_up_expires_at
-      ? new Date(user.recent_step_up_expires_at)
-      : null
-    debugLog(
-      'useEffect[user.recent_step_up_expires_at] - updating ref from user object:',
-      newExpiry?.toISOString(),
-      'current ref:',
-      stepUpExpiresAtRef.current?.toISOString()
-    )
-
-    // Only update if:
-    // 1. Current ref is null/undefined AND new value exists (initial sync)
-    // 2. New value is NEWER than current ref (user object was refreshed with newer data)
-    // NEVER let undefined/null from user object overwrite a valid ref value
-    if (!stepUpExpiresAtRef.current && newExpiry) {
-      stepUpExpiresAtRef.current = newExpiry
-      debugLog(
-        'useEffect[user.recent_step_up_expires_at] - updated ref to:',
-        newExpiry?.toISOString()
-      )
-    } else if (newExpiry && stepUpExpiresAtRef.current && newExpiry > stepUpExpiresAtRef.current) {
-      stepUpExpiresAtRef.current = newExpiry
-      debugLog(
-        'useEffect[user.recent_step_up_expires_at] - updated ref to newer value:',
-        newExpiry?.toISOString()
-      )
-    } else {
-      debugLog('useEffect[user.recent_step_up_expires_at] - skipping update, keeping current ref')
-    }
-  }, [user?.recent_step_up_expires_at])
-
-  const processQueue = useCallback(() => {
-    if (activeRef.current || queueRef.current.length === 0) {
-      return
-    }
-    const next = queueRef.current.shift() ?? null
-    activeRef.current = next
-    if (next) {
-      setIsOpen(true)
-    }
-  }, [])
+  // Single active request
+  const activeRequestRef = useRef<StepUpRequest | null>(null)
 
   const closeStepUp = useCallback(() => {
     if (isVerifying) {
       return
     }
+    debugLog('closeStepUp')
     setIsOpen(false)
-    if (activeRef.current?.onReject) {
-      activeRef.current.onReject(new Error('MFA verification cancelled'))
+    if (activeRequestRef.current?.onReject) {
+      // Create error with suppressToast flag to prevent duplicate toasts
+      const error = new Error('MFA verification cancelled')
+      ;(error as Error & { suppressToast?: boolean }).suppressToast = true
+      activeRequestRef.current.onReject(error)
     }
-    activeRef.current = null
-    queueRef.current = []
+    activeRequestRef.current = null
   }, [isVerifying])
 
-  const openStepUp = useCallback(
-    (request?: StepUpRequest) => {
-      queueRef.current.push(request ?? {})
-      processQueue()
-    },
-    [processQueue]
-  )
+  const openStepUp = useCallback((request?: StepUpRequest) => {
+    debugLog('openStepUp')
+    // Blur any active element (like dropdown menus) to prevent focus conflicts
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    activeRequestRef.current = request ?? {}
+    setIsOpen(true)
+  }, [])
 
   const requireStepUp = useCallback(
     (action: NonNullable<StepUpAction>) => {
@@ -175,110 +134,67 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   const runAction = useCallback(async (action: StepUpAction) => {
+    debugLog('runAction invoked', !!action)
     if (!action) {
       return
     }
     return await Promise.resolve(action())
   }, [])
 
-  const refreshStepUpExpiry = useCallback(async (): Promise<Date | null> => {
-    debugLog('refreshStepUpExpiry called')
-    if (!statusFetchRef.current) {
-      statusFetchRef.current = getMFAStatus()
-        .then((status) => {
-          const expires = status.recent_step_up_expires_at
-            ? new Date(status.recent_step_up_expires_at)
-            : null
-          debugLog('refreshStepUpExpiry - fetched status, expires:', expires?.toISOString())
-          stepUpExpiresAtRef.current = expires
-          return expires
-        })
-        .finally(() => {
-          statusFetchRef.current = null
-        })
-    }
-    return await statusFetchRef.current
-  }, [])
-
-  const needsStepUpPrompt = useCallback(async (): Promise<boolean> => {
-    const bufferMs = 10_000
-    let expires = stepUpExpiresAtRef.current
-    debugLog(
-      'needsStepUpPrompt - current expires:',
-      expires?.toISOString(),
-      'now:',
-      new Date().toISOString()
-    )
-
-    if (!expires || expires.getTime() - Date.now() <= bufferMs) {
-      debugLog('needsStepUpPrompt - expires stale or missing, refreshing...')
-      expires = await refreshStepUpExpiry()
-    }
-
-    const needs = !expires || expires.getTime() - Date.now() <= bufferMs
-    debugLog('needsStepUpPrompt - result:', needs, 'expires:', expires?.toISOString())
-    return needs
-  }, [refreshStepUpExpiry])
-
-  const promptForMfaConfig = useCallback(
-    (originalConfig: InternalRequestConfig): Promise<InternalAxiosRequestConfig> =>
-      new Promise((resolve, reject) => {
-        openStepUp({
-          action: () => {
-            const headers = AxiosHeaders.from(originalConfig.headers ?? {})
-            const mfaHeaders = getMFAHeaders()
-            for (const [key, value] of Object.entries(mfaHeaders)) {
-              if (value) {
-                headers.set(key, value)
-              } else {
-                headers.delete(key)
-              }
-            }
-
-            const nextConfig: InternalRequestConfig = {
-              ...originalConfig,
-              headers,
-              __skipMfaInterceptor: true,
-            }
-
-            return nextConfig
-          },
-          onResolve: (value) => resolve(value as InternalAxiosRequestConfig),
-          onReject: reject,
-        })
-      }),
-    [openStepUp]
-  )
-
-  const handleVerificationSuccess = useCallback(async () => {
-    debugLog('handleVerificationSuccess called')
-    const request = activeRef.current
-
-    try {
-      const result = await runAction(request?.action ?? null)
-
-      // Only close dialog and clear state AFTER action succeeds
-      activeRef.current = null
-      setIsOpen(false)
-
-      request?.onResolve?.(result)
-      debugLog('handleVerificationSuccess - action succeeded, refreshing expiry...')
-      await refreshStepUpExpiry()
-      debugLog('handleVerificationSuccess - expiry refreshed')
-    } catch (error) {
-      debugLog('handleVerificationSuccess - action failed:', error)
-      // Don't close dialog or clear activeRef on error - allow user to retry
-      // Suppress flags are set in the response interceptor
-      request?.onReject?.(error)
-      throw error // Re-throw so the error handler can show appropriate message
-    } finally {
-      clearMFAHeaders()
-      // Only process queue if we successfully completed (activeRef was cleared)
-      if (!activeRef.current) {
-        processQueue()
+  // This is called by the form when user submits MFA code
+  const handleVerify = useCallback(
+    async (params: {
+      method: 'totp' | 'webauthn'
+      code?: string
+      trust_device: boolean
+      session_data?: string
+      assertion_response?: string
+    }) => {
+      const request = activeRequestRef.current
+      if (!request?.action) {
+        throw new Error('No active MFA request')
       }
-    }
-  }, [processQueue, refreshStepUpExpiry, runAction])
+
+      debugLog('handleVerify called', { method: params.method })
+
+      // Set MFA headers
+      clearMFAHeaders()
+      if (params.method === 'totp') {
+        currentMFAHeaders['X-MFA-TOTP'] = params.code ?? ''
+        debugLog('Set TOTP header', { code: params.code })
+      } else {
+        const webauthnData = JSON.stringify({
+          session_data: params.session_data,
+          assertion_response: params.assertion_response,
+        })
+        currentMFAHeaders['X-MFA-WebAuthn'] = btoa(webauthnData)
+        debugLog('Set WebAuthn header')
+      }
+
+      debugLog('MFA headers before action', getMFAHeaders())
+
+      try {
+        // Run the action - this will make a new request with MFA headers
+        const result = await runAction(request.action)
+
+        debugLog('handleVerify - action succeeded')
+
+        // Success: close dialog and resolve
+        activeRequestRef.current = null
+        setIsOpen(false)
+        request.onResolve?.(result)
+      } catch (error) {
+        debugLog('handleVerify - action failed', error)
+
+        // DON'T close dialog, DON'T clear activeRequestRef
+        // Just re-throw so the form shows the error inline
+        throw error
+      } finally {
+        clearMFAHeaders()
+      }
+    },
+    [runAction]
+  )
 
   const runWithMFAGuard = useCallback(
     async <T,>(fn: () => Promise<T>): Promise<T> => {
@@ -302,56 +218,84 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   useEffect(() => {
-    const resolveRequirement = (config: InternalAxiosRequestConfig) => {
+    const requestInterceptor = client.interceptors.request.use(async (config) => {
+      const internalConfig = config as InternalRequestConfig
+
+      debugLog('Request interceptor checking config', {
+        method: internalConfig.method,
+        url: internalConfig.url,
+        hasSkipFlag: internalConfig.__skipMfaHandling === true,
+      })
+
+      // Skip if this request is marked to skip MFA handling
+      if (internalConfig.__skipMfaHandling === true) {
+        debugLog('Request marked as skip - allowing through')
+        return internalConfig
+      }
+
       const baseUrl =
-        typeof config.baseURL === 'string'
-          ? config.baseURL
+        typeof internalConfig.baseURL === 'string'
+          ? internalConfig.baseURL
           : (client.defaults.baseURL as string | undefined)
-      return getMfaRequirementForRequest(config.method?.toUpperCase(), config.url, baseUrl)
-    }
+      const requirement = getMfaRequirementForRequest(
+        internalConfig.method?.toUpperCase(),
+        internalConfig.url,
+        baseUrl
+      )
 
-    const shouldPromptForStepUp = async (mfaLevel: string): Promise<boolean> => {
-      if (mfaLevel === 'always') {
-        return true
-      }
-      if (mfaLevel === 'step_up') {
-        return await needsStepUpPrompt()
-      }
-      return false
-    }
-
-    const applyMfaRequirement = async (
-      internal: InternalRequestConfig,
-      requirement: NonNullable<ReturnType<typeof getMfaRequirementForRequest>>
-    ): Promise<InternalAxiosRequestConfig> => {
-      if (!internal.headers) {
-        internal.headers = AxiosHeaders.from({})
-      }
-      if (internal.__skipMfaInterceptor) {
-        internal.__skipMfaInterceptor = undefined
-        return internal
+      if (!requirement) {
+        return internalConfig
       }
 
       debugLog('applyMfaRequirement', {
-        method: internal.method,
-        url: internal.url,
+        method: internalConfig.method,
+        url: internalConfig.url,
         mfaLevel: requirement.mfaLevel,
       })
 
-      const needsPrompt = await shouldPromptForStepUp(requirement.mfaLevel)
-      if (needsPrompt) {
-        return promptForMfaConfig(internal)
+      // For 'always': always abort and prompt
+      if (requirement.mfaLevel === 'always') {
+        debugLog('mfaLevel=always - aborting request to prompt for MFA')
+        const controller = new AbortController()
+        controller.abort()
+        return {
+          ...internalConfig,
+          signal: controller.signal,
+          __abortedForMfa: true,
+        }
       }
 
-      return internal
-    }
+      // For 'step_up': check status RIGHT NOW
+      if (requirement.mfaLevel === 'step_up') {
+        debugLog('mfaLevel=step_up - fetching status to check if prompt needed')
+        const status = await getMFAStatus()
+        const expiresAt = status.recent_step_up_expires_at
+          ? new Date(status.recent_step_up_expires_at)
+          : null
 
-    const requestInterceptor = client.interceptors.request.use((config) => {
-      const requirement = resolveRequirement(config)
-      if (!requirement) {
-        return config
+        const bufferMs = 10_000
+        const needsPrompt = !expiresAt || expiresAt.getTime() - Date.now() <= bufferMs
+
+        debugLog('step_up check', {
+          expiresAt: expiresAt?.toISOString(),
+          needsPrompt,
+        })
+
+        if (needsPrompt) {
+          debugLog('step_up expired - aborting request to prompt for MFA')
+          const controller = new AbortController()
+          controller.abort()
+          return {
+            ...internalConfig,
+            signal: controller.signal,
+            __abortedForMfa: true,
+          }
+        }
+
+        debugLog('step_up valid - proceeding with request')
       }
-      return applyMfaRequirement(config as InternalRequestConfig, requirement)
+
+      return internalConfig
     })
 
     const responseInterceptor = client.interceptors.response.use(
@@ -361,48 +305,121 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
           suppressToast?: boolean
         }
         const axiosError = error as AxiosStepUpError
-        if (!isMFAError(axiosError)) {
-          return Promise.reject(axiosError)
-        }
 
-        // Suppress toasts for ALL MFA errors since we handle them in the step-up dialog
-        if (axiosError.config) {
-          ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
-        }
-        axiosError.suppressToast = true
+        // Handle our intentional MFA abort
+        if (
+          axiosError.code === 'ERR_CANCELED' &&
+          (axiosError.config as InternalRequestConfig)?.__abortedForMfa
+        ) {
+          debugLog('Handling aborted request - opening step-up dialog')
 
-        const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
+          return new Promise((resolve, reject) => {
+            openStepUp({
+              action: async () => {
+                const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
+                const mfaHeaders = getMFAHeaders()
+                debugLog('Action getting MFA headers', mfaHeaders)
+                const headers = AxiosHeaders.from(originalConfig.headers ?? {})
 
-        if (originalConfig.__skipMfaInterceptor) {
-          return Promise.reject(axiosError)
-        }
-
-        return new Promise((resolve, reject) => {
-          openStepUp({
-            action: async () => {
-              const headers = AxiosHeaders.from(originalConfig.headers ?? {})
-              const mfaHeaders = getMFAHeaders()
-              for (const [key, value] of Object.entries(mfaHeaders)) {
-                if (value) {
-                  headers.set(key, value)
-                } else {
-                  headers.delete(key)
+                for (const [key, value] of Object.entries(mfaHeaders)) {
+                  if (value) {
+                    headers.set(key, value)
+                  } else {
+                    headers.delete(key)
+                  }
                 }
-              }
 
-              const retryConfig: InternalRequestConfig = {
-                ...originalConfig,
-                headers,
-                __skipMfaInterceptor: true,
-              }
+                const retryConfig: InternalRequestConfig = {
+                  ...originalConfig,
+                  headers,
+                  signal: undefined, // Remove abort signal
+                  __abortedForMfa: undefined,
+                  __skipMfaHandling: true,
+                }
 
-              const response = await client.request(retryConfig)
-              return response
-            },
-            onResolve: resolve,
-            onReject: reject,
+                debugLog('Making new request with MFA headers', {
+                  method: retryConfig.method,
+                  url: retryConfig.url,
+                  hasXMfaTotp: headers.has('X-MFA-TOTP'),
+                  xMfaTotpValue: headers.get('X-MFA-TOTP'),
+                  hasXMfaWebAuthn: headers.has('X-MFA-WebAuthn'),
+                  xMfaWebAuthnLength: headers.get('X-MFA-WebAuthn')?.length,
+                  skipMfaHandling: retryConfig.__skipMfaHandling,
+                })
+
+                // Make NEW request with MFA headers
+                const response = await client.request(retryConfig)
+
+                debugLog('New request succeeded', response.status)
+                return response
+              },
+              onResolve: resolve,
+              onReject: reject,
+            })
           })
-        })
+        }
+
+        // Handle real 401 MFA errors (fallback for cases we didn't catch)
+        if (isMFAError(axiosError)) {
+          const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
+
+          // If this config is marked to skip, don't handle it - let error bubble
+          if (originalConfig.__skipMfaHandling === true) {
+            debugLog('401 on skip-marked request - rejecting (expected for invalid code)')
+            // Suppress toasts since we're handling the error in the form
+            if (axiosError.config) {
+              ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
+            }
+            axiosError.suppressToast = true
+            return Promise.reject(axiosError)
+          }
+
+          debugLog('Handling 401 MFA error (fallback)')
+
+          // Suppress toasts for ALL MFA errors since we handle them in the step-up dialog
+          if (axiosError.config) {
+            ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
+          }
+          axiosError.suppressToast = true
+
+          return new Promise((resolve, reject) => {
+            openStepUp({
+              action: async () => {
+                const headers = AxiosHeaders.from(originalConfig.headers ?? {})
+                const mfaHeaders = getMFAHeaders()
+                debugLog('Action getting MFA headers (401 fallback)', mfaHeaders)
+                for (const [key, value] of Object.entries(mfaHeaders)) {
+                  if (value) {
+                    headers.set(key, value)
+                  } else {
+                    headers.delete(key)
+                  }
+                }
+
+                const retryConfig: InternalRequestConfig = {
+                  ...originalConfig,
+                  headers,
+                  __skipMfaHandling: true,
+                }
+
+                debugLog('Retrying request after 401 with MFA headers', {
+                  method: retryConfig.method,
+                  url: retryConfig.url,
+                  hasXMfaTotp: headers.has('X-MFA-TOTP'),
+                  xMfaTotpValue: headers.get('X-MFA-TOTP'),
+                  skipMfaHandling: retryConfig.__skipMfaHandling,
+                })
+                const response = await client.request(retryConfig)
+                debugLog('Retry succeeded', response.status)
+                return response
+              },
+              onResolve: resolve,
+              onReject: reject,
+            })
+          })
+        }
+
+        return Promise.reject(axiosError)
       }
     )
 
@@ -410,7 +427,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       client.interceptors.request.eject(requestInterceptor)
       client.interceptors.response.eject(responseInterceptor)
     }
-  }, [client, needsStepUpPrompt, openStepUp, promptForMfaConfig])
+  }, [client, openStepUp])
 
   const contextValue = useMemo<StepUpContextValue>(
     () => ({
@@ -433,20 +450,35 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
     ]
   )
 
+  useEffect(() => {
+    debugLog('isOpen changed', isOpen)
+  }, [isOpen])
+
   return (
     <StepUpContext.Provider value={contextValue}>
       {children}
       <Dialog
         onOpenChange={(open) => {
           if (open) {
+            debugLog('onOpenChange -> open true')
             setIsOpen(true)
           } else {
+            debugLog('onOpenChange -> open false')
             closeStepUp()
           }
         }}
         open={isOpen}
       >
-        <DialogContent>
+        <DialogContent
+          className="focus-visible:outline-none"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault()
+            // Blur dropdown to prevent aria-hidden warning
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur()
+            }
+          }}
+        >
           <DialogHeader className="text-center sm:text-center">
             <DialogTitle className="text-center">Multi-Factor Authentication Required</DialogTitle>
           </DialogHeader>
@@ -457,18 +489,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
             onVerify={async (params) => {
               setIsVerifying(true)
               try {
-                clearMFAHeaders()
-                if (params.method === 'totp') {
-                  currentMFAHeaders['X-MFA-TOTP'] = params.code
-                } else {
-                  const webauthnData = JSON.stringify({
-                    session_data: params.session_data,
-                    assertion_response: params.assertion_response,
-                  })
-                  currentMFAHeaders['X-MFA-WebAuthn'] = btoa(webauthnData)
-                }
-
-                await handleVerificationSuccess()
+                await handleVerify(params)
               } finally {
                 setIsVerifying(false)
               }

@@ -185,7 +185,7 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 
 	// Extract MFA code from headers (web flow)
 	// This is in addition to inline MFA in password (CLI flow)
-	if totpCode := strings.TrimSpace(r.Header.Get("X-MFA-TOTP")); totpCode != "" {
+	if totpCode := strings.TrimSpace(r.Header.Get("X-Mfa-Totp")); totpCode != "" {
 		user.MFAType = "totp"
 		user.MFAValue = totpCode
 	} else if webauthnData := strings.TrimSpace(r.Header.Get("X-MFA-WebAuthn")); webauthnData != "" {

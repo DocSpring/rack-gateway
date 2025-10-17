@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Button } from '@/components/ui/button'
@@ -147,6 +147,13 @@ export function MFAVerificationForm({
   const [error, setError] = useState<string | null>(null)
   const [useWebAuthn, setUseWebAuthn] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
+  const [inputVersion, setInputVersion] = useState(0)
+  const lastSubmittedCodeRef = useRef<string | null>(null)
+  const pendingCodeRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    ;(globalThis as { __mfaCodeValue?: string }).__mfaCodeValue = code
+  }, [code])
 
   // Fetch MFA status to determine available methods
   const { data: mfaStatus } = useQuery({
@@ -214,8 +221,13 @@ export function MFAVerificationForm({
 
       setError(null)
       setIsVerifying(true)
+      console.log('[MFAVerificationForm] verify', codeToVerify)
+      ;(globalThis as { __verifyCalls?: number }).__verifyCalls =
+        ((globalThis as { __verifyCalls?: number }).__verifyCalls ?? 0) + 1
 
       try {
+        ;(globalThis as { __lastVerifyCode?: string }).__lastVerifyCode = codeToVerify.trim()
+        lastSubmittedCodeRef.current = codeToVerify.trim()
         await onVerify({
           method: 'totp',
           code: codeToVerify.trim(),
@@ -227,6 +239,10 @@ export function MFAVerificationForm({
       } catch (err) {
         const message = getErrorMessage(err, 'Verification failed')
         setError(message)
+        setCode('')
+        pendingCodeRef.current = null
+        lastSubmittedCodeRef.current = null
+        setInputVersion((version) => version + 1)
         onError?.(err)
       } finally {
         setIsVerifying(false)
@@ -234,6 +250,41 @@ export function MFAVerificationForm({
     },
     [code, trustDevice, onVerify, onSuccess, onError]
   )
+
+  const trySubmitCode = useCallback(() => {
+    const pending = pendingCodeRef.current
+    console.log('[MFAVerificationForm] trySubmit check', {
+      pending,
+      isVerifying,
+      useWebAuthn,
+      lastSubmitted: lastSubmittedCodeRef.current,
+    })
+    if (useWebAuthn) {
+      return
+    }
+    if (isVerifying) {
+      return
+    }
+
+    if (!pending || pending.length !== 6 || !/^\d+$/.test(pending)) {
+      return
+    }
+    if (lastSubmittedCodeRef.current === pending) {
+      return
+    }
+
+    console.log('[MFAVerificationForm] auto-submit', pending)
+    pendingCodeRef.current = null
+    handleVerifyTotp(pending).catch(() => {
+      /* errors handled in handleVerifyTotp */
+    })
+  }, [handleVerifyTotp, isVerifying, useWebAuthn])
+
+  useEffect(() => {
+    if (!isVerifying) {
+      trySubmitCode()
+    }
+  }, [isVerifying, trySubmitCode])
 
   const handleVerifyWebAuthn = useCallback(async () => {
     setError(null)
@@ -387,16 +438,35 @@ export function MFAVerificationForm({
             <div className="flex flex-col items-center">
               <MFAInput
                 autoFocus={autoFocus}
+                disabled={isVerifying}
+                key={inputVersion}
                 maxLength={6}
                 onChange={(event) => {
+                  if (isVerifying) {
+                    return
+                  }
+                  const normalized = event.target.value.trim()
+                  ;(globalThis as { __lastOnChange?: string }).__lastOnChange = normalized
                   setError(null)
-                  setCode(event.target.value.trim())
+                  setCode(normalized)
+                  if (normalized.length === 6 && /^\d+$/.test(normalized)) {
+                    console.log('[MFAVerificationForm] pending code from onChange', normalized)
+                    pendingCodeRef.current = normalized
+                    trySubmitCode()
+                  } else {
+                    pendingCodeRef.current = null
+                  }
                 }}
                 onComplete={(completedCode) => {
+                  if (isVerifying) {
+                    return
+                  }
                   setCode(completedCode)
-                  handleVerifyTotp(completedCode).catch(() => {
-                    /* errors handled in handleVerifyTotp */
-                  })
+                  if (/^\d{6}$/.test(completedCode)) {
+                    console.log('[MFAVerificationForm] pending code from onComplete', completedCode)
+                    pendingCodeRef.current = completedCode
+                    trySubmitCode()
+                  }
                 }}
                 value={code}
               />

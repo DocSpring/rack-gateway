@@ -111,9 +111,17 @@ export async function typeOtpCode(
   code: string
 ) {
   const fieldset = context.locator('[aria-label="Verification code"]')
-  const firstInput = fieldset.locator('input').first()
-  await firstInput.clear()
+  const inputs = fieldset.locator('input')
+  console.log('[typeOtpCode] filling code', code)
+  const firstInput = inputs.first()
   await firstInput.click()
+  const inputCount = await inputs.count()
+  for (let index = 0; index < inputCount - 1; index += 1) {
+    await page.keyboard.press('ArrowRight')
+  }
+  for (let index = 0; index < inputCount; index += 1) {
+    await page.keyboard.press('Backspace')
+  }
   for (const digit of code) {
     await page.keyboard.type(digit)
   }

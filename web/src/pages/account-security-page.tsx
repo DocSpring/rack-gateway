@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { MoreVertical, Pencil, ShieldAlert, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { MFAInput } from '@/components/mfa-input'
 import { TimeAgo } from '@/components/time-ago'
@@ -70,7 +70,7 @@ const MFA_METHOD_TYPE_LABELS: Record<string, string> = {
   totp: 'TOTP',
   webauthn: 'WebAuthn',
 }
-export const DEFAULT_TOTP_LABEL = 'Security Key'
+export const DEFAULT_TOTP_LABEL = 'Authenticator App'
 export const DEFAULT_WEBAUTHN_LABEL = 'Security Key'
 
 const DEFAULT_LABELS: Record<MFAMethodType, string> = {
@@ -124,6 +124,7 @@ export function AccountSecurityPage() {
     type: MFAMethodType
   } | null>(null)
   const [editLabel, setEditLabel] = useState('')
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null)
 
   const closeEnrollmentModal = useCallback(() => {
     setEnrollmentModalOpen(false)
@@ -321,9 +322,15 @@ export function AccountSecurityPage() {
     onSuccess: () => {
       toast.success('MFA method removed')
       invalidateStatus()
+      // Invalidate step-up dialog's MFA status query
+      queryClient.invalidateQueries({ queryKey: ['mfa-status'] })
       refreshUser().catch(() => {
         /* noop */
       })
+    },
+    onSettled: () => {
+      // Close dropdown after delete completes
+      setOpenDropdownId(null)
     },
   })
 
@@ -707,7 +714,13 @@ export function AccountSecurityPage() {
                       </td>
                       <td className="py-2 text-right">
                         <div className="flex justify-end">
-                          <DropdownMenu>
+                          <DropdownMenu
+                            modal={false}
+                            onOpenChange={(open) => {
+                              setOpenDropdownId(open ? (method.id as number) : null)
+                            }}
+                            open={openDropdownId === method.id}
+                          >
                             <DropdownMenuTrigger asChild>
                               <Button
                                 aria-label={`Actions for ${method.label ?? getDefaultLabelForType(method.type)}`}
@@ -717,7 +730,17 @@ export function AccountSecurityPage() {
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent
+                              align="end"
+                              onCloseAutoFocus={(e) => {
+                                // Prevent dropdown from focusing trigger when closing
+                                e.preventDefault()
+                              }}
+                              onOpenAutoFocus={(e) => {
+                                // Prevent dropdown from auto-focusing
+                                e.preventDefault()
+                              }}
+                            >
                               <DropdownMenuItem
                                 onClick={() => {
                                   if (!method.id) {
@@ -736,13 +759,24 @@ export function AccountSecurityPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => {
+                                onSelect={(event) => {
                                   if (!method.id) {
                                     toast.error('Unable to determine method identifier')
                                     return
                                   }
-                                  runWithStepUp(async () => {
-                                    await deleteMethodMutation.mutateAsync(method.id as number)
+                                  event.preventDefault()
+                                  // Make dropdown unfocusable before opening dialog
+                                  const el = document.activeElement
+                                  if (el instanceof HTMLElement) {
+                                    el.setAttribute('inert', '')
+                                    el.tabIndex = -1
+                                    el.blur()
+                                  }
+                                  setOpenDropdownId(null)
+                                  requestAnimationFrame(() => {
+                                    runWithStepUp(async () => {
+                                      await deleteMethodMutation.mutateAsync(method.id as number)
+                                    })
                                   })
                                 }}
                                 variant="destructive"
@@ -836,7 +870,7 @@ export function AccountSecurityPage() {
             </div>
           )}
         </CardContent>
-        {user?.has_trusted_device ? null : (
+        {user?.has_trusted_device || !status?.enrolled ? null : (
           <CardFooter className="flex flex-wrap gap-2">
             <Button
               disabled={trustDeviceMutation.isPending}
@@ -871,10 +905,10 @@ export function AccountSecurityPage() {
           </DialogHeader>
 
           {enrollmentStep === 'method-selection' ? (
-            <div className="space-y-6">
+            <div className="mt-6 space-y-6">
               <div className="space-y-3">
                 <Label>Choose authentication method</Label>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-col gap-4">
                   {status?.webauthn_available && (
                     <button
                       aria-label="Passkey or security key"

@@ -94,6 +94,30 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
 }
 
 test.describe('Account security', () => {
+  test.beforeEach(async ({ page }) => {
+    page.on('console', (message) => {
+      // eslint-disable-next-line no-console
+      console.log('[browser]', message.type(), message.text())
+    })
+  })
+  test.beforeEach(async ({ page }) => {
+    page.on('console', (message) => {
+      // eslint-disable-next-line no-console
+      console.log('[browser console]', message.type(), message.text())
+    })
+    page.on('request', (request) => {
+      if (request.url().includes('/auth/mfa/methods/')) {
+        // eslint-disable-next-line no-console
+        console.log('[request]', request.method(), request.url())
+      }
+    })
+    page.on('response', (response) => {
+      if (response.url().includes('/auth/mfa/methods/')) {
+        // eslint-disable-next-line no-console
+        console.log('[response]', response.request().method(), response.status(), response.url())
+      }
+    })
+  })
   test.describe.configure({ mode: 'serial' })
 
   test.beforeEach(async () => {
@@ -572,6 +596,12 @@ test.describe('Account security', () => {
         response.status() === 401
     )
 
+    const verifyCallsAfterFirst = await page.evaluate(
+      () => (globalThis as { __verifyCalls?: number }).__verifyCalls ?? null
+    )
+    // eslint-disable-next-line no-console
+    console.log('verifyCallsAfterFirst', verifyCallsAfterFirst)
+
     // Wait a moment for any toasts or errors to appear
     await page.waitForTimeout(1000)
 
@@ -581,5 +611,142 @@ test.describe('Account security', () => {
 
     // Check that the dialog is still visible for retry
     await expect(stepUpDialog).toBeVisible()
+  })
+
+  test('multiple invalid MFA codes then valid code succeeds', async ({ page }) => {
+    await login(page)
+
+    await page.goto(WebRoute('account/security'))
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+
+    const secret = await getUserMfaSecret(ADMIN_EMAIL)
+    if (!secret) {
+      throw new Error('Expected TOTP secret after login with autoEnrollMfa')
+    }
+
+    await clearStepUpSessionsAndReload(page)
+
+    const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()
+    await expect(methodsCard).toBeVisible()
+
+    const dropdownButton = methodsCard.locator('tbody tr').first().getByRole('button')
+    await dropdownButton.click()
+    const removeMenuItem = page.getByText('Remove Method')
+    await removeMenuItem.click()
+
+    const stepUpDialog = page.getByRole('dialog', {
+      name: 'Multi-Factor Authentication Required',
+    })
+    await expect(stepUpDialog).toBeVisible()
+
+    const generateCodeForTime = (timeOffset: number) => {
+      const originalDate = Date.now
+      const originalTime = originalDate()
+      try {
+        Date.now = () => originalTime + timeOffset * 1000
+        return authenticator.generate(secret)
+      } finally {
+        Date.now = originalDate
+      }
+    }
+
+    const validCodes = new Set([
+      authenticator.generate(secret),
+      generateCodeForTime(-30),
+      generateCodeForTime(30),
+    ])
+
+    const invalidCodes: string[] = []
+    for (let candidate = 0; candidate < 1_000_000 && invalidCodes.length < 2; candidate += 1) {
+      const codeCandidate = candidate.toString().padStart(6, '0')
+      if (validCodes.has(codeCandidate)) {
+        continue
+      }
+      if (invalidCodes.length === 0) {
+        invalidCodes.push(codeCandidate)
+        continue
+      }
+
+      // Prefer a second invalid code that differs early to mimic a realistic retry scenario.
+      if (codeCandidate[0] !== invalidCodes[0][0] || codeCandidate[1] !== invalidCodes[0][1]) {
+        invalidCodes.push(codeCandidate)
+        break
+      }
+    }
+
+    if (invalidCodes.length < 2) {
+      throw new Error('Unable to find two distinct invalid MFA codes for testing')
+    }
+
+    const [invalidCode1, invalidCode2] = invalidCodes
+    // eslint-disable-next-line no-console
+    console.log('invalid codes picked', invalidCode1, invalidCode2)
+
+    await typeOtpCode(page, stepUpDialog, invalidCode1)
+
+    await page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/methods/') &&
+        response.request().method() === 'DELETE' &&
+        response.status() === 401
+    )
+
+    await page.waitForTimeout(1000)
+
+    await expect(stepUpDialog).toBeVisible()
+    const errorToasts1 = page.locator('[role="status"]', { hasText: /Invalid|MFA|code|failed/i })
+    await expect(errorToasts1).toHaveCount(0)
+
+    await typeOtpCode(page, stepUpDialog, invalidCode2)
+
+    await page.waitForTimeout(1000)
+
+    await expect(stepUpDialog).toBeVisible()
+    const errorToasts2 = page.locator('[role="status"]', { hasText: /Invalid|MFA|code|failed/i })
+    await expect(errorToasts2).toHaveCount(0)
+
+    const codeAfterSecond = await page.evaluate(
+      () => (globalThis as { __mfaCodeValue?: string }).__mfaCodeValue ?? null
+    )
+    // eslint-disable-next-line no-console
+    console.log('code after second invalid', codeAfterSecond)
+    const lastOnChange = await page.evaluate(
+      () => (globalThis as { __lastOnChange?: string }).__lastOnChange ?? null
+    )
+    // eslint-disable-next-line no-console
+    console.log('last onChange value', lastOnChange)
+    const lastVerifyAfterSecond = await page.evaluate(
+      () => (globalThis as { __lastVerifyCode?: string }).__lastVerifyCode ?? null
+    )
+    // eslint-disable-next-line no-console
+    console.log('last verify after second', lastVerifyAfterSecond)
+
+    const validCode = authenticator.generate(secret)
+    // eslint-disable-next-line no-console
+    console.log('valid code', validCode)
+    await typeOtpCode(page, stepUpDialog, validCode)
+
+    const codeAfterValid = await page.evaluate(
+      () => (globalThis as { __mfaCodeValue?: string }).__mfaCodeValue ?? null
+    )
+    // eslint-disable-next-line no-console
+    console.log('code after valid', codeAfterValid)
+    const lastVerifyAfterValid = await page.evaluate(
+      () => (globalThis as { __lastVerifyCode?: string }).__lastVerifyCode ?? null
+    )
+    // eslint-disable-next-line no-console
+    console.log('last verify after valid', lastVerifyAfterValid)
+
+    await page.waitForResponse(
+      (response) =>
+        response.url().includes('/auth/mfa/methods/') &&
+        response.request().method() === 'DELETE' &&
+        response.status() === 200
+    )
+
+    await expect(stepUpDialog).toBeHidden({ timeout: 5000 })
+
+    await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
+    await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
   })
 })

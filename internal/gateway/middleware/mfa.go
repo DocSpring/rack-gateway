@@ -171,7 +171,7 @@ func checkInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 	if verifyErr != nil {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 			"error":   "mfa_verification_failed",
-			"message": "Invalid MFA code",
+			"message": "Verification code is incorrect or has expired. Please try again.",
 		})
 		return false
 	}
@@ -228,7 +228,7 @@ func tryInlineStepUp(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "inline: verification failed user=%s err=%v", authUser.Email, verifyErr)
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 			"error":   "mfa_verification_failed",
-			"message": "Invalid MFA code",
+			"message": "Verification code is incorrect or has expired. Please try again.",
 		})
 		return false
 	}

@@ -109,7 +109,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = allowedOrigins
 	corsConfig.AllowCredentials = true
-	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization", "X-MFA-TOTP", "X-MFA-WebAuthn")
+	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization", "X-Mfa-Totp", "X-MFA-WebAuthn")
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers

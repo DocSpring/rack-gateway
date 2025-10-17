@@ -1,4 +1,4 @@
-import { type ComponentPropsWithoutRef, forwardRef, useRef } from 'react'
+import { type ComponentPropsWithoutRef, forwardRef, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 const DIGIT_REGEX = /^\d+$/
@@ -39,6 +39,17 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
   ) => {
     const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
+    // Manually focus first input when autoFocus is true
+    // Use setTimeout to let Dialog's onOpenAutoFocus blur the dropdown first
+    useEffect(() => {
+      if (autoFocus) {
+        const timeoutId = setTimeout(() => {
+          inputRefs.current[0]?.focus()
+        }, 0)
+        return () => clearTimeout(timeoutId)
+      }
+    }, [autoFocus])
+
     // Ensure value is padded to length
     const paddedValue = value.padEnd(length, '')
 
@@ -50,6 +61,8 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
       const newValue = paddedValue.split('')
       newValue[index] = digit
       const finalValue = newValue.join('').slice(0, length)
+
+      console.log('[OTPInput] change', index, inputValue, finalValue)
 
       onChange(finalValue)
 
