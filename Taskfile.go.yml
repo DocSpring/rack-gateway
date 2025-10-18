@@ -186,6 +186,12 @@ tasks:
     cmds:
       - golangci-lint config verify
 
+  duplication:
+    desc: Check for Go code duplication
+    dir: internal
+    cmds:
+      - jscpd .
+
   coverage:
     desc: Generate coverage report
     deps: [test]

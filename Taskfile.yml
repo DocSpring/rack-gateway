@@ -28,8 +28,7 @@ tasks:
 
   duplication:
     desc: Check for code duplication (zero tolerance for Go and TypeScript)
-    cmds:
-      - jscpd .
+    deps: [go:duplication, web:duplication]
 
   file-length:
     desc: Check file length limits (max 500 for code, 1000 for tests - Go and TypeScript)

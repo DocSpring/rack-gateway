@@ -61,7 +61,7 @@ pre-commit:
 
     web-knip:
       root: "web/"
-      # Run across the web project every commit
+      glob: "**/*.{ts,tsx,js,jsx,json}"
       run: pnpm knip
 
     mock-oauth-test:

@@ -1,23 +1,21 @@
 {
   "threshold": 0,
-  "reporters": ["console", "html"],
+  "reporters": ["console"],
   "ignore": [
-    "vendor/**",
-    "**/*_test.go",
-    "bin/**",
-    "web/node_modules/**",
-    "web/dist/**",
-    "web/src/api/generated.ts",
-    "web/src/lib/generated/**",
-    "internal/gateway/db/migrations/**",
-    "goober/**",
-    ".jscpd/**"
+    "**/node_modules/**",
+    "**/.pnpm/**",
+    "**/dist/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+    "**/coverage/**",
+    "**/generated/**",
+    "**/.jscpd/**"
   ],
-  "format": ["go"],
+  "format": ["typescript", "javascript"],
   "minLines": 10,
   "minTokens": 50,
   "output": ".jscpd",
   "exitCode": 1,
-  "absolute": true,
+  "absolute": false,
   "gitignore": true
 }

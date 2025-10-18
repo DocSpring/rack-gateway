@@ -113,6 +113,12 @@ tasks:
     cmds:
       - scripts/check_biome_ignores.sh
 
+  duplication:
+    desc: Check for web code duplication
+    dir: web
+    cmds:
+      - jscpd .
+
   format:
     dir: web
     desc: Format web code (Biome + Prettier equivalents)
