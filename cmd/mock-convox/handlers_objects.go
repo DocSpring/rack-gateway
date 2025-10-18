@@ -36,7 +36,11 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to save upload", http.StatusInternalServerError)
 		return
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			mclog.Errorf("failed to close object file: %v", err)
+		}
+	}()
 
 	written, err := io.Copy(f, r.Body)
 	if err != nil {

@@ -131,7 +131,14 @@ Object.assign(navigator, {
   },
 })
 
-async function createWrapper(user = { email: 'admin@example.com', roles: ['admin'] }) {
+async function createWrapper(
+  user = {
+    email: 'admin@example.com',
+    name: 'Admin User',
+    roles: ['admin'],
+    integrations: { slack: false, github: false, circleci: false },
+  }
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -195,9 +202,7 @@ describe('TokensPage', () => {
   })
 
   it('shows empty state', async () => {
-    vi.mocked(api.get)
-      .mockResolvedValueOnce(mockPermissionMetadata)
-      .mockResolvedValueOnce([])
+    vi.mocked(api.get).mockResolvedValueOnce(mockPermissionMetadata).mockResolvedValueOnce([])
 
     const Wrapper = await createWrapper()
     render(<TokensPage />, { wrapper: Wrapper })
