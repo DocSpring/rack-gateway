@@ -75,7 +75,7 @@ pre-commit:
 
     file-length:
       glob: "**/*"
-      run: task file-length
+      run: scripts/check_file_length.sh {staged_files}
 
     biome-ignores:
       root: "web/"
@@ -83,8 +83,8 @@ pre-commit:
       run: task web:check-ignores
 
     shellcheck:
-      glob: "scripts/**/*.sh"
-      run: task go:sec:shellcheck
+      glob: "{*.sh,**/*.sh}"
+      run: shellcheck {staged_files}
 
 pre-push:
   parallel: false

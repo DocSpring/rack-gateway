@@ -1,18 +1,15 @@
 #!/bin/bash
 # Check file length limits: 500 for code, 1000 for test files
-# Applies to ALL tracked files with exclusions listed below
+# Applies to ALL tracked text files with exclusions listed below
+#
+# Usage:
+#   scripts/check_file_length.sh [files...]
+#   If no files provided, checks all tracked files
 
 set -e
 
 # Exclusion patterns (paths or glob patterns to skip)
 EXCLUSIONS=(
-  "vendor/*"
-  "goober/*"
-  "node_modules/*"
-  "web/dist/*"
-  "web/node_modules/*"
-  "bin/*"
-  ".jscpd/*"
   "*.md"
   "*.json"
   "*.yml"
@@ -30,6 +27,30 @@ EXCLUSIONS=(
   "web/src/api/types.generated.ts"
   "web/src/lib/generated/*"
   "internal/gateway/openapi/generated/*"
+  # Binary file extensions
+  "*.jpg"
+  "*.jpeg"
+  "*.png"
+  "*.gif"
+  "*.ico"
+  "*.svg"
+  "*.woff"
+  "*.woff2"
+  "*.ttf"
+  "*.eot"
+  "*.pdf"
+  "*.zip"
+  "*.tar"
+  "*.gz"
+  "*.tgz"
+  "*.bz2"
+  "*.xz"
+  "*.exe"
+  "*.dll"
+  "*.so"
+  "*.dylib"
+  "*.bin"
+  "*.dat"
 )
 
 exitcode=0
@@ -40,18 +61,21 @@ should_exclude() {
   for pattern in "${EXCLUSIONS[@]}"; do
     # Remove leading ./ from file path for matching
     local clean_file="${file#./}"
-    if [[ "$clean_file" == $pattern ]]; then
+    # shellcheck disable=SC2053
+    if [[ "$clean_file" == $pattern ]]; then  # We want glob matching here
       return 0
     fi
   done
   return 1
 }
 
-# Get all tracked files from git
-while IFS= read -r file; do
+# Check a single file
+check_file() {
+  local file="$1"
+
   # Skip if file doesn't exist or is excluded
   if [[ ! -f "$file" ]] || should_exclude "$file"; then
-    continue
+    return 0
   fi
 
   lines=$(wc -l < "$file" 2>/dev/null || echo "0")
@@ -89,7 +113,19 @@ while IFS= read -r file; do
       exitcode=1
     fi
   fi
-done < <(git ls-files)
+}
+
+# If files provided as arguments, check only those
+if [ $# -gt 0 ]; then
+  for file in "$@"; do
+    check_file "$file"
+  done
+else
+  # Otherwise check all tracked files
+  while IFS= read -r file; do
+    check_file "$file"
+  done < <(git ls-files)
+fi
 
 if [ $exitcode -eq 0 ]; then
   echo "✅ All files within length limits"

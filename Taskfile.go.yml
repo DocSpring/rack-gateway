@@ -197,11 +197,6 @@ tasks:
     cmds:
       - govulncheck ./...
 
-  sec:shellcheck:
-    desc: Check shell scripts for issues
-    cmds:
-      - shellcheck scripts/*.sh
-
   sec:secrets:
     desc: Scan for secrets with TruffleHog
     cmds:

@@ -77,7 +77,7 @@ jobs:
         run: sudo apt-get install -y shellcheck
 
       - name: Shellcheck
-        run: task go:sec:shellcheck
+        run: task shellcheck
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
