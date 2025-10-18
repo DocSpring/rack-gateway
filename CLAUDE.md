@@ -189,47 +189,79 @@ The `fetch-github-actions-logs` script downloads logs for all failing jobs to `t
 
 `ast-grep` is a structural code search tool that understands Go syntax via AST (Abstract Syntax Tree) matching.
 
-### Refactoring Large Go Files - The Effective Method
+### Three-Step Refactoring Technique
 
-This is the **most effective way** to split a large Go file into multiple smaller files:
+The pattern is simple and repeatable:
 
-**Step 1: Create extraction script with exact signatures**
+1. **Extract functions with ast-grep scripts** - Use exact function signatures to reliably extract code
+2. **Fix imports automatically** - Run `goimports -w .` to add/remove imports
+3. **Verify compilation** - Run `go build` to catch any issues
+
+This approach is dramatically faster than manual refactoring and much more reliable.
+
+#### Real-World Example: Breaking Down admin.go
+
+**Step 1: Analyze the File Structure**
+
+First, identify logical groupings by listing all methods:
 
 ```bash
-cat > /tmp/extract_functions.sh << 'EOF'
+ast-grep --pattern 'func (h *AdminHandler) $NAME($$) $$' internal/gateway/handlers/admin.go \
+  --json=compact | jq -r '.[].text' | grep -E '^func \(h \*AdminHandler\)' | \
+  sed 's/func (h \*AdminHandler) //' | sed 's/(.*//' | sort
+```
+
+This reveals clear categories like User Management, API Tokens, Sessions, Settings, and Audit Logging.
+
+**Step 2: Run Extraction Scripts**
+
+Example for user management:
+
+```bash
 #!/bin/bash
-{
-echo 'package proxy
+set -e
+output="internal/gateway/handlers/admin_users.go"
+
+cat > "$output" << 'EOF'
+package handlers
 
 import (
-    // Add necessary imports here
+    "github.com/gin-gonic/gin"
 )
-'
 
-# Extract each function with its EXACT signature
-ast-grep run -l go -p 'func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
-echo
-ast-grep run -l go -p 'func diffParams(before, after map[string]string) []paramChange' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
-echo
-
-} > internal/gateway/proxy/new_file.go
 EOF
-chmod +x /tmp/extract_functions.sh && /tmp/extract_functions.sh
+
+for func in "ListUsers" "GetUser" "CreateUser" "notifyUserCreated" \
+            "DeleteUser" "UpdateUserProfile" "UpdateUserRoles" \
+            "LockUser" "UnlockUser"; do
+  ast-grep --pattern "func (h *AdminHandler) $func(\$\$\$) \$\$\$" \
+    internal/gateway/handlers/admin.go --json=compact | \
+    jq -r '.[0].text' >> "$output"
+  echo -e "\n" >> "$output"
+done
 ```
 
-**Step 2: Fix imports automatically**
+**Tips:**
+- Use exact names for reliability
+- Use `$$` wildcards for params and bodies
+- Keep imports minimal - let goimports handle them
+
+**Step 3: Extract the Core Struct**
+
+Extract the core struct and constructor into a lean core file, then let goimports fix the imports across all files.
+
+**Step 4: Verify Everything**
+
+Run all scripts, fix imports, and verify with:
 
 ```bash
-task go:imports  # Runs goimports -w . to fix all imports
+goimports -w .
+go build ./...
 ```
 
-**Step 3: Verify compilation**
+Any missing types or constants can then be added back manually.
 
-```bash
-task go:build
-```
-
-**Why This Works:**
+#### Why This Works
 
 - ✅ Extracts complete function bodies with all comments and formatting
 - ✅ Works for functions of any size (even 200+ line functions)
@@ -237,45 +269,7 @@ task go:build
 - ✅ goimports automatically fixes imports
 - ✅ Can extract multiple functions to one file in a single script
 - ✅ Uses jq to parse JSON output cleanly
-
-**Real Example from Refactoring:**
-
-```bash
-# Extracted 5 functions from 2300-line handler.go to rack_params.go
-{
-echo 'package proxy
-
-import (
-	"context"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"strings"
-	"time"
-
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
-)
-
-type paramChange struct {
-	Key    string
-	Before string
-	After  string
-}
-'
-
-ast-grep run -l go -p 'func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
-echo
-ast-grep run -l go -p 'func diffParams(before, after map[string]string) []paramChange' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
-echo
-ast-grep run -l go -p 'func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes []paramChange)' internal/gateway/proxy/handler.go --json=compact | jq -r '.[0].text'
-echo
-
-} > internal/gateway/proxy/rack_params.go
-
-# Then fix imports
-task go:imports
-```
+- ✅ Repeatable process for any large file
 
 ### Key Learnings
 
