@@ -97,7 +97,7 @@ func TestAuditLogsForEnvChanges_MultipleRows(t *testing.T) {
 	// Find at least two env-related entries (env.set and secrets.set)
 	count := 0
 	for _, l := range logs {
-		if l.Action == audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet) || l.Action == audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet) {
+		if l.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()) || l.Action == audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()) {
 			count++
 		}
 	}
@@ -175,7 +175,7 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	require.NoError(t, err)
 	found := false
 	for _, l := range logs {
-		if l.Action == audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet) && l.Status == "denied" && strings.Contains(l.Resource, "/DATABASE_URL") {
+		if l.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()) && l.Status == "denied" && strings.Contains(l.Resource, "/DATABASE_URL") {
 			found = true
 			break
 		}

@@ -374,7 +374,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 					APITokenID:     tokenIDPtr,
 					APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
 					ActionType:     "convox",
-					Action:         audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringCreate),
+					Action:         audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionCreate.String()),
 					ResourceType:   "release",
 					Resource:       rel,
 					Status:         "success",

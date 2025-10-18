@@ -11,48 +11,29 @@ import (
 // RBAC Permission Enums (for authorization: scope:resource:action)
 // ============================================================================
 
+//go:generate stringer -type=Scope -linecomment
+
 // Scope is an enum for permission scopes
 type Scope uint8
 
 const (
-	ScopeAuth Scope = iota
-	ScopeConvox
-	ScopeGateway
-	ScopeSecurity
+	ScopeAuth     Scope = iota // auth
+	ScopeConvox                // convox
+	ScopeGateway               // gateway
+	ScopeSecurity              // security
 )
-
-const (
-	ScopeStringAuth     = "auth"
-	ScopeStringConvox   = "convox"
-	ScopeStringGateway  = "gateway"
-	ScopeStringSecurity = "security"
-)
-
-var scopeToString = [...]string{
-	ScopeStringAuth,
-	ScopeStringConvox,
-	ScopeStringGateway,
-	ScopeStringSecurity,
-}
-
-func (s Scope) String() string {
-	if int(s) < len(scopeToString) {
-		return scopeToString[s]
-	}
-	return fmt.Sprintf("Scope(%d)", s)
-}
 
 func (s Scope) IsValid() bool { return s <= ScopeSecurity }
 
 func ParseScope(v string) (Scope, error) {
 	switch v {
-	case ScopeStringConvox:
+	case "convox":
 		return ScopeConvox, nil
-	case ScopeStringGateway:
+	case "gateway":
 		return ScopeGateway, nil
-	case ScopeStringAuth:
+	case "auth":
 		return ScopeAuth, nil
-	case ScopeStringSecurity:
+	case "security":
 		return ScopeSecurity, nil
 	default:
 		return 0, fmt.Errorf("invalid scope %q", v)
@@ -91,115 +72,49 @@ func (s *Scope) UnmarshalJSON(data []byte) error {
 	return s.UnmarshalText([]byte(v))
 }
 
+//go:generate stringer -type=Resource -linecomment
+
 // Resource is an enum for resource types
 type Resource uint8
 
 const (
 	// Convox resources
-	ResourceApp Resource = iota
-	ResourceBuild
-	ResourceCert
-	ResourceDeploy
-	ResourceEnv
-	ResourceInstance
-	ResourceLog
-	ResourceObject
-	ResourceProcess
-	ResourceRack
-	ResourceRegistry
-	ResourceRelease
-	ResourceResource
+	ResourceApp      Resource = iota // app
+	ResourceBuild                    // build
+	ResourceCert                     // cert
+	ResourceDeploy                   // deploy
+	ResourceEnv                      // env
+	ResourceInstance                 // instance
+	ResourceLog                      // log
+	ResourceObject                   // object
+	ResourceProcess                  // process
+	ResourceRack                     // rack
+	ResourceRegistry                 // registry
+	ResourceRelease                  // release
+	ResourceResource                 // resource
 	// Gateway resources
-	ResourceAPIToken
-	ResourceDeployApprovalRequest
-	ResourceIntegration
-	ResourceSecret
-	ResourceSetting
-	ResourceUser
+	ResourceAPIToken              // api_token
+	ResourceDeployApprovalRequest // deploy_approval_request
+	ResourceIntegration           // integration
+	ResourceSecret                // secret
+	ResourceSetting               // setting
+	ResourceUser                  // user
 	// Auth/Security resources
-	ResourceAuth
-	ResourceMFABackupCodes
-	ResourceMFAMethod
-	ResourceMFAPreferences
-	ResourceMFAVerification
-	ResourceTrustedDevice
+	ResourceAuth            // auth
+	ResourceMFABackupCodes  // mfa_backup_codes
+	ResourceMFAMethod       // mfa_method
+	ResourceMFAPreferences  // mfa_preferences
+	ResourceMFAVerification // mfa_verification
+	ResourceTrustedDevice   // trusted_device
 )
-
-const (
-	// Convox resources
-	ResourceStringApp      = "app"
-	ResourceStringBuild    = "build"
-	ResourceStringCert     = "cert"
-	ResourceStringDeploy   = "deploy"
-	ResourceStringEnv      = "env"
-	ResourceStringInstance = "instance"
-	ResourceStringLog      = "log"
-	ResourceStringObject   = "object"
-	ResourceStringProcess  = "process"
-	ResourceStringRack     = "rack"
-	ResourceStringRegistry = "registry"
-	ResourceStringRelease  = "release"
-	ResourceStringResource = "resource"
-	// Gateway resources
-	ResourceStringAPIToken              = "api_token"
-	ResourceStringDeployApprovalRequest = "deploy_approval_request"
-	ResourceStringIntegration           = "integration"
-	ResourceStringSecret                = "secret"
-	ResourceStringSetting               = "setting"
-	ResourceStringUser                  = "user"
-	// Auth/Security resources
-	ResourceStringAuth            = "auth"
-	ResourceStringMFABackupCodes  = "mfa_backup_codes"
-	ResourceStringMFAMethod       = "mfa_method"
-	ResourceStringMFAPreferences  = "mfa_preferences"
-	ResourceStringMFAVerification = "mfa_verification"
-	ResourceStringTrustedDevice   = "trusted_device"
-)
-
-var resourceToString = [...]string{
-	// Convox resources
-	ResourceStringApp,
-	ResourceStringBuild,
-	ResourceStringCert,
-	ResourceStringDeploy,
-	ResourceStringEnv,
-	ResourceStringInstance,
-	ResourceStringLog,
-	ResourceStringObject,
-	ResourceStringProcess,
-	ResourceStringRack,
-	ResourceStringRegistry,
-	ResourceStringRelease,
-	ResourceStringResource,
-	// Gateway resources
-	ResourceStringAPIToken,
-	ResourceStringDeployApprovalRequest,
-	ResourceStringIntegration,
-	ResourceStringSecret,
-	ResourceStringSetting,
-	ResourceStringUser,
-	// Auth/Security resources
-	ResourceStringAuth,
-	ResourceStringMFABackupCodes,
-	ResourceStringMFAMethod,
-	ResourceStringMFAPreferences,
-	ResourceStringMFAVerification,
-	ResourceStringTrustedDevice,
-}
-
-func (r Resource) String() string {
-	if int(r) < len(resourceToString) {
-		return resourceToString[r]
-	}
-	return fmt.Sprintf("Resource(%d)", r)
-}
 
 func (r Resource) IsValid() bool { return r <= ResourceTrustedDevice }
 
 func ParseResource(v string) (Resource, error) {
-	for i, s := range resourceToString {
-		if s == v {
-			return Resource(i), nil
+	// Try each known value
+	for r := ResourceApp; r <= ResourceTrustedDevice; r++ {
+		if r.String() == v {
+			return r, nil
 		}
 	}
 	return 0, fmt.Errorf("invalid resource %q", v)
@@ -237,97 +152,43 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 	return r.UnmarshalText([]byte(v))
 }
 
+//go:generate stringer -type=Action -linecomment
+
 // Action is an enum for action types
 type Action uint8
 
 const (
-	ActionAdd Action = iota
-	ActionApprove
-	ActionCreate
-	ActionDelete
-	ActionDeployWithApproval
-	ActionExec
-	ActionGenerate
-	ActionImport
-	ActionKeyroll
-	ActionList
-	ActionManage
-	ActionPromote
-	ActionRead
-	ActionRemove
-	ActionRestart
-	ActionSet
-	ActionStart
-	ActionStop
-	ActionTerminate
-	ActionUnset
-	ActionUpdate
-	ActionUpdateName
+	ActionAdd                Action = iota // add
+	ActionApprove                          // approve
+	ActionCreate                           // create
+	ActionDelete                           // delete
+	ActionDeployWithApproval               // deploy_with_approval
+	ActionExec                             // exec
+	ActionGenerate                         // generate
+	ActionImport                           // import
+	ActionKeyroll                          // keyroll
+	ActionList                             // list
+	ActionManage                           // manage
+	ActionPromote                          // promote
+	ActionRead                             // read
+	ActionRemove                           // remove
+	ActionRestart                          // restart
+	ActionSet                              // set
+	ActionStart                            // start
+	ActionStop                             // stop
+	ActionTerminate                        // terminate
+	ActionUnset                            // unset
+	ActionUpdate                           // update
+	ActionUpdateName                       // update_name
 )
-
-const (
-	ActionStringAdd                = "add"
-	ActionStringApprove            = "approve"
-	ActionStringCreate             = "create"
-	ActionStringDelete             = "delete"
-	ActionStringDeployWithApproval = "deploy_with_approval"
-	ActionStringExec               = "exec"
-	ActionStringGenerate           = "generate"
-	ActionStringImport             = "import"
-	ActionStringKeyroll            = "keyroll"
-	ActionStringList               = "list"
-	ActionStringManage             = "manage"
-	ActionStringPromote            = "promote"
-	ActionStringRead               = "read"
-	ActionStringRemove             = "remove"
-	ActionStringRestart            = "restart"
-	ActionStringSet                = "set"
-	ActionStringStart              = "start"
-	ActionStringStop               = "stop"
-	ActionStringTerminate          = "terminate"
-	ActionStringUnset              = "unset"
-	ActionStringUpdate             = "update"
-	ActionStringUpdateName         = "update_name"
-)
-
-var actionToString = [...]string{
-	ActionStringAdd,
-	ActionStringApprove,
-	ActionStringCreate,
-	ActionStringDelete,
-	ActionStringDeployWithApproval,
-	ActionStringExec,
-	ActionStringGenerate,
-	ActionStringImport,
-	ActionStringKeyroll,
-	ActionStringList,
-	ActionStringManage,
-	ActionStringPromote,
-	ActionStringRead,
-	ActionStringRemove,
-	ActionStringRestart,
-	ActionStringSet,
-	ActionStringStart,
-	ActionStringStop,
-	ActionStringTerminate,
-	ActionStringUnset,
-	ActionStringUpdate,
-	ActionStringUpdateName,
-}
-
-func (a Action) String() string {
-	if int(a) < len(actionToString) {
-		return actionToString[a]
-	}
-	return fmt.Sprintf("Action(%d)", a)
-}
 
 func (a Action) IsValid() bool { return a <= ActionUpdateName }
 
 func ParseAction(v string) (Action, error) {
-	for i, s := range actionToString {
-		if s == v {
-			return Action(i), nil
+	// Try each known value
+	for a := ActionAdd; a <= ActionUpdateName; a++ {
+		if a.String() == v {
+			return a, nil
 		}
 	}
 	return 0, fmt.Errorf("invalid action %q", v)

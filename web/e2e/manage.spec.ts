@@ -189,7 +189,7 @@ test('users: add shows all fields and persists after refresh', async ({ page }) 
 
   // Refresh and ensure the row and fields persist, then validate columns
   await page.reload()
-  let row = page.locator('tr', { hasText: email })
+  const row = page.locator('tr', { hasText: email })
   await expect(row).toBeVisible()
   // Determine column indices after reload
   const headers = page.locator('table thead th')

@@ -22,8 +22,7 @@ func Reset(t *testing.T, database *db.Database) {
           audit.audit_event,
           audit.audit_event_aggregated,
           cli_login_states,
-          mfa_totp_attempts,
-          mfa_webauthn_attempts,
+          mfa_attempts,
           users
         RESTART IDENTITY CASCADE;
         ALTER SEQUENCE audit.audit_event_chain_index_seq RESTART WITH 0`)

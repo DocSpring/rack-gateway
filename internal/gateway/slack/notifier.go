@@ -125,9 +125,9 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 		if auditLog.Status != audit.StatusSuccess {
 			emoji = "🚨"
 		}
-	} else if strings.HasPrefix(auditLog.Action, rbac.ResourceStringDeployApprovalRequest+".") {
+	} else if strings.HasPrefix(auditLog.Action, rbac.ResourceDeployApprovalRequest.String()+".") {
 		emoji = "🚀"
-	} else if strings.HasPrefix(auditLog.Action, rbac.ResourceStringAPIToken+".") {
+	} else if strings.HasPrefix(auditLog.Action, rbac.ResourceAPIToken.String()+".") {
 		emoji = "🔑"
 	} else if strings.HasPrefix(auditLog.Action, "user.role.") {
 		emoji = "👤"

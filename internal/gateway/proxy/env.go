@@ -135,7 +135,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 					UserEmail:      email,
 					UserName:       userName,
 					ActionType:     "convox",
-					Action:         audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet),
+					Action:         audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()),
 					ResourceType:   "secret",
 					Resource:       fmt.Sprintf("%s/%s", app, key),
 					Details:        "{}",
@@ -159,7 +159,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
+				Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, k),
 				Details:        "{\"error\":\"protected key change denied\"}",
@@ -201,7 +201,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
+				Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, key),
 				Details:        "{}",
@@ -261,7 +261,7 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 				UserEmail:      email,
 				UserName:       userName,
 				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet),
+				Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
 				ResourceType:   "env",
 				Resource:       fmt.Sprintf("%s/%s", app, d.Key),
 				Details:        "{\"error\":\"protected key change denied\"}",
@@ -326,17 +326,17 @@ func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []envut
 			newVal = "[REDACTED]"
 		}
 		details := fmt.Sprintf("{\"old\":\"%s\",\"new\":\"%s\"}", escapeJSONString(oldVal), escapeJSONString(newVal))
-		action := audit.BuildAction(rbac.ResourceStringEnv, rbac.ActionStringSet)
+		action := audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String())
 		rtype := "env"
 		if d.Secret {
-			action = audit.BuildAction(rbac.ResourceStringSecret, rbac.ActionStringSet)
+			action = audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String())
 			rtype = "secret"
 		}
 		if strings.TrimSpace(d.NewVal) == "" {
 			if d.Secret {
-				action = audit.BuildAction(rbac.ResourceStringSecret, audit.ActionVerbUnset)
+				action = audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset)
 			} else {
-				action = audit.BuildAction(rbac.ResourceStringEnv, audit.ActionVerbUnset)
+				action = audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset)
 			}
 		}
 		_ = h.logAudit(r, &db.AuditLog{

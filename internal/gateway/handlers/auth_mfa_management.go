@@ -296,7 +296,7 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 			UserEmail:    userRecord.Email,
 			UserName:     userRecord.Name,
 			ActionType:   "auth",
-			Action:       audit.BuildAction(audit.ActionScopeMFAPreferences, rbac.ActionStringUpdate),
+			Action:       audit.BuildAction(audit.ActionScopeMFAPreferences, rbac.ActionUpdate.String()),
 			ResourceType: "mfa_method",
 			Resource:     fmt.Sprintf("%d", method.ID),
 			Details:      string(details),

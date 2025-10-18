@@ -170,7 +170,7 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
 			ActionType:   audit.ActionTypeAuth,
 			Action:       audit.ActionScopeLogout,
-			ResourceType: rbac.ResourceStringAuth,
+			ResourceType: rbac.ResourceAuth.String(),
 			Resource:     "web",
 			Status:       audit.StatusSuccess,
 		}); err != nil {

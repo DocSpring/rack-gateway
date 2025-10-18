@@ -3,27 +3,29 @@ package audit
 import "github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 
 // Action type constants (high-level categorization for audit logs)
-const (
-	ActionTypeAuth     = rbac.ScopeStringAuth
-	ActionTypeConvox   = rbac.ScopeStringConvox
-	ActionTypeGateway  = rbac.ScopeStringGateway
-	ActionTypeSecurity = rbac.ScopeStringSecurity
+// These use the String() method from stringer-generated code
+var (
+	ActionTypeAuth     = rbac.ScopeAuth.String()
+	ActionTypeConvox   = rbac.ScopeConvox.String()
+	ActionTypeGateway  = rbac.ScopeGateway.String()
+	ActionTypeSecurity = rbac.ScopeSecurity.String()
 )
 
 // Action scope constants (first part of action, e.g., "login" in "login.start")
-const (
-	ActionScopeAPIToken              = rbac.ResourceStringAPIToken
-	ActionScopeDeployApprovalRequest = rbac.ResourceStringDeployApprovalRequest
+// These use the String() method from stringer-generated code
+var (
+	ActionScopeAPIToken              = rbac.ResourceAPIToken.String()
+	ActionScopeDeployApprovalRequest = rbac.ResourceDeployApprovalRequest.String()
 	ActionScopeLogin                 = "login"
 	ActionScopeLogout                = "logout"
-	ActionScopeMFABackupCodes        = rbac.ResourceStringMFABackupCodes
-	ActionScopeMFAMethod             = rbac.ResourceStringMFAMethod
-	ActionScopeMFAPreferences        = rbac.ResourceStringMFAPreferences
-	ActionScopeMFAVerification       = rbac.ResourceStringMFAVerification
+	ActionScopeMFABackupCodes        = rbac.ResourceMFABackupCodes.String()
+	ActionScopeMFAMethod             = rbac.ResourceMFAMethod.String()
+	ActionScopeMFAPreferences        = rbac.ResourceMFAPreferences.String()
+	ActionScopeMFAVerification       = rbac.ResourceMFAVerification.String()
 	ActionScopeRateLimit             = "rate_limit"
-	ActionScopeRelease               = rbac.ResourceStringRelease
+	ActionScopeRelease               = rbac.ResourceRelease.String()
 	ActionScopeSuspiciousActivity    = "suspicious_activity"
-	ActionScopeTrustedDevice         = rbac.ResourceStringTrustedDevice
+	ActionScopeTrustedDevice         = rbac.ResourceTrustedDevice.String()
 )
 
 // Action verb constants (second part of action, e.g., "start" in "login.start")

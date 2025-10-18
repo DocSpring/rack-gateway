@@ -174,7 +174,7 @@ func isReadOnlyAction(permission string) bool {
 	}
 
 	action := permission[lastColon+1:]
-	return action == ActionStringList || action == ActionStringRead
+	return action == ActionList.String() || action == ActionRead.String()
 }
 
 // RequiresMFAStepUp returns true if any of the given permissions require MFA step-up (time window)

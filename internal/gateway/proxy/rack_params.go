@@ -125,7 +125,7 @@ func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes 
 		UserEmail:    actor,
 		UserName:     r.Header.Get("X-User-Name"),
 		ActionType:   "convox",
-		Action:       audit.BuildAction(rbac.ResourceStringRack, audit.ActionVerbParamsSet),
+		Action:       audit.BuildAction(rbac.ResourceRack.String(), audit.ActionVerbParamsSet),
 		ResourceType: "rack",
 		Resource:     h.rackName,
 		Details:      string(b),

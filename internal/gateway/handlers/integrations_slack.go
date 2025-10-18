@@ -23,7 +23,7 @@ var defaultChannelActions = map[string]interface{}{
 			audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbComplete),
 			audit.ActionScopeLogin + ".*_failed", // Matches oauth_failed, user_not_authorized, etc.
 			audit.ActionScopeMFAMethod + ".*",    // MFA enrollment events
-			audit.BuildAction(rbac.ResourceStringUser, audit.ActionVerbUpdateRoles),
+			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUpdateRoles),
 			audit.ActionScopeAPIToken + ".*", // Matches all API token actions
 		},
 	},
@@ -31,8 +31,8 @@ var defaultChannelActions = map[string]interface{}{
 		"id":   nil,
 		"name": "#infrastructure",
 		"actions": []string{
-			rbac.ResourceStringDeployApprovalRequest + ".*", // Matches all deploy approval actions
-			audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote),
+			rbac.ResourceDeployApprovalRequest.String() + ".*", // Matches all deploy approval actions
+			audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionPromote.String()),
 		},
 	},
 }

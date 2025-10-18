@@ -107,7 +107,7 @@ func TestMatchActionToChannels(t *testing.T) {
 		"infrastructure": map[string]interface{}{
 			"id":      "C222",
 			"name":    "#infrastructure",
-			"actions": []interface{}{"deploy-approval-request.*", audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote), "*.created"},
+			"actions": []interface{}{"deploy-approval-request.*", audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionPromote.String()), "*.created"},
 		},
 		"no-id": map[string]interface{}{
 			"id":      nil,
@@ -124,7 +124,7 @@ func TestMatchActionToChannels(t *testing.T) {
 		{"auth.login", []string{"C111"}},
 		{"api-token.created", []string{"C111", "C222"}}, // Matches both security and infrastructure (*.created)
 		{"deploy-approval-request.created", []string{"C222"}},
-		{audit.BuildAction(rbac.ResourceStringRelease, rbac.ActionStringPromote), []string{"C222"}},
+		{audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionPromote.String()), []string{"C222"}},
 		{"unknown.action", []string{}},
 	}
 
@@ -179,7 +179,7 @@ func TestFormatAuditLogMessage(t *testing.T) {
 		{
 			name: "Deploy approval request",
 			auditLog: &db.AuditLog{
-				Action:    audit.BuildAction(rbac.ResourceStringDeployApprovalRequest, "created"),
+				Action:    audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), "created"),
 				UserEmail: "deployer@example.com",
 				UserName:  "CI Bot",
 				Status:    audit.StatusSuccess,
@@ -187,13 +187,13 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				Details:   "Release R123 for app my-app",
 			},
 			expectEmoji:   "🚀",
-			expectInText:  []string{audit.BuildAction(rbac.ResourceStringDeployApprovalRequest, "created")},
+			expectInText:  []string{audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), "created")},
 			expectInBlock: []string{"CI Bot", "deployer@example.com", audit.StatusSuccess, "Release R123"},
 		},
 		{
 			name: "API token created",
 			auditLog: &db.AuditLog{
-				Action:       audit.BuildAction(rbac.ResourceStringAPIToken, "created"),
+				Action:       audit.BuildAction(rbac.ResourceAPIToken.String(), "created"),
 				UserEmail:    "admin@example.com",
 				UserName:     "Admin",
 				APITokenName: "ci-token",
@@ -201,7 +201,7 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				Timestamp:    time.Now(),
 			},
 			expectEmoji:   "🔑",
-			expectInText:  []string{audit.BuildAction(rbac.ResourceStringAPIToken, "created"), "API Token: ci-token"},
+			expectInText:  []string{audit.BuildAction(rbac.ResourceAPIToken.String(), "created"), "API Token: ci-token"},
 			expectInBlock: []string{audit.StatusSuccess},
 		},
 	}
