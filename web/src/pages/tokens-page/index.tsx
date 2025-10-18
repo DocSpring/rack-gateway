@@ -17,13 +17,7 @@ import {
 } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table'
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { TooltipProvider } from '../../components/ui/tooltip'
 import { useAuth } from '../../contexts/auth-context'
 import { useStepUp } from '../../contexts/step-up-context'
@@ -33,15 +27,11 @@ import type { APITokenResponse } from '../../lib/generated/gateway-types'
 import { toFieldErrorMap, tokenFormSchema } from '../../lib/validation'
 import { CreateTokenDialog } from './create-token-dialog'
 import { TokenPermissionsEditor } from './permission-components'
-import {
-  findMatchingRole,
-  normalizePermissions,
-  permissionsEqual,
-} from './permission-utils'
+import { findMatchingRole, normalizePermissions, permissionsEqual } from './permission-utils'
 import { TokenRow } from './token-row'
 import type { APIToken, TOKEN_FORM_FIELDS, TokenPermissionMetadata } from './types'
 
-export type { APIToken }
+export type { APIToken } from './types'
 
 export function TokensPage() {
   return <TokensPageInner />
@@ -65,12 +55,14 @@ function TokensPageInner() {
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
   const [activeRole, setActiveRole] = useState<string | null>(null)
   const [createErrors, setCreateErrors] = useState<
-    Record<typeof TOKEN_FORM_FIELDS[number], string | undefined>
+    Record<(typeof TOKEN_FORM_FIELDS)[number], string | undefined>
   >({
     name: undefined,
     permissions: undefined,
   })
-  const [editErrors, setEditErrors] = useState<Record<typeof TOKEN_FORM_FIELDS[number], string | undefined>>({
+  const [editErrors, setEditErrors] = useState<
+    Record<(typeof TOKEN_FORM_FIELDS)[number], string | undefined>
+  >({
     name: undefined,
     permissions: undefined,
   })

@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/too
 import { buildPermissionGroups, normalizePermissions, permissionsEqual } from './permission-utils'
 import type { PermissionOption, TokenRoleInfo } from './types'
 
-export function RoleShortcutButtons({
+function RoleShortcutButtons({
   roleShortcuts,
   activeRole,
   selectedPermissions,
@@ -63,7 +63,7 @@ export function RoleShortcutButtons({
   )
 }
 
-export function PermissionCheckboxGrid({
+function PermissionCheckboxGrid({
   availablePermissions,
   selectedPermissionsSet,
   onPermissionToggle,

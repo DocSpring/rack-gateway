@@ -100,12 +100,21 @@ check_file() {
   else
     # Regular files max 500 lines (or 1000 for config/data files)
     max_lines=500
+    min_lines=10
 
     # Some file types get 1000 line limit even for non-tests
     if [[ "$file" == *Taskfile* ]] || \
        [[ "$file" == *CLAUDE.md ]] || \
        [[ "$file" == *README.md ]]; then
       max_lines=1000
+    fi
+
+    # Check minimum for TSX/JSX files (no lazy re-export files)
+    if [[ "$file" == *.tsx ]] || [[ "$file" == *.jsx ]]; then
+      if [ "$lines" -lt "$min_lines" ]; then
+        echo "❌ $file has only $lines lines (min $min_lines required for .tsx/.jsx files - no lazy re-exports)"
+        exitcode=1
+      fi
     fi
 
     if [ "$lines" -gt "$max_lines" ]; then

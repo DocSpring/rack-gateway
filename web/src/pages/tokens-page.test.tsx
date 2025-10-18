@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HttpClientProvider } from '@/contexts/http-client-context'
 import { StepUpProvider } from '@/contexts/step-up-context'
 import { api } from '@/lib/api'
-import type { APIToken } from './tokens-page'
-import { TokensPage } from './tokens-page'
+import type { APIToken } from './tokens-page/index'
+import { TokensPage } from './tokens-page/index'
 
 const CREATE_TOKEN_RE = /Create Token/i
 const COPY_TOKEN_NOW_RE = /Copy the token secret now/i

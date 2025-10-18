@@ -14,7 +14,7 @@ import { TooltipProvider } from '../../components/ui/tooltip'
 import { TokenPermissionsEditor } from './permission-components'
 import type { TokenRoleInfo } from './types'
 
-export type CreateTokenDialogProps = {
+type CreateTokenDialogProps = {
   activeRole: string | null
   availablePermissions: string[]
   canAssignPermission: (permission: string) => boolean
