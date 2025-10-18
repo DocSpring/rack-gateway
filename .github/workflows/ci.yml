@@ -54,12 +54,43 @@ jobs:
       - name: Go deps (lint warmup)
         run: task go:deps
 
+      - name: Verify golangci-lint config
+        run: task go:lint:config
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.5
         env:
           CGO_ENABLED: 1
+
+      - name: Install jscpd for duplication checking
+        run: npm install -g jscpd
+
+      - name: Check code duplication
+        run: task duplication
+
+      - name: Check file length limits
+        run: task file-length
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Shellcheck
+        run: task go:sec:shellcheck
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Check for vulnerabilities
+        run: task go:sec:vuln
+
+      - name: Install TruffleHog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan for secrets
+        run: task go:sec:secrets
 
       - name: Install Convox CLI
         run: |
@@ -104,6 +135,9 @@ jobs:
 
       - name: Web lint (Typecheck, Biome, and knip)
         run: task web:lint
+
+      - name: Check for biome-ignore comments (zero tolerance)
+        run: task web:check-ignores
 
       - name: Web tests
         run: task web:test

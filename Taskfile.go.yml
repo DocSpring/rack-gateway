@@ -181,6 +181,37 @@ tasks:
     cmds:
       - golangci-lint run --fix ./...
 
+  lint:config:
+    desc: Verify golangci-lint configuration
+    cmds:
+      - golangci-lint config verify
+
+  coverage:
+    desc: Generate coverage report
+    deps: [test]
+    cmds:
+      - scripts/coverage_report.sh coverage.out
+
+  sec:vuln:
+    desc: Check for known vulnerabilities
+    cmds:
+      - govulncheck ./...
+
+  sec:shellcheck:
+    desc: Check shell scripts for issues
+    cmds:
+      - shellcheck scripts/*.sh
+
+  sec:secrets:
+    desc: Scan for secrets with TruffleHog
+    cmds:
+      - trufflehog git file://. --config=.trufflehog.yml --fail
+
+  mod:tidy:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
+
   e2e:
     desc: Run CLI E2E flow on test stack
     deps: [":docker:test:up", ":docker:test:wait", ":db:migrate:test"]

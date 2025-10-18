@@ -1,0 +1,132 @@
+# golangci-lint configuration
+# v2.5.0-ready: explicit, stable linter set + v2 formatters
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+# Formatters live here in v2 (not in linters.enable)
+formatters:
+  enable:
+    - gofumpt
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/DocSpring/rack-gateway
+    gofumpt:
+      extra-rules: true
+      module-path: github.com/DocSpring/rack-gateway
+
+linters:
+  default: none
+  enable:
+    # Core analysis (default enabled linters)
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+
+    # Error handling
+    - nilerr
+    - forcetypeassert
+
+    # Code quality
+    - revive
+    - gocritic
+
+    # Bugs/correctness
+    - bodyclose
+    - contextcheck
+    - copyloopvar # v2 replacement for exportloopref
+    - noctx
+
+    # Performance
+    - prealloc
+
+    # Complexity
+    - funlen
+    - gocognit
+    - gocyclo
+
+    # Security / policy
+    - gosec
+    - forbidigo
+    - depguard
+
+    # Style
+    - lll
+
+  exclusions:
+    rules:
+      # Allow longer test functions and some duplication in tests
+      - path: _test\.go
+        linters:
+          - funlen
+          - dupl
+          - forbidigo
+          - gosec
+          - gocognit
+      # Allow fmt.Print* in CLI commands (legitimate stdout output)
+      - path: internal/cli/
+        linters:
+          - forbidigo
+      - path: cmd/rack-gateway/
+        linters:
+          - forbidigo
+      # Allow file operations in config and state packages
+      - path: internal/gateway/(config|db|migrations)/
+        text: "G304.*file inclusion"
+        linters:
+          - gosec
+      # Allow crypto/rand usage (not math/rand)
+      - path: internal/gateway/auth/
+        text: "G404.*weak random number generator"
+        linters:
+          - gosec
+
+  settings:
+    lll:
+      line-length: 120
+      tab-width: 1
+
+    funlen:
+      lines: 100
+      statements: 50
+
+    gocognit:
+      min-complexity: 15
+
+    gocyclo:
+      min-complexity: 15
+
+    forbidigo:
+      forbid:
+        - pattern: '^fmt\.Print.*'
+          msg: "use proper logging instead of fmt.Print"
+        - pattern: "^panic"
+          msg: "use error returns instead of panic"
+        - pattern: '^time\.Sleep'
+          msg: "use context with timeout instead of time.Sleep"
+      exclude-godoc-examples: true
+      analyze-types: true
+
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          files: [$all]
+          allow:
+            - $gostd
+            - github.com/DocSpring/rack-gateway
+          deny:
+            - pkg: io/ioutil$
+              desc: "use io or os instead"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

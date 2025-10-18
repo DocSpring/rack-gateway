@@ -2,6 +2,85 @@
 
 IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README.md](README.md) first for context on how Convox actually works and current project status.
 
+## 🚨 MISSION-CRITICAL AUTHENTICATION GATEWAY
+
+**This is production infrastructure that controls access to sensitive systems.**
+
+- **Purpose**: SOC 2 compliant authentication/authorization gateway for production infrastructure
+- **Stakes**: Million-dollar fines, regulatory compliance, protection of sensitive data
+- **Audit**: Will undergo professional security audit and penetration testing
+- **Standards**: Zero compromises on code quality, testing, or security
+
+## 🔒 NON-NEGOTIABLE QUALITY STANDARDS
+
+### 1. File Length Limits - STRICTLY ENFORCED
+
+- **Maximum 500 lines per Go code file** - no exceptions
+- **Maximum 1000 lines per Go test file** - no exceptions
+- **Maximum 500 lines per TypeScript/TSX code file** - no exceptions
+- **Maximum 1000 lines per TypeScript test file** - no exceptions
+- If a file approaches these limits, **refactor immediately** or split tests into multiple files
+- Break large files into smaller, focused modules
+- Enforced by `task file-length` in CI and pre-commit hooks
+
+### 2. Function Length Limits - STRICTLY ENFORCED
+
+- **Maximum 100 lines per function** (Go)
+- **Maximum 50 statements per function** (Go)
+- **Maximum cognitive complexity of 15** (Go)
+- Enforced by golangci-lint (`funlen`, `gocognit`, `gocyclo`)
+
+### 3. Code Duplication - ZERO TOLERANCE
+
+- **Zero code duplication allowed** in production code
+- Threshold: 10 lines or 50 tokens (enforced by jscpd)
+- Enforced in CI and pre-commit hooks
+- Extract common code immediately when duplication is detected
+- Test files may have some duplication (excluded from jscpd)
+
+### 4. Linting - ALL RULES ENABLED
+
+**Go (golangci-lint v2):**
+- **Comprehensive linter set** - 20+ linters enabled
+- **Line length: 120 characters maximum**
+- **NO `//nolint` comments allowed** - fix the code, don't suppress warnings
+- **NO disabling linting rules** - if code doesn't pass, refactor it
+- Forbidden patterns:
+  - `panic` - use error returns
+  - `fmt.Print*` (except in CLI output) - use proper logging
+  - `time.Sleep` - use context with timeout
+
+**Web (Biome):**
+- **NO `// biome-ignore` comments allowed** - zero tolerance
+- Fix the code, don't suppress the linter
+- Enforced by `task web:check-ignores` in CI and pre-commit hooks
+
+### 5. Git Hooks - ALWAYS ENFORCED
+
+**NEVER bypass git hooks:**
+- ❌ **NEVER use `git commit --no-verify`** - no exceptions
+- ❌ **NEVER use `git push --no-verify`** - no exceptions
+
+**Pre-commit hooks enforce:**
+- Code formatting (`task fmt`, `task web:lint:fix`)
+- Linting with auto-fix
+- Module tidying (`task go:mod:tidy`, `pnpm install`)
+- Code duplication check (`task duplication`)
+- File length check (`task file-length`)
+- Zero biome-ignore comments (`task web:check-ignores`)
+
+**Pre-push hooks enforce:**
+- Full CI suite (`task ci`)
+- All tests must pass
+- All builds must succeed
+
+### 6. Security Scanning
+
+**Required security checks:**
+- `govulncheck` - Check for known Go vulnerabilities
+- `shellcheck` - Validate all shell scripts
+- `npm audit` - Check for npm package vulnerabilities
+
 ## 🚨 PROJECT PHILOSOPHY - READ THIS FIRST
 
 **This is a greenfield project with ZERO active deployments.**

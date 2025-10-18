@@ -1,0 +1,23 @@
+{
+  "threshold": 0,
+  "reporters": ["console", "html"],
+  "ignore": [
+    "vendor/**",
+    "**/*_test.go",
+    "bin/**",
+    "web/node_modules/**",
+    "web/dist/**",
+    "web/src/api/generated.ts",
+    "web/src/lib/generated/**",
+    "internal/gateway/db/migrations/**",
+    "goober/**",
+    ".jscpd/**"
+  ],
+  "format": ["go"],
+  "minLines": 10,
+  "minTokens": 50,
+  "output": ".jscpd",
+  "exitCode": 1,
+  "absolute": true,
+  "gitignore": true
+}

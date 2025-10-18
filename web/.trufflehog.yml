@@ -1,0 +1,22 @@
+# TruffleHog secret scanning configuration
+# Runs in pre-push hook to prevent secrets from being pushed
+
+# Verify detectors to use
+detectors:
+  - name: all
+
+# Exclude test files and mock data
+exclude:
+  paths:
+    - "**/*_test.go"
+    - "**/testdata/**"
+    - "mock-oauth/**"
+    - "cmd/mock-convox/**"
+    - "web/e2e/**"
+    - "web/test-results/**"
+    - ".jscpd/**"
+    - "coverage.out"
+    - "**/*.md"
+
+# Only scan git history, not filesystem
+only-verified: false

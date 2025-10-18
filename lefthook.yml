@@ -67,3 +67,36 @@ pre-commit:
     mock-oauth-test:
       glob: "mock-oauth/**/*.{ts,tsx}"
       run: task mock-oauth:test
+
+    # Quality checks - zero tolerance
+    code-duplication:
+      glob: "**/*.{go,ts,tsx}"
+      run: task duplication
+
+    file-length:
+      glob: "**/*"
+      run: task file-length
+
+    biome-ignores:
+      root: "web/"
+      glob: "**/*.{ts,tsx}"
+      run: task web:check-ignores
+
+    shellcheck:
+      glob: "scripts/**/*.sh"
+      run: task go:sec:shellcheck
+
+pre-push:
+  parallel: false
+  commands:
+    # Run full CI suite
+    ci:
+      run: task ci
+
+    # Scan for secrets before pushing
+    secrets:
+      run: task go:sec:secrets
+
+    # Check for vulnerabilities
+    vuln:
+      run: task go:sec:vuln

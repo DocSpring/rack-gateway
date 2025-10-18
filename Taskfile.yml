@@ -15,8 +15,26 @@ includes:
 
 tasks:
   ci:
-    desc: "Runs everything that runs on CI: linters, codegen, tests, build"
-    deps: [lint:fix, generate:test, build]
+    desc: "Runs everything that runs on CI: linters, codegen, tests, build, quality checks"
+    cmds:
+      - task: go:lint:config
+      - task: lint:fix
+      - task: duplication
+      - task: file-length
+      - task: web:check-ignores
+      - task: generate:test
+      - task: build
+      - task: go:sec:shellcheck
+
+  duplication:
+    desc: Check for code duplication (zero tolerance for Go and TypeScript)
+    cmds:
+      - jscpd .
+
+  file-length:
+    desc: Check file length limits (max 500 for code, 1000 for tests - Go and TypeScript)
+    cmds:
+      - scripts/check_file_length.sh
 
   format:
     desc: Format Go, web, and mock OAuth code

@@ -108,6 +108,11 @@ tasks:
     deps: [deps]
     cmds: [pnpm knip]
 
+  check-ignores:
+    desc: Check for biome-ignore comments (zero tolerance)
+    cmds:
+      - scripts/check_biome_ignores.sh
+
   format:
     dir: web
     desc: Format web code (Biome + Prettier equivalents)
