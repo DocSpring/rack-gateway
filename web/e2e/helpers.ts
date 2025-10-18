@@ -43,6 +43,23 @@ const CARD_TEXT_TO_EMAIL: Record<string, string> = {
   'Ops User': 'ops@example.com',
 }
 
+/**
+ * Clicks the login button and waits for OAuth redirect.
+ * Use this for testing the login button itself.
+ * For full authentication flows, use login() instead.
+ */
+export async function clickLoginButton(page: Page) {
+  const btn = page
+    .getByTestId('login-cta')
+    .or(page.getByRole('button', { name: /Continue with/i }))
+    .or(page.getByRole('link', { name: /Continue with/i }))
+  await expect(btn).toBeVisible({ timeout: 5000 })
+
+  const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
+  await btn.click()
+  await navPromise
+}
+
 export async function login(page: Page, options: LoginOptions = {}) {
   const { userCardText = 'Admin User', autoEnrollMfa = true } = options
   const email = options.email ?? CARD_TEXT_TO_EMAIL[userCardText] ?? 'admin@example.com'
@@ -53,15 +70,7 @@ export async function login(page: Page, options: LoginOptions = {}) {
   await clearMfaAttempts()
 
   await page.goto(WebRoute('login'))
-  const btn = page
-    .getByTestId('login-cta')
-    .or(page.getByRole('button', { name: /Continue with/i }))
-    .or(page.getByRole('link', { name: /Continue with/i }))
-  await expect(btn).toBeVisible({ timeout: 5000 })
-
-  const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
-  await btn.click()
-  await navPromise
+  await clickLoginButton(page)
 
   const userCard = page.locator(`text=${userCardText}`)
   if (

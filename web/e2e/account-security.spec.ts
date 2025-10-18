@@ -1,10 +1,11 @@
 import type { Locator, Page } from '@playwright/test'
 import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
-import { getUserMfaSecret } from './db'
+import { clearMfaAttempts, getUserMfaSecret } from './db'
 import { expect, test } from './fixtures'
 import {
   clearStepUpSessions,
+  clickLoginButton,
   enforceMfaFor,
   login,
   resetMfaFor,
@@ -20,6 +21,28 @@ function cardByTitle(page: Page, title: string): Locator {
   return page.locator('[data-slot="card"]').filter({
     has: page.locator('[data-slot="card-title"]', { hasText: title }),
   })
+}
+
+/**
+ * Generates a set of valid TOTP codes (current, previous, and next time windows).
+ */
+function getValidTotpCodes(secret: string): Set<string> {
+  const generateCodeForTime = (timeOffset: number) => {
+    const originalDate = Date.now
+    const originalTime = originalDate()
+    try {
+      Date.now = () => originalTime + timeOffset * 1000
+      return authenticator.generate(secret)
+    } finally {
+      Date.now = originalDate
+    }
+  }
+
+  return new Set([
+    authenticator.generate(secret), // Current window
+    generateCodeForTime(-30), // Previous window
+    generateCodeForTime(30), // Next window
+  ])
 }
 
 async function clearStepUpSessionsAndReload(page: Page) {
@@ -41,15 +64,9 @@ async function clearStepUpSessionsAndReload(page: Page) {
 }
 
 async function performLoginWithMfa(page: Page, secret: string, trustDevice: boolean) {
+  await clearMfaAttempts()
   await page.goto(WebRoute('login'))
-  const btn = page
-    .getByTestId('login-cta')
-    .or(page.getByRole('button', { name: /Continue with/i }))
-    .or(page.getByRole('link', { name: /Continue with/i }))
-  await expect(btn).toBeVisible({ timeout: 5000 })
-  const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
-  await btn.click()
-  await navPromise
+  await clickLoginButton(page)
 
   const userCard = page.locator('text=Admin User').first()
   await expect(userCard).toBeVisible()
@@ -480,14 +497,7 @@ test.describe('Account security', () => {
     await page.waitForURL(/app\/login$/)
 
     // Login and verify WebAuthn method is shown (not TOTP input)
-    const btn = page
-      .getByTestId('login-cta')
-      .or(page.getByRole('button', { name: /Continue with/i }))
-      .or(page.getByRole('link', { name: /Continue with/i }))
-    await expect(btn).toBeVisible({ timeout: 5000 })
-    const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
-    await btn.click()
-    await navPromise
+    await clickLoginButton(page)
 
     const userCard = page.locator('text=Admin User').first()
     await expect(userCard).toBeVisible()
@@ -537,22 +547,7 @@ test.describe('Account security', () => {
 
     // Generate valid codes for current time window and adjacent windows to avoid false negatives
     // TOTP uses 30-second windows, so we check current, previous, and next window
-    const generateCodeForTime = (timeOffset: number) => {
-      const originalDate = Date.now
-      const originalTime = originalDate()
-      try {
-        Date.now = () => originalTime + timeOffset * 1000
-        return authenticator.generate(secret)
-      } finally {
-        Date.now = originalDate
-      }
-    }
-
-    const validCodes = new Set([
-      authenticator.generate(secret), // Current window
-      generateCodeForTime(-30), // Previous window
-      generateCodeForTime(30), // Next window
-    ])
+    const validCodes = getValidTotpCodes(secret)
 
     // Find an invalid code by incrementing from 0 until we find one that's not valid
     let invalidCodeNum = 0
@@ -609,22 +604,7 @@ test.describe('Account security', () => {
     })
     await expect(stepUpDialog).toBeVisible()
 
-    const generateCodeForTime = (timeOffset: number) => {
-      const originalDate = Date.now
-      const originalTime = originalDate()
-      try {
-        Date.now = () => originalTime + timeOffset * 1000
-        return authenticator.generate(secret)
-      } finally {
-        Date.now = originalDate
-      }
-    }
-
-    const validCodes = new Set([
-      authenticator.generate(secret),
-      generateCodeForTime(-30),
-      generateCodeForTime(30),
-    ])
+    const validCodes = getValidTotpCodes(secret)
 
     const invalidCodes: string[] = []
     for (let candidate = 0; candidate < 1_000_000 && invalidCodes.length < 2; candidate += 1) {

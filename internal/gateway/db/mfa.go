@@ -579,54 +579,53 @@ func (d *Database) ConsumeTOTPTimeStep(userID int64, timeStep int64, methodID *i
 	return rowsAffected > 0, nil
 }
 
+const (
+	MFAMethodTypeTOTP     = 1
+	MFAMethodTypeWebAuthn = 2
+)
+
 // LogTOTPAttempt records a TOTP verification attempt for rate limiting and audit
 func (d *Database) LogTOTPAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+	return d.logMFAAttempt(userID, methodID, MFAMethodTypeTOTP, success, failureReason, ipAddress, userAgent, sessionID)
+}
+
+// LogWebAuthnAttempt records a WebAuthn verification attempt for rate limiting and audit
+func (d *Database) LogWebAuthnAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+	return d.logMFAAttempt(userID, methodID, MFAMethodTypeWebAuthn, success, failureReason, ipAddress, userAgent, sessionID)
+}
+
+// logMFAAttempt is the consolidated implementation for logging MFA attempts
+func (d *Database) logMFAAttempt(userID int64, methodID *int64, methodType int, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
 	_, err := d.exec(`
-        INSERT INTO mfa_totp_attempts (user_id, method_id, success, failure_reason, ip_address, user_agent, session_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, userID, methodID, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+        INSERT INTO mfa_attempts (user_id, method_id, method_type, success, failure_reason, ip_address, user_agent, session_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, userID, methodID, methodType, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
 	if err != nil {
-		return fmt.Errorf("failed to log TOTP attempt: %w", err)
+		return fmt.Errorf("failed to log MFA attempt: %w", err)
 	}
 	return nil
 }
 
 // CountRecentTOTPAttempts counts TOTP attempts in the last N minutes
 func (d *Database) CountRecentTOTPAttempts(userID int64, minutes int) (int, error) {
-	var count int
-	query := `
-        SELECT COUNT(*) FROM mfa_totp_attempts
-        WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2
-    `
-	err := d.queryRow(query, userID, minutes).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count TOTP attempts: %w", err)
-	}
-	return count, nil
-}
-
-// LogWebAuthnAttempt records a WebAuthn verification attempt for rate limiting and audit
-func (d *Database) LogWebAuthnAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
-	_, err := d.exec(`
-        INSERT INTO mfa_webauthn_attempts (user_id, method_id, success, failure_reason, ip_address, user_agent, session_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, userID, methodID, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to log WebAuthn attempt: %w", err)
-	}
-	return nil
+	return d.countRecentMFAAttempts(userID, MFAMethodTypeTOTP, minutes)
 }
 
 // CountRecentWebAuthnAttempts counts WebAuthn attempts in the last N minutes
 func (d *Database) CountRecentWebAuthnAttempts(userID int64, minutes int) (int, error) {
+	return d.countRecentMFAAttempts(userID, MFAMethodTypeWebAuthn, minutes)
+}
+
+// countRecentMFAAttempts is the consolidated implementation for counting attempts
+func (d *Database) countRecentMFAAttempts(userID int64, methodType int, minutes int) (int, error) {
 	var count int
 	query := `
-        SELECT COUNT(*) FROM mfa_webauthn_attempts
-        WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2
+        SELECT COUNT(*) FROM mfa_attempts
+        WHERE user_id = $1 AND method_type = $2 AND attempted_at > NOW() - INTERVAL '1 minute' * $3
     `
-	err := d.queryRow(query, userID, minutes).Scan(&count)
+	err := d.queryRow(query, userID, methodType, minutes).Scan(&count)
 	if err != nil {
-		return 0, fmt.Errorf("failed to count WebAuthn attempts: %w", err)
+		return 0, fmt.Errorf("failed to count MFA attempts: %w", err)
 	}
 	return count, nil
 }
@@ -635,11 +634,10 @@ func (d *Database) CountRecentWebAuthnAttempts(userID int64, minutes int) (int, 
 func (d *Database) CountRecentFailedMFAAttempts(userID int64, minutes int) (int, error) {
 	var count int
 	query := `
-        SELECT
-            (SELECT COUNT(*) FROM mfa_totp_attempts WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2 AND success = FALSE) +
-            (SELECT COUNT(*) FROM mfa_webauthn_attempts WHERE user_id = $3 AND attempted_at > NOW() - INTERVAL '1 minute' * $4 AND success = FALSE)
+        SELECT COUNT(*) FROM mfa_attempts
+        WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2 AND success = FALSE
     `
-	err := d.queryRow(query, userID, minutes, userID, minutes).Scan(&count)
+	err := d.queryRow(query, userID, minutes).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count failed MFA attempts: %w", err)
 	}

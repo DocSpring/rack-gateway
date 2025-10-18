@@ -210,21 +210,7 @@ test.describe('Global Settings', () => {
     await page.waitForURL(/app\/login$/)
 
     // Login as viewer
-    await page.goto(WebRoute('login'))
-    const loginButton = page
-      .getByTestId('login-cta')
-      .or(page.getByRole('button', { name: /Continue with/i }))
-      .or(page.getByRole('link', { name: /Continue with/i }))
-    await expect(loginButton).toBeVisible({ timeout: 5000 })
-    const navPromise = page.waitForURL(/oauth2\/v2\/auth|dev\/select-user/i)
-    await loginButton.click()
-    await navPromise
-
-    // Select viewer user
-    const viewerCard = page.locator('text=Viewer User').first()
-    await expect(viewerCard).toBeVisible()
-    await viewerCard.click()
-    await page.waitForURL(/app/, { timeout: 15_000 })
+    await login(page, { userCardText: 'Viewer User', email: VIEWER_EMAIL })
 
     // Navigate to settings
     await navigateToSettings(page)

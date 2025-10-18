@@ -9,7 +9,8 @@
     "**/playwright-report/**",
     "**/coverage/**",
     "**/generated/**",
-    "**/.jscpd/**"
+    "**/.jscpd/**",
+    "**/src/api/**"
   ],
   "format": ["typescript", "javascript"],
   "minLines": 10,
