@@ -1,4 +1,7 @@
+import { useForm } from '@tanstack/react-form'
 import { Copy } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from '@/components/ui/use-toast'
 import { Button } from '../../components/ui/button'
 import {
   Dialog,
@@ -11,60 +14,139 @@ import {
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
 import { TooltipProvider } from '../../components/ui/tooltip'
+import { tokenFormSchema } from '../../lib/validation'
 import { TokenPermissionsEditor } from './permission-components'
-import type { TokenRoleInfo } from './types'
-
-type CreateTokenDialogProps = {
-  activeRole: string | null
-  availablePermissions: string[]
-  canAssignPermission: (permission: string) => boolean
-  errors: { name?: string; permissions?: string }
-  createdToken: string | null
-  createdTokenUuid: string | null
-  isCreating: boolean
-  isOpen: boolean
-  isPermissionLoading: boolean
-  onCancel: () => void
-  onCopyToken: () => void
-  onCopyUuid: () => void
-  onOpenChange: (open: boolean) => void
-  onPermissionToggle: (permission: string) => void
-  onRoleSelect: (role: TokenRoleInfo) => void
-  onSubmit: () => void | Promise<void>
-  onTokenNameChange: (value: string) => void
-  onClose: () => void
-  roleShortcuts: TokenRoleInfo[]
-  selectedPermissions: string[]
-  selectedPermissionsSet: Set<string>
-  tokenName: string
-}
+import { findMatchingRole, normalizePermissions } from './permission-utils'
+import type { TokenPermissionMetadata, TokenRoleInfo } from './types'
+import { useTokenMutations } from './use-token-mutations'
 
 export function CreateTokenDialog({
-  activeRole,
-  availablePermissions,
-  canAssignPermission,
-  errors,
-  createdToken,
-  createdTokenUuid,
-  isCreating,
   isOpen,
-  isPermissionLoading,
-  onCancel,
-  onCopyToken,
-  onCopyUuid,
-  onOpenChange,
-  onPermissionToggle,
-  onRoleSelect,
-  onSubmit,
-  onTokenNameChange,
   onClose,
+  availablePermissions,
   roleShortcuts,
-  selectedPermissions,
-  selectedPermissionsSet,
-  tokenName,
-}: CreateTokenDialogProps) {
+  canAssignPermission,
+  isPermissionLoading,
+  permissionMetadata,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  availablePermissions: string[]
+  roleShortcuts: TokenRoleInfo[]
+  canAssignPermission: (permission: string) => boolean
+  isPermissionLoading: boolean
+  permissionMetadata: TokenPermissionMetadata | undefined
+}) {
+  const { createToken, handleStepUpError } = useTokenMutations()
+  const [createdToken, setCreatedToken] = useState<string | null>(null)
+  const [createdTokenUuid, setCreatedTokenUuid] = useState<string | null>(null)
+
+  const form = useForm({
+    defaultValues: {
+      name: '',
+      permissions: [] as string[],
+    },
+    onSubmit: async ({ value }) => {
+      // Validate with Zod
+      const result = tokenFormSchema.safeParse(value)
+      if (!result.success) {
+        const errors = result.error.format()
+        const nameError = errors.name?._errors?.[0]
+        if (nameError) {
+          form.setFieldMeta('name', (meta) => ({
+            ...meta,
+            errors: [nameError],
+          }))
+        }
+        const permissionsError = errors.permissions?._errors?.[0]
+        if (permissionsError) {
+          form.setFieldMeta('permissions', (meta) => ({
+            ...meta,
+            errors: [permissionsError],
+          }))
+        }
+        return
+      }
+
+      try {
+        const response = await createToken.mutateAsync(result.data)
+        setCreatedToken(response.token || '')
+        setCreatedTokenUuid(response.api_token?.public_id || null)
+      } catch (err) {
+        handleStepUpError(err, () => createToken.mutateAsync(result.data))
+      }
+    },
+  })
+
+  // Set default permissions when dialog opens
+  useEffect(() => {
+    if (!(isOpen && permissionMetadata)) {
+      return
+    }
+    const currentPermissions = form.getFieldValue('permissions')
+    if (currentPermissions.length > 0) {
+      return
+    }
+    const defaults = normalizePermissions(permissionMetadata.default_permissions ?? [])
+    form.setFieldValue('permissions', defaults)
+  }, [isOpen, permissionMetadata, form])
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      const timer = window.setTimeout(() => {
+        form.reset()
+        setCreatedToken(null)
+        setCreatedTokenUuid(null)
+      }, 180)
+      return () => window.clearTimeout(timer)
+    }
+  }, [isOpen, form])
+
+  const permissions = form.getFieldValue('permissions')
+  const permissionsSet = useMemo(() => new Set(permissions), [permissions])
+  const activeRole = useMemo(
+    () => findMatchingRole(permissions, roleShortcuts),
+    [permissions, roleShortcuts]
+  )
+
+  const handleRoleSelect = (role: TokenRoleInfo) => {
+    const normalized = normalizePermissions(role.permissions)
+    if (!normalized.every(canAssignPermission)) {
+      return
+    }
+    form.setFieldValue('permissions', normalized)
+  }
+
+  const handlePermissionToggle = (permission: string) => {
+    if (!canAssignPermission(permission)) {
+      return
+    }
+    const current = form.getFieldValue('permissions')
+    const nextSet = new Set(current)
+    if (nextSet.has(permission)) {
+      nextSet.delete(permission)
+    } else {
+      nextSet.add(permission)
+    }
+    const next = Array.from(nextSet).sort()
+    form.setFieldValue('permissions', next)
+  }
+
+  const handleClose = () => {
+    onClose()
+  }
+
+  const copyToClipboard = (value: string, successMessage: string) => {
+    if (!value) return
+    navigator.clipboard
+      .writeText(value)
+      .then(() => toast.success(successMessage))
+      .catch(() => toast.error('Failed to copy to clipboard'))
+  }
+
   return (
-    <Dialog onOpenChange={onOpenChange} open={isOpen}>
+    <Dialog onOpenChange={(open) => !open && handleClose()} open={isOpen}>
       <DialogContent className="sm:max-w-xl">
         <TooltipProvider>
           <DialogHeader>
@@ -84,7 +166,13 @@ export function CreateTokenDialog({
                   <div className="flex-1 break-all rounded-md bg-muted p-3 font-mono text-sm">
                     {createdTokenUuid}
                   </div>
-                  <Button onClick={onCopyUuid} size="icon" variant="ghost">
+                  <Button
+                    onClick={() =>
+                      copyToClipboard(createdTokenUuid || '', 'UUID copied to clipboard')
+                    }
+                    size="icon"
+                    variant="ghost"
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -95,78 +183,97 @@ export function CreateTokenDialog({
                   <div className="flex-1 break-all rounded-md bg-muted p-3 font-mono text-sm">
                     {createdToken}
                   </div>
-                  <Button onClick={onCopyToken} size="icon" variant="ghost">
+                  <Button
+                    onClick={() => copyToClipboard(createdToken, 'Token copied to clipboard')}
+                    size="icon"
+                    variant="ghost"
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Token Name</Label>
-                <Input
-                  autoCapitalize="none"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  data-1p-ignore
-                  data-bwignore="true"
-                  data-lpignore="true"
-                  id="name"
-                  inputMode="text"
-                  name="token_name"
-                  onChange={(e) => onTokenNameChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const result = onSubmit()
-                      if (result instanceof Promise) {
-                        result.catch(() => {
-                          /* errors handled by caller */
-                        })
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                form.handleSubmit()
+              }}
+            >
+              <div className="space-y-4">
+                <form.Field name="name">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Token Name</Label>
+                      <Input
+                        autoCapitalize="none"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        data-1p-ignore
+                        data-bwignore="true"
+                        data-lpignore="true"
+                        id="name"
+                        inputMode="text"
+                        name="token_name"
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            form.handleSubmit()
+                          }
+                        }}
+                        placeholder="e.g., CI/CD Pipeline"
+                        spellCheck={false}
+                        value={field.state.value}
+                      />
+                      {field.state.meta.errors.length > 0 && (
+                        <p className="text-destructive text-sm">
+                          {String(field.state.meta.errors[0])}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </form.Field>
+
+                <form.Field name="permissions">
+                  {(field) => (
+                    <TokenPermissionsEditor
+                      activeRole={activeRole}
+                      availablePermissions={availablePermissions}
+                      canAssignPermission={canAssignPermission}
+                      error={
+                        field.state.meta.errors.length > 0
+                          ? String(field.state.meta.errors[0])
+                          : undefined
                       }
-                    }
-                  }}
-                  placeholder="e.g., CI/CD Pipeline"
-                  spellCheck={false}
-                  value={tokenName}
-                />
-                {errors.name ? <p className="text-destructive text-sm">{errors.name}</p> : null}
+                      isPermissionLoading={isPermissionLoading}
+                      onPermissionToggle={handlePermissionToggle}
+                      onRoleSelect={handleRoleSelect}
+                      roleShortcuts={roleShortcuts}
+                      selectedPermissions={permissions}
+                      selectedPermissionsSet={permissionsSet}
+                    />
+                  )}
+                </form.Field>
               </div>
-              <TokenPermissionsEditor
-                activeRole={activeRole}
-                availablePermissions={availablePermissions}
-                canAssignPermission={canAssignPermission}
-                error={errors.permissions}
-                isPermissionLoading={isPermissionLoading}
-                onPermissionToggle={onPermissionToggle}
-                onRoleSelect={onRoleSelect}
-                roleShortcuts={roleShortcuts}
-                selectedPermissions={selectedPermissions}
-                selectedPermissionsSet={selectedPermissionsSet}
-              />
-            </div>
+            </form>
           )}
 
           <DialogFooter>
             {createdToken ? (
-              <Button onClick={onClose}>Done</Button>
+              <Button onClick={handleClose}>Done</Button>
             ) : (
               <>
-                <Button onClick={onCancel} variant="outline">
+                <Button onClick={handleClose} type="button" variant="outline">
                   Cancel
                 </Button>
                 <Button
-                  disabled={isCreating || isPermissionLoading}
-                  onClick={() => {
-                    const result = onSubmit()
-                    if (result instanceof Promise) {
-                      result.catch(() => {
-                        /* errors handled by caller */
-                      })
-                    }
-                  }}
+                  disabled={createToken.isPending || isPermissionLoading}
+                  onClick={() => form.handleSubmit()}
+                  type="button"
                 >
-                  {isCreating ? 'Creating...' : 'Create Token'}
+                  {createToken.isPending ? 'Creating...' : 'Create Token'}
                 </Button>
               </>
             )}

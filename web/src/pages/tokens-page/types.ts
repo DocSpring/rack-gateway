@@ -30,5 +30,3 @@ export type PermissionGroup = {
   sortKey: string
   options: PermissionOption[]
 }
-
-export const TOKEN_FORM_FIELDS = ['name', 'permissions'] as const

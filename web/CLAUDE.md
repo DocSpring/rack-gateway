@@ -35,6 +35,52 @@ pnpm test
 - Always run `pnpm typecheck` and keep types clean
 - When a web E2E test fails, first reproduce the failure with a focused unit test; fix it there, then re-run E2E
 
+**Vitest module mocking - CRITICAL PATH RULES:**
+
+- **ALWAYS use relative paths in `vi.mock()`** - Vitest treats `'@/lib/api'` and `'../lib/api'` as DIFFERENT modules
+- **Match the import path the component uses** - If the component imports `'../../lib/api'`, your mock MUST use `'../lib/api'` (relative to test file)
+- **Use `importOriginal` to preserve exports** - This prevents "No export found" errors:
+  ```typescript
+  vi.mock('../lib/api', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../lib/api')>()
+    return {
+      ...actual,
+      api: { ...actual.api, get: vi.fn(), post: vi.fn() }
+    }
+  })
+  ```
+- **Why this matters**: TypeScript path aliases (`@/`) are resolved at build time, but Vitest's module system treats aliased and relative paths as separate module instances. If the component imports via relative path but your test mocks via alias, the mock won't be applied.
+
+**React Query testing patterns:**
+
+- **Child components reading from cache**: When a child component uses `useQuery({ queryKey: QUERY_KEYS.TOKENS })` without a `queryFn`, it's reading from the parent's query cache. Add `enabled: false` to prevent React Query from trying to fetch:
+  ```typescript
+  const { data: tokens = [] } = useQuery<APIToken[]>({
+    queryKey: QUERY_KEYS.TOKENS,
+    enabled: false, // Just reading from cache, not fetching
+  })
+  ```
+- **Suppress React Query cache warnings in tests**: When queries with `enabled: false` generate console errors about missing queryFn, suppress them:
+  ```typescript
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation((message) => {
+      if (typeof message === 'string' && message.includes('No queryFn was passed')) {
+        return
+      }
+      console.error(message)
+    })
+  })
+  ```
+- **Mock pattern for parallel queries**: Use `mockImplementation` with URL routing instead of sequential `mockResolvedValueOnce`:
+  ```typescript
+  vi.mocked(api.get).mockImplementation((url: string) => {
+    if (url.includes('/permissions')) {
+      return Promise.resolve(mockPermissionMetadata)
+    }
+    return Promise.resolve(mockTokens)
+  })
+  ```
+
 ### E2E Tests (Playwright)
 
 **Running E2E tests manually:**
