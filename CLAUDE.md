@@ -41,6 +41,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 ### 4. Linting - ALL RULES ENABLED
 
 **Go (golangci-lint v2):**
+
 - **Comprehensive linter set** - 20+ linters enabled
 - **Line length: 120 characters maximum**
 - **NO `//nolint` comments allowed** - fix the code, don't suppress warnings
@@ -51,6 +52,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
   - `time.Sleep` - use context with timeout
 
 **Web (Biome):**
+
 - **NO `// biome-ignore` comments allowed** - zero tolerance
 - Fix the code, don't suppress the linter
 - Enforced by `task web:check-ignores` in CI and pre-commit hooks
@@ -58,10 +60,12 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 ### 5. Git Hooks - ALWAYS ENFORCED
 
 **NEVER bypass git hooks:**
+
 - ❌ **NEVER use `git commit --no-verify`** - no exceptions
 - ❌ **NEVER use `git push --no-verify`** - no exceptions
 
 **Pre-commit hooks enforce:**
+
 - Code formatting (`task fmt`, `task web:lint:fix`)
 - Linting with auto-fix
 - Module tidying (`task go:mod:tidy`, `pnpm install`)
@@ -70,6 +74,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 - Zero biome-ignore comments (`task web:check-ignores`)
 
 **Pre-push hooks enforce:**
+
 - Full CI suite (`task ci`)
 - All tests must pass
 - All builds must succeed
@@ -77,6 +82,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 ### 6. Security Scanning
 
 **Required security checks:**
+
 - `govulncheck` - Check for known Go vulnerabilities
 - `shellcheck` - Validate all shell scripts
 - `npm audit` - Check for npm package vulnerabilities
@@ -242,6 +248,7 @@ done
 ```
 
 **Tips:**
+
 - Use exact names for reliability
 - Use `$$` wildcards for params and bodies
 - Keep imports minimal - let goimports handle them
