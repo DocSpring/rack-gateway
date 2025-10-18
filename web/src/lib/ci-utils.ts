@@ -34,19 +34,3 @@ export function buildCircleCIPipelineUrl(
 ): string {
   return `https://app.circleci.com/pipelines/${ciOrgSlug}/${pipelineNumber}`
 }
-
-/**
- * Build CircleCI workflow URL
- * Format: https://app.circleci.com/pipelines/{ci_org_slug}/{pipeline_number}/workflows/{workflow_id}
- *
- * @param ciOrgSlug - Organization slug
- * @param pipelineNumber - Pipeline number from CI metadata
- * @param workflowId - Workflow ID from CI metadata
- */
-export function buildCircleCIWorkflowUrl(
-  ciOrgSlug: string,
-  pipelineNumber: string | number,
-  workflowId: string
-): string {
-  return `https://app.circleci.com/pipelines/${ciOrgSlug}/${pipelineNumber}/workflows/${workflowId}`
-}

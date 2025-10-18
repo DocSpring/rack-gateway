@@ -752,5 +752,3 @@ function AddChannelButton({ onAdd, isUpdating }: AddChannelButtonProps) {
     </div>
   )
 }
-
-export default IntegrationsPage

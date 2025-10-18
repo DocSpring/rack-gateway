@@ -50,11 +50,11 @@ type MfaHeaders = { 'X-MFA-TOTP'?: string; 'X-MFA-WebAuthn'?: string }
 
 let currentMFAHeaders: MfaHeaders = {}
 
-export function getMFAHeaders(): MfaHeaders {
+function getMFAHeaders(): MfaHeaders {
   return currentMFAHeaders
 }
 
-export function clearMFAHeaders(): void {
+function clearMFAHeaders(): void {
   currentMFAHeaders = {}
 }
 

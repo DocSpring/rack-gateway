@@ -17,7 +17,7 @@ function readTokenFromMeta(): string | null {
   return value
 }
 
-export function setCsrfToken(token: string | null): void {
+function setCsrfToken(token: string | null): void {
   const value = token?.trim() ?? ''
   if (value === '' || value === PLACEHOLDER) {
     csrfCache = null
@@ -49,19 +49,6 @@ export function getCsrfToken(): string | null {
     csrfCache = metaToken
   }
   return csrfCache
-}
-
-export function ensureCsrfToken(): Promise<string | null> {
-  const existing = getCsrfToken()
-  if (existing) {
-    return Promise.resolve(existing)
-  }
-  const metaToken = readTokenFromMeta()
-  if (metaToken) {
-    setCsrfToken(metaToken)
-    return Promise.resolve(metaToken)
-  }
-  return Promise.resolve(null)
 }
 
 const initialToken = readTokenFromMeta()

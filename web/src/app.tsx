@@ -268,7 +268,7 @@ export function detectBasepath() {
   return base.replace(TRAILING_SLASH_RE, '')
 }
 
-export function createAppRouter(basepath?: string) {
+function createAppRouter(basepath?: string) {
   return createRouter({
     routeTree: buildRouteTree(),
     basepath: basepath ?? detectBasepath(),

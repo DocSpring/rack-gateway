@@ -5,7 +5,7 @@
 /**
  * Convert base64url string to ArrayBuffer for WebAuthn API
  */
-export function base64urlToArrayBuffer(base64url: string): ArrayBuffer {
+function base64urlToArrayBuffer(base64url: string): ArrayBuffer {
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
   const binaryString = atob(base64)
   const bytes = new Uint8Array(binaryString.length)
@@ -18,7 +18,7 @@ export function base64urlToArrayBuffer(base64url: string): ArrayBuffer {
 /**
  * Convert ArrayBuffer to base64url string for JSON serialization
  */
-export function arrayBufferToBase64url(buffer: ArrayBuffer): string {
+function arrayBufferToBase64url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
   let binary = ''
   for (const byte of bytes) {

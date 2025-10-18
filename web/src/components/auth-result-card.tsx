@@ -62,5 +62,3 @@ export function AuthResultCard({
     </div>
   )
 }
-
-export default AuthResultCard

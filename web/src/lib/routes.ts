@@ -17,8 +17,6 @@ const join = (prefix: string, path = ''): string => {
 export const APIRoute = (path = ''): string => join(API_PREFIX, path)
 export const WebRoute = (path = ''): string => join(WEB_PREFIX, path)
 
-export const DEFAULT_WEB_ROUTE = WebRoute('rack')
-
 const SUFFIX_SEPARATOR = /[?#]/
 
 const splitPathAndSuffix = (value: string): [string, string] => {
@@ -31,12 +29,12 @@ const splitPathAndSuffix = (value: string): [string, string] => {
 
 export const resolveWebRedirect = (target?: string | null): string => {
   if (!target) {
-    return DEFAULT_WEB_ROUTE
+    return WebRoute('rack')
   }
 
   const trimmed = target.trim()
   if (trimmed === '') {
-    return DEFAULT_WEB_ROUTE
+    return WebRoute('rack')
   }
 
   const [pathPart, suffix] = splitPathAndSuffix(trimmed)

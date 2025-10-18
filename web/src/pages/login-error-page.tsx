@@ -51,5 +51,3 @@ export function LoginErrorPage() {
     </AuthResultCard>
   )
 }
-
-export default LoginErrorPage

@@ -28,5 +28,3 @@ export function normalizeRedirectPath(value: string | null): string | null {
 
   return coercePath(value)
 }
-
-export default normalizeRedirectPath

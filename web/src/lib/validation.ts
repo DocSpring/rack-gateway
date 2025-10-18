@@ -64,18 +64,10 @@ export const tokenFormSchema = z.object({
     }),
 })
 
-export const protectedEnvVarSchema = z
-  .string()
-  .trim()
-  .min(1, envVarMessages.required)
-  .max(100, envVarMessages.length)
-  .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, envVarMessages.format)
-  .transform((value) => value.toUpperCase())
+type UserFormValues = z.infer<typeof userFormSchema>
+type TokenFormValues = z.infer<typeof tokenFormSchema>
 
-export type UserFormValues = z.infer<typeof userFormSchema>
-export type TokenFormValues = z.infer<typeof tokenFormSchema>
-
-export type ValidationErrors<T extends string> = Partial<Record<T, string>>
+type ValidationErrors<T extends string> = Partial<Record<T, string>>
 
 export function toFieldErrorMap<TFields extends string>(
   error: z.ZodError,
@@ -92,11 +84,3 @@ export function toFieldErrorMap<TFields extends string>(
   }
   return Object.fromEntries(entries) as ValidationErrors<TFields>
 }
-
-export const validationMessages = {
-  email: emailMessages,
-  name: nameMessages,
-  roles: roleMessages,
-  token: tokenMessages,
-  envVar: envVarMessages,
-} as const

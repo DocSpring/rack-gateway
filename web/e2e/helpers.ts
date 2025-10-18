@@ -18,7 +18,7 @@ type E2EWindow = Window &
     __e2e_clipboardStubbed?: boolean
   }
 
-export type LoginOptions = {
+type LoginOptions = {
   /**
    * Display text of the mock OAuth user card to select.
    * Defaults to "Admin User" when omitted.

@@ -57,10 +57,6 @@ export function initSentry(): boolean {
   return true
 }
 
-export function isSentryEnabled(): boolean {
-  return sentryEnabled
-}
-
 export function __resetSentryForTests() {
   sentryEnabled = false
 }

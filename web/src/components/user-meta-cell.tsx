@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type UserMeta = {
+type UserMeta = {
   name?: string | null
   email?: string | null
 }
@@ -26,8 +26,4 @@ export function UserMetaCell({ name, email, fallback = '—' }: UserMetaCellProp
       {displayEmail ? <span className="text-muted-foreground">{displayEmail}</span> : null}
     </div>
   )
-}
-
-export function renderUserMeta({ name, email }: UserMeta, fallback?: ReactNode): ReactNode {
-  return <UserMetaCell email={email ?? undefined} fallback={fallback} name={name ?? undefined} />
 }

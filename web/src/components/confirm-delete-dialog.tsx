@@ -12,7 +12,7 @@ import {
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 
-export type ConfirmDeleteDialogProps = {
+type ConfirmDeleteDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string

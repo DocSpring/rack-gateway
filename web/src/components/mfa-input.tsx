@@ -71,5 +71,3 @@ export const MFAInput = forwardRef<HTMLFieldSetElement, MFAInputProps>(
 )
 
 MFAInput.displayName = 'MFAInput'
-
-export default MFAInput

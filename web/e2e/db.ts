@@ -43,7 +43,7 @@ export function listE2eDatabaseUrls(): string[] {
   return Array.from(urls).filter((url) => !url.includes('/gateway_dev') && url !== 'undefined')
 }
 
-export function resolveConnectionString() {
+function resolveConnectionString() {
   const candidates = [
     process.env.E2E_DATABASE_URL,
     process.env.TEST_DATABASE_URL,

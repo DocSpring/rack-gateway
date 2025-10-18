@@ -31,7 +31,7 @@ type VerificationParams =
       assertion_response: string
     }
 
-export type MFAVerificationFormProps = {
+type MFAVerificationFormProps = {
   /**
    * Called when verification needs to happen. Should perform the actual API call.
    * For TOTP: receives code and trust_device

@@ -170,5 +170,3 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
 )
 
 OTPInput.displayName = 'OTPInput'
-
-export default OTPInput

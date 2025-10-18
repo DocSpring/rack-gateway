@@ -14,5 +14,3 @@ export function CLIAuthSuccessPage() {
     </AuthResultCard>
   )
 }
-
-export default CLIAuthSuccessPage

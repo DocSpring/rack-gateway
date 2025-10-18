@@ -22,7 +22,7 @@ export type User = {
   }
 }
 
-export type AuthState = {
+type AuthState = {
   user: User | null
   token: string | null
   isAuthenticated: boolean

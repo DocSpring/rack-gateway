@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 
-export type CardItem = {
+type CardItem = {
   label: string
   value?: string | number | null
 }

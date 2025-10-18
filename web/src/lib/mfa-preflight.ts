@@ -124,21 +124,6 @@ function findRequirement(
   return null
 }
 
-export function shouldPreemptMfaRequest(
-  method: string | undefined,
-  url: string | undefined,
-  baseUrl?: string
-): boolean {
-  if (!(method && url)) {
-    return false
-  }
-  const requirement = findRequirement(method, url, baseUrl)
-  if (!requirement) {
-    return false
-  }
-  return requirement.mfaLevel === 'always'
-}
-
 export function getMfaRequirementForRequest(
   method: string | undefined,
   url: string | undefined,

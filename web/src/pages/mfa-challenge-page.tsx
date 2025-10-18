@@ -272,5 +272,3 @@ export function MFAChallengePage() {
     </div>
   )
 }
-
-export default MFAChallengePage

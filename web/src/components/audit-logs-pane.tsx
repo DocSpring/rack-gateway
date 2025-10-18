@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 
 export type AuditLogRecord = AuditLogEntry
 
-export type AuditLogsPaneProps = {
+type AuditLogsPaneProps = {
   title: string
   logs: AuditLogRecord[]
   totalCount: number
