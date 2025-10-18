@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/gin-gonic/gin"
 )
@@ -27,8 +25,8 @@ import (
 // @Security CSRFToken
 // @Router /auth/mfa/verify [post]
 func (h *AuthHandler) VerifyMFA(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
@@ -38,82 +36,29 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		return
 	}
 
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-
-	ipAddress := c.ClientIP()
-	userAgent := c.GetHeader("User-Agent")
-	var sessionID *int64
-	if authUser.Session != nil {
-		sessionID = &authUser.Session.ID
-	}
-	if _, err := h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code), ipAddress, userAgent, sessionID); err != nil {
-		// Notify about failed MFA attempt
+	if _, err := h.mfaService.VerifyTOTP(ctx.userRecord, strings.TrimSpace(req.Code), ctx.ipAddress, ctx.userAgent, ctx.sessionID); err != nil {
 		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, ipAddress, userAgent)
+			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	now := time.Now()
-	var trustedDeviceID *int64
-	trustedCookieSet := false
-
-	if authUser.Session == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, req.TrustDevice)
+	if !ok {
 		return
 	}
 
-	// Only create a new trusted device if requested and session doesn't already have one
-	if req.TrustDevice && (authUser.Session.TrustedDeviceID == nil || *authUser.Session.TrustedDeviceID == 0) {
-		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
-			return
-		}
-		h.setTrustedDeviceCookie(c, payload.Token)
-		trustedDeviceID = &payload.RecordID
-		trustedCookieSet = true
-	} else if authUser.Session.TrustedDeviceID != nil {
-		// Session already has a trusted device, reuse it
-		trustedDeviceID = authUser.Session.TrustedDeviceID
-	}
-
-	// Detect if this is login flow (first MFA verification) vs step-up
-	isLoginFlow := authUser.Session.MFAVerifiedAt == nil
-
-	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
-		log.Printf("failed updating session mfa state: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
+	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
+	if !ok {
 		return
 	}
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "before_update_step_up user_email=%q session_id=%d now=%q", userRecord.Email, authUser.Session.ID, now.Format(time.RFC3339))
-	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		gtwlog.Errorf("update_step_up_failed user_email=%q session_id=%d error=%q", userRecord.Email, authUser.Session.ID, err.Error())
-	} else if authUser.Session != nil {
-		authUser.Session.RecentStepUpAt = &now
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q", userRecord.Email, authUser.Session.ID, now.Format(time.RFC3339))
-	}
-	if trustedDeviceID != nil && trustedCookieSet {
-		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
-			log.Printf("failed attaching trusted device to session: %v", err)
-		}
-	}
 
-	// Audit log for login completion after MFA verification
-	if isLoginFlow && h.database != nil && h.securityNotifier != nil {
-		h.securityNotifier.LoginAttempt(userRecord.Email, userRecord.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
-	}
+	// Extra debug logging for TOTP step-up
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "before_update_step_up user_email=%q session_id=%d now=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
+	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
+
+	h.notifyLoginComplete(ctx, c)
 
 	response := VerifyMFAResponse{
 		MFAVerifiedAt:         now,
@@ -134,39 +79,26 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 // @Security SessionCookie
 // @Router /auth/mfa/webauthn/assertion/start [post]
 func (h *AuthHandler) StartWebAuthnAssertion(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
-		return
-	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
-	options, sessionJSON, err := h.mfaService.StartWebAuthnAssertion(userRecord)
+	options, sessionJSON, err := h.mfaService.StartWebAuthnAssertion(ctx.userRecord)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Store session data in the user's session for later verification
-	if authUser.Session != nil {
-		// Store WebAuthn session in the database or session store
-		// For now, we'll return it to the client to send back
-		c.JSON(http.StatusOK, WebAuthnAssertionStartResponse{
-			Options:     options,
-			SessionData: string(sessionJSON),
-		})
+	if ctx.authUser.Session == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
 		return
 	}
 
-	c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+	c.JSON(http.StatusOK, WebAuthnAssertionStartResponse{
+		Options:     options,
+		SessionData: string(sessionJSON),
+	})
 }
 
 // VerifyWebAuthnAssertion godoc
@@ -183,8 +115,8 @@ func (h *AuthHandler) StartWebAuthnAssertion(c *gin.Context) {
 // @Security SessionCookie
 // @Router /auth/mfa/webauthn/assertion/verify [post]
 func (h *AuthHandler) VerifyWebAuthnAssertion(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
@@ -194,69 +126,25 @@ func (h *AuthHandler) VerifyWebAuthnAssertion(c *gin.Context) {
 		return
 	}
 
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-
-	ipAddress := c.ClientIP()
-	userAgent := c.GetHeader("User-Agent")
-	var sessionID *int64
-	if authUser.Session != nil {
-		sessionID = &authUser.Session.ID
-	}
-	if _, err := h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ipAddress, userAgent, sessionID); err != nil {
-		// Notify about failed MFA attempt
+	if _, err := h.mfaService.VerifyWebAuthnAssertion(ctx.userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ctx.ipAddress, ctx.userAgent, ctx.sessionID); err != nil {
 		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, ipAddress, userAgent)
+			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	now := time.Now()
-	var trustedDeviceID *int64
-	trustedCookieSet := false
-
-	if authUser.Session == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, req.TrustDevice)
+	if !ok {
 		return
 	}
 
-	// Only create a new trusted device if requested and session doesn't already have one
-	if req.TrustDevice && (authUser.Session.TrustedDeviceID == nil || *authUser.Session.TrustedDeviceID == 0) {
-		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
-			return
-		}
-		h.setTrustedDeviceCookie(c, payload.Token)
-		trustedDeviceID = &payload.RecordID
-		trustedCookieSet = true
+	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
+	if !ok {
+		return
 	}
 
-	// Detect if this is login flow (first MFA verification) vs step-up
-	isLoginFlow := authUser.Session.MFAVerifiedAt == nil
-
-	// Update session with MFA verification and recent step-up timestamps
-	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
-		log.Printf("Warning: failed to update session MFA verified: %v", err)
-	}
-	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		log.Printf("Warning: failed to update session step-up: %v", err)
-	}
-
-	// Audit log for login completion after MFA verification
-	if isLoginFlow && h.database != nil && h.securityNotifier != nil {
-		h.securityNotifier.LoginAttempt(userRecord.Email, userRecord.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
-	}
+	h.notifyLoginComplete(ctx, c)
 
 	response := VerifyMFAResponse{
 		MFAVerifiedAt:         now,

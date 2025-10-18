@@ -28,24 +28,12 @@ import (
 // @Security CSRFToken
 // @Router /auth/mfa/enroll/totp/start [post]
 func (h *AuthHandler) StartTOTPEnrollment(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-
-	result, err := h.mfaService.StartTOTPEnrollment(userRecord)
+	result, err := h.mfaService.StartTOTPEnrollment(ctx.userRecord)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -76,8 +64,8 @@ func (h *AuthHandler) StartTOTPEnrollment(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/enroll/totp/confirm [post]
 func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
@@ -91,22 +79,9 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-
-	if err := h.mfaService.ConfirmTOTP(userRecord, req.MethodID, strings.TrimSpace(req.Code)); err != nil {
-		// Notify about failed MFA enrollment attempt
+	if err := h.mfaService.ConfirmTOTP(ctx.userRecord, req.MethodID, strings.TrimSpace(req.Code)); err != nil {
 		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -122,46 +97,14 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		}
 	}
 
-	now := time.Now()
-	var trustedDeviceID *int64
-	trustedCookieSet := false
-
-	if authUser.Session == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, req.TrustDevice)
+	if !ok {
 		return
 	}
 
-	// Only create a new trusted device if requested and session doesn't already have one
-	if req.TrustDevice && (authUser.Session.TrustedDeviceID == nil || *authUser.Session.TrustedDeviceID == 0) {
-		payload, err := h.mfaService.MintTrustedDevice(userRecord.ID, c.ClientIP(), c.GetHeader("User-Agent"))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mint trusted device"})
-			return
-		}
-		h.setTrustedDeviceCookie(c, payload.Token)
-		trustedDeviceID = &payload.RecordID
-		trustedCookieSet = true
-	} else if authUser.Session.TrustedDeviceID != nil {
-		// Session already has a trusted device, reuse it
-		trustedDeviceID = authUser.Session.TrustedDeviceID
-	}
-
-	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, trustedDeviceID); err != nil {
-		log.Printf("failed updating session mfa state: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
+	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
+	if !ok {
 		return
-	}
-	authUser.Session.MFAVerifiedAt = &now
-	authUser.Session.TrustedDeviceID = trustedDeviceID
-	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		log.Printf("failed updating session step-up timestamp: %v", err)
-	} else if authUser.Session != nil {
-		authUser.Session.RecentStepUpAt = &now
-	}
-	if trustedDeviceID != nil && trustedCookieSet {
-		if err := h.sessions.AttachTrustedDeviceToSession(authUser.Session.ID, *trustedDeviceID); err != nil {
-			log.Printf("failed attaching trusted device to session: %v", err)
-		}
 	}
 
 	// Audit log for MFA enrollment completion
@@ -174,16 +117,16 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			"label": methodLabel,
 		})
 		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:    userRecord.Email,
-			UserName:     userRecord.Name,
+			UserEmail:    ctx.userRecord.Email,
+			UserName:     ctx.userRecord.Name,
 			ActionType:   "auth",
 			Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "totp",
 			Details:      string(details),
 			Status:       "success",
-			IPAddress:    c.ClientIP(),
-			UserAgent:    c.GetHeader("User-Agent"),
+			IPAddress:    ctx.ipAddress,
+			UserAgent:    ctx.userAgent,
 		}); err != nil {
 			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`, err)
 		}
@@ -212,18 +155,8 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/enroll/yubiotp/start [post]
 func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
-		return
-	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
@@ -234,9 +167,9 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	result, err := h.mfaService.StartYubiOTPEnrollment(userRecord, req.YubiOTP)
+	result, err := h.mfaService.StartYubiOTPEnrollment(ctx.userRecord, req.YubiOTP)
 	if err != nil {
-		log.Printf(`{"level":"error","event":"yubiotp_enrollment_failed","user":%q,"error":%q}`, authUser.Email, err.Error())
+		log.Printf(`{"level":"error","event":"yubiotp_enrollment_failed","user":%q,"error":%q}`, ctx.authUser.Email, err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -258,24 +191,14 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/enroll/webauthn/start [post]
 func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
-		return
-	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
-	result, sessionData, err := h.mfaService.StartWebAuthnEnrollment(userRecord)
+	result, sessionData, err := h.mfaService.StartWebAuthnEnrollment(ctx.userRecord)
 	if err != nil {
-		log.Printf(`{"level":"error","event":"webauthn_start_failed","user":%q,"error":%q}`, authUser.Email, err.Error())
+		log.Printf(`{"level":"error","event":"webauthn_start_failed","user":%q,"error":%q}`, ctx.authUser.Email, err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -325,18 +248,8 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/enroll/webauthn/confirm [post]
 func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
-		return
-	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
 
@@ -392,7 +305,7 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		label = "Security Key"
 	}
 
-	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(userRecord, req.MethodID, []byte(sessionDataStr), credentialJSON, label)
+	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(ctx.userRecord, req.MethodID, []byte(sessionDataStr), credentialJSON, label)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -405,23 +318,9 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		log.Printf("failed to clear webauthn session: %v", err)
 	}
 
-	now := time.Now()
-
-	if authUser.Session == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
+	_, ok = h.updateSessionAfterMFA(c, ctx, ctx.authUser.Session.TrustedDeviceID, false)
+	if !ok {
 		return
-	}
-
-	if err := h.sessions.UpdateSessionMFAVerified(authUser.Session.ID, now, authUser.Session.TrustedDeviceID); err != nil {
-		log.Printf("failed updating session mfa state: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session"})
-		return
-	}
-	authUser.Session.MFAVerifiedAt = &now
-	if err := h.sessions.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
-		log.Printf("failed updating session step-up timestamp: %v", err)
-	} else {
-		authUser.Session.RecentStepUpAt = &now
 	}
 
 	// Audit log for WebAuthn enrollment completion
@@ -430,16 +329,16 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			"label": label,
 		})
 		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:    userRecord.Email,
-			UserName:     userRecord.Name,
+			UserEmail:    ctx.userRecord.Email,
+			UserName:     ctx.userRecord.Name,
 			ActionType:   "auth",
 			Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
 			ResourceType: "mfa_method",
 			Resource:     "webauthn",
 			Details:      string(details),
 			Status:       "success",
-			IPAddress:    c.ClientIP(),
-			UserAgent:    c.GetHeader("User-Agent"),
+			IPAddress:    ctx.ipAddress,
+			UserAgent:    ctx.userAgent,
 		}); err != nil {
 			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`, err)
 		}

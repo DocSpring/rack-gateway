@@ -30,21 +30,12 @@ import (
 // @Security CSRFToken
 // @Router /auth/mfa/backup-codes/regenerate [post]
 func (h *AuthHandler) RegenerateBackupCodes(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-	codes, err := h.mfaService.GenerateBackupCodes(userRecord.ID)
+
+	codes, err := h.mfaService.GenerateBackupCodes(ctx.userRecord.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -63,35 +54,22 @@ func (h *AuthHandler) RegenerateBackupCodes(c *gin.Context) {
 // @Security SessionCookie
 // @Router /auth/mfa/status [get]
 func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	ctx, ok := h.getMFAContext(c)
+	if !ok {
 		return
 	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
-		return
-	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
-		return
-	}
-	if userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-	methods, err := h.database.ListMFAMethods(userRecord.ID)
+
+	methods, err := h.database.ListMFAMethods(ctx.userRecord.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list mfa methods"})
 		return
 	}
-	trustedDevices, err := h.database.ListTrustedDevices(userRecord.ID)
+	trustedDevices, err := h.database.ListTrustedDevices(ctx.userRecord.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list trusted devices"})
 		return
 	}
-	backupCodes, err := h.database.ListBackupCodes(userRecord.ID)
+	backupCodes, err := h.database.ListBackupCodes(ctx.userRecord.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list backup codes"})
 		return
@@ -115,18 +93,18 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 	}
 	summary := summarizeBackupCodes(backupCodes)
 	var recentExpires *time.Time
-	if authUser.Session != nil && authUser.Session.RecentStepUpAt != nil {
-		expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
+	if ctx.authUser.Session != nil && ctx.authUser.Session.RecentStepUpAt != nil {
+		expires := ctx.authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
 		recentExpires = &expires
 	}
 	response := MFAStatusResponse{
-		Enrolled:              userRecord.MFAEnrolled,
-		Required:              shouldEnforceMFA(h.mfaSettings, userRecord),
+		Enrolled:              ctx.userRecord.MFAEnrolled,
+		Required:              shouldEnforceMFA(h.mfaSettings, ctx.userRecord),
 		Methods:               methodResp,
 		TrustedDevices:        trustedResp,
 		BackupCodes:           summary,
 		RecentStepUpExpiresAt: recentExpires,
-		PreferredMethod:       userRecord.PreferredMFAMethod,
+		PreferredMethod:       ctx.userRecord.PreferredMFAMethod,
 		WebAuthnAvailable:     h.mfaService.IsWebAuthnConfigured(),
 	}
 	c.JSON(http.StatusOK, response)
