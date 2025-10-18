@@ -30,12 +30,6 @@ const tokenMessages = {
   permissionLength: 'Permission names must be 150 characters or less',
 } as const
 
-const envVarMessages = {
-  required: 'Environment variable name is required',
-  length: 'Environment variable name must be 100 characters or less',
-  format: 'Use letters, numbers, or underscores and start with a letter or underscore',
-} as const
-
 export const userFormSchema = z.object({
   email: z
     .string()
@@ -63,9 +57,6 @@ export const tokenFormSchema = z.object({
       return unique.sort()
     }),
 })
-
-type UserFormValues = z.infer<typeof userFormSchema>
-type TokenFormValues = z.infer<typeof tokenFormSchema>
 
 type ValidationErrors<T extends string> = Partial<Record<T, string>>
 

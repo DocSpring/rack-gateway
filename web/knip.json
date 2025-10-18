@@ -8,5 +8,10 @@
     "orval.config.ts",
     "src/api/types.generated.ts",
     "src/components/ui/**"
+  ],
+  "ignoreDependencies": [
+    "@radix-ui/react-tabs",
+    "tailwindcss",
+    "tw-animate-css"
   ]
 }

@@ -17,29 +17,6 @@ function readTokenFromMeta(): string | null {
   return value
 }
 
-function setCsrfToken(token: string | null): void {
-  const value = token?.trim() ?? ''
-  if (value === '' || value === PLACEHOLDER) {
-    csrfCache = null
-  } else {
-    csrfCache = value
-  }
-  if (!hasDOM) {
-    return
-  }
-  const meta = document.querySelector<HTMLMetaElement>(META_SELECTOR)
-  if (meta) {
-    meta.content = value
-    return
-  }
-  if (value) {
-    const element = document.createElement('meta')
-    element.name = META_NAME
-    element.content = value
-    document.head.appendChild(element)
-  }
-}
-
 export function getCsrfToken(): string | null {
   if (csrfCache) {
     return csrfCache
