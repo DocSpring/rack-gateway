@@ -58,58 +58,16 @@ func NewSender(token, from, stream string) Sender {
 	return NoopSender{}
 }
 
-func (p *PostmarkSender) Send(to, subject, textBody, htmlBody string) error {
+// sendEmail builds the Postmark API request and sends it.
+// The 'to' parameter is the primary recipient, and 'bcc' is an optional
+// comma-separated list of additional recipients.
+func (p *PostmarkSender) sendEmail(to, bcc, subject, textBody, htmlBody string) error {
 	if to == "" {
 		return nil
 	}
 	payload := map[string]string{
 		"From":          p.From,
 		"To":            to,
-		"Subject":       subject,
-		"TextBody":      textBody,
-		"MessageStream": p.Stream,
-	}
-	if htmlBody != "" {
-		payload["HtmlBody"] = htmlBody
-	}
-	b, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", p.APIBase+"/email", bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Postmark-Server-Token", p.Token)
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close() //nolint:errcheck // ignore close error
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("postmark send failed: %s", resp.Status)
-	}
-	return nil
-}
-
-func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody string) error {
-	if len(to) == 0 {
-		return nil
-	}
-	// Use Bcc for additional recipients to avoid exposing multiple To addresses
-	primary := to[0]
-	bcc := ""
-	if len(to) > 1 {
-		// Comma-separated per Postmark API
-		for i, addr := range to[1:] {
-			if i == 0 {
-				bcc = addr
-			} else {
-				bcc += "," + addr
-			}
-		}
-	}
-	payload := map[string]string{
-		"From":          p.From,
-		"To":            primary,
 		"Subject":       subject,
 		"TextBody":      textBody,
 		"MessageStream": p.Stream,
@@ -136,6 +94,30 @@ func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody strin
 		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}
 	return nil
+}
+
+func (p *PostmarkSender) Send(to, subject, textBody, htmlBody string) error {
+	return p.sendEmail(to, "", subject, textBody, htmlBody)
+}
+
+func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody string) error {
+	if len(to) == 0 {
+		return nil
+	}
+	// Use Bcc for additional recipients to avoid exposing multiple To addresses
+	primary := to[0]
+	bcc := ""
+	if len(to) > 1 {
+		// Comma-separated per Postmark API
+		for i, addr := range to[1:] {
+			if i == 0 {
+				bcc = addr
+			} else {
+				bcc += "," + addr
+			}
+		}
+	}
+	return p.sendEmail(primary, bcc, subject, textBody, htmlBody)
 }
 
 // LoggerSender writes emails to stdout (useful in development)
