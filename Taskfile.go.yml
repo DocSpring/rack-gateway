@@ -93,7 +93,7 @@ tasks:
     generates:
       - bin/rack-gateway-api
     cmds:
-      - go build -o bin/rack-gateway-api ./cmd/gateway/
+      - go build -buildvcs=false -o bin/rack-gateway-api ./cmd/gateway/
 
   build:cli:
     desc: Build gateway CLI -> bin/rack-gateway
@@ -109,7 +109,7 @@ tasks:
     generates:
       - bin/rack-gateway
     cmds:
-      - go build -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway ./cmd/rack-gateway/
+      - go build -buildvcs=false -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway ./cmd/rack-gateway/
 
   build:mock:
     desc: Build mock Convox server -> bin/mock-convox
@@ -125,7 +125,7 @@ tasks:
     generates:
       - bin/mock-convox
     cmds:
-      - go build -o bin/mock-convox ./cmd/mock-convox/
+      - go build -buildvcs=false -o bin/mock-convox ./cmd/mock-convox/
 
   test:
     desc: Run Go unit and integration tests safely
