@@ -47,20 +47,7 @@ func (h *AdminHandler) SlackOAuthAuthorizeHandler(c *gin.Context) {
 		return
 	}
 
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-
-	// Check admin permission
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, rbac.ActionManage)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+	if !h.enforceIntegrationPermission(c, rbac.ActionManage) {
 		return
 	}
 
@@ -167,30 +154,12 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 
 // GetSlackIntegrationHandler retrieves the current Slack integration
 func (h *AdminHandler) GetSlackIntegrationHandler(c *gin.Context) {
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+	if !h.enforceIntegrationPermission(c, rbac.ActionRead) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, rbac.ActionRead)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return
-	}
-
-	integration, err := h.database.GetSlackIntegration()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get integration"})
-		return
-	}
-
+	integration := h.loadSlackIntegration(c)
 	if integration == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration found"})
 		return
 	}
 
@@ -202,19 +171,7 @@ func (h *AdminHandler) GetSlackIntegrationHandler(c *gin.Context) {
 
 // UpdateSlackChannelsHandler updates the channel action mappings
 func (h *AdminHandler) UpdateSlackChannelsHandler(c *gin.Context) {
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, rbac.ActionManage)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+	if !h.enforceIntegrationPermission(c, rbac.ActionManage) {
 		return
 	}
 
@@ -240,19 +197,7 @@ func (h *AdminHandler) UpdateSlackChannelsHandler(c *gin.Context) {
 
 // DeleteSlackIntegrationHandler removes the Slack integration
 func (h *AdminHandler) DeleteSlackIntegrationHandler(c *gin.Context) {
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, rbac.ActionManage)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+	if !h.enforceIntegrationPermission(c, rbac.ActionManage) {
 		return
 	}
 
@@ -266,40 +211,20 @@ func (h *AdminHandler) DeleteSlackIntegrationHandler(c *gin.Context) {
 
 // ListSlackChannelsHandler lists available Slack channels
 func (h *AdminHandler) ListSlackChannelsHandler(c *gin.Context) {
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+	if !h.enforceIntegrationPermission(c, rbac.ActionRead) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, rbac.ActionRead)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return
-	}
-
-	integration, err := h.database.GetSlackIntegration()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get integration"})
-		return
-	}
+	integration := h.loadSlackIntegration(c)
 	if integration == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration found"})
 		return
 	}
 
-	// Decrypt bot token
-	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decrypt token"})
+	client := h.createSlackClient(c, integration)
+	if client == nil {
 		return
 	}
 
-	client := slack.NewClient(string(botToken))
 	channels, err := client.ListChannels()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to list channels: %v", err)})
@@ -311,20 +236,7 @@ func (h *AdminHandler) ListSlackChannelsHandler(c *gin.Context) {
 
 // TestSlackNotificationHandler sends a test notification
 func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceIntegration, rbac.ActionManage)
-	if err != nil {
-		fmt.Printf("TestSlackNotification: RBAC check failed: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+	if !h.enforceIntegrationPermission(c, rbac.ActionManage) {
 		return
 	}
 
@@ -343,29 +255,20 @@ func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
 		return
 	}
 
-	integration, err := h.database.GetSlackIntegration()
-	if err != nil {
-		fmt.Printf("TestSlackNotification: Failed to get integration: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get integration"})
-		return
-	}
+	integration := h.loadSlackIntegration(c)
 	if integration == nil {
 		fmt.Printf("TestSlackNotification: No Slack integration found\n")
-		c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration found"})
 		return
 	}
 
-	// Decrypt bot token
-	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
-	if err != nil {
-		fmt.Printf("TestSlackNotification: Failed to decrypt token: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decrypt token"})
+	client := h.createSlackClient(c, integration)
+	if client == nil {
+		fmt.Printf("TestSlackNotification: Failed to create Slack client\n")
 		return
 	}
 
 	fmt.Printf("TestSlackNotification: Sending test message to channel %s\n", req.ChannelID)
-	client := slack.NewClient(string(botToken))
-	err = client.PostMessage(req.ChannelID, "🧪 Test notification from Rack Gateway", nil)
+	err := client.PostMessage(req.ChannelID, "🧪 Test notification from Rack Gateway", nil)
 	if err != nil {
 		fmt.Printf("TestSlackNotification: Failed to send message: %v\n", err)
 
