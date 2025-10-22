@@ -66,68 +66,13 @@ func (d *Database) getUserSession(where string, args ...interface{}) (*UserSessi
 		WHERE %s
 	`, where)
 
-	var (
-		session     UserSession
-		deviceID    sql.NullString
-		deviceName  sql.NullString
-		mfaVerified sql.NullTime
-		recentStep  sql.NullTime
-		trustedID   sql.NullInt64
-		ip          sql.NullString
-		ua          sql.NullString
-		revoked     sql.NullTime
-		revoker     sql.NullInt64
-		meta        sql.NullString
-		deviceMeta  sql.NullString
-	)
-
+	var session UserSession
 	row := d.queryRow(query, args...)
-	if err := row.Scan(&session.ID, &session.UserID, &session.TokenHash, &session.CreatedAt, &session.UpdatedAt,
-		&session.LastSeenAt, &session.ExpiresAt, &session.Channel, &deviceID, &deviceName, &mfaVerified, &recentStep, &trustedID, &ip, &ua, &revoked, &revoker, &meta, &deviceMeta); err != nil {
+	if err := scanSessionRow(&session, row, true); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get user session: %w", err)
-	}
-
-	if deviceID.Valid {
-		session.DeviceID = deviceID.String
-	}
-	if deviceName.Valid {
-		session.DeviceName = deviceName.String
-	}
-
-	if mfaVerified.Valid {
-		verified := mfaVerified.Time
-		session.MFAVerifiedAt = &verified
-	}
-	if recentStep.Valid {
-		step := recentStep.Time
-		session.RecentStepUpAt = &step
-	}
-	if trustedID.Valid {
-		id := trustedID.Int64
-		session.TrustedDeviceID = &id
-	}
-	if ip.Valid {
-		session.IPAddress = ip.String
-	}
-	if ua.Valid {
-		session.UserAgent = ua.String
-	}
-	if revoked.Valid {
-		revokedAt := revoked.Time
-		session.RevokedAt = &revokedAt
-	}
-	if revoker.Valid {
-		id := revoker.Int64
-		session.RevokedByUser = &id
-	}
-	if meta.Valid {
-		session.Metadata = json.RawMessage(meta.String)
-	}
-	if deviceMeta.Valid {
-		session.DeviceMetadata = json.RawMessage(deviceMeta.String)
 	}
 
 	return &session, nil
@@ -148,20 +93,9 @@ func (d *Database) getUserSessionWithUser(where string, args ...interface{}) (*U
 	`, where)
 
 	var (
-		session     UserSession
-		deviceID    sql.NullString
-		deviceName  sql.NullString
-		mfaVerified sql.NullTime
-		recentStep  sql.NullTime
-		trustedID   sql.NullInt64
-		ip          sql.NullString
-		ua          sql.NullString
-		revoked     sql.NullTime
-		revoker     sql.NullInt64
-		meta        sql.NullString
-		deviceMeta  sql.NullString
+		session UserSession
+		user    User
 
-		user          User
 		rolesJSON     string
 		mfaEnforced   sql.NullTime
 		preferred     sql.NullString
@@ -172,11 +106,12 @@ func (d *Database) getUserSessionWithUser(where string, args ...interface{}) (*U
 		lockedByName  sql.NullString
 	)
 
+	s := &sessionScanner{}
 	row := d.queryRow(query, args...)
 	if err := row.Scan(
 		&session.ID, &session.UserID, &session.TokenHash, &session.CreatedAt, &session.UpdatedAt,
-		&session.LastSeenAt, &session.ExpiresAt, &session.Channel, &deviceID, &deviceName,
-		&mfaVerified, &recentStep, &trustedID, &ip, &ua, &revoked, &revoker, &meta, &deviceMeta,
+		&session.LastSeenAt, &session.ExpiresAt, &session.Channel, &s.deviceID, &s.deviceName,
+		&s.mfaVerified, &s.recentStep, &s.trustedID, &s.ip, &s.ua, &s.revoked, &s.revoker, &s.meta, &s.deviceMeta,
 		&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended,
 		&user.MFAEnrolled, &mfaEnforced, &preferred, &lockedAt, &lockedReason, &lockedBy,
 		&lockedByEmail, &lockedByName,
@@ -187,45 +122,7 @@ func (d *Database) getUserSessionWithUser(where string, args ...interface{}) (*U
 		return nil, nil, fmt.Errorf("failed to get user session with user: %w", err)
 	}
 
-	if deviceID.Valid {
-		session.DeviceID = deviceID.String
-	}
-	if deviceName.Valid {
-		session.DeviceName = deviceName.String
-	}
-
-	if mfaVerified.Valid {
-		verified := mfaVerified.Time
-		session.MFAVerifiedAt = &verified
-	}
-	if recentStep.Valid {
-		step := recentStep.Time
-		session.RecentStepUpAt = &step
-	}
-	if trustedID.Valid {
-		id := trustedID.Int64
-		session.TrustedDeviceID = &id
-	}
-	if ip.Valid {
-		session.IPAddress = ip.String
-	}
-	if ua.Valid {
-		session.UserAgent = ua.String
-	}
-	if revoked.Valid {
-		revokedAt := revoked.Time
-		session.RevokedAt = &revokedAt
-	}
-	if revoker.Valid {
-		id := revoker.Int64
-		session.RevokedByUser = &id
-	}
-	if meta.Valid {
-		session.Metadata = json.RawMessage(meta.String)
-	}
-	if deviceMeta.Valid {
-		session.DeviceMetadata = json.RawMessage(deviceMeta.String)
-	}
+	applySessionNullables(&session, s)
 
 	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal user roles: %w", err)
@@ -372,50 +269,9 @@ func (d *Database) ListActiveSessionsByUser(userID int64) ([]*UserSession, error
 
 	sessions := []*UserSession{}
 	for rows.Next() {
-		var (
-			sess        UserSession
-			deviceID    sql.NullString
-			deviceName  sql.NullString
-			mfaVerified sql.NullTime
-			recentStep  sql.NullTime
-			trustedID   sql.NullInt64
-			ip          sql.NullString
-			ua          sql.NullString
-			meta        sql.NullString
-			deviceMeta  sql.NullString
-		)
-		if err := rows.Scan(&sess.ID, &sess.UserID, &sess.TokenHash, &sess.CreatedAt, &sess.UpdatedAt, &sess.LastSeenAt, &sess.ExpiresAt, &sess.Channel, &deviceID, &deviceName, &mfaVerified, &recentStep, &trustedID, &ip, &ua, &meta, &deviceMeta); err != nil {
+		var sess UserSession
+		if err := scanSessionRow(&sess, rows, false); err != nil {
 			return nil, fmt.Errorf("failed to scan user session: %w", err)
-		}
-		if deviceID.Valid {
-			sess.DeviceID = deviceID.String
-		}
-		if deviceName.Valid {
-			sess.DeviceName = deviceName.String
-		}
-		if mfaVerified.Valid {
-			verified := mfaVerified.Time
-			sess.MFAVerifiedAt = &verified
-		}
-		if recentStep.Valid {
-			step := recentStep.Time
-			sess.RecentStepUpAt = &step
-		}
-		if trustedID.Valid {
-			id := trustedID.Int64
-			sess.TrustedDeviceID = &id
-		}
-		if ip.Valid {
-			sess.IPAddress = ip.String
-		}
-		if ua.Valid {
-			sess.UserAgent = ua.String
-		}
-		if meta.Valid {
-			sess.Metadata = json.RawMessage(meta.String)
-		}
-		if deviceMeta.Valid {
-			sess.DeviceMetadata = json.RawMessage(deviceMeta.String)
 		}
 		sessions = append(sessions, &sess)
 	}
@@ -470,6 +326,101 @@ func (d *Database) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID
 		return fmt.Errorf("failed to attach trusted device to session: %w", err)
 	}
 	return nil
+}
+
+// sessionScanner holds nullable database fields for scanning session rows.
+type sessionScanner struct {
+	deviceID    sql.NullString
+	deviceName  sql.NullString
+	mfaVerified sql.NullTime
+	recentStep  sql.NullTime
+	trustedID   sql.NullInt64
+	ip          sql.NullString
+	ua          sql.NullString
+	revoked     sql.NullTime
+	revoker     sql.NullInt64
+	meta        sql.NullString
+	deviceMeta  sql.NullString
+}
+
+// scanSessionRow scans a database row into a UserSession using nullable intermediaries.
+// It handles the conversion of sql.Null* types to their corresponding Go types.
+func scanSessionRow(
+	session *UserSession,
+	scanner interface {
+		Scan(dest ...interface{}) error
+	},
+	includeRevocation bool,
+) error {
+	s := &sessionScanner{}
+
+	var scanArgs []interface{}
+	if includeRevocation {
+		scanArgs = []interface{}{
+			&session.ID, &session.UserID, &session.TokenHash,
+			&session.CreatedAt, &session.UpdatedAt, &session.LastSeenAt, &session.ExpiresAt,
+			&session.Channel, &s.deviceID, &s.deviceName,
+			&s.mfaVerified, &s.recentStep, &s.trustedID,
+			&s.ip, &s.ua, &s.revoked, &s.revoker, &s.meta, &s.deviceMeta,
+		}
+	} else {
+		scanArgs = []interface{}{
+			&session.ID, &session.UserID, &session.TokenHash,
+			&session.CreatedAt, &session.UpdatedAt, &session.LastSeenAt, &session.ExpiresAt,
+			&session.Channel, &s.deviceID, &s.deviceName,
+			&s.mfaVerified, &s.recentStep, &s.trustedID,
+			&s.ip, &s.ua, &s.meta, &s.deviceMeta,
+		}
+	}
+
+	if err := scanner.Scan(scanArgs...); err != nil {
+		return err
+	}
+
+	applySessionNullables(session, s)
+	return nil
+}
+
+// applySessionNullables applies nullable fields from sessionScanner to UserSession.
+func applySessionNullables(session *UserSession, s *sessionScanner) {
+	if s.deviceID.Valid {
+		session.DeviceID = s.deviceID.String
+	}
+	if s.deviceName.Valid {
+		session.DeviceName = s.deviceName.String
+	}
+	if s.mfaVerified.Valid {
+		verified := s.mfaVerified.Time
+		session.MFAVerifiedAt = &verified
+	}
+	if s.recentStep.Valid {
+		step := s.recentStep.Time
+		session.RecentStepUpAt = &step
+	}
+	if s.trustedID.Valid {
+		id := s.trustedID.Int64
+		session.TrustedDeviceID = &id
+	}
+	if s.ip.Valid {
+		session.IPAddress = s.ip.String
+	}
+	if s.ua.Valid {
+		session.UserAgent = s.ua.String
+	}
+	if s.revoked.Valid {
+		revokedAt := s.revoked.Time
+		session.RevokedAt = &revokedAt
+	}
+	if s.revoker.Valid {
+		id := s.revoker.Int64
+		session.RevokedByUser = &id
+	}
+	if s.meta.Valid {
+		session.Metadata = json.RawMessage(s.meta.String)
+	}
+	if s.deviceMeta.Valid {
+		session.DeviceMetadata = json.RawMessage(s.deviceMeta.String)
+	}
 }
 
 func sanitizeUserAgent(ua string) string {
