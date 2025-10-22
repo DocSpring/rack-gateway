@@ -95,8 +95,9 @@ async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise
 export async function cleanupE2eArtifacts() {
   await withDbClient(async (client) => {
     await client.query("DELETE FROM api_tokens WHERE name LIKE 'E2E Web%';")
-    await client.query("DELETE FROM audit_logs WHERE resource LIKE 'E2E Web%';")
-    await client.query("DELETE FROM audit_logs WHERE details LIKE '%E2E Web%';")
+    await client.query("DELETE FROM audit.audit_event WHERE resource LIKE 'E2E Web%';")
+    await client.query("DELETE FROM audit.audit_event WHERE details LIKE '%E2E Web%';")
+    await client.query("DELETE FROM audit.audit_event_aggregated WHERE resource LIKE 'E2E Web%';")
     await client.query("DELETE FROM users WHERE name LIKE 'E2E Web%';")
   })
 }
@@ -168,9 +169,8 @@ export async function enforceMfaForUser(email: string) {
 
 export async function clearMfaAttempts() {
   await withDbClient(async (client) => {
-    await client.query(
-      'DELETE FROM mfa_totp_attempts; DELETE FROM mfa_webauthn_attempts; DELETE FROM used_totp_steps;'
-    )
+    await client.query('TRUNCATE TABLE mfa_attempts RESTART IDENTITY CASCADE;')
+    await client.query('TRUNCATE TABLE used_totp_steps RESTART IDENTITY CASCADE;')
   })
 }
 

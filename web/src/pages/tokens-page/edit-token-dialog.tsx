@@ -39,10 +39,12 @@ export function EditTokenDialog({
 }) {
   const { updateToken, handleStepUpError } = useTokenMutations()
 
-  const { data: tokens = [] } = useQuery<APIToken[]>({
+  const { data: tokensData } = useQuery<APIToken[]>({
     queryKey: QUERY_KEYS.TOKENS,
     enabled: false, // Just reading from cache, not fetching
   })
+
+  const tokens = Array.isArray(tokensData) ? tokensData : []
 
   const token = tokens.find((t) => t.public_id === tokenId)
 
