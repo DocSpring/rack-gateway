@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/gin-gonic/gin"
 )
@@ -87,13 +88,13 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 			}
 		}
 
-		if logReqBody && req.Body != nil && isJSONContentType(req.Header.Get("Content-Type")) {
+		if logReqBody && req.Body != nil && httputil.IsJSONContentType(req.Header.Get("Content-Type")) {
 			bodyBytes, err := io.ReadAll(req.Body)
 			if err == nil {
 				_ = req.Body.Close()
 				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-				if len(bodyBytes) > 0 && !isBinaryContent(req.Header.Get("Content-Type")) {
-					gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", len(bodyBytes), truncateBody(bodyBytes))
+				if len(bodyBytes) > 0 && !httputil.IsBinaryContent(req.Header.Get("Content-Type")) {
+					gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", len(bodyBytes), httputil.TruncateString(bodyBytes, httputil.BodyTruncationLimit))
 				}
 			} else {
 				gtwlog.Warnf("failed to read request body: %v", err)
@@ -124,7 +125,7 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 			}
 		}
 
-		respJSON := logRespBody && isJSONContentType(c.Writer.Header().Get("Content-Type"))
+		respJSON := logRespBody && httputil.IsJSONContentType(c.Writer.Header().Get("Content-Type"))
 		if respJSON {
 			writer = &bodyWriter{ResponseWriter: c.Writer, body: &bytes.Buffer{}}
 			c.Writer = writer
@@ -132,8 +133,8 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		c.Next()
 		if respJSON && writer != nil {
 			responseBody := writer.body.Bytes()
-			if len(responseBody) > 0 && !isBinaryContent(c.Writer.Header().Get("Content-Type")) {
-				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), truncateBody(responseBody))
+			if len(responseBody) > 0 && !httputil.IsBinaryContent(c.Writer.Header().Get("Content-Type")) {
+				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), httputil.TruncateString(responseBody, httputil.BodyTruncationLimit))
 			}
 		}
 
@@ -190,37 +191,4 @@ func (w *bodyWriter) Write(b []byte) (int, error) {
 func (w *bodyWriter) WriteString(s string) (int, error) {
 	w.body.WriteString(s)
 	return w.ResponseWriter.WriteString(s)
-}
-
-func truncateBody(body []byte) string {
-	const maxBytes = 16384
-	if len(body) <= maxBytes {
-		return string(body)
-	}
-	return string(body[:maxBytes]) + "…(truncated)"
-}
-
-func isBinaryContent(contentType string) bool {
-	ct := strings.ToLower(strings.TrimSpace(contentType))
-	if ct == "" {
-		return false
-	}
-	return strings.Contains(ct, "application/octet-stream") ||
-		strings.Contains(ct, "application/x-tar") ||
-		strings.Contains(ct, "application/zip") ||
-		strings.Contains(ct, "gzip")
-}
-
-func isJSONContentType(contentType string) bool {
-	ct := strings.ToLower(strings.TrimSpace(contentType))
-	if ct == "" {
-		return false
-	}
-	if idx := strings.IndexByte(ct, ';'); idx >= 0 {
-		ct = strings.TrimSpace(ct[:idx])
-	}
-	if ct == "application/json" {
-		return true
-	}
-	return strings.HasSuffix(ct, "+json")
 }

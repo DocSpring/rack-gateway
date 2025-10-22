@@ -17,6 +17,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
+	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -87,15 +88,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		return 0, fmt.Errorf("failed to create proxy request: %w", err)
 	}
 
-	for key, values := range r.Header {
-		lk := strings.ToLower(key)
-		if lk == "authorization" || lk == "env" || lk == "environment" || lk == "release-env" || lk == "x-audit-resource" {
-			continue
-		}
-		for _, value := range values {
-			proxyReq.Header.Add(key, value)
-		}
-	}
+	httputil.CopyHeaders(proxyReq.Header, r.Header, "authorization", "env", "environment", "release-env", "x-audit-resource")
 
 	// Convox uses Basic Auth with configurable username (default "convox") and the API key as password
 	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s",
@@ -185,19 +178,12 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	// Copy headers, but drop Content-Length since we may have modified the body; let Go recalculate
-	for key, values := range resp.Header {
-		if strings.ToLower(key) == "content-length" {
-			continue
-		}
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
+	httputil.CopyHeaders(w.Header(), resp.Header, "content-length")
 
 	w.WriteHeader(resp.StatusCode)
 
 	contentType := resp.Header.Get("Content-Type")
-	shouldCaptureBody := logResponseBody && !isLikelyBinaryContent(contentType)
+	shouldCaptureBody := logResponseBody && !httputil.IsBinaryContent(contentType)
 
 	if needsBuffer {
 		var err error
@@ -206,7 +192,7 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
 		}
 		if shouldCaptureBody {
-			logSnippet = truncateBytes(body, proxyLogBodyLimit)
+			logSnippet = httputil.TruncateBytes(body, proxyLogBodyLimit)
 		}
 	} else {
 		if shouldCaptureBody {
@@ -256,25 +242,6 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	return resp.StatusCode, nil
-}
-
-func truncateBytes(body []byte, limit int) []byte {
-	if limit <= 0 || len(body) <= limit {
-		return body
-	}
-	truncated := append([]byte{}, body[:limit]...)
-	return append(truncated, []byte("…(truncated)")...)
-}
-
-func isLikelyBinaryContent(contentType string) bool {
-	ct := strings.ToLower(strings.TrimSpace(contentType))
-	if ct == "" {
-		return false
-	}
-	return strings.Contains(ct, "application/octet-stream") ||
-		strings.Contains(ct, "application/x-tar") ||
-		strings.Contains(ct, "application/zip") ||
-		strings.Contains(ct, "gzip")
 }
 
 func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
@@ -512,11 +479,7 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 		if resp != nil {
 			// If upstream returned a non-101 status (e.g., 404), pass it through to the client
 			body, _ := io.ReadAll(resp.Body)
-			for k, vs := range resp.Header {
-				for _, v := range vs {
-					w.Header().Add(k, v)
-				}
-			}
+			httputil.CopyHeaders(w.Header(), resp.Header)
 			w.WriteHeader(resp.StatusCode)
 			_, _ = w.Write(body)
 			return resp.StatusCode, nil
