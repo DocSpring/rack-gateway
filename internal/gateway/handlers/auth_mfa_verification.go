@@ -36,36 +36,14 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.mfaService.VerifyTOTP(ctx.userRecord, strings.TrimSpace(req.Code), ctx.ipAddress, ctx.userAgent, ctx.sessionID); err != nil {
-		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
-		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, req.TrustDevice)
-	if !ok {
-		return
-	}
-
-	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
-	if !ok {
-		return
-	}
-
-	// Extra debug logging for TOTP step-up
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "before_update_step_up user_email=%q session_id=%d now=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
-
-	h.notifyLoginComplete(ctx, c)
-
-	response := VerifyMFAResponse{
-		MFAVerifiedAt:         now,
-		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
-		TrustedDeviceCookie:   trustedCookieSet,
-	}
-	c.JSON(http.StatusOK, response)
+	// Use the shared verification flow with TOTP-specific verification function
+	h.verifyMFAAndComplete(c, ctx, req.TrustDevice, func() (interface{}, error) {
+		return h.mfaService.VerifyTOTP(ctx.userRecord, strings.TrimSpace(req.Code), ctx.ipAddress, ctx.userAgent, ctx.sessionID)
+	}, func(now time.Time) {
+		// Extra debug logging for TOTP step-up
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "before_update_step_up user_email=%q session_id=%d now=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
+	})
 }
 
 // StartWebAuthnAssertion godoc
@@ -126,30 +104,8 @@ func (h *AuthHandler) VerifyWebAuthnAssertion(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.mfaService.VerifyWebAuthnAssertion(ctx.userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ctx.ipAddress, ctx.userAgent, ctx.sessionID); err != nil {
-		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
-		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, req.TrustDevice)
-	if !ok {
-		return
-	}
-
-	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
-	if !ok {
-		return
-	}
-
-	h.notifyLoginComplete(ctx, c)
-
-	response := VerifyMFAResponse{
-		MFAVerifiedAt:         now,
-		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
-		TrustedDeviceCookie:   trustedCookieSet,
-	}
-	c.JSON(http.StatusOK, response)
+	// Use the shared verification flow with WebAuthn-specific verification function
+	h.verifyMFAAndComplete(c, ctx, req.TrustDevice, func() (interface{}, error) {
+		return h.mfaService.VerifyWebAuthnAssertion(ctx.userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ctx.ipAddress, ctx.userAgent, ctx.sessionID)
+	}, nil) // No extra debug logging for WebAuthn
 }

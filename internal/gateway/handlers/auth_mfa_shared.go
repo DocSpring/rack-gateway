@@ -112,9 +112,60 @@ func (h *AuthHandler) updateSessionAfterMFA(c *gin.Context, ctx *mfaContext, tru
 }
 
 // notifyLoginComplete sends login completion notification if this was the initial MFA verification during login.
-func (h *AuthHandler) notifyLoginComplete(ctx *mfaContext, c *gin.Context) {
-	isLoginFlow := ctx.authUser.Session != nil && ctx.authUser.Session.MFAVerifiedAt == nil
-	if isLoginFlow && h.database != nil && h.securityNotifier != nil {
+func (h *AuthHandler) notifyLoginComplete(ctx *mfaContext, c *gin.Context, wasLoginFlow bool) {
+	if wasLoginFlow && h.database != nil && h.securityNotifier != nil {
 		h.securityNotifier.LoginAttempt(ctx.userRecord.Email, ctx.userRecord.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
 	}
+}
+
+// verifyMFAAndComplete handles the common MFA verification flow for any factor type.
+// It takes a verification function that performs the specific factor verification (TOTP, WebAuthn, etc.),
+// handles failure notifications, manages trusted devices, updates session state, and constructs the response.
+//
+// The verifyFunc should return (credential, error) where credential is the verified credential or nil on error.
+// This function handles all error responses, trusted device logic, session updates, and notifications.
+//
+// Returns true if the verification flow completed successfully (response sent to client).
+func (h *AuthHandler) verifyMFAAndComplete(
+	c *gin.Context,
+	ctx *mfaContext,
+	trustDevice bool,
+	verifyFunc func() (interface{}, error),
+	extraDebugLog func(now time.Time),
+) bool {
+	// Perform the specific verification (TOTP, WebAuthn, etc.)
+	if _, err := verifyFunc(); err != nil {
+		if h.securityNotifier != nil {
+			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return false
+	}
+
+	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, trustDevice)
+	if !ok {
+		return false
+	}
+
+	wasLoginFlow := ctx.authUser.Session != nil && ctx.authUser.Session.MFAVerifiedAt == nil
+
+	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
+	if !ok {
+		return false
+	}
+
+	// Call extra debug logging if provided (for TOTP step-up)
+	if extraDebugLog != nil {
+		extraDebugLog(now)
+	}
+
+	h.notifyLoginComplete(ctx, c, wasLoginFlow)
+
+	response := VerifyMFAResponse{
+		MFAVerifiedAt:         now,
+		RecentStepUpExpiresAt: now.Add(h.stepUpWindow()),
+		TrustedDeviceCookie:   trustedCookieSet,
+	}
+	c.JSON(http.StatusOK, response)
+	return true
 }
