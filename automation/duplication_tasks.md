@@ -30,10 +30,11 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Outcome:** Extracted shared user-load helper, centralized enforcement checks in `db/mfa.go`, updated middleware/handlers to call the shared logic, and reduced duplication without altering behaviour (DB migration tests still fail due to pre-existing missing `locked_at` column).
 
 ### 004 – `internal/gateway/handlers/deploy_approval_admin.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `dfbdb5a`
 - **Why flagged:** Multiple large clones (22–40 lines) for list/create/update flows.
 - **Goal:** Introduce reusable query/build helpers (e.g., filter builders, paginator) so the handler methods are thin.
 - **Tests:** Existing handler tests should be rewritten to cover new helpers—keep behaviour identical.
+- **Outcome:** Added shared auth/validation/audit helpers in `deploy_approval_helpers.go`, refactored admin handlers to use them, and verified with `task go:test`.
 
 ### 005 – `internal/gateway/handlers/auth_mfa_management.go`
 - **Status:** ☐ unassigned
@@ -47,9 +48,10 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Notes:** Touch migrations/tests carefully—DB semantics must not change.
 
 ### 007 – `internal/gateway/db/sessions.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `f8d9b7b`
 - **Why flagged:** Two large clones around session insert/update logic (43-line blocks).
 - **Goal:** Share transaction scaffolding between create/update paths. Consider moving to common `withTx` helper.
+- **Outcome:** Introduced `sessionScanner` helpers to centralize row parsing and refactored the session create/update paths to use them. Verified via `task go:test` after merge.
 
 ### 008 – `internal/gateway/db/deploy_approval_requests.go`
 - **Status:** ☐ unassigned
