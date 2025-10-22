@@ -557,49 +557,36 @@ func (s *Service) GetDeployApprovalWindowMinutes() (int, error) {
 
 // GetProtectedEnvVars returns protected environment variables for an app.
 func (s *Service) GetProtectedEnvVars(appName string) ([]string, error) {
-	setting, err := s.GetAppSetting(appName, KeyProtectedEnvVars, []string{})
-	if err != nil {
-		return []string{}, err
-	}
-
-	// Handle both []interface{} and []string from JSON unmarshaling
-	switch val := setting.Value.(type) {
-	case []string:
-		return normalizeEnvVars(val), nil
-	case []interface{}:
-		strs := make([]string, 0, len(val))
-		for _, v := range val {
-			if s, ok := v.(string); ok {
-				strs = append(strs, s)
-			}
-		}
-		return normalizeEnvVars(strs), nil
-	default:
-		return []string{}, nil
-	}
+	return s.getEnvVarList(appName, KeyProtectedEnvVars)
 }
 
 // GetSecretEnvVars returns secret environment variables for an app.
 func (s *Service) GetSecretEnvVars(appName string) ([]string, error) {
-	setting, err := s.GetAppSetting(appName, KeySecretEnvVars, []string{})
+	return s.getEnvVarList(appName, KeySecretEnvVars)
+}
+
+func (s *Service) getEnvVarList(appName, key string) ([]string, error) {
+	setting, err := s.GetAppSetting(appName, key, []string{})
 	if err != nil {
 		return []string{}, err
 	}
+	return normalizeEnvVars(extractStringSlice(setting.Value)), nil
+}
 
-	// Handle both []interface{} and []string from JSON unmarshaling
-	switch val := setting.Value.(type) {
+func extractStringSlice(value interface{}) []string {
+	switch v := value.(type) {
 	case []string:
-		return normalizeEnvVars(val), nil
+		return v
 	case []interface{}:
-		strs := make([]string, 0, len(val))
-		for _, v := range val {
-			if s, ok := v.(string); ok {
-				strs = append(strs, s)
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
 			}
 		}
-		return normalizeEnvVars(strs), nil
+		return out
 	default:
-		return []string{}, nil
+		return nil
 	}
 }
 
