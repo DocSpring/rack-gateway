@@ -73,29 +73,33 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Outcome:** Added shared scanning helpers in `users_scan.go`, updated user lookup/list functions to reuse them, and confirmed behaviour with `task go:test`.
 
 ### 011 – `internal/gateway/email/postmark.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `7c45e90`
 - **Why flagged:** Two 19-line blocks sending templated emails.
 - **Goal:** Parameterize template selection; share request-building code.
+- **Outcome:** Introduced `PostmarkSender.sendEmail` to build the payload + request once, and rewired `Send`/`SendMany` to call it (preserving HTML/Bcc handling and existing error flow).
 
 ### 012 – `internal/gateway/github/client.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `fa48cf0`
 - **Why flagged:** 15-line duplication for request execution.
 - **Goal:** Wrap API calls in reusable `doRequest` helper with consistent error decoration.
+- **Outcome:** Added `Client.doRequest` for shared header setup, error handling, and JSON decoding; refactored the four duplicated call sites to use it and introduced extensive httptest coverage for the helper.
 
-### 013 – `internal/gateway/handlers/integrations_slack.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `1bb90ec`
 - **Why flagged:** Several 17–27 line clones across POST/PUT flows.
 - **Goal:** Factor option-building & response shaping into helper functions; unify error pathways.
+- **Outcome:** Introduced `enforceIntegrationPermission`, `loadSlackIntegration`, and `createSlackClient` helpers to centralize RBAC checks, integration lookup, and client creation; refactored all Slack handlers to use them and added focused gin/dbtest coverage for authorization and error paths.
 
 ### 014 – `internal/gateway/handlers/settings_helpers.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `c2035f4`
 - **Why flagged:** 11–17 line clones inside helper functions.
 - **Goal:** Share repeated `findSetting` / `composeResponse` logic via a single helper; tests exist in `settings_test.go` and should be updated.
+- **Outcome:** Added `validateSettingKeys` and `buildSettingsResponse` helpers, refactored update/delete/get flows to reuse them, and preserved response semantics for unrestricted endpoints while returning full group payloads for scoped handlers.
 
 ### 015 – `internal/gateway/handlers/auth_mfa_verification.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `639deff`
 - **Why flagged:** 18-line clone of verification flow.
 - **Goal:** Combine duplicated sections (likely GET vs POST) by extracting a base function that both call.
+- **Outcome:** Introduced `verifyMFAAndComplete` helper orchestrating verification, trusted-device handling, session updates, and notifications; rewired TOTP/WebAuthn handlers to use it, added regression tests, and fixed login-complete notifier gating.
 
 ### 016 – `internal/gateway/handlers/api.go`
 - **Status:** ☐ unassigned

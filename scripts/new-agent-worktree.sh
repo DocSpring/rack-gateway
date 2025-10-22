@@ -63,6 +63,14 @@ fi
 # Create the worktree from origin/main, forcing the branch to point there.
 git worktree add -B "$BRANCH" "$WORKTREE_PATH" main
 
+# Ensure each worktree automatically reuses the primary Postgres container by
+# wiring RGW_SHARED_DB_PROJECT via mise.local.toml.
+MISE_LOCAL="$WORKTREE_PATH/mise.local.toml"
+cat > "$MISE_LOCAL" <<EOF
+[env]
+RGW_SHARED_DB_PROJECT = "$(basename "$ROOT_DIR")"
+EOF
+
 echo "Created worktree: $WORKTREE_PATH"
 echo "Branch: $BRANCH"
 echo "Next steps:"

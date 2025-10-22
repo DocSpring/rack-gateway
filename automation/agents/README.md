@@ -32,7 +32,7 @@ The high-level workflow looks like this:
 - When you run worker commands manually (outside the helper script), set `RGW_SHARED_DB_PROJECT=rack-gateway` to avoid provisioning duplicate Postgres containers that collide on 55432.
 
 7. Once the worker finishes, run a review cycle from the worktree before merging:
-   - If the worker left changes unstaged, run CodeRabbit against the working tree. If they committed, review the commit directly. Formally:
+   - If the worker left changes unstaged, run CodeRabbit against the working tree. If they committed, review the commit directly. **Run CodeRabbit only once per branch.** If you need to make follow-up format-only fixes (e.g., gofmt), skip re-running CodeRabbit; rely on your own review instead. Formally:
      ```bash
      # unstaged diff
      coderabbit review --plain --type uncommitted
