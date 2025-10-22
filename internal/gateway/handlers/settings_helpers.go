@@ -67,6 +67,38 @@ func (o *appSettingsOps) deleteSetting(appName, key string) error {
 	return o.service.DeleteAppSetting(appName, key)
 }
 
+// validateSettingKeys validates a list of keys against allowed keys and operations.
+// Returns an error message if validation fails, empty string otherwise.
+func validateSettingKeys(keys []string, allowed map[string]struct{}, ops settingsOperations) string {
+	for _, key := range keys {
+		if !isAllowedKey(allowed, key) {
+			return fmt.Sprintf("setting %s is not managed by this endpoint", key)
+		}
+		if !ops.isValid(key) {
+			return fmt.Sprintf("unknown setting key: %s", key)
+		}
+	}
+	return ""
+}
+
+// buildSettingsResponse builds a response map for a list of keys by fetching settings with defaults.
+// Returns the result map and an error message if any operation fails.
+func buildSettingsResponse(ops settingsOperations, appName string, keys []string) (map[string]settings.Setting, string) {
+	result := make(map[string]settings.Setting)
+	for _, key := range keys {
+		defaultValue, err := ops.getDefault(key)
+		if err != nil {
+			return nil, fmt.Sprintf("failed to get default for: %s", key)
+		}
+		setting, err := ops.getSetting(appName, key, defaultValue)
+		if err != nil {
+			return nil, fmt.Sprintf("failed to get setting: %s", key)
+		}
+		result[key] = *setting
+	}
+	return result, ""
+}
+
 // updateSettings handles updating multiple settings (global or app).
 func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations, appName string, allowedKeys []string) {
 	email := c.GetString("user_email")
@@ -82,18 +114,18 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 		return
 	}
 
+	// Extract keys from updates map for validation
+	keys := make([]string, 0, len(updates))
+	for key := range updates {
+		keys = append(keys, key)
+	}
+
 	allowed := buildKeySet(allowedKeys)
 
 	// Validate all keys first
-	for key := range updates {
-		if !isAllowedKey(allowed, key) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s is not managed by this endpoint", key)})
-			return
-		}
-		if !ops.isValid(key) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
-			return
-		}
+	if errMsg := validateSettingKeys(keys, allowed, ops); errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		return
 	}
 
 	// Get user ID for audit
@@ -113,19 +145,10 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 	}
 
 	// Return all updated settings
-	result := make(map[string]settings.Setting)
-	for key := range updates {
-		defaultValue, err := ops.getDefault(key)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get default for: %s", key)})
-			return
-		}
-		setting, err := ops.getSetting(appName, key, defaultValue)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get setting: %s", key)})
-			return
-		}
-		result[key] = *setting
+	result, errMsg := buildSettingsResponse(ops, appName, allowedKeys)
+	if errMsg != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
+		return
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -142,15 +165,9 @@ func (h *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 	allowed := buildKeySet(allowedKeys)
 
 	// Validate all keys first
-	for _, key := range keys {
-		if !isAllowedKey(allowed, key) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("setting %s is not managed by this endpoint", key)})
-			return
-		}
-		if !ops.isValid(key) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown setting key: %s", key)})
-			return
-		}
+	if errMsg := validateSettingKeys(keys, allowed, ops); errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		return
 	}
 
 	// Delete all settings
@@ -162,19 +179,10 @@ func (h *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 	}
 
 	// Return all settings after deletion
-	result := make(map[string]settings.Setting)
-	for _, key := range keys {
-		defaultValue, err := ops.getDefault(key)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get default for: %s", key)})
-			return
-		}
-		setting, err := ops.getSetting(appName, key, defaultValue)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get setting: %s", key)})
-			return
-		}
-		result[key] = *setting
+	result, errMsg := buildSettingsResponse(ops, appName, keys)
+	if errMsg != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
+		return
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -182,19 +190,11 @@ func (h *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 
 // getSingleSettingResponse gets a single setting and returns it as a map response.
 func (h *SettingsHandler) getSingleSettingResponse(c *gin.Context, ops settingsOperations, appName, key string) {
-	defaultValue, err := ops.getDefault(key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get default for: %s", key)})
+	result, errMsg := buildSettingsResponse(ops, appName, []string{key})
+	if errMsg != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
 		return
 	}
 
-	setting, err := ops.getSetting(appName, key, defaultValue)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get setting: %s", key)})
-		return
-	}
-
-	c.JSON(http.StatusOK, map[string]settings.Setting{
-		key: *setting,
-	})
+	c.JSON(http.StatusOK, result)
 }
