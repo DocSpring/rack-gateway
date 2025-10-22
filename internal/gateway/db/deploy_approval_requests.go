@@ -37,222 +37,6 @@ func (e *DeployApprovalRequestConflictError) Unwrap() error {
 	return ErrDeployApprovalRequestActive
 }
 
-const deployApprovalRequestSelect = `
-SELECT
-    dr.id,
-    dr.public_id,
-    dr.message,
-    dr.status,
-    dr.created_at,
-    dr.updated_at,
-    dr.created_by_user_id,
-    created_user.email,
-    created_user.name,
-    dr.created_by_api_token_id,
-    created_token.public_id,
-    created_token.name,
-    dr.target_api_token_id,
-    target_token.public_id,
-    target_token.name,
-    dr.approved_by_user_id,
-    approved_user.email,
-    approved_user.name,
-    dr.approved_at,
-    dr.approval_expires_at,
-    dr.rejected_by_user_id,
-    rejected_user.email,
-    rejected_user.name,
-    dr.rejected_at,
-    dr.approval_notes,
-    dr.git_commit_hash,
-    dr.git_branch,
-    dr.pr_url,
-    dr.ci_metadata,
-    dr.app,
-    dr.object_url,
-    dr.build_id,
-    dr.release_id,
-    dr.process_ids,
-    dr.exec_commands
-FROM deploy_approval_requests dr
-LEFT JOIN users created_user ON created_user.id = dr.created_by_user_id
-LEFT JOIN api_tokens created_token ON created_token.id = dr.created_by_api_token_id
-LEFT JOIN api_tokens target_token ON target_token.id = dr.target_api_token_id
-LEFT JOIN users approved_user ON approved_user.id = dr.approved_by_user_id
-LEFT JOIN users rejected_user ON rejected_user.id = dr.rejected_by_user_id
-`
-
-func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, error) {
-	var dr DeployApprovalRequest
-	var (
-		createdByUserID    sql.NullInt64
-		createdByEmail     sql.NullString
-		createdByName      sql.NullString
-		createdByTokenID   sql.NullInt64
-		createdTokenPublic sql.NullString
-		createdTokenName   sql.NullString
-		targetTokenPublic  sql.NullString
-		targetTokenName    sql.NullString
-		approvedByUserID   sql.NullInt64
-		approvedByEmail    sql.NullString
-		approvedByName     sql.NullString
-		approvedAt         sql.NullTime
-		approvalExpiresAt  sql.NullTime
-		rejectedByUserID   sql.NullInt64
-		rejectedByEmail    sql.NullString
-		rejectedByName     sql.NullString
-		rejectedAt         sql.NullTime
-		approvalNotes      sql.NullString
-		gitBranch          sql.NullString
-		prURL              sql.NullString
-		ciMetadata         []byte
-		app                sql.NullString
-		objectURL          sql.NullString
-		buildID            sql.NullString
-		releaseID          sql.NullString
-		processIDs         []byte // Array from PostgreSQL
-		execCommands       []byte // JSONB from PostgreSQL
-	)
-
-	if err := scanner.Scan(
-		&dr.ID,
-		&dr.PublicID,
-		&dr.Message,
-		&dr.Status,
-		&dr.CreatedAt,
-		&dr.UpdatedAt,
-		&createdByUserID,
-		&createdByEmail,
-		&createdByName,
-		&createdByTokenID,
-		&createdTokenPublic,
-		&createdTokenName,
-		&dr.TargetAPITokenID,
-		&targetTokenPublic,
-		&targetTokenName,
-		&approvedByUserID,
-		&approvedByEmail,
-		&approvedByName,
-		&approvedAt,
-		&approvalExpiresAt,
-		&rejectedByUserID,
-		&rejectedByEmail,
-		&rejectedByName,
-		&rejectedAt,
-		&approvalNotes,
-		&dr.GitCommitHash,
-		&gitBranch,
-		&prURL,
-		&ciMetadata,
-		&app,
-		&objectURL,
-		&buildID,
-		&releaseID,
-		&processIDs,
-		&execCommands,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrDeployApprovalRequestNotFound
-		}
-		return nil, err
-	}
-
-	if createdByUserID.Valid {
-		dr.CreatedByUserID = &createdByUserID.Int64
-	}
-	if createdByEmail.Valid {
-		dr.CreatedByEmail = createdByEmail.String
-	}
-	if createdByName.Valid {
-		dr.CreatedByName = createdByName.String
-	}
-	if createdByTokenID.Valid {
-		dr.CreatedByAPITokenID = &createdByTokenID.Int64
-	}
-	if createdTokenPublic.Valid {
-		dr.CreatedByAPITokenPublicID = createdTokenPublic.String
-	}
-	if createdTokenName.Valid {
-		dr.CreatedByAPITokenName = createdTokenName.String
-	}
-	if targetTokenPublic.Valid {
-		dr.TargetAPITokenPublicID = targetTokenPublic.String
-	}
-	if targetTokenName.Valid {
-		dr.TargetAPITokenName = targetTokenName.String
-	}
-	if approvedByUserID.Valid {
-		dr.ApprovedByUserID = &approvedByUserID.Int64
-	}
-	if approvedByEmail.Valid {
-		dr.ApprovedByEmail = approvedByEmail.String
-	}
-	if approvedByName.Valid {
-		dr.ApprovedByName = approvedByName.String
-	}
-	if approvedAt.Valid {
-		t := approvedAt.Time
-		dr.ApprovedAt = &t
-	}
-	if approvalExpiresAt.Valid {
-		t := approvalExpiresAt.Time
-		dr.ApprovalExpiresAt = &t
-	}
-	if rejectedByUserID.Valid {
-		dr.RejectedByUserID = &rejectedByUserID.Int64
-	}
-	if rejectedByEmail.Valid {
-		dr.RejectedByEmail = rejectedByEmail.String
-	}
-	if rejectedByName.Valid {
-		dr.RejectedByName = rejectedByName.String
-	}
-	if rejectedAt.Valid {
-		t := rejectedAt.Time
-		dr.RejectedAt = &t
-	}
-	if approvalNotes.Valid {
-		dr.ApprovalNotes = approvalNotes.String
-	}
-	if gitBranch.Valid {
-		dr.GitBranch = gitBranch.String
-	}
-	if prURL.Valid {
-		dr.PrURL = prURL.String
-	}
-	if len(ciMetadata) > 0 {
-		dr.CIMetadata = ciMetadata
-	}
-	if app.Valid {
-		dr.App = app.String
-	}
-	if objectURL.Valid {
-		dr.ObjectURL = objectURL.String
-	}
-	if buildID.Valid {
-		dr.BuildID = buildID.String
-	}
-	if releaseID.Valid {
-		dr.ReleaseID = releaseID.String
-	}
-	if len(processIDs) > 0 {
-		// Parse PostgreSQL array format: {item1,item2,item3}
-		// Convert to string and parse manually
-		arrStr := string(processIDs)
-		if len(arrStr) > 2 && arrStr[0] == '{' && arrStr[len(arrStr)-1] == '}' {
-			// Remove braces and split by comma
-			inner := arrStr[1 : len(arrStr)-1]
-			if inner != "" {
-				dr.ProcessIDs = strings.Split(inner, ",")
-			}
-		}
-	}
-	if len(execCommands) > 0 {
-		dr.ExecCommands = execCommands
-	}
-	return &dr, nil
-}
-
 func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitBranch, prURL string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -445,102 +229,91 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	return out, nil
 }
 
-func (d *Database) ApproveDeployApprovalRequest(id int64, approverUserID int64, expiresAt time.Time, notes string) (*DeployApprovalRequest, error) {
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
+// updateApprovalStatus updates the status of a deploy approval request.
+// whereClause should be "id = ?" or "public_id = ?".
+// whereArg is the corresponding ID or publicID value.
+func (d *Database) updateApprovalStatus(whereClause string, whereArg interface{}, newStatus string, actorUserID int64, approvalExpiresAt *time.Time, notes string, allowedStatuses []string) error {
+	trimmedNotes := strings.TrimSpace(notes)
+
+	var whereColumn string
+	switch whereClause {
+	case "id = ?":
+		whereColumn = "id"
+	case "public_id = ?":
+		whereColumn = "public_id"
+	default:
+		return fmt.Errorf("invalid where clause: %s", whereClause)
+	}
+
+	var updateSQL string
+	var args []interface{}
+
+	switch newStatus {
+	case DeployApprovalRequestStatusApproved:
+		if len(allowedStatuses) < 1 {
+			return fmt.Errorf("allowedStatuses must include at least one allowed status")
+		}
+		if approvalExpiresAt == nil {
+			return fmt.Errorf("approval expiration timestamp required for approved status")
+		}
+		updateSQL = `UPDATE deploy_approval_requests
          SET status = ?, approved_by_user_id = ?, approved_at = NOW(), approval_expires_at = ?, approval_notes = ?, updated_at = NOW()
-         WHERE id = ? AND status = ?`,
-		DeployApprovalRequestStatusApproved,
-		approverUserID,
-		expiresAt,
-		strings.TrimSpace(notes),
-		id,
-		DeployApprovalRequestStatusPending,
-	)
+         WHERE ` + whereColumn + ` = ? AND status = ?`
+		args = []interface{}{newStatus, actorUserID, *approvalExpiresAt, trimmedNotes, whereArg, allowedStatuses[0]}
+	case DeployApprovalRequestStatusRejected:
+		if len(allowedStatuses) < 2 {
+			return fmt.Errorf("allowedStatuses must include two allowed statuses for rejection")
+		}
+		updateSQL = `UPDATE deploy_approval_requests
+         SET status = ?, rejected_by_user_id = ?, rejected_at = NOW(), approval_notes = ?, updated_at = NOW()
+         WHERE ` + whereColumn + ` = ? AND status IN (?, ?)`
+		args = []interface{}{newStatus, actorUserID, trimmedNotes, whereArg, allowedStatuses[0], allowedStatuses[1]}
+	default:
+		return fmt.Errorf("unsupported status: %s", newStatus)
+	}
+
+	res, err := d.exec(updateSQL, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve deploy approval request: %w", err)
+		return fmt.Errorf("failed to update deploy approval request status: %w", err)
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve deploy approval request: %w", err)
+		return fmt.Errorf("failed to update deploy approval request status: %w", err)
 	}
 	if rows == 0 {
-		return nil, ErrDeployApprovalRequestNotFound
+		return ErrDeployApprovalRequestNotFound
+	}
+	return nil
+}
+
+func (d *Database) ApproveDeployApprovalRequest(id int64, approverUserID int64, expiresAt time.Time, notes string) (*DeployApprovalRequest, error) {
+	err := d.updateApprovalStatus("id = ?", id, DeployApprovalRequestStatusApproved, approverUserID, &expiresAt, notes, []string{DeployApprovalRequestStatusPending})
+	if err != nil {
+		return nil, err
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
 func (d *Database) ApproveDeployApprovalRequestByPublicID(publicID string, approverUserID int64, expiresAt time.Time, notes string) (*DeployApprovalRequest, error) {
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET status = ?, approved_by_user_id = ?, approved_at = NOW(), approval_expires_at = ?, approval_notes = ?, updated_at = NOW()
-         WHERE public_id = ? AND status = ?`,
-		DeployApprovalRequestStatusApproved,
-		approverUserID,
-		expiresAt,
-		strings.TrimSpace(notes),
-		publicID,
-		DeployApprovalRequestStatusPending,
-	)
+	err := d.updateApprovalStatus("public_id = ?", publicID, DeployApprovalRequestStatusApproved, approverUserID, &expiresAt, notes, []string{DeployApprovalRequestStatusPending})
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve deploy approval request: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("failed to approve deploy approval request: %w", err)
-	}
-	if rows == 0 {
-		return nil, ErrDeployApprovalRequestNotFound
+		return nil, err
 	}
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }
 
 func (d *Database) RejectDeployApprovalRequest(id int64, approverUserID int64, notes string) (*DeployApprovalRequest, error) {
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET status = ?, rejected_by_user_id = ?, rejected_at = NOW(), approval_notes = ?, updated_at = NOW()
-         WHERE id = ? AND status IN (?, ?)`,
-		DeployApprovalRequestStatusRejected,
-		approverUserID,
-		strings.TrimSpace(notes),
-		id,
-		DeployApprovalRequestStatusPending,
-		DeployApprovalRequestStatusApproved,
-	)
+	err := d.updateApprovalStatus("id = ?", id, DeployApprovalRequestStatusRejected, approverUserID, nil, notes, []string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved})
 	if err != nil {
-		return nil, fmt.Errorf("failed to reject deploy approval request: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("failed to reject deploy approval request: %w", err)
-	}
-	if rows == 0 {
-		return nil, ErrDeployApprovalRequestNotFound
+		return nil, err
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
 func (d *Database) RejectDeployApprovalRequestByPublicID(publicID string, approverUserID int64, notes string) (*DeployApprovalRequest, error) {
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET status = ?, rejected_by_user_id = ?, rejected_at = NOW(), approval_notes = ?, updated_at = NOW()
-         WHERE public_id = ? AND status IN (?, ?)`,
-		DeployApprovalRequestStatusRejected,
-		approverUserID,
-		strings.TrimSpace(notes),
-		publicID,
-		DeployApprovalRequestStatusPending,
-		DeployApprovalRequestStatusApproved,
-	)
+	err := d.updateApprovalStatus("public_id = ?", publicID, DeployApprovalRequestStatusRejected, approverUserID, nil, notes, []string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved})
 	if err != nil {
-		return nil, fmt.Errorf("failed to reject deploy approval request: %w", err)
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("failed to reject deploy approval request: %w", err)
-	}
-	if rows == 0 {
-		return nil, ErrDeployApprovalRequestNotFound
+		return nil, err
 	}
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }

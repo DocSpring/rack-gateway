@@ -9,15 +9,12 @@ import (
 
 // GetUserByID retrieves a user by ID
 func (d *Database) GetUserByID(id int64) (*User, error) {
-	var user User
-	var rolesJSON string
-	var lockedReason sql.NullString
-
-	err := d.queryRow(
+	row := d.queryRow(
 		"SELECT id, email, name, roles, created_at, updated_at, suspended, mfa_enrolled, mfa_enforced_at, preferred_mfa_method, locked_at, locked_reason, locked_by_user_id FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID)
+	)
 
+	user, fields, err := scanUserBasicFields(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -25,25 +22,16 @@ func (d *Database) GetUserByID(id int64) (*User, error) {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
+	if err := finalizeUserFields(user, fields); err != nil {
+		return nil, err
 	}
 
-	if lockedReason.Valid {
-		user.LockedReason = lockedReason.String
-	}
-
-	return &user, nil
+	return user, nil
 }
 
 // GetUser retrieves a user by email
 func (d *Database) GetUser(email string) (*User, error) {
-	var user User
-	var rolesJSON string
-	var lockedReason sql.NullString
-	var lockedByEmail, lockedByName sql.NullString
-
-	err := d.queryRow(
+	row := d.queryRow(
 		`SELECT u.id, u.email, u.name, u.roles, u.created_at, u.updated_at, u.suspended, u.mfa_enrolled, u.mfa_enforced_at, u.preferred_mfa_method,
 			u.locked_at, u.locked_reason, u.locked_by_user_id,
 			lbu.email, lbu.name
@@ -51,8 +39,9 @@ func (d *Database) GetUser(email string) (*User, error) {
 		LEFT JOIN users lbu ON lbu.id = u.locked_by_user_id
 		WHERE u.email = ?`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.Name, &rolesJSON, &user.CreatedAt, &user.UpdatedAt, &user.Suspended, &user.MFAEnrolled, &user.MFAEnforcedAt, &user.PreferredMFAMethod, &user.LockedAt, &lockedReason, &user.LockedByUserID, &lockedByEmail, &lockedByName)
+	)
 
+	user, err := scanUserWithLockedBy(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -60,21 +49,7 @@ func (d *Database) GetUser(email string) (*User, error) {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
-	}
-
-	if lockedReason.Valid {
-		user.LockedReason = lockedReason.String
-	}
-	if lockedByEmail.Valid {
-		user.LockedByEmail = lockedByEmail.String
-	}
-	if lockedByName.Valid {
-		user.LockedByName = lockedByName.String
-	}
-
-	return &user, nil
+	return user, nil
 }
 
 // CreateUser creates a new user
@@ -165,52 +140,11 @@ func (d *Database) ListUsers() ([]*User, error) {
 
 	var users []*User
 	for rows.Next() {
-		var user User
-		var rolesJSON string
-		var lockedReason sql.NullString
-		var creatorID sql.NullInt64
-		var creatorEmail sql.NullString
-		var creatorName sql.NullString
-
-		err := rows.Scan(
-			&user.ID,
-			&user.Email,
-			&user.Name,
-			&rolesJSON,
-			&user.CreatedAt,
-			&user.UpdatedAt,
-			&user.Suspended,
-			&user.LockedAt,
-			&lockedReason,
-			&user.LockedByUserID,
-			&creatorID,
-			&creatorEmail,
-			&creatorName,
-		)
+		user, err := scanUserWithCreator(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
-
-		if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
-		}
-
-		if lockedReason.Valid {
-			user.LockedReason = lockedReason.String
-		}
-
-		if creatorID.Valid {
-			id := creatorID.Int64
-			user.CreatedByUserID = &id
-		}
-		if creatorEmail.Valid {
-			user.CreatedByEmail = creatorEmail.String
-		}
-		if creatorName.Valid {
-			user.CreatedByName = creatorName.String
-		}
-
-		users = append(users, &user)
+		users = append(users, user)
 	}
 
 	return users, nil

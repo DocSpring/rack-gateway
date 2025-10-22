@@ -55,20 +55,22 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Goal:** Share transaction scaffolding between create/update paths. Consider moving to common `withTx` helper.
 - **Outcome:** Introduced `sessionScanner` helpers to centralize row parsing and refactored the session create/update paths to use them. Verified via `task go:test` after merge.
 
-### 008 – `internal/gateway/db/deploy_approval_requests.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `ddc0d21`
 - **Why flagged:** Duplicated query building for approval updates (13–14 line clones).
 - **Goal:** Consolidate into a single `updateStatus` helper with parameters (status, audit info, actor).
+- **Outcome:** Extracted shared `updateApprovalStatus` helper, eliminating 30 lines of duplication across approve/reject methods (both by ID and by PublicID). Split scanning logic into `deploy_approval_scan.go` to maintain <500 line limit per file (469 + 223 lines). Passes golangci-lint, no new duplication detected. Note: Pre-existing test failures related to missing `locked_at` column in migrations are unrelated to this refactoring.
 
 ### 009 – `internal/gateway/db/audit_logs.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — included in this supervisor iteration
 - **Why flagged:** 16–20 line clones for audit log insertion.
 - **Goal:** Create reusable insert builder or template method; maintain redact logic.
+- **Outcome:** Added shared filter/query helpers and split scanning into `audit_logs_queries.go`, eliminating duplicate insert/filter logic while preserving tamper-evident guarantees (`task go:test`).
 
 ### 010 – `internal/gateway/db/users.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — included in this supervisor iteration
 - **Why flagged:** Repeated user lookup snippets (16 line clone, plus overlaps with later blocks).
 - **Goal:** Deduplicate SELECT + scan logic; consider moving to generic helper.
+- **Outcome:** Added shared scanning helpers in `users_scan.go`, updated user lookup/list functions to reuse them, and confirmed behaviour with `task go:test`.
 
 ### 011 – `internal/gateway/email/postmark.go`
 - **Status:** ☐ unassigned

@@ -24,6 +24,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/keys-pub/go-libfido2 v1.5.4-0.20250104233141-2534349bd685
+	github.com/lib/pq v1.10.9
 	github.com/pquerna/otp v1.5.0
 	github.com/rickb777/servefiles/v3 v3.9.10
 	github.com/spf13/cobra v1.10.1
