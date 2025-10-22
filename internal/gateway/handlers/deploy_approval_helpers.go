@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
+	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -174,4 +177,80 @@ func getAppSettingString(svc *settings.Service, appName, key string, defaultValu
 		return val, nil
 	}
 	return defaultValue, nil
+}
+
+// checkDeployApprovalAuth validates authentication and RBAC permissions for deploy approval operations.
+// Returns the authenticated email and true on success, otherwise writes an error response and returns false.
+func checkDeployApprovalAuth(c *gin.Context, rbacSvc rbac.RBACManager, action rbac.Action) (string, bool) {
+	userEmail := strings.TrimSpace(c.GetString("user_email"))
+	if userEmail == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return "", false
+	}
+
+	allowed, err := rbacSvc.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, action)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return "", false
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return "", false
+	}
+
+	return userEmail, true
+}
+
+// validatePublicID ensures the path parameter `id` is present.
+func validatePublicID(c *gin.Context) (string, bool) {
+	publicID := strings.TrimSpace(c.Param("id"))
+	if publicID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
+		return "", false
+	}
+	return publicID, true
+}
+
+// loadDeployApprovalRequest retrieves a deploy approval record by public ID.
+func loadDeployApprovalRequest(c *gin.Context, database *db.Database, publicID string) (*db.DeployApprovalRequest, bool) {
+	record, err := database.GetDeployApprovalRequestByPublicID(publicID)
+	if err != nil {
+		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
+			return nil, false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy approval request"})
+		return nil, false
+	}
+	return record, true
+}
+
+// loadApprover fetches the approver user by email.
+func loadApprover(c *gin.Context, database *db.Database, email string) (*db.User, bool) {
+	approver, err := database.GetUser(email)
+	if err != nil || approver == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load approver"})
+		return nil, false
+	}
+	return approver, true
+}
+
+// logDeployApprovalAudit wraps audit logging for deploy approval operations.
+func logDeployApprovalAudit(logger *audit.Logger, userEmail, userName, action, resourceID, details, status string, httpStatus int) {
+	if logger == nil {
+		return
+	}
+
+	_ = logger.LogDBEntry(&db.AuditLog{
+		UserEmail:    userEmail,
+		UserName:     userName,
+		ActionType:   "gateway",
+		Action:       action,
+		ResourceType: "deploy-approval-request",
+		Resource:     resourceID,
+		Details:      details,
+		Status:       status,
+		RBACDecision: "allow",
+		HTTPStatus:   httpStatus,
+	})
 }

@@ -25,18 +25,7 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 		return
 	}
 
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+	if _, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove); !ok {
 		return
 	}
 
@@ -87,25 +76,13 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+	userEmail, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove)
+	if !ok {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return
-	}
-
-	publicID := strings.TrimSpace(c.Param("id"))
-	if publicID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
+	publicID, ok := validatePublicID(c)
+	if !ok {
 		return
 	}
 
@@ -115,9 +92,8 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	approver, err := h.database.GetUser(userEmail)
-	if err != nil || approver == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load approver"})
+	approver, ok := loadApprover(c, h.database, userEmail)
+	if !ok {
 		return
 	}
 
@@ -150,18 +126,16 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		"message":    strings.TrimSpace(record.Message),
 	})
 
-	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
-		UserEmail:    userEmail,
-		UserName:     approver.Name,
-		ActionType:   "gateway",
-		Action:       audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionApprove.String()),
-		ResourceType: "deploy-approval-request",
-		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      details,
-		Status:       "success",
-		RBACDecision: "allow",
-		HTTPStatus:   http.StatusOK,
-	})
+	logDeployApprovalAudit(
+		h.auditLogger,
+		userEmail,
+		approver.Name,
+		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionApprove.String()),
+		fmt.Sprintf("%d", record.ID),
+		details,
+		"success",
+		http.StatusOK,
+	)
 
 	// Trigger CircleCI approval if configured and enabled
 	if h.settingsService == nil || len(record.CIMetadata) == 0 {
@@ -252,25 +226,13 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+	userEmail, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove)
+	if !ok {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return
-	}
-
-	publicID := strings.TrimSpace(c.Param("id"))
-	if publicID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
+	publicID, ok := validatePublicID(c)
+	if !ok {
 		return
 	}
 
@@ -280,9 +242,8 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	approver, err := h.database.GetUser(userEmail)
-	if err != nil || approver == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load approver"})
+	approver, ok := loadApprover(c, h.database, userEmail)
+	if !ok {
 		return
 	}
 
@@ -301,18 +262,16 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		"message": strings.TrimSpace(record.Message),
 	})
 
-	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
-		UserEmail:    userEmail,
-		UserName:     approver.Name,
-		ActionType:   "gateway",
-		Action:       audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), audit.ActionVerbReject),
-		ResourceType: "deploy-approval-request",
-		Resource:     fmt.Sprintf("%d", record.ID),
-		Details:      details,
-		Status:       "success",
-		RBACDecision: "allow",
-		HTTPStatus:   http.StatusOK,
-	})
+	logDeployApprovalAudit(
+		h.auditLogger,
+		userEmail,
+		approver.Name,
+		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), audit.ActionVerbReject),
+		fmt.Sprintf("%d", record.ID),
+		details,
+		"success",
+		http.StatusOK,
+	)
 
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
@@ -323,36 +282,17 @@ func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
 		return
 	}
 
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+	if _, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove); !ok {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+	publicID, ok := validatePublicID(c)
+	if !ok {
 		return
 	}
 
-	publicID := strings.TrimSpace(c.Param("id"))
-	if publicID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
-		return
-	}
-
-	// Get the deploy approval request to verify it exists and get the internal ID
-	record, err := h.database.GetDeployApprovalRequestByPublicID(publicID)
-	if err != nil {
-		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy approval request"})
+	record, ok := loadDeployApprovalRequest(c, h.database, publicID)
+	if !ok {
 		return
 	}
 
