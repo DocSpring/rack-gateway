@@ -3,6 +3,14 @@
 # This script safely runs tests by managing Convox config backup/restore
 set -euo pipefail
 
+compose_cmd() {
+    if [ -n "${RGW_SHARED_DB_PROJECT:-}" ]; then
+        docker compose --project-name "${RGW_SHARED_DB_PROJECT}" "$@"
+    else
+        docker compose "$@"
+    fi
+}
+
 # Get script directory to find backup/restore scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_SCRIPT="$SCRIPT_DIR/backup-convox-config.sh"
@@ -147,9 +155,9 @@ EOF
         case "$host" in
             ''|localhost|127.0.0.*)
                 if [ "${port:-}" = "55432" ]; then
-                    docker compose up -d postgres >/dev/null 2>&1 || true
+                    compose_cmd up -d postgres >/dev/null 2>&1 || true
                     for _ in $(seq 1 20); do
-                        if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+                        if compose_cmd exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
                             use_docker=true
                             break
                         fi
@@ -161,12 +169,12 @@ EOF
     fi
 
     if [ "$use_docker" = true ]; then
-        if docker compose exec -T postgres psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1; then
+        if compose_cmd exec -T postgres psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1; then
             return
         fi
 
         echo "Creating local database $db_name for tests (docker compose)..."
-        if ! docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\";" >/dev/null; then
+        if ! compose_cmd exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${db_name}\";" >/dev/null; then
             echo "Warning: failed to create database $db_name in docker (continuing)." >&2
         fi
         return

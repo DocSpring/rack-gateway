@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+compose_cmd() {
+  if [ -n "${RGW_SHARED_DB_PROJECT:-}" ]; then
+    docker compose --project-name "${RGW_SHARED_DB_PROJECT}" "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
 # If arguments provided, reset specific database
 # Otherwise reset all databases
 if [ $# -eq 2 ]; then
@@ -15,17 +23,17 @@ fi
 
 echo "Stopping gateway services..."
 for service in "${SERVICES[@]}"; do
-  docker compose stop "$service" 2>/dev/null || true
-  docker compose rm -f "$service" 2>/dev/null || true
+  compose_cmd stop "$service" 2>/dev/null || true
+  compose_cmd rm -f "$service" 2>/dev/null || true
 done
 
 echo "Starting postgres..."
-docker compose up -d postgres
+compose_cmd up -d postgres
 
 # Wait for postgres to be ready
 echo "Waiting for Postgres..."
-for i in {1..30}; do
-  if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+for _ in {1..30}; do
+  if compose_cmd exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
     echo "Postgres is ready"
     break
   fi
@@ -35,8 +43,8 @@ done
 # Drop and recreate databases
 for dbname in "${DATABASES[@]}"; do
   echo "Resetting database: ${dbname}"
-  docker compose exec -T postgres psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS \"${dbname}\";"
-  docker compose exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE \"${dbname}\";"
+  compose_cmd exec -T postgres psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS \"${dbname}\";"
+  compose_cmd exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE \"${dbname}\";"
 done
 
 echo "Database(s) reset."

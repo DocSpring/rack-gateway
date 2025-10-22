@@ -18,20 +18,35 @@
 -- STEP 1: CREATE ROLES
 -- ============================================================================
 
+-- Acquire a cluster-wide advisory lock so concurrent migrations do not race
+-- when provisioning shared roles and schema objects.
+SELECT pg_advisory_lock(728443218); -- arbitrary constant for audit migration
+
 -- Check if roles exist before creating them
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_owner') THEN
+    -- Create roles idempotently so concurrent migrations do not fail.
+    BEGIN
         CREATE ROLE audit_owner NOINHERIT;
-    END IF;
+    EXCEPTION
+        WHEN duplicate_object THEN
+            -- Role already exists; ensure migration continues without error.
+            NULL;
+    END;
 
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_writer') THEN
+    BEGIN
         CREATE ROLE audit_writer NOINHERIT;
-    END IF;
+    EXCEPTION
+        WHEN duplicate_object THEN
+            NULL;
+    END;
 
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_reader') THEN
+    BEGIN
         CREATE ROLE audit_reader NOINHERIT;
-    END IF;
+    EXCEPTION
+        WHEN duplicate_object THEN
+            NULL;
+    END;
 END
 $$;
 
@@ -500,6 +515,9 @@ $$;
 CREATE TRIGGER t_maintain_aggregation
 AFTER INSERT ON audit.audit_event
 FOR EACH ROW EXECUTE FUNCTION audit.maintain_aggregation();
+
+-- Release the advisory lock acquired at the beginning of the migration.
+SELECT pg_advisory_unlock(728443218);
 
 -- ============================================================================
 -- DONE
