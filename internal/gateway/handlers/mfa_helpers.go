@@ -2,32 +2,14 @@ package handlers
 
 import "github.com/DocSpring/rack-gateway/internal/gateway/db"
 
-// shouldEnforceMFA returns true when the user is subject to MFA enforcement
-// (e.g. require_all_users policy or a per-user enforcement flag).
+// shouldEnforceMFA is a local wrapper for db.ShouldEnforceMFA to maintain backward compatibility
+// within the handlers package.
 func shouldEnforceMFA(settings *db.MFASettings, user *db.User) bool {
-	if user == nil {
-		if settings == nil {
-			return true
-		}
-		return settings.RequireAllUsers
-	}
-	if settings == nil {
-		return true
-	}
-	if settings.RequireAllUsers {
-		return true
-	}
-	return user.MFAEnforcedAt != nil
+	return db.ShouldEnforceMFA(settings, user)
 }
 
-// isMFAChallengeRequired returns true when the user must complete an MFA
-// challenge to proceed (i.e. enforcement is active and the user is enrolled).
+// isMFAChallengeRequired is a local wrapper for db.IsMFAChallengeRequired to maintain backward compatibility
+// within the handlers package.
 func isMFAChallengeRequired(settings *db.MFASettings, user *db.User) bool {
-	if user == nil {
-		return false
-	}
-	if !user.MFAEnrolled {
-		return false
-	}
-	return shouldEnforceMFA(settings, user)
+	return db.IsMFAChallengeRequired(settings, user)
 }

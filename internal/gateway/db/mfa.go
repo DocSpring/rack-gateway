@@ -8,6 +8,36 @@ import (
 	"time"
 )
 
+// ShouldEnforceMFA returns true when the user is subject to MFA enforcement
+// (e.g. require_all_users policy or a per-user enforcement flag).
+func ShouldEnforceMFA(settings *MFASettings, user *User) bool {
+	if user == nil {
+		if settings == nil {
+			return true
+		}
+		return settings.RequireAllUsers
+	}
+	if settings == nil {
+		return true
+	}
+	if settings.RequireAllUsers {
+		return true
+	}
+	return user.MFAEnforcedAt != nil
+}
+
+// IsMFAChallengeRequired returns true when the user must complete an MFA
+// challenge to proceed (i.e. enforcement is active and the user is enrolled).
+func IsMFAChallengeRequired(settings *MFASettings, user *User) bool {
+	if user == nil {
+		return false
+	}
+	if !user.MFAEnrolled {
+		return false
+	}
+	return ShouldEnforceMFA(settings, user)
+}
+
 func (d *Database) SetUserMFAEnrolled(userID int64, enrolled bool) error {
 	_, err := d.exec("UPDATE users SET mfa_enrolled = ?, mfa_enforced_at = CASE WHEN ? THEN COALESCE(mfa_enforced_at, NOW()) ELSE mfa_enforced_at END, updated_at = NOW() WHERE id = ?", enrolled, enrolled, userID)
 	if err != nil {

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -8,6 +9,30 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
+
+// loadUserForEnrollmentCheck retrieves the user record from the database if not already loaded.
+// It populates authUser.DBUser and returns the user record. Returns nil for API tokens.
+func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, authUser *auth.AuthUser) (*db.User, error) {
+	if authUser == nil || authUser.IsAPIToken {
+		return nil, nil
+	}
+
+	user := auth.GetAuthUserRecord(ctx)
+	if user != nil {
+		return user, nil
+	}
+
+	loaded, err := database.GetUser(authUser.Email)
+	if err != nil {
+		return nil, err
+	}
+	if loaded == nil {
+		return nil, nil
+	}
+
+	authUser.DBUser = loaded
+	return loaded, nil
+}
 
 // RequireMFAEnrollment blocks CLI sessions when MFA enforcement is active but the
 // user has not yet completed enrollment. It returns a clear error so the CLI can
@@ -29,24 +54,19 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 			return
 		}
 
-		user := auth.GetAuthUserRecord(c.Request.Context())
+		user, err := loadUserForEnrollmentCheck(c.Request.Context(), database, authUser)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+			c.Abort()
+			return
+		}
 		if user == nil {
-			loaded, err := database.GetUser(authUser.Email)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-				c.Abort()
-				return
-			}
-			if loaded == nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-				c.Abort()
-				return
-			}
-			authUser.DBUser = loaded
-			user = loaded
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+			c.Abort()
+			return
 		}
 
-		if shouldEnforceMFAForMiddleware(settings, user) && !user.MFAEnrolled {
+		if db.ShouldEnforceMFA(settings, user) && !user.MFAEnrolled {
 			message := "You must set up multi-factor authentication before you can continue using the CLI. Please run rack-gateway login and finish MFA enrollment."
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "mfa_enrollment_required",
@@ -81,24 +101,19 @@ func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gi
 			return
 		}
 
-		user := auth.GetAuthUserRecord(c.Request.Context())
+		user, err := loadUserForEnrollmentCheck(c.Request.Context(), database, authUser)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+			c.Abort()
+			return
+		}
 		if user == nil {
-			loaded, err := database.GetUser(authUser.Email)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-				c.Abort()
-				return
-			}
-			if loaded == nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-				c.Abort()
-				return
-			}
-			authUser.DBUser = loaded
-			user = loaded
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+			c.Abort()
+			return
 		}
 
-		if !shouldEnforceMFAForMiddleware(settings, user) || user.MFAEnrolled {
+		if !db.ShouldEnforceMFA(settings, user) || user.MFAEnrolled {
 			c.Next()
 			return
 		}
@@ -136,22 +151,4 @@ func isMFAEnrollmentAllowedPath(path string) bool {
 		}
 	}
 	return false
-}
-
-// handlersShouldEnforceMFA mirrors the logic used by handlers without creating a
-// circular dependency (middleware cannot import handlers directly).
-func shouldEnforceMFAForMiddleware(settings *db.MFASettings, user *db.User) bool {
-	if user == nil {
-		if settings == nil {
-			return true
-		}
-		return settings.RequireAllUsers
-	}
-	if settings == nil {
-		return true
-	}
-	if settings.RequireAllUsers {
-		return true
-	}
-	return user.MFAEnforcedAt != nil
 }
