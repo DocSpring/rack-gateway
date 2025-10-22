@@ -88,6 +88,55 @@ type VerifyCommitOptions struct {
 	Mode      string // Verification mode: settings.VerifyGitCommitModeBranch or settings.VerifyGitCommitModeLatest
 }
 
+// doRequest executes an HTTP request to the GitHub API with standard headers and error handling.
+// Parameters:
+//   - method: HTTP method (GET, POST, etc.)
+//   - url: Full API URL
+//   - body: Optional request body (can be nil)
+//   - expectedStatus: Expected HTTP status code(s) for success
+//   - notFoundError: Optional custom error message for 404 responses (if empty, 404 is treated as a regular error)
+//   - target: Optional pointer to decode JSON response into (can be nil)
+//
+// Returns an error if the request fails, returns unexpected status, or JSON decoding fails.
+func (c *Client) doRequest(method, url string, body io.Reader, expectedStatus int, notFoundError string, target interface{}) error {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Handle 404 with custom error if provided
+	if resp.StatusCode == http.StatusNotFound && notFoundError != "" {
+		return fmt.Errorf("%s", notFoundError)
+	}
+
+	// Check for expected status
+	if resp.StatusCode != expectedStatus {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Decode JSON response if target is provided
+	if target != nil {
+		if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // VerifyCommitAndFindPR verifies a commit against GitHub and optionally finds a PR.
 // The behavior depends on the options:
 // - Mode "latest": commit must be the latest on the specified branch
@@ -151,62 +200,19 @@ func (c *Client) verifyCommitOnBranch(owner, repo, branch, commitHash, branchHea
 	// API: GET /repos/{owner}/{repo}/compare/{basehead}
 	// If commit is on the branch, the compare will show it's behind or identical
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/compare/%s...%s", owner, repo, commitHash, branchHeadSHA)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create compare request: %w", err)
-	}
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to compare commits: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("commit %s not found or not on branch %s", commitHash, branch)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub compare API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// If we get here, the commit exists and is reachable from the branch head
-	return nil
+	notFoundError := fmt.Sprintf("commit %s not found or not on branch %s", commitHash, branch)
+	return c.doRequest("GET", url, nil, http.StatusOK, notFoundError, nil)
 }
 
 // getBranch fetches branch information from GitHub
 func (c *Client) getBranch(owner, repo, branch string) (*Branch, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/branches/%s", owner, repo, branch)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("branch %s not found in repository %s/%s", branch, owner, repo)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-	}
 
 	var branchInfo Branch
-	if err := json.NewDecoder(resp.Body).Decode(&branchInfo); err != nil {
-		return nil, fmt.Errorf("failed to decode branch response: %w", err)
+	notFoundError := fmt.Sprintf("branch %s not found in repository %s/%s", branch, owner, repo)
+	if err := c.doRequest("GET", url, nil, http.StatusOK, notFoundError, &branchInfo); err != nil {
+		return nil, err
 	}
 
 	return &branchInfo, nil
@@ -215,28 +221,10 @@ func (c *Client) getBranch(owner, repo, branch string) (*Branch, error) {
 // findPRForBranch finds an open PR for the specified branch
 func (c *Client) findPRForBranch(owner, repo, branch string) (*PullRequest, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls?head=%s:%s&state=open", owner, repo, owner, branch)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-	}
 
 	var prs []PullRequest
-	if err := json.NewDecoder(resp.Body).Decode(&prs); err != nil {
-		return nil, fmt.Errorf("failed to decode PR list response: %w", err)
+	if err := c.doRequest("GET", url, nil, http.StatusOK, "", &prs); err != nil {
+		return nil, err
 	}
 
 	if len(prs) == 0 {
@@ -255,25 +243,5 @@ func (c *Client) PostPRComment(owner, repo string, prNumber int, comment string)
 		return fmt.Errorf("failed to marshal comment: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return c.doRequest("POST", url, strings.NewReader(string(body)), http.StatusCreated, "", nil)
 }
