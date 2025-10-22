@@ -144,8 +144,12 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 		}
 	}
 
-	// Return all updated settings
-	result, errMsg := buildSettingsResponse(ops, appName, allowedKeys)
+	// Return updated settings (full group when restricted, otherwise just the keys touched)
+	keysToReturn := keys
+	if len(allowedKeys) > 0 {
+		keysToReturn = allowedKeys
+	}
+	result, errMsg := buildSettingsResponse(ops, appName, keysToReturn)
 	if errMsg != "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
 		return
