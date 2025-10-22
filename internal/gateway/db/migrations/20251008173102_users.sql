@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
   mfa_enrolled BOOLEAN NOT NULL DEFAULT FALSE,
   mfa_enforced_at TIMESTAMPTZ,
   preferred_mfa_method VARCHAR(20),
-  locked_at TIMESTAMP,
+  locked_at TIMESTAMPTZ,
   locked_reason TEXT,
   locked_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT check_preferred_mfa_method CHECK (preferred_mfa_method IS NULL OR preferred_mfa_method IN ('totp', 'webauthn'))
