@@ -1,19 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -128,73 +120,27 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
 		return
 	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+
+	userCtx, ok := loadMFAUserContext(c, h.database)
+	if !ok {
 		return
 	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+
+	methodID, ok := parseIDParam(c, "methodID")
+	if !ok {
 		return
 	}
-	if userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-	methodIDParam := strings.TrimSpace(c.Param("methodID"))
-	if methodIDParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "method id required"})
-		return
-	}
-	methodID, err := strconv.ParseInt(methodIDParam, 10, 64)
-	if err != nil || methodID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid method id"})
-		return
-	}
-	method, err := h.database.GetMFAMethodByID(methodID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load mfa method"})
-		return
-	}
-	if method == nil || method.UserID != userRecord.ID {
-		c.JSON(http.StatusNotFound, gin.H{"error": "mfa method not found"})
+
+	method, ok := loadMFAMethod(c, h.database, methodID, userCtx.userRecord.ID)
+	if !ok {
 		return
 	}
 	if err := h.database.DeleteMFAMethod(method.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete mfa method"})
 		return
 	}
-	remaining, err := h.database.ListMFAMethods(userRecord.ID)
-	if err == nil {
-		hasConfirmed := false
-		for _, candidate := range remaining {
-			if candidate != nil && candidate.ConfirmedAt != nil {
-				hasConfirmed = true
-				break
-			}
-		}
-		if !hasConfirmed {
-			if err := h.database.SetUserMFAEnrolled(userRecord.ID, false); err != nil {
-				log.Printf("failed to update mfa enrollment after delete: %v", err)
-			}
-			// Clear all trusted devices when MFA is fully disabled
-			trustedDevices, err := h.database.ListTrustedDevices(userRecord.ID)
-			if err != nil {
-				log.Printf("failed to list trusted devices: %v", err)
-			} else {
-				for _, device := range trustedDevices {
-					if device != nil && device.RevokedAt == nil {
-						if err := h.database.RevokeTrustedDevice(device.ID, "mfa_disabled"); err != nil {
-							log.Printf("failed to revoke trusted device %d: %v", device.ID, err)
-						}
-					}
-				}
-			}
-		}
-	} else {
-		log.Printf("failed to list remaining mfa methods: %v", err)
-	}
+
+	h.handleMFADisablement(userCtx.userRecord.ID)
 	c.JSON(http.StatusOK, StatusResponse{Status: "deleted"})
 }
 
@@ -218,37 +164,19 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
 		return
 	}
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+
+	userCtx, ok := loadMFAUserContext(c, h.database)
+	if !ok {
 		return
 	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+
+	methodID, ok := parseIDParam(c, "methodID")
+	if !ok {
 		return
 	}
-	if userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
-	}
-	methodIDParam := strings.TrimSpace(c.Param("methodID"))
-	if methodIDParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "method id required"})
-		return
-	}
-	methodID, err := strconv.ParseInt(methodIDParam, 10, 64)
-	if err != nil || methodID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid method id"})
-		return
-	}
-	method, err := h.database.GetMFAMethodByID(methodID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load mfa method"})
-		return
-	}
-	if method == nil || method.UserID != userRecord.ID {
-		c.JSON(http.StatusNotFound, gin.H{"error": "mfa method not found"})
+
+	method, ok := loadMFAMethod(c, h.database, methodID, userCtx.userRecord.ID)
+	if !ok {
 		return
 	}
 
@@ -258,34 +186,12 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 		return
 	}
 
-	// Update only the label
 	if err := h.database.UpdateMFAMethodLabel(method.ID, req.Label); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update mfa method"})
 		return
 	}
 
-	// Audit log
-	if h.database != nil {
-		details, _ := json.Marshal(map[string]interface{}{
-			"method_id": method.ID,
-			"label":     req.Label,
-		})
-		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:    userRecord.Email,
-			UserName:     userRecord.Name,
-			ActionType:   "auth",
-			Action:       audit.BuildAction(audit.ActionScopeMFAPreferences, rbac.ActionUpdate.String()),
-			ResourceType: "mfa_method",
-			Resource:     fmt.Sprintf("%d", method.ID),
-			Details:      string(details),
-			Status:       "success",
-			IPAddress:    c.ClientIP(),
-			UserAgent:    c.Request.UserAgent(),
-		}); err != nil {
-			log.Printf("failed to log mfa update audit: %v", err)
-		}
-	}
-
+	h.auditMFAUpdate(c, userCtx.userRecord, method.ID, req.Label)
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
 }
 
@@ -379,47 +285,31 @@ func (h *AuthHandler) TrustCurrentDevice(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/trusted-devices/{deviceID} [delete]
 func (h *AuthHandler) RevokeTrustedDevice(c *gin.Context) {
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa requires user session"})
+	userCtx, ok := loadMFAUserContext(c, h.database)
+	if !ok {
 		return
 	}
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+
+	deviceID, ok := parseIDParam(c, "deviceID")
+	if !ok {
 		return
 	}
-	if userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
+
+	device, ok := loadTrustedDevice(c, h.database, deviceID, userCtx.userRecord.ID)
+	if !ok {
 		return
 	}
-	deviceIDParam := strings.TrimSpace(c.Param("deviceID"))
-	if deviceIDParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device id required"})
-		return
-	}
-	deviceID, err := strconv.ParseInt(deviceIDParam, 10, 64)
-	if err != nil || deviceID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device id"})
-		return
-	}
-	device, err := h.database.GetTrustedDeviceByID(deviceID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load trusted device"})
-		return
-	}
-	if device == nil || device.UserID != userRecord.ID {
-		c.JSON(http.StatusNotFound, gin.H{"error": "trusted device not found"})
-		return
-	}
+
 	if device.RevokedAt != nil {
 		c.JSON(http.StatusOK, StatusResponse{Status: "revoked"})
 		return
 	}
+
 	if err := h.database.RevokeTrustedDevice(device.ID, "user_request"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke trusted device"})
 		return
 	}
+
 	c.JSON(http.StatusOK, StatusResponse{Status: "revoked"})
 }
 
@@ -437,9 +327,8 @@ func (h *AuthHandler) RevokeTrustedDevice(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/preferred-method [put]
 func (h *AuthHandler) UpdatePreferredMFAMethod(c *gin.Context) {
-	authUser, ok := auth.GetAuthUser(c.Request.Context())
-	if !ok || authUser == nil || authUser.IsAPIToken {
-		c.JSON(http.StatusForbidden, gin.H{"error": "user session required"})
+	userCtx, ok := loadMFAUserContext(c, h.database)
+	if !ok {
 		return
 	}
 
@@ -449,7 +338,6 @@ func (h *AuthHandler) UpdatePreferredMFAMethod(c *gin.Context) {
 		return
 	}
 
-	// Validate method if provided
 	if req.PreferredMethod != nil {
 		method := *req.PreferredMethod
 		if method != "totp" && method != "webauthn" {
@@ -458,13 +346,7 @@ func (h *AuthHandler) UpdatePreferredMFAMethod(c *gin.Context) {
 		}
 	}
 
-	userRecord, err := h.database.GetUser(authUser.Email)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
-		return
-	}
-
-	if err := h.database.UpdatePreferredMFAMethod(userRecord.ID, req.PreferredMethod); err != nil {
+	if err := h.database.UpdatePreferredMFAMethod(userCtx.userRecord.ID, req.PreferredMethod); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update preferred method"})
 		return
 	}

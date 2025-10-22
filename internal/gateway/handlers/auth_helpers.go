@@ -352,3 +352,68 @@ func summarizeBackupCodes(codes []*db.MFABackupCode) MFABackupCodesSummary {
 	}
 	return summary
 }
+
+// handleMFADisablement checks if a user has any confirmed MFA methods remaining,
+// and if not, marks the user as not enrolled and revokes all trusted devices.
+func (h *AuthHandler) handleMFADisablement(userID int64) {
+	remaining, err := h.database.ListMFAMethods(userID)
+	if err != nil {
+		log.Printf("failed to list remaining mfa methods: %v", err)
+		return
+	}
+
+	hasConfirmed := false
+	for _, candidate := range remaining {
+		if candidate != nil && candidate.ConfirmedAt != nil {
+			hasConfirmed = true
+			break
+		}
+	}
+
+	if !hasConfirmed {
+		if err := h.database.SetUserMFAEnrolled(userID, false); err != nil {
+			log.Printf("failed to update mfa enrollment after delete: %v", err)
+		}
+
+		trustedDevices, err := h.database.ListTrustedDevices(userID)
+		if err != nil {
+			log.Printf("failed to list trusted devices: %v", err)
+			return
+		}
+
+		for _, device := range trustedDevices {
+			if device != nil && device.RevokedAt == nil {
+				if err := h.database.RevokeTrustedDevice(device.ID, "mfa_disabled"); err != nil {
+					log.Printf("failed to revoke trusted device %d: %v", device.ID, err)
+				}
+			}
+		}
+	}
+}
+
+// auditMFAUpdate logs an MFA method update to the audit log
+func (h *AuthHandler) auditMFAUpdate(c *gin.Context, user *db.User, methodID int64, label string) {
+	if h.database == nil {
+		return
+	}
+
+	details, _ := json.Marshal(map[string]interface{}{
+		"method_id": methodID,
+		"label":     label,
+	})
+
+	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
+		UserEmail:    user.Email,
+		UserName:     user.Name,
+		ActionType:   "auth",
+		Action:       audit.BuildAction(audit.ActionScopeMFAPreferences, rbac.ActionUpdate.String()),
+		ResourceType: "mfa_method",
+		Resource:     fmt.Sprintf("%d", methodID),
+		Details:      string(details),
+		Status:       "success",
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.Request.UserAgent(),
+	}); err != nil {
+		log.Printf("failed to log mfa update audit: %v", err)
+	}
+}

@@ -37,9 +37,10 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Outcome:** Added shared auth/validation/audit helpers in `deploy_approval_helpers.go`, refactored admin handlers to use them, and verified with `task go:test`.
 
 ### 005 – `internal/gateway/handlers/auth_mfa_management.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ completed — commit `6547f51`
 - **Why flagged:** Several 30–40 line duplicates for enabling/disabling MFA methods.
 - **Goal:** Extract a method-orchestrating helper (e.g., `withMethod(userID, methodType, func(*MFAMethod) error)`) and consolidate response writers.
+- **Outcome:** Added shared helpers in `mfa_helpers.go` (`loadMFAUserContext`, `parseIDParam`, `loadMFAMethod`, `loadTrustedDevice`) and `auth_helpers.go` (`handleMFADisablement`, `auditMFAUpdate`). Refactored DeleteMFAMethod, UpdateMFAMethod, RevokeTrustedDevice, and UpdatePreferredMFAMethod to use these helpers. Eliminated 30-40 line clones while preserving audit logging, RBAC enforcement, and error messages. All handler tests pass.
 
 ### 006 – `internal/gateway/db/mfa.go`
 - **Status:** ✅ merged — commit `c37dd52`
