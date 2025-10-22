@@ -61,7 +61,7 @@ fi
 )
 
 # Create the worktree from origin/main, forcing the branch to point there.
-git worktree add -B "$BRANCH" "$WORKTREE_PATH" origin/main
+git worktree add -B "$BRANCH" "$WORKTREE_PATH" main
 
 echo "Created worktree: $WORKTREE_PATH"
 echo "Branch: $BRANCH"
