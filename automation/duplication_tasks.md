@@ -42,10 +42,11 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Goal:** Extract a method-orchestrating helper (e.g., `withMethod(userID, methodType, func(*MFAMethod) error)`) and consolidate response writers.
 
 ### 006 – `internal/gateway/db/mfa.go`
-- **Status:** ☐ unassigned
+- **Status:** ✅ merged — commit `c37dd52`
 - **Why flagged:** Repeated SQL fragments for MFA method queries and updates (42-line and 29-line clones).
 - **Goal:** Build parameterised helpers (e.g., generic upsert, select) or use query builders to kill the copy/paste.
 - **Notes:** Touch migrations/tests carefully—DB semantics must not change.
+- **Outcome:** Added shared scanning helpers and extracted trusted device operations into dedicated files, keeping functionality intact and passing `task go:test`.
 
 ### 007 – `internal/gateway/db/sessions.go`
 - **Status:** ✅ merged — commit `f8d9b7b`
