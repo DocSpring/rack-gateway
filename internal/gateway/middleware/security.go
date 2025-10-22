@@ -382,7 +382,7 @@ func CSRF(sessionManager *auth.SessionManager) gin.HandlerFunc {
 		}
 
 		trimmedSession := strings.TrimSpace(sessionToken)
-		if _, err := sessionManager.ValidateSession(trimmedSession, clientIPFromRequest(c.Request), c.GetHeader("User-Agent")); err != nil {
+		if _, err := sessionManager.ValidateSession(trimmedSession, ClientIPFromRequest(c.Request), c.GetHeader("User-Agent")); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
 			c.Abort()
 			return
@@ -396,29 +396,6 @@ func CSRF(sessionManager *auth.SessionManager) gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-func clientIPFromRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			candidate := strings.TrimSpace(parts[0])
-			if candidate != "" {
-				return candidate
-			}
-		}
-	}
-	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
-		return xrip
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.HandlerFunc {

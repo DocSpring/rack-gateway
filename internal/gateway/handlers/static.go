@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -197,7 +196,7 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 		if sessionCookie, err := r.Cookie("session_token"); err == nil {
 			sessionToken := strings.TrimSpace(sessionCookie.Value)
 			if sessionToken != "" {
-				if _, err := h.sessions.ValidateSession(sessionToken, clientIPFromRequest(r), r.UserAgent()); err == nil {
+				if _, err := h.sessions.ValidateSession(sessionToken, middleware.ClientIPFromRequest(r), r.UserAgent()); err == nil {
 					if csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken); err == nil && csrfToken != "" {
 						result = replacePlaceholder(result, "RGW_CSRF_TOKEN", csrfToken)
 					}
@@ -259,27 +258,4 @@ func shouldRedirectToDefault(r *http.Request) bool {
 		return false
 	}
 	return true
-}
-
-func clientIPFromRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			candidate := strings.TrimSpace(parts[0])
-			if candidate != "" {
-				return candidate
-			}
-		}
-	}
-	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
-		return xrip
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
 }
