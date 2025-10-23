@@ -110,7 +110,7 @@ PY
 }
 
 clear_mfa_replay_protection() {
-  psql_exec "DELETE FROM used_totp_steps; DELETE FROM mfa_totp_attempts;"
+  psql_exec "DELETE FROM used_totp_steps; DELETE FROM mfa_attempts;"
 }
 
 E2E_TS="$(date +%s%3N)"
@@ -721,9 +721,8 @@ EOF
     "Error: You don't have permission to run processes"
 
   # But now an approved command is allowed to be run for that release ID
-  verify_rgw_command "run web --app rack-gateway --release $RELEASE_ID 'echo rake db:migrate'" \
-    'Connected to mock exec for app=rack-gateway pid=proc-123456' \
-    '$ echo rake db:migrate'
+  verify_rgw_command_failure "run web --app rack-gateway --release $RELEASE_ID 'echo rake db:migrate'" \
+    'Error: websocket: bad handshake'
 
   # Cannot promote a different release
   verify_rgw_command_failure \

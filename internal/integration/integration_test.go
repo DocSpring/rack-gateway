@@ -501,7 +501,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 	// Test 1: ps (lists processes)
 	t.Run("ps", func(t *testing.T) {
 		// Clear TOTP attempts to avoid rate limiting
-		_, _ = s.database.DB().Exec("DELETE FROM mfa_totp_attempts")
+    _, _ = s.database.DB().Exec("DELETE FROM mfa_attempts")
 
 		cmd := exec.Command("../../bin/rack-gateway", "ps", "-a", "myapp")
 		cmd.Env = append(os.Environ(),
@@ -588,7 +588,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 	// Test 1: Viewer role - should be blocked from write operations
 	t.Run("viewer_blocked_from_writes", func(t *testing.T) {
 		// Clear TOTP attempts to avoid rate limiting
-		_, _ = s.database.DB().Exec("DELETE FROM mfa_totp_attempts")
+    _, _ = s.database.DB().Exec("DELETE FROM mfa_attempts")
 
 		configDir, totpSecret := createUserConfig(t, "viewer@example.com", []string{"viewer"})
 
@@ -707,7 +707,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 	// Test 5: Verify proper access levels are enforced
 	t.Run("verify_access_levels", func(t *testing.T) {
 		// Clear TOTP attempts to avoid rate limiting
-		_, _ = s.database.DB().Exec("DELETE FROM mfa_totp_attempts")
+    _, _ = s.database.DB().Exec("DELETE FROM mfa_attempts")
 
 		// Viewer can read but not write
 		viewerConfig, _ := createUserConfig(t, "viewer@example.com", []string{"viewer"})

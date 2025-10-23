@@ -70,6 +70,15 @@ export async function login(page: Page, options: LoginOptions = {}) {
   await clearMfaAttempts()
 
   await page.goto(WebRoute('login'))
+  await page.evaluate(() => {
+    const nonce = (window as unknown as { __nonce__?: string }).__nonce__
+    const style = document.createElement('style')
+    if (nonce) {
+      style.setAttribute('nonce', nonce)
+    }
+    style.textContent = '[data-rht-toaster]{pointer-events:none !important;}'
+    document.head.appendChild(style)
+  })
   await clickLoginButton(page)
 
   const userCard = page.locator(`text=${userCardText}`)
@@ -107,6 +116,11 @@ export async function enforceMfaFor(email: string) {
 export async function clearStepUpSessions() {
   await expireStepUpForAllSessions()
   await clearMfaAttempts()
+}
+
+export async function waitForToastsToDisappear(page: Page) {
+  const toasts = page.locator('[data-rht-toaster] :scope > *')
+  await expect(toasts).toHaveCount(0, { timeout: 6000 })
 }
 
 /**

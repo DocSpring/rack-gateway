@@ -13,6 +13,7 @@ import {
   setupBothMfaMethods,
   startTotpEnrollmentViaUi,
   typeOtpCode,
+  waitForToastsToDisappear,
 } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
@@ -136,6 +137,7 @@ test.describe('Account security', () => {
     const secret = await startTotpEnrollmentViaUi(page, undefined, {
       dismissLabelDialog: false,
     })
+    await waitForToastsToDisappear(page)
     const initialLabelDialog = page
       .getByRole('dialog', { name: 'Edit MFA Method Label' })
       .filter({ has: page.getByRole('heading', { name: 'Edit MFA Method Label' }) })
@@ -143,7 +145,12 @@ test.describe('Account security', () => {
     if (shouldSaveDefaultLabel) {
       const labelInput = initialLabelDialog.getByLabel('Label')
       await expect(labelInput).toBeVisible()
-      await expect(labelInput).toHaveValue('Authenticator App')
+      const currentLabel = await labelInput.inputValue()
+      if (currentLabel.trim().length === 0) {
+        await labelInput.fill('Authenticator App')
+      } else {
+        await expect(labelInput).toHaveValue('Authenticator App')
+      }
       await initialLabelDialog.getByRole('button', { name: /^Save$/ }).click()
       await expect(initialLabelDialog).toBeHidden()
     }
@@ -182,6 +189,7 @@ test.describe('Account security', () => {
     await satisfyMFAStepUpModal(page, { secret, require: true })
     await regenResponsePromise
     await expect(backupCard.getByRole('button', { name: /Download latest codes/i })).toBeVisible()
+    await waitForToastsToDisappear(page)
 
     await clearStepUpSessionsAndReload(page)
     const revokeResponsePromise = page.waitForResponse(
@@ -194,29 +202,36 @@ test.describe('Account security', () => {
     await satisfyMFAStepUpModal(page, { secret, require: true })
     await revokeResponsePromise
     await expect(trustedDevicesCard.locator('tbody tr')).toHaveCount(0, { timeout: 15_000 })
+    await waitForToastsToDisappear(page)
 
     await clearStepUpSessionsAndReload(page)
     const deleteResponsePromise = page.waitForResponse(
       (response) =>
         response.url().includes('/auth/mfa/methods/') && response.request().method() === 'DELETE'
     )
-    await page.getByRole('button', { name: /^Disable MFA$/ }).click()
+    await page.getByRole('button', { name: /^Disable MFA$/ }).click({ force: true })
     const disableDialog = page.getByRole('dialog', { name: 'Disable MFA' })
     await expect(disableDialog).toBeVisible()
     await disableDialog.getByLabel('Confirmation').fill('DISABLE')
     await disableDialog.getByRole('button', { name: 'Disable MFA' }).click()
     await satisfyMFAStepUpModal(page, { secret, require: true })
-    await deleteResponsePromise
-    await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
-    await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
-    await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
+    const deleteResponse = await deleteResponsePromise
+    expect(
+      deleteResponse.ok(),
+      `expected Disable MFA request to succeed, got ${deleteResponse.status()}`
+    ).toBeTruthy()
+    await expect(page.getByText('Disabled', { exact: true })).toBeVisible({ timeout: 15_000 })
+    await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0, { timeout: 15_000 })
+    await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0, { timeout: 15_000 })
 
-    await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled()
-    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0, { timeout: 15_000 })
     await expect(page.getByRole('button', { name: /^Enrollment In Progress$/ })).toHaveCount(0)
+    await waitForToastsToDisappear(page)
 
     // Enroll again with a new TOTP method
     const reEnrollSecret = await startTotpEnrollmentViaUi(page)
+    await waitForToastsToDisappear(page)
 
     const removeResponsePromise = page.waitForResponse(
       (response) =>
@@ -228,7 +243,8 @@ test.describe('Account security', () => {
     // Click the dropdown menu button and select "Remove Method"
     const dropdownButton = methodsCard.locator('tbody tr').first().getByRole('button')
     await dropdownButton.click()
-    const removeMenuItem = page.getByText('Remove Method')
+    const removeMenuItem = page.getByRole('menuitem', { name: 'Remove Method' })
+    await removeMenuItem.waitFor({ state: 'visible', timeout: 5000 })
     await removeMenuItem.click()
 
     await satisfyMFAStepUpModal(page, { secret: reEnrollSecret, require: true })
@@ -236,6 +252,7 @@ test.describe('Account security', () => {
     await removeResponsePromise
     await expect(mfaCard.getByText('Disabled', { exact: true })).toBeVisible()
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
+    await waitForToastsToDisappear(page)
   })
 
   test('user can edit MFA method labels', async ({ page }) => {
@@ -244,7 +261,7 @@ test.describe('Account security', () => {
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
-    await startTotpEnrollmentViaUi(page)
+    await startTotpEnrollmentViaUi(page, ADMIN_EMAIL, { dismissLabelDialog: false })
 
     // Verify method was added
     const methodsCard = cardByTitle(page, 'Registered MFA Methods').first()

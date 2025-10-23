@@ -122,6 +122,22 @@ export async function cleanupE2eArtifacts() {
   })
 }
 
+export async function ensureAdminUser(): Promise<void> {
+  await withDbClient(async (client) => {
+    await client.query(
+      `
+        INSERT INTO users (email, name, roles)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (email) DO UPDATE
+        SET name = EXCLUDED.name,
+            roles = EXCLUDED.roles,
+            updated_at = NOW()
+      `,
+      ['admin@example.com', 'Admin User', '["admin"]']
+    )
+  })
+}
+
 type AggregatedAuditSeed = {
   firstEventId: number
   lastEventId: number
