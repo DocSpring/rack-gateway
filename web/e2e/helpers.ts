@@ -222,6 +222,12 @@ export async function satisfyMFAStepUpModal(
   const code = authenticator.generate(secret)
   await typeOtpCode(page, dialog, code)
 
+  const confirmButton = dialog.getByRole('button', { name: /Confirm|Verify|Continue/i })
+  const hasConfirmButton = await confirmButton.isVisible({ timeout: 1000 }).catch(() => false)
+  if (hasConfirmButton) {
+    await confirmButton.click()
+  }
+
   // Wait for the dialog to close after auto-submit
   await expect(dialog).toBeHidden({ timeout: 5000 })
   return true

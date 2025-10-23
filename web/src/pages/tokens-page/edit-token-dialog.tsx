@@ -1,6 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { Button } from '../../components/ui/button'
 import {
@@ -38,6 +38,7 @@ export function EditTokenDialog({
   isPermissionLoading: boolean
 }) {
   const { updateToken, handleStepUpError } = useTokenMutations()
+  const [nameError, setNameError] = useState<string | null>(null)
 
   const { data: tokensData } = useQuery<APIToken[]>({
     queryKey: QUERY_KEYS.TOKENS,
@@ -62,11 +63,12 @@ export function EditTokenDialog({
       const result = tokenFormSchema.safeParse(value)
       if (!result.success) {
         const errors = result.error.format()
-        const nameError = errors.name?._errors?.[0]
-        if (nameError) {
+        const nextNameError = errors.name?._errors?.[0]
+        if (nextNameError) {
+          setNameError(nextNameError)
           form.setFieldMeta('name', (meta) => ({
             ...meta,
-            errors: [nameError],
+            errors: [nextNameError],
           }))
         }
         const permissionsError = errors.permissions?._errors?.[0]
@@ -80,6 +82,7 @@ export function EditTokenDialog({
       }
 
       try {
+        setNameError(null)
         await updateToken.mutateAsync({
           publicId: token.public_id,
           name: result.data.name,
@@ -104,6 +107,7 @@ export function EditTokenDialog({
       const normalized = normalizePermissions(token.permissions ?? [])
       form.setFieldValue('name', token.name)
       form.setFieldValue('permissions', normalized)
+      setNameError(null)
     }
   }, [isOpen, token, form])
 
@@ -175,9 +179,9 @@ export function EditTokenDialog({
                       }}
                       value={field.state.value}
                     />
-                    {field.state.meta.errors.length > 0 && (
+                    {(nameError ?? field.state.meta.errors[0]) && (
                       <p className="text-destructive text-sm">
-                        {String(field.state.meta.errors[0])}
+                        {String(nameError ?? field.state.meta.errors[0])}
                       </p>
                     )}
                   </div>

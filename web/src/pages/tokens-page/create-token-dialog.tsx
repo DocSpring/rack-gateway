@@ -40,6 +40,7 @@ export function CreateTokenDialog({
   const { createToken, handleStepUpError } = useTokenMutations()
   const [createdToken, setCreatedToken] = useState<string | null>(null)
   const [createdTokenUuid, setCreatedTokenUuid] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
 
   const form = useForm({
     defaultValues: {
@@ -51,11 +52,12 @@ export function CreateTokenDialog({
       const result = tokenFormSchema.safeParse(value)
       if (!result.success) {
         const errors = result.error.format()
-        const nameError = errors.name?._errors?.[0]
-        if (nameError) {
+        const nextNameError = errors.name?._errors?.[0]
+        if (nextNameError) {
+          setNameError(nextNameError)
           form.setFieldMeta('name', (meta) => ({
             ...meta,
-            errors: [nameError],
+            errors: [nextNameError],
           }))
         }
         const permissionsError = errors.permissions?._errors?.[0]
@@ -67,6 +69,8 @@ export function CreateTokenDialog({
         }
         return
       }
+
+      setNameError(null)
 
       try {
         const response = await createToken.mutateAsync(result.data)
@@ -98,6 +102,7 @@ export function CreateTokenDialog({
         form.reset()
         setCreatedToken(null)
         setCreatedTokenUuid(null)
+        setNameError(null)
       }, 180)
       return () => window.clearTimeout(timer)
     }
@@ -227,9 +232,9 @@ export function CreateTokenDialog({
                         spellCheck={false}
                         value={field.state.value}
                       />
-                      {field.state.meta.errors.length > 0 && (
+                      {(nameError ?? field.state.meta.errors[0]) && (
                         <p className="text-destructive text-sm">
-                          {String(field.state.meta.errors[0])}
+                          {String(nameError ?? field.state.meta.errors[0])}
                         </p>
                       )}
                     </div>

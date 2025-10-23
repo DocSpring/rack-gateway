@@ -94,10 +94,28 @@ async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise
 
 export async function cleanupE2eArtifacts() {
   await withDbClient(async (client) => {
+    const { rows } = await client.query<[{ fn: string | null }]>(
+      `SELECT to_regprocedure('audit.reset_for_tests()') AS fn`
+    )
+    const resetFnExists = rows[0]?.fn != null
+
+    if (resetFnExists) {
+      await client.query("SET audit.allow_reset = 'on';")
+      try {
+        await client.query('SELECT audit.reset_for_tests();')
+      } finally {
+        await client.query('RESET audit.allow_reset;')
+      }
+    } else {
+      await client.query("SET session_replication_role = 'replica';")
+      try {
+        await client.query('TRUNCATE TABLE audit.audit_event_aggregated RESTART IDENTITY CASCADE;')
+        await client.query('TRUNCATE TABLE audit.audit_event CASCADE;')
+      } finally {
+        await client.query("SET session_replication_role = 'origin';")
+      }
+    }
     await client.query("DELETE FROM api_tokens WHERE name LIKE 'E2E Web%';")
-    await client.query("DELETE FROM audit.audit_event WHERE resource LIKE 'E2E Web%';")
-    await client.query("DELETE FROM audit.audit_event WHERE details LIKE '%E2E Web%';")
-    await client.query("DELETE FROM audit.audit_event_aggregated WHERE resource LIKE 'E2E Web%';")
     await client.query("DELETE FROM users WHERE name LIKE 'E2E Web%';")
   })
 }
