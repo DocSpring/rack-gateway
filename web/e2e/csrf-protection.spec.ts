@@ -57,7 +57,9 @@ test.describe('CSRF Protection for Proxy Routes', () => {
 
     const tokenName = `Playwright CLI Token ${Date.now()}`
     await page.getByRole('button', { name: /Create Token/i }).click()
-    const createDialog = page.getByRole('dialog')
+    const createDialog = page
+      .getByRole('dialog', { name: 'Create API Token' })
+      .filter({ has: page.getByRole('heading', { name: 'Create API Token' }) })
     await expect(createDialog).toBeVisible()
     await createDialog.getByLabel('Token Name').fill(tokenName)
 
@@ -65,7 +67,11 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     await createDialog.getByRole('button', { name: 'CI/CD' }).click()
 
     // Submit the form
-    await createDialog.getByRole('button', { name: /Create Token/i }).click()
+    const stepUpDialog = page.getByRole('dialog', { name: /Multi-Factor Authentication Required/i })
+    const stepUpAlreadyVisible = await stepUpDialog.isVisible({ timeout: 1000 }).catch(() => false)
+    if (!stepUpAlreadyVisible) {
+      await createDialog.getByRole('button', { name: /^Create Token$/ }).click()
+    }
 
     // Step-up modal WILL appear because this is a sensitive operation
     await satisfyMFAStepUpModal(page, { require: true })
@@ -81,7 +87,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
     expect(apiToken).toMatch(/^rgw_/)
 
     // Close the success dialog
-    await page.getByRole('button', { name: /Done/i }).click()
+    await createDialog.getByRole('button', { name: /Done/i }).click()
 
     // Now test that the CLI can use this token to access proxy routes
     const cliContext = await request.newContext({

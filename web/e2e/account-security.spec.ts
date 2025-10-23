@@ -133,7 +133,20 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0)
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0)
 
-    const secret = await startTotpEnrollmentViaUi(page)
+    const secret = await startTotpEnrollmentViaUi(page, undefined, {
+      dismissLabelDialog: false,
+    })
+    const initialLabelDialog = page
+      .getByRole('dialog', { name: 'Edit MFA Method Label' })
+      .filter({ has: page.getByRole('heading', { name: 'Edit MFA Method Label' }) })
+    const shouldSaveDefaultLabel = await initialLabelDialog.isVisible().catch(() => false)
+    if (shouldSaveDefaultLabel) {
+      const labelInput = initialLabelDialog.getByLabel('Label')
+      await expect(labelInput).toBeVisible()
+      await expect(labelInput).toHaveValue('Authenticator App')
+      await initialLabelDialog.getByRole('button', { name: /^Save$/ }).click()
+      await expect(initialLabelDialog).toBeHidden()
+    }
     await expect(mfaCard.getByText('Enabled', { exact: true })).toBeVisible()
 
     let methodsCard: Locator = cardByTitle(page, 'Registered MFA Methods').first()

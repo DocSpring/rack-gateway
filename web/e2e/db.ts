@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { Client } from 'pg'
 
 function getFallbackDatabaseUrl(): string {
@@ -115,8 +116,150 @@ export async function cleanupE2eArtifacts() {
         await client.query("SET session_replication_role = 'origin';")
       }
     }
+    await client.query('ALTER SEQUENCE audit.audit_event_chain_index_seq RESTART WITH 0;')
     await client.query("DELETE FROM api_tokens WHERE name LIKE 'E2E Web%';")
     await client.query("DELETE FROM users WHERE name LIKE 'E2E Web%';")
+  })
+}
+
+type AggregatedAuditSeed = {
+  firstEventId: number
+  lastEventId: number
+  eventCount: number
+  userEmail: string
+  userName: string
+  actionType: string
+  action: string
+  command: string
+  resource: string
+  resourceType: string
+  status: string
+  rbacDecision: string
+  httpStatus: number
+  minResponseTimeMs: number
+  maxResponseTimeMs: number
+  avgResponseTimeMs: number
+  ipAddress: string
+  userAgent: string
+  details: string
+}
+
+export async function seedAggregatedAuditLog(
+  overrides: Partial<AggregatedAuditSeed> = {}
+): Promise<void> {
+  const now = new Date()
+  const defaults: AggregatedAuditSeed = {
+    firstEventId: 1,
+    lastEventId: 3,
+    eventCount: 3,
+    userEmail: 'admin@example.com',
+    userName: 'Admin User',
+    actionType: 'convox',
+    action: 'app.list',
+    command: '',
+    resource: 'all',
+    resourceType: 'app',
+    status: 'success',
+    rbacDecision: 'allow',
+    httpStatus: 200,
+    minResponseTimeMs: 8,
+    maxResponseTimeMs: 12,
+    avgResponseTimeMs: 10,
+    ipAddress: '172.217.167.113',
+    userAgent: 'Playwright CLI',
+    details: '{}',
+  }
+
+  const seed: AggregatedAuditSeed = { ...defaults, ...overrides }
+  const firstHash = randomBytes(32)
+  const lastHash = randomBytes(32)
+
+  await withDbClient(async (client) => {
+    await client.query(
+      `
+        INSERT INTO audit.audit_event_aggregated (
+          first_event_id,
+          last_event_id,
+          first_seen,
+          last_seen,
+          first_hash,
+          last_hash,
+          event_count,
+          min_response_time_ms,
+          max_response_time_ms,
+          avg_response_time_ms,
+          user_email,
+          user_name,
+          api_token_id,
+          api_token_name,
+          action_type,
+          action,
+          command,
+          resource,
+          resource_type,
+          details,
+          ip_address,
+          user_agent,
+          status,
+          rbac_decision,
+          http_status,
+          deploy_approval_request_id
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12,
+          NULL,
+          NULL,
+          $13,
+          $14,
+          $15,
+          $16,
+          $17,
+          $18,
+          $19,
+          $20,
+          $21,
+          $22,
+          $23,
+          NULL
+        )
+      `,
+      [
+        seed.firstEventId,
+        seed.lastEventId,
+        now,
+        now,
+        firstHash,
+        lastHash,
+        seed.eventCount,
+        seed.minResponseTimeMs,
+        seed.maxResponseTimeMs,
+        seed.avgResponseTimeMs,
+        seed.userEmail,
+        seed.userName,
+        seed.actionType,
+        seed.action,
+        seed.command,
+        seed.resource,
+        seed.resourceType,
+        seed.details,
+        seed.ipAddress,
+        seed.userAgent,
+        seed.status,
+        seed.rbacDecision,
+        seed.httpStatus,
+      ]
+    )
   })
 }
 

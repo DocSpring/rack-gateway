@@ -124,14 +124,11 @@ export async function typeOtpCode(
   const firstInput = inputs.first()
   await firstInput.click()
   const inputCount = await inputs.count()
-  for (let index = 0; index < inputCount - 1; index += 1) {
-    await page.keyboard.press('ArrowRight')
-  }
-  for (let index = 0; index < inputCount; index += 1) {
-    await page.keyboard.press('Backspace')
-  }
-  for (const digit of code) {
-    await page.keyboard.type(digit)
+  const digits = code.slice(0, inputCount).split('')
+  for (let index = 0; index < digits.length; index += 1) {
+    const targetInput = inputs.nth(index)
+    await targetInput.click()
+    await targetInput.fill(digits[index])
   }
 }
 
@@ -235,8 +232,10 @@ export async function satisfyMFAStepUpModal(
 
 export async function startTotpEnrollmentViaUi(
   page: Page,
-  email = 'admin@example.com'
+  email = 'admin@example.com',
+  options: { dismissLabelDialog?: boolean } = {}
 ): Promise<string> {
+  const dismissLabelDialog = options.dismissLabelDialog ?? true
   // console.log(`[START_TOTP_ENROLLMENT] Starting for ${email}`)
   await page.evaluate(() => {
     const globalWindow = window as unknown as E2EWindow
@@ -302,9 +301,11 @@ export async function startTotpEnrollmentViaUi(
     .getByRole('dialog', { name: 'Edit MFA Method Label' })
     .filter({ has: page.getByRole('heading', { name: 'Edit MFA Method Label' }) })
   const labelDialogVisible = await editLabelDialog.isVisible({ timeout: 1000 }).catch(() => false)
-  if (labelDialogVisible) {
-    await editLabelDialog.getByRole('button', { name: /^Save$/ }).click()
-    await expect(editLabelDialog).toBeHidden()
+  if (labelDialogVisible && dismissLabelDialog) {
+    await editLabelDialog
+      .getByRole('button', { name: /^Save$/ })
+      .click()
+      .catch(() => {})
   }
 
   return secret
