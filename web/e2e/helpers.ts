@@ -129,7 +129,7 @@ export async function waitForToastsToDisappear(page: Page) {
  * Looks for the input within the provided context (page or dialog).
  */
 export async function typeOtpCode(
-  page: Page,
+  _page: Page,
   context: Page | ReturnType<Page['getByRole']>,
   code: string
 ) {

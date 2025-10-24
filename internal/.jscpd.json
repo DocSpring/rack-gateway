@@ -1,5 +1,6 @@
 {
   "minLines": 10,
+  "exitCode": 1,
   "ignore": [
     "**/convox_source/**",
     "**/reference/**",
@@ -7,7 +8,10 @@
     "**/.pnpm/**",
     "**/test-results/**",
     "**/playwright-report/**",
-    "**/coverage/**"
+    "**/coverage/**",
+    "**/AGENTS.md",
+    "**/CLAUDE.md",
+    "**/*_test.go"
   ],
   "gitignore": true,
   "absolute": false

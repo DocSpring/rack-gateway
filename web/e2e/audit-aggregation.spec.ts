@@ -33,7 +33,7 @@ test.describe('Audit aggregation', () => {
     await expect(page.getByRole('heading', { name: /Audit Logs/i })).toBeVisible()
 
     const table = page.getByRole('table')
-    await expect(table).toBeVisible({ timeout: 15000 })
+    await expect(table).toBeVisible({ timeout: 15_000 })
 
     // Scroll to table to ensure it's in screenshot
     await table.scrollIntoViewIfNeeded()
@@ -41,7 +41,7 @@ test.describe('Audit aggregation', () => {
     const targetRow = table
       .getByRole('row', { name: /(app\.list|convox:app:list)/i })
       .filter({ hasText: /×\d+/i })
-    await expect(targetRow).toHaveCount(1, { timeout: 15000 })
+    await expect(targetRow).toHaveCount(1, { timeout: 15_000 })
 
     const countBadge = targetRow.getByText(/×\d+/)
     const badgeText = (await countBadge.textContent())?.trim() ?? ''

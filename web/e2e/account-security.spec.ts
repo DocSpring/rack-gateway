@@ -224,8 +224,12 @@ test.describe('Account security', () => {
     await expect(cardByTitle(page, 'Registered MFA Methods')).toHaveCount(0, { timeout: 15_000 })
     await expect(cardByTitle(page, 'Backup Codes')).toHaveCount(0, { timeout: 15_000 })
 
-    await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0, { timeout: 15_000 })
+    await expect(page.getByRole('button', { name: /^Enable MFA$/ })).toBeEnabled({
+      timeout: 15_000,
+    })
+    await expect(page.getByRole('button', { name: /^Disable MFA$/ })).toHaveCount(0, {
+      timeout: 15_000,
+    })
     await expect(page.getByRole('button', { name: /^Enrollment In Progress$/ })).toHaveCount(0)
     await waitForToastsToDisappear(page)
 

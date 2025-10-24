@@ -10,7 +10,15 @@
     "**/coverage/**",
     "**/generated/**",
     "**/.jscpd/**",
-    "**/src/api/**"
+    "**/src/api/**",
+    "**/AGENTS.md",
+    "**/CLAUDE.md",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/*.test.js",
+    "**/*.spec.js"
   ],
   "format": ["typescript", "javascript"],
   "minLines": 10,
