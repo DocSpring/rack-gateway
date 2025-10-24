@@ -80,7 +80,7 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		objectURL          sql.NullString
 		buildID            sql.NullString
 		releaseID          sql.NullString
-		processIDs         pq.StringArray
+		processIDs         []string
 		execCommands       []byte // JSONB from PostgreSQL
 	)
 
@@ -206,7 +206,7 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		dr.ReleaseID = releaseID.String
 	}
 	if len(processIDs) > 0 {
-		dr.ProcessIDs = []string(processIDs)
+		dr.ProcessIDs = append([]string{}, processIDs...)
 	}
 	if len(execCommands) > 0 {
 		dr.ExecCommands = execCommands

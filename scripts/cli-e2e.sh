@@ -722,7 +722,8 @@ EOF
 
   # But now an approved command is allowed to be run for that release ID
   verify_rgw_command_failure "run web --app rack-gateway --release $RELEASE_ID 'echo rake db:migrate'" \
-    'Error: websocket: bad handshake'
+    'Connected to mock exec for app=rack-gateway pid=proc-123456' \
+    '$ echo rake db:migrate'
 
   # Cannot promote a different release
   verify_rgw_command_failure \
