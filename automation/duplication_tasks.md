@@ -30,20 +30,20 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Outcome:** Extracted shared user-load helper, centralized enforcement checks in `db/mfa.go`, updated middleware/handlers to call the shared logic, and reduced duplication without altering behaviour (DB migration tests still fail due to pre-existing missing `locked_at` column).
 
 ### 004 – `internal/gateway/handlers/deploy_approval_admin.go`
-- **Status:** ✅ merged — commit `dfbdb5a`
+- **Status:** 🔁 follow-up needed — residual clones still detected between list/approve flows (jscpd run 2024-10-18)
 - **Why flagged:** Multiple large clones (22–40 lines) for list/create/update flows.
 - **Goal:** Introduce reusable query/build helpers (e.g., filter builders, paginator) so the handler methods are thin.
 - **Tests:** Existing handler tests should be rewritten to cover new helpers—keep behaviour identical.
 - **Outcome:** Added shared auth/validation/audit helpers in `deploy_approval_helpers.go`, refactored admin handlers to use them, and verified with `task go:test`.
 
 ### 005 – `internal/gateway/handlers/auth_mfa_management.go`
-- **Status:** ✅ completed — commit `6547f51`
+- **Status:** 🔁 follow-up needed — jscpd still reports duplicates around method orchestration (run 2024-10-18)
 - **Why flagged:** Several 30–40 line duplicates for enabling/disabling MFA methods.
 - **Goal:** Extract a method-orchestrating helper (e.g., `withMethod(userID, methodType, func(*MFAMethod) error)`) and consolidate response writers.
 - **Outcome:** Added shared helpers in `mfa_helpers.go` (`loadMFAUserContext`, `parseIDParam`, `loadMFAMethod`, `loadTrustedDevice`) and `auth_helpers.go` (`handleMFADisablement`, `auditMFAUpdate`). Refactored DeleteMFAMethod, UpdateMFAMethod, RevokeTrustedDevice, and UpdatePreferredMFAMethod to use these helpers. Eliminated 30-40 line clones while preserving audit logging, RBAC enforcement, and error messages. All handler tests pass.
 
 ### 006 – `internal/gateway/db/mfa.go`
-- **Status:** ✅ merged — commit `c37dd52`
+- **Status:** 🔁 follow-up needed — shared query helpers still leave 13-line clones (jscpd 2024-10-18)
 - **Why flagged:** Repeated SQL fragments for MFA method queries and updates (42-line and 29-line clones).
 - **Goal:** Build parameterised helpers (e.g., generic upsert, select) or use query builders to kill the copy/paste.
 - **Notes:** Touch migrations/tests carefully—DB semantics must not change.
@@ -67,7 +67,7 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Outcome:** Added shared filter/query helpers and split scanning into `audit_logs_queries.go`, eliminating duplicate insert/filter logic while preserving tamper-evident guarantees (`task go:test`).
 
 ### 010 – `internal/gateway/db/users.go`
-- **Status:** ✅ merged — included in this supervisor iteration
+- **Status:** 🔁 follow-up needed — `users_scan.go` still has overlapping scan helpers (jscpd 2024-10-18)
 - **Why flagged:** Repeated user lookup snippets (16 line clone, plus overlaps with later blocks).
 - **Goal:** Deduplicate SELECT + scan logic; consider moving to generic helper.
 - **Outcome:** Added shared scanning helpers in `users_scan.go`, updated user lookup/list functions to reuse them, and confirmed behaviour with `task go:test`.
@@ -126,37 +126,82 @@ This backlog is sourced from `task go:duplication` (which runs `jscpd` inside `i
 - **Why flagged:** 12-line clone when registering routes.
 - **Goal:** Centralize route registration in routes package.
 
+### 021 – `internal/gateway/handlers/sentry.go` ⇄ `internal/gateway/proxy/handler.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Shared Sentry capture logic duplicated between handler utilities and proxy error handling (12-line clone).
+- **Goal:** Extract a common Sentry reporting helper so both call sites share tagging, request context, and user metadata wiring.
+
+### 022 – `internal/gateway/handlers/admin_audit.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Audit list/build helpers still contain mirrored logic (13-line clone) for assembling responses and authorization checks.
+- **Goal:** Consolidate audit response construction into a reusable helper that preserves filtering and pagination behaviour.
+
+### 023 – `internal/gateway/db/audit_logs.go` ⇄ `internal/gateway/db/audit_logs_queries.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Query + scan paths are duplicated across the two files (16–18 line clones) for building audit rollups.
+- **Goal:** Move shared SQL + scanning code into a single helper (or reduce file split) so append-only logic lives in one place.
+
+### 024 – `internal/gateway/db/api_tokens.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Multiple large clones (12–51 lines) for token CRUD flows, especially around audit logging and redaction.
+- **Goal:** Introduce shared builders for token responses and audit events, keeping RBAC + redaction semantics untouched.
+
+### 025 – `internal/gateway/auth/service.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Session/context hydration duplicates utility logic already present in `middleware/util.go` (19–21 line clones).
+- **Goal:** Extract shared request context helpers so auth service and middleware reuse the same code paths without copying.
+
+### 026 – `internal/convox/commands.go` ⇄ `internal/gateway/rbac/http_routes.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Route-to-permission mapping appears in both the Convox command registry and RBAC configuration (11-line clone).
+- **Goal:** Centralize command metadata so CLI + gateway reference a single shared capability map.
+
 ## CLI Packages (Priority B)
 
-### 021 – `internal/cli/mfa_helpers.go` ⇄ `internal/cli/mfa_verify.go`
+### 031 – `internal/cli/mfa_helpers.go` ⇄ `internal/cli/mfa_verify.go`
 - **Status:** ☐ unassigned
 - **Why flagged:** After the recent split, the WebAuthn assertion flow still exists in both files (16-line clone).
 - **Goal:** Move shared WebAuthn assertion + submission logic into a single helper (probably in `internal/cli/mfa_shared.go`). Keep worker prompt template aligned.
 
-### 022 – `internal/cli/gateway_deploy_approvals.go`
+### 032 – `internal/cli/gateway_deploy_approvals.go`
 - **Status:** ☐ unassigned
 - **Why flagged:** Multiple 10–12 line duplicates for command scaffolding.
 - **Goal:** Extract shared option parsing / API invocation.
 
-### 023 – `internal/cli/convox_env.go`
+### 033 – `internal/cli/convox_env.go`
 - **Status:** ☐ unassigned
 - **Why flagged:** 34-line clone for environment diff handling.
 - **Goal:** Build a reusable diff helper or data structure.
 
-### 024 – `internal/cli/config.go` ⇄ `internal/cli/gateway_api_tokens.go`
+### 034 – `internal/cli/config.go` ⇄ `internal/cli/gateway_api_tokens.go`
 - **Status:** ☐ unassigned
 - **Why flagged:** 14-line overlap for config save/load.
 - **Goal:** Centralize config serialization in a helper.
 
-### 025 – `internal/cli/auth.go`
+### 035 – `internal/cli/auth.go`
 - **Status:** ☐ unassigned
 - **Why flagged:** 12-line duplicate login flow.
 - **Goal:** Share login prompt/response formatting across commands.
 
-### 026 – `internal/cli/logging/logging.go` ⇄ `internal/gateway/logging/logging.go`
+### 036 – `internal/cli/logging/logging.go` ⇄ `internal/gateway/logging/logging.go`
 - **Status:** ☐ unassigned
 - **Why flagged:** Logging helper copied between CLI and gateway.
 - **Goal:** Extract a shared logging utility (maybe under `internal/logging`).
+
+### 037 – `internal/cli/convox_processes.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Command output rendering duplicates table-building logic across multiple functions (10-line clones).
+- **Goal:** Factor shared formatting helpers for process listings.
+
+### 038 – `internal/cli/convox_builds.go` ⇄ `internal/cli/convox_deploy.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** Build/deploy commands share identical argument parsing + API invocation (10-line clone).
+- **Goal:** Extract a helper for build/deploy command scaffolding to avoid drift.
+
+### 039 – `internal/cli/gateway_test_auth.go` ⇄ `internal/cli/mfa_helpers.go`
+- **Status:** ☐ unassigned
+- **Why flagged:** MFA helper scaffolding reappears in the gateway auth command support file (12-line clone).
+- **Goal:** Consolidate shared MFA helper logic into one module consumed by both files.
 
 ## Tests & Supporting Code (Priority T)
 Tests can tolerate some duplication, but the large clones make maintenance painful. These tasks focus on parameterising repeated fixtures.
