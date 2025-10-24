@@ -240,16 +240,7 @@ func buildSentrySecurityConfig(cfg *config.Config) (*sentrySecurityConfig, error
 // HostValidator enforces that requests are sent to the configured domain while
 // permitting internal health probes and localhost access.
 func HostValidator(cfg *config.Config) gin.HandlerFunc {
-	isDev := gin.Mode() == gin.DebugMode
-	if cfg != nil && cfg.DevMode {
-		isDev = true
-	}
-
-	allowedHost := ""
-	if cfg != nil {
-		allowedHost = canonicalHost(cfg.Domain)
-	}
-
+	allowedHost, isDev := validatorContext(cfg)
 	return func(c *gin.Context) {
 		ua := strings.ToLower(strings.TrimSpace(c.GetHeader("User-Agent")))
 		if strings.Contains(ua, "kube-probe") {
@@ -289,16 +280,7 @@ func HostValidator(cfg *config.Config) gin.HandlerFunc {
 
 // OriginValidator validates the Origin header for cross-origin requests.
 func OriginValidator(cfg *config.Config) gin.HandlerFunc {
-	isDev := gin.Mode() == gin.DebugMode
-	if cfg != nil && cfg.DevMode {
-		isDev = true
-	}
-
-	allowedHost := ""
-	if cfg != nil {
-		allowedHost = canonicalHost(cfg.Domain)
-	}
-
+	allowedHost, isDev := validatorContext(cfg)
 	return func(c *gin.Context) {
 		// Only enforce for browser-originated requests. Probes and internal clients usually
 		// omit typical browser headers, so skip origin validation for them.
@@ -559,4 +541,15 @@ func canonicalHost(raw string) string {
 
 func isLocalHost(host string) bool {
 	return host == "localhost" || host == "127.0.0.1"
+}
+
+func validatorContext(cfg *config.Config) (allowedHost string, isDev bool) {
+	isDev = gin.Mode() == gin.DebugMode
+	if cfg != nil && cfg.DevMode {
+		isDev = true
+	}
+	if cfg != nil {
+		allowedHost = canonicalHost(cfg.Domain)
+	}
+	return allowedHost, isDev
 }

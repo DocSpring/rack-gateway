@@ -120,35 +120,9 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 }
 
 func TestGetSlackIntegration_NotFound(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
-
-	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
-	require.NoError(t, err)
-
-	handler := &AdminHandler{
-		rbac:     newAllowAllRBAC(user),
-		database: database,
-		config:   &config.Config{},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/slack", nil)
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
-		Email: user.Email,
-		Name:  user.Name,
-	}))
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = req
-	c.Set("user_email", user.Email)
-
-	handler.GetSlackIntegrationHandler(c)
-
-	resp := w.Result()
+	env := setupSlackTestEnv(t)
+	w, resp := env.callGetSlackIntegration(nil)
 	defer resp.Body.Close() //nolint:errcheck
-
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 

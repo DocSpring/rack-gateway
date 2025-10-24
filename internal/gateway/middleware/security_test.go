@@ -11,124 +11,86 @@ import (
 )
 
 func TestHostValidatorAllowsExactDomain(t *testing.T) {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
-	router.Use(SecurityHeaders(cfg))
-	router.Use(HostValidator(cfg))
-	router.Use(OriginValidator(cfg))
-	router.GET("/", func(c *gin.Context) {
-		c.String(200, "ok")
-	})
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Host = "gateway.example.com:8447"
-	req.Header.Set("Origin", "https://gateway.example.com")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp := httptest.NewRecorder()
-
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != 200 {
-		t.Fatalf("expected 200, got %d", resp.Code)
-	}
+	router, _ := setupMiddlewareTest(t, &config.Config{Domain: "gateway.example.com", Port: "8447"})
+	driveRequest(t, router, func(req *http.Request) {
+		req.Host = "gateway.example.com:8447"
+		req.Header.Set("Origin", "https://gateway.example.com")
+	}, http.StatusOK)
 }
 
 func TestHostValidatorRejectsSubstringDomain(t *testing.T) {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
-	router.Use(SecurityHeaders(cfg))
-	router.Use(HostValidator(cfg))
-	router.Use(OriginValidator(cfg))
-	router.GET("/", func(c *gin.Context) {
-		c.String(200, "ok")
-	})
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Host = "gateway-example.com"
-	req.Header.Set("Origin", "https://gateway.example.com")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp := httptest.NewRecorder()
-
-	router.ServeHTTP(resp, req)
-
-	if resp.Code < 400 {
-		t.Fatalf("expected >=400, got %d", resp.Code)
-	}
+	router, _ := setupMiddlewareTest(t, &config.Config{Domain: "gateway.example.com", Port: "8447"})
+	driveRequest(t, router, func(req *http.Request) {
+		req.Host = "gateway-example.com"
+		req.Header.Set("Origin", "https://gateway.example.com")
+	}, http.StatusBadRequest, http.StatusForbidden)
 }
 
 func TestHostValidatorRejectsMismatchedOrigin(t *testing.T) {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
-	router.Use(SecurityHeaders(cfg))
-	router.Use(HostValidator(cfg))
-	router.Use(OriginValidator(cfg))
-	router.GET("/", func(c *gin.Context) {
-		c.String(200, "ok")
-	})
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Host = "gateway.example.com"
-	req.Header.Set("Origin", "https://evil.example.com")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp := httptest.NewRecorder()
-
-	router.ServeHTTP(resp, req)
-
-	if resp.Code < 400 {
-		t.Fatalf("expected >=400, got %d", resp.Code)
-	}
+	router, _ := setupMiddlewareTest(t, &config.Config{Domain: "gateway.example.com", Port: "8447"})
+	driveRequest(t, router, func(req *http.Request) {
+		req.Host = "gateway.example.com"
+		req.Header.Set("Origin", "https://evil.example.com")
+	}, http.StatusBadRequest, http.StatusForbidden)
 }
 
 func TestHostValidatorAllowsDevLocalhost(t *testing.T) {
-	gin.SetMode(gin.DebugMode)
-	defer gin.SetMode(gin.ReleaseMode)
-
-	router := gin.New()
-	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true}
-	router.Use(SecurityHeaders(cfg))
-	router.Use(HostValidator(cfg))
-	router.Use(OriginValidator(cfg))
-	router.GET("/", func(c *gin.Context) {
-		c.String(200, "ok")
-	})
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Host = "localhost:8447"
-	req.Header.Set("Origin", "http://localhost:3000")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp := httptest.NewRecorder()
-
-	router.ServeHTTP(resp, req)
-
-	if resp.Code != 200 {
-		t.Fatalf("expected 200 in dev mode, got %d", resp.Code)
-	}
+	router, cancel := setupMiddlewareTest(t, &config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true}, gin.DebugMode)
+	defer cancel()
+	driveRequest(t, router, func(req *http.Request) {
+		req.Host = "localhost:8447"
+		req.Header.Set("Origin", "http://localhost:3000")
+	}, http.StatusOK)
 }
 
 func TestHostValidatorAllowsKubeProbe(t *testing.T) {
-	gin.SetMode(gin.ReleaseMode)
+	router, _ := setupMiddlewareTest(t, &config.Config{Domain: "gateway.example.com", Port: "8447"})
+	driveRequest(t, router, func(req *http.Request) {
+		req.Host = "internal-service"
+		req.Header.Set("User-Agent", "kube-probe/1.28")
+	}, http.StatusOK)
+}
+
+func setupMiddlewareTest(t *testing.T, cfg *config.Config, ginModes ...string) (*gin.Engine, func()) {
+	originalMode := gin.Mode()
+	targetMode := gin.ReleaseMode
+	if len(ginModes) > 0 {
+		targetMode = ginModes[0]
+	}
+	gin.SetMode(targetMode)
 	router := gin.New()
-	cfg := &config.Config{Domain: "gateway.example.com", Port: "8447"}
 	router.Use(SecurityHeaders(cfg))
 	router.Use(HostValidator(cfg))
 	router.Use(OriginValidator(cfg))
 	router.GET("/", func(c *gin.Context) {
 		c.String(200, "ok")
 	})
+	restore := func() {
+		gin.SetMode(originalMode)
+	}
+	return router, restore
+}
+
+func driveRequest(t *testing.T, router *gin.Engine, mutate func(*http.Request), allowedStatuses ...int) {
+	t.Helper()
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Host = "internal-service"
-	req.Header.Set("User-Agent", "kube-probe/1.28")
+	// Default headers expected by tests
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	mutate(req)
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
 
-	if resp.Code != 200 {
-		t.Fatalf("expected 200, got %d", resp.Code)
+	if len(allowedStatuses) == 0 {
+		allowedStatuses = []int{http.StatusOK}
 	}
+	for _, status := range allowedStatuses {
+		if resp.Code == status {
+			return
+		}
+	}
+	t.Fatalf("unexpected status %d, allowed: %v", resp.Code, allowedStatuses)
 }
 
 func TestSecurityHeadersAddsSentryReporting(t *testing.T) {

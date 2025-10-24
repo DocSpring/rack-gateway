@@ -269,26 +269,10 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 			}
 			return strings.Join(lines, "\n")
 		}
-		switch v := any.(type) {
-		case map[string]interface{}:
-			if envv, ok := v["env"].(string); ok {
-				v["env"] = maskAll(envv)
-			}
-			nb, _ := json.Marshal(v)
-			return nb
-		case []interface{}:
-			for _, it := range v {
-				if m, ok := it.(map[string]interface{}); ok {
-					if envv, ok2 := m["env"].(string); ok2 {
-						m["env"] = maskAll(envv)
-					}
-				}
-			}
-			nb, _ := json.Marshal(v)
-			return nb
-		default:
-			return body
+		if updated, ok := transformEnvPayload(any, maskAll); ok {
+			return updated
 		}
+		return body
 	}
 
 	// Env read allowed; redact secrets (always, regardless of secrets:read)
@@ -311,26 +295,10 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 		}
 		return strings.Join(lines, "\n")
 	}
-	switch v := any.(type) {
-	case map[string]interface{}:
-		if envv, ok := v["env"].(string); ok {
-			v["env"] = mask(envv)
-		}
-		nb, _ := json.Marshal(v)
-		return nb
-	case []interface{}:
-		for _, it := range v {
-			if m, ok := it.(map[string]interface{}); ok {
-				if envv, ok2 := m["env"].(string); ok2 {
-					m["env"] = mask(envv)
-				}
-			}
-		}
-		nb, _ := json.Marshal(v)
-		return nb
-	default:
-		return body
+	if updated, ok := transformEnvPayload(any, mask); ok {
+		return updated
 	}
+	return body
 }
 
 func (h *Handler) isSecretKey(key string) bool {
@@ -603,6 +571,36 @@ func (h *Handler) checkWebSocketOrigin(r *http.Request) bool {
 
 	// Reject all other origins
 	return false
+}
+
+func transformEnvPayload(any interface{}, transform func(string) string) ([]byte, bool) {
+	switch v := any.(type) {
+	case map[string]interface{}:
+		if envv, ok := v["env"].(string); ok {
+			v["env"] = transform(envv)
+			nb, err := json.Marshal(v)
+			if err == nil {
+				return nb, true
+			}
+		}
+	case []interface{}:
+		changed := false
+		for _, it := range v {
+			if m, ok := it.(map[string]interface{}); ok {
+				if envv, ok2 := m["env"].(string); ok2 {
+					m["env"] = transform(envv)
+					changed = true
+				}
+			}
+		}
+		if changed {
+			nb, err := json.Marshal(v)
+			if err == nil {
+				return nb, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // captureProcessCreation extracts process ID from the response and tracks it in the deploy approval request

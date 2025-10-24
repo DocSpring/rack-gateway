@@ -16,6 +16,33 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+func (h *Handler) logDeniedRBACAction(
+	r *http.Request,
+	email,
+	userName string,
+	resource rbac.Resource,
+	action rbac.Action,
+	resourceType,
+	resourceName,
+	details string,
+) {
+	_ = h.logAudit(r, &db.AuditLog{
+		UserEmail:      email,
+		UserName:       userName,
+		ActionType:     "convox",
+		Action:         audit.BuildAction(resource.String(), action.String()),
+		ResourceType:   resourceType,
+		Resource:       resourceName,
+		Details:        details,
+		IPAddress:      clientIPFromRequest(r),
+		UserAgent:      r.UserAgent(),
+		Status:         "denied",
+		RBACDecision:   "deny",
+		HTTPStatus:     http.StatusForbidden,
+		ResponseTimeMs: 0,
+	})
+}
+
 func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
 	// Extract keys from known headers
 	keys := h.extractEnvKeysFromHeaders(r.Header)
@@ -131,21 +158,16 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 			// Log denied secrets.set per offending key for audit clarity
 			userName := r.Header.Get("X-User-Name")
 			for _, key := range offending {
-				_ = h.logAudit(r, &db.AuditLog{
-					UserEmail:      email,
-					UserName:       userName,
-					ActionType:     "convox",
-					Action:         audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()),
-					ResourceType:   "secret",
-					Resource:       fmt.Sprintf("%s/%s", app, key),
-					Details:        "{}",
-					IPAddress:      clientIPFromRequest(r),
-					UserAgent:      r.UserAgent(),
-					Status:         "denied",
-					RBACDecision:   "deny",
-					HTTPStatus:     http.StatusForbidden,
-					ResponseTimeMs: 0,
-				})
+				h.logDeniedRBACAction(
+					r,
+					email,
+					userName,
+					rbac.ResourceSecret,
+					rbac.ActionSet,
+					"secret",
+					fmt.Sprintf("%s/%s", app, key),
+					"{}",
+				)
 			}
 			return false, nil, nil
 		}
@@ -155,21 +177,16 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 	for k := range posted {
 		if h.isProtectedKeyForApp(k, app) {
 			userName := r.Header.Get("X-User-Name")
-			_ = h.logAudit(r, &db.AuditLog{
-				UserEmail:      email,
-				UserName:       userName,
-				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
-				ResourceType:   "env",
-				Resource:       fmt.Sprintf("%s/%s", app, k),
-				Details:        "{\"error\":\"protected key change denied\"}",
-				IPAddress:      clientIPFromRequest(r),
-				UserAgent:      r.UserAgent(),
-				Status:         "denied",
-				RBACDecision:   "deny",
-				HTTPStatus:     http.StatusForbidden,
-				ResponseTimeMs: 0,
-			})
+			h.logDeniedRBACAction(
+				r,
+				email,
+				userName,
+				rbac.ResourceEnv,
+				rbac.ActionSet,
+				"env",
+				fmt.Sprintf("%s/%s", app, k),
+				"{\"error\":\"protected key change denied\"}",
+			)
 			return false, nil, nil
 		}
 	}
@@ -197,21 +214,16 @@ func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, 
 		// Log denied env.set entries for submitted keys
 		userName := r.Header.Get("X-User-Name")
 		for _, key := range order {
-			_ = h.logAudit(r, &db.AuditLog{
-				UserEmail:      email,
-				UserName:       userName,
-				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
-				ResourceType:   "env",
-				Resource:       fmt.Sprintf("%s/%s", app, key),
-				Details:        "{}",
-				IPAddress:      clientIPFromRequest(r),
-				UserAgent:      r.UserAgent(),
-				Status:         "denied",
-				RBACDecision:   "deny",
-				HTTPStatus:     http.StatusForbidden,
-				ResponseTimeMs: 0,
-			})
+			h.logDeniedRBACAction(
+				r,
+				email,
+				userName,
+				rbac.ResourceEnv,
+				rbac.ActionSet,
+				"env",
+				fmt.Sprintf("%s/%s", app, key),
+				"{}",
+			)
 		}
 		return false, nil, nil
 	}

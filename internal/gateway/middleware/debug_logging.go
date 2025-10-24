@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
@@ -73,19 +74,7 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		}
 
 		if logReqHeaders {
-			var builder strings.Builder
-			for key, values := range req.Header {
-				for _, value := range values {
-					builder.WriteString(key)
-					builder.WriteString(": ")
-					builder.WriteString(value)
-					builder.WriteByte('\n')
-				}
-			}
-			headers := strings.TrimSuffix(builder.String(), "\n")
-			if headers != "" {
-				gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestHeaders, "\n%s", headers)
-			}
+			logHeaders(gtwlog.TopicHTTPRequestHeaders, req.Header)
 		}
 
 		if logReqBody && req.Body != nil && httputil.IsJSONContentType(req.Header.Get("Content-Type")) {
@@ -110,19 +99,7 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		c.Next()
 
 		if logRespHeaders {
-			var builder strings.Builder
-			for key, values := range c.Writer.Header() {
-				for _, value := range values {
-					builder.WriteString(key)
-					builder.WriteString(": ")
-					builder.WriteString(value)
-					builder.WriteByte('\n')
-				}
-			}
-			headers := strings.TrimSuffix(builder.String(), "\n")
-			if headers != "" {
-				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "\n%s", headers)
-			}
+			logHeaders(gtwlog.TopicHTTPResponseHeaders, c.Writer.Header())
 		}
 
 		respJSON := logRespBody && httputil.IsJSONContentType(c.Writer.Header().Get("Content-Type"))
@@ -138,6 +115,25 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 			}
 		}
 
+	}
+}
+
+func logHeaders(topic string, headers http.Header) {
+	if len(headers) == 0 {
+		return
+	}
+	var builder strings.Builder
+	for key, values := range headers {
+		for _, value := range values {
+			builder.WriteString(key)
+			builder.WriteString(": ")
+			builder.WriteString(value)
+			builder.WriteByte('\n')
+		}
+	}
+	out := strings.TrimSuffix(builder.String(), "\n")
+	if out != "" {
+		gtwlog.DebugTopicf(topic, "\n%s", out)
 	}
 }
 

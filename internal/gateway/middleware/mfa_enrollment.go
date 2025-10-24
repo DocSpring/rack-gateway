@@ -34,18 +34,10 @@ func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, auth
 	return loaded, nil
 }
 
-// RequireMFAEnrollment blocks CLI sessions when MFA enforcement is active but the
-// user has not yet completed enrollment. It returns a clear error so the CLI can
-// instruct the user to finish setup.
-func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+func requireMFAEnrollment(database *db.Database, settings *db.MFASettings, handler func(*gin.Context, *auth.AuthUser, *db.User) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authUser, ok := auth.GetAuthUser(c.Request.Context())
 		if !ok || authUser == nil || authUser.IsAPIToken {
-			c.Next()
-			return
-		}
-		session := authUser.Session
-		if session == nil || !strings.EqualFold(session.Channel, "cli") {
 			c.Next()
 			return
 		}
@@ -66,12 +58,7 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 			return
 		}
 
-		if db.ShouldEnforceMFA(settings, user) && !user.MFAEnrolled {
-			message := "You must set up multi-factor authentication before you can continue using the CLI. Please run rack-gateway login and finish MFA enrollment."
-			c.JSON(http.StatusForbidden, gin.H{
-				"error":   "mfa_enrollment_required",
-				"message": message,
-			})
+		if handler != nil && handler(c, authUser, user) {
 			c.Abort()
 			return
 		}
@@ -80,57 +67,49 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 	}
 }
 
+// RequireMFAEnrollment blocks CLI sessions when MFA enforcement is active but the
+// user has not yet completed enrollment. It returns a clear error so the CLI can
+// instruct the user to finish setup.
+func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
+	return requireMFAEnrollment(database, settings, func(c *gin.Context, authUser *auth.AuthUser, user *db.User) bool {
+		session := authUser.Session
+		if session == nil || !strings.EqualFold(session.Channel, "cli") {
+			return false
+		}
+		if !db.ShouldEnforceMFA(settings, user) || user.MFAEnrolled {
+			return false
+		}
+		message := "You must set up multi-factor authentication before you can continue using the CLI. Please run rack-gateway login and finish MFA enrollment."
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "mfa_enrollment_required",
+			"message": message,
+		})
+		return true
+	})
+}
+
 // RequireMFAEnrollmentWeb blocks authenticated requests that rely on cookie-based sessions
 // (primarily the web UI) from hitting API routes unrelated to MFA setup while enrollment is
 // enforced but incomplete. This keeps every channel other than the dedicated CLI proxy locked
 // down to the Account Security flows until enrollment succeeds.
 func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return requireMFAEnrollment(database, settings, func(c *gin.Context, authUser *auth.AuthUser, user *db.User) bool {
 		if c.Request.Method == http.MethodOptions {
-			c.Next()
-			return
+			return false
 		}
-
-		authUser, ok := auth.GetAuthUser(c.Request.Context())
-		if !ok || authUser == nil || authUser.IsAPIToken {
-			c.Next()
-			return
-		}
-		if database == nil {
-			c.Next()
-			return
-		}
-
-		user, err := loadUserForEnrollmentCheck(c.Request.Context(), database, authUser)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-			c.Abort()
-			return
-		}
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-			c.Abort()
-			return
-		}
-
 		if !db.ShouldEnforceMFA(settings, user) || user.MFAEnrolled {
-			c.Next()
-			return
+			return false
 		}
-
-		path := c.Request.URL.Path
-		if isMFAEnrollmentAllowedPath(path) {
-			c.Next()
-			return
+		if isMFAEnrollmentAllowedPath(c.Request.URL.Path) {
+			return false
 		}
-
 		c.Header("X-MFA-Required", "enrollment")
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "mfa_enrollment_required",
 			"message": "Multi-factor authentication enrollment is required before you can access this resource.",
 		})
-		c.Abort()
-	}
+		return true
+	})
 }
 
 var mfaEnrollmentAllowedPrefixes = []string{

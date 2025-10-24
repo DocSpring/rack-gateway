@@ -42,57 +42,22 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, database.ConfirmMFAMethod(method.ID, time.Now()))
 
-	pepper := []byte("0123456789abcdef0123456789abcdef")
-	mfaService, err := mfa.NewService(database, "Rack Gateway Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "localhost", "http://localhost", nil)
-	require.NoError(t, err)
-
-	settingsService := settings.NewService(database)
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
-
-	sessionManager := auth.NewSessionManager(database, "test-session-secret", time.Hour)
+	mfaService, mfaSettings, sessionManager := setupMFAHelpers(t, database)
 
 	newSession := func(t *testing.T) *db.UserSession {
-		t.Helper()
-		_, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
-		require.NoError(t, err)
-		require.NotNil(t, session)
-
-		verifiedAt := time.Now()
-		require.NoError(t, sessionManager.UpdateSessionMFAVerified(session.ID, verifiedAt, nil))
-		session.MFAVerifiedAt = &verifiedAt
-		session.RecentStepUpAt = nil
-
-		return session
+		return confirmSession(t, sessionManager, user)
 	}
 
 	const endpoint = "/api/v1/auth/mfa/backup-codes/regenerate"
 
 	newRouter := func(session *db.UserSession) *gin.Engine {
-		router := gin.New()
-		router.POST(endpoint, func(c *gin.Context) {
-			authUser := &auth.AuthUser{
-				Email:      user.Email,
-				Name:       user.Name,
-				Roles:      user.Roles,
-				IsAPIToken: false,
-				Session:    session,
-			}
-
+		middleware := EnforceMFARequirements(mfaService, database, mfaSettings)
+		return buildStepUpRouter(endpoint, session, user, middleware, func(authUser *auth.AuthUser, c *gin.Context) {
 			if code := strings.TrimSpace(c.GetHeader("X-MFA-TOTP")); code != "" {
 				authUser.MFAType = "totp"
 				authUser.MFAValue = code
 			}
-
-			ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, authUser)
-			c.Request = c.Request.WithContext(ctx)
-			c.Set("user_email", user.Email)
-			c.Set("user_name", user.Name)
-			c.Next()
-		}, EnforceMFARequirements(mfaService, database, mfaSettings), func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
-		return router
 	}
 
 	t.Run("denies without inline totp", func(t *testing.T) {
@@ -150,4 +115,57 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 		require.Equal(t, "mfa_step_up_required", resp["error"])
 	})
+}
+
+func setupMFAHelpers(t *testing.T, database *db.Database) (*mfa.Service, *db.MFASettings, *auth.SessionManager) {
+	pepper := []byte("0123456789abcdef0123456789abcdef")
+	mfaService, err := mfa.NewService(database, "Rack Gateway Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "localhost", "http://localhost", nil)
+	require.NoError(t, err)
+
+	settingsService := settings.NewService(database)
+	mfaSettings, err := settingsService.GetMFASettings()
+	require.NoError(t, err)
+
+	sessionManager := auth.NewSessionManager(database, "test-session-secret", time.Hour)
+	return mfaService, mfaSettings, sessionManager
+}
+
+func confirmSession(t *testing.T, sessionManager *auth.SessionManager, user *db.User) *db.UserSession {
+	t.Helper()
+
+	_, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+
+	verifiedAt := time.Now()
+	require.NoError(t, sessionManager.UpdateSessionMFAVerified(session.ID, verifiedAt, nil))
+	session.MFAVerifiedAt = &verifiedAt
+	session.RecentStepUpAt = nil
+	return session
+}
+
+func buildStepUpRouter(endpoint string, session *db.UserSession, user *db.User, middleware gin.HandlerFunc, configure func(*auth.AuthUser, *gin.Context)) *gin.Engine {
+	router := gin.New()
+	router.POST(endpoint, func(c *gin.Context) {
+		authUser := &auth.AuthUser{
+			Email:      user.Email,
+			Name:       user.Name,
+			Roles:      user.Roles,
+			IsAPIToken: false,
+			Session:    session,
+		}
+
+		if configure != nil {
+			configure(authUser, c)
+		}
+
+		ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, authUser)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set("user_email", user.Email)
+		c.Set("user_name", user.Name)
+		c.Next()
+	}, middleware, func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	return router
 }

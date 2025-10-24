@@ -81,59 +81,54 @@ func TestSaveUserUpdatesDisplayName(t *testing.T) {
 }
 
 func TestAPITokenPermissions(t *testing.T) {
-	t.Run("direct permission granted", func(t *testing.T) {
-		mockDB := &mockDatabase{
-			apiToken: &db.APIToken{
-				ID:          1,
-				Permissions: []string{"convox:app:list"},
-			},
-		}
+	cases := []struct {
+		name     string
+		perms    []string
+		resource Resource
+		action   Action
+		want     bool
+	}{
+		{
+			name:     "direct permission granted",
+			perms:    []string{"convox:app:list"},
+			resource: ResourceApp,
+			action:   ActionList,
+			want:     true,
+		},
+		{
+			name:     "direct permission denied",
+			perms:    []string{"convox:app:list"},
+			resource: ResourceApp,
+			action:   ActionDelete,
+			want:     false,
+		},
+		{
+			name:     "wildcard permission",
+			perms:    []string{"convox:*:*"},
+			resource: ResourceApp,
+			action:   ActionDelete,
+			want:     true,
+		},
+	}
 
-		mgr := &DBManager{
-			db: mockDB,
-			mu: sync.RWMutex{},
-		}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			mgr := newTestDBManager(tc.perms)
+			ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, tc.resource, tc.action)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, ok)
+		})
+	}
+}
 
-		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceApp, ActionList)
-		require.NoError(t, err)
-		require.True(t, ok, "should be allowed with direct permission")
-	})
-
-	t.Run("direct permission denied", func(t *testing.T) {
-		mockDB := &mockDatabase{
-			apiToken: &db.APIToken{
-				ID:          1,
-				Permissions: []string{"convox:app:list"},
-			},
-		}
-
-		mgr := &DBManager{
-			db: mockDB,
-			mu: sync.RWMutex{},
-		}
-
-		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceApp, ActionDelete)
-		require.NoError(t, err)
-		require.False(t, ok, "should NOT be allowed without direct permission")
-	})
-
-	t.Run("wildcard permission", func(t *testing.T) {
-		mockDB := &mockDatabase{
-			apiToken: &db.APIToken{
-				ID:          1,
-				Permissions: []string{"convox:*:*"},
-			},
-		}
-
-		mgr := &DBManager{
-			db: mockDB,
-			mu: sync.RWMutex{},
-		}
-
-		ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, ResourceApp, ActionDelete)
-		require.NoError(t, err)
-		require.True(t, ok, "should be allowed with wildcard permission")
-	})
+func newTestDBManager(perms []string) *DBManager {
+	return &DBManager{
+		db: &mockDatabase{
+			apiToken: &db.APIToken{ID: 1, Permissions: perms},
+		},
+		mu: sync.RWMutex{},
+	}
 }
 
 // mockDatabase implements RBACDatabase interface for testing

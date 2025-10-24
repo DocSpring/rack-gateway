@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -40,23 +41,9 @@ func newSettingsTestEnv(t *testing.T) *settingsTestEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() {
-		dbtest.Reset(t, database)
-	})
+	database, settingsService, sessionManager, mfaService, mfaSettings := setupSettingsServices(t)
 
 	mgr, err := rbac.NewDBManager(database, "example.com")
-	require.NoError(t, err)
-
-	settingsService := settings.NewService(database)
-	handler := NewSettingsHandler(settingsService, mgr)
-
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-
-	mfaSettings, err := settingsService.GetMFASettings()
 	require.NoError(t, err)
 
 	admin, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
@@ -76,7 +63,7 @@ func newSettingsTestEnv(t *testing.T) *settingsTestEnv {
 
 	return &settingsTestEnv{
 		t:              t,
-		handler:        handler,
+		handler:        NewSettingsHandler(settingsService, mgr),
 		database:       database,
 		rbac:           mgr,
 		sessionManager: sessionManager,
@@ -116,6 +103,73 @@ func (e *settingsTestEnv) markRecentStepUp(t *testing.T, session *db.UserSession
 	t.Helper()
 	session.RecentStepUpAt = &when
 	require.NoError(t, e.database.UpdateSessionRecentStepUp(session.ID, when))
+}
+
+func (e *settingsTestEnv) performSettingsRequest(
+	t *testing.T,
+	method string,
+	pattern string,
+	requestPath string,
+	handler gin.HandlerFunc,
+	authUser *auth.AuthUser,
+	payload interface{},
+	params gin.Params,
+	verifier middleware.MFAVerifier,
+	modify func(*http.Request),
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	if verifier == nil {
+		verifier = e.mfaService
+	}
+
+	router := setupRouterWithMFAMiddleware(
+		t,
+		method,
+		pattern,
+		authUser,
+		verifier,
+		e.database,
+		e.mfaSettings,
+		handler,
+		params,
+	)
+
+	var bodyReader io.Reader
+	if payload != nil {
+		body, err := json.Marshal(payload)
+		require.NoError(t, err)
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req := httptest.NewRequest(method, requestPath, bodyReader)
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if modify != nil {
+		modify(req)
+	}
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	return w
+}
+
+func setupSettingsServices(t *testing.T) (*db.Database, *settings.Service, *auth.SessionManager, *mfa.Service, *db.MFASettings) {
+	t.Helper()
+
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
+	settingsService := settings.NewService(database)
+	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	pepper := []byte("test-pepper")
+	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	require.NoError(t, err)
+	mfaSettings, err := settingsService.GetMFASettings()
+	require.NoError(t, err)
+
+	return database, settingsService, sessionManager, mfaService, mfaSettings
 }
 
 func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.RBACManager) {
@@ -210,28 +264,21 @@ func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
 	t.Run("requires step-up when none provided", func(t *testing.T) {
 		authUser, _ := env.newWebAuthUser(t)
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/vcs-and-ci-defaults",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateGlobalVCSAndCIDefaults,
-			nil,
-		)
-
 		payload := map[string]interface{}{
 			"default_ci_provider": "github",
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/vcs-and-ci-defaults", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/vcs-and-ci-defaults",
+			"/api/v1/settings/vcs-and-ci-defaults",
+			env.handler.UpdateGlobalVCSAndCIDefaults,
+			authUser,
+			payload,
+			nil,
+			nil,
+			nil,
+		)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "step-up", w.Header().Get("X-MFA-Required"))
@@ -247,28 +294,23 @@ func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
 		authUser.MFAType = "totp"
 		authUser.MFAValue = code
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/vcs-and-ci-defaults",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateGlobalVCSAndCIDefaults,
-			nil,
-		)
-
 		payload := map[string]interface{}{
 			"default_ci_provider": "github",
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/vcs-and-ci-defaults", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/vcs-and-ci-defaults",
+			"/api/v1/settings/vcs-and-ci-defaults",
+			env.handler.UpdateGlobalVCSAndCIDefaults,
+			authUser,
+			payload,
+			nil,
+			nil,
+			func(req *http.Request) {
+				req.Header.Set("X-MFA-TOTP", code)
+			},
+		)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})
@@ -277,28 +319,21 @@ func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
 		authUser, session := env.newWebAuthUser(t)
 		env.markRecentStepUp(t, session, time.Now())
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/vcs-and-ci-defaults",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateGlobalVCSAndCIDefaults,
-			nil,
-		)
-
 		payload := map[string]interface{}{
 			"default_ci_org_slug": "example",
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/vcs-and-ci-defaults", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/vcs-and-ci-defaults",
+			"/api/v1/settings/vcs-and-ci-defaults",
+			env.handler.UpdateGlobalVCSAndCIDefaults,
+			authUser,
+			payload,
+			nil,
+			nil,
+			nil,
+		)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})
@@ -310,28 +345,21 @@ func TestGlobalSettingsAllowDestructive_MFA(t *testing.T) {
 	t.Run("requires inline MFA", func(t *testing.T) {
 		authUser, _ := env.newWebAuthUser(t)
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/allow-destructive-actions",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateGlobalAllowDestructiveActions,
-			nil,
-		)
-
 		payload := map[string]interface{}{
 			"allow_destructive_actions": true,
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/allow-destructive-actions",
+			"/api/v1/settings/allow-destructive-actions",
+			env.handler.UpdateGlobalAllowDestructiveActions,
+			authUser,
+			payload,
+			nil,
+			nil,
+			nil,
+		)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
@@ -347,29 +375,23 @@ func TestGlobalSettingsAllowDestructive_MFA(t *testing.T) {
 		authUser.MFAType = "totp"
 		authUser.MFAValue = code
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/allow-destructive-actions",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateGlobalAllowDestructiveActions,
-			nil,
-		)
-
 		payload := map[string]interface{}{
 			"allow_destructive_actions": true,
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-MFA-TOTP", code)
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/settings/allow-destructive-actions",
+			"/api/v1/settings/allow-destructive-actions",
+			env.handler.UpdateGlobalAllowDestructiveActions,
+			authUser,
+			payload,
+			nil,
+			nil,
+			func(req *http.Request) {
+				req.Header.Set("X-MFA-TOTP", code)
+			},
+		)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})
@@ -385,28 +407,18 @@ func TestGlobalSettingsAllowDestructive_MFA(t *testing.T) {
 			},
 		}
 
-		router := setupRouterWithMockMFAMiddleware(
+		w := env.performSettingsRequest(
 			t,
 			http.MethodPut,
 			"/api/v1/settings/allow-destructive-actions",
-			authUser,
-			mockVerifier,
-			env.database,
-			env.mfaSettings,
+			"/api/v1/settings/allow-destructive-actions",
 			env.handler.UpdateGlobalAllowDestructiveActions,
+			authUser,
+			map[string]interface{}{"allow_destructive_actions": true},
+			nil,
+			mockVerifier,
 			nil,
 		)
-
-		payload := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		var resp map[string]interface{}
@@ -427,29 +439,20 @@ func TestGlobalSettingsAllowDestructive_MFA(t *testing.T) {
 		authUser.MFAValue = base64.StdEncoding.EncodeToString(raw)
 
 		mockVerifier := &mockMFAService{}
-		router := setupRouterWithMockMFAMiddleware(
+		w := env.performSettingsRequest(
 			t,
 			http.MethodPut,
 			"/api/v1/settings/allow-destructive-actions",
-			authUser,
-			mockVerifier,
-			env.database,
-			env.mfaSettings,
+			"/api/v1/settings/allow-destructive-actions",
 			env.handler.UpdateGlobalAllowDestructiveActions,
+			authUser,
+			map[string]interface{}{"allow_destructive_actions": true},
 			nil,
+			mockVerifier,
+			func(req *http.Request) {
+				req.Header.Set("X-MFA-WebAuthn", authUser.MFAValue)
+			},
 		)
-
-		payload := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/settings/allow-destructive-actions", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-MFA-WebAuthn", authUser.MFAValue)
-		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})
@@ -461,21 +464,18 @@ func TestDeleteGlobalSettingsAllowDestructive_MFA(t *testing.T) {
 	t.Run("requires inline MFA to delete", func(t *testing.T) {
 		authUser, _ := env.newWebAuthUser(t)
 
-		router := setupRouterWithMFAMiddleware(
+		w := env.performSettingsRequest(
 			t,
 			http.MethodDelete,
 			"/api/v1/settings/allow-destructive-actions",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
+			"/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions",
 			env.handler.DeleteGlobalAllowDestructiveActions,
+			authUser,
+			nil,
+			nil,
+			nil,
 			nil,
 		)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions", nil)
-		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
@@ -487,22 +487,20 @@ func TestDeleteGlobalSettingsAllowDestructive_MFA(t *testing.T) {
 		authUser.MFAType = "totp"
 		authUser.MFAValue = code
 
-		router := setupRouterWithMFAMiddleware(
+		w := env.performSettingsRequest(
 			t,
 			http.MethodDelete,
 			"/api/v1/settings/allow-destructive-actions",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
+			"/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions",
 			env.handler.DeleteGlobalAllowDestructiveActions,
+			authUser,
 			nil,
+			nil,
+			nil,
+			func(req *http.Request) {
+				req.Header.Set("X-MFA-TOTP", code)
+			},
 		)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodDelete, "/api/v1/settings/allow-destructive-actions?key=allow_destructive_actions", nil)
-		req.Header.Set("X-MFA-TOTP", code)
-		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})
@@ -514,28 +512,21 @@ func TestAppSettingsVCSCIDeploy_MFA(t *testing.T) {
 	t.Run("requires inline MFA", func(t *testing.T) {
 		authUser, _ := env.newWebAuthUser(t)
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/apps/:app/settings/vcs-ci-deploy",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateAppVCSCIDeploySettings,
-			gin.Params{{Key: "app", Value: "test-app"}},
-		)
-
 		payload := map[string]interface{}{
 			"vcs_provider": "github",
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/vcs-ci-deploy", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/apps/:app/settings/vcs-ci-deploy",
+			"/api/v1/apps/test-app/settings/vcs-ci-deploy",
+			env.handler.UpdateAppVCSCIDeploySettings,
+			authUser,
+			payload,
+			gin.Params{{Key: "app", Value: "test-app"}},
+			nil,
+			nil,
+		)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
@@ -547,29 +538,23 @@ func TestAppSettingsVCSCIDeploy_MFA(t *testing.T) {
 		authUser.MFAType = "totp"
 		authUser.MFAValue = code
 
-		router := setupRouterWithMFAMiddleware(
-			t,
-			http.MethodPut,
-			"/api/v1/apps/:app/settings/vcs-ci-deploy",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
-			env.handler.UpdateAppVCSCIDeploySettings,
-			gin.Params{{Key: "app", Value: "test-app"}},
-		)
-
 		payload := map[string]interface{}{
 			"vcs_provider": "github",
 		}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/vcs-ci-deploy", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-MFA-TOTP", code)
-		router.ServeHTTP(w, req)
+		w := env.performSettingsRequest(
+			t,
+			http.MethodPut,
+			"/api/v1/apps/:app/settings/vcs-ci-deploy",
+			"/api/v1/apps/test-app/settings/vcs-ci-deploy",
+			env.handler.UpdateAppVCSCIDeploySettings,
+			authUser,
+			payload,
+			gin.Params{{Key: "app", Value: "test-app"}},
+			nil,
+			func(req *http.Request) {
+				req.Header.Set("X-MFA-TOTP", code)
+			},
+		)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})
@@ -581,26 +566,19 @@ func TestAppSettingProtectedEnvVars_MFA(t *testing.T) {
 	t.Run("requires recent step-up", func(t *testing.T) {
 		authUser, _ := env.newWebAuthUser(t)
 
-		router := setupRouterWithMFAMiddleware(
+		payload := []string{"DATABASE_URL"}
+		w := env.performSettingsRequest(
 			t,
 			http.MethodPut,
 			"/api/v1/apps/:app/settings/protected-env-vars",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
+			"/api/v1/apps/test-app/settings/protected-env-vars",
 			env.handler.UpdateAppProtectedEnvVars,
+			authUser,
+			payload,
 			gin.Params{{Key: "app", Value: "test-app"}},
+			nil,
+			nil,
 		)
-
-		payload := []string{"DATABASE_URL"}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/protected-env-vars", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
 		require.Equal(t, "step-up", w.Header().Get("X-MFA-Required"))
@@ -612,26 +590,21 @@ func TestAppSettingProtectedEnvVars_MFA(t *testing.T) {
 		authUser.MFAType = "totp"
 		authUser.MFAValue = code
 
-		router := setupRouterWithMFAMiddleware(
+		payload := []string{"DATABASE_URL"}
+		w := env.performSettingsRequest(
 			t,
 			http.MethodPut,
 			"/api/v1/apps/:app/settings/protected-env-vars",
-			authUser,
-			env.mfaService,
-			env.database,
-			env.mfaSettings,
+			"/api/v1/apps/test-app/settings/protected-env-vars",
 			env.handler.UpdateAppProtectedEnvVars,
+			authUser,
+			payload,
 			gin.Params{{Key: "app", Value: "test-app"}},
+			nil,
+			func(req *http.Request) {
+				req.Header.Set("X-MFA-TOTP", code)
+			},
 		)
-
-		payload := []string{"DATABASE_URL"}
-		body, err := json.Marshal(payload)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPut, "/api/v1/apps/test-app/settings/protected-env-vars", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 	})

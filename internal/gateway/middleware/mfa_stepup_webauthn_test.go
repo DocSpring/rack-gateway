@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -11,8 +10,6 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	mfa "github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
 	"github.com/gin-gonic/gin"
@@ -36,21 +33,8 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, database.ConfirmMFAMethod(method.ID, time.Now()))
 
-	pepper := []byte("0123456789abcdef0123456789abcdef")
-	mfaService, err := mfa.NewService(database, "Rack Gateway Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "localhost", "http://localhost", nil)
-	require.NoError(t, err)
-
-	settingsService := settings.NewService(database)
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
-
-	sessionManager := auth.NewSessionManager(database, "test-session-secret", time.Hour)
-	_, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
-	require.NoError(t, err)
-	verifiedAt := time.Now()
-	require.NoError(t, sessionManager.UpdateSessionMFAVerified(session.ID, verifiedAt, nil))
-	session.MFAVerifiedAt = &verifiedAt
-	session.RecentStepUpAt = nil
+	mfaService, mfaSettings, sessionManager := setupMFAHelpers(t, database)
+	session := confirmSession(t, sessionManager, user)
 
 	_, sessionData, err := mfaService.StartWebAuthnAssertion(user)
 	require.NoError(t, err)
@@ -73,24 +57,11 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	bodyBytes, err := json.Marshal(body)
 	require.NoError(t, err)
 
-	router := gin.New()
-	router.POST("/api/v1/api-tokens", func(c *gin.Context) {
-		authUser := &auth.AuthUser{
-			Email:      user.Email,
-			Name:       user.Name,
-			Roles:      user.Roles,
-			IsAPIToken: false,
-			Session:    session,
-			MFAType:    "webauthn",
-			MFAValue:   inlineHeader,
-		}
-		ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, authUser)
-		c.Request = c.Request.WithContext(ctx)
+	middleware := EnforceMFARequirements(mfaService, database, mfaSettings)
+	router := buildStepUpRouter("/api/v1/api-tokens", session, user, middleware, func(authUser *auth.AuthUser, c *gin.Context) {
+		authUser.MFAType = "webauthn"
+		authUser.MFAValue = inlineHeader
 		c.Request.Header.Set("X-MFA-WebAuthn", inlineHeader)
-		c.Set("user_email", user.Email)
-		c.Next()
-	}, EnforceMFARequirements(mfaService, database, mfaSettings), func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/api-tokens", bytes.NewReader(bodyBytes))

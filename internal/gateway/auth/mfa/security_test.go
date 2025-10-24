@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
@@ -12,41 +13,23 @@ import (
 func TestVerifyTOTP_ReplayProtection(t *testing.T) {
 	t.Parallel()
 
-	database := dbtest.NewDatabase(t)
-	pepper := []byte("test-pepper")
-
-	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	user, _ := database.CreateUser("test@example.com", "Test User", []string{"admin"})
+	svc, database, user := setupMFAService(t, "test@example.com", "Test User")
 
 	// Create TOTP method
-	key, _ := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Test",
-		AccountName: user.Email,
-		Period:      30,
-		Digits:      otp.DigitsSix,
-	})
-	method, _ := database.CreateMFAMethod(user.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
-	_ = database.ConfirmMFAMethod(method.ID, time.Now())
+	key := createConfirmedTOTP(t, database, user)
 
 	// Generate a valid TOTP code
 	code, _ := totp.GenerateCode(key.Secret(), time.Now())
 
 	// First attempt should succeed
-	_, err = svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil)
-	if err != nil {
+	if _, err := svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil); err != nil {
 		t.Fatalf("expected first attempt to succeed, got: %v", err)
 	}
 
 	// Second attempt with same code should be rejected (generic error)
-	_, err = svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil)
-	if err == nil {
+	if _, err := svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil); err == nil {
 		t.Fatal("expected replay detection to reject reused code")
-	}
-	if err.Error() != "verification failed" {
+	} else if err.Error() != "verification failed" {
 		t.Fatalf("expected 'verification failed' error, got: %v", err)
 	}
 }
@@ -54,15 +37,7 @@ func TestVerifyTOTP_ReplayProtection(t *testing.T) {
 func TestVerifyTOTP_RateLimiting(t *testing.T) {
 	t.Parallel()
 
-	database := dbtest.NewDatabase(t)
-	pepper := []byte("test-pepper")
-
-	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	user, _ := database.CreateUser("ratelimit@example.com", "Rate Test", []string{"admin"})
+	svc, database, user := setupMFAService(t, "ratelimit@example.com", "Rate Test")
 
 	// Make 4 failed attempts (less than lock threshold)
 	for i := 0; i < 4; i++ {
@@ -73,11 +48,9 @@ func TestVerifyTOTP_RateLimiting(t *testing.T) {
 	_ = database.LogTOTPAttempt(user.ID, nil, false, "invalid_code", "1.2.3.4", "test-agent", nil)
 
 	// 6th attempt should be rate limited (not locked, since only 4 failed verifications)
-	_, err = svc.VerifyTOTP(user, "123456", "1.2.3.4", "test-agent", nil)
-	if err == nil {
+	if _, err := svc.VerifyTOTP(user, "123456", "1.2.3.4", "test-agent", nil); err == nil {
 		t.Fatal("expected rate limiting to reject attempt")
-	}
-	if err.Error() != "too many attempts - try again in 5 minutes" {
+	} else if err.Error() != "too many attempts - try again in 5 minutes" {
 		t.Fatalf("expected rate limit error, got: %v", err)
 	}
 }
@@ -85,15 +58,7 @@ func TestVerifyTOTP_RateLimiting(t *testing.T) {
 func TestVerifyTOTP_AccountLocking(t *testing.T) {
 	t.Parallel()
 
-	database := dbtest.NewDatabase(t)
-	pepper := []byte("test-pepper")
-
-	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	user, _ := database.CreateUser("lock@example.com", "Lock Test", []string{"admin"})
+	svc, database, user := setupMFAService(t, "lock@example.com", "Lock Test")
 
 	// Make 5 failed attempts to trigger auto-lock
 	for i := 0; i < 5; i++ {
@@ -119,38 +84,21 @@ func TestVerifyTOTP_AccountLocking(t *testing.T) {
 func TestVerifyTOTP_LockedAccountRejection(t *testing.T) {
 	t.Parallel()
 
-	database := dbtest.NewDatabase(t)
-	pepper := []byte("test-pepper")
-
-	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	user, _ := database.CreateUser("locked@example.com", "Locked User", []string{"admin"})
+	svc, database, user := setupMFAService(t, "locked@example.com", "Locked User")
 
 	// Lock the account
 	_ = database.LockUser(user.ID, "Test lock", nil)
 
 	// Create valid TOTP method
-	key, _ := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Test",
-		AccountName: user.Email,
-		Period:      30,
-		Digits:      otp.DigitsSix,
-	})
-	method, _ := database.CreateMFAMethod(user.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
-	_ = database.ConfirmMFAMethod(method.ID, time.Now())
+	key := createConfirmedTOTP(t, database, user)
 
 	// Generate valid code
 	code, _ := totp.GenerateCode(key.Secret(), time.Now())
 
 	// Attempt should be rejected immediately
-	_, err = svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil)
-	if err == nil {
+	if _, err := svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil); err == nil {
 		t.Fatal("expected locked account to reject login")
-	}
-	if err.Error() != "account locked - contact administrator" {
+	} else if err.Error() != "account locked - contact administrator" {
 		t.Fatalf("expected account locked error, got: %v", err)
 	}
 }
@@ -158,15 +106,7 @@ func TestVerifyTOTP_LockedAccountRejection(t *testing.T) {
 func TestVerifyTOTP_LoggingMetadata(t *testing.T) {
 	t.Parallel()
 
-	database := dbtest.NewDatabase(t)
-	pepper := []byte("test-pepper")
-
-	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	if err != nil {
-		t.Fatalf("failed to create service: %v", err)
-	}
-
-	user, _ := database.CreateUser("logging@example.com", "Logging Test", []string{"admin"})
+	svc, _, user := setupMFAService(t, "logging@example.com", "Logging Test")
 
 	// Make a failed attempt
 	_, _ = svc.VerifyTOTP(user, "wrong", "192.168.1.100", "Mozilla/5.0", nil)
@@ -174,4 +114,55 @@ func TestVerifyTOTP_LoggingMetadata(t *testing.T) {
 	// This test verifies that attempt logging happens, but we can't easily
 	// query the attempts table in this test framework without adding more methods.
 	// The real verification happens in integration tests.
+}
+
+func setupMFAService(t *testing.T, email, name string) (*Service, *db.Database, *db.User) {
+	t.Helper()
+
+	database := dbtest.NewDatabase(t)
+	svc := mustNewService(t, database)
+	user := mustCreateUser(t, database, email, name)
+	return svc, database, user
+}
+
+func mustNewService(t *testing.T, database *db.Database) *Service {
+	t.Helper()
+
+	svc, err := NewService(database, "Test", 24*time.Hour, 10*time.Minute, []byte("test-pepper"), "", "", "", "", nil)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	return svc
+}
+
+func mustCreateUser(t *testing.T, database *db.Database, email, name string) *db.User {
+	t.Helper()
+
+	user, err := database.CreateUser(email, name, []string{"admin"})
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	return user
+}
+
+func createConfirmedTOTP(t *testing.T, database *db.Database, user *db.User) *otp.Key {
+	t.Helper()
+
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Test",
+		AccountName: user.Email,
+		Period:      30,
+		Digits:      otp.DigitsSix,
+	})
+	if err != nil {
+		t.Fatalf("failed to generate TOTP key: %v", err)
+	}
+	method, err := database.CreateMFAMethod(user.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create MFA method: %v", err)
+	}
+	if err := database.ConfirmMFAMethod(method.ID, time.Now()); err != nil {
+		t.Fatalf("failed to confirm MFA method: %v", err)
+	}
+	return key
 }

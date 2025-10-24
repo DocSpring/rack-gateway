@@ -5,10 +5,7 @@ import (
 )
 
 func TestMFARequirements_GatewayPermissions(t *testing.T) {
-	tests := []struct {
-		permission string
-		want       MFALevel
-	}{
+	cases := []singlePermissionCase{
 		// Deploy Approval - ALWAYS require fresh MFA (privileged action)
 		{Gateway(ResourceDeployApprovalRequest, ActionApprove), MFAAlways},
 		{Gateway(ResourceDeployApprovalRequest, ActionCreate), MFANone}, // Creating request is safe
@@ -42,21 +39,11 @@ func TestMFARequirements_GatewayPermissions(t *testing.T) {
 		{Gateway(ResourceIntegration, ActionDelete), MFAStepUp},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.permission, func(t *testing.T) {
-			got := GetMFALevel([]string{tt.permission})
-			if got != tt.want {
-				t.Errorf("GetMFALevel(%q) = %v, want %v", tt.permission, got, tt.want)
-			}
-		})
-	}
+	runSinglePermissionCases(t, cases)
 }
 
 func TestMFARequirements_ConvoxPermissions(t *testing.T) {
-	tests := []struct {
-		permission string
-		want       MFALevel
-	}{
+	cases := []singlePermissionCase{
 		// Destructive operations - ALWAYS
 		{Convox(ResourceApp, ActionDelete), MFAAlways},
 		{Convox(ResourceInstance, ActionTerminate), MFAAlways},
@@ -79,14 +66,7 @@ func TestMFARequirements_ConvoxPermissions(t *testing.T) {
 		{Convox(ResourceObject, ActionCreate), MFANone}, // Object uploads for builds
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.permission, func(t *testing.T) {
-			got := GetMFALevel([]string{tt.permission})
-			if got != tt.want {
-				t.Errorf("GetMFALevel(%q) = %v, want %v", tt.permission, got, tt.want)
-			}
-		})
-	}
+	runSinglePermissionCases(t, cases)
 }
 
 func TestGetMFALevel_MultiplePermissions(t *testing.T) {
@@ -206,11 +186,7 @@ func TestRequiresMFAStepUp(t *testing.T) {
 func TestGetMFALevel_AllowsReadListWithoutExplicitListing(t *testing.T) {
 	// These permissions are NOT explicitly listed in MFARequirements
 	// but should default to MFANone since they're read-only
-	tests := []struct {
-		name       string
-		permission string
-		want       MFALevel
-	}{
+	cases := []namedPermissionCase{
 		{
 			name:       "convox:env:read defaults to MFANone",
 			permission: Convox(ResourceEnv, ActionRead),
@@ -233,14 +209,7 @@ func TestGetMFALevel_AllowsReadListWithoutExplicitListing(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GetMFALevel([]string{tt.permission})
-			if got != tt.want {
-				t.Errorf("GetMFALevel(%q) = %v, want %v", tt.permission, got, tt.want)
-			}
-		})
-	}
+	runNamedPermissionCases(t, cases)
 }
 
 func TestGetMFALevel_PanicsForUnlistedWriteOperations(t *testing.T) {
@@ -268,6 +237,45 @@ func TestGetMFALevel_PanicsForUnlistedWriteOperations(t *testing.T) {
 				}
 			}()
 			GetMFALevel([]string{tt.permission})
+		})
+	}
+}
+
+type singlePermissionCase struct {
+	permission string
+	want       MFALevel
+}
+
+func runSinglePermissionCases(t *testing.T, cases []singlePermissionCase) {
+	for _, tc := range cases {
+		tc := tc
+		caseName := tc.permission
+		if caseName == "" {
+			caseName = "empty-permission"
+		}
+		t.Run(caseName, func(t *testing.T) {
+			got := GetMFALevel([]string{tc.permission})
+			if got != tc.want {
+				t.Errorf("GetMFALevel(%q) = %v, want %v", tc.permission, got, tc.want)
+			}
+		})
+	}
+}
+
+type namedPermissionCase struct {
+	name       string
+	permission string
+	want       MFALevel
+}
+
+func runNamedPermissionCases(t *testing.T, cases []namedPermissionCase) {
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := GetMFALevel([]string{tc.permission})
+			if got != tc.want {
+				t.Errorf("GetMFALevel(%q) = %v, want %v", tc.permission, got, tc.want)
+			}
 		})
 	}
 }

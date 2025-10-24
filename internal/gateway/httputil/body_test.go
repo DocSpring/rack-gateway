@@ -6,13 +6,15 @@ import (
 	"testing"
 )
 
+type truncateTestCase struct {
+	name     string
+	input    []byte
+	limit    int
+	expected string
+}
+
 func TestTruncateBytes(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		limit    int
-		expected string
-	}{
+	tests := []truncateTestCase{
 		{
 			name:     "empty input",
 			input:    []byte{},
@@ -62,12 +64,7 @@ func TestTruncateBytes(t *testing.T) {
 }
 
 func TestTruncateString(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		limit    int
-		expected string
-	}{
+	tests := []truncateTestCase{
 		{
 			name:     "empty input",
 			input:    []byte{},

@@ -152,19 +152,8 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 			}
 		}
 
-	case resource == rbac.ResourceBuild && action == rbac.ActionRead:
-		buildID := extractBuildIDFromPath(r.URL.Path)
-		if buildID == "" {
-			return deny()
-		}
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-			TokenID:      *authUser.TokenID,
-			App:          app,
-			BuildID:      buildID,
-			StatusFilter: "approved",
-		})
-
-	case resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path):
+	case resource == rbac.ResourceBuild && action == rbac.ActionRead,
+		resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path):
 		buildID := extractBuildIDFromPath(r.URL.Path)
 		if buildID == "" {
 			return deny()
