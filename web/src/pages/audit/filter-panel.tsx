@@ -74,12 +74,12 @@ export function AuditFilterPanel({
       <CardContent>
         <div className="flex flex-wrap gap-4">
           <div className="mx-4 ml-0 flex flex-1 flex-col space-y-2">
-            <Label htmlFor="audit-search">Search</Label>
+            <Label htmlFor="search">Search</Label>
             <div className="relative">
               <Search className="absolute top-2.5 left-2 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                id="audit-search"
+                id="search"
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="User, resource, action..."
                 value={searchTerm}
@@ -88,7 +88,7 @@ export function AuditFilterPanel({
           </div>
 
           <AuditSelectField
-            id="audit-action-type"
+            id="action-type"
             label="Action Type"
             onChange={handleSelectChange(onActionTypeChange)}
             options={actionOptions}
@@ -96,7 +96,7 @@ export function AuditFilterPanel({
           />
 
           <AuditSelectField
-            id="audit-status"
+            id="status"
             label="Status"
             onChange={handleSelectChange(onStatusChange)}
             options={statusOptions}
@@ -104,7 +104,7 @@ export function AuditFilterPanel({
           />
 
           <AuditSelectField
-            id="audit-resource-type"
+            id="resource-type"
             label="Resource Type"
             onChange={handleSelectChange(onResourceTypeChange)}
             options={resourceOptions}
@@ -112,10 +112,10 @@ export function AuditFilterPanel({
           />
 
           <div className="mx-4 flex flex-col space-y-2">
-            <Label htmlFor="audit-date-range">Date Range</Label>
+            <Label htmlFor="date-range">Date Range</Label>
             <NativeSelect
               className="min-w-[160px]"
-              id="audit-date-range"
+              id="date-range"
               onChange={handleSelectChange(onDateRangeChange)}
               value={dateRange}
             >
@@ -130,10 +130,10 @@ export function AuditFilterPanel({
           </div>
 
           <div className="mx-6 mr-0 flex flex-col space-y-2">
-            <Label htmlFor="audit-per-page">Per Page</Label>
+            <Label htmlFor="per-page">Per Page</Label>
             <NativeSelect
               className="min-w-[80px]"
-              id="audit-per-page"
+              id="per-page"
               onChange={(event) => onPerPageChange(Number(event.target.value))}
               value={String(perPage)}
             >

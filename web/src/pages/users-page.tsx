@@ -1,39 +1,22 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { Lock, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { TablePane } from '@/components/table-pane'
-import { TimeAgo } from '@/components/time-ago'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from '@/components/ui/use-toast'
 import type { UserEditDialogMode, UserEditDialogValues } from '@/components/user-edit-dialog'
 import { UserEditDialog } from '@/components/user-edit-dialog'
 import { UserLockDialog, useUnlockUser } from '@/components/user-lock-dialog'
-import { UserMetaCell } from '@/components/user-meta-cell'
 import { useAuth } from '@/contexts/auth-context'
 import { useMutation } from '@/hooks/use-mutation'
 import { api, type RoleName, type UpdateUserRequest } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { pickPrimaryRole } from '@/lib/user-roles'
-import { UserActions } from '@/pages/users/user-actions'
-import {
-  AVAILABLE_ROLES,
-  canModifyUser,
-  determineUserUpdatePlan,
-  isUserLocked,
-  type User,
-} from '@/pages/users/user-utils'
+import { canModifyUser, determineUserUpdatePlan, type User } from '@/pages/users/user-utils'
+import { UsersTableRow } from '@/pages/users/users-table-row'
 
 export function UsersPage() {
   const queryClient = useQueryClient()
@@ -329,83 +312,19 @@ export function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: no need to extract this */}
-            {rows.map((user) => {
-              const locked = isUserLocked(user)
-              return (
-                <TableRow key={user.email}>
-                  <TableCell className={locked ? 'opacity-60' : ''}>
-                    <div>
-                      <div className="font-medium">
-                        <Link
-                          className="underline hover:no-underline"
-                          params={{ email: user.email }}
-                          to="/users/$email"
-                        >
-                          {user.name}
-                        </Link>
-                        {locked && <Lock className="ml-2 inline h-4 w-4" />}
-                        {user.email === currentUser?.email && (
-                          <Badge className="ml-2" variant="outline">
-                            You
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-muted-foreground text-sm">
-                        <Link
-                          className="underline hover:no-underline"
-                          params={{ email: user.email }}
-                          to="/users/$email"
-                        >
-                          {user.email}
-                        </Link>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className={locked ? 'opacity-60' : ''}>
-                    <div className="flex flex-wrap gap-1">
-                      {user.roles.map((role) => {
-                        const cfg = AVAILABLE_ROLES[role as keyof typeof AVAILABLE_ROLES]
-                        return (
-                          <Badge className={cfg?.className} key={role} variant={'default'}>
-                            {cfg?.label || role}
-                          </Badge>
-                        )
-                      })}
-                    </div>
-                  </TableCell>
-                  <TableCell className={locked ? 'opacity-60' : ''}>
-                    {isUserLocked(user) ? (
-                      <Badge variant="destructive">Locked</Badge>
-                    ) : (
-                      <Badge variant={'default'}>Active</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className={locked ? 'opacity-60' : ''}>
-                    <UserMetaCell
-                      email={user.created_by_email ?? undefined}
-                      name={user.created_by_name ?? undefined}
-                    />
-                  </TableCell>
-                  <TableCell className={locked ? 'text-sm opacity-60' : 'text-sm'}>
-                    <TimeAgo date={user.created_at} />
-                  </TableCell>
-                  {isAdmin && (
-                    <TableCell className="text-right">
-                      <UserActions
-                        currentUserEmail={currentUser?.email}
-                        isUnlocking={unlockUserMutation.isPending}
-                        onDelete={handleRequestDeleteUser}
-                        onEdit={handleEditUser}
-                        onLock={handleRequestLockUser}
-                        onUnlock={handleUnlockUser}
-                        user={user}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              )
-            })}
+            {rows.map((user) => (
+              <UsersTableRow
+                currentUserEmail={currentUser?.email ?? undefined}
+                isAdmin={isAdmin}
+                isUnlocking={unlockUserMutation.isPending}
+                key={user.email}
+                onDelete={handleRequestDeleteUser}
+                onEdit={handleEditUser}
+                onLock={handleRequestLockUser}
+                onUnlock={handleUnlockUser}
+                user={user}
+              />
+            ))}
           </TableBody>
         </Table>
         {total > 0 && (

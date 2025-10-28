@@ -14,7 +14,7 @@ RUN bun install --frozen-lockfile
 FROM deps AS build
 
 COPY tsconfig.json tsconfig.build.json ./
-COPY server.ts logging.ts ./
+COPY src ./src
 RUN bun run build
 
 FROM base AS prod-deps

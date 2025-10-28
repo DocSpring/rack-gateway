@@ -15,6 +15,6 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true
   },
-  "include": ["*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

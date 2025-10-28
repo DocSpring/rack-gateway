@@ -1,17 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
-import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
+import { getSettingValue } from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
 
 import type { AppSettingsResponse } from '@/pages/app-settings/types'
 import { extractErrorMessage } from '@/pages/app-settings/utils'
+import { VcsProviderFields } from '@/pages/app-settings/vcs-provider-fields'
+import { VerificationSettingsFields } from '@/pages/app-settings/verification-settings-fields'
 
 type IntegrationAvailability = {
   github: boolean
@@ -25,17 +25,90 @@ type VCSCIProvidersCardProps = {
   integrations?: IntegrationAvailability
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
-export function VCSCIProvidersCard({
-  app,
-  settings,
-  disabled,
-  integrations,
-}: VCSCIProvidersCardProps) {
-  const qc = useQueryClient()
+type StringOverrideKey =
+  | 'vcs_provider'
+  | 'vcs_repo'
+  | 'ci_provider'
+  | 'ci_org_slug'
+  | 'default_branch'
+  | 'verify_git_commit_mode'
 
-  const githubAvailable = integrations?.github ?? false
-  const circleciAvailable = integrations?.circleci ?? false
+type BooleanOverrideKey =
+  | 'github_verification'
+  | 'allow_deploy_from_default_branch'
+  | 'require_pr_for_branch'
+
+type OverrideState = Record<StringOverrideKey, string | null> &
+  Record<BooleanOverrideKey, boolean | null>
+
+const STRING_OVERRIDE_KEYS: readonly StringOverrideKey[] = [
+  'vcs_provider',
+  'vcs_repo',
+  'ci_provider',
+  'ci_org_slug',
+  'default_branch',
+  'verify_git_commit_mode',
+]
+
+const BOOLEAN_OVERRIDE_KEYS: readonly BooleanOverrideKey[] = [
+  'github_verification',
+  'allow_deploy_from_default_branch',
+  'require_pr_for_branch',
+]
+
+function buildUpdatePayload(overrides: OverrideState) {
+  const payload: Record<string, unknown> = {}
+
+  for (const key of STRING_OVERRIDE_KEYS) {
+    const value = overrides[key]
+    if (value !== null) {
+      payload[key] = value || null
+    }
+  }
+
+  for (const key of BOOLEAN_OVERRIDE_KEYS) {
+    const value = overrides[key]
+    if (value !== null) {
+      payload[key] = value
+    }
+  }
+
+  return payload
+}
+
+function mergeOverride<T>(overrideValue: T | null, currentValue: T): T {
+  return overrideValue !== null ? overrideValue : currentValue
+}
+
+type VcsCiDisplayValues = {
+  vcsProvider: string
+  vcsRepo: string
+  ciProvider: string
+  ciOrgSlug: string
+  githubVerification: boolean
+  allowDeployFromDefaultBranch: boolean
+  requirePRForBranch: boolean
+  defaultBranch: string
+  verifyGitCommitMode: string
+}
+
+type VcsCiFormState = {
+  overrides: OverrideState
+  display: VcsCiDisplayValues
+  hasChanges: boolean
+  reset: () => void
+  setVcsProvider: (value: string | null) => void
+  setVcsRepo: (value: string | null) => void
+  setCiProvider: (value: string | null) => void
+  setCiOrgSlug: (value: string | null) => void
+  setGithubVerification: (value: boolean) => void
+  setAllowDeployFromDefaultBranch: (value: boolean) => void
+  setRequirePRForBranch: (value: boolean) => void
+  setDefaultBranch: (value: string | null) => void
+  setVerifyGitCommitMode: (value: string | null) => void
+}
+
+function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState {
   const [vcsProvider, setVcsProvider] = useState<string | null>(null)
   const [vcsRepo, setVcsRepo] = useState<string | null>(null)
   const [ciProvider, setCiProvider] = useState<string | null>(null)
@@ -48,77 +121,139 @@ export function VCSCIProvidersCard({
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const [verifyGitCommitMode, setVerifyGitCommitMode] = useState<string | null>(null)
 
-  const currentVcsProvider = getSettingValue(settings?.vcs_provider, '')
-  const currentVcsRepo = getSettingValue(settings?.vcs_repo, '')
-  const currentCiProvider = getSettingValue(settings?.ci_provider, '')
-  const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '')
-  const currentGithubVerification = getSettingValue(settings?.github_verification, true)
-  const currentAllowDeployFromDefaultBranch = getSettingValue(
-    settings?.allow_deploy_from_default_branch,
-    false
+  const overrides = useMemo<OverrideState>(
+    () => ({
+      vcs_provider: vcsProvider,
+      vcs_repo: vcsRepo,
+      ci_provider: ciProvider,
+      ci_org_slug: ciOrgSlug,
+      default_branch: defaultBranch,
+      verify_git_commit_mode: verifyGitCommitMode,
+      github_verification: githubVerification,
+      allow_deploy_from_default_branch: allowDeployFromDefaultBranch,
+      require_pr_for_branch: requirePRForBranch,
+    }),
+    [
+      allowDeployFromDefaultBranch,
+      ciOrgSlug,
+      ciProvider,
+      defaultBranch,
+      githubVerification,
+      requirePRForBranch,
+      vcsProvider,
+      vcsRepo,
+      verifyGitCommitMode,
+    ]
   )
-  const currentRequirePRForBranch = getSettingValue(settings?.require_pr_for_branch, true)
-  const currentDefaultBranch = getSettingValue(settings?.default_branch, 'main')
-  const currentVerifyGitCommitMode = getSettingValue(settings?.verify_git_commit_mode, 'latest')
 
-  const displayVcsProvider = vcsProvider !== null ? vcsProvider : currentVcsProvider
-  const displayVcsRepo = vcsRepo !== null ? vcsRepo : currentVcsRepo
-  const displayCiProvider = ciProvider !== null ? ciProvider : currentCiProvider
-  const displayCiOrgSlug = ciOrgSlug !== null ? ciOrgSlug : currentCiOrgSlug
-  const displayGithubVerification =
-    githubVerification !== null ? githubVerification : currentGithubVerification
-  const displayAllowDeployFromDefaultBranch =
-    allowDeployFromDefaultBranch !== null
-      ? allowDeployFromDefaultBranch
-      : currentAllowDeployFromDefaultBranch
-  const displayRequirePRForBranch =
-    requirePRForBranch !== null ? requirePRForBranch : currentRequirePRForBranch
-  const displayDefaultBranch = defaultBranch !== null ? defaultBranch : currentDefaultBranch
-  const displayVerifyGitCommitMode =
-    verifyGitCommitMode !== null ? verifyGitCommitMode : currentVerifyGitCommitMode
+  const display = useMemo<VcsCiDisplayValues>(() => {
+    const currentVcsProvider = getSettingValue(settings?.vcs_provider, '')
+    const currentVcsRepo = getSettingValue(settings?.vcs_repo, '')
+    const currentCiProvider = getSettingValue(settings?.ci_provider, '')
+    const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '')
+    const currentGithubVerification = getSettingValue(settings?.github_verification, true)
+    const currentAllowDeployFromDefaultBranch = getSettingValue(
+      settings?.allow_deploy_from_default_branch,
+      false
+    )
+    const currentRequirePRForBranch = getSettingValue(settings?.require_pr_for_branch, true)
+    const currentDefaultBranch = getSettingValue(settings?.default_branch, 'main')
+    const currentVerifyGitCommitMode = getSettingValue(settings?.verify_git_commit_mode, 'latest')
 
-  const hasChanges =
-    vcsProvider !== null ||
-    vcsRepo !== null ||
-    ciProvider !== null ||
-    ciOrgSlug !== null ||
-    githubVerification !== null ||
-    allowDeployFromDefaultBranch !== null ||
-    requirePRForBranch !== null ||
-    defaultBranch !== null ||
-    verifyGitCommitMode !== null
+    return {
+      vcsProvider: mergeOverride(overrides.vcs_provider, currentVcsProvider),
+      vcsRepo: mergeOverride(overrides.vcs_repo, currentVcsRepo),
+      ciProvider: mergeOverride(overrides.ci_provider, currentCiProvider),
+      ciOrgSlug: mergeOverride(overrides.ci_org_slug, currentCiOrgSlug),
+      githubVerification: mergeOverride(overrides.github_verification, currentGithubVerification),
+      allowDeployFromDefaultBranch: mergeOverride(
+        overrides.allow_deploy_from_default_branch,
+        currentAllowDeployFromDefaultBranch
+      ),
+      requirePRForBranch: mergeOverride(overrides.require_pr_for_branch, currentRequirePRForBranch),
+      defaultBranch: mergeOverride(overrides.default_branch, currentDefaultBranch),
+      verifyGitCommitMode: mergeOverride(
+        overrides.verify_git_commit_mode,
+        currentVerifyGitCommitMode
+      ),
+    }
+  }, [overrides, settings])
+
+  const hasChanges = useMemo(
+    () => Object.values(overrides).some((value) => value !== null),
+    [overrides]
+  )
+
+  const reset = useCallback(() => {
+    setVcsProvider(null)
+    setVcsRepo(null)
+    setCiProvider(null)
+    setCiOrgSlug(null)
+    setGithubVerification(null)
+    setAllowDeployFromDefaultBranch(null)
+    setRequirePRForBranch(null)
+    setDefaultBranch(null)
+    setVerifyGitCommitMode(null)
+  }, [])
+
+  return {
+    overrides,
+    display,
+    hasChanges,
+    reset,
+    setVcsProvider,
+    setVcsRepo,
+    setCiProvider,
+    setCiOrgSlug,
+    setGithubVerification: (value: boolean) => setGithubVerification(value),
+    setAllowDeployFromDefaultBranch: (value: boolean) => setAllowDeployFromDefaultBranch(value),
+    setRequirePRForBranch: (value: boolean) => setRequirePRForBranch(value),
+    setDefaultBranch,
+    setVerifyGitCommitMode,
+  }
+}
+
+export function VCSCIProvidersCard({
+  app,
+  settings,
+  disabled,
+  integrations,
+}: VCSCIProvidersCardProps) {
+  const qc = useQueryClient()
+
+  const githubAvailable = integrations?.github ?? false
+  const circleciAvailable = integrations?.circleci ?? false
+  const {
+    overrides,
+    display,
+    hasChanges,
+    reset,
+    setVcsProvider,
+    setVcsRepo,
+    setCiProvider,
+    setCiOrgSlug,
+    setGithubVerification,
+    setAllowDeployFromDefaultBranch,
+    setRequirePRForBranch,
+    setDefaultBranch,
+    setVerifyGitCommitMode,
+  } = useVcsCiForm(settings)
+
+  const {
+    vcsProvider: displayVcsProvider,
+    vcsRepo: displayVcsRepo,
+    ciProvider: displayCiProvider,
+    ciOrgSlug: displayCiOrgSlug,
+    githubVerification: displayGithubVerification,
+    allowDeployFromDefaultBranch: displayAllowDeployFromDefaultBranch,
+    requirePRForBranch: displayRequirePRForBranch,
+    defaultBranch: displayDefaultBranch,
+    verifyGitCommitMode: displayVerifyGitCommitMode,
+  } = display
 
   const updateMutation = useMutation({
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Multiple settings require individual checks
     mutationFn: async () => {
-      const payload: Record<string, unknown> = {}
-      if (vcsProvider !== null) {
-        payload.vcs_provider = vcsProvider || null
-      }
-      if (vcsRepo !== null) {
-        payload.vcs_repo = vcsRepo || null
-      }
-      if (ciProvider !== null) {
-        payload.ci_provider = ciProvider || null
-      }
-      if (ciOrgSlug !== null) {
-        payload.ci_org_slug = ciOrgSlug || null
-      }
-      if (githubVerification !== null) {
-        payload.github_verification = githubVerification
-      }
-      if (allowDeployFromDefaultBranch !== null) {
-        payload.allow_deploy_from_default_branch = allowDeployFromDefaultBranch
-      }
-      if (requirePRForBranch !== null) {
-        payload.require_pr_for_branch = requirePRForBranch
-      }
-      if (defaultBranch !== null) {
-        payload.default_branch = defaultBranch
-      }
-      if (verifyGitCommitMode !== null) {
-        payload.verify_git_commit_mode = verifyGitCommitMode
-      }
+      const payload = buildUpdatePayload(overrides)
       if (Object.keys(payload).length === 0) {
         return
       }
@@ -126,15 +261,7 @@ export function VCSCIProvidersCard({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setVcsProvider(null)
-      setVcsRepo(null)
-      setCiProvider(null)
-      setCiOrgSlug(null)
-      setGithubVerification(null)
-      setAllowDeployFromDefaultBranch(null)
-      setRequirePRForBranch(null)
-      setDefaultBranch(null)
-      setVerifyGitCommitMode(null)
+      reset()
       toast.success('Deploy settings updated')
     },
     onError: (error: unknown) => {
@@ -149,15 +276,7 @@ export function VCSCIProvidersCard({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appSettings', app] })
-      setVcsProvider(null)
-      setVcsRepo(null)
-      setCiProvider(null)
-      setCiOrgSlug(null)
-      setGithubVerification(null)
-      setAllowDeployFromDefaultBranch(null)
-      setRequirePRForBranch(null)
-      setDefaultBranch(null)
-      setVerifyGitCommitMode(null)
+      reset()
       toast.success('Deploy settings cleared')
     },
     onError: (error: unknown) => {
@@ -167,15 +286,7 @@ export function VCSCIProvidersCard({
   })
 
   const handleCancel = () => {
-    setVcsProvider(null)
-    setVcsRepo(null)
-    setCiProvider(null)
-    setCiOrgSlug(null)
-    setGithubVerification(null)
-    setAllowDeployFromDefaultBranch(null)
-    setRequirePRForBranch(null)
-    setDefaultBranch(null)
-    setVerifyGitCommitMode(null)
+    reset()
   }
 
   const handleSave = () => {
@@ -210,172 +321,35 @@ export function VCSCIProvidersCard({
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-4">
-            <div className={disabled ? 'opacity-50' : ''}>
-              <Label htmlFor="vcs-provider">VCS Provider</Label>
-              <div className="flex items-center gap-2">
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  disabled={disabled}
-                  id="vcs-provider"
-                  onChange={(event) => setVcsProvider(event.target.value || null)}
-                  value={displayVcsProvider}
-                >
-                  <option value="">Not set</option>
-                  <option value="github">GitHub</option>
-                </select>
-                <SourceIndicator setting={settings?.vcs_provider} />
-              </div>
-            </div>
-
-            <div className={disabled || !githubAvailable ? 'opacity-50' : ''}>
-              <Label htmlFor="vcs-repo">GitHub Repo</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  disabled={disabled || !githubAvailable}
-                  id="vcs-repo"
-                  onChange={(event) => setVcsRepo(event.target.value)}
-                  placeholder="org/repo"
-                  value={displayVcsRepo}
-                />
-                <SourceIndicator setting={settings?.vcs_repo} />
-              </div>
-              <p className="mt-1 text-muted-foreground text-xs">
-                GitHub repository in <code>org/repo</code> format
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="ci-provider">CI Provider</Label>
-              <div className="flex items-center gap-2">
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  disabled={disabled}
-                  id="ci-provider"
-                  onChange={(event) => setCiProvider(event.target.value || null)}
-                  value={displayCiProvider}
-                >
-                  <option value="">Not set</option>
-                  <option disabled={!circleciAvailable} value="circleci">
-                    CircleCI
-                  </option>
-                  <option disabled={!githubAvailable} value="github">
-                    GitHub Actions
-                  </option>
-                </select>
-                <SourceIndicator setting={settings?.ci_provider} />
-              </div>
-            </div>
-
-            <div className={disabled ? 'opacity-50' : ''}>
-              <Label htmlFor="ci-org-slug">CircleCI Org Slug</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  disabled={disabled || !circleciAvailable}
-                  id="ci-org-slug"
-                  onChange={(event) => setCiOrgSlug(event.target.value)}
-                  placeholder="gh/org-name"
-                  value={displayCiOrgSlug}
-                />
-                <SourceIndicator setting={settings?.ci_org_slug} />
-              </div>
-              <p className="mt-1 text-muted-foreground text-xs">
-                Required for CircleCI integration. Format: <code>gh/org-name</code>
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-4">
-              <label
-                className={`flex items-center gap-3 ${disabled || !githubAvailable ? 'cursor-not-allowed opacity-50' : ''}`}
-              >
-                <input
-                  checked={displayGithubVerification}
-                  disabled={disabled || !githubAvailable}
-                  onChange={(event) => setGithubVerification(event.target.checked)}
-                  type="checkbox"
-                />
-                <span className="font-medium text-sm">Enable GitHub verification</span>
-                <SourceIndicator setting={settings?.github_verification} />
-              </label>
-              <p className="text-muted-foreground text-xs">
-                Verify git commits against GitHub when creating deploy approval requests.
-              </p>
-
-              <label
-                className={`flex items-center gap-3 ${disabled || !githubAvailable ? 'cursor-not-allowed opacity-50' : ''}`}
-              >
-                <input
-                  checked={displayAllowDeployFromDefaultBranch}
-                  disabled={disabled || !githubAvailable}
-                  onChange={(event) => setAllowDeployFromDefaultBranch(event.target.checked)}
-                  type="checkbox"
-                />
-                <span className="font-medium text-sm">Allow deploy from default branch</span>
-                <SourceIndicator setting={settings?.allow_deploy_from_default_branch} />
-              </label>
-              <p className="text-muted-foreground text-xs">
-                When disabled, deployments must be from a non-default branch.
-              </p>
-
-              <label
-                className={`flex items-center gap-3 ${disabled || !githubAvailable ? 'cursor-not-allowed opacity-50' : ''}`}
-              >
-                <input
-                  checked={displayRequirePRForBranch}
-                  disabled={disabled || !githubAvailable}
-                  onChange={(event) => setRequirePRForBranch(event.target.checked)}
-                  type="checkbox"
-                />
-                <span className="font-medium text-sm">Require PR for branch</span>
-                <SourceIndicator setting={settings?.require_pr_for_branch} />
-              </label>
-              <p className="text-muted-foreground text-xs">
-                Require a GitHub pull request to exist for the branch being deployed.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div className={disabled || !githubAvailable ? 'opacity-50' : ''}>
-                <Label htmlFor="default-branch">Default Branch</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    disabled={disabled || !githubAvailable}
-                    id="default-branch"
-                    onChange={(event) => setDefaultBranch(event.target.value)}
-                    placeholder="main"
-                    type="text"
-                    value={displayDefaultBranch}
-                  />
-                  <SourceIndicator setting={settings?.default_branch} />
-                </div>
-                <p className="mt-1 text-muted-foreground text-xs">
-                  The default branch name for the app&apos;s repository
-                </p>
-              </div>
-
-              <div className={disabled || !githubAvailable ? 'opacity-50' : ''}>
-                <Label htmlFor="verify-git-commit-mode">Git Commit Verification Mode</Label>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    disabled={disabled || !githubAvailable}
-                    id="verify-git-commit-mode"
-                    onChange={(event) => setVerifyGitCommitMode(event.target.value)}
-                    value={displayVerifyGitCommitMode}
-                  >
-                    <option value="branch">branch (commit must exist on branch)</option>
-                    <option value="latest">latest (commit must be latest on branch)</option>
-                  </select>
-                  <SourceIndicator setting={settings?.verify_git_commit_mode} />
-                </div>
-                <p className="mt-1 text-muted-foreground text-xs">
-                  How strictly to verify git commits when deploying
-                </p>
-              </div>
-            </div>
-          </div>
+          <VcsProviderFields
+            circleciAvailable={circleciAvailable}
+            disabled={disabled}
+            displayCiOrgSlug={displayCiOrgSlug}
+            displayCiProvider={displayCiProvider}
+            displayVcsProvider={displayVcsProvider}
+            displayVcsRepo={displayVcsRepo}
+            githubAvailable={githubAvailable}
+            onChangeCiOrgSlug={setCiOrgSlug}
+            onChangeCiProvider={(value) => setCiProvider(value || null)}
+            onChangeVcsProvider={setVcsProvider}
+            onChangeVcsRepo={setVcsRepo}
+            settings={settings}
+          />
+          <VerificationSettingsFields
+            disabled={disabled}
+            displayAllowDeployFromDefaultBranch={displayAllowDeployFromDefaultBranch}
+            displayDefaultBranch={displayDefaultBranch}
+            displayGithubVerification={displayGithubVerification}
+            displayRequirePRForBranch={displayRequirePRForBranch}
+            displayVerifyGitCommitMode={displayVerifyGitCommitMode}
+            githubAvailable={githubAvailable}
+            onChangeDefaultBranch={setDefaultBranch}
+            onChangeVerifyGitCommitMode={setVerifyGitCommitMode}
+            onToggleAllowDeployFromDefaultBranch={setAllowDeployFromDefaultBranch}
+            onToggleGithubVerification={setGithubVerification}
+            onToggleRequirePRForBranch={setRequirePRForBranch}
+            settings={settings}
+          />
         </div>
 
         <div className="flex justify-end gap-2">

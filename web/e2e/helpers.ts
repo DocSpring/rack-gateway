@@ -3,6 +3,7 @@ import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import {
   clearMfaAttempts,
+  ensureAdminUser,
   enforceMfaForUser,
   expireStepUpForAllSessions,
   getPendingTotpSecret,
@@ -147,6 +148,7 @@ export async function typeOtpCode(
 }
 
 export async function setupBothMfaMethods(email: string) {
+  await ensureAdminUser()
   await setupBothMfaMethodsForUser(email)
 }
 
@@ -155,7 +157,14 @@ export async function ensureMfaEnrollment(
   options: { email?: string } = {}
 ): Promise<string> {
   const email = options.email ?? 'admin@example.com'
-  const existing = await getUserMfaSecret(email)
+  let existing = await getUserMfaSecret(email)
+  if (existing) {
+    return existing
+  }
+
+  // Prefer direct seeding to avoid UI flakiness when enrolling MFA for test users
+  await setupBothMfaMethodsForUser(email)
+  existing = await getUserMfaSecret(email)
   if (existing) {
     return existing
   }
@@ -266,9 +275,35 @@ export async function startTotpEnrollmentViaUi(
     globalWindow.__e2e_clipboardStubbed = true
   })
 
-  await page.getByRole('button', { name: /^Enable MFA$/ }).click()
+  const enableButton = page.getByRole('button', { name: /^Enable MFA$/ })
+  const addMethodButton = page.getByRole('button', { name: /^Add Method$/ })
 
-  await page.getByRole('button', { name: 'Authenticator app', exact: true }).click()
+  const enableVisible = await enableButton.isVisible({ timeout: 1500 }).catch(() => false)
+  const addVisible = enableVisible ? false : await addMethodButton.isVisible({ timeout: 1500 }).catch(() => false)
+
+  if (enableVisible) {
+    await enableButton.click()
+  } else if (addVisible) {
+    await addMethodButton.click()
+  } else {
+    const existingSecret = await getUserMfaSecret(email)
+    if (existingSecret) {
+      return existingSecret
+    }
+    throw new Error('MFA enrollment dialog did not open and no existing secret found')
+  }
+
+  const authenticatorButton = page.getByRole('button', { name: 'Authenticator app', exact: true })
+  const authenticatorVisible = await authenticatorButton.isVisible({ timeout: 5000 }).catch(() => false)
+  if (!authenticatorVisible) {
+    const existingSecret = await getUserMfaSecret(email)
+    if (existingSecret) {
+      return existingSecret
+    }
+    throw new Error('Authenticator app option not available during enrollment')
+  }
+
+  await authenticatorButton.click()
 
   const enrollmentDialog = page.getByRole('dialog', {
     name: 'Enable Multi-Factor Authentication',

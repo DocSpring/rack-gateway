@@ -401,21 +401,33 @@ export async function getUserMfaEnrolled(email: string): Promise<boolean> {
 
 export async function setupBothMfaMethodsForUser(email: string) {
   await withDbClient(async (client) => {
+    const existingUser = await client.query('SELECT id FROM users WHERE email = $1;', [email])
+    let userId: number | null = existingUser.rows[0]?.id ?? null
+
+    if (!userId) {
+      const inserted = await client.query(
+        `INSERT INTO users (email, name, roles)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, roles = EXCLUDED.roles
+         RETURNING id;`,
+        [email, 'Admin User', '["admin"]']
+      )
+      userId = inserted.rows[0]?.id ?? null
+    }
+
+    if (!userId) {
+      throw new Error(`Failed to ensure user exists for ${email}`)
+    }
+
     // First reset any existing MFA state
-    await client.query(
-      'DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = $1);',
-      [email]
-    )
-    await client.query(
-      'DELETE FROM mfa_backup_codes WHERE user_id = (SELECT id FROM users WHERE email = $1);',
-      [email]
-    )
+    await client.query('DELETE FROM mfa_methods WHERE user_id = $1;', [userId])
+    await client.query('DELETE FROM mfa_backup_codes WHERE user_id = $1;', [userId])
 
     // Insert TOTP method (using real secret from dev database)
     await client.query(
       `INSERT INTO mfa_methods (user_id, type, secret, label, created_at, confirmed_at, last_used_at)
        VALUES (
-         (SELECT id FROM users WHERE email = $1),
+         $1,
          'totp',
          'K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU',
          'Authenticator App',
@@ -423,14 +435,14 @@ export async function setupBothMfaMethodsForUser(email: string) {
          NOW(),
          NULL
        );`,
-      [email]
+      [userId]
     )
 
     // Insert WebAuthn method (using real Yubikey credential from dev database)
     await client.query(
       `INSERT INTO mfa_methods (user_id, type, credential_id, public_key, label, created_at, confirmed_at, last_used_at)
        VALUES (
-         (SELECT id FROM users WHERE email = $1),
+         $1,
          'webauthn',
          decode('b08fa0de532b22a9537c63309329c7cad86d8f4c72dc3f05f94e9f7d2d8acfe9e5a9d9a88794e2a8f4bd3de69371ed17ae2e0229e4ed9f37896381a322a1016f', 'hex'),
          decode('a5010203262001215820debc463a75d894212b5b9717110b10c330217872751093370c2cf78a3fd25d7b2258208f4e7ecfdc836e2984883b666666b54306151e9f785b0935e9415d9cd3baeea6', 'hex'),
@@ -439,7 +451,7 @@ export async function setupBothMfaMethodsForUser(email: string) {
          NOW(),
          NULL
        );`,
-      [email]
+      [userId]
     )
 
     // Generate backup codes
@@ -459,12 +471,12 @@ export async function setupBothMfaMethodsForUser(email: string) {
       await client.query(
         `INSERT INTO mfa_backup_codes (user_id, code_hash, used_at, created_at)
          VALUES (
-           (SELECT id FROM users WHERE email = $1),
+           $1,
            $2,
            NULL,
            NOW()
          );`,
-        [email, code]
+        [userId, code]
       )
     }
 

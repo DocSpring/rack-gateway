@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
@@ -11,96 +10,11 @@ import {
   prepareRequestOptions,
   serializeAssertionCredential,
 } from '@/lib/webauthn-utils'
+import { determineInitialMFAMethod } from './mfa-verification-form/determine-initial-method'
+import type { MFAMethod, MFAVerificationFormProps } from './mfa-verification-form/types'
 
 const DIGITS_ONLY_REGEX = /^\d+$/
 const SIX_DIGITS_REGEX = /^\d{6}$/
-
-type MFAMethod = 'totp' | 'webauthn'
-type MFAMode = 'step-up' | 'cli' | 'web'
-
-type VerificationParams =
-  | {
-      method: 'totp'
-      code: string
-      trust_device: boolean
-    }
-  | {
-      method: 'webauthn'
-      trust_device: boolean
-      session_data: string
-      assertion_response: string
-    }
-
-type MFAVerificationFormProps = {
-  /**
-   * Called when verification needs to happen. Should perform the actual API call.
-   * For TOTP: receives code and trust_device
-   * For WebAuthn: receives session_data, assertion_response, and trust_device
-   */
-  onVerify: (params: VerificationParams) => Promise<void>
-
-  /**
-   * Called after successful verification. Use for navigation, state updates, etc.
-   */
-  onSuccess?: () => void | Promise<void>
-
-  /**
-   * Called when verification fails. Use for error display or logging.
-   */
-  onError?: (error: unknown) => void
-
-  /**
-   * Called when MFA status is loaded. Use to check enrollment state.
-   */
-  onMFAStatusLoaded?: (mfaStatus: Awaited<ReturnType<typeof getMFAStatus>>) => void
-
-  /**
-   * Auto-focus the TOTP input when rendered
-   * @default true
-   */
-  autoFocus?: boolean
-
-  /**
-   * Show the "Trust this device" checkbox
-   * @default true
-   */
-  showTrustDevice?: boolean
-
-  /**
-   * Default value for trust device checkbox
-   * @default true
-   */
-  trustDeviceDefault?: boolean
-
-  /**
-   * Allow switching between TOTP and WebAuthn methods
-   * @default true
-   */
-  allowMethodSwitch?: boolean
-
-  /**
-   * Preferred method to show initially. 'auto' detects from MFA status.
-   * @default 'auto'
-   */
-  preferredMethod?: MFAMethod | 'auto'
-
-  /**
-   * Auto-trigger WebAuthn verification when it's selected
-   * @default false
-   */
-  autoTriggerWebAuthn?: boolean
-
-  /**
-   * Mode determines the description text shown to the user
-   * @default 'web'
-   */
-  mode?: MFAMode
-
-  /**
-   * Optional cancel button to render at the bottom right (e.g., for dialog)
-   */
-  renderCancelButton?: () => ReactNode
-}
 
 /**
  * Reusable MFA verification form component that wraps the common
@@ -153,35 +67,16 @@ export function MFAVerificationForm({
   const hasWebAuthn = (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0
   const hasTOTP = (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Method resolution checks multiple preference branches
-  const resolvedInitialMethod = useMemo<MFAMethod | null>(() => {
-    if (!mfaStatus) {
-      return null
-    }
-
-    if (preferredMethod === 'totp' && hasTOTP) {
-      return 'totp'
-    }
-
-    if (preferredMethod === 'webauthn' && hasWebAuthn) {
-      return 'webauthn'
-    }
-
-    if (preferredMethod === 'auto') {
-      if (mfaStatus.preferred_method === 'webauthn' && hasWebAuthn) {
-        return 'webauthn'
-      }
-      if (mfaStatus.preferred_method === 'totp' && hasTOTP) {
-        return 'totp'
-      }
-    }
-
-    if (hasWebAuthn && !hasTOTP) {
-      return 'webauthn'
-    }
-
-    return 'totp'
-  }, [hasTOTP, hasWebAuthn, mfaStatus, preferredMethod])
+  const resolvedInitialMethod = useMemo<MFAMethod | null>(
+    () =>
+      determineInitialMFAMethod({
+        mfaStatus,
+        preferredMethod,
+        hasTOTP,
+        hasWebAuthn,
+      }),
+    [hasTOTP, hasWebAuthn, mfaStatus, preferredMethod]
+  )
 
   useEffect(() => {
     if (!(mfaStatus && resolvedInitialMethod)) {

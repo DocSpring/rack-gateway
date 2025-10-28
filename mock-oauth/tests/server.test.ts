@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import request from "supertest";
 
-import { createApp } from "../server.js";
+import { createApp } from "../src/server.js";
 
 test("openid configuration endpoint", async () => {
   const app = await createApp();

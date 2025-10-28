@@ -7,7 +7,7 @@
   "scripts": {
     "build": "bunx tsc --project tsconfig.build.json",
     "start": "bun run build && bun dist/server.js",
-    "dev": "bun --watch server.ts",
+    "dev": "bun --watch src/server.ts",
     "test": "SKIP_AUTOSTART=true bun test tests",
     "lint": "bunx biome check .",
     "lint:fix": "bunx biome check --write .",

@@ -2,7 +2,8 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useParams } from '@tanstack/react-router'
 import { Check, Loader2, X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+
 import { type AuditLogRecord, AuditLogsPane } from '@/components/audit-logs-pane'
 import { DeployApprovalRejectDialog } from '@/components/deploy-approval-reject-dialog'
 import { DeployApprovalStatusBadge } from '@/components/deploy-approval-status-badge'
@@ -25,6 +26,8 @@ import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { withAPIErrorMessage } from '@/lib/error-utils'
 import { QUERY_KEYS } from '@/lib/query-keys'
 
+const PLACEHOLDER_VALUE = '—'
+
 type DetailRowProps = {
   label: string
   value: ReactNode
@@ -35,20 +38,20 @@ function DetailRow({ label, value, valueClassName }: DetailRowProps) {
   return (
     <div className="break-words text-sm">
       <span className="text-muted-foreground">{label}:</span>{' '}
-      <span className={valueClassName}>{value ?? '—'}</span>
+      <span className={valueClassName}>{value ?? PLACEHOLDER_VALUE}</span>
     </div>
   )
 }
 
 function renderTime(value?: string | null): ReactNode {
-  return value ? <TimeAgo date={value} /> : '—'
+  return value ? <TimeAgo date={value} /> : PLACEHOLDER_VALUE
 }
 
 function formatUser(name?: string | null, email?: string | null): string {
   if (name && email) {
     return `${name} (${email})`
   }
-  return name ?? email ?? '—'
+  return name ?? email ?? PLACEHOLDER_VALUE
 }
 
 function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest | undefined {
@@ -56,15 +59,7 @@ function toNotesPayload(notes: string): UpdateDeployApprovalRequestStatusRequest
   return trimmed ? { notes: trimmed } : undefined
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: detail page with multiple sections
-export function DeployApprovalRequestDetailPage() {
-  const { id } = useParams({ from: '/deploy-approval-requests/$id' }) as {
-    id: string
-  }
-  const queryClient = useQueryClient()
-  const { handleStepUpError } = useStepUp()
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
-
+function useDeployApprovalRequestData(id: string) {
   const {
     data: request,
     isLoading: requestLoading,
@@ -75,17 +70,15 @@ export function DeployApprovalRequestDetailPage() {
     retry: 1,
   })
 
-  // Fetch app settings to get ci_org_slug for building pipeline URL
   const { data: appSettings } = useQuery<Record<string, { value: unknown; source: string }>, Error>(
     {
       queryKey: ['app-settings', request?.app],
       queryFn: () => api.get(`/api/v1/apps/${request?.app}/settings`),
-      enabled: !!request?.app,
+      enabled: Boolean(request?.app),
       retry: 1,
     }
   )
 
-  // Extract CI metadata and build pipeline URL if available
   const { circleCIPipelineUrl, circleCIMetadata } = useMemo(() => {
     if (!request?.ci_metadata) {
       return { circleCIPipelineUrl: null, circleCIMetadata: null }
@@ -102,15 +95,78 @@ export function DeployApprovalRequestDetailPage() {
     }
 
     return { circleCIPipelineUrl: null, circleCIMetadata: metadata }
-  }, [request?.ci_metadata, appSettings?.ci_org_slug])
+  }, [appSettings?.ci_org_slug, request?.ci_metadata])
 
+  return {
+    request,
+    requestLoading,
+    requestError,
+    circleCIPipelineUrl,
+    circleCIMetadata,
+  }
+}
+
+function useDeployApprovalAuditLogs(id: string, enabled: boolean) {
+  const [pageIndex, setPageIndex] = useState(1)
+
+  const { data, isLoading, error } = useQuery<AuditLogsResponse, Error>({
+    queryKey: ['deployApprovalRequestAuditLogs', id, pageIndex, DEFAULT_PER_PAGE],
+    queryFn: () =>
+      api.get(`/api/v1/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}`),
+    enabled,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+  })
+
+  const logs = (data?.logs ?? []) as AuditLogRecord[]
+  const total = data?.total ?? 0
+  const limit = data?.limit ?? DEFAULT_PER_PAGE
+  const currentPage = data?.page ?? pageIndex
+  const totalPages = Math.max(1, Math.ceil(Math.max(total, 0) / limit))
+  const firstRowIndex = total === 0 ? 0 : (currentPage - 1) * limit + 1
+  const lastRowIndex = total === 0 ? 0 : firstRowIndex + logs.length - 1
+
+  const goToPreviousPage = useCallback(() => {
+    setPageIndex((prev) => Math.max(1, prev - 1))
+  }, [])
+
+  const goToNextPage = useCallback(() => {
+    setPageIndex((prev) => Math.min(totalPages, prev + 1))
+  }, [totalPages])
+
+  return {
+    auditLogs: logs,
+    auditTotal: total,
+    auditTotalPages: totalPages,
+    auditFirstRowIndex: firstRowIndex,
+    auditLastRowIndex: lastRowIndex,
+    auditLoading: isLoading,
+    auditError: error,
+    auditPage: currentPage,
+    goToPreviousPage,
+    goToNextPage,
+  }
+}
+
+type DeployActionsArgs = {
+  id: string
+  queryClient: ReturnType<typeof useQueryClient>
+  handleStepUpError: ReturnType<typeof useStepUp>['handleStepUpError']
+  closeRejectDialog: () => void
+}
+
+function useDeployApprovalActions({
+  id,
+  queryClient,
+  handleStepUpError,
+  closeRejectDialog,
+}: DeployActionsArgs) {
   const approveMutation = useMutation({
     mutationFn: (requestId: string) => approveDeployApprovalRequest(requestId, {}),
     onSuccess: () => {
       toast.success('Request approved')
-      queryClient.invalidateQueries({
-        queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id],
-      })
+      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id] })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DEPLOY_APPROVAL_REQUESTS })
     },
   })
@@ -120,10 +176,8 @@ export function DeployApprovalRequestDetailPage() {
       rejectDeployApprovalRequest(requestId, toNotesPayload(notes)),
     onSuccess: () => {
       toast.success('Request rejected')
-      setRejectDialogOpen(false)
-      queryClient.invalidateQueries({
-        queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id],
-      })
+      closeRejectDialog()
+      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.DEPLOY_APPROVAL_REQUEST, id] })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DEPLOY_APPROVAL_REQUESTS })
     },
   })
@@ -160,300 +214,167 @@ export function DeployApprovalRequestDetailPage() {
     [handleStepUpError, rejectMutation]
   )
 
-  const handleApprove = () => {
-    approveRequest(id).catch(() => {
-      /* errors handled within approveRequest */
-    })
+  return {
+    approveRequest,
+    submitRejection,
+    approveMutationPending: approveMutation.isPending,
+    rejectMutationPending: rejectMutation.isPending,
   }
+}
 
-  const handleRejectClick = () => {
-    setRejectDialogOpen(true)
-  }
+export function DeployApprovalRequestDetailPage() {
+  const { id } = useParams({ from: '/deploy-approval-requests/$id' }) as { id: string }
+  const queryClient = useQueryClient()
+  const { handleStepUpError } = useStepUp()
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
 
-  const handleRejectSubmit = (notes: string) => {
-    submitRejection(id, notes).catch(() => {
-      /* errors handled within submitRejection */
-    })
-  }
-
-  const [auditPageIndex, setAuditPageIndex] = useState(1)
+  const { request, requestLoading, requestError, circleCIPipelineUrl, circleCIMetadata } =
+    useDeployApprovalRequestData(id)
 
   const {
-    data: auditTableData,
-    isLoading: auditTableLoading,
-    error: auditTableError,
-  } = useQuery<AuditLogsResponse, Error>({
-    queryKey: ['deployApprovalRequestAuditLogs', id, auditPageIndex, DEFAULT_PER_PAGE],
-    queryFn: () =>
-      api.get(`/api/v1/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}`),
-    enabled: !!request,
-    placeholderData: keepPreviousData,
-    refetchOnWindowFocus: true,
-    staleTime: 0,
-  })
+    auditLogs,
+    auditTotal,
+    auditTotalPages,
+    auditFirstRowIndex,
+    auditLastRowIndex,
+    auditLoading,
+    auditError,
+    auditPage,
+    goToPreviousPage,
+    goToNextPage,
+  } = useDeployApprovalAuditLogs(id, Boolean(request))
 
-  const auditLogs = (auditTableData?.logs ?? []) as AuditLogRecord[]
-  const auditTotal = auditTableData?.total ?? 0
-  const auditLimit = auditTableData?.limit ?? DEFAULT_PER_PAGE
-  const currentAuditPage = auditTableData?.page ?? auditPageIndex
-  const auditTotalPages = Math.max(1, Math.ceil(Math.max(auditTotal, 0) / auditLimit))
-  const auditFirstRowIndex = auditTotal === 0 ? 0 : (currentAuditPage - 1) * auditLimit + 1
-  const auditLastRowIndex = auditTotal === 0 ? 0 : auditFirstRowIndex + auditLogs.length - 1
-  const auditLoading = auditTableLoading && auditLogs.length === 0
-  const auditError = auditTableError ? auditTableError.message : null
+  const { approveRequest, submitRejection, approveMutationPending, rejectMutationPending } =
+    useDeployApprovalActions({
+      id,
+      queryClient,
+      handleStepUpError,
+      closeRejectDialog: () => setRejectDialogOpen(false),
+    })
 
-  useEffect(() => {
-    if (!auditTableData) {
-      return
-    }
-    if (auditPageIndex !== currentAuditPage) {
-      setAuditPageIndex(currentAuditPage)
-      return
-    }
-    if (currentAuditPage > auditTotalPages) {
-      setAuditPageIndex(auditTotalPages)
-    }
-  }, [auditTableData, auditPageIndex, currentAuditPage, auditTotalPages])
+  const handleApprove = useCallback(() => {
+    approveRequest(id).catch(() => {
+      /* handled in hook */
+    })
+  }, [approveRequest, id])
 
-  const handleAuditPrevPage = () => {
-    setAuditPageIndex((prev) => Math.max(1, prev - 1))
-  }
-
-  const handleAuditNextPage = () => {
-    setAuditPageIndex((prev) => Math.min(auditTotalPages, prev + 1))
-  }
+  const handleRejectSubmit = useCallback(
+    (notes: string) => {
+      submitRejection(id, notes).catch(() => {
+        /* handled in hook */
+      })
+    },
+    [id, submitRejection]
+  )
 
   if (requestError) {
     return (
-      <div className="space-y-4 p-8">
+      <div className="space-y-4">
         <h1 className="font-semibold text-2xl">Deploy Approval Request</h1>
         <p className="text-destructive text-sm">Unable to load request: {requestError.message}</p>
       </div>
     )
   }
 
-  const status = request?.status ?? 'unknown'
-  const normalizedStatus = status.toLowerCase()
-  const canApprove = normalizedStatus === 'pending'
-  const canReject = normalizedStatus === 'pending' || normalizedStatus === 'approved'
-  const approveDisabled = approveMutation.isPending || rejectMutation.isPending
-  const rejectDisabled = rejectMutation.isPending || approveMutation.isPending
+  if (requestLoading || !request) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    )
+  }
+
+  const targetTokenDisplay =
+    request.target_api_token_name ?? request.target_api_token_id ?? PLACEHOLDER_VALUE
 
   return (
-    <div className="space-y-6 p-8">
-      {/* Header with app name and actions */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-semibold text-3xl">
-              {requestLoading ? 'Loading…' : request?.app || 'Deploy Approval'}
-            </h1>
-            {request?.status && <DeployApprovalStatusBadge status={request.status} />}
-          </div>
-          <p className="mt-1 text-muted-foreground">
-            {request?.message || 'Deploy approval request'}
-          </p>
-          <p className="font-mono text-muted-foreground text-sm">{id}</p>
+    <div className="space-y-8 p-8">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <h1 className="font-semibold text-3xl">Deploy Approval Request</h1>
+          <DetailRow label="App" value={request.app ?? PLACEHOLDER_VALUE} />
+          <DetailRow label="Target Token" value={targetTokenDisplay} />
+          <DetailRow
+            label="Created"
+            value={renderTime(request.created_at)}
+            valueClassName="text-muted-foreground"
+          />
+          <DetailRow label="Status" value={<DeployApprovalStatusBadge status={request.status} />} />
+          <DetailRow
+            label="Created by"
+            value={formatUser(request.created_by_name, request.created_by_email)}
+          />
+          {circleCIPipelineUrl ? (
+            <DetailRow
+              label="CI Pipeline"
+              value={
+                <a
+                  className="text-primary"
+                  href={circleCIPipelineUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  CircleCI Pipeline #{circleCIMetadata?.pipelineNumber}
+                </a>
+              }
+            />
+          ) : (
+            <DetailRow label="CI Pipeline" value={PLACEHOLDER_VALUE} />
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 md:justify-end">
-          {canApprove && (
-            <Button
-              className="bg-green-600 hover:bg-green-700"
-              disabled={approveDisabled || requestLoading}
-              onClick={handleApprove}
-            >
-              {approveMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="mr-2 h-4 w-4" />
-              )}
-              Approve
-            </Button>
-          )}
-          {canReject && (
-            <Button
-              disabled={rejectDisabled || requestLoading}
-              onClick={handleRejectClick}
-              variant="destructive"
-            >
-              {rejectMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <X className="mr-2 h-4 w-4" />
-              )}
-              Reject
-            </Button>
-          )}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={approveMutationPending || request.status !== 'pending'}
+            onClick={handleApprove}
+            variant="secondary"
+          >
+            {approveMutationPending ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Check className="mr-2 size-4" />
+            )}
+            Approve Request
+          </Button>
+          <Button
+            disabled={rejectMutationPending || request.status !== 'pending'}
+            onClick={() => setRejectDialogOpen(true)}
+            variant="destructive"
+          >
+            <X className="mr-2 size-4" /> Reject Request
+          </Button>
         </div>
       </div>
 
-      {/* Two-column layout for details */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Deployment Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Deployment Info</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <DetailRow
-              label="Git Commit"
-              value={request?.git_commit_hash ?? '—'}
-              valueClassName="font-mono"
-            />
-            <DetailRow
-              label="Branch"
-              value={request?.git_branch ?? '—'}
-              valueClassName="font-mono"
-            />
-            {request?.pr_url && (
-              <DetailRow
-                label="Pull Request"
-                value={
-                  <a
-                    className="text-link hover:underline"
-                    href={request.pr_url}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    {request.pr_url}
-                  </a>
-                }
-              />
-            )}
-            {circleCIMetadata?.workflowId && (
-              <DetailRow
-                label="Workflow ID"
-                value={circleCIMetadata.workflowId}
-                valueClassName="font-mono text-xs"
-              />
-            )}
-            {circleCIMetadata?.pipelineNumber && (
-              <DetailRow label="Pipeline Number" value={circleCIMetadata.pipelineNumber} />
-            )}
-            {circleCIPipelineUrl && (
-              <DetailRow
-                label="Pipeline URL"
-                value={
-                  <a
-                    className="text-link hover:underline"
-                    href={circleCIPipelineUrl}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    {circleCIPipelineUrl}
-                  </a>
-                }
-              />
-            )}
-            <DetailRow label="Object URL" value={request?.object_url ?? '—'} />
-            <DetailRow
-              label="Build ID"
-              value={request?.build_id ?? '—'}
-              valueClassName="font-mono"
-            />
-            <DetailRow
-              label="Release ID"
-              value={request?.release_id ?? '—'}
-              valueClassName="font-mono"
-            />
-            <DetailRow
-              label="Process IDs"
-              value={
-                request?.process_ids && request.process_ids.length > 0
-                  ? request.process_ids.join(', ')
-                  : '—'
-              }
-              valueClassName="font-mono"
-            />
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Request Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <DetailRow
+            label="Message"
+            value={request.message || 'No message provided'}
+            valueClassName="text-sm"
+          />
+          <DetailRow label="Branch" value={request.git_branch ?? PLACEHOLDER_VALUE} />
+          <DetailRow label="Git Commit" value={request.git_commit_hash ?? PLACEHOLDER_VALUE} />
+          <DetailRow label="Release ID" value={request.release_id ?? PLACEHOLDER_VALUE} />
+          <DetailRow label="Build ID" value={request.build_id ?? PLACEHOLDER_VALUE} />
+        </CardContent>
+      </Card>
 
-        {/* Approval Workflow */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Approval Workflow</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <DetailRow
-              label="Target Token"
-              value={request?.target_api_token_name ?? request?.target_api_token_id ?? '—'}
-            />
-            <DetailRow
-              label="Created By"
-              value={
-                request?.created_by_api_token_name ??
-                formatUser(request?.created_by_name, request?.created_by_email)
-              }
-            />
-            <DetailRow label="Created At" value={renderTime(request?.created_at)} />
-            <DetailRow label="Updated At" value={renderTime(request?.updated_at)} />
-            <DetailRow label="Expires At" value={renderTime(request?.approval_expires_at)} />
-            <DetailRow
-              label="Approved By"
-              value={formatUser(request?.approved_by_name, request?.approved_by_email)}
-            />
-            <DetailRow label="Approved At" value={renderTime(request?.approved_at)} />
-            {(request?.rejected_by_name || request?.rejected_by_email) && (
-              <DetailRow
-                label="Rejected By"
-                value={formatUser(request.rejected_by_name, request.rejected_by_email)}
-              />
-            )}
-            {request?.rejected_at && (
-              <DetailRow label="Rejected At" value={renderTime(request.rejected_at)} />
-            )}
-            {request?.approval_notes && (
-              <DetailRow label="Rejection Notes" value={request.approval_notes} />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Executed Commands - table showing process IDs and commands */}
-      {request?.exec_commands && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Executed Commands</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="pr-4 pb-2 text-left font-medium">Process ID</th>
-                    <th className="pb-2 text-left font-medium">Command</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(request.exec_commands as Record<string, string>).map(
-                    ([processId, command]) => (
-                      <tr className="border-b last:border-0" key={processId}>
-                        <td className="py-2 pr-4 align-top font-mono">{processId}</td>
-                        <td className="py-2 font-mono">{command}</td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Audit Logs */}
       <div data-testid="deploy-approval-audit-logs">
         <AuditLogsPane
-          currentPage={currentAuditPage}
-          disableNext={currentAuditPage >= auditTotalPages}
-          disablePrevious={currentAuditPage <= 1}
-          emptyMessage="No audit logs for this deploy approval request"
-          error={auditError}
+          currentPage={auditPage}
+          disableNext={auditPage >= auditTotalPages}
+          disablePrevious={auditPage <= 1}
+          emptyMessage="No audit logs for this request"
+          error={auditError?.message ?? null}
           firstRowIndex={auditFirstRowIndex}
           lastRowIndex={auditLastRowIndex}
           loading={auditLoading}
           logs={auditLogs}
-          onNextPage={handleAuditNextPage}
-          onPreviousPage={handleAuditPrevPage}
+          onNextPage={goToNextPage}
+          onPreviousPage={goToPreviousPage}
           title="Audit Logs"
           totalCount={auditTotal}
           totalPages={auditTotalPages}
@@ -464,7 +385,7 @@ export function DeployApprovalRequestDetailPage() {
         onOpenChange={setRejectDialogOpen}
         onSubmit={handleRejectSubmit}
         open={rejectDialogOpen}
-        pending={rejectMutation.isPending}
+        pending={rejectMutationPending}
         requestId={id}
       />
     </div>
