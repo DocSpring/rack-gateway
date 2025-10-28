@@ -111,12 +111,12 @@ jobs:
       - name: Install Playwright and deps
         working-directory: web
         run: |
-          pnpm install --frozen-lockfile
-          npx playwright install --with-deps || npx playwright install
+          bun install
+          bunx playwright install --with-deps || bunx playwright install
 
       - name: Run Web E2E
         working-directory: web
-        run: pnpm e2e
+        run: bun run e2e
 
       - name: Docker logs (on failure)
         if: failure()
