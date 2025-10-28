@@ -41,6 +41,16 @@ func TestAuditLogger(t *testing.T) {
 		assert.Equal(t, "success", st)
 	})
 
+	t.Run("Status302IsSuccess", func(t *testing.T) {
+		st := logger.mapStatusToString(302, "allow")
+		assert.Equal(t, "success", st)
+	})
+
+	t.Run("UnknownStatusTreatedAsError", func(t *testing.T) {
+		st := logger.mapStatusToString(-1, "allow")
+		assert.Equal(t, "error", st)
+	})
+
 	t.Run("RedactEnvVars_RedactsValues", func(t *testing.T) {
 		vars := map[string]string{"FOO": "bar", "SECRET_TOKEN": "abc"}
 		red := logger.RedactEnvVars(vars)
@@ -115,6 +125,14 @@ func TestAuditLogger(t *testing.T) {
 				assert.NotEqual(t, "unknown", resourceType, "resource type should not be unknown")
 			})
 		}
+	})
+
+	t.Run("InferResourceType_Fallback", func(t *testing.T) {
+		resourceType := logger.InferResourceType("/totally/new/path", "")
+		assert.Equal(t, "totally/new/path", resourceType)
+
+		resourceType = logger.InferResourceType("", "")
+		assert.Equal(t, "unknown", resourceType)
 	})
 
 }

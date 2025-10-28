@@ -9,6 +9,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/getsentry/sentry-go"
 )
@@ -57,7 +58,7 @@ func (n *Notifier) NotifyAuditEvent(auditLog *db.AuditLog) error {
 	for _, channelID := range channels {
 		if err := client.PostMessage(channelID, text, blocks); err != nil {
 			// Log error but continue sending to other channels
-			fmt.Printf("Failed to send Slack notification to channel %s: %v\n", channelID, err)
+			gtwlog.Errorf("slack notifier: failed to send notification to channel %s: %v", channelID, err)
 			// Capture in Sentry
 			sentry.CaptureException(err)
 		}

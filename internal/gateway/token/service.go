@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -126,7 +127,7 @@ func (s *Service) ValidateAPIToken(token string) (*db.APIToken, error) {
 	// Update last used timestamp
 	if err := s.db.UpdateAPITokenLastUsed(tokenHash); err != nil {
 		// Log but don't fail - this is not critical
-		fmt.Printf("Warning: Failed to update token last used: %v\n", err)
+		gtwlog.Warnf("token service: failed to update token last used: %v", err)
 	}
 
 	return apiToken, nil

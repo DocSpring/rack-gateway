@@ -3,14 +3,13 @@ package audit
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/google/uuid"
 )
@@ -97,12 +96,12 @@ func (l *Logger) Log(entry *LogEntry) {
 
 	data, err := json.Marshal(entry)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to marshal audit log: %v\n", err)
+		gtwlog.Errorf("audit: failed to marshal audit log entry: %v", err)
 		return
 	}
 
 	// Output structured JSON to stdout for CloudWatch ingestion
-	fmt.Println(string(data))
+	writeAuditLine(data)
 }
 
 // LogDB writes a DB-style audit entry to stdout as structured JSON and persists it.
@@ -140,9 +139,9 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 	}
 	// Omit verbose request details; method/path are already logged separately
 	if data, err := json.Marshal(payload); err == nil {
-		fmt.Println(string(data))
+		writeAuditLine(data)
 	} else {
-		fmt.Fprintf(os.Stderr, "Failed to marshal audit db log: %v\n", err)
+		gtwlog.Errorf("audit: failed to marshal audit db log: %v", err)
 	}
 	if database == nil {
 		return nil
@@ -162,12 +161,12 @@ func (l *Logger) notifySlackAsync(al *db.AuditLog) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "Slack notification panicked: %v\n", r)
+				gtwlog.Errorf("audit: Slack notification panicked: %v", r)
 			}
 		}()
 
 		if err := l.slackNotifier.NotifyAuditEvent(al); err != nil {
-			fmt.Fprintf(os.Stderr, "Slack notification failed: %v\n", err)
+			gtwlog.Errorf("audit: Slack notification failed: %v", err)
 		}
 	}()
 }
@@ -438,14 +437,15 @@ func (l *Logger) MapHttpStatusToStatus(httpStatus int) string {
 	switch {
 	case httpStatus == 101: // WebSocket Switching Protocols treated as success
 		return "success"
-	case httpStatus >= 200 && httpStatus < 300:
+	case httpStatus >= 100 && httpStatus < 400:
 		return "success"
 	case httpStatus >= 400 && httpStatus < 500:
 		return "failed"
 	case httpStatus >= 500:
 		return "error"
 	default:
-		panic(fmt.Sprintf("CRITICAL: Unknown HTTP status %d", httpStatus))
+		gtwlog.Warnf("audit: unexpected HTTP status %d, treating as error", httpStatus)
+		return "error"
 	}
 }
 
@@ -483,5 +483,9 @@ func (l *Logger) InferResourceType(path, action string) string {
 	if action != "" {
 		return action
 	}
-	panic(fmt.Sprintf("CRITICAL: Unknown path %s and action %s", path, action))
+	gtwlog.Warnf("audit: unable to infer resource type for path=%q action=%q", path, action)
+	if trimmed := strings.Trim(strings.TrimSpace(path), "/"); trimmed != "" {
+		return trimmed
+	}
+	return "unknown"
 }

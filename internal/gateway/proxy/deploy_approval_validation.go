@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 type buildApprovalContext struct {
@@ -145,6 +146,6 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 	err := h.database.UpdateDeployApprovalRequestBuild(ctx.approvalID, buildID, releaseID)
 	if err != nil {
 		// Log error but don't fail the request - build already succeeded
-		fmt.Printf("WARNING: failed to update deploy approval tracking: %v\n", err)
+		gtwlog.Warnf("proxy: failed to update deploy approval tracking build_id=%s release_id=%s: %v", buildID, releaseID, err)
 	}
 }

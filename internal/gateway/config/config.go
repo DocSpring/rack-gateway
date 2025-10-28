@@ -49,6 +49,8 @@ type RackConfig struct {
 	Enabled  bool
 }
 
+var randRead = rand.Read
+
 func normalizeSampleRate(raw string, fallback string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -101,8 +103,11 @@ func Load() (*Config, error) {
 	sessionSecret := getEnv("APP_SECRET_KEY", "")
 	if sessionSecret == "" {
 		if cfg.DevMode {
-			sessionSecret = generateDevKey()
-			fmt.Printf("Generated dev secret key: %s\n", sessionSecret)
+			var err error
+			sessionSecret, err = generateDevKey()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate dev secret key: %w", err)
+			}
 		} else {
 			return nil, fmt.Errorf("APP_SECRET_KEY is required in production")
 		}
@@ -212,12 +217,12 @@ func (c *Config) setupDevRacks() {
 	}
 }
 
-func generateDevKey() string {
+func generateDevKey() (string, error) {
 	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		panic(fmt.Sprintf("failed to generate dev key: %v", err))
+	if _, err := randRead(b); err != nil {
+		return "", fmt.Errorf("generateDevKey: %w", err)
 	}
-	return base64.StdEncoding.EncodeToString(b)
+	return base64.StdEncoding.EncodeToString(b), nil
 }
 
 func getEnv(key, defaultVal string) string {

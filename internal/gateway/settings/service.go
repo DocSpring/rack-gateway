@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // Service provides settings resolution with environment variable fallback.
@@ -120,7 +121,7 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 		parsedValue, err := parseEnvValue(envValue, defaultValue)
 		if err != nil {
 			// If parsing fails, log and fall through to default
-			fmt.Printf("Warning: failed to parse env var %s: %v\n", envVarName, err)
+			gtwlog.Warnf("settings: failed to parse env var %s: %v", envVarName, err)
 		} else {
 			return &Setting{
 				Value:  parsedValue,

@@ -3,7 +3,6 @@ package middleware
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -27,7 +26,12 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 		method := c.Request.Method
 		permissions, ok := rbac.HTTPMFAPermissions(method, pattern)
 		if !ok {
-			panic(fmt.Sprintf("CRITICAL: Missing MFA permission mapping for route %s %s", method, pattern))
+			gtwlog.Errorf("mfa: missing MFA permission mapping for method=%s path=%s", method, pattern)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error":   "mfa_configuration_error",
+				"message": "MFA policy misconfiguration detected. Please contact an administrator.",
+			})
+			return
 		}
 
 		level := rbac.GetMFALevel(permissions)
@@ -58,7 +62,11 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 			}
 			c.Next()
 		default:
-			panic(fmt.Sprintf("CRITICAL: Unknown MFALevel %d for route %s %s", level, method, pattern))
+			gtwlog.Errorf("mfa: unknown MFA level=%d for method=%s path=%s", level, method, pattern)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error":   "mfa_configuration_error",
+				"message": "MFA policy misconfiguration detected. Please contact an administrator.",
+			})
 		}
 	}
 }

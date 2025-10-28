@@ -12,6 +12,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/github"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	if h.settingsService != nil {
 		enabled, err := h.settingsService.GetDeployApprovalsEnabled()
 		if err != nil {
-			log.Printf("WARN: Failed to get deploy_approvals_enabled setting: %v", err)
+			gtwlog.Warnf("deploy approvals: failed to get deploy_approvals_enabled setting: %v", err)
 		} else if !enabled {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approvals feature is disabled"})
 			return
@@ -76,7 +77,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	dbUser, err := h.database.GetUser(userEmail)
 	if err != nil {
-		fmt.Printf("CreateDeployApprovalRequest: Failed to load user %s: %v\n", userEmail, err)
+		gtwlog.Errorf("deploy approvals: failed to load user email=%s: %v", userEmail, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
 		return
 	}
@@ -97,7 +98,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		case errors.Is(err, errDeployApprovalRequestTargetMissing):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
-			fmt.Printf("CreateDeployApprovalRequest: Failed to resolve API token: %v\n", err)
+			gtwlog.Errorf("deploy approvals: failed to resolve API token for user_id=%d: %v", dbUser.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
 		}
 		return
@@ -133,12 +134,12 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	var prURL string
 	if h.settingsService != nil {
 		if githubVerificationEnabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true); err != nil {
-			fmt.Printf("CreateDeployApprovalRequest: Failed to get github_verification setting: %v\n", err)
+			gtwlog.Warnf("deploy approvals: failed to get github_verification setting app=%s: %v", app, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 			return
 		} else if githubVerificationEnabled && h.config != nil && h.config.GitHubToken != "" {
 			if githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, ""); err != nil {
-				fmt.Printf("CreateDeployApprovalRequest: Failed to get vcs_repo setting: %v\n", err)
+				gtwlog.Warnf("deploy approvals: failed to get vcs_repo setting app=%s: %v", app, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 				return
 			} else if githubRepo != "" {
@@ -150,7 +151,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 				owner, repo := github.SplitRepo(githubRepo)
 				if owner == "" || repo == "" {
-					fmt.Printf("CreateDeployApprovalRequest: Invalid vcs_repo format: %s (expected owner/repo)\n", githubRepo)
+					gtwlog.Warnf("deploy approvals: invalid vcs_repo format app=%s value=%s", app, githubRepo)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
 					return
 				}
@@ -158,14 +159,14 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 				// Check if deploying from default branch is allowed
 				allowDefaultBranch, err := getAppSettingBool(h.settingsService, app, settings.KeyAllowDeployFromDefaultBranch, false)
 				if err != nil {
-					fmt.Printf("CreateDeployApprovalRequest: Failed to get allow_deploy_from_default_branch setting: %v\n", err)
+					gtwlog.Warnf("deploy approvals: failed to get allow_deploy_from_default_branch setting app=%s: %v", app, err)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 					return
 				}
 
 				defaultBranch, err := getAppSettingString(h.settingsService, app, settings.KeyDefaultBranch, "main")
 				if err != nil {
-					fmt.Printf("CreateDeployApprovalRequest: Failed to get default_branch setting: %v\n", err)
+					gtwlog.Warnf("deploy approvals: failed to get default_branch setting app=%s: %v", app, err)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 					return
 				}
@@ -178,14 +179,14 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 				// Get verification mode and PR requirement
 				requirePR, err := getAppSettingBool(h.settingsService, app, settings.KeyRequirePRForBranch, true)
 				if err != nil {
-					fmt.Printf("CreateDeployApprovalRequest: Failed to get require_pr_for_branch setting: %v\n", err)
+					gtwlog.Warnf("deploy approvals: failed to get require_pr_for_branch setting app=%s: %v", app, err)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 					return
 				}
 
 				verifyMode, err := getAppSettingString(h.settingsService, app, settings.KeyVerifyGitCommitMode, settings.VerifyGitCommitModeLatest)
 				if err != nil {
-					fmt.Printf("CreateDeployApprovalRequest: Failed to get verify_git_commit_mode setting: %v\n", err)
+					gtwlog.Warnf("deploy approvals: failed to get verify_git_commit_mode setting app=%s: %v", app, err)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
 					return
 				}
@@ -198,7 +199,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 				prURL, err = client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
 				if err != nil {
-					fmt.Printf("CreateDeployApprovalRequest: GitHub verification failed: %v\n", err)
+					gtwlog.Warnf("deploy approvals: GitHub verification failed app=%s repo=%s/%s branch=%s commit=%s: %v", app, owner, repo, gitBranch, gitCommitHash, err)
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
 					return
 				}
@@ -228,7 +229,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 			}
 			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token and git commit"})
 		default:
-			fmt.Printf("CreateDeployApprovalRequest: Failed to create deploy approval request: %v\n", err)
+			gtwlog.Errorf("deploy approvals: failed to create approval request for token_id=%d git_commit=%s: %v", token.ID, gitCommitHash, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
 		}
 		return

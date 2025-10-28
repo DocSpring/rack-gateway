@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -107,7 +107,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 			// This should never fail because we validated upfront
 			if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
 				// Log error but don't fail - we already validated this should work
-				fmt.Printf("ERROR: failed to update object URL tracking after validation passed: %v\n", err)
+				gtwlog.Errorf("proxy: failed to update object URL tracking after validation passed: %v", err)
 			}
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
 	"github.com/gin-gonic/gin"
@@ -244,33 +245,33 @@ func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
 		ChannelID string `json:"channel_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fmt.Printf("TestSlackNotification: Invalid JSON request: %v\n", err)
+		gtwlog.Warnf("slack test notification: invalid JSON request: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
 	if req.ChannelID == "" {
-		fmt.Printf("TestSlackNotification: Empty channel_id in request\n")
+		gtwlog.Warnf("slack test notification: empty channel_id in request")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "channel_id is required"})
 		return
 	}
 
 	integration := h.loadSlackIntegration(c)
 	if integration == nil {
-		fmt.Printf("TestSlackNotification: No Slack integration found\n")
+		gtwlog.Warnf("slack test notification: no Slack integration configured")
 		return
 	}
 
 	client := h.createSlackClient(c, integration)
 	if client == nil {
-		fmt.Printf("TestSlackNotification: Failed to create Slack client\n")
+		gtwlog.Errorf("slack test notification: failed to create Slack client")
 		return
 	}
 
-	fmt.Printf("TestSlackNotification: Sending test message to channel %s\n", req.ChannelID)
+	gtwlog.Infof("slack test notification: sending test message to channel %s", req.ChannelID)
 	err := client.PostMessage(req.ChannelID, "🧪 Test notification from Rack Gateway", nil)
 	if err != nil {
-		fmt.Printf("TestSlackNotification: Failed to send message: %v\n", err)
+		gtwlog.Errorf("slack test notification: failed to send message: %v", err)
 
 		// Provide user-friendly error messages for common Slack API errors
 		errMsg := err.Error()
@@ -291,6 +292,6 @@ func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("TestSlackNotification: Successfully sent test message to channel %s\n", req.ChannelID)
+	gtwlog.Infof("slack test notification: successfully sent test message to channel %s", req.ChannelID)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
