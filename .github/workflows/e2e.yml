@@ -111,7 +111,7 @@ jobs:
       - name: Install Playwright and deps
         working-directory: web
         run: |
-          bun install
+          bun install --frozen-lockfile
           bunx playwright install --with-deps || bunx playwright install
 
       - name: Run Web E2E
