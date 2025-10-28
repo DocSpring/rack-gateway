@@ -11,7 +11,7 @@ COPY web/ ./
 RUN bunx tsc -b tsconfig.build.json \
     && bunx vite build --base=/web/
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates make gcc musl-dev
 
