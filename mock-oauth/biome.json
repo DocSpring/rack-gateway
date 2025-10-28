@@ -1,5 +1,6 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.5/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.3.2/schema.json",
+  "extends": ["ultracite/core"],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -21,6 +22,5 @@
         "noVoid": "off"
       }
     }
-  },
-  "extends": ["ultracite"]
+  }
 }

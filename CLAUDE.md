@@ -152,7 +152,7 @@ This file contains high-level architecture and task commands. Component-specific
 - `Taskfile.web.yml` - Web frontend tasks (build, test, lint, e2e)
 - `Taskfile.db.yml` - Database tasks (migrate, reset)
 - `Taskfile.docker.yml` - Docker orchestration tasks
-- `Taskfile.mock-oauth.yml` - Mock OAuth server tasks
+- `mock-oauth/Taskfile.yml` - Mock OAuth server tasks
 - `taskfiles/docker-stack.yml` - Shared Docker stack helpers
 
 **Key Workflows:**

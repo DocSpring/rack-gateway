@@ -40,7 +40,7 @@ if ! kill -0 "$PID" 2>/dev/null; then
   exit 1
 fi
 
-PID_DIR="$(git rev-parse --show-toplevel)/automation/agents/pids"
+PID_DIR="$(git rev-parse --show-toplevel)/ai_automation/agents/pids"
 mkdir -p "$PID_DIR"
 PID_FILE="$PID_DIR/${TASK_ID}.pid"
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 TIMEOUT_MINUTES=20
 POLL_INTERVAL=5
-PID_DIR="$(git rev-parse --show-toplevel)/automation/agents/pids"
+PID_DIR="$(git rev-parse --show-toplevel)/ai_automation/agents/pids"
 
 end_time=$((SECONDS + TIMEOUT_MINUTES * 60))
 

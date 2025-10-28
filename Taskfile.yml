@@ -7,23 +7,25 @@ vars:
   MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT | default 3345}}"
 
 includes:
-  docker: ./Taskfile.docker.yml
-  go: ./Taskfile.go.yml
-  web: ./Taskfile.web.yml
-  mock-oauth: ./Taskfile.mock-oauth.yml
-  db: ./Taskfile.db.yml
+  docker: ./taskfiles/Taskfile.docker.yml
+  go: ./taskfiles/Taskfile.go.yml
+  web: ./web/Taskfile.yml
+  mock-oauth: ./mock-oauth/Taskfile.yml
+  db: ./taskfiles/Taskfile.db.yml
 
 tasks:
   ci:
     desc: "Runs everything that runs on CI: linters, codegen, tests, build, quality checks"
     cmds:
       - task: go:lint:config
+      - task: mock-oauth:lint
       - task: lint:fix
       - task: duplication
       - task: file-length
       - task: shellcheck
       - task: web:check-ignores
       - task: generate:test
+      - task: test
       - task: build
 
   duplication:

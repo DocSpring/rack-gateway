@@ -13,7 +13,7 @@ env:
 
 includes:
   dev:
-    taskfile: ./taskfiles/docker-stack.yml
+    taskfile: ./docker-stack.yml
     vars:
       STACK: dev
       PROFILE: dev
@@ -25,7 +25,7 @@ includes:
       WAIT_MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT}}"
       WAIT_CHECK_VITE_PROXY: '{{.CHECK_VITE_PROXY | default "true"}}'
   preview:
-    taskfile: ./taskfiles/docker-stack.yml
+    taskfile: ./docker-stack.yml
     vars:
       STACK: preview
       PROFILE: preview
@@ -37,7 +37,7 @@ includes:
       WAIT_MOCK_OAUTH_PORT: "{{.MOCK_OAUTH_PORT}}"
       WAIT_CHECK_VITE_PROXY: "false"
   test:
-    taskfile: ./taskfiles/docker-stack.yml
+    taskfile: ./docker-stack.yml
     vars:
       STACK: test
       PROFILE: test

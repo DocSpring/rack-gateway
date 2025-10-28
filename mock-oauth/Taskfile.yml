@@ -8,7 +8,7 @@ tasks:
     sources:
       - package.json
       - bun.lock
-      - ../Taskfile.mock-oauth.yml
+      - ../mock-oauth/Taskfile.yml
     cmds:
       - bun install
 
@@ -21,7 +21,7 @@ tasks:
       - bun.lock
       - tsconfig.json
       - tsconfig.build.json
-      - ../Taskfile.mock-oauth.yml
+      - ../mock-oauth/Taskfile.yml
       - "*.ts"
     generates:
       - dist/**/*
