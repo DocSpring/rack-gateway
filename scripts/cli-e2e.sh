@@ -32,6 +32,4 @@ E2E_TS="$(date +%s%3N)"
 mkdir -p config/cli-e2e
 export GATEWAY_CLI_CONFIG_DIR="config/cli-e2e"
 
-STAGES="ADMIN API_TOKEN DEPLOYER VIEWER"
-
 run_cli_e2e_suite

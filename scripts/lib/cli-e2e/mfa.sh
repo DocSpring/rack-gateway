@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+
+# shellcheck disable=SC2034
 declare -Ag MFA_TOTP_SECRETS=(
     ["admin@example.com"]="K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU"
     ["deployer@example.com"]="KB6VQXGZLMN4Y3DC"

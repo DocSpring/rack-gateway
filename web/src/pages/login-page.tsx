@@ -41,7 +41,6 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         <div className="mb-16 text-center">
           <div className="mb-4 flex flex-col items-center justify-center">
-            {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
             <img
               alt="Rack Gateway Logo"
               aria-hidden

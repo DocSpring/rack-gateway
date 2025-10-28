@@ -117,7 +117,6 @@ export function EnrollmentDialog({
               <div className="space-y-3">
                 <h3 className="font-semibold text-base">Scan the QR code</h3>
                 {qrDataUrl ? (
-                  /* biome-ignore lint/performance/noImgElement: Authenticator setup requires inline QR code. */
                   <img
                     alt="Authenticator QR code"
                     className="h-48 w-48 rounded border"

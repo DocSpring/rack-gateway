@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 psql_exec() {
     local sql="$1"
     local output
@@ -41,7 +43,7 @@ SQL
 reset_all_test_state() {
     if ! docker ps --format '{{.Names}}' | grep -q '^rack-gateway-postgres-1$'; then
         return 0
-    }
+    fi
 
     local sql
     sql=$(cat <<'SQL'

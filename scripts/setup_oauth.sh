@@ -5,7 +5,6 @@
 set -e
 
 # Colors for output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -21,7 +20,7 @@ echo "1. Go to https://console.cloud.google.com/"
 echo "2. Create a new project or select an existing one"
 echo "3. Note your project ID"
 echo ""
-read -p "Press Enter when you have a Google Cloud project ready..."
+read -r -p "Press Enter when you have a Google Cloud project ready..."
 
 echo ""
 echo -e "${GREEN}Step 2: Enable OAuth 2.0${NC}"
@@ -33,7 +32,7 @@ echo "   - App name: Rack Gateway"
 echo "   - User support email: Your email"
 echo "   - Authorized domains: Your company domain (e.g., example.com)"
 echo ""
-read -p "Press Enter when consent screen is configured..."
+read -r -p "Press Enter when consent screen is configured..."
 
 echo ""
 echo -e "${GREEN}Step 3: Create OAuth 2.0 Client ID${NC}"
@@ -47,7 +46,7 @@ echo "   - http://localhost:8447/api/v1/auth/cli/callback (for development)"
 echo "   - https://your-gateway-domain.com/api/v1/auth/cli/callback (for production)"
 echo "5. Click 'CREATE'"
 echo ""
-read -p "Press Enter when OAuth client is created..."
+read -r -p "Press Enter when OAuth client is created..."
 
 echo ""
 echo -e "${GREEN}Step 4: Configure Environment${NC}"
@@ -56,9 +55,9 @@ echo ""
 
 # Read OAuth credentials
 echo -e "${BLUE}Enter your OAuth credentials:${NC}"
-read -p "Client ID: " client_id
-read -p "Client Secret: " client_secret
-read -p "Allowed domain (e.g., example.com): " domain
+read -r -p "Client ID: " client_id
+read -r -p "Client Secret: " client_secret
+read -r -p "Allowed domain (e.g., example.com): " domain
 
 # Create mise.local.toml if it doesn't exist
 if [ ! -f mise.local.toml ]; then

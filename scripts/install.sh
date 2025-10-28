@@ -102,9 +102,9 @@ BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILDTIME}"
 
 echo "Building CLI (version: $VERSION)..."
-GOFLAGS=${GOFLAGS:-}
+GOFLAGS="${GOFLAGS:-}"
 # Note: CGO is required for WebAuthn/FIDO2 support (HID device access)
-CGO_ENABLED=1 go build $GOFLAGS -ldflags "$LDFLAGS" -o bin/rack-gateway ./cmd/rack-gateway
+CGO_ENABLED=1 GOFLAGS="$GOFLAGS" go build -ldflags "$LDFLAGS" -o bin/rack-gateway ./cmd/rack-gateway
 
 popd >/dev/null
 
@@ -157,9 +157,6 @@ toml_get() {
 }
 
 GATEWAY_PORT="${GATEWAY_PORT:-}"
-WEB_P="${WEB_PORT:-}"
-OAUTH_P="${MOCK_OAUTH_PORT:-}"
-RACK_P="${MOCK_CONVOX_PORT:-}"
 CLI_DIR="${GATEWAY_CLI_CONFIG_DIR:-}"
 
 [[ -z "$GATEWAY_PORT" ]]   && GATEWAY_PORT="$(toml_get GATEWAY_PORT "$MiseFile" || echo 8447)"

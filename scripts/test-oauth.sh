@@ -8,13 +8,13 @@ echo "=================================="
 OAUTH_URL="http://localhost:${MOCK_OAUTH_PORT:-3345}"
 
 echo "✅ Testing health endpoint..."
-curl -s $OAUTH_URL/health | jq .
+curl -s "$OAUTH_URL"/health | jq .
 
 echo -e "\n✅ Testing discovery endpoint..."
-curl -s $OAUTH_URL/.well-known/openid_configuration | jq .
+curl -s "$OAUTH_URL"/.well-known/openid_configuration | jq .
 
 echo -e "\n✅ Testing server info..."
-curl -s $OAUTH_URL/ | jq .
+curl -s "$OAUTH_URL"/ | jq .
 
 echo -e "\n🌐 Testing authorization flow..."
 echo "Visit this URL to test the user selection flow:"

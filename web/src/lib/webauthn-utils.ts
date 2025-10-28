@@ -2,6 +2,11 @@
  * WebAuthn encoding/decoding utilities for browser API compatibility
  */
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __e2e_test_mode__: boolean | undefined
+}
+
 /**
  * Convert base64url string to ArrayBuffer for WebAuthn API
  */
@@ -145,8 +150,7 @@ function createBaseMockCredential() {
  * In E2E mode, returns a mock credential to prevent triggering real hardware
  */
 export function getCredential(options: CredentialRequestOptions): Promise<Credential | null> {
-  // biome-ignore lint/suspicious/noExplicitAny: window.__e2e_test_mode__ is set by test environment
-  if ((window as any).__e2e_test_mode__) {
+  if (globalThis.__e2e_test_mode__) {
     // Return a mock PublicKeyCredential that will pass serialization
     const mockCredential = {
       ...createBaseMockCredential(),
@@ -167,8 +171,7 @@ export function getCredential(options: CredentialRequestOptions): Promise<Creden
  * In E2E mode, returns a mock credential to prevent triggering real hardware
  */
 export function createCredential(options: CredentialCreationOptions): Promise<Credential | null> {
-  // biome-ignore lint/suspicious/noExplicitAny: window.__e2e_test_mode__ is set by test environment
-  if ((window as any).__e2e_test_mode__) {
+  if (globalThis.__e2e_test_mode__) {
     // Return a mock PublicKeyCredential that will pass serialization
     const mockCredential = {
       ...createBaseMockCredential(),

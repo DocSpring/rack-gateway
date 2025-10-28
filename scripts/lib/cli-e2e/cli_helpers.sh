@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 login_cli_as() {
     local user_email="$1"
     local rack_name="${2:-e2e}"

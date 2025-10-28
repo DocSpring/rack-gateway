@@ -44,9 +44,6 @@ fi
 if [ -n "${WAIT_MOCK_OAUTH_PORT:-}" ]; then
   MOCK_OAUTH_PORT="$WAIT_MOCK_OAUTH_PORT"
 fi
-if [ -n "${SKIP_BUILD:-}" ]; then
-  SKIP_BUILD="$SKIP_BUILD"
-fi
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -186,6 +183,7 @@ fi
 # Start dependency services first (if any)
 if [ -n "$DEPENDENCY_SERVICES" ]; then
   echo "Starting dependency services: $DEPENDENCY_SERVICES"
+  # shellcheck disable=SC2086
   docker compose --profile "$PROFILE" up -d $BUILD_FLAG $DEPENDENCY_SERVICES
 fi
 
@@ -247,6 +245,7 @@ fi
 
 # Start main services
 echo "Starting main services: $SERVICES"
+# shellcheck disable=SC2086
 docker compose --profile "$PROFILE" up -d $BUILD_FLAG $SERVICES
 
 echo ""

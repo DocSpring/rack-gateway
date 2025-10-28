@@ -286,6 +286,10 @@ func (c *Client) SystemInstall(w io.Writer, opts structs.SystemInstallOptions) (
 	return "", fmt.Errorf("not implemented")
 }
 
+func (c *Client) SystemUninstall(name string, w io.Writer, opts structs.SystemUninstallOptions) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (c *Client) SystemJwtSignKey() (string, error) {
 	return "", fmt.Errorf("not implemented")
 }
@@ -306,6 +310,10 @@ func (c *Client) SystemProcesses(opts structs.SystemProcessesOptions) (structs.P
 	return nil, fmt.Errorf("not implemented")
 }
 
+func (c *Client) SystemReleases() (structs.Releases, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (c *Client) SystemRelease() (*structs.Release, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -314,28 +322,12 @@ func (c *Client) SystemUpdate(opts structs.SystemUpdateOptions) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (c *Client) SystemToken(id string, opts structs.SystemTokenOptions) (*structs.SystemToken, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
 func (c *Client) SystemTokenDelete(id string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (c *Client) SystemTokenList(opts structs.SystemTokenListOptions) (structs.SystemTokens, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (c *Client) SystemTokenRegenerate(id string) (*structs.SystemToken, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
 func (c *Client) SystemUpdateCancel() error {
 	return fmt.Errorf("not implemented")
-}
-
-func (c *Client) SystemVersion() (*structs.Version, error) {
-	return nil, fmt.Errorf("not implemented")
 }
 
 func (c *Client) SystemResourceCreate(name string, opts structs.ResourceCreateOptions) (*structs.Resource, error) {

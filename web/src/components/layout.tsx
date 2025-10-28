@@ -168,7 +168,6 @@ export function Layout() {
       <div className="flex w-64 flex-col border-r bg-card">
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center px-6">
-          {/* biome-ignore lint/performance/noImgElement: not using Next.js Image in this Vite app */}
           <img
             alt=""
             aria-hidden

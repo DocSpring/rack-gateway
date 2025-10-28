@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 run_admin_tests() {
     if [[ -n "$SKIP_ADMIN_TESTS" ]]; then
         return

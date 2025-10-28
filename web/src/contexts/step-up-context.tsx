@@ -1,9 +1,16 @@
-import { type AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
+import {
+  type AxiosError,
+  AxiosHeaders,
+  type AxiosInstance,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '@/contexts/auth-context'
 import { useHttpClient } from '@/contexts/http-client-context'
+import { debugLog } from '@/contexts/step-up-debug'
 import { StepUpDialog } from '@/contexts/step-up-dialog'
 import {
   clearMFAHeaders,
@@ -15,15 +22,7 @@ import {
 import { getMFAStatus } from '@/lib/api'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
-// Change to true to debug step-up dialog flow
-const DEBUG_STEP_UP = false
-function debugLog(...args: unknown[]) {
-  if (!DEBUG_STEP_UP) {
-    return
-  }
-  // biome-ignore lint/suspicious/noConsole: debug logs
-  console.log('[STEP_UP]', ...args)
-}
+const STEP_UP_BUFFER_MS = 10_000
 
 type StepUpAction = (() => Promise<unknown>) | (() => unknown) | null
 
@@ -218,215 +217,92 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   useEffect(() => {
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: very complex logic
-    const requestInterceptor = client.interceptors.request.use(async (config) => {
-      const internalConfig = config as InternalRequestConfig
+    const shouldPromptForStepUp = async () => {
+      debugLog('mfaLevel=step_up - fetching status to check if prompt needed')
+      const status = await getMFAStatus()
+      const expiresAt = status.recent_step_up_expires_at
+        ? new Date(status.recent_step_up_expires_at)
+        : null
 
-      debugLog('Request interceptor checking config', {
-        method: internalConfig.method,
-        url: internalConfig.url,
-        hasSkipFlag: internalConfig.__skipMfaHandling === true,
+      const needsPrompt = !expiresAt || expiresAt.getTime() - Date.now() <= STEP_UP_BUFFER_MS
+
+      debugLog('step_up check', {
+        expiresAt: expiresAt?.toISOString(),
+        needsPrompt,
       })
 
-      // Skip if this request is marked to skip MFA handling
-      if (internalConfig.__skipMfaHandling === true) {
+      return needsPrompt
+    }
+
+    const handleRequest = async (config: InternalRequestConfig) => {
+      debugLog('Request interceptor checking config', {
+        method: config.method,
+        url: config.url,
+        hasSkipFlag: config.__skipMfaHandling === true,
+      })
+
+      if (config.__skipMfaHandling === true) {
         debugLog('Request marked as skip - allowing through')
-        return internalConfig
+        return config
       }
 
-      const baseUrl =
-        typeof internalConfig.baseURL === 'string'
-          ? internalConfig.baseURL
-          : (client.defaults.baseURL as string | undefined)
-      const requirement = getMfaRequirementForRequest(
-        internalConfig.method?.toUpperCase(),
-        internalConfig.url,
-        baseUrl
-      )
-
+      const requirement = resolveRequirement(client, config)
       if (!requirement) {
-        return internalConfig
+        return config
       }
 
       debugLog('applyMfaRequirement', {
-        method: internalConfig.method,
-        url: internalConfig.url,
+        method: config.method,
+        url: config.url,
         mfaLevel: requirement.mfaLevel,
       })
 
-      // For 'always': always abort and prompt
       if (requirement.mfaLevel === 'always') {
         debugLog('mfaLevel=always - aborting request to prompt for MFA')
-        const controller = new AbortController()
-        controller.abort()
-        return {
-          ...internalConfig,
-          signal: controller.signal,
-          __abortedForMfa: true,
-        }
+        return abortForMfa(config)
       }
 
-      // For 'step_up': check status RIGHT NOW
-      if (requirement.mfaLevel === 'step_up') {
-        debugLog('mfaLevel=step_up - fetching status to check if prompt needed')
-        const status = await getMFAStatus()
-        const expiresAt = status.recent_step_up_expires_at
-          ? new Date(status.recent_step_up_expires_at)
-          : null
-
-        const bufferMs = 10_000
-        const needsPrompt = !expiresAt || expiresAt.getTime() - Date.now() <= bufferMs
-
-        debugLog('step_up check', {
-          expiresAt: expiresAt?.toISOString(),
-          needsPrompt,
-        })
-
-        if (needsPrompt) {
-          debugLog('step_up expired - aborting request to prompt for MFA')
-          const controller = new AbortController()
-          controller.abort()
-          return {
-            ...internalConfig,
-            signal: controller.signal,
-            __abortedForMfa: true,
-          }
-        }
-
-        debugLog('step_up valid - proceeding with request')
+      if (requirement.mfaLevel !== 'step_up') {
+        return config
       }
 
-      return internalConfig
-    })
+      if (await shouldPromptForStepUp()) {
+        debugLog('step_up expired - aborting request to prompt for MFA')
+        return abortForMfa(config)
+      }
 
+      debugLog('step_up valid - proceeding with request')
+      return config
+    }
+
+    const handleResponseError = async (error: unknown) => {
+      const axiosError = error as AxiosStepUpError
+
+      if (isAbortForMfaError(axiosError)) {
+        debugLog('Handling aborted request - opening step-up dialog')
+        return await createStepUpPromise(client, axiosError, openStepUp)
+      }
+
+      if (!isMFAError(axiosError)) {
+        throw axiosError
+      }
+
+      suppressMfaError(axiosError)
+
+      const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
+      if (originalConfig.__skipMfaHandling === true) {
+        debugLog('401 on skip-marked request - rejecting (expected for invalid code)')
+        throw axiosError
+      }
+
+      debugLog('Handling 401 MFA error (fallback)')
+      return await createStepUpPromise(client, axiosError, openStepUp)
+    }
+
+    const requestInterceptor = client.interceptors.request.use(handleRequest)
     const responseInterceptor = client.interceptors.response.use(
       (response) => response,
-      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: very complex logic
-      (error) => {
-        type AxiosStepUpError = AxiosError<unknown, InternalRequestConfig> & {
-          suppressToast?: boolean
-        }
-        const axiosError = error as AxiosStepUpError
-
-        // Handle our intentional MFA abort
-        if (
-          axiosError.code === 'ERR_CANCELED' &&
-          (axiosError.config as InternalRequestConfig)?.__abortedForMfa
-        ) {
-          debugLog('Handling aborted request - opening step-up dialog')
-
-          return new Promise((resolve, reject) => {
-            openStepUp({
-              // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: very complex logic
-              action: async () => {
-                const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
-                const mfaHeaders = getMFAHeaders()
-                debugLog('Action getting MFA headers', mfaHeaders)
-
-                // Clone headers to avoid mutating original request
-                const headers = new AxiosHeaders(originalConfig.headers ?? {})
-
-                // Add MFA headers
-                for (const [key, value] of Object.entries(mfaHeaders)) {
-                  if (value) {
-                    headers.set(key, value)
-                  }
-                }
-
-                const retryConfig: InternalRequestConfig = {
-                  ...originalConfig,
-                  headers,
-                  signal: undefined, // Remove abort signal
-                  __abortedForMfa: undefined,
-                  __skipMfaHandling: true,
-                }
-
-                debugLog('Making new request with MFA headers', {
-                  method: retryConfig.method,
-                  url: retryConfig.url,
-                  hasXMfaTotp: headers.has('X-MFA-TOTP'),
-                  xMfaTotpValue: headers.get('X-MFA-TOTP'),
-                  hasXMfaWebAuthn: headers.has('X-MFA-WebAuthn'),
-                  xMfaWebAuthnLength: String(headers.get('X-MFA-WebAuthn') || '').length,
-                  skipMfaHandling: retryConfig.__skipMfaHandling,
-                })
-
-                // Make NEW request with MFA headers
-                const response = await client.request(retryConfig)
-
-                debugLog('New request succeeded', response.status)
-                return response
-              },
-              onResolve: resolve,
-              onReject: reject,
-            })
-          })
-        }
-
-        // Handle real 401 MFA errors (fallback for cases we didn't catch)
-        if (isMFAError(axiosError)) {
-          const originalConfig = (axiosError.config ?? {}) as InternalRequestConfig
-
-          // If this config is marked to skip, don't handle it - let error bubble
-          if (originalConfig.__skipMfaHandling === true) {
-            debugLog('401 on skip-marked request - rejecting (expected for invalid code)')
-            // Suppress toasts since we're handling the error in the form
-            if (axiosError.config) {
-              ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
-            }
-            axiosError.suppressToast = true
-            return Promise.reject(axiosError)
-          }
-
-          debugLog('Handling 401 MFA error (fallback)')
-
-          // Suppress toasts for ALL MFA errors since we handle them in the step-up dialog
-          if (axiosError.config) {
-            ;(axiosError.config as InternalRequestConfig).__suppressGlobalError = true
-          }
-          axiosError.suppressToast = true
-
-          return new Promise((resolve, reject) => {
-            openStepUp({
-              action: async () => {
-                // Clone headers to avoid mutating original request
-                const headers = new AxiosHeaders(originalConfig.headers ?? {})
-
-                const mfaHeaders = getMFAHeaders()
-                debugLog('Action getting MFA headers (401 fallback)', mfaHeaders)
-
-                // Add MFA headers
-                for (const [key, value] of Object.entries(mfaHeaders)) {
-                  if (value) {
-                    headers.set(key, value)
-                  }
-                }
-
-                const retryConfig: InternalRequestConfig = {
-                  ...originalConfig,
-                  headers,
-                  __skipMfaHandling: true,
-                }
-
-                debugLog('Retrying request after 401 with MFA headers', {
-                  method: retryConfig.method,
-                  url: retryConfig.url,
-                  hasXMfaTotp: headers.has('X-MFA-TOTP'),
-                  xMfaTotpValue: headers.get('X-MFA-TOTP'),
-                  skipMfaHandling: retryConfig.__skipMfaHandling,
-                })
-                const response = await client.request(retryConfig)
-                debugLog('Retry succeeded', response.status)
-                return response
-              },
-              onResolve: resolve,
-              onReject: reject,
-            })
-          })
-        }
-
-        return Promise.reject(axiosError)
-      }
+      (error) => handleResponseError(error)
     )
 
     return () => {
@@ -480,4 +356,91 @@ export function useStepUp(): StepUpContextValue {
     throw new Error('useStepUp must be used within a StepUpProvider')
   }
   return context
+}
+
+type AxiosStepUpError = AxiosError<unknown, InternalRequestConfig> & {
+  suppressToast?: boolean
+}
+
+function resolveRequirement(client: AxiosInstance, config: InternalRequestConfig) {
+  const baseUrl =
+    typeof config.baseURL === 'string'
+      ? config.baseURL
+      : (client.defaults.baseURL as string | undefined)
+  return getMfaRequirementForRequest(config.method?.toUpperCase(), config.url, baseUrl)
+}
+
+function abortForMfa(config: InternalRequestConfig): InternalRequestConfig {
+  const controller = new AbortController()
+  controller.abort()
+  return {
+    ...config,
+    signal: controller.signal,
+    __abortedForMfa: true,
+  }
+}
+
+function isAbortForMfaError(error: AxiosStepUpError): boolean {
+  const config = error.config as InternalRequestConfig | undefined
+  return error.code === 'ERR_CANCELED' && Boolean(config?.__abortedForMfa)
+}
+
+function suppressMfaError(error: AxiosStepUpError): void {
+  const config = error.config as InternalRequestConfig | undefined
+  if (config) {
+    config.__suppressGlobalError = true
+  }
+  error.suppressToast = true
+}
+
+async function retryRequestWithMfa(
+  client: AxiosInstance,
+  originalConfig: InternalRequestConfig
+): Promise<AxiosResponse> {
+  const headers = new AxiosHeaders(originalConfig.headers ?? {})
+  const mfaHeaders = getMFAHeaders()
+
+  debugLog('Retrying request with MFA headers', {
+    method: originalConfig.method,
+    url: originalConfig.url,
+    hasXMfaTotp: Boolean(mfaHeaders['X-MFA-TOTP']),
+    hasXMfaWebAuthn: Boolean(mfaHeaders['X-MFA-WebAuthn']),
+  })
+
+  for (const [key, value] of Object.entries(mfaHeaders)) {
+    if (value) {
+      headers.set(key, value)
+    }
+  }
+
+  const retryConfig: InternalRequestConfig = {
+    ...originalConfig,
+    headers,
+    signal: undefined,
+    __abortedForMfa: undefined,
+    __skipMfaHandling: true,
+  }
+
+  const response = await client.request(retryConfig)
+  debugLog('Retry succeeded', response.status)
+  return response
+}
+
+function createStepUpPromise(
+  client: AxiosInstance,
+  error: AxiosStepUpError,
+  openStepUp: StepUpContextValue['openStepUp']
+): Promise<AxiosResponse> {
+  const originalConfig = (error.config ?? {}) as InternalRequestConfig | undefined
+  if (!originalConfig) {
+    return Promise.reject(error)
+  }
+
+  return new Promise((resolve, reject) => {
+    openStepUp({
+      action: async () => retryRequestWithMfa(client, originalConfig),
+      onResolve: (value) => resolve(value as AxiosResponse),
+      onReject: reject,
+    })
+  })
 }

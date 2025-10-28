@@ -48,7 +48,8 @@ fi
 
 # Generate secret key if not set (for development only)
 if [ -z "$APP_SECRET_KEY" ] && [ "$DEV_MODE" = "true" ]; then
-    export APP_SECRET_KEY="dev-secret-$(date +%s)"
+    generated_key="dev-secret-$(date +%s)"
+    export APP_SECRET_KEY="$generated_key"
     echo -e "${GREEN}Generated development secret key${NC}"
 fi
 

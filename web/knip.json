@@ -3,6 +3,7 @@
   "ignore": [
     "src/api/generated.ts",
     "src/lib/generated/**",
+    "src/contexts/step-up-debug.ts",
     "src/lib/api.ts",
     "src/api/schemas/**",
     "orval.config.ts",

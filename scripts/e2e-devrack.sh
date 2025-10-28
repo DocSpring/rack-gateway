@@ -36,9 +36,9 @@ convox apps | grep -q "^$APP_NAME\b" || convox apps create "$APP_NAME"
 
 # Pass common env; adjust as needed
 convox env set \
-  APP_SECRET_KEY=${APP_SECRET_KEY:-dev-e2e-key} \
-  GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-mock-client-id} \
-  GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-mock-client-secret} \
+  APP_SECRET_KEY="${APP_SECRET_KEY:-dev-e2e-key}" \
+  GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-mock-client-id}" \
+  GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-mock-client-secret}" \
   -a "$APP_NAME"
 
 convox deploy -a "$APP_NAME"
@@ -47,7 +47,7 @@ echo "Waiting for app to be running..."
 SECS=0
 until convox apps info -a "$APP_NAME" | grep -q "Status *running"; do
   sleep 5; SECS=$((SECS+5));
-  if [ $SECS -ge $TIMEOUT_SECS ]; then
+  if [ "$SECS" -ge "$TIMEOUT_SECS" ]; then
     echo "Timed out waiting for app to be running"; exit 1;
   fi
 done
@@ -59,4 +59,3 @@ convox ps -a "$APP_NAME"
 convox apps -a "$APP_NAME" || true
 
 echo "E2E dev rack test completed."
-

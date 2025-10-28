@@ -19,10 +19,16 @@ export function StringArrayInput({
   const [newItem, setNewItem] = useState('')
 
   const handleAddItem = () => {
-    if (newItem.trim()) {
-      onChange([...value, newItem.trim()])
-      setNewItem('')
+    const trimmed = newItem.trim()
+    if (!trimmed) {
+      return
     }
+    if (value.includes(trimmed)) {
+      setNewItem('')
+      return
+    }
+    onChange([...value, trimmed])
+    setNewItem('')
   }
 
   const handleRemoveItem = (index: number) => {
@@ -32,8 +38,7 @@ export function StringArrayInput({
   return (
     <div className="space-y-2">
       {value.map((item, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: Items are simple strings without stable IDs
-        <div className="flex items-center gap-2" key={`${item}-${index}`}>
+        <div className="flex items-center gap-2" key={item}>
           <code className="flex-1 rounded bg-muted px-3 py-2 font-mono text-sm">{item}</code>
           <Button
             disabled={disabled}

@@ -1,4 +1,4 @@
-import { type ComponentPropsWithoutRef, forwardRef, useEffect, useRef } from 'react'
+import { type ComponentPropsWithoutRef, forwardRef, useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 const DIGIT_REGEX = /^\d+$/
@@ -125,6 +125,8 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
       }
     }
 
+    const slots = useMemo(() => Array.from({ length }, (_, index) => `otp-slot-${index}`), [length])
+
     return (
       <fieldset
         aria-label="Verification code"
@@ -133,7 +135,7 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
         ref={ref}
         {...rest}
       >
-        {Array.from({ length }, (_, index) => (
+        {slots.map((slotKey, index) => (
           <input
             autoCapitalize="none"
             autoComplete={index === 0 ? 'one-time-code' : 'off'}
@@ -149,8 +151,7 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
             data-lpignore="true"
             disabled={disabled}
             inputMode="numeric"
-            // biome-ignore lint/suspicious/noArrayIndexKey: static list that never reorders
-            key={index}
+            key={slotKey}
             maxLength={1}
             name={`otp-${index}`}
             onChange={(e) => handleInputChange(index, e.target.value)}

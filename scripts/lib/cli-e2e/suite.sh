@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 toml_get() {
     local key="$1" file="$2"
     if [[ -f "$file" ]]; then
@@ -22,22 +24,27 @@ resolve_ports() {
 
 configure_stage_skips() {
     local stages="ADMIN API_TOKEN DEPLOYER VIEWER"
-    STAGES="$stages"
-
     for stage in $stages; do
         local var="ONLY_${stage}_TESTS"
-        local val
-        val="$(eval "echo \\${$var:-}")"
+        local val=""
+        if [[ -v $var ]]; then
+            val="${!var}"
+        fi
         if [[ -n "$val" ]]; then
             for other in $stages; do
-                [[ "$other" != "$stage" ]] && eval "SKIP_${other}_TESTS=true"
+                if [[ "$other" != "$stage" ]]; then
+                    printf -v "SKIP_${other}_TESTS" %s true
+                fi
             done
             break
         fi
     done
 
     for stage in $stages; do
-        eval "SKIP_${stage}_TESTS=\\${SKIP_${stage}_TESTS:-}"
+        local var="SKIP_${stage}_TESTS"
+        if [[ ! -v $var ]]; then
+            printf -v "$var" %s ""
+        fi
     done
 }
 

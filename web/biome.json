@@ -30,6 +30,10 @@
         "useNamingConvention": "off",
         "noMagicNumbers": "off"
       },
+      "performance": {
+        "noImgElement": "off",
+        "noNamespaceImport": "off"
+      },
       "suspicious": {
         "noExplicitAny": "warn",
         "noEmptyBlockStatements": "off",

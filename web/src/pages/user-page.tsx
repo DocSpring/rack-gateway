@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { Edit2, Lock, RefreshCw, Trash2, Unlock } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { AuditLogsPane } from '@/components/audit-logs-pane'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,269 @@ import { LockedNotice } from '@/pages/user/locked-notice'
 import { RoleBadges } from '@/pages/user/role-badges'
 import { type SessionId, SessionTable } from '@/pages/user/session-table'
 import { useUserAuditLogs } from '@/pages/user/use-user-audit-logs'
+
+type EditPlan = {
+  originalEmail: string
+  routeEmail: string
+  trimmedEmail: string
+  trimmedName: string
+  desiredRoles: RoleName[]
+  emailChanged: boolean
+  profileChanged: boolean
+  shouldUpdateRoles: boolean
+}
+
+type EditPlanResult = { plan: EditPlan } | { error: string }
+
+type EditPlanExecutionDeps = {
+  applyProfileUpdate: (
+    shouldUpdate: boolean,
+    originalEmail: string,
+    nextEmail: string,
+    nextName: string
+  ) => Promise<void>
+  applyRoleUpdate: (shouldUpdate: boolean, targetEmail: string, roles: RoleName[]) => Promise<void>
+  invalidateUserData: (email: string) => Promise<void>
+  invalidateUsersList: () => Promise<void>
+  navigateToUser: (email: string) => Promise<void>
+}
+
+function buildEditPlan(
+  existingUser: GatewayUser,
+  routeEmail: string,
+  values: UserEditDialogValues
+): EditPlanResult {
+  const trimmedEmail = values.email.trim()
+  const trimmedName = values.name.trim()
+
+  if (!(trimmedEmail && trimmedName)) {
+    return { error: 'Email and name are required' }
+  }
+
+  const desiredRoles: RoleName[] = [values.role]
+  const existingRoles = existingUser.roles ?? []
+  const currentEmail = existingUser.email ?? ''
+  const currentName = existingUser.name ?? ''
+  const emailChanged = trimmedEmail !== currentEmail
+  const profileChanged = emailChanged || trimmedName !== currentName
+  const rolesChanged =
+    existingRoles.length !== desiredRoles.length ||
+    desiredRoles.some((role) => !existingRoles.includes(role))
+
+  return {
+    plan: {
+      originalEmail: currentEmail,
+      routeEmail,
+      trimmedEmail,
+      trimmedName,
+      desiredRoles,
+      emailChanged,
+      profileChanged,
+      shouldUpdateRoles: rolesChanged || emailChanged,
+    },
+  }
+}
+
+async function executeEditPlan(plan: EditPlan, deps: EditPlanExecutionDeps): Promise<void> {
+  await deps.applyProfileUpdate(
+    plan.profileChanged,
+    plan.originalEmail,
+    plan.trimmedEmail,
+    plan.trimmedName
+  )
+
+  await deps.applyRoleUpdate(plan.shouldUpdateRoles, plan.trimmedEmail, plan.desiredRoles)
+
+  const invalidations: Promise<unknown>[] = [
+    deps.invalidateUsersList(),
+    deps.invalidateUserData(plan.routeEmail),
+  ]
+
+  if (plan.emailChanged) {
+    invalidations.push(deps.invalidateUserData(plan.trimmedEmail))
+  }
+
+  await Promise.all(invalidations)
+
+  if (plan.emailChanged) {
+    await deps.navigateToUser(plan.trimmedEmail)
+  }
+}
+
+type UpdateProfileVariables = {
+  originalEmail: string
+  email: string
+  name: string
+}
+
+type UpdateRoleVariables = {
+  email: string
+  roles: string[]
+}
+
+type ProfileUpdateParams = {
+  shouldUpdate: boolean
+  mutate: (variables: UpdateProfileVariables) => Promise<unknown>
+  originalEmail: string
+  nextEmail: string
+  nextName: string
+}
+
+type RoleUpdateParams = {
+  shouldUpdate: boolean
+  mutate: (variables: UpdateRoleVariables) => Promise<unknown>
+  targetEmail: string
+  roles: RoleName[]
+}
+
+async function performProfileUpdate({
+  shouldUpdate,
+  mutate,
+  originalEmail,
+  nextEmail,
+  nextName,
+}: ProfileUpdateParams): Promise<void> {
+  if (!shouldUpdate) {
+    return
+  }
+
+  await mutate({
+    originalEmail,
+    email: nextEmail,
+    name: nextName,
+  })
+}
+
+async function performRoleUpdate({
+  shouldUpdate,
+  mutate,
+  targetEmail,
+  roles,
+}: RoleUpdateParams): Promise<void> {
+  if (!shouldUpdate) {
+    return
+  }
+
+  await mutate({ email: targetEmail, roles })
+}
+
+type RequestLockUserParams = {
+  currentUserEmail: string | null
+  targetEmail: string
+  userLoaded: boolean
+  setIsLockDialogOpen: (open: boolean) => void
+  toastApi: Pick<typeof toast, 'error'>
+}
+
+function requestLockUser({
+  currentUserEmail,
+  targetEmail,
+  userLoaded,
+  setIsLockDialogOpen,
+  toastApi,
+}: RequestLockUserParams): void {
+  if (currentUserEmail && currentUserEmail === targetEmail) {
+    toastApi.error("You can't lock your own account")
+    return
+  }
+
+  if (!userLoaded) {
+    toastApi.error('User is not loaded yet')
+    return
+  }
+
+  setIsLockDialogOpen(true)
+}
+
+type RequestDeleteParams = {
+  currentUserEmail: string | null
+  targetEmail: string
+  userLoaded: boolean
+  setIsDeleteOpen: (open: boolean) => void
+  toastApi: Pick<typeof toast, 'error'>
+}
+
+function requestDeleteUser({
+  currentUserEmail,
+  targetEmail,
+  userLoaded,
+  setIsDeleteOpen,
+  toastApi,
+}: RequestDeleteParams): void {
+  if (currentUserEmail && currentUserEmail === targetEmail) {
+    toastApi.error("You can't delete your own account")
+    return
+  }
+
+  if (!userLoaded) {
+    toastApi.error('User is not loaded yet')
+    return
+  }
+
+  setIsDeleteOpen(true)
+}
+
+type ToggleDeleteDialogParams = {
+  open: boolean
+  isPending: boolean
+  setIsDeleteOpen: (open: boolean) => void
+}
+
+function toggleDeleteDialog({ open, isPending, setIsDeleteOpen }: ToggleDeleteDialogParams): void {
+  if (isPending) {
+    return
+  }
+
+  setIsDeleteOpen(open)
+}
+
+type ConfirmUserDeletionParams = {
+  user?: GatewayUser
+  isPending: boolean
+  mutate: () => void
+}
+
+function confirmUserDeletion({ user, isPending, mutate }: ConfirmUserDeletionParams): void {
+  if (!user || isPending) {
+    return
+  }
+
+  mutate()
+}
+
+type SubmitUserEditsArgs = {
+  user?: GatewayUser
+  decodedEmail: string
+  values: UserEditDialogValues
+  toastApi: Pick<typeof toast, 'error' | 'success'>
+  executePlan: (plan: EditPlan) => Promise<void>
+}
+
+async function submitUserEdits({
+  user,
+  decodedEmail,
+  values,
+  toastApi,
+  executePlan,
+}: SubmitUserEditsArgs): Promise<void> {
+  if (!user) {
+    return
+  }
+
+  const planResult = buildEditPlan(user, decodedEmail, values)
+  if ('error' in planResult) {
+    toastApi.error(planResult.error)
+    throw new Error(planResult.error)
+  }
+
+  try {
+    await executePlan(planResult.plan)
+    toastApi.success('User updated successfully')
+  } catch (error) {
+    toastApi.error(error instanceof Error ? error.message : 'Failed to update user')
+    throw error
+  }
+}
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: User management screen orchestrates multiple flows
 export function UserPage() {
@@ -96,145 +359,86 @@ export function UserPage() {
 
   const isEditBusy = updateProfileMutation.isPending || updateRolesMutation.isPending
 
-  type EditPlan = {
-    originalEmail: string
-    routeEmail: string
-    trimmedEmail: string
-    trimmedName: string
-    desiredRoles: RoleName[]
-    emailChanged: boolean
-    profileChanged: boolean
-    shouldUpdateRoles: boolean
-  }
-
-  const applyProfileUpdate = async (
-    shouldUpdate: boolean,
-    originalEmail: string,
-    nextEmail: string,
-    nextName: string
-  ) => {
-    if (!shouldUpdate) {
-      return
-    }
-    await updateProfileMutation.mutateAsync({
-      originalEmail,
-      email: nextEmail,
-      name: nextName,
-    })
-  }
-
-  const applyRoleUpdate = async (shouldUpdate: boolean, targetEmail: string, roles: RoleName[]) => {
-    if (!shouldUpdate) {
-      return
-    }
-    await updateRolesMutation.mutateAsync({ email: targetEmail, roles })
-  }
-
-  const invalidateUserData = async (targetEmail: string) => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.USER, targetEmail] }),
-      queryClient.invalidateQueries({
-        queryKey: [...QUERY_KEYS.USER_SESSIONS, targetEmail],
+  const applyProfileUpdate = useCallback(
+    (shouldUpdate: boolean, originalEmail: string, nextEmail: string, nextName: string) =>
+      performProfileUpdate({
+        shouldUpdate,
+        mutate: updateProfileMutation.mutateAsync,
+        originalEmail,
+        nextEmail,
+        nextName,
       }),
-      queryClient.invalidateQueries({
-        queryKey: [...QUERY_KEYS.USER_AUDIT_LOGS, targetEmail],
+    [updateProfileMutation]
+  )
+
+  const applyRoleUpdate = useCallback(
+    (shouldUpdate: boolean, targetEmail: string, roles: RoleName[]) =>
+      performRoleUpdate({
+        shouldUpdate,
+        mutate: updateRolesMutation.mutateAsync,
+        targetEmail,
+        roles,
       }),
-    ])
-  }
+    [updateRolesMutation]
+  )
 
-  const handleOpenEdit = () => {
-    setIsEditOpen(true)
-  }
+  const invalidateUserData = useCallback(
+    async (targetEmail: string) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.USER, targetEmail] }),
+        queryClient.invalidateQueries({
+          queryKey: [...QUERY_KEYS.USER_SESSIONS, targetEmail],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: [...QUERY_KEYS.USER_AUDIT_LOGS, targetEmail],
+        }),
+      ])
+    },
+    [queryClient]
+  )
 
-  const buildEditPlan = (
-    existingUser: GatewayUser,
-    values: UserEditDialogValues
-  ): { error: string } | { plan: EditPlan } => {
-    const trimmedEmail = values.email.trim()
-    const trimmedName = values.name.trim()
+  const invalidateUsersList = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USERS })
+  }, [queryClient])
 
-    if (!(trimmedEmail && trimmedName)) {
-      return { error: 'Email and name are required' }
-    }
-
-    const desiredRoles: RoleName[] = [values.role]
-    const existingRoles = existingUser.roles ?? []
-    const currentEmail = existingUser.email ?? ''
-    const currentName = existingUser.name ?? ''
-    const emailChanged = trimmedEmail !== currentEmail
-    const profileChanged = emailChanged || trimmedName !== currentName
-    const rolesChanged =
-      existingRoles.length !== desiredRoles.length ||
-      desiredRoles.some((role) => !existingRoles.includes(role))
-
-    return {
-      plan: {
-        originalEmail: currentEmail,
-        routeEmail: decodedEmail,
-        trimmedEmail,
-        trimmedName,
-        desiredRoles,
-        emailChanged,
-        profileChanged,
-        shouldUpdateRoles: rolesChanged || emailChanged,
-      },
-    }
-  }
-
-  const executeEditPlan = async (plan: EditPlan) => {
-    await applyProfileUpdate(
-      plan.profileChanged,
-      plan.originalEmail,
-      plan.trimmedEmail,
-      plan.trimmedName
-    )
-    await applyRoleUpdate(plan.shouldUpdateRoles, plan.trimmedEmail, plan.desiredRoles)
-
-    const invalidations: Promise<unknown>[] = [
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USERS }),
-      invalidateUserData(plan.routeEmail),
-    ]
-    if (plan.emailChanged) {
-      invalidations.push(invalidateUserData(plan.trimmedEmail))
-    }
-    await Promise.all(invalidations)
-
-    if (plan.emailChanged) {
+  const navigateToUser = useCallback(
+    async (emailToNavigate: string) => {
       await navigate({
         to: '/users/$email',
-        params: { email: plan.trimmedEmail },
+        params: { email: emailToNavigate },
         replace: true,
       })
-    }
-  }
+    },
+    [navigate]
+  )
 
-  const handleEditSubmit = async ({
-    email: nextEmail,
-    name: nextName,
-    role,
-  }: UserEditDialogValues) => {
-    if (!user) {
-      return
-    }
+  const executePlan = useCallback(
+    (plan: EditPlan) =>
+      executeEditPlan(plan, {
+        applyProfileUpdate,
+        applyRoleUpdate,
+        invalidateUserData,
+        invalidateUsersList,
+        navigateToUser,
+      }),
+    [applyProfileUpdate, applyRoleUpdate, invalidateUserData, invalidateUsersList, navigateToUser]
+  )
 
-    const planResult = buildEditPlan(user, {
-      email: nextEmail,
-      name: nextName,
-      role,
-    })
-    if ('error' in planResult) {
-      toast.error(planResult.error)
-      throw new Error(planResult.error)
-    }
+  const handleOpenEdit = useCallback(() => {
+    setIsEditOpen(true)
+  }, [])
 
-    try {
-      await executeEditPlan(planResult.plan)
-      toast.success('User updated successfully')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update user')
-      throw error
-    }
-  }
+  const handleEditSubmit = useCallback(
+    (values: UserEditDialogValues) =>
+      submitUserEdits({
+        user,
+        decodedEmail,
+        values,
+        toastApi: toast,
+        executePlan,
+      }),
+    [user, decodedEmail, executePlan]
+  )
 
   const revokeSessionMutation = useMutation({
     mutationFn: (sessionId: SessionId) => api.revokeUserSession(decodedEmail, sessionId),
@@ -270,17 +474,22 @@ export function UserPage() {
 
   const unlockUserMutation = useUnlockUser()
 
-  const handleRequestLockUser = () => {
-    if (currentUser?.email === decodedEmail) {
-      toast.error("You can't lock your own account")
-      return
-    }
-    setIsLockDialogOpen(true)
-  }
+  const handleRequestLockUser = useCallback(
+    () =>
+      requestLockUser({
+        currentUserEmail: currentUser?.email ?? null,
+        targetEmail: decodedEmail,
+        userLoaded: Boolean(user),
+        setIsLockDialogOpen,
+        toastApi: toast,
+      }),
+    [currentUser?.email, decodedEmail, user]
+  )
 
-  const handleUnlockUser = async () => {
-    await unlockUserMutation.mutateAsync(decodedEmail)
-  }
+  const handleUnlockUser = useCallback(
+    () => unlockUserMutation.mutateAsync(decodedEmail),
+    [unlockUserMutation, decodedEmail]
+  )
 
   const deleteUserMutation = useMutation({
     mutationFn: () => api.delete(`/api/v1/users/${encodeURIComponent(decodedEmail)}`),
@@ -298,31 +507,37 @@ export function UserPage() {
     },
   })
 
-  const handleRequestDelete = () => {
-    if (currentUser?.email === decodedEmail) {
-      toast.error("You can't delete your own account")
-      return
-    }
-    if (!user) {
-      toast.error('User is not loaded yet')
-      return
-    }
-    setIsDeleteOpen(true)
-  }
+  const handleRequestDelete = useCallback(
+    () =>
+      requestDeleteUser({
+        currentUserEmail: currentUser?.email ?? null,
+        targetEmail: decodedEmail,
+        userLoaded: Boolean(user),
+        setIsDeleteOpen,
+        toastApi: toast,
+      }),
+    [currentUser?.email, decodedEmail, user]
+  )
 
-  const handleDeleteDialogOpenChange = (open: boolean) => {
-    if (deleteUserMutation.isPending) {
-      return
-    }
-    setIsDeleteOpen(open)
-  }
+  const handleDeleteDialogOpenChange = useCallback(
+    (open: boolean) =>
+      toggleDeleteDialog({
+        open,
+        isPending: deleteUserMutation.isPending,
+        setIsDeleteOpen,
+      }),
+    [deleteUserMutation.isPending]
+  )
 
-  const confirmDeleteUser = () => {
-    if (!user || deleteUserMutation.isPending) {
-      return
-    }
-    deleteUserMutation.mutate()
-  }
+  const confirmDeleteUser = useCallback(
+    () =>
+      confirmUserDeletion({
+        user,
+        isPending: deleteUserMutation.isPending,
+        mutate: () => deleteUserMutation.mutate(),
+      }),
+    [user, deleteUserMutation.isPending, deleteUserMutation.mutate]
+  )
 
   if (userError) {
     return (

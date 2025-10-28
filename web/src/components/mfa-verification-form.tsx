@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { MFAInput } from '@/components/mfa-input'
 import { Button } from '@/components/ui/button'
@@ -144,52 +144,51 @@ export function MFAVerificationForm({
   })
 
   // Notify parent when MFA status is loaded
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger when mfaStatus changes
   useEffect(() => {
     if (mfaStatus && onMFAStatusLoaded) {
       onMFAStatusLoaded(mfaStatus)
     }
-  }, [mfaStatus])
+  }, [mfaStatus, onMFAStatusLoaded])
 
   const hasWebAuthn = (mfaStatus?.methods?.filter((m) => m.type === 'webauthn').length ?? 0) > 0
   const hasTOTP = (mfaStatus?.methods?.filter((m) => m.type === 'totp').length ?? 0) > 0
 
-  // Set initial method based on preferred method or available methods
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Method selection logic requires checking multiple conditions
-  useEffect(() => {
-    if (!mfaStatus) return
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Method resolution checks multiple preference branches
+  const resolvedInitialMethod = useMemo<MFAMethod | null>(() => {
+    if (!mfaStatus) {
+      return null
+    }
 
     if (preferredMethod === 'totp' && hasTOTP) {
-      setUseWebAuthn(false)
-      return
+      return 'totp'
     }
 
     if (preferredMethod === 'webauthn' && hasWebAuthn) {
-      setUseWebAuthn(true)
-      return
+      return 'webauthn'
     }
 
-    // Auto-detect: Use server's preferred method if set
     if (preferredMethod === 'auto') {
       if (mfaStatus.preferred_method === 'webauthn' && hasWebAuthn) {
-        setUseWebAuthn(true)
-        return
+        return 'webauthn'
       }
       if (mfaStatus.preferred_method === 'totp' && hasTOTP) {
-        setUseWebAuthn(false)
-        return
+        return 'totp'
       }
     }
 
-    // Fallback: If only WebAuthn available, use it
     if (hasWebAuthn && !hasTOTP) {
-      setUseWebAuthn(true)
-      return
+      return 'webauthn'
     }
 
-    // Default to TOTP
-    setUseWebAuthn(false)
-  }, [mfaStatus, hasWebAuthn, hasTOTP, preferredMethod])
+    return 'totp'
+  }, [hasTOTP, hasWebAuthn, mfaStatus, preferredMethod])
+
+  useEffect(() => {
+    if (!(mfaStatus && resolvedInitialMethod)) {
+      return
+    }
+    setUseWebAuthn(resolvedInitialMethod === 'webauthn')
+  }, [mfaStatus, resolvedInitialMethod])
 
   const handleVerifyTotp = useCallback(
     async (codeOverride?: string) => {
@@ -306,7 +305,6 @@ export function MFAVerificationForm({
 
   // Auto-trigger WebAuthn verification when it's the user's preferred method
   // Only triggers when server says preferred_method is webauthn, not when user manually switches
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only trigger on useWebAuthn change
   useEffect(() => {
     // Don't auto-trigger until MFA status is loaded
     if (!mfaStatus) return
@@ -324,7 +322,15 @@ export function MFAVerificationForm({
         /* errors handled in handleVerifyWebAuthn */
       })
     }
-  }, [useWebAuthn, autoTriggerWebAuthn, hasWebAuthn, mfaStatus])
+  }, [
+    autoTriggerWebAuthn,
+    error,
+    handleVerifyWebAuthn,
+    hasWebAuthn,
+    isVerifying,
+    mfaStatus,
+    useWebAuthn,
+  ])
 
   // Generate dynamic description based on mode and method
   const getDescription = () => {
