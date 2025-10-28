@@ -26,6 +26,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/gateway_test?sslmode=disable
       TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/gateway_test?sslmode=disable
+      GOLANGCI_LINT_VERSION: v2.5.0
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +52,12 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
           task --version
 
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+            | sudo sh -s -- -b /usr/local/bin "${GOLANGCI_LINT_VERSION}"
+          golangci-lint version
+
       - name: Go deps (lint warmup)
         run: task go:deps
 
@@ -60,7 +67,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
         env:
           CGO_ENABLED: 1
 
