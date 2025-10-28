@@ -1,19 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-
+import type { SettingsSetting } from '@/api/schemas'
 import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
-import { useMutation } from '@/hooks/use-mutation'
 import { useStepUp } from '@/contexts/step-up-context'
+import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
 import { toastAPIError } from '@/lib/error-utils'
-
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
-import type { SettingsSetting } from '@/api/schemas'
 
 type VcsCiCardProps = {
   settings: GlobalSettingsResponse | undefined
@@ -58,7 +56,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
       }
       return await api.put<Record<string, SettingsSetting>>(
         '/api/v1/settings/vcs-and-ci-defaults',
-        updates,
+        updates
       )
     },
     onSuccess: (updatedSettings) => {
@@ -95,7 +93,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
       if (keys.length > 0) {
         const params = keys.map((key) => `key=${key}`).join('&')
         return await api.delete<Record<string, SettingsSetting>>(
-          `/api/v1/settings/vcs-and-ci-defaults?${params}`,
+          `/api/v1/settings/vcs-and-ci-defaults?${params}`
         )
       }
     },
@@ -157,7 +155,8 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
       </CardHeader>
       <CardContent className="space-y-6 pb-6">
         <p className="text-muted-foreground text-sm">
-          Configure default version control and CI providers used for deploy approval flows. These defaults can be overridden per app.
+          Configure default version control and CI providers used for deploy approval flows. These
+          defaults can be overridden per app.
         </p>
 
         <div className="grid gap-6 md:grid-cols-2">

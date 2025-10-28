@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"crypto/tls"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"

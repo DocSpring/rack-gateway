@@ -1,30 +1,26 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import {
-  AuditLogsPane,
-  type AuditLogRecord,
-} from '@/components/audit-logs-pane'
+import { type AuditLogRecord, AuditLogsPane } from '@/components/audit-logs-pane'
 import { api } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { AuditFilterPanel } from '@/pages/audit/filter-panel'
 import { useAuditMetrics } from '@/pages/audit/metrics'
 import { AuditStatsCards } from '@/pages/audit/stats-cards'
 import {
-	ACTION_TYPES,
-	DEFAULT_DATE_RANGE,
-	RESOURCE_TYPES,
-	STATUS_TYPES,
-	VALID_DATE_RANGES,
-	createAuditQueryParams,
-	ensureFilterValue,
-	formatAuditExportFileName,
-	isValidDateTime,
-	toDateTimeLocalInput,
-	toISOStringParam,
+  ACTION_TYPES,
+  createAuditQueryParams,
+  DEFAULT_DATE_RANGE,
+  ensureFilterValue,
+  formatAuditExportFileName,
+  isValidDateTime,
+  RESOURCE_TYPES,
+  STATUS_TYPES,
+  toDateTimeLocalInput,
+  toISOStringParam,
+  VALID_DATE_RANGES,
 } from '@/pages/audit/utils'
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: acceptable complexity for this page component
 export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: string } = {}) {
   const initialSearchParams =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined

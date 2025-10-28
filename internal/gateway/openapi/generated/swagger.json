@@ -375,6 +375,9 @@
                 "security": [
                     {
                         "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
                     }
                 ],
                 "description": "Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.",
