@@ -1,22 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Edit2, Eye, Lock, MoreVertical, Plus, Trash2, Unlock } from 'lucide-react'
+import { Lock, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { toast } from '@/components/ui/use-toast'
-import { useMutation } from '@/hooks/use-mutation'
-import { QUERY_KEYS } from '@/lib/query-keys'
-import { ConfirmDeleteDialog } from '../components/confirm-delete-dialog'
-import { TablePane } from '../components/table-pane'
-import { TimeAgo } from '../components/time-ago'
-import { Badge } from '../components/ui/badge'
-import { Button } from '../components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu'
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
+import { TablePane } from '@/components/table-pane'
+import { TimeAgo } from '@/components/time-ago'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -24,164 +14,26 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '../components/ui/table'
-import type { UserEditDialogMode, UserEditDialogValues } from '../components/user-edit-dialog'
-import { UserEditDialog } from '../components/user-edit-dialog'
-import { UserLockDialog, useUnlockUser } from '../components/user-lock-dialog'
-import { UserMetaCell } from '../components/user-meta-cell'
-import { useAuth } from '../contexts/auth-context'
-import { api, type RoleName, type UpdateUserRequest } from '../lib/api'
-import { DEFAULT_PER_PAGE } from '../lib/constants'
-import { pickPrimaryRole } from '../lib/user-roles'
-
-type User = {
-  id?: number
-  email: string
-  name: string
-  roles: string[]
-  created_at: string
-  updated_at: string
-  suspended: boolean
-  created_by_email?: string
-  created_by_name?: string
-  locked_at?: string
-  locked_reason?: string
-  locked_by_user_id?: number
-}
-
-// CI/CD role is intentionally omitted here; it is reserved for automation tokens only.
-const AVAILABLE_ROLES = {
-  viewer: {
-    label: 'Viewer',
-    description: 'Read-only access to apps and logs',
-    className: 'bg-zinc-600 text-white',
-  },
-  ops: {
-    label: 'Operations',
-    description: 'Can manage processes and access systems',
-    className: 'bg-green-600 text-white',
-  },
-  deployer: {
-    label: 'Deployer',
-    description: 'Can deploy apps and manage configurations',
-    className: 'bg-blue-600 text-white',
-  },
-  admin: {
-    label: 'Administrator',
-    description: 'Full access to all resources',
-    className: 'bg-purple-600 text-white',
-  },
-} as const
-
-function isUserLocked(user: User): boolean {
-  return !!user.locked_at
-}
-
-function canModifyUser(user: User, currentUserEmail?: string): boolean {
-  return user.email !== currentUserEmail
-}
-
-type UserUpdatePlan =
-  | { type: 'none' }
-  | { type: 'nameOnly'; name: string }
-  | { type: 'full'; payload: UpdateUserRequest }
-
-function determineUserUpdatePlan(original: User, values: UserEditDialogValues): UserUpdatePlan {
-  const desiredRoles: RoleName[] = [values.role]
-  const changedEmail = values.email !== original.email
-  const changedName = values.name !== original.name
-  const rolesChanged =
-    original.roles.length !== desiredRoles.length ||
-    desiredRoles.some((role) => !original.roles.includes(role))
-
-  if (!changedEmail && changedName && !rolesChanged) {
-    return { type: 'nameOnly', name: values.name }
-  }
-
-  if (!(changedEmail || changedName || rolesChanged)) {
-    return { type: 'none' }
-  }
-
-  const payload: UpdateUserRequest = {}
-  if (changedEmail) {
-    payload.email = values.email
-  }
-  if (changedName) {
-    payload.name = values.name
-  }
-  if (rolesChanged) {
-    payload.roles = desiredRoles
-  }
-
-  return { type: 'full', payload }
-}
-
-type UserActionsProps = {
-  user: User
-  currentUserEmail?: string
-  isUnlocking: boolean
-  onEdit: (user: User) => void
-  onLock: (user: User) => void
-  onUnlock: (user: User) => void
-  onDelete: (user: User) => void
-}
-
-function UserActions({
-  user,
-  currentUserEmail,
-  isUnlocking,
-  onEdit,
-  onLock,
-  onUnlock,
-  onDelete,
-}: UserActionsProps) {
-  const canModify = canModifyUser(user, currentUserEmail)
-  const locked = isUserLocked(user)
-
-  return (
-    <div className="flex justify-end">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button aria-label={`Actions for ${user.email}`} size="sm" variant="ghost">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem asChild>
-            <Link params={{ email: user.email }} to="/users/$email">
-              <Eye className="h-4 w-4" />
-              View Details
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onEdit(user)}>
-            <Edit2 className="h-4 w-4" />
-            Edit User
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {locked ? (
-            <DropdownMenuItem disabled={isUnlocking} onClick={() => onUnlock(user)}>
-              <Unlock className="h-4 w-4" />
-              Unlock Account
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem disabled={!canModify} onClick={() => onLock(user)}>
-              <Lock className="h-4 w-4" />
-              Lock Account
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem
-            disabled={!canModify}
-            onClick={() => onDelete(user)}
-            variant="destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete User
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  )
-}
+} from '@/components/ui/table'
+import { toast } from '@/components/ui/use-toast'
+import type { UserEditDialogMode, UserEditDialogValues } from '@/components/user-edit-dialog'
+import { UserEditDialog } from '@/components/user-edit-dialog'
+import { UserLockDialog, useUnlockUser } from '@/components/user-lock-dialog'
+import { UserMetaCell } from '@/components/user-meta-cell'
+import { useAuth } from '@/contexts/auth-context'
+import { useMutation } from '@/hooks/use-mutation'
+import { api, type RoleName, type UpdateUserRequest } from '@/lib/api'
+import { DEFAULT_PER_PAGE } from '@/lib/constants'
+import { QUERY_KEYS } from '@/lib/query-keys'
+import { pickPrimaryRole } from '@/lib/user-roles'
+import { UserActions } from '@/pages/users/user-actions'
+import {
+  AVAILABLE_ROLES,
+  canModifyUser,
+  determineUserUpdatePlan,
+  isUserLocked,
+  type User,
+} from '@/pages/users/user-utils'
 
 export function UsersPage() {
   const queryClient = useQueryClient()

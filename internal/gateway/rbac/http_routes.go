@@ -2,10 +2,10 @@ package rbac
 
 import (
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
+	"github.com/DocSpring/rack-gateway/internal/util/stringset"
 )
 
 // RouteSpec defines a known Convox API route and the canonical resource/action it maps to.
@@ -382,12 +382,7 @@ func RackAllPermissions() []string {
 			set[perm] = struct{}{}
 		}
 	}
-	perms := make([]string, 0, len(set))
-	for perm := range set {
-		perms = append(perms, perm)
-	}
-	sort.Strings(perms)
-	return perms
+	return stringset.SortedKeys(set)
 }
 
 // KeyMatch3 simplified: supports {var} placeholders and wildcards, shared by proxies and audit logic.

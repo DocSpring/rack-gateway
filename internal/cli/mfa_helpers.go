@@ -95,18 +95,7 @@ func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (stri
 		return collectMFAAuth(cmd, baseURL, bearer, rack, *preferredMethod, mfaStatus.Methods)
 	}
 
-	cfg, _, err := LoadConfig()
-	if err != nil {
-		cfg = &Config{MFAPreference: "default"}
-	}
-
-	preference := cfg.MFAPreference
-	if rack != "" {
-		if gateway, ok := cfg.Gateways[rack]; ok && gateway.MFAPreference != "" {
-			preference = gateway.MFAPreference
-		}
-	}
-
+	preference := resolveMFAPreference(rack)
 	methods := filterMethodsByPreference(mfaStatus.Methods, preference)
 	if len(methods) == 0 {
 		return "", fmt.Errorf("no MFA methods available (preference: %q)", preference)
@@ -202,7 +191,26 @@ func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 		return "", err
 	}
 
-	webauthnResponse := map[string]any{
+	assertionJSON, err := marshalWebAuthnResponse(assertion)
+	if err != nil {
+		return "", err
+	}
+
+	inlineData := map[string]any{
+		"session_data":       startResp.SessionData,
+		"assertion_response": assertionJSON,
+	}
+
+	jsonData, err := json.Marshal(inlineData)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(jsonData), nil
+}
+
+func marshalWebAuthnResponse(assertion *webauthn.AssertionResponse) (string, error) {
+	response := map[string]any{
 		"id":    assertion.CredentialID,
 		"rawId": assertion.CredentialID,
 		"response": map[string]string{
@@ -214,20 +222,26 @@ func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 		"type": "public-key",
 	}
 
-	assertionJSON, err := json.Marshal(webauthnResponse)
+	payload, err := json.Marshal(response)
 	if err != nil {
 		return "", err
 	}
 
-	inlineData := map[string]any{
-		"session_data":       startResp.SessionData,
-		"assertion_response": string(assertionJSON),
-	}
+	return string(payload), nil
+}
 
-	jsonData, err := json.Marshal(inlineData)
+func resolveMFAPreference(rack string) string {
+	cfg, _, err := LoadConfig()
 	if err != nil {
-		return "", err
+		cfg = &Config{MFAPreference: "default"}
 	}
 
-	return base64.StdEncoding.EncodeToString(jsonData), nil
+	preference := cfg.MFAPreference
+	if rack != "" {
+		if gateway, ok := cfg.Gateways[rack]; ok && gateway.MFAPreference != "" {
+			preference = gateway.MFAPreference
+		}
+	}
+
+	return preference
 }

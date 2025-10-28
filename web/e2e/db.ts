@@ -95,7 +95,7 @@ async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise
 
 export async function cleanupE2eArtifacts() {
   await withDbClient(async (client) => {
-    const { rows } = await client.query<[{ fn: string | null }]>(
+    const { rows } = await client.query<{ fn: string | null }>(
       `SELECT to_regprocedure('audit.reset_for_tests()') AS fn`
     )
     const resetFnExists = rows[0]?.fn != null

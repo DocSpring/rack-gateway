@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/util/stringset"
 )
 
 // Command defines a known convox CLI command and its required permissions
@@ -486,10 +487,5 @@ func AllPermissions() []string {
 		}
 	}
 
-	perms := make([]string, 0, len(set))
-	for perm := range set {
-		perms = append(perms, perm)
-	}
-	sort.Strings(perms)
-	return perms
+	return stringset.SortedKeys(set)
 }

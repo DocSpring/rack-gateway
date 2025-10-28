@@ -4,7 +4,7 @@ import {
 } from '@tanstack/react-query'
 
 import { toast } from '@/components/ui/use-toast'
-import { isMFAError } from '@/contexts/step-up-context'
+import { isMFAError } from '@/contexts/step-up-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
 
 type CustomMutationOptions<TData, TError, TVariables, TContext> = UseMutationOptions<

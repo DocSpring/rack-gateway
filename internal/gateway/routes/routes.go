@@ -5,21 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
 	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
 	"github.com/DocSpring/rack-gateway/internal/gateway/openapi"
-	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/security"
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
-	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/requestid"
@@ -28,24 +17,8 @@ import (
 
 // Config holds dependencies needed for route setup
 type Config struct {
-	App              interface{} // Reference to app for handlers that need it
-	Config           *config.Config
-	Database         *db.Database
-	RBACManager      rbac.RBACManager
-	SessionManager   *auth.SessionManager
-	OAuthHandler     *auth.OAuthHandler
-	AuthService      *auth.AuthService
-	TokenService     *token.Service
-	MFAService       *mfa.Service
-	MFASettings      *db.MFASettings
-	SettingsService  *settings.Service
-	EmailSender      email.Sender
-	ProxyHandler     *proxy.Handler
-	RackCertMgr      *rackcert.Manager
-	SentryEnabled    bool
-	AuditLogger      *audit.Logger
-	DefaultRack      string
-	SecurityNotifier *security.Notifier
+	*deps.Gateway
+	App interface{} // Reference to app for handlers that need it
 }
 
 // Setup configures all routes for the application
@@ -114,8 +87,8 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier, cfg.AuditLogger)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertMgr, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
-	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertMgr, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
+	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
+	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertManager, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
 	settingsHandler := handlers.NewSettingsHandler(cfg.SettingsService, cfg.RBACManager)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
 	staticHandler := handlers.NewStaticHandler(cfg.Config, cfg.SessionManager)

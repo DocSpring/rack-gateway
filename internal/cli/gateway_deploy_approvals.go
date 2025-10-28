@@ -99,25 +99,14 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 				rack = strings.TrimSpace(rackFlag)
 			}
 
-			pollInterval := 5 * time.Second
-			if strings.TrimSpace(pollIntervalStr) != "" {
-				dur, err := time.ParseDuration(pollIntervalStr)
-				if err != nil {
-					return fmt.Errorf("invalid --poll-interval: %w", err)
-				}
-				if dur <= 0 {
-					return fmt.Errorf("--poll-interval must be positive")
-				}
-				pollInterval = dur
+			pollInterval, err := parseDurationFlag(pollIntervalStr, "poll-interval", false, 5*time.Second)
+			if err != nil {
+				return err
 			}
 
-			timeout := 0 * time.Second
-			if strings.TrimSpace(timeoutStr) != "" {
-				dur, err := time.ParseDuration(timeoutStr)
-				if err != nil {
-					return fmt.Errorf("invalid --timeout: %w", err)
-				}
-				timeout = dur
+			timeout, err := parseDurationFlag(timeoutStr, "timeout", true, 0)
+			if err != nil {
+				return err
 			}
 
 			// Parse CI metadata JSON if provided
@@ -278,16 +267,9 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 				return fmt.Errorf("no racks specified")
 			}
 
-			pollInterval := 1 * time.Second
-			if strings.TrimSpace(pollIntervalStr) != "" {
-				dur, err := time.ParseDuration(pollIntervalStr)
-				if err != nil {
-					return fmt.Errorf("invalid --poll-interval: %w", err)
-				}
-				if dur <= 0 {
-					return fmt.Errorf("--poll-interval must be positive")
-				}
-				pollInterval = dur
+			pollInterval, err := parseDurationFlag(pollIntervalStr, "poll-interval", false, time.Second)
+			if err != nil {
+				return err
 			}
 
 			// Prepare rack list for round-robin polling
@@ -520,15 +502,7 @@ func createDeployApproval(cmd *cobra.Command, rack, app, gitCommitHash, gitBranc
 		payload["target_api_token_id"] = trimmed
 	}
 
-	var result deployApprovalRequest
-	if err := gatewayRequest(cmd, rack, http.MethodPost, "/deploy-approval-requests", payload, &result); err != nil {
-		// Handle conflict error specially
-		if strings.Contains(err.Error(), "409") {
-			return &result, &deployApprovalRequestConflictError{request: &result}
-		}
-		return nil, err
-	}
-	return &result, nil
+	return postDeployApprovalRequest(cmd, rack, "/deploy-approval-requests", payload)
 }
 
 func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*deployApprovalRequest, error) {
@@ -537,15 +511,36 @@ func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*d
 		payload["notes"] = notes
 	}
 
+	endpoint := fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID)
+	return postDeployApprovalRequest(cmd, rack, endpoint, payload)
+}
+
+func postDeployApprovalRequest(cmd *cobra.Command, rack, endpoint string, payload map[string]interface{}) (*deployApprovalRequest, error) {
 	var result deployApprovalRequest
-	if err := gatewayRequest(cmd, rack, http.MethodPost, fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID), payload, &result); err != nil {
-		// Handle conflict error specially
+	if err := gatewayRequest(cmd, rack, http.MethodPost, endpoint, payload, &result); err != nil {
 		if strings.Contains(err.Error(), "409") {
 			return &result, &deployApprovalRequestConflictError{request: &result}
 		}
 		return nil, err
 	}
 	return &result, nil
+}
+
+func parseDurationFlag(raw, flag string, allowZero bool, defaultValue time.Duration) (time.Duration, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return defaultValue, nil
+	}
+
+	dur, err := time.ParseDuration(trimmed)
+	if err != nil {
+		return 0, fmt.Errorf("invalid --%s: %w", flag, err)
+	}
+	if !allowZero && dur <= 0 {
+		return 0, fmt.Errorf("--%s must be positive", flag)
+	}
+
+	return dur, nil
 }
 
 func waitForDeployApproval(cmd *cobra.Command, rack, publicID string, interval, timeout time.Duration) (*deployApprovalRequest, error) {

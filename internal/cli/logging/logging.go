@@ -1,21 +1,18 @@
 package logging
 
-import base "github.com/DocSpring/rack-gateway/internal/logging"
-
-var logger = base.NewLogger()
+import gwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 
 const (
-	TopicHTTP     = "http"
-	TopicHTTPBody = "http.body"
+	TopicHTTP     = gwlog.TopicHTTP
+	TopicHTTPBody = gwlog.TopicHTTPResponseBody
 )
 
-func Reload() { logger.Reload() }
-
-func DebugTopicf(topic, format string, args ...interface{}) {
-	logger.DebugTopicf(topic, format, args...)
-}
-func Debugf(format string, args ...interface{}) { logger.Debugf(format, args...) }
-func Infof(format string, args ...interface{})  { logger.Infof(format, args...) }
-func Warnf(format string, args ...interface{})  { logger.Warnf(format, args...) }
-func Errorf(format string, args ...interface{}) { logger.Errorf(format, args...) }
-func TopicEnabled(topic string) bool            { return logger.TopicEnabled(topic) }
+var (
+	Reload       = gwlog.Reload
+	DebugTopicf  = gwlog.DebugTopicf
+	Debugf       = gwlog.Debugf
+	Infof        = gwlog.Infof
+	Warnf        = gwlog.Warnf
+	Errorf       = gwlog.Errorf
+	TopicEnabled = gwlog.TopicEnabled
+)

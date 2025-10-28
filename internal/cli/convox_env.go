@@ -148,18 +148,6 @@ func envGetGateway(cmd *cobra.Command, args []string) error {
 	// Get unmask flag (show unmasked secrets)
 	unmask, _ := cmd.Flags().GetBool("unmask")
 
-	// Get gateway URL and token
-	rack, err := SelectedRack()
-	if err != nil {
-		return err
-	}
-	gatewayURL, token, err := LoadRackAuth(rack)
-	if err != nil {
-		return err
-	}
-
-	// Build API URL
-	base := fmt.Sprintf("%s/api/v1/apps/%s/env", gatewayURL, url.PathEscape(app))
 	queryValues := url.Values{}
 	if key != "" {
 		queryValues.Set("key", key)
@@ -167,47 +155,13 @@ func envGetGateway(cmd *cobra.Command, args []string) error {
 	if unmask {
 		queryValues.Set("secrets", "true")
 	}
-	apiURL := base
-	if encoded := queryValues.Encode(); encoded != "" {
-		apiURL = fmt.Sprintf("%s?%s", base, encoded)
-	}
-
-	// Create request
-	req, err := http.NewRequest("GET", apiURL, nil)
+	envMap, err := fetchAppEnv(cmd, app, queryValues)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	// Make request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch env: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	// Check status
-	if resp.StatusCode != http.StatusOK {
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
-			return fmt.Errorf("failed to fetch env: %s", errResp.Error)
-		}
-		return fmt.Errorf("failed to fetch env: HTTP %d", resp.StatusCode)
-	}
-
-	// Parse response
-	var result struct {
-		Env map[string]string `json:"env"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+		return err
 	}
 
 	// Print value
-	if val, ok := result.Env[key]; ok {
+	if val, ok := envMap[key]; ok {
 		fmt.Println(val)
 	} else {
 		return fmt.Errorf("key %s not found", key)
@@ -230,58 +184,66 @@ func envListGateway(cmd *cobra.Command) error {
 		}
 	}
 
-	// Get gateway URL and token
+	envMap, err := fetchAppEnv(cmd, app, nil)
+	if err != nil {
+		return err
+	}
+
+	// Print in key=value format
+	for key, val := range envMap {
+		fmt.Printf("%s=%s\n", key, val)
+	}
+
+	return nil
+}
+
+func fetchAppEnv(cmd *cobra.Command, app string, query url.Values) (map[string]string, error) {
 	rack, err := SelectedRack()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	gatewayURL, token, err := LoadRackAuth(rack)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// Build API URL (without --unmask flag, secrets are masked)
-	apiBase := fmt.Sprintf("%s/api/v1/apps/%s/env", gatewayURL, url.PathEscape(app))
-	apiURL := apiBase
+	base := fmt.Sprintf("%s/api/v1/apps/%s/env", gatewayURL, url.PathEscape(app))
+	apiURL := base
+	if query != nil {
+		if encoded := query.Encode(); encoded != "" {
+			apiURL = fmt.Sprintf("%s?%s", base, encoded)
+		}
+	}
 
-	// Create request
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	// Make request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to fetch env: %w", err)
+		return nil, fmt.Errorf("failed to fetch env: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	// Check status
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct {
 			Error string `json:"error"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil && errResp.Error != "" {
-			return fmt.Errorf("failed to fetch env: %s", errResp.Error)
+			return nil, fmt.Errorf("failed to fetch env: %s", errResp.Error)
 		}
-		return fmt.Errorf("failed to fetch env: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to fetch env: HTTP %d", resp.StatusCode)
 	}
 
-	// Parse response
 	var result struct {
 		Env map[string]string `json:"env"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	// Print in key=value format
-	for key, val := range result.Env {
-		fmt.Printf("%s=%s\n", key, val)
-	}
-
-	return nil
+	return result.Env, nil
 }

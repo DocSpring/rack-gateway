@@ -140,10 +140,22 @@ func (d *Database) DeleteMFAMethod(methodID int64) error {
 }
 
 func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
+	return d.listMFAMethods(userID, false)
+}
+
+func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
+	return d.listMFAMethods(userID, true)
+}
+
+func (d *Database) listMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at
-        FROM mfa_methods WHERE user_id = ? AND confirmed_at IS NOT NULL ORDER BY created_at
-    `
+        FROM mfa_methods WHERE user_id = ?`
+	if !includeUnconfirmed {
+		query += " AND confirmed_at IS NOT NULL"
+	}
+	query += " ORDER BY created_at"
+
 	rows, err := d.query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list MFA methods: %w", err)
@@ -160,31 +172,6 @@ func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate MFA methods: %w", err)
-	}
-	return methods, nil
-}
-
-func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
-	query := `
-        SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at
-        FROM mfa_methods WHERE user_id = ? ORDER BY created_at
-    `
-	rows, err := d.query(query, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list all MFA methods: %w", err)
-	}
-	defer rows.Close() //nolint:errcheck
-
-	var methods []*MFAMethod
-	for rows.Next() {
-		method, err := scanMFAMethod(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan MFA method: %w", err)
-		}
-		methods = append(methods, method)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate all MFA methods: %w", err)
 	}
 	return methods, nil
 }

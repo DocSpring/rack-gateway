@@ -1,7 +1,7 @@
 import { isAxiosError } from 'axios'
 
 import { toast } from '@/components/ui/use-toast'
-import { isMFAError } from '@/contexts/step-up-context'
+import { isMFAError } from '@/contexts/step-up-helpers'
 
 export function getErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
   const resolved = resolveErrorMessage(error)

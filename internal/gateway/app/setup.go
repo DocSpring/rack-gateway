@@ -247,23 +247,8 @@ func (a *App) setupRouter() {
 
 	// Set up routes with all dependencies
 	routes.Setup(router, &routes.Config{
-		Config:           a.Config,
-		Database:         a.Database,
-		RBACManager:      a.RBACManager,
-		SessionManager:   a.SessionManager,
-		OAuthHandler:     a.OAuthHandler,
-		AuthService:      a.AuthService,
-		TokenService:     a.TokenService,
-		MFAService:       a.MFAService,
-		MFASettings:      a.MFASettings,
-		SettingsService:  a.SettingsService,
-		EmailSender:      a.EmailSender,
-		ProxyHandler:     a.ProxyHandler,
-		RackCertMgr:      a.RackCertManager,
-		SentryEnabled:    a.SentryEnabled,
-		AuditLogger:      a.AuditLogger,
-		DefaultRack:      a.DefaultRack,
-		SecurityNotifier: a.SecurityNotifier,
+		Gateway: a.Gateway,
+		App:     a,
 	})
 
 	a.router = router

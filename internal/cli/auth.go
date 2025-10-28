@@ -15,19 +15,9 @@ import (
 
 // StartLogin initiates the OAuth login flow
 func StartLogin(gatewayURL string) (*LoginStartResponse, error) {
-	parsedURL := gatewayURL
-	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
-		parsedURL = "https://" + parsedURL
-	}
-	url := fmt.Sprintf("%s/api/v1/auth/cli/start", strings.TrimSuffix(parsedURL, "/"))
+	url := buildGatewayAPIURL(gatewayURL, "/api/v1/auth/cli/start")
 
-	req, err := http.NewRequest(http.MethodPost, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := HTTPClient.Do(req)
+	resp, err := sendGatewayRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -48,11 +38,7 @@ func StartLogin(gatewayURL string) (*LoginStartResponse, error) {
 
 // CompleteLogin polls the server to complete the OAuth login flow
 func CompleteLogin(gatewayURL, state, codeVerifier string, device DeviceInfo) (*LoginResponse, error) {
-	parsedURL := gatewayURL
-	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
-		parsedURL = "https://" + parsedURL
-	}
-	url := fmt.Sprintf("%s/api/v1/auth/cli/complete", strings.TrimSuffix(parsedURL, "/"))
+	url := buildGatewayAPIURL(gatewayURL, "/api/v1/auth/cli/complete")
 
 	payload := map[string]string{
 		"state":          state,
@@ -68,13 +54,7 @@ func CompleteLogin(gatewayURL, state, codeVerifier string, device DeviceInfo) (*
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := HTTPClient.Do(req)
+	resp, err := sendGatewayRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
@@ -127,4 +107,22 @@ func DetermineDeviceInfo() DeviceInfo {
 		OS:            runtime.GOOS,
 		ClientVersion: clientVersion,
 	}
+}
+
+func buildGatewayAPIURL(gatewayURL, path string) string {
+	parsedURL := gatewayURL
+	if !strings.HasPrefix(parsedURL, "http://") && !strings.HasPrefix(parsedURL, "https://") {
+		parsedURL = "https://" + parsedURL
+	}
+	return fmt.Sprintf("%s%s", strings.TrimSuffix(parsedURL, "/"), path)
+}
+
+func sendGatewayRequest(method, url string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return HTTPClient.Do(req)
 }

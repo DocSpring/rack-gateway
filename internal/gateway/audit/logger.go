@@ -73,18 +73,8 @@ func (l *Logger) SetSlackNotifier(notifier SlackNotifier) {
 // LogDBEntry persists a DB-style audit log entry using this logger's database.
 func (l *Logger) LogDBEntry(al *db.AuditLog) error {
 	err := LogDB(l.database, al)
-	if err == nil && l.slackNotifier != nil {
-		// Send to Slack asynchronously (don't block on Slack errors)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					fmt.Fprintf(os.Stderr, "Slack notification panicked: %v\n", r)
-				}
-			}()
-			if slackErr := l.slackNotifier.NotifyAuditEvent(al); slackErr != nil {
-				fmt.Fprintf(os.Stderr, "Slack notification failed: %v\n", slackErr)
-			}
-		}()
+	if err == nil {
+		l.notifySlackAsync(al)
 	}
 	return err
 }
@@ -95,19 +85,7 @@ func (l *Logger) LogDBEntryWithContext(ctx context.Context, al *db.AuditLog) (co
 	err := LogDB(l.database, al)
 	if err == nil {
 		ctx = MarkAuditLogCreated(ctx)
-		// Send to Slack asynchronously (don't block on Slack errors)
-		if l.slackNotifier != nil {
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						fmt.Fprintf(os.Stderr, "Slack notification panicked: %v\n", r)
-					}
-				}()
-				if slackErr := l.slackNotifier.NotifyAuditEvent(al); slackErr != nil {
-					fmt.Fprintf(os.Stderr, "Slack notification failed: %v\n", slackErr)
-				}
-			}()
-		}
+		l.notifySlackAsync(al)
 	}
 	return ctx, err
 }
@@ -174,6 +152,24 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 		al.Timestamp = time.Now().UTC()
 	}
 	return database.CreateAuditLog(al)
+}
+
+func (l *Logger) notifySlackAsync(al *db.AuditLog) {
+	if l.slackNotifier == nil {
+		return
+	}
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "Slack notification panicked: %v\n", r)
+			}
+		}()
+
+		if err := l.slackNotifier.NotifyAuditEvent(al); err != nil {
+			fmt.Fprintf(os.Stderr, "Slack notification failed: %v\n", err)
+		}
+	}()
 }
 
 // MarkAuditLogCreated marks that an explicit audit log was created for this request

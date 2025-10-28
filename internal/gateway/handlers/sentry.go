@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/sentryutil"
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
@@ -56,16 +57,7 @@ func CaptureHTTPError(r *http.Request, err error, userEmail string) {
 		return
 	}
 
-	sentry.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelError)
-		if r != nil {
-			scope.SetRequest(r)
-			scope.SetTag("http_method", r.Method)
-			scope.SetTag("http_path", r.URL.Path)
-		}
-		if userEmail != "" {
-			scope.SetUser(sentry.User{Email: userEmail})
-		}
+	sentryutil.WithHTTPRequestScope(r, userEmail, nil, func() {
 		sentry.CaptureException(err)
 	})
 }

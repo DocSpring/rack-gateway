@@ -92,21 +92,11 @@ func ExecCommand() *cobra.Command {
 		Short: "execute a command in a running process",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "exec")
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "exec", "entrypoint")
 			if err != nil {
 				return err
 			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "entrypoint")
-			if err != nil {
-				return err
-			}
-			err = cli.Exec(client, ctx)
-			// Convox CLI returns "exit 0" as an error for successful commands
-			if err != nil && err.Error() == "exit 0" {
-				return nil
-			}
-			return err
+			return normalizeConvoxExit(cli.Exec(client, ctx))
 		}),
 	}
 
@@ -123,21 +113,11 @@ func RunCommand() *cobra.Command {
 		Short: "run a one-off process",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "run")
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "run", "detach", "entrypoint", "release", "env")
 			if err != nil {
 				return err
 			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "detach", "entrypoint", "release", "env")
-			if err != nil {
-				return err
-			}
-			err = cli.Run(client, ctx)
-			// Convox CLI returns "exit 0" as an error for successful commands
-			if err != nil && err.Error() == "exit 0" {
-				return nil
-			}
-			return err
+			return normalizeConvoxExit(cli.Run(client, ctx))
 		}),
 	}
 

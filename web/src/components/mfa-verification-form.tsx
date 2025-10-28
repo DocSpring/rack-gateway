@@ -103,33 +103,10 @@ type MFAVerificationFormProps = {
 }
 
 /**
- * Reusable MFA verification form component.
- *
- * Handles all the common logic and UI for MFA verification:
- * - Fetching MFA status
- * - Managing TOTP/WebAuthn method selection
- * - TOTP input with auto-submit
- * - WebAuthn assertion flow
- * - Trust device checkbox
- * - Method switching UI
- * - Dynamic descriptions based on mode
- * - Consistent spacing and layout
- *
- * @example
- * ```tsx
- * <MFAVerificationForm
- *   mode="step-up"
- *   onVerify={async (params) => {
- *     if (params.method === 'totp') {
- *       await verifyMFA({ code: params.code, trust_device: params.trust_device })
- *     } else {
- *       await verifyWebAuthnAssertion({ ...params })
- *     }
- *   }}
- *   onSuccess={() => navigate('/dashboard')}
- *   renderCancelButton={() => <Button onClick={close}>Cancel</Button>}
- * />
- * ```
+ * Reusable MFA verification form component that wraps the common
+ * TOTP and WebAuthn flows. It exposes callbacks for verification,
+ * success, and error handling while providing the standard UI for
+ * method selection, trust device prompts, and form layout.
  */
 export function MFAVerificationForm({
   onVerify,

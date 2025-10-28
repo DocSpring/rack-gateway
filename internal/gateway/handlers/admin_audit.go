@@ -77,24 +77,14 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 		Limit: limit,
 	}
 
-	details := map[string]interface{}{
-		"total":         total,
-		"event_total":   eventTotal,
-		"page":          page,
-		"limit":         limit,
-		"action_type":   filters.ActionType,
-		"status_filter": filters.Status,
-		"resource_type": filters.ResourceType,
-		"search":        filters.Search,
-	}
-	if !filters.Since.IsZero() {
-		details["since"] = filters.Since.UTC().Format(time.RFC3339)
-	}
-	if !filters.Until.IsZero() {
-		details["until"] = filters.Until.UTC().Format(time.RFC3339)
+	baseDetails := map[string]interface{}{
+		"total":       total,
+		"event_total": eventTotal,
+		"page":        page,
+		"limit":       limit,
 	}
 
-	h.respondAuditSuccess(c, http.StatusOK, payload, "audit.list", "", start, details)
+	h.respondAuditSuccess(c, http.StatusOK, payload, "audit.list", "", start, buildAuditDetails(filters, baseDetails))
 }
 
 // ExportAuditLogs godoc
@@ -192,22 +182,12 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 		return
 	}
 
-	details := map[string]interface{}{
-		"count":         len(logs),
-		"events":        totalEvents,
-		"action_type":   filters.ActionType,
-		"status_filter": filters.Status,
-		"resource_type": filters.ResourceType,
-		"search":        filters.Search,
-	}
-	if !filters.Since.IsZero() {
-		details["since"] = filters.Since.UTC().Format(time.RFC3339)
-	}
-	if !filters.Until.IsZero() {
-		details["until"] = filters.Until.UTC().Format(time.RFC3339)
+	baseDetails := map[string]interface{}{
+		"count":  len(logs),
+		"events": totalEvents,
 	}
 
-	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, details, start)
+	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, buildAuditDetails(filters, baseDetails), start)
 }
 
 func (h *AdminHandler) auditAdminAction(c *gin.Context, action, resource, status string, httpStatus int, details map[string]interface{}, start time.Time) {
@@ -282,6 +262,35 @@ func (h *AdminHandler) auditAdminAction(c *gin.Context, action, resource, status
 	}
 
 	_ = h.auditLogger.LogDBEntry(entry)
+}
+
+func buildAuditDetails(filters db.AuditLogFilters, base map[string]interface{}) map[string]interface{} {
+	details := make(map[string]interface{}, len(base)+6)
+	for key, value := range base {
+		details[key] = value
+	}
+
+	if value := strings.TrimSpace(filters.ActionType); value != "" {
+		details["action_type"] = value
+	}
+	if value := strings.TrimSpace(filters.Status); value != "" {
+		details["status_filter"] = value
+	}
+	if value := strings.TrimSpace(filters.ResourceType); value != "" {
+		details["resource_type"] = value
+	}
+	if value := strings.TrimSpace(filters.Search); value != "" {
+		details["search"] = value
+	}
+
+	if !filters.Since.IsZero() {
+		details["since"] = filters.Since.UTC().Format(time.RFC3339)
+	}
+	if !filters.Until.IsZero() {
+		details["until"] = filters.Until.UTC().Format(time.RFC3339)
+	}
+
+	return details
 }
 
 func (h *AdminHandler) respondAudit(c *gin.Context, statusCode int, payload interface{}, action, resource, auditStatus string, start time.Time, details map[string]interface{}) {

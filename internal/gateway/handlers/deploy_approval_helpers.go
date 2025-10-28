@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -253,4 +254,56 @@ func logDeployApprovalAudit(logger *audit.Logger, userEmail, userName, action, r
 		RBACDecision: "allow",
 		HTTPStatus:   httpStatus,
 	})
+}
+
+type deployApprovalStatusInput struct {
+	userEmail string
+	publicID  string
+	notes     string
+	approver  *db.User
+}
+
+func (h *AdminHandler) ensureDeployApprovalDependencies(c *gin.Context) bool {
+	if h == nil || h.database == nil || h.rbac == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+		return false
+	}
+	return true
+}
+
+func (h *AdminHandler) requireDeployApprovalAccess(c *gin.Context, action rbac.Action) (string, bool) {
+	if !h.ensureDeployApprovalDependencies(c) {
+		return "", false
+	}
+	return checkDeployApprovalAuth(c, h.rbac, action)
+}
+
+func (h *AdminHandler) parseDeployApprovalStatusUpdateRequest(c *gin.Context) (*deployApprovalStatusInput, bool) {
+	userEmail, ok := h.requireDeployApprovalAccess(c, rbac.ActionApprove)
+	if !ok {
+		return nil, false
+	}
+
+	publicID, ok := validatePublicID(c)
+	if !ok {
+		return nil, false
+	}
+
+	var payload UpdateDeployApprovalRequestStatusRequest
+	if err := c.ShouldBindJSON(&payload); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return nil, false
+	}
+
+	approver, ok := loadApprover(c, h.database, userEmail)
+	if !ok {
+		return nil, false
+	}
+
+	return &deployApprovalStatusInput{
+		userEmail: userEmail,
+		publicID:  publicID,
+		notes:     payload.Notes,
+		approver:  approver,
+	}, true
 }

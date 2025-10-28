@@ -1,18 +1,17 @@
-import { type AxiosError, AxiosHeaders, type InternalAxiosRequestConfig, isAxiosError } from 'axios'
+import { type AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
-import { MFAVerificationForm } from '@/components/mfa-verification-form'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/auth-context'
 import { useHttpClient } from '@/contexts/http-client-context'
+import { StepUpDialog } from '@/contexts/step-up-dialog'
+import {
+  clearMFAHeaders,
+  getMFAHeaders,
+  isMFAError,
+  setTotpHeader,
+  setWebAuthnHeader,
+} from '@/contexts/step-up-helpers'
 import { getMFAStatus } from '@/lib/api'
 import { getMfaRequirementForRequest } from '@/lib/mfa-preflight'
 
@@ -45,36 +44,6 @@ type StepUpContextValue = {
 }
 
 const StepUpContext = createContext<StepUpContextValue | undefined>(undefined)
-
-type MfaHeaders = { 'X-MFA-TOTP'?: string; 'X-MFA-WebAuthn'?: string }
-
-let currentMFAHeaders: MfaHeaders = {}
-
-function getMFAHeaders(): MfaHeaders {
-  return currentMFAHeaders
-}
-
-function clearMFAHeaders(): void {
-  currentMFAHeaders = {}
-}
-
-export function isMFAError(error: unknown): boolean {
-  if (!isAxiosError(error)) {
-    return false
-  }
-  if (error.response?.status !== 401) {
-    return false
-  }
-  const errorCode = (error.response?.data as { error?: string } | undefined)?.error
-  const header = error.response?.headers?.['x-mfa-required']
-  return (
-    errorCode === 'mfa_step_up_required' ||
-    errorCode === 'mfa_required' ||
-    errorCode === 'mfa_verification_failed' ||
-    header === 'step-up' ||
-    header === 'always'
-  )
-}
 
 type InternalRequestConfig = InternalAxiosRequestConfig & {
   __suppressGlobalError?: boolean
@@ -161,14 +130,13 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       // Set MFA headers
       clearMFAHeaders()
       if (params.method === 'totp') {
-        currentMFAHeaders['X-MFA-TOTP'] = params.code ?? ''
+        setTotpHeader(params.code)
         debugLog('Set TOTP header', { code: params.code })
       } else {
-        const webauthnData = JSON.stringify({
+        setWebAuthnHeader({
           session_data: params.session_data,
           assertion_response: params.assertion_response,
         })
-        currentMFAHeaders['X-MFA-WebAuthn'] = btoa(webauthnData)
         debugLog('Set WebAuthn header')
       }
 
@@ -197,6 +165,24 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
     [runAction]
   )
 
+  const handleDialogVerify = useCallback(
+    async (params: {
+      method: 'totp' | 'webauthn'
+      code?: string
+      trust_device: boolean
+      session_data?: string
+      assertion_response?: string
+    }) => {
+      setIsVerifying(true)
+      try {
+        await handleVerify(params)
+      } finally {
+        setIsVerifying(false)
+      }
+    },
+    [handleVerify]
+  )
+
   const runWithMFAGuard = useCallback(
     async <T,>(fn: () => Promise<T>): Promise<T> => {
       try {
@@ -216,6 +202,19 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
       }
     },
     [openStepUp]
+  )
+
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        debugLog('onOpenChange -> open true')
+        setIsOpen(true)
+      } else {
+        debugLog('onOpenChange -> open false')
+        closeStepUp()
+      }
+    },
+    [closeStepUp]
   )
 
   useEffect(() => {
@@ -464,52 +463,13 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   return (
     <StepUpContext.Provider value={contextValue}>
       {children}
-      <Dialog
-        onOpenChange={(open) => {
-          if (open) {
-            debugLog('onOpenChange -> open true')
-            setIsOpen(true)
-          } else {
-            debugLog('onOpenChange -> open false')
-            closeStepUp()
-          }
-        }}
-        open={isOpen}
-      >
-        <DialogContent
-          className="focus-visible:outline-none"
-          onOpenAutoFocus={(e) => {
-            e.preventDefault()
-            // Blur dropdown to prevent aria-hidden warning
-            if (document.activeElement instanceof HTMLElement) {
-              document.activeElement.blur()
-            }
-          }}
-        >
-          <DialogHeader className="text-center sm:text-center">
-            <DialogTitle className="text-center">Multi-Factor Authentication Required</DialogTitle>
-          </DialogHeader>
-
-          <DialogDescription className="text-center" />
-          <MFAVerificationForm
-            mode="step-up"
-            onVerify={async (params) => {
-              setIsVerifying(true)
-              try {
-                await handleVerify(params)
-              } finally {
-                setIsVerifying(false)
-              }
-            }}
-            renderCancelButton={() => (
-              <Button onClick={closeStepUp} type="button" variant="outline">
-                Cancel
-              </Button>
-            )}
-            showTrustDevice={!user?.has_trusted_device}
-          />
-        </DialogContent>
-      </Dialog>
+      <StepUpDialog
+        isOpen={isOpen}
+        onCancel={closeStepUp}
+        onOpenChange={handleDialogOpenChange}
+        onVerify={handleDialogVerify}
+        showTrustDevice={!user?.has_trusted_device}
+      />
     </StepUpContext.Provider>
   )
 }

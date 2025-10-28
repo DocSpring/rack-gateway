@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -116,22 +117,11 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/methods/{methodID} [delete]
 func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	if !h.ensureMFAService(c) {
 		return
 	}
 
-	userCtx, ok := loadMFAUserContext(c, h.database)
-	if !ok {
-		return
-	}
-
-	methodID, ok := parseIDParam(c, "methodID")
-	if !ok {
-		return
-	}
-
-	method, ok := loadMFAMethod(c, h.database, methodID, userCtx.userRecord.ID)
+	userCtx, method, ok := h.loadMFAMethodForCurrentUser(c, "methodID")
 	if !ok {
 		return
 	}
@@ -160,22 +150,11 @@ func (h *AuthHandler) DeleteMFAMethod(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /auth/mfa/methods/{methodID} [put]
 func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	if !h.ensureMFAService(c) {
 		return
 	}
 
-	userCtx, ok := loadMFAUserContext(c, h.database)
-	if !ok {
-		return
-	}
-
-	methodID, ok := parseIDParam(c, "methodID")
-	if !ok {
-		return
-	}
-
-	method, ok := loadMFAMethod(c, h.database, methodID, userCtx.userRecord.ID)
+	userCtx, method, ok := h.loadMFAMethodForCurrentUser(c, "methodID")
 	if !ok {
 		return
 	}
@@ -208,8 +187,7 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 // @Security CSRFToken
 // @Router /auth/mfa/trusted-devices/trust [post]
 func (h *AuthHandler) TrustCurrentDevice(c *gin.Context) {
-	if h.mfaService == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	if !h.ensureMFAService(c) {
 		return
 	}
 
@@ -352,4 +330,31 @@ func (h *AuthHandler) UpdatePreferredMFAMethod(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{Status: "updated"})
+}
+
+func (h *AuthHandler) ensureMFAService(c *gin.Context) bool {
+	if h.mfaService != nil {
+		return true
+	}
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "mfa service unavailable"})
+	return false
+}
+
+func (h *AuthHandler) loadMFAMethodForCurrentUser(c *gin.Context, paramName string) (*mfaUserContext, *db.MFAMethod, bool) {
+	userCtx, ok := loadMFAUserContext(c, h.database)
+	if !ok {
+		return nil, nil, false
+	}
+
+	methodID, ok := parseIDParam(c, paramName)
+	if !ok {
+		return nil, nil, false
+	}
+
+	method, ok := loadMFAMethod(c, h.database, methodID, userCtx.userRecord.ID)
+	if !ok {
+		return nil, nil, false
+	}
+
+	return userCtx, method, true
 }

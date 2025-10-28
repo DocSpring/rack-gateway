@@ -143,17 +143,7 @@ func testPreferredMFA(cmd *cobra.Command, baseURL, bearer string, status *MFASta
 	}
 
 	// Otherwise fall back to CLI preference
-	cfg, _, err := LoadConfig()
-	if err != nil {
-		cfg = &Config{MFAPreference: "default"}
-	}
-
-	preference := cfg.MFAPreference
-	if rack != "" {
-		if gateway, ok := cfg.Gateways[rack]; ok && gateway.MFAPreference != "" {
-			preference = gateway.MFAPreference
-		}
-	}
+	preference := resolveMFAPreference(rack)
 
 	fmt.Printf("  No server preference - using CLI preference: %s\n", preference)
 

@@ -69,12 +69,8 @@ func scanUserWithLockedBy(scanner userScanner) (*User, error) {
 		return nil, err
 	}
 
-	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
-	}
-
-	if lockedReason.Valid {
-		user.LockedReason = lockedReason.String
+	if err := assignRolesAndLockedReason(&user, rolesJSON, lockedReason); err != nil {
+		return nil, err
 	}
 	if lockedByEmail.Valid {
 		user.LockedByEmail = lockedByEmail.String
@@ -115,12 +111,8 @@ func scanUserWithCreator(scanner userScanner) (*User, error) {
 		return nil, err
 	}
 
-	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
-	}
-
-	if lockedReason.Valid {
-		user.LockedReason = lockedReason.String
+	if err := assignRolesAndLockedReason(&user, rolesJSON, lockedReason); err != nil {
+		return nil, err
 	}
 
 	if creatorID.Valid {
@@ -152,6 +144,18 @@ func finalizeUserFields(user *User, fields *userNullableFields) error {
 
 	if fields.lockedReason.Valid {
 		user.LockedReason = fields.lockedReason.String
+	}
+
+	return nil
+}
+
+func assignRolesAndLockedReason(user *User, rolesJSON string, lockedReason sql.NullString) error {
+	if err := json.Unmarshal([]byte(rolesJSON), &user.Roles); err != nil {
+		return fmt.Errorf("failed to unmarshal roles: %w", err)
+	}
+
+	if lockedReason.Valid {
+		user.LockedReason = lockedReason.String
 	}
 
 	return nil

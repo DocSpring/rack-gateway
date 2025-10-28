@@ -183,19 +183,7 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 		return fmt.Errorf("WebAuthn assertion failed: %w", err)
 	}
 
-	webauthnResponse := map[string]any{
-		"id":    assertion.CredentialID,
-		"rawId": assertion.CredentialID,
-		"response": map[string]string{
-			"authenticatorData": assertion.AuthenticatorData,
-			"clientDataJSON":    assertion.ClientDataJSON,
-			"signature":         assertion.Signature,
-			"userHandle":        assertion.UserHandle,
-		},
-		"type": "public-key",
-	}
-
-	assertionJSON, err := json.Marshal(webauthnResponse)
+	assertionJSON, err := marshalWebAuthnResponse(assertion)
 	if err != nil {
 		return fmt.Errorf("failed to marshal assertion: %w", err)
 	}
@@ -203,7 +191,7 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 	verifyEndpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
 	verifyPayload := map[string]any{
 		"session_data":       startResp.SessionData,
-		"assertion_response": string(assertionJSON),
+		"assertion_response": assertionJSON,
 		"trust_device":       false,
 	}
 

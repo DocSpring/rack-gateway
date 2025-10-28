@@ -128,16 +128,7 @@ func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog
 	}
 	defer rows.Close() //nolint:errcheck // best-effort close
 
-	var logs []*AuditLog
-	for rows.Next() {
-		log, err := scanAuditLog(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan audit log: %w", err)
-		}
-		logs = append(logs, log)
-	}
-
-	return logs, nil
+	return scanAuditLogs(rows)
 }
 
 // GetAuditLogsByDeployApprovalRequestID retrieves audit logs for a specific deploy approval request
@@ -165,6 +156,10 @@ func (d *Database) GetAuditLogsByDeployApprovalRequestID(deployApprovalRequestID
 	}
 	defer rows.Close() //nolint:errcheck // best-effort close
 
+	return scanAuditLogs(rows)
+}
+
+func scanAuditLogs(rows *sql.Rows) ([]*AuditLog, error) {
 	var logs []*AuditLog
 	for rows.Next() {
 		log, err := scanAuditLog(rows)
@@ -327,17 +322,8 @@ func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*A
 		return nil, err
 	}
 
-	if tokenID.Valid {
-		id := tokenID.Int64
-		log.APITokenID = &id
-	}
-	if tokenName.Valid {
-		log.APITokenName = tokenName.String
-	}
-	if deployApprovalRequestID.Valid {
-		id := deployApprovalRequestID.Int64
-		log.DeployApprovalRequestID = &id
-	}
+	fields := extractAuditTokenFields(tokenID, tokenName, deployApprovalRequestID)
+	applyAuditTokenFieldsToTarget(log, fields)
 
 	return log, nil
 }

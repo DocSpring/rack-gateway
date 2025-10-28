@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -20,12 +19,7 @@ import (
 )
 
 func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
-		return
-	}
-
-	if _, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove); !ok {
+	if _, ok := h.requireDeployApprovalAccess(c, rbac.ActionApprove); !ok {
 		return
 	}
 
@@ -71,28 +65,7 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 }
 
 func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
-		return
-	}
-
-	userEmail, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove)
-	if !ok {
-		return
-	}
-
-	publicID, ok := validatePublicID(c)
-	if !ok {
-		return
-	}
-
-	var payload UpdateDeployApprovalRequestStatusRequest
-	if err := c.ShouldBindJSON(&payload); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
-		return
-	}
-
-	approver, ok := loadApprover(c, h.database, userEmail)
+	input, ok := h.parseDeployApprovalStatusUpdateRequest(c)
 	if !ok {
 		return
 	}
@@ -110,7 +83,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 
 	window := time.Duration(windowMinutes) * time.Minute
 	expiresAt := time.Now().Add(window)
-	record, err := h.database.ApproveDeployApprovalRequestByPublicID(publicID, approver.ID, expiresAt, payload.Notes)
+	record, err := h.database.ApproveDeployApprovalRequestByPublicID(input.publicID, input.approver.ID, expiresAt, input.notes)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
@@ -122,14 +95,14 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 
 	details := auditDetails(map[string]string{
 		"expires_at": expiresAt.UTC().Format(time.RFC3339),
-		"notes":      strings.TrimSpace(payload.Notes),
+		"notes":      strings.TrimSpace(input.notes),
 		"message":    strings.TrimSpace(record.Message),
 	})
 
 	logDeployApprovalAudit(
 		h.auditLogger,
-		userEmail,
-		approver.Name,
+		input.userEmail,
+		input.approver.Name,
 		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionApprove.String()),
 		fmt.Sprintf("%d", record.ID),
 		details,
@@ -221,33 +194,12 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 }
 
 func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
-		return
-	}
-
-	userEmail, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove)
+	input, ok := h.parseDeployApprovalStatusUpdateRequest(c)
 	if !ok {
 		return
 	}
 
-	publicID, ok := validatePublicID(c)
-	if !ok {
-		return
-	}
-
-	var payload UpdateDeployApprovalRequestStatusRequest
-	if err := c.ShouldBindJSON(&payload); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
-		return
-	}
-
-	approver, ok := loadApprover(c, h.database, userEmail)
-	if !ok {
-		return
-	}
-
-	record, err := h.database.RejectDeployApprovalRequestByPublicID(publicID, approver.ID, payload.Notes)
+	record, err := h.database.RejectDeployApprovalRequestByPublicID(input.publicID, input.approver.ID, input.notes)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
@@ -258,14 +210,14 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	}
 
 	details := auditDetails(map[string]string{
-		"notes":   strings.TrimSpace(payload.Notes),
+		"notes":   strings.TrimSpace(input.notes),
 		"message": strings.TrimSpace(record.Message),
 	})
 
 	logDeployApprovalAudit(
 		h.auditLogger,
-		userEmail,
-		approver.Name,
+		input.userEmail,
+		input.approver.Name,
 		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), audit.ActionVerbReject),
 		fmt.Sprintf("%d", record.ID),
 		details,
@@ -277,12 +229,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 }
 
 func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
-		return
-	}
-
-	if _, ok := checkDeployApprovalAuth(c, h.rbac, rbac.ActionApprove); !ok {
+	if _, ok := h.requireDeployApprovalAccess(c, rbac.ActionApprove); !ok {
 		return
 	}
 

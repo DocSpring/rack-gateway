@@ -232,32 +232,6 @@ func setupRouterWithMFAMiddleware(
 	return router
 }
 
-func setupRouterWithMockMFAMiddleware(
-	t *testing.T,
-	method string,
-	pattern string,
-	authUser *auth.AuthUser,
-	mockVerifier middleware.MFAVerifier,
-	database *db.Database,
-	mfaSettings *db.MFASettings,
-	handler gin.HandlerFunc,
-	params gin.Params,
-) *gin.Engine {
-	router := gin.New()
-	router.Handle(method, pattern, func(c *gin.Context) {
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-		c.Set("user_email", authUser.Email)
-		if authUser.Name != "" {
-			c.Set("user_name", authUser.Name)
-		}
-		if len(params) > 0 {
-			c.Params = append(gin.Params{}, params...)
-		}
-		c.Next()
-	}, middleware.EnforceMFARequirements(mockVerifier, database, mfaSettings), handler)
-	return router
-}
-
 func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
 	env := newSettingsTestEnv(t)
 

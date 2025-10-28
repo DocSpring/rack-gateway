@@ -121,7 +121,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 
 func TestGetSlackIntegration_NotFound(t *testing.T) {
 	env := setupSlackTestEnv(t)
-	w, resp := env.callGetSlackIntegration(nil)
+	resp := env.callGetSlackIntegration()
 	defer resp.Body.Close() //nolint:errcheck
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -486,4 +486,49 @@ func TestCreateSlackClient_InvalidToken(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 	require.Equal(t, "failed to decrypt token", result["error"])
+}
+
+type slackTestEnv struct {
+	t        *testing.T
+	database *db.Database
+	handler  *AdminHandler
+	user     *db.User
+}
+
+func setupSlackTestEnv(t *testing.T) *slackTestEnv {
+	gin.SetMode(gin.TestMode)
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
+	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+	require.NoError(t, err)
+
+	handler := &AdminHandler{
+		rbac:     newAllowAllRBAC(user),
+		database: database,
+		config:   &config.Config{},
+	}
+
+	return &slackTestEnv{
+		t:        t,
+		database: database,
+		handler:  handler,
+		user:     user,
+	}
+}
+
+func (e *slackTestEnv) callGetSlackIntegration() *http.Response {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/slack", nil)
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+		Email: e.user.Email,
+		Name:  e.user.Name,
+	}))
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Set("user_email", e.user.Email)
+
+	e.handler.GetSlackIntegrationHandler(c)
+	return w.Result()
 }

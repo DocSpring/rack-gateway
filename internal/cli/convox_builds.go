@@ -11,19 +11,10 @@ func BuildCommand() *cobra.Command {
 		Use:   "build [dir]",
 		Short: "create a build",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "build")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "app", "description", "file", "manifest", "no-cache")
-			if err != nil {
-				return err
-			}
-			return cli.Build(client, ctx)
-		}),
 	}
+	cmd.RunE = SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+		return runBuildCommand(cobraCmd, args)
+	})
 
 	cmd.Flags().StringP("app", "a", "", "app name")
 	cmd.Flags().String("description", "", "build description")
@@ -41,12 +32,7 @@ func BuildsCommand() *cobra.Command {
 		Short: "list builds",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "builds")
-			if err != nil {
-				return err
-			}
-
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "limit")
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "builds", "limit")
 			if err != nil {
 				return err
 			}
@@ -137,6 +123,14 @@ func buildsImportCommand() *cobra.Command {
 	cmd.Flags().StringP("app", "a", "", "app name")
 
 	return cmd
+}
+
+func runBuildCommand(cobraCmd *cobra.Command, args []string) error {
+	client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "build", "app", "description", "file", "manifest", "no-cache")
+	if err != nil {
+		return err
+	}
+	return cli.Build(client, ctx)
 }
 
 func buildsLogsCommand() *cobra.Command {

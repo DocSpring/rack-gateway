@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/DocSpring/rack-gateway/internal/gateway/netutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
@@ -155,28 +155,13 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 		}
 		source = "header"
 	} else if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
-		result, err := a.sessions.ValidateSession(cookie.Value, clientIPFromRequest(r), r.UserAgent())
+		result, err := a.sessions.ValidateSession(cookie.Value, netutil.ClientIPFromRequest(r), r.UserAgent())
 		if err != nil {
 			return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
 		}
-		user = &AuthUser{
-			Email:              result.User.Email,
-			Name:               result.User.Name,
-			Roles:              append([]string(nil), result.User.Roles...),
-			IsAPIToken:         false,
-			Session:            result.Session,
-			Suspended:          result.User.Suspended,
-			MFAEnrolled:        result.User.MFAEnrolled,
-			PreferredMFAMethod: result.User.PreferredMFAMethod,
-			LockedAt:           result.User.LockedAt,
-			LockedReason:       result.User.LockedReason,
-			LockedByUserID:     result.User.LockedByUserID,
-			LockedByEmail:      result.User.LockedByEmail,
-			LockedByName:       result.User.LockedByName,
-			DBUser:             result.User,
-		}
-		if result.Session != nil {
-			result.Session.UserID = result.User.ID
+		user = newAuthUserFromSessionResult(result)
+		if user == nil {
+			return nil, "cookie", fmt.Errorf("authentication failed: invalid session")
 		}
 		source = "cookie"
 	} else {
@@ -194,29 +179,6 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 	}
 
 	return user, source, nil
-}
-
-func clientIPFromRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			candidate := strings.TrimSpace(parts[0])
-			if candidate != "" {
-				return candidate
-			}
-		}
-	}
-	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
-		return xrip
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
@@ -373,17 +335,9 @@ func parseInlineMFA(tokenString string) (string, string, string) {
 	return tokenString, "", ""
 }
 
-func (a *AuthService) validateSessionToken(token string, r *http.Request) (*AuthUser, error) {
-	trimmed := strings.TrimSpace(token)
-	if trimmed == "" {
-		return nil, fmt.Errorf("empty session token")
-	}
-	result, err := a.sessions.ValidateSession(trimmed, clientIPFromRequest(r), r.UserAgent())
-	if err != nil {
-		return nil, err
-	}
-	if result == nil || result.User == nil || result.Session == nil {
-		return nil, fmt.Errorf("session invalid")
+func newAuthUserFromSessionResult(result *SessionValidationResult) *AuthUser {
+	if result == nil || result.User == nil {
+		return nil
 	}
 	authUser := &AuthUser{
 		Email:              result.User.Email,
@@ -403,6 +357,22 @@ func (a *AuthService) validateSessionToken(token string, r *http.Request) (*Auth
 	}
 	if result.Session != nil {
 		result.Session.UserID = result.User.ID
+	}
+	return authUser
+}
+
+func (a *AuthService) validateSessionToken(token string, r *http.Request) (*AuthUser, error) {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return nil, fmt.Errorf("empty session token")
+	}
+	result, err := a.sessions.ValidateSession(trimmed, netutil.ClientIPFromRequest(r), r.UserAgent())
+	if err != nil {
+		return nil, err
+	}
+	authUser := newAuthUserFromSessionResult(result)
+	if authUser == nil || authUser.Session == nil {
+		return nil, fmt.Errorf("session invalid")
 	}
 	return authUser, nil
 }

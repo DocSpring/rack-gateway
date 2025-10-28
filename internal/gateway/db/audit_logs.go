@@ -245,16 +245,7 @@ func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([
 	}
 	defer rows.Close() //nolint:errcheck // best-effort close
 
-	var logs []*AuditLog
-	for rows.Next() {
-		log, err := scanAuditLog(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan audit log: %w", err)
-		}
-		logs = append(logs, log)
-	}
-
-	return logs, nil
+	return scanAuditLogs(rows)
 }
 
 // scanAuditLog scans a single audit log row
@@ -278,17 +269,8 @@ func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, e
 		return nil, err
 	}
 
-	if tokenID.Valid {
-		id := tokenID.Int64
-		log.APITokenID = &id
-	}
-	if tokenName.Valid {
-		log.APITokenName = tokenName.String
-	}
-	if deployApprovalRequestID.Valid {
-		id := deployApprovalRequestID.Int64
-		log.DeployApprovalRequestID = &id
-	}
+	fields := extractAuditTokenFields(tokenID, tokenName, deployApprovalRequestID)
+	applyAuditTokenFieldsToTarget(log, fields)
 	if checkpointID.Valid {
 		log.CheckpointID = checkpointID.String
 	}
@@ -296,4 +278,68 @@ func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, e
 	log.CheckpointHash = checkpointHash
 
 	return log, nil
+}
+
+func optionalInt64Ptr(value sql.NullInt64) *int64 {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Int64
+	return &v
+}
+
+func stringFromNull(value sql.NullString) (string, bool) {
+	if !value.Valid {
+		return "", false
+	}
+	return value.String, true
+}
+
+type auditTokenFieldSet struct {
+	tokenID  *int64
+	name     string
+	hasName  bool
+	deployID *int64
+}
+
+func extractAuditTokenFields(tokenID sql.NullInt64, tokenName sql.NullString, deployID sql.NullInt64) auditTokenFieldSet {
+	fields := auditTokenFieldSet{}
+	if id := optionalInt64Ptr(tokenID); id != nil {
+		fields.tokenID = id
+	}
+	if name, ok := stringFromNull(tokenName); ok {
+		fields.name = name
+		fields.hasName = true
+	}
+	if id := optionalInt64Ptr(deployID); id != nil {
+		fields.deployID = id
+	}
+	return fields
+}
+
+func applyAuditTokenFieldsToTarget(target interface{}, fields auditTokenFieldSet) {
+	if fields.tokenID != nil {
+		switch t := target.(type) {
+		case *AuditLog:
+			t.APITokenID = fields.tokenID
+		case *AuditLogAggregated:
+			t.APITokenID = fields.tokenID
+		}
+	}
+	if fields.hasName {
+		switch t := target.(type) {
+		case *AuditLog:
+			t.APITokenName = fields.name
+		case *AuditLogAggregated:
+			t.APITokenName = fields.name
+		}
+	}
+	if fields.deployID != nil {
+		switch t := target.(type) {
+		case *AuditLog:
+			t.DeployApprovalRequestID = fields.deployID
+		case *AuditLogAggregated:
+			t.DeployApprovalRequestID = fields.deployID
+		}
+	}
 }

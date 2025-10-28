@@ -170,3 +170,18 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 
 	return client, ctx, nil
 }
+
+func setupConvoxWithMFAAction(cobraCmd *cobra.Command, args []string, action string, flagNames ...string) (*sdk.Client, *stdcli.Context, error) {
+	mfaAuth, err := checkMFAAndGetAuth(cobraCmd, action)
+	if err != nil {
+		return nil, nil, err
+	}
+	return SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, flagNames...)
+}
+
+func normalizeConvoxExit(err error) error {
+	if err != nil && err.Error() == "exit 0" {
+		return nil
+	}
+	return err
+}

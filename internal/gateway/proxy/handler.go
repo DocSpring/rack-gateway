@@ -23,6 +23,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/sentryutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/getsentry/sentry-go"
 )
@@ -430,18 +431,15 @@ func (h *Handler) captureSentryError(r *http.Request, err error, userEmail strin
 		return
 	}
 
-	sentry.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(sentry.LevelError)
-		if r != nil {
-			scope.SetRequest(r)
-			scope.SetTag("http_method", r.Method)
-			scope.SetTag("http_path", r.URL.Path)
-		}
-		if userEmail != "" && userEmail != "anonymous" {
-			scope.SetUser(sentry.User{Email: userEmail})
-		}
-		scope.SetTag("component", "proxy")
-		scope.SetTag("rack", h.rackName)
+	email := userEmail
+	if email == "anonymous" {
+		email = ""
+	}
+
+	sentryutil.WithHTTPRequestScope(r, email, map[string]string{
+		"component": "proxy",
+		"rack":      h.rackName,
+	}, func() {
 		sentry.CaptureException(err)
 	})
 }
