@@ -11,7 +11,7 @@ CRITICAL PROJECT RULES (see AGENTS.md for full details):
 
 WORKFLOW:
 1. `git status` – understand the current branch state.
-2. Read the assigned task entry in `ai_automation/tasks.md` for context.
+2. Read the assigned task entry in `ai_automation/tasks/<task-id>.md` (inside `ai_automation/tasks/`) for context.
 3. Inspect the files mentioned using the excerpts provided in the task context.
 4. Implement the refactor while preserving behaviour. Update or add tests when you reshape code.
 5. Run the relevant Task commands:

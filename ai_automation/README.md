@@ -4,7 +4,7 @@ This directory holds coordination assets for running multiple Claude Code agents
 
 The high-level workflow looks like this:
 
-1. **Pick a task** from `ai_automation/tasks.md` (or add a new entry if you discover an uncovered task).
+1. **Pick a task** from one of the files in `ai_automation/tasks/` (add a new Markdown file there if you discover an uncovered task).
 2. **Create an isolated worktree** for the task:
    ```bash
    scripts/new-agent-worktree.sh <task-id> "short description"

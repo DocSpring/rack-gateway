@@ -9,7 +9,7 @@ Creates a prompt for the specified task, launches Claude Code in the background,
 and registers the worker PID for monitoring.
 
 Example:
-  $0 001 /Users/.../001-proxy-dedupe ai_automation/agents/task-001.md
+  $0 001 /Users/.../001-proxy-dedupe ai_automation/tasks/task-001.md
 USAGE
 }
 
