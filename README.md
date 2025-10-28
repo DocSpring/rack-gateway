@@ -72,7 +72,7 @@ Get everything running locally with mock services - no Google OAuth setup requir
 git clone https://github.com/DocSpring/rack-gateway.git
 cd rack-gateway
 go mod download
-cd web && pnpm install && cd ..
+cd web && bun install && cd ..
 
 # 2. Set up configuration (uses defaults with mock services)
 cp mise.local.toml.example mise.local.toml
@@ -102,7 +102,7 @@ task dev
 
 - Go 1.22+
 - Docker & Docker Compose
-- Node.js 20+ and pnpm
+- Node.js 20+ and Bun 1.3+
 - mise (for environment variables) - [Install mise](https://mise.jdx.dev/getting-started.html)
 
 Install the task runner (recommended):

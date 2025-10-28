@@ -3,7 +3,6 @@
   "reporters": ["console"],
   "ignore": [
     "**/node_modules/**",
-    "**/.pnpm/**",
     "**/dist/**",
     "**/test-results/**",
     "**/playwright-report/**",

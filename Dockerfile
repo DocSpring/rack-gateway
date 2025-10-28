@@ -1,17 +1,15 @@
-FROM node:20-alpine AS webbuilder
+FROM oven/bun:1.3.1-alpine AS webbuilder
 
 WORKDIR /webapp
 
-# Enable corepack to use pnpm
-RUN corepack enable
-
 # Install deps with maximum cache reuse: copy only lockfile + manifest first
-COPY web/pnpm-lock.yaml web/package.json ./
-RUN pnpm install --frozen-lockfile
+COPY web/bun.lock web/package.json ./
+RUN bun install --frozen-lockfile
 
 # Copy the rest of the web app and build
 COPY web/ ./
-RUN pnpm build -- --base=/web/
+RUN bunx tsc -b tsconfig.build.json \
+    && bunx vite build --base=/web/
 
 FROM golang:1.24-alpine AS builder
 

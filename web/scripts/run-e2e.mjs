@@ -82,7 +82,7 @@ await import('./print-e2e-env.mjs')
 const playwrightArgs = process.argv.slice(2)
 
 await new Promise((resolve, reject) => {
-  const child = spawn('pnpm', ['exec', 'playwright', 'test', ...playwrightArgs], {
+  const child = spawn('bunx', ['playwright', 'test', ...playwrightArgs], {
     stdio: 'inherit',
     env,
     shell: process.platform === 'win32',

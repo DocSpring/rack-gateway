@@ -60,16 +60,16 @@ Once the test stack is running (`task docker:test:up`), you can run individual t
 
 ```bash
 # Run a specific test file
-pnpm exec playwright test e2e/account-security.spec.ts
+bunx playwright test e2e/account-security.spec.ts
 
 # Run tests matching a pattern
-pnpm exec playwright test --grep "user can manage MFA enrollment"
+bunx playwright test --grep "user can manage MFA enrollment"
 
 # Run with UI mode for debugging
-pnpm exec playwright test --ui
+bunx playwright test --ui
 
 # Run with headed browser (see what's happening)
-pnpm exec playwright test --headed e2e/login.spec.ts
+bunx playwright test --headed e2e/login.spec.ts
 ```
 
 **IMPORTANT**: Running individual tests does NOT rebuild the application. If you've changed app code (not just test files), you MUST rebuild first with `task docker:test:up` or `task web:e2e`.
@@ -287,13 +287,13 @@ await enforceMfaForUser("admin@test.com");
 
 ```bash
 # Run with headed browser
-pnpm exec playwright test --headed e2e/login.spec.ts
+bunx playwright test --headed e2e/login.spec.ts
 
 # Run with Playwright Inspector
-pnpm exec playwright test --debug e2e/login.spec.ts
+bunx playwright test --debug e2e/login.spec.ts
 
 # Run with UI mode (recommended)
-pnpm exec playwright test --ui
+bunx playwright test --ui
 ```
 
 ### View Test Results
@@ -308,7 +308,7 @@ After tests run, Playwright generates:
 View results:
 
 ```bash
-pnpm exec playwright show-report
+bunx playwright show-report
 ```
 
 ### Check Service Logs
@@ -342,7 +342,7 @@ docker compose logs -f gateway-api-test
 **"Cannot find module" errors**:
 
 - Web dependencies out of sync
-- Run `pnpm install` in web directory
+- Run `bun install` in the web directory
 
 **Tests pass locally but fail in CI**:
 

@@ -5,7 +5,7 @@ project_name: rack-gateway
 before:
   hooks:
     - go mod tidy
-    - cd web && pnpm install --frozen-lockfile && pnpm build
+    - cd web && bun install --frozen-lockfile && bun run build
 
 builds:
   - id: gateway

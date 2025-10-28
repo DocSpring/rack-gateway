@@ -25,7 +25,7 @@ tasks:
         SERVICES="{{.SERVICES}}" \
         STACK="{{.STACK}}" \
         PROFILE="{{.PROFILE}}" \
-        bash scripts/docker-up.sh
+        bash "{{.TASKFILE_DIR}}/../scripts/docker-up.sh"
 
   up:gateway:
     desc: Up {{.STACK}} gateway
@@ -50,7 +50,7 @@ tasks:
         GATEWAY_PORT={{.WAIT_GATEWAY_PORT}} \
         MOCK_OAUTH_PORT={{.WAIT_MOCK_OAUTH_PORT}} \
         CHECK_VITE_PROXY={{.WAIT_CHECK_VITE_PROXY | default "false"}} \
-        bash scripts/wait-for-services.sh
+        bash "{{.TASKFILE_DIR}}/../scripts/wait-for-services.sh"
 
   down:
     desc: Down full {{.STACK}} stack

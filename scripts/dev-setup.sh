@@ -24,20 +24,25 @@ install_task() {
   echo "- task installed: $(task --version | head -n1)"
 }
 
-install_pnpm() {
-  echo "- Ensuring pnpm via corepack..."
-  if have corepack; then
-    corepack enable || true
-    corepack prepare pnpm@latest --activate || true
-  else
-    echo "  corepack not found; installing pnpm globally via npm"
-    if have npm; then
-      npm i -g pnpm
-    else
-      echo "npm is not available. Install Node.js 20+ first." >&2
-    fi
+install_bun() {
+  if have bun; then
+    echo "- bun already installed: $(bun --version)"
+    return
   fi
-  echo "- pnpm version: $(pnpm -v || echo 'not found')"
+
+  echo "- Installing Bun..."
+  if have curl; then
+    curl -fsSL https://bun.sh/install | bash
+    BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+    if [ -x "$BUN_INSTALL/bin/bun" ]; then
+      export PATH="$BUN_INSTALL/bin:$PATH"
+    fi
+  else
+    echo "  curl not found; please install Bun manually: https://bun.sh" >&2
+    return
+  fi
+
+  echo "- bun version: $(bun --version 2>/dev/null || echo 'not found (restart shell)')"
 }
 
 install_air() {
@@ -98,7 +103,7 @@ install_libfido2() {
 }
 
 install_task
-install_pnpm
+install_bun
 install_air
 install_goimports
 install_libfido2
@@ -106,4 +111,3 @@ install_libfido2
 echo "==> Done"
 echo "Run: task dev   # start the dev stack"
 echo "     task test  # run all tests (web + go + e2e)"
-

@@ -16,8 +16,7 @@ tmp
 reference
 
 # Web app artifacts
-web/node_modules
-web/.pnpm-store
+web/node_modules/
 web/dist
 web/.vite
 web/test-results
@@ -27,9 +26,7 @@ web/playwright-report
 # Dev mock oauth
 mock-oauth/node_modules
 mock-oauth/dist
-mock-oauth/.pnpm-store
 mock-oauth/package-lock.json
-mock-oauth/pnpm-lock.yaml
 
 # Local config/examples not needed in image
 docker-compose.override.yml

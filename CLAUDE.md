@@ -68,7 +68,7 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 
 - Code formatting (`task fmt`, `task web:lint:fix`)
 - Linting with auto-fix
-- Module tidying (`task go:mod:tidy`, `pnpm install`)
+- Module tidying (`task go:mod:tidy`, `bun install`)
 - Code duplication check (`task duplication`)
 - File length check (`task file-length`)
 - Zero biome-ignore comments (`task web:check-ignores`)
@@ -596,7 +596,7 @@ See `web/CLAUDE.md` for detailed commands and testing procedures.
 # ❌ WRONG - Never use raw commands
 go test ./...
 go build ./cmd/gateway
-cd web && pnpm test
+cd web && bun run test
 grep "PASS" test_output.txt
 
 # ❌ WRONG - Never pipe or filter test output
@@ -632,7 +632,7 @@ task ci
 
 This runs:
 
-- Web Biome lint via `pnpm lint`
+- Web Biome lint via `bun run lint`
 - Go vet/fmt/staticcheck
 - Go unit and integration tests (uses isolated test databases)
 - Web unit tests (Vitest)

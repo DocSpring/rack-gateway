@@ -47,22 +47,22 @@ pre-commit:
     biome-format:
       root: "web/"
       # Run across the web project every commit to avoid misses
-      run: pnpm biome format --write .
+      run: bunx biome format --write .
 
     biome-lint:
       root: "web/"
       # Run across the web project every commit to avoid misses
-      run: pnpm biome check --write .
+      run: bunx biome check --write .
 
     web-typecheck:
       root: "web/"
       glob: "**/*.{ts,tsx}"
-      run: pnpm tsc --noEmit
+      run: bunx tsc --noEmit
 
     web-knip:
       root: "web/"
       glob: "**/*.{ts,tsx,js,jsx,json}"
-      run: pnpm knip
+      run: bunx knip
 
     mock-oauth-test:
       glob: "mock-oauth/**/*.{ts,tsx}"

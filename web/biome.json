@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.3.2/schema.json",
   "files": {
     "includes": [
       "**/*.{js,ts,jsx,tsx}",
@@ -9,6 +9,7 @@
       "!src/api/types.generated.ts",
       "!src/api/schemas/**/*.ts",
       "!src/api/openapi.json",
+      "!index.html",
       "!test-results",
       "!playwright-report"
     ]
@@ -39,6 +40,9 @@
         "noEmptyBlockStatements": "off",
         "noUnknownAtRules": "off",
         "noAlert": "off"
+      },
+      "nursery": {
+        "noIncrementDecrement": "off"
       }
     }
   },
@@ -81,5 +85,5 @@
       }
     }
   ],
-  "extends": ["ultracite"]
+  "extends": ["./node_modules/ultracite/config/core/biome.jsonc"]
 }

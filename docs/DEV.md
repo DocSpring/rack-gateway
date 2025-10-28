@@ -7,7 +7,7 @@ Complete guide for setting up the Rack Gateway development environment.
 - **Go 1.22+** - [Install Go](https://golang.org/doc/install)
 - **Docker & Docker Compose** - [Install Docker](https://docs.docker.com/get-docker/)
 - **Node.js 20+** - [Install Node.js](https://nodejs.org/en/download/)
-- **pnpm** - `npm install -g pnpm`
+- **Bun** - follow https://bun.sh/docs/installation (requires Bun 1.3+)
 - **mise** (recommended) - [Install mise](https://mise.jdx.dev/getting-started.html) for environment variable management
 
 ## Quick Start
@@ -19,7 +19,7 @@ cd rack-gateway
 
 # Install dependencies
 go mod download
-cd web && pnpm install && cd ..
+cd web && bun install && cd ..
 
 # Set up configuration (see Configuration section below)
 cp mise.local.toml.example mise.local.toml
@@ -280,8 +280,8 @@ Integration tests use different ports to avoid conflicts:
 
 ```bash
 cd web
-pnpm test        # Run once
-pnpm test:ui     # Interactive UI
+bunx vitest --run        # Run once
+bunx vitest --ui         # Interactive UI
 ```
 
 ## Debugging

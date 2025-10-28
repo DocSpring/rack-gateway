@@ -5,7 +5,6 @@
     "**/convox_source/**",
     "**/reference/**",
     "**/node_modules/**",
-    "**/.pnpm/**",
     "**/test-results/**",
     "**/playwright-report/**",
     "**/coverage/**",

@@ -10,13 +10,13 @@ env:
 tasks:
   deps:
     dir: web
-    desc: Install web dependencies (pnpm)
+    desc: Install web dependencies (Bun)
     run: once
     cmds:
-      - pnpm install --frozen-lockfile
+      - bun install --frozen-lockfile
     sources:
       - package.json
-      - pnpm-lock.yaml
+      - bun.lock
       - ../Taskfile.web.yml
 
   generate:
@@ -33,7 +33,7 @@ tasks:
       - ../internal/gateway/openapi/generated/swagger.json
     generates:
       - src/api/openapi.json
-    cmds: [pnpm generate:openapi]
+    cmds: [bun run generate:openapi]
 
   generate:types:
     dir: web
@@ -44,7 +44,7 @@ tasks:
       - src/api/openapi.json
     generates:
       - src/api/types.generated.ts
-    cmds: [pnpm generate:types]
+    cmds: [bun run generate:types]
 
   generate:client:
     dir: web
@@ -58,7 +58,7 @@ tasks:
     generates:
       - src/api/generated.ts
       - src/api/schemas/**/*.ts
-    cmds: [pnpm generate:client]
+    cmds: [bun run generate:client]
 
   build:
     dir: web
@@ -67,14 +67,14 @@ tasks:
     sources:
       - ../Taskfile.web.yml
       - package.json
-      - pnpm-lock.yaml
+      - bun.lock
       - tsconfig*.json
       - vite.config.ts
       - src/**/*
       - public/**/*
     generates:
       - dist/**/*
-    cmds: [pnpm build]
+    cmds: [bun run build]
 
   lint:
     desc: Run TypeScript typecheck, Biome lint, and knip
@@ -88,25 +88,25 @@ tasks:
     dir: web
     desc: Run TypeScript type checking
     deps: [deps, ":go:generate"]
-    cmds: [pnpm typecheck]
+    cmds: [bun run typecheck]
 
   lint:biome:
     dir: web
     desc: Run Biome lint
     deps: [deps]
-    cmds: [pnpm lint]
+    cmds: [bun run lint]
 
   lint:biome:fix:
     dir: web
     desc: Run Biome lint
     deps: [deps]
-    cmds: [pnpm lint:fix]
+    cmds: [bun run lint:fix]
 
   lint:knip:
     dir: web
     desc: Run knip to find unused files and exports
     deps: [deps]
-    cmds: [pnpm knip]
+    cmds: [bun run knip]
 
   check-ignores:
     desc: Check for biome-ignore comments (zero tolerance)
@@ -123,19 +123,19 @@ tasks:
     dir: web
     desc: Format web code (Biome + Prettier equivalents)
     deps: [deps]
-    cmds: [pnpm format]
+    cmds: [bun run format]
 
   lint:unsafe:
     dir: web
     desc: Auto-fix Biome issues (unsafe, may change code semantics)
     deps: [deps]
-    cmds: [pnpm lint:unsafe]
+    cmds: [bun run lint:unsafe]
 
   test:
     dir: web
     desc: Run web unit tests (Vitest)
     deps: [deps, ":go:generate"]
-    cmds: [pnpm test --run]
+    cmds: [bunx vitest --run]
 
   e2e:deps:
     dir: web
@@ -145,17 +145,17 @@ tasks:
     sources:
       - ../Taskfile.web.yml
       - package.json
-      - pnpm-lock.yaml
+      - bun.lock
       - playwright.config.ts
     cmds:
-      - pnpm exec playwright install --with-deps || pnpm exec playwright install
+      - bunx playwright install --with-deps || bunx playwright install
 
   e2e:
     dir: web
     desc: Run Web E2E against dedicated test stack (preview-style)
     deps: [":docker:test:up", ":docker:test:wait", "e2e:deps", ":go:generate"]
     cmds:
-      - env TEST_GATEWAY_PORT={{.TEST_GATEWAY_PORT}} GATEWAY_PORT={{.TEST_GATEWAY_PORT}} WEB_PORT={{.TEST_GATEWAY_PORT}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT}} PLAYWRIGHT_BASE_URL=http://localhost:{{.TEST_GATEWAY_PORT}} E2E_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable PLAYWRIGHT_FORCE_TTY=false pnpm e2e {{.CLI_ARGS}}
+      - env TEST_GATEWAY_PORT={{.TEST_GATEWAY_PORT}} GATEWAY_PORT={{.TEST_GATEWAY_PORT}} WEB_PORT={{.TEST_GATEWAY_PORT}} MOCK_OAUTH_PORT={{.TEST_MOCK_OAUTH_PORT}} PLAYWRIGHT_BASE_URL=http://localhost:{{.TEST_GATEWAY_PORT}} E2E_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable PLAYWRIGHT_FORCE_TTY=false bun run e2e {{.CLI_ARGS}}
 
   test:all:
     desc: Run all tests in parallel

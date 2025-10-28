@@ -13,6 +13,7 @@
   "ignoreDependencies": [
     "@radix-ui/react-tabs",
     "tailwindcss",
-    "tw-animate-css"
+    "tw-animate-css",
+    "@biomejs/biome"
   ]
 }

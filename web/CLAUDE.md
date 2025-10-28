@@ -20,7 +20,7 @@ Run unit tests:
 ```bash
 task web:test
 # or directly:
-pnpm test
+bun run test
 ```
 
 **What to test:**
@@ -32,7 +32,7 @@ pnpm test
 **Testing policy:**
 
 - Prefer fast feedback: write unit tests and run type checks before E2E
-- Always run `pnpm typecheck` and keep types clean
+- Always run `bun run typecheck` and keep types clean
 - When a web E2E test fails, first reproduce the failure with a focused unit test; fix it there, then re-run E2E
 
 **Vitest module mocking - CRITICAL PATH RULES:**
@@ -90,10 +90,10 @@ You can run specific E2E tests directly with Playwright for faster iteration whe
 ```bash
 # Run specific test file
 cd web
-PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test e2e/account-security.spec.ts
+PLAYWRIGHT_BASE_URL=http://localhost:9447 bunx playwright test e2e/account-security.spec.ts
 
 # Run specific test by name
-PLAYWRIGHT_BASE_URL=http://localhost:9447 pnpm exec playwright test --grep "user can manage MFA enrollment"
+PLAYWRIGHT_BASE_URL=http://localhost:9447 bunx playwright test --grep "user can manage MFA enrollment"
 ```
 
 **CRITICAL: If you're updating application code (not just test files), you MUST rebuild first:**
@@ -129,7 +129,7 @@ This rebuilds the app and runs only the tests matching the pattern.
 Always run type checking before committing:
 
 ```bash
-pnpm typecheck
+bun run typecheck
 ```
 
 ## Task Commands

@@ -18,7 +18,7 @@ EXCLUSIONS=(
   "*.txt"
   "*.lock"
   "go.sum"
-  "pnpm-lock.yaml"
+  "bun.lock"
   "package-lock.json"
   "*.generated.*"
   "*/generated/*"

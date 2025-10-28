@@ -10,7 +10,7 @@ Admin UI and client for Rack Gateway. Provides user management, API token manage
   - Gateway API: `http://localhost:${GATEWAY_PORT:-8447}`
 
 - Run unit tests:
-  - `pnpm test --run`
+  - `bunx vitest --run`
 
 - Run end‑to‑end tests (requires dev stack):
   - `task e2e:web:release`
