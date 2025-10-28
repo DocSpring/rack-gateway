@@ -3,8 +3,8 @@ import { authenticator } from 'otplib'
 import { WebRoute } from '@/lib/routes'
 import {
   clearMfaAttempts,
-  ensureAdminUser,
   enforceMfaForUser,
+  ensureAdminUser,
   expireStepUpForAllSessions,
   getPendingTotpSecret,
   getUserMfaSecret,
@@ -157,14 +157,7 @@ export async function ensureMfaEnrollment(
   options: { email?: string } = {}
 ): Promise<string> {
   const email = options.email ?? 'admin@example.com'
-  let existing = await getUserMfaSecret(email)
-  if (existing) {
-    return existing
-  }
-
-  // Prefer direct seeding to avoid UI flakiness when enrolling MFA for test users
-  await setupBothMfaMethodsForUser(email)
-  existing = await getUserMfaSecret(email)
+  const existing = await getUserMfaSecret(email)
   if (existing) {
     return existing
   }
@@ -256,9 +249,10 @@ export async function satisfyMFAStepUpModal(
 export async function startTotpEnrollmentViaUi(
   page: Page,
   email = 'admin@example.com',
-  options: { dismissLabelDialog?: boolean } = {}
+  options: { dismissLabelDialog?: boolean; resetAttempted?: boolean } = {}
 ): Promise<string> {
   const dismissLabelDialog = options.dismissLabelDialog ?? true
+  const resetAttempted = options.resetAttempted ?? false
   // console.log(`[START_TOTP_ENROLLMENT] Starting for ${email}`)
   await page.evaluate(() => {
     const globalWindow = window as unknown as E2EWindow
@@ -279,13 +273,24 @@ export async function startTotpEnrollmentViaUi(
   const addMethodButton = page.getByRole('button', { name: /^Add Method$/ })
 
   const enableVisible = await enableButton.isVisible({ timeout: 1500 }).catch(() => false)
-  const addVisible = enableVisible ? false : await addMethodButton.isVisible({ timeout: 1500 }).catch(() => false)
+  const addVisible = enableVisible
+    ? false
+    : await addMethodButton.isVisible({ timeout: 1500 }).catch(() => false)
 
   if (enableVisible) {
     await enableButton.click()
   } else if (addVisible) {
     await addMethodButton.click()
   } else {
+    if (!resetAttempted) {
+      await resetMfaForUser(email)
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+      return startTotpEnrollmentViaUi(page, email, {
+        dismissLabelDialog,
+        resetAttempted: true,
+      })
+    }
     const existingSecret = await getUserMfaSecret(email)
     if (existingSecret) {
       return existingSecret
@@ -294,7 +299,9 @@ export async function startTotpEnrollmentViaUi(
   }
 
   const authenticatorButton = page.getByRole('button', { name: 'Authenticator app', exact: true })
-  const authenticatorVisible = await authenticatorButton.isVisible({ timeout: 5000 }).catch(() => false)
+  const authenticatorVisible = await authenticatorButton
+    .isVisible({ timeout: 5000 })
+    .catch(() => false)
   if (!authenticatorVisible) {
     const existingSecret = await getUserMfaSecret(email)
     if (existingSecret) {

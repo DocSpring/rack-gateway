@@ -26,7 +26,7 @@ test.describe('Global Settings', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     // Verify both cards are visible
-    await expect(page.getByText('MFA Configuration').first()).toBeVisible()
+    await expect(page.getByText('MFA Requirements').first()).toBeVisible()
     await expect(page.getByText('Allow Destructive Actions').first()).toBeVisible()
 
     // Check for environment variable source indicator
@@ -163,7 +163,7 @@ test.describe('Global Settings', () => {
 
   test('can update multiple MFA settings at once', async ({ page }) => {
     // Wait for settings to load
-    await expect(page.getByText('MFA Configuration').first()).toBeVisible()
+    await expect(page.getByText('MFA Requirements').first()).toBeVisible()
 
     // The TTL input should have value from env var (45)
     const ttlInput = page.getByLabel(/trusted device ttl/i)
@@ -195,7 +195,7 @@ test.describe('Global Settings', () => {
 
     // Reload page to verify change persisted
     await page.reload()
-    await expect(page.getByText('MFA Configuration').first()).toBeVisible()
+    await expect(page.getByText('MFA Requirements').first()).toBeVisible()
 
     // Step-up window should still be 15
     await expect(page.getByLabel(/step-up window/i)).toHaveValue('15')

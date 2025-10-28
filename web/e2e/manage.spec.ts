@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
-import { getUserMfaSecret } from './db'
+import { getUserMfaSecret, resetMfaForUser } from './db'
 import { expect, test } from './fixtures'
-import { clearStepUpSessions, login, satisfyMFAStepUpModal } from './helpers'
+import { clearStepUpSessions, login, satisfyMFAStepUpModal, setupBothMfaMethods } from './helpers'
 
 /**
  * Opens the Add User dialog and fills in email and name fields.
@@ -317,13 +317,16 @@ test('tokens: name length validation', async ({ page }) => {
 })
 
 test('audit logs: view and filter', async ({ page }) => {
+  await resetMfaForUser('admin@example.com')
+  await setupBothMfaMethods('admin@example.com')
   await login(page)
+
+  const timestamp = Date.now()
+  const tokenName = `E2E Web API Token ${timestamp}`
 
   // Create a token to ensure we have a recent audit entry to filter
   await page.goto(WebRoute('api-tokens'))
   await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
-  const timestamp = Date.now()
-  const tokenName = `E2E Web API Token ${timestamp}`
   const adminSecret = await getUserMfaSecret('admin@example.com')
   if (!adminSecret) {
     throw new Error('admin@example.com missing TOTP secret')
@@ -375,7 +378,6 @@ test('audit logs: view and filter', async ({ page }) => {
   const filteredActionCell = page.locator('table tbody td', { hasText: 'api_token.create' }).first()
   await expect(filteredActionCell).toBeVisible()
 
-  // name is truncated to fit in the cell
   const filteredResourceCell = page.locator('table tbody td', { hasText: 'E2E Web API' }).first()
   await expect(filteredResourceCell).toBeVisible()
 
