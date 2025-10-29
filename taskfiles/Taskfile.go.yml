@@ -172,7 +172,7 @@ tasks:
 
   lint:fix:
     desc: Auto-fix Go formatting and lint issues
-    deps: [deps, format]
+    deps: [deps, format, lint:config]
     sources:
       - Taskfile.go.yml
       - go.*

@@ -247,16 +247,16 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 		notifier := NewNotifier(database)
 
 		// Create user for integration
-		user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+		user, err := database.CreateUser("admin1@example.com", "Admin User", []string{"admin"})
 		require.NoError(t, err)
 
 		// Create integration with alerts disabled
 		botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
 		_, err = database.CreateSlackIntegration(
-			"T123456",
-			"Test Team",
+			"T123456-1",
+			"Test Team 1",
 			botToken,
-			"U123456",
+			"U123456-1",
 			"channels:read,chat:write",
 			map[string]interface{}{},
 			&user.ID,
@@ -278,16 +278,16 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 		notifier := NewNotifier(database)
 
 		// Create user for integration
-		user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
+		user, err := database.CreateUser("admin2@example.com", "Admin User", []string{"admin"})
 		require.NoError(t, err)
 
 		// Create integration with alerts enabled but no channel
 		botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
 		_, err = database.CreateSlackIntegration(
-			"T123456",
-			"Test Team",
+			"T123456-2",
+			"Test Team 2",
 			botToken,
-			"U123456",
+			"U123456-2",
 			"channels:read,chat:write",
 			map[string]interface{}{},
 			&user.ID,

@@ -17,17 +17,13 @@ tasks:
   ci:
     desc: "Runs everything that runs on CI: linters, codegen, tests, build, quality checks"
     cmds:
-      - task: go:lint:config
-      - task: go:sec:vuln
-      - task: mock-oauth:lint
       - task: lint:fix
       - task: duplication
       - task: file-length
       - task: shellcheck
       - task: web:check-ignores
-      - task: generate:test
-      - task: test
       - task: build
+      - task: generate:test
 
   duplication:
     desc: Check for code duplication (zero tolerance for Go and TypeScript)
@@ -70,8 +66,11 @@ tasks:
 
   generate:test:
     desc: Run code generation and tests. Can run all the go tasks in parallel.
-    deps: [go:test, go:e2e, go:generate, web:test, mock-oauth:test]
+    deps: [go:test, go:sec:vuln, go:generate]
     cmds:
+      - task: web:test
+      - task: mock-oauth:test
+      - task: go:e2e
       - task: web:e2e
 
   e2e:
