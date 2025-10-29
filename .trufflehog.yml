@@ -1,0 +1,22 @@
+rules:
+  - allow:
+      regex: ^postgres://postgres:postgres@postgres:5432$
+        # standard local dev test creds
+    description: "Local postgres test credentials"
+    detectors: ["Postgres"]
+  - allow:
+      regex: ^https://convox:[^@]+@convox-api-proxy\.domain$
+    description: "Example Convox proxy URI in docs"
+    detectors: ["URI"]
+  - allow:
+      regex: ^https://convox:AUTH@gateway$
+    description: "Mock gateway URI in CLI helpers"
+    detectors: ["URI"]
+  - allow:
+      regex: ^https://convox:token123@api\.rack\.convox\.cloud$
+    description: "Placeholder API token reference"
+    detectors: ["URI"]
+  - allow:
+      regex: ^https://convox:token@api\.domain\.com$
+    description: "Mock Convox API URI"
+    detectors: ["URI"]

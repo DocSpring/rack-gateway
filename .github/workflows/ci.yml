@@ -35,6 +35,54 @@ jobs:
         with:
           go-version: "1.25.x"
 
+      - name: Install libfido2 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfido2-dev libudev-dev pkg-config
+
+      - name: Install Task
+        run: |
+          curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+          task --version
+
+      - name: Go deps
+        run: task go:deps
+
+      - name: Install Convox CLI
+        run: |
+          set -euo pipefail
+          ARCH=$(uname -m)
+          URL="https://github.com/convox/convox/releases/latest/download/convox-linux"
+          if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            URL="https://github.com/convox/convox/releases/latest/download/convox-linux-arm64"
+          fi
+          curl -fsSL "$URL" -o /tmp/convox
+          sudo mv /tmp/convox /usr/local/bin/convox
+          sudo chmod 755 /usr/local/bin/convox
+          convox version || true
+
+      - name: Create test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE gateway_test;"
+
+      - name: Pre-build binaries for integration tests
+        run: task go:build
+
+      - name: Go tests
+        run: task go:test
+
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      GOLANGCI_LINT_VERSION: v2.5.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
       - name: Cache golangci-lint cache
         uses: actions/cache@v4
         with:
@@ -98,29 +146,6 @@ jobs:
 
       - name: Scan for secrets
         run: task go:sec:secrets
-
-      - name: Install Convox CLI
-        run: |
-          set -euo pipefail
-          ARCH=$(uname -m)
-          URL="https://github.com/convox/convox/releases/latest/download/convox-linux"
-          if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-            URL="https://github.com/convox/convox/releases/latest/download/convox-linux-arm64"
-          fi
-          curl -fsSL "$URL" -o /tmp/convox
-          sudo mv /tmp/convox /usr/local/bin/convox
-          sudo chmod 755 /usr/local/bin/convox
-          convox version || true
-
-      - name: Create test database
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE gateway_test;"
-
-      - name: Pre-build binaries for integration tests
-        run: task go:build
-
-      - name: Go tests
-        run: task go:test
 
   web-tests:
     runs-on: ubuntu-latest

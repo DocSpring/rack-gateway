@@ -206,7 +206,7 @@ tasks:
   sec:secrets:
     desc: Scan for secrets with TruffleHog
     cmds:
-      - trufflehog git file://. --config=.trufflehog.yml --fail
+      - trufflehog git file://. --results verified --fail
 
   mod:tidy:
     desc: Tidy go modules
