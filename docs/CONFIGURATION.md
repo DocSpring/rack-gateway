@@ -14,6 +14,7 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - [Rack Connectivity](#rack-connectivity)
   - [Cookies and Session](#cookies-and-session)
   - [Database and Auditing](#database-and-auditing)
+    - [Connection Pool Configuration](#connection-pool-configuration)
   - [Email (Postmark)](#email-postmark)
   - [CLI Wrapper](#cli-wrapper)
   - [Notes](#notes)
@@ -105,7 +106,20 @@ Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGP
 - `WEB_E2E_SHARDS` (default: `7` locally, `1` on CI)
   - Controls how many isolated gateway/database pairs the web Playwright suite will launch. When greater than one, helper scripts derive `E2E_GATEWAY_PORTS` and `E2E_DATABASE_URLS` automatically so each worker receives a unique target.
 
+### Connection Pool Configuration
+
+- `DB_MAX_OPEN_CONNS` (default: `25`)
+  - Maximum number of concurrent database connections. Limits connection usage under load to prevent exhausting PostgreSQL server resources.
+- `DB_MAX_IDLE_CONNS` (default: `5`)
+  - Maximum number of idle connections to keep in the pool. Maintains warm connections for reuse without wasting resources.
+- `DB_CONN_MAX_LIFETIME` (default: `30m`)
+  - Maximum lifetime of a database connection before recycling. Prevents stale connections. Accepts Go duration strings (e.g., `30m`, `1h`).
+- `DB_CONN_MAX_IDLE_TIME` (default: `10m`)
+
+  - Maximum time an idle connection remains in the pool before being closed. Cleans up unused connections. Accepts Go duration strings (e.g., `10m`, `15m`).
+
 - `AUDIT_HMAC_SECRET` (required for production)
+
   - Secret key used for HMAC-SHA256 cryptographic chain of audit logs.
   - Must be a secure random value (at least 32 bytes). Generate with: `openssl rand -hex 32`
   - WARNING: Changing this value will break the audit chain. Only rotate during planned maintenance with proper documentation.

@@ -12,6 +12,14 @@ type Database struct {
 	driver string // always "pgx"
 }
 
+// PoolConfig holds database connection pool configuration
+type PoolConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+}
+
 // User represents a user in the system
 type User struct {
 	ID                 int64      `json:"id"`

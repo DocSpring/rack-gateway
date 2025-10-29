@@ -37,6 +37,10 @@ type Config struct {
 	TrustedProxies        []string
 	GitHubToken           string
 	CircleCIToken         string
+	DBMaxOpenConns        int
+	DBMaxIdleConns        int
+	DBConnMaxLifetime     time.Duration
+	DBConnMaxIdleTime     time.Duration
 }
 
 type RackConfig struct {
@@ -156,6 +160,12 @@ func Load() (*Config, error) {
 	// CircleCI integration token for pipeline approval
 	cfg.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
 
+	// Database connection pool configuration
+	cfg.DBMaxOpenConns = getEnvInt("DB_MAX_OPEN_CONNS", 25)
+	cfg.DBMaxIdleConns = getEnvInt("DB_MAX_IDLE_CONNS", 5)
+	cfg.DBConnMaxLifetime = getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute)
+	cfg.DBConnMaxIdleTime = getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute)
+
 	return cfg, nil
 }
 
@@ -228,6 +238,24 @@ func generateDevKey() (string, error) {
 func getEnv(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultVal
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
 	}
 	return defaultVal
 }

@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -15,6 +17,11 @@ import (
 
 // New creates a new database connection
 func New(dsn string) (*Database, error) {
+	return NewWithPoolConfig(dsn, nil)
+}
+
+// NewWithPoolConfig creates a new database connection with custom pool configuration
+func NewWithPoolConfig(dsn string, poolConfig *PoolConfig) (*Database, error) {
 	// Use provided DSN if it looks like Postgres, else use env var
 	source := strings.TrimSpace(dsn)
 	lower := strings.ToLower(source)
@@ -35,6 +42,10 @@ func New(dsn string) (*Database, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open postgres: %w", err)
 	}
+
+	// Apply connection pool configuration
+	applyPoolConfig(db, poolConfig)
+
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
@@ -43,6 +54,29 @@ func New(dsn string) (*Database, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 	return d, nil
+}
+
+// applyPoolConfig applies connection pool settings to the database connection.
+// If poolConfig is nil, defaults from environment variables are used.
+func applyPoolConfig(db *sql.DB, poolConfig *PoolConfig) {
+	if poolConfig == nil {
+		poolConfig = poolConfigFromEnv()
+	}
+
+	db.SetMaxOpenConns(poolConfig.MaxOpenConns)
+	db.SetMaxIdleConns(poolConfig.MaxIdleConns)
+	db.SetConnMaxLifetime(poolConfig.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
+}
+
+// poolConfigFromEnv loads pool configuration from environment variables with defaults
+func poolConfigFromEnv() *PoolConfig {
+	return &PoolConfig{
+		MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
+		MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),
+		ConnMaxLifetime: getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		ConnMaxIdleTime: getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute),
+	}
 }
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
@@ -397,4 +431,22 @@ func relativePath(file string) string {
 		return filepath.Base(file)
 	}
 	return rel
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultVal
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+	}
+	return defaultVal
 }
