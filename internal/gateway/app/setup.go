@@ -13,6 +13,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -231,6 +232,24 @@ func (a *App) initializeServices() error {
 
 	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
 	a.DefaultRack = rackAlias
+
+	// Initialize River jobs client for background job processing
+	jobsClient, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
+		Database:      a.Database,
+		EmailSender:   a.EmailSender,
+		SlackNotifier: a.SlackNotifier,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize jobs client: %w", err)
+	}
+	a.JobsClient = jobsClient
+
+	// Start the job worker in a goroutine
+	go func() {
+		if err := jobsClient.Start(context.Background()); err != nil {
+			log.Printf("ERROR: Failed to start jobs worker: %v", err)
+		}
+	}()
 
 	return nil
 }

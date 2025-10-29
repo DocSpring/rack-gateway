@@ -327,3 +327,53 @@ func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*A
 
 	return log, nil
 }
+
+// GetAuditLogByID retrieves a single audit log by its ID
+func (d *Database) GetAuditLogByID(id int64) (*AuditLog, error) {
+	query := `
+		SELECT id, timestamp, chain_index, previous_hash, event_hash,
+		       checkpoint_id, checkpoint_hash,
+		       user_email, user_name, api_token_id, api_token_name,
+		       action_type, action, command, resource, resource_type, details,
+		       request_id, ip_address, user_agent,
+		       status, rbac_decision, http_status, response_time_ms, event_count,
+		       deploy_approval_request_id
+		FROM audit_log
+		WHERE id = ?
+	`
+	row := d.queryRow(query, id)
+
+	log := &AuditLog{}
+	var tokenID sql.NullInt64
+	var tokenName sql.NullString
+	var deployApprovalRequestID sql.NullInt64
+	var checkpointID sql.NullString
+
+	err := row.Scan(
+		&log.ID, &log.Timestamp, &log.ChainIndex, &log.PreviousHash, &log.EventHash,
+		&checkpointID, &log.CheckpointHash,
+		&log.UserEmail, &log.UserName, &tokenID, &tokenName,
+		&log.ActionType, &log.Action, &log.Command, &log.Resource,
+		&log.ResourceType, &log.Details,
+		&log.RequestID, &log.IPAddress, &log.UserAgent,
+		&log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount,
+		&deployApprovalRequestID,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("audit log %d not found", id)
+		}
+		return nil, fmt.Errorf("failed to get audit log: %w", err)
+	}
+
+	log.CheckpointID = checkpointID.String
+	if tokenID.Valid {
+		log.APITokenID = &tokenID.Int64
+	}
+	log.APITokenName = tokenName.String
+	if deployApprovalRequestID.Valid {
+		log.DeployApprovalRequestID = &deployApprovalRequestID.Int64
+	}
+
+	return log, nil
+}

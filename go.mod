@@ -23,6 +23,8 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/pquerna/otp v1.5.0
 	github.com/rickb777/servefiles/v3 v3.9.10
+	github.com/riverqueue/river v0.26.0
+	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.26.0
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.2
@@ -176,6 +178,9 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rickb777/path v1.3.1 // indirect
+	github.com/riverqueue/river/riverdriver v0.26.0 // indirect
+	github.com/riverqueue/river/rivershared v0.26.0 // indirect
+	github.com/riverqueue/river/rivertype v0.26.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
@@ -185,6 +190,10 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/tidwall/gjson v1.18.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/tkrajina/go-reflector v0.5.5 // indirect
@@ -195,6 +204,7 @@ require (
 	github.com/xlab/treeprint v1.2.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/arch v0.21.0 // indirect
 	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/net v0.44.0 // indirect

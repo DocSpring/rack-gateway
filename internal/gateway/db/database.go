@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -37,6 +39,8 @@ func NewWithPoolConfig(dsn string, poolConfig *PoolConfig) (*Database, error) {
 
 	// Ensure appropriate sslmode: require in non-dev unless explicitly set
 	source = ensureSSLMode(source)
+
+	// Create database/sql connection (for existing code)
 	db, err := sql.Open("pgx", source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open postgres: %w", err)
@@ -48,8 +52,25 @@ func NewWithPoolConfig(dsn string, poolConfig *PoolConfig) (*Database, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
-	d := &Database{db: db, driver: "pgx"}
+
+	// Create pgxpool connection (for River and pgx-native operations)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, source)
+	if err != nil {
+		db.Close() //nolint:errcheck // cleanup on init failure
+		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		db.Close() //nolint:errcheck // cleanup on init failure
+		return nil, fmt.Errorf("failed to ping pgxpool: %w", err)
+	}
+
+	d := &Database{db: db, pool: pool, driver: "pgx"}
 	if err := d.migrateAll(); err != nil {
+		pool.Close()
+		db.Close() //nolint:errcheck // cleanup on init failure
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 	return d, nil
@@ -413,6 +434,9 @@ func (d *Database) ResetDatabase() error {
 
 // Close closes the database connection
 func (d *Database) Close() error {
+	if d.pool != nil {
+		d.pool.Close()
+	}
 	return d.db.Close()
 }
 
@@ -420,6 +444,11 @@ func (d *Database) Close() error {
 // Avoid using this in application code where higher-level helpers exist.
 func (d *Database) DB() *sql.DB {
 	return d.db
+}
+
+// Pool exposes the underlying *pgxpool.Pool for River and other pgx-native operations.
+func (d *Database) Pool() *pgxpool.Pool {
+	return d.pool
 }
 func relativePath(file string) string {
 	wd, err := os.Getwd()

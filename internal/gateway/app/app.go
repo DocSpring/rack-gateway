@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"time"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
@@ -65,6 +68,11 @@ func (a *App) Router() *gin.Engine {
 
 // Cleanup cleans up resources
 func (a *App) Cleanup() {
+	if a.JobsClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		a.JobsClient.Stop(ctx) //nolint:errcheck // application shutdown
+	}
 	if a.Database != nil {
 		a.Database.Close() //nolint:errcheck // application shutdown
 	}

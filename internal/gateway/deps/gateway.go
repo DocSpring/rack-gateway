@@ -7,6 +7,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -36,4 +37,5 @@ type Gateway struct {
 	DefaultRack      string
 	SecurityNotifier *security.Notifier
 	SlackNotifier    *slack.Notifier
+	JobsClient       *jobs.Client
 }

@@ -4,12 +4,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Database wraps the SQL database connection
 type Database struct {
 	db     *sql.DB
-	driver string // always "pgx"
+	pool   *pgxpool.Pool // For River and other pgx-native operations
+	driver string        // always "pgx"
 }
 
 // PoolConfig holds database connection pool configuration
