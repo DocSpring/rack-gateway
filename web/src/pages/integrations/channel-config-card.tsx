@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 
-import type { ChannelConfig, SlackChannel } from '@/pages/integrations/types'
+import type { ChannelConfig, SlackChannel } from '@/pages/integrations/slack-types'
 
 type ChannelConfigCardProps = {
   configKey: string

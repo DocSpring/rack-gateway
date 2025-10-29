@@ -2,6 +2,7 @@ package slack
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -222,6 +223,162 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 		blocks = append(blocks, map[string]interface{}{
 			"type":     "context",
 			"elements": contextElements,
+		})
+	}
+
+	// Add divider
+	blocks = append(blocks, map[string]interface{}{
+		"type": "divider",
+	})
+
+	return text, blocks
+}
+
+// NotifyDeployApprovalCreated sends a rich notification for a new deploy approval request
+func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error {
+	// Get Slack integration
+	integration, err := n.database.GetSlackIntegration()
+	if err != nil || integration == nil {
+		// No integration configured, silently skip
+		return nil
+	}
+
+	// Check if deploy approval alerts are enabled
+	if !integration.AlertDeployApprovalsEnabled {
+		return nil
+	}
+
+	// Check if channel is configured
+	channelID := integration.AlertDeployApprovalsChannelID
+	if channelID == "" {
+		return nil
+	}
+
+	// Decrypt bot token
+	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt bot token: %w", err)
+	}
+
+	// Create Slack client
+	client := NewClient(string(botToken))
+
+	// Format rich message
+	text, blocks := n.formatDeployApprovalAlert(req, gatewayDomain)
+
+	// Send to configured channel
+	if err := client.PostMessage(channelID, text, blocks); err != nil {
+		gtwlog.Errorf("slack notifier: failed to send deploy approval alert to channel %s: %v", channelID, err)
+		sentry.CaptureException(err)
+		return err
+	}
+
+	return nil
+}
+
+// formatDeployApprovalAlert formats a deploy approval request into a rich Slack message
+func (n *Notifier) formatDeployApprovalAlert(req *db.DeployApprovalRequest, gatewayDomain string) (string, []map[string]interface{}) {
+	// Build text (fallback for notifications)
+	branchText := req.GitBranch
+	if branchText == "" {
+		branchText = "unknown branch"
+	}
+	text := fmt.Sprintf("🚀 Deploy approval needed for %s - %s", branchText, req.Message)
+
+	// Build rich blocks
+	blocks := []map[string]interface{}{
+		{
+			"type": "section",
+			"text": map[string]interface{}{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*🚀 Deploy approval needed for `%s`*", branchText),
+			},
+		},
+		{
+			"type": "section",
+			"fields": []map[string]interface{}{
+				{
+					"type": "mrkdwn",
+					"text": fmt.Sprintf("*App:*\n%s", req.App),
+				},
+				{
+					"type": "mrkdwn",
+					"text": fmt.Sprintf("*Commit:*\n`%s`", req.GitCommitHash[:7]),
+				},
+			},
+		},
+	}
+
+	// Add message if present
+	if req.Message != "" {
+		blocks = append(blocks, map[string]interface{}{
+			"type": "section",
+			"text": map[string]interface{}{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*Message:*\n%s", req.Message),
+			},
+		})
+	}
+
+	// Build links section
+	linksElements := []map[string]interface{}{
+		{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("🔗 <https://%s/app/deploy-approvals/%s|View Approval Request>", gatewayDomain, req.PublicID),
+		},
+	}
+
+	// Add PR link if available
+	if req.PrURL != "" {
+		linksElements = append(linksElements, map[string]interface{}{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("🔗 <%s|GitHub PR>", req.PrURL),
+		})
+	}
+
+	// Extract CI pipeline URL from ci_metadata if available
+	if len(req.CIMetadata) > 0 {
+		var ciMeta map[string]interface{}
+		if err := json.Unmarshal(req.CIMetadata, &ciMeta); err == nil {
+			// Try to extract CircleCI URL
+			if buildURL, ok := ciMeta["build_url"].(string); ok && buildURL != "" {
+				linksElements = append(linksElements, map[string]interface{}{
+					"type": "mrkdwn",
+					"text": fmt.Sprintf("🔗 <%s|CI Pipeline>", buildURL),
+				})
+			}
+		}
+	}
+
+	blocks = append(blocks, map[string]interface{}{
+		"type":   "section",
+		"fields": linksElements,
+	})
+
+	// Add creator context
+	creatorText := ""
+	if req.CreatedByEmail != "" {
+		creatorText = fmt.Sprintf("Created by %s", req.CreatedByEmail)
+		if req.CreatedByName != "" {
+			creatorText = fmt.Sprintf("Created by %s (%s)", req.CreatedByName, req.CreatedByEmail)
+		}
+	} else if req.CreatedByAPITokenName != "" {
+		creatorText = fmt.Sprintf("Created by API token: %s", req.CreatedByAPITokenName)
+	}
+
+	if creatorText != "" {
+		blocks = append(blocks, map[string]interface{}{
+			"type": "context",
+			"elements": []map[string]interface{}{
+				{
+					"type": "mrkdwn",
+					"text": creatorText,
+				},
+				{
+					"type": "mrkdwn",
+					"text": fmt.Sprintf("<!date^%d^{date_short_pretty} at {time}|%s>", req.CreatedAt.Unix(), req.CreatedAt.Format(time.RFC3339)),
+				},
+			},
 		})
 	}
 

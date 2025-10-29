@@ -3,15 +3,11 @@ import { CheckCircle2, Circle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-import type { CircleCISettings } from '@/pages/integrations/types'
-
 type CircleCiCardProps = {
-  settings?: CircleCISettings | null
+  enabled: boolean
 }
 
-export function CircleCiCard({ settings }: CircleCiCardProps) {
-  const enabled = Boolean(settings?.api_token?.trim() && settings?.org_slug?.trim())
-
+export function CircleCiCard({ enabled }: CircleCiCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -45,23 +41,11 @@ export function CircleCiCard({ settings }: CircleCiCardProps) {
                 jobs when deploy approvals are granted.
               </AlertDescription>
             </Alert>
-            <div className="rounded border bg-muted p-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">Organization:</span>
-                  <code className="rounded bg-background px-2 py-1">{settings?.org_slug}</code>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">API Token:</span>
-                  <span className="text-muted-foreground">Configured</span>
-                </div>
-              </div>
-            </div>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-sm">
               API token set via{' '}
               <code className="ml-1 rounded bg-muted px-1 py-0.5">CIRCLECI_TOKEN</code> env var.
             </p>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-sm">
               Per-app organization slugs and job names are configured in app settings.
             </p>
           </div>

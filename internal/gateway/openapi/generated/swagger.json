@@ -2335,6 +2335,183 @@
                 }
             }
         },
+        "/deploy-approval-requests": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns a list of deploy approval requests with optional filtering",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deploy Approvals"
+                ],
+                "summary": "List deploy approval requests",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, approved, rejected, expired)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only return open requests (pending status)",
+                        "name": "only_open",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of results",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeployApprovalRequestList"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/deploy-approval-requests/{id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Approves a deploy approval request and optionally triggers CircleCI job approval",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deploy Approvals"
+                ],
+                "summary": "Approve a deploy approval request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deploy approval request public ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Approval notes",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateDeployApprovalRequestStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeployApprovalRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/deploy-approval-requests/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Rejects a deploy approval request with optional notes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deploy Approvals"
+                ],
+                "summary": "Reject a deploy approval request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deploy approval request public ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Rejection notes",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateDeployApprovalRequestStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeployApprovalRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns service health information.",
@@ -2379,6 +2556,31 @@
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/integrations/slack": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Get Slack integration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/db.SlackIntegration"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3499,6 +3701,45 @@
                 }
             }
         },
+        "db.SlackIntegration": {
+            "type": "object",
+            "properties": {
+                "alert_deploy_approvals_channel_id": {
+                    "type": "string"
+                },
+                "alert_deploy_approvals_enabled": {
+                    "type": "boolean"
+                },
+                "bot_user_id": {
+                    "type": "string"
+                },
+                "channel_actions": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by_user_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                },
+                "workspace_name": {
+                    "type": "string"
+                }
+            }
+        },
         "db.User": {
             "type": "object",
             "properties": {
@@ -3778,6 +4019,135 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "handlers.DeployApprovalRequestList": {
+            "type": "object",
+            "required": [
+                "deploy_approval_requests"
+            ],
+            "properties": {
+                "deploy_approval_requests": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.DeployApprovalRequestResponse"
+                    }
+                }
+            }
+        },
+        "handlers.DeployApprovalRequestResponse": {
+            "type": "object",
+            "required": [
+                "created_at",
+                "git_commit_hash",
+                "message",
+                "public_id",
+                "status",
+                "target_api_token_id",
+                "updated_at"
+            ],
+            "properties": {
+                "app": {
+                    "type": "string"
+                },
+                "approval_expires_at": {
+                    "type": "string"
+                },
+                "approval_notes": {
+                    "type": "string"
+                },
+                "approved_at": {
+                    "type": "string"
+                },
+                "approved_by_email": {
+                    "type": "string"
+                },
+                "approved_by_name": {
+                    "type": "string"
+                },
+                "build_id": {
+                    "type": "string"
+                },
+                "ci_metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by_api_token_id": {
+                    "type": "string"
+                },
+                "created_by_api_token_name": {
+                    "type": "string"
+                },
+                "created_by_email": {
+                    "type": "string"
+                },
+                "created_by_name": {
+                    "type": "string"
+                },
+                "exec_commands": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "git_branch": {
+                    "type": "string"
+                },
+                "git_commit_hash": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "object_url": {
+                    "type": "string"
+                },
+                "pr_url": {
+                    "type": "string"
+                },
+                "process_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "public_id": {
+                    "type": "string"
+                },
+                "rejected_at": {
+                    "type": "string"
+                },
+                "rejected_by_email": {
+                    "type": "string"
+                },
+                "rejected_by_name": {
+                    "type": "string"
+                },
+                "release_created_at": {
+                    "type": "string"
+                },
+                "release_id": {
+                    "type": "string"
+                },
+                "release_promoted_at": {
+                    "type": "string"
+                },
+                "release_promoted_by_api_token_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "target_api_token_id": {
+                    "type": "string"
+                },
+                "target_api_token_name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -4207,6 +4577,14 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "handlers.UpdateDeployApprovalRequestStatusRequest": {
+            "type": "object",
+            "properties": {
+                "notes": {
+                    "type": "string"
                 }
             }
         },

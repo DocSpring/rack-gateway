@@ -87,7 +87,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier, cfg.AuditLogger)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
+	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService, cfg.SlackNotifier)
 	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertManager, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService)
 	settingsHandler := handlers.NewSettingsHandler(cfg.SettingsService, cfg.RBACManager)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
@@ -295,6 +295,7 @@ func Setup(router *gin.Engine, cfg *Config) {
 			slack.DELETE("", adminHandler.DeleteSlackIntegrationHandler)
 			slack.GET("/channels/list", adminHandler.ListSlackChannelsHandler)
 			slack.POST("/test", adminHandler.TestSlackNotificationHandler)
+			slack.PUT("/alerts", adminHandler.UpdateSlackAlertSettingsHandler)
 		}
 
 		convoxCLI := api.Group("/rack-proxy")

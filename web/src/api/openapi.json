@@ -460,6 +460,9 @@
                 "security": [
                     {
                         "SessionCookie": []
+                    },
+                    {
+                        "CSRFToken": []
                     }
                 ],
                 "description": "Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.",
@@ -2868,19 +2871,16 @@
                 "security": [
                     {
                         "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
                     }
                 ],
-                "description": "Lists deploy approval requests (admin).",
+                "description": "Returns a list of deploy approval requests with optional filtering",
                 "tags": [
-                    "DeployApprovalRequests"
+                    "Deploy Approvals"
                 ],
-                "summary": "List deploy approvals",
+                "summary": "List deploy approval requests",
                 "parameters": [
                     {
-                        "description": "Filter by status",
+                        "description": "Filter by status (pending, approved, rejected, expired)",
                         "name": "status",
                         "in": "query",
                         "schema": {
@@ -2888,7 +2888,7 @@
                         }
                     },
                     {
-                        "description": "Only pending/approved",
+                        "description": "Only return open requests (pending status)",
                         "name": "only_open",
                         "in": "query",
                         "schema": {
@@ -2896,7 +2896,7 @@
                         }
                     },
                     {
-                        "description": "Limit",
+                        "description": "Maximum number of results",
                         "name": "limit",
                         "in": "query",
                         "schema": {
@@ -2904,7 +2904,7 @@
                         }
                     },
                     {
-                        "description": "Offset",
+                        "description": "Offset for pagination",
                         "name": "offset",
                         "in": "query",
                         "schema": {
@@ -2933,208 +2933,6 @@
                             }
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Creates a manual approval record tied to an API token.",
-                "tags": [
-                    "DeployApprovalRequests"
-                ],
-                "summary": "Request deploy approval",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/handlers.CreateDeployApprovalRequestRequest"
-                            }
-                        }
-                    },
-                    "description": "Deploy approval request payload",
-                    "required": true
-                },
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - pending request already exists",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/deploy-approval-requests/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Returns the status of a deploy approval request.",
-                "tags": [
-                    "DeployApprovalRequests"
-                ],
-                "summary": "Get deploy approval",
-                "parameters": [
-                    {
-                        "description": "Deploy approval request public ID (UUID)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "content": {
@@ -3153,19 +2951,16 @@
                 "security": [
                     {
                         "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
                     }
                 ],
-                "description": "Approves a pending deploy approval request.",
+                "description": "Approves a deploy approval request and optionally triggers CircleCI job approval",
                 "tags": [
-                    "DeployApprovalRequests"
+                    "Deploy Approvals"
                 ],
-                "summary": "Approve deploy approval request",
+                "summary": "Approve a deploy approval request",
                 "parameters": [
                     {
-                        "description": "Deploy approval request public ID (UUID)",
+                        "description": "Deploy approval request public ID",
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -3191,134 +2986,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/deploy-approval-requests/{id}/audit-logs": {
-            "get": {
-                "security": [
-                    {
-                        "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
-                    }
-                ],
-                "description": "Returns audit logs associated with a specific deploy approval request.",
-                "tags": [
-                    "DeployApprovalRequests"
-                ],
-                "summary": "Get audit logs for deploy approval request",
-                "parameters": [
-                    {
-                        "description": "Deploy approval request public ID (UUID)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "Limit (default 100)",
-                        "name": "limit",
-                        "in": "query",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.AuditLogsResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
                             }
                         }
@@ -3351,19 +3018,16 @@
                 "security": [
                     {
                         "SessionCookie": []
-                    },
-                    {
-                        "CSRFToken": []
                     }
                 ],
-                "description": "Rejects a pending deploy approval request.",
+                "description": "Rejects a deploy approval request with optional notes",
                 "tags": [
-                    "DeployApprovalRequests"
+                    "Deploy Approvals"
                 ],
-                "summary": "Reject deploy approval request",
+                "summary": "Reject a deploy approval request",
                 "parameters": [
                     {
-                        "description": "Deploy approval request public ID (UUID)",
+                        "description": "Deploy approval request public ID",
                         "name": "id",
                         "in": "path",
                         "required": true,
@@ -3389,36 +3053,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
                                 }
                             }
                         }
@@ -3492,6 +3126,36 @@
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/integrations/slack": {
+            "get": {
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Get Slack integration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/db.SlackIntegration"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -4851,6 +4515,45 @@
                     }
                 }
             },
+            "db.SlackIntegration": {
+                "type": "object",
+                "properties": {
+                    "alert_deploy_approvals_channel_id": {
+                        "type": "string"
+                    },
+                    "alert_deploy_approvals_enabled": {
+                        "type": "boolean"
+                    },
+                    "bot_user_id": {
+                        "type": "string"
+                    },
+                    "channel_actions": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "created_by_user_id": {
+                        "type": "integer"
+                    },
+                    "id": {
+                        "type": "integer"
+                    },
+                    "scope": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "workspace_id": {
+                        "type": "string"
+                    },
+                    "workspace_name": {
+                        "type": "string"
+                    }
+                }
+            },
             "db.User": {
                 "type": "object",
                 "properties": {
@@ -5106,38 +4809,6 @@
                         }
                     },
                     "token": {
-                        "type": "string"
-                    }
-                }
-            },
-            "handlers.CreateDeployApprovalRequestRequest": {
-                "type": "object",
-                "required": [
-                    "app",
-                    "git_commit_hash",
-                    "message"
-                ],
-                "properties": {
-                    "app": {
-                        "type": "string"
-                    },
-                    "ci_metadata": {
-                        "type": "object",
-                        "additionalProperties": true
-                    },
-                    "git_branch": {
-                        "type": "string"
-                    },
-                    "git_commit_hash": {
-                        "type": "string"
-                    },
-                    "message": {
-                        "type": "string"
-                    },
-                    "target_api_token": {
-                        "type": "string"
-                    },
-                    "target_api_token_id": {
                         "type": "string"
                     }
                 }

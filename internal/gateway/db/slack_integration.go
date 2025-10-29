@@ -9,16 +9,18 @@ import (
 
 // SlackIntegration represents a Slack workspace integration
 type SlackIntegration struct {
-	ID                int64                  `json:"id"`
-	WorkspaceID       string                 `json:"workspace_id"`
-	WorkspaceName     string                 `json:"workspace_name"`
-	BotTokenEncrypted string                 `json:"-"` // Never expose
-	ChannelActions    map[string]interface{} `json:"channel_actions"`
-	CreatedAt         time.Time              `json:"created_at"`
-	UpdatedAt         time.Time              `json:"updated_at"`
-	CreatedByUserID   *int64                 `json:"created_by_user_id,omitempty"`
-	BotUserID         string                 `json:"bot_user_id,omitempty"`
-	Scope             string                 `json:"scope,omitempty"`
+	ID                            int64                  `json:"id"`
+	WorkspaceID                   string                 `json:"workspace_id"`
+	WorkspaceName                 string                 `json:"workspace_name"`
+	BotTokenEncrypted             string                 `json:"-"` // Never expose
+	ChannelActions                map[string]interface{} `json:"channel_actions"`
+	AlertDeployApprovalsEnabled   bool                   `json:"alert_deploy_approvals_enabled"`
+	AlertDeployApprovalsChannelID string                 `json:"alert_deploy_approvals_channel_id"`
+	CreatedAt                     time.Time              `json:"created_at"`
+	UpdatedAt                     time.Time              `json:"updated_at"`
+	CreatedByUserID               *int64                 `json:"created_by_user_id,omitempty"`
+	BotUserID                     string                 `json:"bot_user_id,omitempty"`
+	Scope                         string                 `json:"scope,omitempty"`
 }
 
 // GetSlackIntegration retrieves the Slack integration (only one per gateway)
@@ -26,7 +28,8 @@ func (d *Database) GetSlackIntegration() (*SlackIntegration, error) {
 	query := `
 		SELECT
 			id, workspace_id, workspace_name, bot_token_encrypted,
-			channel_actions, created_at, updated_at, created_by_user_id,
+			channel_actions, alert_deploy_approvals_enabled, alert_deploy_approvals_channel_id,
+			created_at, updated_at, created_by_user_id,
 			bot_user_id, scope
 		FROM slack_integration
 		LIMIT 1
@@ -41,6 +44,8 @@ func (d *Database) GetSlackIntegration() (*SlackIntegration, error) {
 		&si.WorkspaceName,
 		&si.BotTokenEncrypted,
 		&channelActionsJSON,
+		&si.AlertDeployApprovalsEnabled,
+		&si.AlertDeployApprovalsChannelID,
 		&si.CreatedAt,
 		&si.UpdatedAt,
 		&si.CreatedByUserID,
@@ -72,8 +77,9 @@ func (d *Database) CreateSlackIntegration(workspaceID, workspaceName, botTokenEn
 	query := `
 		INSERT INTO slack_integration (
 			workspace_id, workspace_name, bot_token_encrypted,
-			channel_actions, created_by_user_id, bot_user_id, scope
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			channel_actions, alert_deploy_approvals_enabled, alert_deploy_approvals_channel_id,
+			created_by_user_id, bot_user_id, scope
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -84,6 +90,8 @@ func (d *Database) CreateSlackIntegration(workspaceID, workspaceName, botTokenEn
 		workspaceName,
 		botTokenEncrypted,
 		channelActionsJSON,
+		false, // alert_deploy_approvals_enabled defaults to false
+		"",    // alert_deploy_approvals_channel_id defaults to empty
 		createdByUserID,
 		botUserID,
 		scope,
@@ -97,6 +105,8 @@ func (d *Database) CreateSlackIntegration(workspaceID, workspaceName, botTokenEn
 	si.WorkspaceName = workspaceName
 	si.BotTokenEncrypted = botTokenEncrypted
 	si.ChannelActions = channelActions
+	si.AlertDeployApprovalsEnabled = false
+	si.AlertDeployApprovalsChannelID = ""
 	si.CreatedByUserID = createdByUserID
 	si.BotUserID = botUserID
 	si.Scope = scope
@@ -137,4 +147,29 @@ func (d *Database) DeleteSlackIntegration() error {
 	query := `DELETE FROM slack_integration`
 	_, err := d.db.Exec(query)
 	return err
+}
+
+// UpdateSlackAlertSettings updates the deploy approval alert configuration
+func (d *Database) UpdateSlackAlertSettings(deployApprovalsEnabled bool, deployApprovalsChannelID string) error {
+	query := `
+		UPDATE slack_integration
+		SET alert_deploy_approvals_enabled = $1,
+		    alert_deploy_approvals_channel_id = $2,
+		    updated_at = NOW()
+	`
+
+	result, err := d.db.Exec(query, deployApprovalsEnabled, deployApprovalsChannelID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("no Slack integration found to update")
+	}
+
+	return nil
 }

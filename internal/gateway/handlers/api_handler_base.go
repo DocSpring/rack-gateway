@@ -27,6 +27,12 @@ type APIHandler struct {
 	mfaSettings     *db.MFASettings
 	auditLogger     *audit.Logger
 	settingsService *settings.Service
+	slackNotifier   SlackNotifier
+}
+
+// SlackNotifier defines the interface for sending Slack notifications
+type SlackNotifier interface {
+	NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, gatewayDomain string) error
 }
 
 var (
@@ -42,6 +48,7 @@ func NewAPIHandler(
 	mfaSettings *db.MFASettings,
 	auditLogger *audit.Logger,
 	settingsService *settings.Service,
+	slackNotifier SlackNotifier,
 ) *APIHandler {
 	return &APIHandler{
 		rbac:            rbac,
@@ -51,6 +58,7 @@ func NewAPIHandler(
 		mfaSettings:     mfaSettings,
 		auditLogger:     auditLogger,
 		settingsService: settingsService,
+		slackNotifier:   slackNotifier,
 	}
 }
 

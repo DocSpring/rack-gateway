@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
+import { useAuth } from '@/contexts/auth-context'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
 import { QUERY_KEYS } from '@/lib/query-keys'
@@ -10,17 +11,16 @@ import { GitHubCard } from '@/pages/integrations/github-card'
 import { SlackCard } from '@/pages/integrations/slack-card'
 import type {
   ChannelConfig,
-  CircleCISettings,
-  GitHubSettings,
   SlackChannel,
   SlackConfig,
   SlackIntegration,
-} from '@/pages/integrations/types'
+} from '@/pages/integrations/slack-types'
 import { getErrorMessage, hasStatus } from '@/pages/integrations/utils'
 
 export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const queryClient = useQueryClient()
+  const { user } = useAuth()
 
   const { data: slackConfig } = useQuery<SlackConfig>({
     queryKey: ['slack-config'],
@@ -33,34 +33,6 @@ export function IntegrationsPage() {
           return { configured: false }
         }
         return { configured: true }
-      }
-    },
-  })
-
-  const { data: circleCISettings } = useQuery<CircleCISettings | null>({
-    queryKey: ['circleci-settings'],
-    queryFn: async () => {
-      try {
-        return await api.get<CircleCISettings>('/api/v1/settings/circleci')
-      } catch (error: unknown) {
-        if (hasStatus(error, 404)) {
-          return null
-        }
-        throw error
-      }
-    },
-  })
-
-  const { data: gitHubSettings } = useQuery<GitHubSettings | null>({
-    queryKey: ['github-settings'],
-    queryFn: async () => {
-      try {
-        return await api.get<GitHubSettings>('/api/v1/settings/github')
-      } catch (error: unknown) {
-        if (hasStatus(error, 404)) {
-          return null
-        }
-        throw error
       }
     },
   })
@@ -152,6 +124,23 @@ export function IntegrationsPage() {
     },
   })
 
+  const updateAlertsMutation = useMutation({
+    mutationFn: async ({ enabled, channelId }: { enabled: boolean; channelId: string }) => {
+      await api.put('/api/v1/integrations/slack/alerts', {
+        deploy_approvals_enabled: enabled,
+        deploy_approvals_channel_id: channelId,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SLACK_INTEGRATION })
+      toast.success('Alert settings updated')
+    },
+    onError: (error: unknown) => {
+      const message = getErrorMessage(error, 'Failed to update alert settings')
+      toast.error(message)
+    },
+  })
+
   const handleConnect = () => {
     setIsConnecting(true)
     connectMutation.mutate()
@@ -164,14 +153,15 @@ export function IntegrationsPage() {
   }
 
   const handleUpdateChannel = (key: string, channelId: string, channelName: string) => {
-    if (!integration) {
+    if (!integration?.channel_actions) {
       return
     }
 
+    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
     updateChannelsMutation.mutate({
-      ...integration.channel_actions,
+      ...channelActions,
       [key]: {
-        ...integration.channel_actions[key],
+        ...channelActions[key],
         id: channelId,
         name: channelName,
       },
@@ -179,13 +169,14 @@ export function IntegrationsPage() {
   }
 
   const handleAddAction = (key: string, action: string) => {
-    if (!(integration && action.trim())) {
+    if (!(integration?.channel_actions && action.trim())) {
       return
     }
 
-    const currentConfig = integration.channel_actions[key]
+    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
+    const currentConfig = channelActions[key]
     updateChannelsMutation.mutate({
-      ...integration.channel_actions,
+      ...channelActions,
       [key]: {
         ...currentConfig,
         actions: [...currentConfig.actions, action.trim()],
@@ -194,13 +185,14 @@ export function IntegrationsPage() {
   }
 
   const handleRemoveAction = (key: string, actionIndex: number) => {
-    if (!integration) {
+    if (!integration?.channel_actions) {
       return
     }
 
-    const currentConfig = integration.channel_actions[key]
+    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
+    const currentConfig = channelActions[key]
     updateChannelsMutation.mutate({
-      ...integration.channel_actions,
+      ...channelActions,
       [key]: {
         ...currentConfig,
         actions: currentConfig.actions.filter((_, index) => index !== actionIndex),
@@ -209,13 +201,14 @@ export function IntegrationsPage() {
   }
 
   const handleAddChannel = (channelName: string) => {
-    if (!(integration && channelName.trim())) {
+    if (!(integration?.channel_actions && channelName.trim())) {
       return
     }
 
     const key = channelName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
     updateChannelsMutation.mutate({
-      ...integration.channel_actions,
+      ...channelActions,
       [key]: {
         id: null,
         name: channelName,
@@ -225,17 +218,22 @@ export function IntegrationsPage() {
   }
 
   const handleRemoveChannel = (key: string) => {
-    if (!integration) {
+    if (!integration?.channel_actions) {
       return
     }
 
-    const remaining = { ...integration.channel_actions }
+    const channelActions = integration.channel_actions as Record<string, ChannelConfig>
+    const remaining = { ...channelActions }
     delete remaining[key]
     updateChannelsMutation.mutate(remaining)
   }
 
   const handleTestNotification = (channelId: string) => {
     testMutation.mutate(channelId)
+  }
+
+  const handleUpdateDeployApprovalAlerts = (enabled: boolean, channelId: string) => {
+    updateAlertsMutation.mutate({ enabled, channelId })
   }
 
   if (isLoading) {
@@ -261,8 +259,8 @@ export function IntegrationsPage() {
 
       <div className="space-y-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <CircleCiCard settings={circleCISettings ?? undefined} />
-          <GitHubCard settings={gitHubSettings ?? undefined} />
+          <CircleCiCard enabled={user?.integrations?.circleci ?? false} />
+          <GitHubCard enabled={user?.integrations?.github ?? false} />
         </div>
 
         <SlackCard
@@ -279,8 +277,10 @@ export function IntegrationsPage() {
           onRemoveChannel={handleRemoveChannel}
           onTestNotification={handleTestNotification}
           onUpdateChannel={handleUpdateChannel}
+          onUpdateDeployApprovalAlerts={handleUpdateDeployApprovalAlerts}
           slackConfigured={slackConfigured}
           testPending={testMutation.isPending}
+          updateAlertsPending={updateAlertsMutation.isPending}
           updatePending={updateChannelsMutation.isPending}
         />
       </div>

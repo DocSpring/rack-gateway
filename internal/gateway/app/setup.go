@@ -152,6 +152,7 @@ func (a *App) initializeServices() error {
 	// Initialize Slack notifier (optional, won't fail if not configured)
 	slackNotifier := slackpkg.NewNotifier(a.Database)
 	auditLogger.SetSlackNotifier(slackNotifier)
+	a.SlackNotifier = slackNotifier
 
 	// Rack TLS certificate manager
 	if a.Config.RackTLSPinningEnabled {

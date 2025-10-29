@@ -6,6 +6,4 @@
  * OpenAPI spec version: 1.0
  */
 
-export type HandlersDeployApprovalRequestResponseExecCommands = {
-  [key: string]: unknown;
-};
+export type DbSlackIntegrationChannelActions = { [key: string]: unknown };

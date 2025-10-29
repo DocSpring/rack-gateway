@@ -2684,19 +2684,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List deploy approvals
-         * @description Lists deploy approval requests (admin).
+         * List deploy approval requests
+         * @description Returns a list of deploy approval requests with optional filtering
          */
         get: {
             parameters: {
                 query?: {
-                    /** @description Filter by status */
+                    /** @description Filter by status (pending, approved, rejected, expired) */
                     status?: string;
-                    /** @description Only pending/approved */
+                    /** @description Only return open requests (pending status) */
                     only_open?: boolean;
-                    /** @description Limit */
+                    /** @description Maximum number of results */
                     limit?: number;
-                    /** @description Offset */
+                    /** @description Offset for pagination */
                     offset?: number;
                 };
                 header?: never;
@@ -2716,193 +2716,6 @@ export interface paths {
                 };
                 /** @description Bad Request */
                 400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Request deploy approval
-         * @description Creates a manual approval record tied to an API token.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            /** @description Deploy approval request payload */
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["handlers.CreateDeployApprovalRequestRequest"];
-                };
-            };
-            responses: {
-                /** @description Created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Conflict - pending request already exists */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/deploy-approval-requests/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get deploy approval
-         * @description Returns the status of a deploy approval request.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description Deploy approval request public ID (UUID) */
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2939,15 +2752,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Approve deploy approval request
-         * @description Approves a pending deploy approval request.
+         * Approve a deploy approval request
+         * @description Approves a deploy approval request and optionally triggers CircleCI job approval
          */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy approval request public ID (UUID) */
+                    /** @description Deploy approval request public ID */
                     id: string;
                 };
                 cookie?: never;
@@ -2968,33 +2781,6 @@ export interface paths {
                         "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
                     };
                 };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
                 /** @description Not Found */
                 404: {
                     headers: {
@@ -3015,96 +2801,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/deploy-approval-requests/{id}/audit-logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get audit logs for deploy approval request
-         * @description Returns audit logs associated with a specific deploy approval request.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Limit (default 100) */
-                    limit?: number;
-                };
-                header?: never;
-                path: {
-                    /** @description Deploy approval request public ID (UUID) */
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.AuditLogsResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Internal Server Error */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3121,15 +2817,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reject deploy approval request
-         * @description Rejects a pending deploy approval request.
+         * Reject a deploy approval request
+         * @description Rejects a deploy approval request with optional notes
          */
         post: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description Deploy approval request public ID (UUID) */
+                    /** @description Deploy approval request public ID */
                     id: string;
                 };
                 cookie?: never;
@@ -3148,33 +2844,6 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Unauthorized */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
-                    };
-                };
-                /** @description Forbidden */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["handlers.ErrorResponse"];
                     };
                 };
                 /** @description Not Found */
@@ -3273,6 +2942,51 @@ export interface paths {
                 };
                 /** @description Internal Server Error */
                 500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/slack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Slack integration */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["db.SlackIntegration"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -4434,6 +4148,21 @@ export interface components {
             fingerprint?: string;
             pem?: string;
         };
+        "db.SlackIntegration": {
+            alert_deploy_approvals_channel_id?: string;
+            alert_deploy_approvals_enabled?: boolean;
+            bot_user_id?: string;
+            channel_actions?: {
+                [key: string]: unknown;
+            };
+            created_at?: string;
+            created_by_user_id?: number;
+            id?: number;
+            scope?: string;
+            updated_at?: string;
+            workspace_id?: string;
+            workspace_name?: string;
+        };
         "db.User": {
             created_at?: string;
             created_by_email?: string;
@@ -4509,17 +4238,6 @@ export interface components {
             name: string;
             permissions: string[];
             token: string;
-        };
-        "handlers.CreateDeployApprovalRequestRequest": {
-            app: string;
-            ci_metadata?: {
-                [key: string]: unknown;
-            };
-            git_branch?: string;
-            git_commit_hash: string;
-            message: string;
-            target_api_token?: string;
-            target_api_token_id?: string;
         };
         "handlers.CreateUserRequest": {
             email: string;

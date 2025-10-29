@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -69,13 +68,14 @@ func applyPoolConfig(db *sql.DB, poolConfig *PoolConfig) {
 	db.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
 }
 
-// poolConfigFromEnv loads pool configuration from environment variables with defaults
+// poolConfigFromEnv returns default pool configuration values.
+// Configuration values should be passed in via PoolConfig parameter instead of reading from env.
 func poolConfigFromEnv() *PoolConfig {
 	return &PoolConfig{
-		MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
-		MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),
-		ConnMaxLifetime: getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
-		ConnMaxIdleTime: getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute),
+		MaxOpenConns:    25,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 30 * time.Minute,
+		ConnMaxIdleTime: 10 * time.Minute,
 	}
 }
 
@@ -431,22 +431,4 @@ func relativePath(file string) string {
 		return filepath.Base(file)
 	}
 	return rel
-}
-
-func getEnvInt(key string, defaultVal int) int {
-	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
-	}
-	return defaultVal
-}
-
-func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
-	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
-		if d, err := time.ParseDuration(val); err == nil {
-			return d
-		}
-	}
-	return defaultVal
 }

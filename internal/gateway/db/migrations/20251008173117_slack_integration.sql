@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS slack_integration (
   -- Maps Slack channels to arrays of audit log action patterns
   channel_actions JSONB NOT NULL DEFAULT '{}',
 
+  -- Deploy approval alerts (separate from audit notifications)
+  alert_deploy_approvals_enabled BOOLEAN DEFAULT FALSE,
+  alert_deploy_approvals_channel_id TEXT,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,

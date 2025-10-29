@@ -18,6 +18,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ListDeployApprovalRequests godoc
+// @Summary List deploy approval requests
+// @Description Returns a list of deploy approval requests with optional filtering
+// @Tags Deploy Approvals
+// @Produce json
+// @Param status query string false "Filter by status (pending, approved, rejected, expired)"
+// @Param only_open query boolean false "Only return open requests (pending status)"
+// @Param limit query integer false "Maximum number of results"
+// @Param offset query integer false "Offset for pagination"
+// @Success 200 {object} DeployApprovalRequestList
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /deploy-approval-requests [get]
 func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 	if _, ok := h.requireDeployApprovalAccess(c, rbac.ActionApprove); !ok {
 		return
@@ -64,6 +78,19 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, DeployApprovalRequestList{DeployApprovalRequests: responses})
 }
 
+// ApproveDeployApprovalRequest godoc
+// @Summary Approve a deploy approval request
+// @Description Approves a deploy approval request and optionally triggers CircleCI job approval
+// @Tags Deploy Approvals
+// @Accept json
+// @Produce json
+// @Param id path string true "Deploy approval request public ID"
+// @Param body body UpdateDeployApprovalRequestStatusRequest false "Approval notes"
+// @Success 200 {object} DeployApprovalRequestResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /deploy-approval-requests/{id}/approve [post]
 func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	input, ok := h.parseDeployApprovalStatusUpdateRequest(c)
 	if !ok {
@@ -193,6 +220,19 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
+// RejectDeployApprovalRequest godoc
+// @Summary Reject a deploy approval request
+// @Description Rejects a deploy approval request with optional notes
+// @Tags Deploy Approvals
+// @Accept json
+// @Produce json
+// @Param id path string true "Deploy approval request public ID"
+// @Param body body UpdateDeployApprovalRequestStatusRequest false "Rejection notes"
+// @Success 200 {object} DeployApprovalRequestResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /deploy-approval-requests/{id}/reject [post]
 func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	input, ok := h.parseDeployApprovalStatusUpdateRequest(c)
 	if !ok {

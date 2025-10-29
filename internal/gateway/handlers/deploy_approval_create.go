@@ -15,6 +15,7 @@ import (
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
+	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
 )
 
@@ -256,6 +257,14 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	}); err != nil {
 		// best-effort logging; ignore error
 		_ = err
+	}
+
+	// Send Slack deploy approval alert (separate from audit notification)
+	if h.slackNotifier != nil && h.config != nil && h.config.Domain != "" {
+		if err := h.slackNotifier.NotifyDeployApprovalCreated(record, h.config.Domain); err != nil {
+			gtwlog.Errorf("deploy approvals: failed to send Slack alert: %v", err)
+			sentry.CaptureException(err)
+		}
 	}
 
 	// Post PR comment if GitHub integration is enabled and PR was found

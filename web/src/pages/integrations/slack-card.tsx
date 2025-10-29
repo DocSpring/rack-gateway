@@ -6,7 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 import { AddChannelButton } from '@/pages/integrations/add-channel-button'
 import { ChannelConfigCard } from '@/pages/integrations/channel-config-card'
-import type { SlackChannel, SlackIntegration } from '@/pages/integrations/types'
+import { DeployApprovalAlertsConfig } from '@/pages/integrations/deploy-approval-alerts-config'
+import type {
+  ChannelConfig,
+  SlackChannel,
+  SlackIntegration,
+} from '@/pages/integrations/slack-types'
 
 type SlackCardProps = {
   integration: SlackIntegration | null | undefined
@@ -17,6 +22,7 @@ type SlackCardProps = {
   disconnectPending: boolean
   updatePending: boolean
   testPending: boolean
+  updateAlertsPending: boolean
   onConnect: () => void
   onDisconnect: () => void
   onUpdateChannel: (key: string, channelId: string, channelName: string) => void
@@ -25,6 +31,7 @@ type SlackCardProps = {
   onRemoveChannel: (key: string) => void
   onAddChannel: (channelName: string) => void
   onTestNotification: (channelId: string) => void
+  onUpdateDeployApprovalAlerts: (enabled: boolean, channelId: string) => void
 }
 
 export function SlackCard({
@@ -36,6 +43,7 @@ export function SlackCard({
   disconnectPending,
   updatePending,
   testPending,
+  updateAlertsPending,
   onConnect,
   onDisconnect,
   onUpdateChannel,
@@ -44,6 +52,7 @@ export function SlackCard({
   onRemoveChannel,
   onAddChannel,
   onTestNotification,
+  onUpdateDeployApprovalAlerts,
 }: SlackCardProps) {
   if (!slackConfigured) {
     return null
@@ -93,30 +102,53 @@ export function SlackCard({
               </AlertDescription>
             </Alert>
 
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Channel Configuration</h3>
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-semibold text-lg">Channel Configuration</h3>
+                <p className="text-muted-foreground text-sm">
+                  Configure which channels receive audit log notifications
+                </p>
+              </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {Object.entries(integration.channel_actions).map(([key, config]) => (
-                  <ChannelConfigCard
-                    channels={channels || []}
-                    config={config}
-                    configKey={key}
-                    isTesting={testPending}
-                    isUpdating={updatePending}
-                    key={key}
-                    onAddAction={onAddAction}
-                    onRemoveAction={onRemoveAction}
-                    onRemoveChannel={onRemoveChannel}
-                    onTestNotification={onTestNotification}
-                    onUpdateChannel={onUpdateChannel}
-                  />
-                ))}
+                {integration.channel_actions &&
+                  Object.entries(integration.channel_actions).map(([key, config]) => (
+                    <ChannelConfigCard
+                      channels={channels || []}
+                      config={config as ChannelConfig}
+                      configKey={key}
+                      isTesting={testPending}
+                      isUpdating={updatePending}
+                      key={key}
+                      onAddAction={onAddAction}
+                      onRemoveAction={onRemoveAction}
+                      onRemoveChannel={onRemoveChannel}
+                      onTestNotification={onTestNotification}
+                      onUpdateChannel={onUpdateChannel}
+                    />
+                  ))}
               </div>
 
               <div className="mt-6 flex justify-end">
                 <AddChannelButton isUpdating={updatePending} onAdd={onAddChannel} />
               </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-6">
+              <div>
+                <h3 className="font-semibold text-lg">Alert Configuration</h3>
+                <p className="text-muted-foreground text-sm">
+                  Configure dedicated alerts for specific events
+                </p>
+              </div>
+
+              <DeployApprovalAlertsConfig
+                channelId={integration.alert_deploy_approvals_channel_id ?? ''}
+                channels={channels}
+                enabled={integration.alert_deploy_approvals_enabled ?? false}
+                isUpdating={updateAlertsPending}
+                onChange={onUpdateDeployApprovalAlerts}
+              />
             </div>
           </div>
         ) : (

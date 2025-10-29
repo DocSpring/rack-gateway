@@ -12,6 +12,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
+	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
@@ -34,4 +35,5 @@ type Gateway struct {
 	AuditLogger      *audit.Logger
 	DefaultRack      string
 	SecurityNotifier *security.Notifier
+	SlackNotifier    *slack.Notifier
 }

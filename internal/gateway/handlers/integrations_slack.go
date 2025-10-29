@@ -154,6 +154,12 @@ func (h *AdminHandler) SlackOAuthCallbackHandler(c *gin.Context) {
 }
 
 // GetSlackIntegrationHandler retrieves the current Slack integration
+// @Summary Get Slack integration
+// @Tags integrations
+// @Produce json
+// @Success 200 {object} db.SlackIntegration
+// @Failure 404 {object} ErrorResponse
+// @Router /integrations/slack [get]
 func (h *AdminHandler) GetSlackIntegrationHandler(c *gin.Context) {
 	if !h.enforceIntegrationPermission(c, rbac.ActionRead) {
 		return
@@ -293,5 +299,38 @@ func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
 	}
 
 	gtwlog.Infof("slack test notification: successfully sent test message to channel %s", req.ChannelID)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// UpdateSlackAlertSettingsHandler updates deploy approval alert configuration
+func (h *AdminHandler) UpdateSlackAlertSettingsHandler(c *gin.Context) {
+	if !h.enforceIntegrationPermission(c, rbac.ActionManage) {
+		return
+	}
+
+	var req struct {
+		DeployApprovalsEnabled   bool   `json:"deploy_approvals_enabled"`
+		DeployApprovalsChannelID string `json:"deploy_approvals_channel_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Validate channel ID format if provided
+	if req.DeployApprovalsChannelID != "" && !strings.HasPrefix(req.DeployApprovalsChannelID, "C") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid channel ID format"})
+		return
+	}
+
+	if err := h.database.UpdateSlackAlertSettings(req.DeployApprovalsEnabled, req.DeployApprovalsChannelID); err != nil {
+		if err.Error() == "no Slack integration found to update" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration configured"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update alert settings"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

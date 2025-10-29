@@ -3,15 +3,11 @@ import { CheckCircle2, Circle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-import type { GitHubSettings } from '@/pages/integrations/types'
-
 type GitHubCardProps = {
-  settings?: GitHubSettings | null
+  enabled: boolean
 }
 
-export function GitHubCard({ settings }: GitHubCardProps) {
-  const enabled = Boolean(settings?.token?.trim())
-
+export function GitHubCard({ enabled }: GitHubCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -45,23 +41,11 @@ export function GitHubCard({ settings }: GitHubCardProps) {
                 approval requests.
               </AlertDescription>
             </Alert>
-            <div className="rounded border bg-muted p-4">
-              <div className="space-y-2">
-                {settings?.repo && (
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">Repository:</span>
-                    <code className="rounded bg-background px-2 py-1">{settings.repo}</code>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">API Token:</span>
-                  <span className="text-muted-foreground">Configured</span>
-                </div>
-              </div>
-            </div>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-sm">
               API token set via{' '}
               <code className="ml-1 rounded bg-muted px-1 py-0.5">GITHUB_TOKEN</code> env var.
+            </p>
+            <p className="text-muted-foreground text-sm">
               Per-app repositories are configured in app settings.
             </p>
           </div>
