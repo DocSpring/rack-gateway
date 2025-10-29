@@ -41,7 +41,7 @@ includes:
     vars:
       STACK: test
       PROFILE: test
-      SERVICES: "mock-oauth-test mock-convox-test gateway-api-test gateway-api-test-2 gateway-api-test-3 gateway-api-test-4 gateway-api-test-5 gateway-api-test-6 gateway-api-test-7"
+      SERVICES: "mock-oauth-test mock-convox-test gateway-api-test"
       GATEWAY_SERVICE: "gateway-api-test"
       WEB_SERVICE: ""
       DEPENDENCY_SERVICES: "postgres"

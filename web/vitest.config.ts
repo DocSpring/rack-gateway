@@ -1,9 +1,7 @@
 import path from 'node:path'
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { defineConfig, type UserConfigExport } from 'vitest/config'
 
-export default defineConfig({
-  plugins: [react()],
+const config: UserConfigExport = {
   resolve: {
     alias: {
       '@': path.resolve(process.cwd(), 'src'),
@@ -20,4 +18,6 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
     },
   },
-})
+}
+
+export default defineConfig(config)

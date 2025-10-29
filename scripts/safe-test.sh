@@ -205,16 +205,48 @@ EOF
 
 ensure_local_database
 
+# Limit go test parallelism unless caller overrides via -parallel or GO_TEST_PARALLEL
+PARALLEL_FLAG="-parallel=${GO_TEST_PARALLEL:-4}"
+skip_next=0
+for arg in "$@"; do
+    if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        PARALLEL_FLAG=""
+        break
+    fi
+    case "$arg" in
+        -parallel)
+            skip_next=1
+            ;;
+        -parallel=*)
+            PARALLEL_FLAG=""
+            break
+            ;;
+    esac
+done
+
 # Use gotestsum for better output formatting if available
 if command -v gotestsum >/dev/null 2>&1; then
     # Use dots format by default (shows . for pass, F for fail)
     # In CI, use testname format to show all passes for better debugging
     if [ -n "${CI:-}" ]; then
-        gotestsum --format testname -- "$@"
+        if [ -n "$PARALLEL_FLAG" ]; then
+            gotestsum --format testname -- "$PARALLEL_FLAG" "$@"
+        else
+            gotestsum --format testname -- "$@"
+        fi
     else
-        gotestsum --format dots -- "$@"
+        if [ -n "$PARALLEL_FLAG" ]; then
+            gotestsum --format dots -- "$PARALLEL_FLAG" "$@"
+        else
+            gotestsum --format dots -- "$@"
+        fi
     fi
 else
     echo "Warning: gotestsum not found, using plain go test. Run 'task go:tools' to install." >&2
-    go test "$@"
+    if [ -n "$PARALLEL_FLAG" ]; then
+        go test "$PARALLEL_FLAG" "$@"
+    else
+        go test "$@"
+    fi
 fi

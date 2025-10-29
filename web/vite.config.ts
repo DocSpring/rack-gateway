@@ -1,7 +1,7 @@
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type PluginOption } from 'vite'
 import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
@@ -11,23 +11,23 @@ export default defineConfig(() => {
     main: path.resolve(process.cwd(), 'index.html'),
   }
 
+  const reactPlugin = react() as PluginOption
+  const tailwindPlugin = tailwindcss() as PluginOption
+  const gzipCompression = viteCompression({
+    algorithm: 'gzip',
+    ext: '.gz',
+    filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
+  }) as PluginOption
+  const brotliCompression = viteCompression({
+    algorithm: 'brotliCompress',
+    ext: '.br',
+    filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
+  }) as PluginOption
+
   return {
     // Serve UI consistently under /app/ in all envs
     base: '/app/',
-    plugins: [
-      react(),
-      tailwindcss(),
-      viteCompression({
-        algorithm: 'gzip',
-        ext: '.gz',
-        filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
-      }),
-      viteCompression({
-        algorithm: 'brotliCompress',
-        ext: '.br',
-        filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
-      }),
-    ],
+    plugins: [reactPlugin, tailwindPlugin, gzipCompression, brotliCompression],
     build: {
       manifest: true,
       minify: false,

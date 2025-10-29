@@ -21,12 +21,12 @@ const parseList = (value) =>
 
 const inferShards = () => {
   if (env.WEB_E2E_SHARDS) {
-    return toInt(env.WEB_E2E_SHARDS, env.CI ? 1 : 7)
+    return toInt(env.WEB_E2E_SHARDS, env.CI ? 1 : 3)
   }
   if (env.CI) {
     return 1
   }
-  return 7
+  return 3
 }
 
 const shards = Math.max(1, inferShards())

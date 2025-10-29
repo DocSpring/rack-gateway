@@ -24,7 +24,7 @@ determine_web_e2e_shards() {
   if [ "${CI:-}" = "true" ]; then
     echo 1
   else
-    echo 7
+    echo 3
   fi
 }
 
