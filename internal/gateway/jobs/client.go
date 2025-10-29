@@ -98,3 +98,13 @@ func (c *Client) Insert(ctx context.Context, args river.JobArgs, opts *river.Ins
 func (c *Client) InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error) {
 	return c.river.InsertTx(ctx, tx, args, opts)
 }
+
+// JobList lists jobs with the given parameters
+func (c *Client) JobList(ctx context.Context, params *river.JobListParams) (*river.JobListResult, error) {
+	return c.river.JobList(ctx, params)
+}
+
+// JobGet retrieves a job by ID
+func (c *Client) JobGet(ctx context.Context, id int64) (*rivertype.JobRow, error) {
+	return c.river.JobGet(ctx, id)
+}

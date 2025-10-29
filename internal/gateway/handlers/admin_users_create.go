@@ -2,15 +2,18 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
-	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
+	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
+	"github.com/riverqueue/river"
 )
 
 // CreateUser godoc
@@ -98,7 +101,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 }
 
 func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) {
-	if h == nil || h.emailSender == nil {
+	if h == nil || h.jobsClient == nil {
 		return
 	}
 	inviter := h.currentAuthUser(c)
@@ -112,16 +115,26 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 	rack := h.rackDisplay()
 	base := h.publicBaseURL(c)
 	recipient := strings.TrimSpace(req.Email)
+
+	// Enqueue welcome email to new user
 	if recipient != "" {
-		subjectUser := fmt.Sprintf("Rack Gateway (%s): You've been granted access", rack)
-		textUser, htmlUser, err := emailtemplates.RenderWelcome(rack, recipient, inviterEmail, base, base)
-		if err != nil || (textUser == "" && htmlUser == "") {
-			roles := strings.Join(req.Roles, ", ")
-			textUser = fmt.Sprintf("You've been granted access to the Rack Gateway (%s) with roles: %s.", rack, roles)
+		_, err := h.jobsClient.Insert(c.Request.Context(), jobemail.WelcomeArgs{
+			Email:        recipient,
+			Name:         req.Name,
+			Roles:        req.Roles,
+			InviterEmail: inviterEmail,
+			Rack:         rack,
+			BaseURL:      base,
+		}, &river.InsertOpts{
+			Queue:       jobs.QueueNotifications,
+			MaxAttempts: jobs.MaxAttemptsNotification,
+		})
+		if err != nil {
+			log.Printf("failed to enqueue welcome email to %s: %v", recipient, err)
 		}
-		_ = h.emailSender.Send(recipient, subjectUser, textUser, htmlUser)
 	}
 
+	// Enqueue admin notification
 	admins := h.getAdminEmails()
 	if len(admins) == 0 {
 		return
@@ -138,14 +151,19 @@ func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) 
 	}
 	sort.Strings(filtered)
 	recipients := prioritiseInviterFirst(filtered, inviterEmail)
-	creator := inviterEmail
-	if creator == "" {
-		creator = "an administrator"
+
+	_, err := h.jobsClient.Insert(c.Request.Context(), jobemail.UserAddedAdminArgs{
+		AdminEmails:  recipients,
+		NewUserEmail: req.Email,
+		NewUserName:  req.Name,
+		Roles:        req.Roles,
+		CreatorEmail: inviterEmail,
+		Rack:         rack,
+	}, &river.InsertOpts{
+		Queue:       jobs.QueueNotifications,
+		MaxAttempts: jobs.MaxAttemptsNotification,
+	})
+	if err != nil {
+		log.Printf("failed to enqueue user added admin emails: %v", err)
 	}
-	subjectAdmin := fmt.Sprintf("Rack Gateway (%s): %s added %s (%s)", rack, creator, req.Email, req.Name)
-	textAdmin, htmlAdmin, err := emailtemplates.RenderUserAddedAdmin(rack, creator, req.Email, req.Name, req.Roles)
-	if err != nil || (textAdmin == "" && htmlAdmin == "") {
-		textAdmin = fmt.Sprintf("%s added new user %s (%s) with roles: %s.", creator, req.Email, req.Name, strings.Join(req.Roles, ", "))
-	}
-	_ = h.emailSender.SendMany(recipients, subjectAdmin, textAdmin, htmlAdmin)
 }

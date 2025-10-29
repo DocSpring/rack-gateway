@@ -24,20 +24,21 @@ func _() {
 	_ = x[ResourceAPIToken-13]
 	_ = x[ResourceDeployApprovalRequest-14]
 	_ = x[ResourceIntegration-15]
-	_ = x[ResourceSecret-16]
-	_ = x[ResourceSetting-17]
-	_ = x[ResourceUser-18]
-	_ = x[ResourceAuth-19]
-	_ = x[ResourceMFABackupCodes-20]
-	_ = x[ResourceMFAMethod-21]
-	_ = x[ResourceMFAPreferences-22]
-	_ = x[ResourceMFAVerification-23]
-	_ = x[ResourceTrustedDevice-24]
+	_ = x[ResourceJob-16]
+	_ = x[ResourceSecret-17]
+	_ = x[ResourceSetting-18]
+	_ = x[ResourceUser-19]
+	_ = x[ResourceAuth-20]
+	_ = x[ResourceMFABackupCodes-21]
+	_ = x[ResourceMFAMethod-22]
+	_ = x[ResourceMFAPreferences-23]
+	_ = x[ResourceMFAVerification-24]
+	_ = x[ResourceTrustedDevice-25]
 }
 
-const _Resource_name = "appbuildcertdeployenvinstancelogobjectprocessrackregistryreleaseresourceapi_tokendeploy_approval_requestintegrationsecretsettinguserauthmfa_backup_codesmfa_methodmfa_preferencesmfa_verificationtrusted_device"
+const _Resource_name = "appbuildcertdeployenvinstancelogobjectprocessrackregistryreleaseresourceapi_tokendeploy_approval_requestintegrationjobsecretsettinguserauthmfa_backup_codesmfa_methodmfa_preferencesmfa_verificationtrusted_device"
 
-var _Resource_index = [...]uint8{0, 3, 8, 12, 18, 21, 29, 32, 38, 45, 49, 57, 64, 72, 81, 104, 115, 121, 128, 132, 136, 152, 162, 177, 193, 207}
+var _Resource_index = [...]uint8{0, 3, 8, 12, 18, 21, 29, 32, 38, 45, 49, 57, 64, 72, 81, 104, 115, 118, 124, 131, 135, 139, 155, 165, 180, 196, 210}
 
 func (i Resource) String() string {
 	idx := int(i) - 0

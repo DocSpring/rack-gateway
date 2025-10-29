@@ -25,6 +25,7 @@ require (
 	github.com/rickb777/servefiles/v3 v3.9.10
 	github.com/riverqueue/river v0.26.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.26.0
+	github.com/riverqueue/river/rivertype v0.26.0
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.2
@@ -180,7 +181,6 @@ require (
 	github.com/rickb777/path v1.3.1 // indirect
 	github.com/riverqueue/river/riverdriver v0.26.0 // indirect
 	github.com/riverqueue/river/rivershared v0.26.0 // indirect
-	github.com/riverqueue/river/rivertype v0.26.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect

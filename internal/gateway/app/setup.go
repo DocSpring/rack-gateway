@@ -201,8 +201,35 @@ func (a *App) initializeServices() error {
 		}
 	}
 
-	// Initialize security notifier
-	a.SecurityNotifier = security.NewNotifier(a.EmailSender, auditLogger, a.Database, adminEmails)
+	// Initialize River jobs client for background job processing (before SecurityNotifier)
+	jobsClient, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
+		Database:      a.Database,
+		EmailSender:   a.EmailSender,
+		SlackNotifier: a.SlackNotifier,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize jobs client: %w", err)
+	}
+	a.JobsClient = jobsClient
+
+	// Set audit event enqueuer on audit logger for Slack notification jobs
+	auditEventEnqueuer := jobs.NewAuditEventEnqueuer(a.JobsClient)
+	auditLogger.SetAuditEventEnqueuer(auditEventEnqueuer)
+
+	// Start the job worker with proper lifecycle management
+	ctx, cancel := context.WithCancel(context.Background())
+	a.WorkerCtx = ctx
+	a.WorkerCancel = cancel
+	a.WorkerWg.Add(1)
+	go func() {
+		defer a.WorkerWg.Done()
+		if startErr := jobsClient.Start(ctx); startErr != nil {
+			log.Printf("ERROR: Failed to start jobs worker: %v", startErr)
+		}
+	}()
+
+	// Initialize security notifier (needs jobsClient)
+	a.SecurityNotifier = security.NewNotifier(a.EmailSender, auditLogger, a.Database, adminEmails, a.JobsClient)
 
 	// Determine rack name for notifications
 	rackName := strings.TrimSpace(os.Getenv("RACK"))
@@ -232,24 +259,6 @@ func (a *App) initializeServices() error {
 
 	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
 	a.DefaultRack = rackAlias
-
-	// Initialize River jobs client for background job processing
-	jobsClient, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
-		Database:      a.Database,
-		EmailSender:   a.EmailSender,
-		SlackNotifier: a.SlackNotifier,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to initialize jobs client: %w", err)
-	}
-	a.JobsClient = jobsClient
-
-	// Start the job worker in a goroutine
-	go func() {
-		if err := jobsClient.Start(context.Background()); err != nil {
-			log.Printf("ERROR: Failed to start jobs worker: %v", err)
-		}
-	}()
 
 	return nil
 }

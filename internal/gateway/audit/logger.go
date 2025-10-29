@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -20,14 +21,20 @@ const requestLoggedKey contextKey = "rgw-request-logged"
 const auditLogCreatedKey contextKey = "rgw-audit-log-created"
 
 type Logger struct {
-	redactPatterns []*regexp.Regexp
-	database       *db.Database
-	slackNotifier  SlackNotifier
+	redactPatterns     []*regexp.Regexp
+	database           *db.Database
+	slackNotifier      SlackNotifier
+	auditEventEnqueuer AuditEventEnqueuer
 }
 
 // SlackNotifier interface for sending audit events to Slack
 type SlackNotifier interface {
 	NotifyAuditEvent(auditLog *db.AuditLog) error
+}
+
+// AuditEventEnqueuer enqueues audit event notifications
+type AuditEventEnqueuer interface {
+	EnqueueAuditEvent(auditLogID int64) error
 }
 
 type LogEntry struct {
@@ -67,6 +74,10 @@ func NewLogger(database *db.Database) *Logger {
 // SetSlackNotifier sets the Slack notifier for this logger
 func (l *Logger) SetSlackNotifier(notifier SlackNotifier) {
 	l.slackNotifier = notifier
+}
+
+func (l *Logger) SetAuditEventEnqueuer(enqueuer AuditEventEnqueuer) {
+	l.auditEventEnqueuer = enqueuer
 }
 
 // LogDBEntry persists a DB-style audit log entry using this logger's database.
@@ -154,21 +165,13 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 }
 
 func (l *Logger) notifySlackAsync(al *db.AuditLog) {
-	if l.slackNotifier == nil {
+	if l.auditEventEnqueuer == nil {
 		return
 	}
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				gtwlog.Errorf("audit: Slack notification panicked: %v", r)
-			}
-		}()
-
-		if err := l.slackNotifier.NotifyAuditEvent(al); err != nil {
-			gtwlog.Errorf("audit: Slack notification failed: %v", err)
-		}
-	}()
+	if err := l.auditEventEnqueuer.EnqueueAuditEvent(al.ID); err != nil {
+		log.Printf("failed to enqueue Slack audit event notification: %v", err)
+	}
 }
 
 // MarkAuditLogCreated marks that an explicit audit log was created for this request

@@ -46,7 +46,7 @@ func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handle
 
 	auditLogger := audit.NewLogger(database)
 	settingsService := settings.NewService(database)
-	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil, auditLogger, settingsService, nil)
+	handler := handlers.NewAPIHandler(rbacManager, database, cfg, nil, nil, auditLogger, settingsService, nil, nil)
 	return handler, rbacManager
 }
 

@@ -417,3 +417,25 @@ func (h *AuthHandler) auditMFAUpdate(c *gin.Context, user *db.User, methodID int
 		log.Printf("failed to log mfa update audit: %v", err)
 	}
 }
+
+// requireAuth checks authentication and authorization for a given resource and action.
+// Returns the authenticated user's email and true if authorized, otherwise writes error response and returns false.
+func requireAuth(c *gin.Context, rbacSvc rbac.RBACManager, resource rbac.Resource, action rbac.Action) (string, bool) {
+	userEmail := strings.TrimSpace(c.GetString("user_email"))
+	if userEmail == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return "", false
+	}
+
+	allowed, err := rbacSvc.Enforce(userEmail, rbac.ScopeGateway, resource, action)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return "", false
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return "", false
+	}
+
+	return userEmail, true
+}

@@ -236,6 +236,10 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("PUT", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionUpdate)),
 	newHTTPRoute("DELETE", "/api/v1/api-tokens/:tokenID", Gateway(ResourceAPIToken, ActionDelete)),
 
+	// Background jobs
+	newHTTPRoute("GET", "/api/v1/jobs", Gateway(ResourceJob, ActionList)),
+	newHTTPRoute("GET", "/api/v1/jobs/:id", Gateway(ResourceJob, ActionRead)),
+
 	// Integrations
 	newHTTPRoute("GET", "/api/v1/integrations/slack", Gateway(ResourceIntegration, ActionRead)),
 	newHTTPRoute("POST", "/api/v1/integrations/slack/oauth/authorize", Gateway(ResourceIntegration, ActionCreate)),

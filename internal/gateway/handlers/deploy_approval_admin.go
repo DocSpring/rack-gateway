@@ -13,9 +13,12 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
+	jobcircleci "github.com/DocSpring/rack-gateway/internal/gateway/jobs/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/gin-gonic/gin"
+	"github.com/riverqueue/river"
 )
 
 // ListDeployApprovalRequests godoc
@@ -207,15 +210,20 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	// Trigger CircleCI approval in background (don't block response)
-	go func() {
-		client := circleci.NewClient(h.config.CircleCIToken)
-		if err := client.ApproveJob(circleciMetadata.WorkflowID, circleciMetadata.ApprovalJobName); err != nil {
-			log.Printf("ERROR: Failed to approve CircleCI job: %v", err)
-		} else {
-			log.Printf("INFO: Successfully approved CircleCI job %s in workflow %s", circleciMetadata.ApprovalJobName, circleciMetadata.WorkflowID)
+	// Trigger CircleCI approval via background job
+	if h.jobsClient != nil {
+		_, err := h.jobsClient.Insert(c.Request.Context(), jobcircleci.ApproveJobArgs{
+			CircleCIToken:   h.config.CircleCIToken,
+			WorkflowID:      circleciMetadata.WorkflowID,
+			ApprovalJobName: circleciMetadata.ApprovalJobName,
+		}, &river.InsertOpts{
+			Queue:       jobs.QueueIntegrations,
+			MaxAttempts: jobs.MaxAttemptsNotification,
+		})
+		if err != nil {
+			log.Printf("ERROR: Failed to enqueue CircleCI approval job: %v", err)
 		}
-	}()
+	}
 
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }

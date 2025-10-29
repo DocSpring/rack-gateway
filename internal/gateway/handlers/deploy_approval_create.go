@@ -12,11 +12,15 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/github"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
+	jobgithub "github.com/DocSpring/rack-gateway/internal/gateway/jobs/github"
+	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin"
+	"github.com/riverqueue/river"
 )
 
 func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
@@ -260,9 +264,16 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 	}
 
 	// Send Slack deploy approval alert (separate from audit notification)
-	if h.slackNotifier != nil && h.config != nil && h.config.Domain != "" {
-		if err := h.slackNotifier.NotifyDeployApprovalCreated(record, h.config.Domain); err != nil {
-			gtwlog.Errorf("deploy approvals: failed to send Slack alert: %v", err)
+	if h.jobsClient != nil && h.config != nil && h.config.Domain != "" {
+		_, err := h.jobsClient.Insert(c.Request.Context(), jobslack.DeployApprovalArgs{
+			DeployApprovalRequestID: record.ID,
+			GatewayDomain:           h.config.Domain,
+		}, &river.InsertOpts{
+			Queue:       jobs.QueueNotifications,
+			MaxAttempts: jobs.MaxAttemptsNotification,
+		})
+		if err != nil {
+			gtwlog.Errorf("deploy approvals: failed to enqueue Slack notification: %v", err)
 			sentry.CaptureException(err)
 		}
 	}
@@ -323,15 +334,22 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 
 	comment := fmt.Sprintf("## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s", approvalURL)
 
-	// Post comment in background (don't block response)
-	go func() {
-		client := github.NewClient(h.config.GitHubToken)
-		if err := client.PostPRComment(owner, repo, prNumber, comment); err != nil {
-			log.Printf("ERROR: Failed to post PR comment: %v", err)
-		} else {
-			log.Printf("INFO: Successfully posted comment on PR #%d", prNumber)
+	// Post comment via background job
+	if h.jobsClient != nil {
+		_, err := h.jobsClient.Insert(c.Request.Context(), jobgithub.PostPRCommentArgs{
+			GitHubToken: h.config.GitHubToken,
+			Owner:       owner,
+			Repo:        repo,
+			PRNumber:    prNumber,
+			Comment:     comment,
+		}, &river.InsertOpts{
+			Queue:       jobs.QueueIntegrations,
+			MaxAttempts: jobs.MaxAttemptsNotification,
+		})
+		if err != nil {
+			log.Printf("ERROR: Failed to enqueue GitHub PR comment job: %v", err)
 		}
-	}()
+	}
 
 	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 }

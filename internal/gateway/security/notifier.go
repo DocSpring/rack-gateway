@@ -1,16 +1,21 @@
 package security
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
+	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/riverqueue/river"
 )
 
 // Notifier handles security event notifications via audit logs and email
@@ -20,6 +25,7 @@ type Notifier struct {
 	database      *db.Database
 	adminEmails   []string
 	emailsEnabled bool
+	jobsClient    *jobs.Client
 
 	// Email rate limiting and deduplication
 	mu              sync.Mutex
@@ -30,7 +36,7 @@ type Notifier struct {
 }
 
 // NewNotifier creates a new security notifier
-func NewNotifier(emailSender email.Sender, auditLogger *audit.Logger, database *db.Database, adminEmails []string) *Notifier {
+func NewNotifier(emailSender email.Sender, auditLogger *audit.Logger, database *db.Database, adminEmails []string, jobsClient *jobs.Client) *Notifier {
 	// Check if email sender is actually configured (not noop)
 	emailsEnabled := false
 	if emailSender != nil {
@@ -46,6 +52,7 @@ func NewNotifier(emailSender email.Sender, auditLogger *audit.Logger, database *
 		database:        database,
 		adminEmails:     adminEmails,
 		emailsEnabled:   emailsEnabled,
+		jobsClient:      jobsClient,
 		recentEmails:    make(map[string]time.Time),
 		cleanupInterval: 5 * time.Minute,
 		dedupWindow:     15 * time.Minute, // Don't send same email within 15 minutes
@@ -86,6 +93,28 @@ func (n *Notifier) cleanupRecentEmails() {
 }
 
 // shouldSendEmail checks if we should send this email based on deduplication window
+// enqueueSecurityNotification enqueues a security notification if deduplication allows
+func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType string, args river.JobArgs) {
+	if recipient == "" && !strings.HasPrefix(eventType, "admin") {
+		return
+	}
+	if !n.shouldSendEmail(recipient, subject, eventType) {
+		return
+	}
+	if n.jobsClient == nil {
+		log.Printf("WARNING: security notification dropped (no jobs client configured): type=%s, recipient=%s", eventType, recipient)
+		return
+	}
+
+	_, err := n.jobsClient.Insert(context.Background(), args, &river.InsertOpts{
+		Queue:       jobs.QueueSecurity,
+		MaxAttempts: jobs.MaxAttemptsNotification,
+	})
+	if err != nil {
+		log.Printf("failed to enqueue %s notification: %v", eventType, err)
+	}
+}
+
 // Returns true if email should be sent, false if it was recently sent
 func (n *Notifier) shouldSendEmail(recipient, subject, eventType string) bool {
 	if !n.emailsEnabled {
@@ -131,21 +160,19 @@ func (n *Notifier) FailedMFAAttempt(userEmail, userName, ipAddress, userAgent st
 
 	// Email notification to user (with rate limiting)
 	if userEmail != "" && n.shouldSendEmail(userEmail, "Failed MFA Attempt", "mfa_failed") {
-		subject := "Failed MFA Attempt on Your Account"
-		text := fmt.Sprintf(`Hello,
-
-We detected a failed multi-factor authentication attempt on your account.
-
-Time: %s UTC
-IP Address: %s
-User Agent: %s
-
-If this was you, you can safely ignore this message. If you did not attempt to log in, please contact your administrator immediately.
-
-This is an automated security notification.`, time.Now().UTC().Format(time.RFC3339), ipAddress, userAgent)
-
-		if err := n.emailSender.Send(userEmail, subject, text, ""); err != nil {
-			log.Printf("failed to send failed MFA notification email to %s: %v", userEmail, err)
+		if n.jobsClient != nil {
+			_, err := n.jobsClient.Insert(context.Background(), jobemail.FailedMFAArgs{
+				UserEmail: userEmail,
+				UserName:  userName,
+				IPAddress: ipAddress,
+				UserAgent: userAgent,
+			}, &river.InsertOpts{
+				Queue:       jobs.QueueSecurity,
+				MaxAttempts: jobs.MaxAttemptsNotification,
+			})
+			if err != nil {
+				log.Printf("failed to enqueue failed MFA notification email to %s: %v", userEmail, err)
+			}
 		}
 	}
 }
@@ -177,23 +204,21 @@ func (n *Notifier) LoginAttempt(userEmail, userName, channel, status, ipAddress,
 
 	// Email notification for failed logins (with rate limiting)
 	if !success && userEmail != "" && n.shouldSendEmail(userEmail, "Failed Login Attempt", "login_failed") {
-		subject := "Failed Login Attempt on Your Account"
-		text := fmt.Sprintf(`Hello,
-
-We detected a failed login attempt on your account.
-
-Time: %s UTC
-Channel: %s
-IP Address: %s
-User Agent: %s
-Reason: %s
-
-If this was you, please verify your credentials. If you did not attempt to log in, please contact your administrator immediately.
-
-This is an automated security notification.`, time.Now().UTC().Format(time.RFC3339), channel, ipAddress, userAgent, status)
-
-		if err := n.emailSender.Send(userEmail, subject, text, ""); err != nil {
-			log.Printf("failed to send failed login notification email to %s: %v", userEmail, err)
+		if n.jobsClient != nil {
+			_, err := n.jobsClient.Insert(context.Background(), jobemail.FailedLoginArgs{
+				UserEmail: userEmail,
+				UserName:  userName,
+				Channel:   channel,
+				Status:    status,
+				IPAddress: ipAddress,
+				UserAgent: userAgent,
+			}, &river.InsertOpts{
+				Queue:       jobs.QueueSecurity,
+				MaxAttempts: jobs.MaxAttemptsNotification,
+			})
+			if err != nil {
+				log.Printf("failed to enqueue failed login notification email to %s: %v", userEmail, err)
+			}
 		}
 	}
 }
@@ -218,52 +243,25 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 	}
 
 	// Email notification to user if known (with rate limiting)
-	if userEmail != "" && n.shouldSendEmail(userEmail, "Rate Limit Exceeded", "rate_limit") {
-		subject := "Rate Limit Exceeded on Your Account"
-		text := fmt.Sprintf(`Hello,
-
-Your account has exceeded the rate limit for authentication requests.
-
-Time: %s UTC
-Path: %s
-IP Address: %s
-User Agent: %s
-
-This could indicate a security issue or misconfiguration. If you did not make these requests, please contact your administrator immediately.
-
-This is an automated security notification.`, time.Now().UTC().Format(time.RFC3339), path, ipAddress, userAgent)
-
-		if err := n.emailSender.Send(userEmail, subject, text, ""); err != nil {
-			log.Printf("failed to send rate limit notification email to %s: %v", userEmail, err)
-		}
-	}
+	n.enqueueSecurityNotification(userEmail, "Rate Limit Exceeded", "rate_limit", jobemail.RateLimitUserArgs{
+		UserEmail: userEmail,
+		UserName:  userName,
+		Path:      path,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+	})
 
 	// Also notify admins about rate limit violations (potential attack) - with deduplication
 	// Use IP address in the hash so we deduplicate per-IP, not globally
 	adminKey := fmt.Sprintf("admins-%s", ipAddress)
-	if len(n.adminEmails) > 0 && n.shouldSendEmail(adminKey, "Rate Limit Exceeded", "rate_limit_admin") {
-		subject := "Rate Limit Exceeded - Security Alert"
-		text := fmt.Sprintf(`Security Alert: Rate limit exceeded
-
-Time: %s UTC
-Path: %s
-User: %s (%s)
-IP Address: %s
-User Agent: %s
-
-This could indicate:
-- Legitimate user with misconfigured client
-- Brute force attack attempt
-- API abuse
-
-Please investigate immediately.
-
-This is an automated security notification.`, time.Now().UTC().Format(time.RFC3339), path, userEmail, userName, ipAddress, userAgent)
-
-		if err := n.emailSender.SendMany(n.adminEmails, subject, text, ""); err != nil {
-			log.Printf("failed to send rate limit admin notification: %v", err)
-		}
-	}
+	n.enqueueSecurityNotification(adminKey, "Rate Limit Exceeded", "rate_limit_admin", jobemail.RateLimitAdminArgs{
+		AdminEmails: n.adminEmails,
+		UserEmail:   userEmail,
+		UserName:    userName,
+		Path:        path,
+		IPAddress:   ipAddress,
+		UserAgent:   userAgent,
+	})
 }
 
 // SuspiciousActivity logs and notifies about suspicious login patterns
@@ -286,52 +284,24 @@ func (n *Notifier) SuspiciousActivity(userEmail, userName, reason, ipAddress, us
 	}
 
 	// Email notification to user (with rate limiting)
-	if userEmail != "" && n.shouldSendEmail(userEmail, "Suspicious Activity", "suspicious_activity") {
-		subject := "Suspicious Activity Detected on Your Account"
-		text := fmt.Sprintf(`Hello,
-
-We detected suspicious activity on your account.
-
-Time: %s UTC
-Reason: %s
-IP Address: %s
-User Agent: %s
-
-If this was you, you can safely ignore this message. If you did not perform this action, please contact your administrator immediately and consider changing your password.
-
-This is an automated security notification.`, time.Now().UTC().Format(time.RFC3339), reason, ipAddress, userAgent)
-
-		if err := n.emailSender.Send(userEmail, subject, text, ""); err != nil {
-			log.Printf("failed to send suspicious activity notification email to %s: %v", userEmail, err)
-		}
-	}
+	n.enqueueSecurityNotification(userEmail, "Suspicious Activity", "suspicious_activity", jobemail.SuspiciousActivityUserArgs{
+		UserEmail: userEmail,
+		UserName:  userName,
+		Reason:    reason,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+		Details:   details,
+	})
 
 	// Notify admins about suspicious activity (with deduplication per user+reason)
 	adminKey := fmt.Sprintf("admins-%s-%s", userEmail, reason)
-	if len(n.adminEmails) > 0 && n.shouldSendEmail(adminKey, "Suspicious Activity", "suspicious_activity_admin") {
-		detailsStr := ""
-		for k, v := range details {
-			detailsStr += fmt.Sprintf("%s: %s\n", k, v)
-		}
-
-		subject := "Suspicious Activity Detected - Security Alert"
-		text := fmt.Sprintf(`Security Alert: Suspicious activity detected
-
-Time: %s UTC
-User: %s (%s)
-Reason: %s
-IP Address: %s
-User Agent: %s
-
-Additional Details:
-%s
-
-Please investigate immediately.
-
-This is an automated security notification.`, time.Now().UTC().Format(time.RFC3339), userEmail, userName, reason, ipAddress, userAgent, detailsStr)
-
-		if err := n.emailSender.SendMany(n.adminEmails, subject, text, ""); err != nil {
-			log.Printf("failed to send suspicious activity admin notification: %v", err)
-		}
-	}
+	n.enqueueSecurityNotification(adminKey, "Suspicious Activity", "suspicious_activity_admin", jobemail.SuspiciousActivityAdminArgs{
+		AdminEmails: n.adminEmails,
+		UserEmail:   userEmail,
+		UserName:    userName,
+		Reason:      reason,
+		IPAddress:   ipAddress,
+		UserAgent:   userAgent,
+		Details:     details,
+	})
 }

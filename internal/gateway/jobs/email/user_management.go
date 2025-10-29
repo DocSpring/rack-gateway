@@ -11,12 +11,12 @@ import (
 
 // WelcomeArgs contains parameters for welcome email to new users
 type WelcomeArgs struct {
-	Email       string   `json:"email"`
-	Name        string   `json:"name"`
-	Roles       []string `json:"roles"`
+	Email        string   `json:"email"`
+	Name         string   `json:"name"`
+	Roles        []string `json:"roles"`
 	InviterEmail string   `json:"inviter_email"`
-	Rack        string   `json:"rack"`
-	BaseURL     string   `json:"base_url"`
+	Rack         string   `json:"rack"`
+	BaseURL      string   `json:"base_url"`
 }
 
 // Kind returns the unique identifier for this job type
@@ -86,12 +86,12 @@ Welcome aboard!`,
 
 // UserAddedAdminArgs contains parameters for admin notification when a user is added
 type UserAddedAdminArgs struct {
-	AdminEmails   []string `json:"admin_emails"`
-	NewUserEmail  string   `json:"new_user_email"`
-	NewUserName   string   `json:"new_user_name"`
-	Roles         []string `json:"roles"`
-	CreatorEmail  string   `json:"creator_email"`
-	Rack          string   `json:"rack"`
+	AdminEmails  []string `json:"admin_emails"`
+	NewUserEmail string   `json:"new_user_email"`
+	NewUserName  string   `json:"new_user_name"`
+	Roles        []string `json:"roles"`
+	CreatorEmail string   `json:"creator_email"`
+	Rack         string   `json:"rack"`
 }
 
 // Kind returns the unique identifier for this job type

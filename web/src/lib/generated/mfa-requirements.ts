@@ -218,6 +218,18 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "GET",
+    pattern: "/api/v1/jobs",
+    permissions: ["gateway:job:list"],
+    mfaLevel: "none",
+  },
+  {
+    method: "GET",
+    pattern: "/api/v1/jobs/:id",
+    permissions: ["gateway:job:read"],
+    mfaLevel: "none",
+  },
+  {
+    method: "GET",
     pattern: "/api/v1/rack",
     permissions: ["convox:rack:read"],
     mfaLevel: "none",

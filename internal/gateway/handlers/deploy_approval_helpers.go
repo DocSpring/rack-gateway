@@ -183,23 +183,7 @@ func getAppSettingString(svc *settings.Service, appName, key string, defaultValu
 // checkDeployApprovalAuth validates authentication and RBAC permissions for deploy approval operations.
 // Returns the authenticated email and true on success, otherwise writes an error response and returns false.
 func checkDeployApprovalAuth(c *gin.Context, rbacSvc rbac.RBACManager, action rbac.Action) (string, bool) {
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return "", false
-	}
-
-	allowed, err := rbacSvc.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, action)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return "", false
-	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return "", false
-	}
-
-	return userEmail, true
+	return requireAuth(c, rbacSvc, rbac.ResourceDeployApprovalRequest, action)
 }
 
 // validatePublicID ensures the path parameter `id` is present.

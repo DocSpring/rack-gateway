@@ -13,6 +13,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
@@ -28,6 +29,7 @@ type APIHandler struct {
 	auditLogger     *audit.Logger
 	settingsService *settings.Service
 	slackNotifier   SlackNotifier
+	jobsClient      *jobs.Client
 }
 
 // SlackNotifier defines the interface for sending Slack notifications
@@ -49,6 +51,7 @@ func NewAPIHandler(
 	auditLogger *audit.Logger,
 	settingsService *settings.Service,
 	slackNotifier SlackNotifier,
+	jobsClient *jobs.Client,
 ) *APIHandler {
 	return &APIHandler{
 		rbac:            rbac,
@@ -59,6 +62,7 @@ func NewAPIHandler(
 		auditLogger:     auditLogger,
 		settingsService: settingsService,
 		slackNotifier:   slackNotifier,
+		jobsClient:      jobsClient,
 	}
 }
 

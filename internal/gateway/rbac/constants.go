@@ -96,6 +96,7 @@ const (
 	ResourceAPIToken              // api_token
 	ResourceDeployApprovalRequest // deploy_approval_request
 	ResourceIntegration           // integration
+	ResourceJob                   // job
 	ResourceSecret                // secret
 	ResourceSetting               // setting
 	ResourceUser                  // user
