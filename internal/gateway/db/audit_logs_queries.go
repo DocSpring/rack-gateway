@@ -331,15 +331,35 @@ func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*A
 // GetAuditLogByID retrieves a single audit log by its ID
 func (d *Database) GetAuditLogByID(id int64) (*AuditLog, error) {
 	query := `
-		SELECT id, timestamp, chain_index, previous_hash, event_hash,
-		       checkpoint_id, checkpoint_hash,
-		       user_email, user_name, api_token_id, api_token_name,
-		       action_type, action, command, resource, resource_type, details,
-		       request_id, ip_address, user_agent,
-		       status, rbac_decision, http_status, response_time_ms, event_count,
-		       deploy_approval_request_id
-		FROM audit_log
-		WHERE id = ?
+        SELECT
+               "id",
+               "timestamp",
+               "chain_index",
+               "previous_hash",
+               "event_hash",
+               "checkpoint_id",
+               "checkpoint_hash",
+               "user_email",
+               COALESCE("user_name", ''),
+               "api_token_id",
+               "api_token_name",
+               "action_type",
+               "action",
+               COALESCE("command", ''),
+               COALESCE("resource", ''),
+               COALESCE("resource_type", ''),
+               COALESCE("details", ''),
+               COALESCE("request_id", ''),
+               COALESCE(host("ip_address"::inet), ''),
+               COALESCE("user_agent", ''),
+               "status",
+               COALESCE("rbac_decision", ''),
+               COALESCE("http_status", 0),
+               "response_time_ms",
+               "event_count",
+               "deploy_approval_request_id"
+        FROM "audit"."audit_event"
+        WHERE id = ?
 	`
 	row := d.queryRow(query, id)
 

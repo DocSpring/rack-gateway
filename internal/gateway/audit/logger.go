@@ -169,6 +169,15 @@ func (l *Logger) notifySlackAsync(al *db.AuditLog) {
 		return
 	}
 
+	// Check if Slack integration is configured before enqueueing
+	if l.database != nil {
+		integration, err := l.database.GetSlackIntegration()
+		if err != nil || integration == nil {
+			// No integration configured, skip enqueueing
+			return
+		}
+	}
+
 	if err := l.auditEventEnqueuer.EnqueueAuditEvent(al.ID); err != nil {
 		log.Printf("failed to enqueue Slack audit event notification: %v", err)
 	}

@@ -380,6 +380,43 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	assert.Equal(t, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), timeFiltered[0].Action)
 }
 
+func TestGetAuditLogByIDHandlesNulls(t *testing.T) {
+    db := dbtest.NewDatabase(t)
+    defer db.Close() //nolint:errcheck // test cleanup
+    dbtest.Reset(t, db)
+
+    // Create a minimal audit log with several nullable fields omitted
+    log := &gwdb.AuditLog{
+        UserEmail:      "nulls@example.com",
+        ActionType:     "convox",
+        Action:         audit.BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()),
+        Status:         "success",
+        ResponseTimeMs: 5,
+        // Intentionally leave: UserName, Command, Resource, ResourceType, Details,
+        // RequestID, IPAddress, UserAgent, RBACDecision, HTTPStatus unset (zero values)
+    }
+    require.NoError(t, db.CreateAuditLog(log))
+
+    // Fetch by ID and ensure scan succeeds with defaults rather than NULL errors
+    fetched, err := db.GetAuditLogByID(log.ID)
+    require.NoError(t, err)
+    require.NotNil(t, fetched)
+    assert.Equal(t, log.ID, fetched.ID)
+    assert.Equal(t, "nulls@example.com", fetched.UserEmail)
+    // Fields should be empty strings rather than causing scan errors
+    assert.Equal(t, "", fetched.UserName)
+    assert.Equal(t, "", fetched.Command)
+    assert.Equal(t, "", fetched.Resource)
+    assert.Equal(t, "", fetched.ResourceType)
+    assert.Equal(t, "", fetched.Details)
+    assert.Equal(t, "", fetched.RequestID)
+    assert.Equal(t, "", fetched.IPAddress)
+    assert.Equal(t, "", fetched.UserAgent)
+    assert.Equal(t, "", fetched.RBACDecision)
+    // HTTPStatus should default to 0 when NULL
+    assert.Equal(t, 0, fetched.HTTPStatus)
+}
+
 func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	db := dbtest.NewDatabase(t)
 	defer db.Close() //nolint:errcheck // test cleanup
