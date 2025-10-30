@@ -45,6 +45,11 @@ const handleApiError = (rawError: unknown): Promise<never> => {
   if (handleUnauthorized(error)) {
     return Promise.reject(error)
   }
+  // Don't show toasts for 404 errors - they're often expected (e.g., checking if resource exists)
+  const status = error.response?.status
+  if (status === 404) {
+    return Promise.reject(error)
+  }
   toastAPIError(error)
   return Promise.reject(error)
 }
