@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -166,12 +167,21 @@ func toJobResponse(job *rivertype.JobRow) JobResponse {
 		lastError = job.Errors[len(job.Errors)-1].Error
 	}
 
+	// Decode args from byte array to JSON
+	// The args are stored as bytes in the database, we just pass them through as-is
+	// and let JSON marshal handle the conversion
+	var args json.RawMessage
+	if len(job.EncodedArgs) > 0 {
+		// River stores args as JSON bytes, we just return them as JSON
+		args = job.EncodedArgs
+	}
+
 	return JobResponse{
 		ID:          job.ID,
 		State:       string(job.State),
 		Queue:       job.Queue,
 		Kind:        job.Kind,
-		Args:        job.EncodedArgs,
+		Args:        args,
 		Attempt:     job.Attempt,
 		MaxAttempts: job.MaxAttempts,
 		CreatedAt:   job.CreatedAt,
@@ -207,7 +217,7 @@ type JobResponse struct {
 	State       string             `json:"state"`
 	Queue       string             `json:"queue"`
 	Kind        string             `json:"kind"`
-	Args        []byte             `json:"args,omitempty"`
+	Args        json.RawMessage    `json:"args,omitempty"`
 	Attempt     int                `json:"attempt"`
 	MaxAttempts int                `json:"max_attempts"`
 	CreatedAt   time.Time          `json:"created_at"`

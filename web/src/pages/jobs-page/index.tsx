@@ -1,9 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
+import { Eye } from 'lucide-react'
 import { useState } from 'react'
 import type { components } from '../../api/types.generated'
 import { TablePane } from '../../components/table-pane'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -26,6 +34,7 @@ function JobsPageInner() {
   const [page, setPage] = useState(1)
   const [stateFilter, setStateFilter] = useState<string>('')
   const [queueFilter, setQueueFilter] = useState<string>('')
+  const [selectedJob, setSelectedJob] = useState<JobResponse | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['jobs', stateFilter, queueFilter, page],
@@ -53,26 +62,6 @@ function JobsPageInner() {
   const totalPages = Math.max(1, Math.ceil(total / perPage))
   const start = (page - 1) * perPage
   const end = Math.min(start + perPage, total)
-
-  const getStateBadgeVariant = (state?: string) => {
-    switch (state) {
-      case 'completed':
-        return 'success'
-      case 'running':
-        return 'default'
-      case 'scheduled':
-      case 'pending':
-      case 'available':
-        return 'secondary'
-      case 'cancelled':
-      case 'discarded':
-        return 'destructive'
-      case 'retryable':
-        return 'destructive'
-      default:
-        return 'secondary'
-    }
-  }
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-'
@@ -139,6 +128,7 @@ function JobsPageInner() {
               <TableHead>Created</TableHead>
               <TableHead>Scheduled</TableHead>
               <TableHead>Last Error</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -162,6 +152,17 @@ function JobsPageInner() {
                   title={job.last_error || ''}
                 >
                   {job.last_error || '-'}
+                </TableCell>
+                <TableCell
+                  className="text-right"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setSelectedJob(job)
+                  }}
+                >
+                  <Button size="sm" variant="ghost">
+                    <Eye className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -192,6 +193,120 @@ function JobsPageInner() {
           </div>
         )}
       </TablePane>
+
+      <JobDetailDialog job={selectedJob} onClose={() => setSelectedJob(null)} />
     </div>
   )
+}
+
+type JobDetailDialogProps = {
+  job: JobResponse | null
+  onClose: () => void
+}
+
+function JobDetailDialog({ job, onClose }: JobDetailDialogProps) {
+  return (
+    <Dialog onOpenChange={(open) => !open && onClose()} open={Boolean(job)}>
+      <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Background Job Details</DialogTitle>
+          <DialogDescription>
+            Detailed information for the selected background job:
+          </DialogDescription>
+        </DialogHeader>
+        {job ? (
+          <div className="space-y-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">ID:</span>{' '}
+              <span className="font-mono">{job.id}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Kind:</span>{' '}
+              <span className="font-mono">{job.kind}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Queue:</span> {job.queue}
+            </div>
+            <div>
+              <span className="text-muted-foreground">State:</span>{' '}
+              <Badge variant={getStateBadgeVariant(job.state)}>{job.state}</Badge>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Attempt:</span> {job.attempt}/
+              {job.max_attempts}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Created At:</span>{' '}
+              {job.created_at ? new Date(job.created_at).toISOString() : '-'}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Scheduled At:</span>{' '}
+              {job.scheduled_at ? new Date(job.scheduled_at).toISOString() : '-'}
+            </div>
+            {job.attempted_at && (
+              <div>
+                <span className="text-muted-foreground">Attempted At:</span>{' '}
+                {new Date(job.attempted_at).toISOString()}
+              </div>
+            )}
+            {job.finalized_at && (
+              <div>
+                <span className="text-muted-foreground">Finalized At:</span>{' '}
+                {new Date(job.finalized_at).toISOString()}
+              </div>
+            )}
+            {job.last_error && (
+              <div>
+                <span className="text-muted-foreground">Last Error:</span>
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs break-words">
+                  {job.last_error}
+                </pre>
+              </div>
+            )}
+            {job.errors && job.errors.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">Errors:</span>
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs break-words">
+                  {JSON.stringify(job.errors, null, 2)}
+                </pre>
+              </div>
+            )}
+            {job.args && (
+              <div>
+                <span className="text-muted-foreground">Arguments:</span>
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs break-words">
+                  {typeof job.args === 'string' ? job.args : JSON.stringify(job.args, null, 2)}
+                </pre>
+              </div>
+            )}
+            <div className="mt-2 flex justify-end">
+              <Button onClick={onClose} variant="outline">
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function getStateBadgeVariant(state?: string): 'success' | 'default' | 'secondary' | 'destructive' {
+  switch (state) {
+    case 'completed':
+      return 'success'
+    case 'running':
+      return 'default'
+    case 'scheduled':
+    case 'pending':
+    case 'available':
+      return 'secondary'
+    case 'cancelled':
+    case 'discarded':
+      return 'destructive'
+    case 'retryable':
+      return 'destructive'
+    default:
+      return 'secondary'
+  }
 }
