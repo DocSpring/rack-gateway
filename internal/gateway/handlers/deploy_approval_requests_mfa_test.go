@@ -92,6 +92,7 @@ func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployAppr
 	}
 }
 
+//nolint:funlen
 func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
@@ -139,7 +140,13 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", fixture.admin.Email)
 			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(
+			fixture.mfaService,
+			database,
+			fixture.mfaSettings,
+		),
+			fixture.handler.ApproveDeployApprovalRequest,
+		)
 
 		// Make request WITHOUT MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -205,7 +212,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", fixture.admin.Email)
 			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(
+			fixture.mfaService,
+			database,
+			fixture.mfaSettings,
+		), fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request WITH valid MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -252,7 +263,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", fixture.admin.Email)
 			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(
+			fixture.mfaService,
+			database,
+			fixture.mfaSettings),
+			fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request WITH invalid MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -290,7 +305,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			c.Set("user_email", fixture.admin.Email)
 			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(
+			fixture.mfaService,
+			database,
+			fixture.mfaSettings,
+		), fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request as API token
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -348,7 +367,11 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 			c.Set("user_email", fixture.admin.Email)
 			c.Next()
-		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.CreateAPIToken)
+		}, middleware.EnforceMFARequirements(
+			fixture.mfaService,
+			database,
+			fixture.mfaSettings,
+		), fixture.handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
 			"name":        "new-token",
@@ -395,7 +418,11 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
 			c.Set("user_email", fixture.admin.Email)
 			c.Next()
-		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.CreateAPIToken)
+		}, middleware.EnforceMFARequirements(
+			fixture.mfaService,
+			database,
+			fixture.mfaSettings,
+		), fixture.handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
 			"name":        "new-token",

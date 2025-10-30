@@ -120,6 +120,8 @@ type CreatorInfo struct {
 }
 
 // DeployApprovalRequest tracks manual approval requirements for CI/CD actions.
+//
+//nolint:lll
 type DeployApprovalRequest struct {
 	ID                          int64           `json:"id"`
 	PublicID                    string          `json:"public_id"`
@@ -140,12 +142,12 @@ type DeployApprovalRequest struct {
 	ApprovedByUserID            *int64          `json:"approved_by_user_id,omitempty"`
 	ApprovedByEmail             string          `json:"approved_by_email,omitempty"`
 	ApprovedByName              string          `json:"approved_by_name,omitempty"`
-	ApprovedAt                  *time.Time      `json:"approved_at,omitempty" ts_type:"string | null"`
-	ApprovalExpiresAt           *time.Time      `json:"approval_expires_at,omitempty" ts_type:"string | null"`
+	ApprovedAt                  *time.Time      `json:"approved_at,omitempty"                      ts_type:"string | null"`
+	ApprovalExpiresAt           *time.Time      `json:"approval_expires_at,omitempty"              ts_type:"string | null"`
 	RejectedByUserID            *int64          `json:"rejected_by_user_id,omitempty"`
 	RejectedByEmail             string          `json:"rejected_by_email,omitempty"`
 	RejectedByName              string          `json:"rejected_by_name,omitempty"`
-	RejectedAt                  *time.Time      `json:"rejected_at,omitempty" ts_type:"string | null"`
+	RejectedAt                  *time.Time      `json:"rejected_at,omitempty"                      ts_type:"string | null"`
 	ApprovalNotes               string          `json:"approval_notes,omitempty"`
 	GitCommitHash               string          `json:"git_commit_hash"`
 	GitBranch                   string          `json:"git_branch,omitempty"`
@@ -157,8 +159,8 @@ type DeployApprovalRequest struct {
 	ReleaseID                   string          `json:"release_id,omitempty"`
 	ProcessIDs                  []string        `json:"process_ids,omitempty"`
 	ExecCommands                json.RawMessage `json:"exec_commands,omitempty"`
-	ReleaseCreatedAt            *time.Time      `json:"release_created_at,omitempty" ts_type:"string | null"`
-	ReleasePromotedAt           *time.Time      `json:"release_promoted_at,omitempty" ts_type:"string | null"`
+	ReleaseCreatedAt            *time.Time      `json:"release_created_at,omitempty"               ts_type:"string | null"`
+	ReleasePromotedAt           *time.Time      `json:"release_promoted_at,omitempty"              ts_type:"string | null"`
 	ReleasePromotedByAPITokenID *int64          `json:"release_promoted_by_api_token_id,omitempty"`
 }
 

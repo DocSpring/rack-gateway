@@ -44,6 +44,8 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 
 - **Comprehensive linter set** - 20+ linters enabled
 - **Line length: 120 characters maximum**
+- **NEW (as of 2025-10-30): For Go struct tag lines that cannot be broken without invalidating formatting (where gofmt/goimports always rejoin them, and a field+tag line exceeds 120 chars), you MAY add `//nolint:lll` at the end of that line to disable the lll rule.**
+- **This is the ONLY context where any //nolint comment is allowed.**
 - **NO `//nolint` comments allowed** - fix the code, don't suppress warnings
 - **NO disabling linting rules** - if code doesn't pass, refactor it
 - Forbidden patterns:

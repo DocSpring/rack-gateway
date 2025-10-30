@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // ListUserSessions godoc

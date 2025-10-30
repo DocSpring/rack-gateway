@@ -378,27 +378,29 @@ type UpdateDeployApprovalRequestStatusRequest struct {
 }
 
 // DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
+//
+//nolint:lll
 type DeployApprovalRequestResponse struct {
-	PublicID                  string                 `json:"public_id" validate:"required"`
-	Message                   string                 `json:"message" validate:"required"`
-	Status                    string                 `json:"status" validate:"required"`
-	CreatedAt                 time.Time              `json:"created_at" validate:"required" ts_type:"string"`
-	UpdatedAt                 time.Time              `json:"updated_at" validate:"required" ts_type:"string"`
+	PublicID                  string                 `json:"public_id"                                  validate:"required"`
+	Message                   string                 `json:"message"                                    validate:"required"`
+	Status                    string                 `json:"status"                                     validate:"required"`
+	CreatedAt                 time.Time              `json:"created_at"                                 validate:"required" ts_type:"string"`
+	UpdatedAt                 time.Time              `json:"updated_at"                                 validate:"required" ts_type:"string"`
 	CreatedByEmail            string                 `json:"created_by_email,omitempty"`
 	CreatedByName             string                 `json:"created_by_name,omitempty"`
 	CreatedByAPITokenPublicID string                 `json:"created_by_api_token_id,omitempty"`
 	CreatedByAPITokenName     string                 `json:"created_by_api_token_name,omitempty"`
-	TargetAPITokenID          string                 `json:"target_api_token_id" validate:"required"`
+	TargetAPITokenID          string                 `json:"target_api_token_id"                        validate:"required"`
 	TargetAPITokenName        string                 `json:"target_api_token_name,omitempty"`
 	ApprovedByEmail           string                 `json:"approved_by_email,omitempty"`
 	ApprovedByName            string                 `json:"approved_by_name,omitempty"`
-	ApprovedAt                *time.Time             `json:"approved_at,omitempty" ts_type:"string"`
-	ApprovalExpiresAt         *time.Time             `json:"approval_expires_at,omitempty" ts_type:"string"`
+	ApprovedAt                *time.Time             `json:"approved_at,omitempty"                                          ts_type:"string"`
+	ApprovalExpiresAt         *time.Time             `json:"approval_expires_at,omitempty"                                  ts_type:"string"`
 	RejectedByEmail           string                 `json:"rejected_by_email,omitempty"`
 	RejectedByName            string                 `json:"rejected_by_name,omitempty"`
-	RejectedAt                *time.Time             `json:"rejected_at,omitempty" ts_type:"string"`
+	RejectedAt                *time.Time             `json:"rejected_at,omitempty"                                          ts_type:"string"`
 	ApprovalNotes             string                 `json:"approval_notes,omitempty"`
-	GitCommitHash             string                 `json:"git_commit_hash" validate:"required"`
+	GitCommitHash             string                 `json:"git_commit_hash"                            validate:"required"`
 	GitBranch                 string                 `json:"git_branch,omitempty"`
 	PrURL                     string                 `json:"pr_url,omitempty"`
 	CIMetadata                map[string]interface{} `json:"ci_metadata,omitempty"`
@@ -408,8 +410,8 @@ type DeployApprovalRequestResponse struct {
 	ReleaseID                 string                 `json:"release_id,omitempty"`
 	ProcessIDs                []string               `json:"process_ids,omitempty"`
 	ExecCommands              map[string]interface{} `json:"exec_commands,omitempty"`
-	ReleaseCreatedAt          *time.Time             `json:"release_created_at,omitempty" ts_type:"string"`
-	ReleasePromotedAt         *time.Time             `json:"release_promoted_at,omitempty" ts_type:"string"`
+	ReleaseCreatedAt          *time.Time             `json:"release_created_at,omitempty"                                   ts_type:"string"`
+	ReleasePromotedAt         *time.Time             `json:"release_promoted_at,omitempty"                                  ts_type:"string"`
 	ReleasePromotedByTokenID  *int64                 `json:"release_promoted_by_api_token_id,omitempty"`
 }
 

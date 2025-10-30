@@ -127,7 +127,6 @@ func (h *Handler) evaluateAPITokenPermission(
 
 	// Lookup matching approval
 	req, err := h.findDeployApprovalForResource(r, deny, *authUser.TokenID, app, resource, action)
-
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			log.Printf("DEBUG: deploy approval lookup failed: not found")

@@ -74,28 +74,3 @@ func buildTargetURL(rack config.RackConfig, path string, rawQuery string) string
 	}
 	return targetURL
 }
-
-// shouldBufferResponse determines whether the response needs to be buffered.
-func shouldBufferResponse(r *http.Request, pth string, isJSON bool) (bool, bool, bool) {
-	filterRelease := isJSON && (strings.Contains(pth, "/apps/") && strings.Contains(pth, "/releases"))
-	shouldCapture := false
-	captureProcess := false
-
-	if isJSON {
-		switch r.Method {
-		case http.MethodPost:
-			shouldCapture = true
-			if strings.Contains(pth, "/services/") && strings.Contains(pth, "/processes") {
-				captureProcess = true
-			}
-		case http.MethodGet:
-			if (strings.Contains(pth, "/builds/") || strings.Contains(pth, "/releases/")) &&
-				!strings.HasSuffix(pth, "/builds") && !strings.HasSuffix(pth, "/releases") {
-				shouldCapture = true
-			}
-		}
-	}
-
-	needsBuffer := filterRelease || shouldCapture || captureProcess
-	return needsBuffer, filterRelease, shouldCapture
-}

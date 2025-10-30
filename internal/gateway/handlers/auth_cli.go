@@ -73,6 +73,14 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, redirect)
 }
 
+// CLILoginMFAForm godoc
+// @Summary Display MFA challenge form
+// @Description Displays the MFA challenge form for CLI login.
+// @Tags Auth
+// @Param state query string true "State"
+// @Success 307 {string} string "Temporary Redirect"
+// @Failure 400 {string} string "Missing parameters"
+// @Router /auth/cli/mfa [get]
 func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	state := strings.TrimSpace(c.Query("state"))
 	if state == "" {
@@ -224,7 +232,14 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	verification, err := h.performMFAVerification(c, userRecord, method, req.Code, req.SessionData, req.AssertionResponse)
+	verification, err := h.performMFAVerification(
+		c,
+		userRecord,
+		method,
+		req.Code,
+		req.SessionData,
+		req.AssertionResponse,
+	)
 	if err != nil {
 		return
 	}
