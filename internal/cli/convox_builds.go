@@ -12,9 +12,7 @@ func BuildCommand() *cobra.Command {
 		Short: "create a build",
 		Args:  cobra.MaximumNArgs(1),
 	}
-	cmd.RunE = SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-		return runBuildCommand(cobraCmd, args)
-	})
+	cmd.RunE = SilenceOnError(runBuildCommand)
 
 	cmd.Flags().StringP("app", "a", "", "app name")
 	cmd.Flags().String("description", "", "build description")

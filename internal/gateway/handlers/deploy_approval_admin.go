@@ -22,6 +22,40 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
+func parseDeployApprovalListOptions(c *gin.Context) (db.DeployApprovalRequestListOptions, bool) {
+	opts := db.DeployApprovalRequestListOptions{}
+
+	if status := strings.TrimSpace(c.Query("status")); status != "" {
+		opts.Status = status
+	}
+
+	if onlyOpen := strings.TrimSpace(c.Query("only_open")); onlyOpen != "" {
+		opts.OnlyOpen = onlyOpen == "true"
+	}
+
+	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			if limit < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be non-negative"})
+				return opts, false
+			}
+			opts.Limit = limit
+		}
+	}
+
+	if offsetStr := strings.TrimSpace(c.Query("offset")); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			if offset < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be non-negative"})
+				return opts, false
+			}
+			opts.Offset = offset
+		}
+	}
+
+	return opts, true
+}
+
 // ListDeployApprovalRequests godoc
 // @Summary List deploy approval requests
 // @Description Returns a list of deploy approval requests with optional filtering
@@ -41,30 +75,9 @@ func (h *AdminHandler) ListDeployApprovalRequests(c *gin.Context) {
 		return
 	}
 
-	opts := db.DeployApprovalRequestListOptions{}
-	if status := strings.TrimSpace(c.Query("status")); status != "" {
-		opts.Status = status
-	}
-	if onlyOpen := strings.TrimSpace(c.Query("only_open")); onlyOpen != "" {
-		opts.OnlyOpen = onlyOpen == "true"
-	}
-	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil {
-			if limit < 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be non-negative"})
-				return
-			}
-			opts.Limit = limit
-		}
-	}
-	if offsetStr := strings.TrimSpace(c.Query("offset")); offsetStr != "" {
-		if offset, err := strconv.Atoi(offsetStr); err == nil {
-			if offset < 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be non-negative"})
-				return
-			}
-			opts.Offset = offset
-		}
+	opts, ok := parseDeployApprovalListOptions(c)
+	if !ok {
+		return
 	}
 
 	records, err := h.database.ListDeployApprovalRequests(opts)
@@ -146,96 +159,7 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		http.StatusOK,
 	)
 
-	// Trigger CircleCI approval if configured and enabled
-	if h.settingsService == nil || len(record.CIMetadata) == 0 {
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	// Check if CI provider is CircleCI
-	ciProvider, err := getAppSettingString(h.settingsService, record.App, settings.KeyCIProvider, "")
-	if err != nil {
-		log.Printf("WARN: Failed to get ci_provider setting: %v", err)
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	if ciProvider != "circleci" {
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	autoApprove, err := getAppSettingBool(
-		h.settingsService,
-		record.App,
-		settings.KeyCircleCIAutoApproveOnApproval,
-		false,
-	)
-	if err != nil {
-		log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	if !autoApprove {
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	if h.config == nil || h.config.CircleCIToken == "" {
-		log.Printf("WARN: CircleCI auto-approve enabled but no CircleCIToken configured")
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	// Parse CI metadata
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
-		log.Printf("WARN: Failed to unmarshal CircleCI metadata: %v", err)
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	// Get the approval job name from app settings
-	approvalJobName, err := getAppSettingString(h.settingsService, record.App, settings.KeyCircleCIApprovalJobName, "")
-	if err != nil {
-		log.Printf("WARN: Failed to get circleci_approval_job_name setting: %v", err)
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	if approvalJobName == "" {
-		log.Printf("WARN: CircleCI auto-approve enabled but no approval_job_name configured for app %s", record.App)
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	// Override approval_job_name from settings if configured
-	metadata["approval_job_name"] = approvalJobName
-
-	// Validate and parse metadata
-	circleciMetadata, err := circleci.ParseMetadata(metadata)
-	if err != nil {
-		log.Printf("WARN: Invalid CircleCI metadata: %v", err)
-		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
-		return
-	}
-
-	// Trigger CircleCI approval via background job
-	if h.jobsClient != nil {
-		_, err := h.jobsClient.Insert(c.Request.Context(), jobcircleci.ApproveJobArgs{
-			CircleCIToken:   h.config.CircleCIToken,
-			WorkflowID:      circleciMetadata.WorkflowID,
-			ApprovalJobName: circleciMetadata.ApprovalJobName,
-		}, &river.InsertOpts{
-			Queue:       jobs.QueueIntegrations,
-			MaxAttempts: jobs.MaxAttemptsNotification,
-		})
-		if err != nil {
-			log.Printf("ERROR: Failed to enqueue CircleCI approval job: %v", err)
-		}
-	}
-
+	h.triggerCircleCIApprovalIfEnabled(c, record)
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
@@ -287,6 +211,105 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
+func (h *AdminHandler) triggerCircleCIApprovalIfEnabled(c *gin.Context, record *db.DeployApprovalRequest) {
+	if h.settingsService == nil || len(record.CIMetadata) == 0 {
+		return
+	}
+
+	ciProvider, err := getAppSettingString(h.settingsService, record.App, settings.KeyCIProvider, "")
+	if err != nil {
+		log.Printf("WARN: Failed to get ci_provider setting: %v", err)
+		return
+	}
+
+	if ciProvider != "circleci" {
+		return
+	}
+
+	if !h.shouldAutoApproveCircleCI(record) {
+		return
+	}
+
+	h.enqueueCircleCIApprovalJob(c, record)
+}
+
+func (h *AdminHandler) shouldAutoApproveCircleCI(record *db.DeployApprovalRequest) bool {
+	autoApprove, err := getAppSettingBool(
+		h.settingsService,
+		record.App,
+		settings.KeyCircleCIAutoApproveOnApproval,
+		false,
+	)
+	if err != nil {
+		log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
+		return false
+	}
+
+	if !autoApprove {
+		return false
+	}
+
+	if h.config == nil || h.config.CircleCIToken == "" {
+		log.Printf("WARN: CircleCI auto-approve enabled but no CircleCIToken configured")
+		return false
+	}
+
+	return true
+}
+
+func (h *AdminHandler) enqueueCircleCIApprovalJob(c *gin.Context, record *db.DeployApprovalRequest) {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(record.CIMetadata, &metadata); err != nil {
+		log.Printf("WARN: Failed to unmarshal CircleCI metadata: %v", err)
+		return
+	}
+
+	approvalJobName, err := getAppSettingString(h.settingsService, record.App, settings.KeyCircleCIApprovalJobName, "")
+	if err != nil {
+		log.Printf("WARN: Failed to get circleci_approval_job_name setting: %v", err)
+		return
+	}
+
+	if approvalJobName == "" {
+		log.Printf("WARN: CircleCI auto-approve enabled but no approval_job_name configured for app %s", record.App)
+		return
+	}
+
+	metadata["approval_job_name"] = approvalJobName
+
+	circleciMetadata, err := circleci.ParseMetadata(metadata)
+	if err != nil {
+		log.Printf("WARN: Invalid CircleCI metadata: %v", err)
+		return
+	}
+
+	if h.jobsClient != nil {
+		_, err := h.jobsClient.Insert(c.Request.Context(), jobcircleci.ApproveJobArgs{
+			CircleCIToken:   h.config.CircleCIToken,
+			WorkflowID:      circleciMetadata.WorkflowID,
+			ApprovalJobName: circleciMetadata.ApprovalJobName,
+		}, &river.InsertOpts{
+			Queue:       jobs.QueueIntegrations,
+			MaxAttempts: jobs.MaxAttemptsNotification,
+		})
+		if err != nil {
+			log.Printf("ERROR: Failed to enqueue CircleCI approval job: %v", err)
+		}
+	}
+}
+
+// GetDeployApprovalRequestAuditLogs godoc
+// @Summary Get audit logs for a deploy approval request
+// @Description Returns audit logs for a specific deploy approval request
+// @Tags Deploy Approvals
+// @Produce json
+// @Param id path string true "Deploy approval request public ID"
+// @Param limit query integer false "Maximum number of results (default: 100)"
+// @Success 200 {object} RawAuditLogsResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /deploy-approval-requests/{id}/audit-logs [get]
 func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
 	if _, ok := h.requireDeployApprovalAccess(c, rbac.ActionApprove); !ok {
 		return

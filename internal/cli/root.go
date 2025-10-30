@@ -27,7 +27,7 @@ Rack management:
   rack-gateway racks               # List all racks
   rack-gateway switch <rack>       # Switch to a different rack
   rack-gateway login <rack> <url>  # Login to a new rack`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			// If no subcommand is specified, show help
 			return cmd.Help()
 		},
@@ -37,7 +37,7 @@ Rack management:
 	rootCmd.PersistentFlags().StringVar(&ConfigPath, "config", ConfigPath, "Config directory")
 	rootCmd.PersistentFlags().StringVar(&RackFlag, "rack", "", "Rack to use (overrides current rack)")
 	rootCmd.PersistentFlags().
-		StringVar(&APITokenFlag, "api-token", "", "API token to use for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
+		StringVar(&APITokenFlag, "api-token", "", "API token for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
 	rootCmd.PersistentFlags().StringVar(&MFAMethodFlag, "mfa-method", "", "MFA method to use (totp or webauthn)")
 	rootCmd.PersistentFlags().
 		StringVar(&MFACodeFlag, "mfa-code", "", "MFA code (TOTP/Yubikey/backup) for step-up authentication")

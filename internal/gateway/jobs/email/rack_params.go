@@ -18,18 +18,22 @@ type RackParamsChangedArgs struct {
 	Changes     string   `json:"changes"`
 }
 
+// Kind returns the job kind identifier for rack params change notifications
 func (RackParamsChangedArgs) Kind() string { return "email:rack:params_changed" }
 
+// RackParamsChangedWorker sends email notifications when rack parameters are changed
 type RackParamsChangedWorker struct {
 	river.WorkerDefaults[RackParamsChangedArgs]
 	emailSender gtwemail.Sender
 }
 
+// NewRackParamsChangedWorker creates a new worker for rack params change notifications
 func NewRackParamsChangedWorker(emailSender gtwemail.Sender) *RackParamsChangedWorker {
 	return &RackParamsChangedWorker{emailSender: emailSender}
 }
 
-func (w *RackParamsChangedWorker) Work(ctx context.Context, job *river.Job[RackParamsChangedArgs]) error {
+// Work processes a rack params change notification job and sends emails to admins
+func (w *RackParamsChangedWorker) Work(_ context.Context, job *river.Job[RackParamsChangedArgs]) error {
 	args := job.Args
 	if len(args.AdminEmails) == 0 {
 		return nil

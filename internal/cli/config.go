@@ -22,11 +22,10 @@ func LoadConfig() (*Config, bool, error) {
 	data, err := os.ReadFile(path)
 	exists := true
 	if err != nil {
-		if os.IsNotExist(err) {
-			exists = false
-		} else {
+		if !os.IsNotExist(err) {
 			return nil, false, err
 		}
+		exists = false
 	} else {
 		if err := json.Unmarshal(data, cfg); err != nil {
 			return nil, false, err

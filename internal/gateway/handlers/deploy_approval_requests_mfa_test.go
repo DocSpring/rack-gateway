@@ -18,17 +18,24 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
-func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
+type deployApprovalMFATestFixture struct {
+	admin          *db.User
+	apiToken       *db.APIToken
+	totpKey        *otp.Key
+	handler        *AdminHandler
+	sessionManager *auth.SessionManager
+	mfaService     *mfa.Service
+	mfaSettings    *db.MFASettings
+}
 
+func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployApprovalMFATestFixture {
 	// Create admin user with TOTP MFA enrolled
 	admin, err := database.CreateUser("admin@test.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -48,26 +55,10 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	err = database.ConfirmMFAMethod(method.ID, time.Now())
 	require.NoError(t, err)
 
-	// Create API token for deploy requests
+	// Create API apiToken for deploy requests
 	tokenHash := "test-token-hash-12345"
-	token, err := database.CreateAPIToken(tokenHash, "test-token", admin.ID, []string{"deployer"}, nil, nil)
+	apiToken, err := database.CreateAPIToken(tokenHash, "test-token", admin.ID, []string{"deployer"}, nil, nil)
 	require.NoError(t, err)
-
-	// Create a pending deploy approval request
-	req, err := database.CreateDeployApprovalRequest(
-		"Test deploy",
-		"test-app",
-		"abc123",
-		"main",
-		"",           // prURL
-		[]byte("{}"), // ciMetadata - must be valid JSON
-		admin.ID,     // createdByUserID
-		nil,          // createdByAPITokenID
-		token.ID,     // targetAPITokenID
-		&admin.ID,    // targetUserID
-	)
-	require.NoError(t, err)
-	require.Equal(t, "pending", req.Status)
 
 	// Create handler and MFA service
 	rbacManager := newAllowAllRBAC(admin)
@@ -90,9 +81,43 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	mfaSettings, err := settingsService.GetMFASettings()
 	require.NoError(t, err)
 
+	return &deployApprovalMFATestFixture{
+		admin:          admin,
+		apiToken:       apiToken,
+		totpKey:        key,
+		handler:        handler,
+		sessionManager: sessionManager,
+		mfaService:     mfaService,
+		mfaSettings:    mfaSettings,
+	}
+}
+
+func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+
+	fixture := setupDeployApprovalMFATest(t, database)
+
+	// Create a pending deploy approval request
+	req, err := database.CreateDeployApprovalRequest(
+		"Test deploy",
+		"test-app",
+		"abc123",
+		"main",
+		"",                  // prURL
+		[]byte("{}"),        // ciMetadata - must be valid JSON
+		fixture.admin.ID,    // createdByUserID
+		nil,                 // createdByAPITokenID
+		fixture.apiToken.ID, // targetAPITokenID
+		&fixture.admin.ID,   // targetUserID
+	)
+	require.NoError(t, err)
+	require.Equal(t, "pending", req.Status)
+
 	t.Run("denies approval without MFA code", func(t *testing.T) {
 		// Create a session for the admin user with MFA verified
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
+		_, session, err := fixture.sessionManager.CreateSession(fixture.admin, auth.SessionMetadata{Channel: "web"})
 		require.NoError(t, err)
 		require.NotNil(t, session)
 
@@ -103,18 +128,18 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.User{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
+				Email:      fixture.admin.Email,
+				Name:       fixture.admin.Name,
+				Roles:      fixture.admin.Roles,
 				IsAPIToken: false,
 				Session:    session,
 				// NO MFAType or MFAValue - this is the key difference
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", admin.Email)
-			c.Set("user_name", admin.Name)
+			c.Set("user_email", fixture.admin.Email)
+			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request WITHOUT MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -143,17 +168,17 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			"test-app-2",
 			"def456",
 			"main",
-			"",           // prURL
-			[]byte("{}"), // ciMetadata - must be valid JSON
-			admin.ID,     // createdByUserID
-			nil,          // createdByAPITokenID
-			token.ID,     // targetAPITokenID
-			&admin.ID,    // targetUserID
+			"",                   // prURL
+			[]byte("{}"),         // ciMetadata - must be valid JSON
+			fixture.admin.ID,     // createdByUserID
+			nil,                  // createdByAPITokenID
+			fixture.apiToken.ID,  // targetAPITokenID
+			&fixture.admin.ID,    // targetUserID
 		)
 		require.NoError(t, err)
 
 		// Create a fresh session for the admin user
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
+		_, session, err := fixture.sessionManager.CreateSession(fixture.admin, auth.SessionMetadata{Channel: "web"})
 		require.NoError(t, err)
 		require.NotNil(t, session)
 
@@ -162,25 +187,25 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		session.MFAVerifiedAt = &now
 
 		// Generate a valid TOTP code
-		code, err := totp.GenerateCode(key.Secret(), time.Now())
+		code, err := totp.GenerateCode(fixture.totpKey.Secret(), time.Now())
 		require.NoError(t, err)
 
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.User{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
+				Email:      fixture.admin.Email,
+				Name:       fixture.admin.Name,
+				Roles:      fixture.admin.Roles,
 				IsAPIToken: false,
 				Session:    session,
 				MFAType:    "totp", // Provide MFA type
 				MFAValue:   code,   // Provide valid TOTP code
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", admin.Email)
-			c.Set("user_name", admin.Name)
+			c.Set("user_email", fixture.admin.Email)
+			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request WITH valid MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -204,7 +229,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 
 	t.Run("denies approval with invalid TOTP code", func(t *testing.T) {
 		// Create a fresh session for the admin user
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
+		_, session, err := fixture.sessionManager.CreateSession(fixture.admin, auth.SessionMetadata{Channel: "web"})
 		require.NoError(t, err)
 		require.NotNil(t, session)
 
@@ -215,19 +240,19 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
 			authUser := &auth.User{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
+				Email:      fixture.admin.Email,
+				Name:       fixture.admin.Name,
+				Roles:      fixture.admin.Roles,
 				IsAPIToken: false,
 				Session:    session,
 				MFAType:    "totp",
 				MFAValue:   "000000", // Invalid TOTP code
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", admin.Email)
-			c.Set("user_name", admin.Name)
+			c.Set("user_email", fixture.admin.Email)
+			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request WITH invalid MFA code
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -252,19 +277,20 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	t.Run("allows API tokens with proper permissions", func(t *testing.T) {
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
+			tokenID := fixture.apiToken.ID
 			authUser := &auth.User{
-				Email:       admin.Email,
-				Name:        admin.Name,
+				Email:       fixture.admin.Email,
+				Name:        fixture.admin.Name,
 				Permissions: []string{"convox:apps:*"},
 				IsAPIToken:  true, // This is an API token
-				TokenID:     &token.ID,
+				TokenID:     &tokenID,
 				TokenName:   "test-token",
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", admin.Email)
-			c.Set("user_name", admin.Name)
+			c.Set("user_email", fixture.admin.Email)
+			c.Set("user_name", fixture.admin.Name)
 			c.Next()
-		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.ApproveDeployApprovalRequest)
+		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.ApproveDeployApprovalRequest)
 
 		// Make request as API token
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
@@ -295,51 +321,14 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 
-	// Create admin user with TOTP MFA enrolled
-	admin, err := database.CreateUser("admin@test.com", "Admin User", []string{"admin"})
-	require.NoError(t, err)
-
-	// Create TOTP MFA method for admin
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "Test",
-		AccountName: admin.Email,
-		Period:      30,
-		Digits:      otp.DigitsSix,
-	})
-	require.NoError(t, err)
-
-	method, err := database.CreateMFAMethod(admin.ID, "totp", "Authenticator", key.Secret(), nil, nil, nil, nil)
-	require.NoError(t, err)
-
-	err = database.ConfirmMFAMethod(method.ID, time.Now())
-	require.NoError(t, err)
-
-	// Create handler and MFA service
-	rbacManager := newAllowAllRBAC(admin)
-	auditLogger := audit.NewLogger(database)
-	tokenService := token.NewService(database)
-	handler := &AdminHandler{
-		rbac:         rbacManager,
-		database:     database,
-		auditLogger:  auditLogger,
-		config:       &config.Config{},
-		tokenService: tokenService,
-	}
-
-	// Create session manager and MFA service
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
-	pepper := []byte("test-pepper")
-	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-	require.NoError(t, err)
-
-	// Get MFA settings
-	settingsService := settings.NewService(database)
-	mfaSettings, err := settingsService.GetMFASettings()
-	require.NoError(t, err)
+	fixture := setupDeployApprovalMFATest(t, database)
+	// Add token service to handler
+	tokenSvc := token.NewService(database)
+	fixture.handler.tokenService = tokenSvc
 
 	t.Run("denies token creation without MFA code", func(t *testing.T) {
 		// Create a session for the admin user
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
+		_, session, err := fixture.sessionManager.CreateSession(fixture.admin, auth.SessionMetadata{Channel: "web"})
 		require.NoError(t, err)
 
 		// Set MFA verified but NO MFA code in request
@@ -349,17 +338,17 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		router := gin.New()
 		router.POST("/api/v1/api-tokens", func(c *gin.Context) {
 			authUser := &auth.User{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
+				Email:      fixture.admin.Email,
+				Name:       fixture.admin.Name,
+				Roles:      fixture.admin.Roles,
 				IsAPIToken: false,
 				Session:    session,
 				// NO MFAType or MFAValue
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", admin.Email)
+			c.Set("user_email", fixture.admin.Email)
 			c.Next()
-		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.CreateAPIToken)
+		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
 			"name":        "new-token",
@@ -381,7 +370,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 
 	t.Run("allows token creation with valid MFA code", func(t *testing.T) {
 		// Create a fresh session for the admin user
-		_, session, err := sessionManager.CreateSession(admin, auth.SessionMetadata{Channel: "web"})
+		_, session, err := fixture.sessionManager.CreateSession(fixture.admin, auth.SessionMetadata{Channel: "web"})
 		require.NoError(t, err)
 
 		// Set MFA verified
@@ -389,24 +378,24 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 		session.MFAVerifiedAt = &now
 
 		// Generate a valid TOTP code
-		code, err := totp.GenerateCode(key.Secret(), time.Now())
+		code, err := totp.GenerateCode(fixture.totpKey.Secret(), time.Now())
 		require.NoError(t, err)
 
 		router := gin.New()
 		router.POST("/api/v1/api-tokens", func(c *gin.Context) {
 			authUser := &auth.User{
-				Email:      admin.Email,
-				Name:       admin.Name,
-				Roles:      admin.Roles,
+				Email:      fixture.admin.Email,
+				Name:       fixture.admin.Name,
+				Roles:      fixture.admin.Roles,
 				IsAPIToken: false,
 				Session:    session,
 				MFAType:    "totp",
 				MFAValue:   code,
 			}
 			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-			c.Set("user_email", admin.Email)
+			c.Set("user_email", fixture.admin.Email)
 			c.Next()
-		}, middleware.EnforceMFARequirements(mfaService, database, mfaSettings), handler.CreateAPIToken)
+		}, middleware.EnforceMFARequirements(fixture.mfaService, database, fixture.mfaSettings), fixture.handler.CreateAPIToken)
 
 		reqBody := map[string]interface{}{
 			"name":        "new-token",

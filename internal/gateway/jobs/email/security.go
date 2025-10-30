@@ -32,7 +32,7 @@ func NewFailedMFAWorker(emailSender email.Sender) *FailedMFAWorker {
 }
 
 // Work sends the failed MFA attempt email
-func (w *FailedMFAWorker) Work(ctx context.Context, job *river.Job[FailedMFAArgs]) error {
+func (w *FailedMFAWorker) Work(_ context.Context, job *river.Job[FailedMFAArgs]) error {
 	args := job.Args
 
 	subject := "Failed MFA Verification Attempt"
@@ -102,7 +102,7 @@ func NewFailedLoginWorker(emailSender email.Sender) *FailedLoginWorker {
 }
 
 // Work sends the failed login attempt email
-func (w *FailedLoginWorker) Work(ctx context.Context, job *river.Job[FailedLoginArgs]) error {
+func (w *FailedLoginWorker) Work(_ context.Context, job *river.Job[FailedLoginArgs]) error {
 	args := job.Args
 
 	subject := "Failed Login Attempt"
@@ -179,7 +179,7 @@ func NewRateLimitUserWorker(emailSender email.Sender) *RateLimitUserWorker {
 }
 
 // Work sends the rate limit exceeded email to the user
-func (w *RateLimitUserWorker) Work(ctx context.Context, job *river.Job[RateLimitUserArgs]) error {
+func (w *RateLimitUserWorker) Work(_ context.Context, job *river.Job[RateLimitUserArgs]) error {
 	args := job.Args
 
 	subject := "Rate Limit Exceeded"
@@ -253,7 +253,7 @@ func NewRateLimitAdminWorker(emailSender email.Sender) *RateLimitAdminWorker {
 }
 
 // Work sends the rate limit exceeded alert to admins
-func (w *RateLimitAdminWorker) Work(ctx context.Context, job *river.Job[RateLimitAdminArgs]) error {
+func (w *RateLimitAdminWorker) Work(_ context.Context, job *river.Job[RateLimitAdminArgs]) error {
 	args := job.Args
 
 	subject := fmt.Sprintf("Rate Limit Exceeded - User %s", args.UserEmail)

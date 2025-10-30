@@ -35,7 +35,7 @@ func TestAuthServiceAllowsCookieSession(t *testing.T) {
 	svc := NewAuthService(nil, database, sessionManager)
 
 	nextCalled := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		nextCalled = true
 		user, ok := GetAuthUser(r.Context())
 		if !ok {

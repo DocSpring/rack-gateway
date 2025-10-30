@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"log"
@@ -18,40 +19,78 @@ var migrationsFS embed.FS
 // migrateAll applies embedded migrations in lexical order using a simple schema_migrations table.
 func (d *Database) migrateAll() error {
 	// Acquire a cluster-wide advisory lock to serialize migration runs.
-	if _, err := d.db.Exec(`SELECT pg_advisory_lock($1)`, AdvisoryLockMigration); err != nil {
+	if err := d.acquireMigrationLock(); err != nil {
 		return err
 	}
-	defer func() {
-		_, _ = d.db.Exec(`SELECT pg_advisory_unlock($1)`, AdvisoryLockMigration)
-	}()
+	defer d.releaseMigrationLock()
 
-	if _, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
+	if err := d.createMigrationsTable(); err != nil {
 		return err
 	}
-	// Base schema is defined in the timestamped init SQL; apply migrations in order.
-	entries, err := migrationsFS.ReadDir("migrations")
+
+	applied, err := d.loadAppliedMigrations()
 	if err != nil {
 		return err
 	}
-	// read applied
+
+	migrationFiles, err := d.loadMigrationFiles()
+	if err != nil {
+		return err
+	}
+
+	if err := d.applyPendingMigrations(migrationFiles, applied); err != nil {
+		return err
+	}
+
+	// Run River migrations after SQL migrations complete
+	if err := d.migrateRiver(context.Background()); err != nil {
+		return fmt.Errorf("failed to run River migrations: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Database) acquireMigrationLock() error {
+	_, err := d.db.Exec(`SELECT pg_advisory_lock($1)`, AdvisoryLockMigration)
+	return err
+}
+
+func (d *Database) releaseMigrationLock() {
+	_, _ = d.db.Exec(`SELECT pg_advisory_unlock($1)`, AdvisoryLockMigration)
+}
+
+func (d *Database) createMigrationsTable() error {
+	createSQL := `CREATE TABLE IF NOT EXISTS schema_migrations ` +
+		`(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`
+	_, err := d.db.Exec(createSQL)
+	return err
+}
+
+func (d *Database) loadAppliedMigrations() (map[string]bool, error) {
 	applied := map[string]bool{}
 	rows, err := d.db.Query(`SELECT version FROM schema_migrations`)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var v string
 		if err := rows.Scan(&v); err != nil {
-			if err := rows.Close(); err != nil {
-				return err
-			}
-			return err
+			return nil, err
 		}
 		applied[v] = true
 	}
-	if err := rows.Close(); err != nil {
-		return err
+
+	return applied, rows.Err()
+}
+
+func (d *Database) loadMigrationFiles() ([]string, error) {
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return nil, err
 	}
+
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() {
@@ -63,42 +102,59 @@ func (d *Database) migrateAll() error {
 		}
 	}
 	sort.Strings(names)
-	for _, name := range names {
-		version := strings.TrimSuffix(name, ".sql")
-		// Extract just the timestamp prefix (before first underscore)
-		if idx := strings.Index(version, "_"); idx > 0 {
-			version = version[:idx]
-		}
+	return names, nil
+}
+
+func (d *Database) applyPendingMigrations(files []string, applied map[string]bool) error {
+	for _, name := range files {
+		version := extractVersionFromFilename(name)
 		if applied[version] {
 			continue
 		}
-		sqlBytes, err := migrationsFS.ReadFile("migrations/" + name)
-		if err != nil {
-			return err
-		}
-		tx, err := d.db.Begin()
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(string(sqlBytes)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("migration %s failed: %w", name, err)
-		}
-		if _, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES ($1)`, version); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		if err := tx.Commit(); err != nil {
+
+		if err := d.applyMigration(name, version); err != nil {
 			return err
 		}
 	}
-
-	// Run River migrations after SQL migrations complete
-	if err := d.migrateRiver(context.Background()); err != nil {
-		return fmt.Errorf("failed to run River migrations: %w", err)
-	}
-
 	return nil
+}
+
+func extractVersionFromFilename(name string) string {
+	version := strings.TrimSuffix(name, ".sql")
+	// Extract just the timestamp prefix (before first underscore)
+	if idx := strings.Index(version, "_"); idx > 0 {
+		version = version[:idx]
+	}
+	return version
+}
+
+func (d *Database) applyMigration(name, version string) error {
+	sqlBytes, err := migrationsFS.ReadFile("migrations/" + name)
+	if err != nil {
+		return err
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(string(sqlBytes)); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("migration %s failed: %w", name, err)
+	}
+
+	if err := d.recordMigration(tx, version); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (d *Database) recordMigration(tx *sql.Tx, version string) error {
+	_, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES ($1)`, version)
+	return err
 }
 
 // migrateRiver runs River's database migrations using the rivermigrate package.

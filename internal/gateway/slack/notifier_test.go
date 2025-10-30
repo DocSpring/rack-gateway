@@ -332,126 +332,135 @@ func TestNotifyDeployApprovalCreated(t *testing.T) {
 	})
 }
 
-func TestFormatDeployApprovalAlert(t *testing.T) {
+func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })
-
 	notifier := NewNotifier(database)
 
-	t.Run("formats basic message", func(t *testing.T) {
-		now := time.Now()
-		req := &db.DeployApprovalRequest{
-			ID:            1,
-			PublicID:      "req_abc123",
-			App:           "myapp",
-			GitBranch:     "feature-branch",
-			GitCommitHash: "abc123def456789",
-			Message:       "Deploy feature X",
-			CreatedAt:     now,
-		}
+	now := time.Now()
+	req := &db.DeployApprovalRequest{
+		ID:            1,
+		PublicID:      "req_abc123",
+		App:           "myapp",
+		GitBranch:     "feature-branch",
+		GitCommitHash: "abc123def456789",
+		Message:       "Deploy feature X",
+		CreatedAt:     now,
+	}
 
-		text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
 
-		// Check text contains key elements
-		require.Contains(t, text, "feature-branch")
-		require.Contains(t, text, "Deploy feature X")
-		require.Contains(t, text, "🚀")
+	// Check text contains key elements
+	require.Contains(t, text, "feature-branch")
+	require.Contains(t, text, "Deploy feature X")
+	require.Contains(t, text, "🚀")
 
-		// Check blocks structure
-		blocksJSON, err := json.Marshal(blocks)
-		require.NoError(t, err)
-		blocksStr := string(blocksJSON)
+	// Check blocks structure
+	blocksJSON, err := json.Marshal(blocks)
+	require.NoError(t, err)
+	blocksStr := string(blocksJSON)
 
-		require.Contains(t, blocksStr, "feature-branch")
-		require.Contains(t, blocksStr, "myapp")
-		require.Contains(t, blocksStr, "abc123d") // First 7 chars of commit
-		require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approvals/req_abc123")
-	})
+	require.Contains(t, blocksStr, "feature-branch")
+	require.Contains(t, blocksStr, "myapp")
+	require.Contains(t, blocksStr, "abc123d") // First 7 chars of commit
+	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approvals/req_abc123")
+}
 
-	t.Run("formats message with PR and CI metadata", func(t *testing.T) {
-		now := time.Now()
-		ciMeta := map[string]interface{}{
-			"build_url": "https://circleci.com/gh/org/repo/123",
-		}
-		ciMetaBytes, err := json.Marshal(ciMeta)
-		require.NoError(t, err)
+func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+	notifier := NewNotifier(database)
 
-		req := &db.DeployApprovalRequest{
-			ID:             1,
-			PublicID:       "req_abc123",
-			App:            "myapp",
-			GitBranch:      "feature-branch",
-			GitCommitHash:  "abc123def456789",
-			Message:        "Deploy feature X",
-			PrURL:          "https://github.com/org/repo/pull/42",
-			CIMetadata:     ciMetaBytes,
-			CreatedByEmail: "user@example.com",
-			CreatedByName:  "Test User",
-			CreatedAt:      now,
-		}
+	now := time.Now()
+	ciMeta := map[string]interface{}{
+		"build_url": "https://circleci.com/gh/org/repo/123",
+	}
+	ciMetaBytes, err := json.Marshal(ciMeta)
+	require.NoError(t, err)
 
-		text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	req := &db.DeployApprovalRequest{
+		ID:             1,
+		PublicID:       "req_abc123",
+		App:            "myapp",
+		GitBranch:      "feature-branch",
+		GitCommitHash:  "abc123def456789",
+		Message:        "Deploy feature X",
+		PrURL:          "https://github.com/org/repo/pull/42",
+		CIMetadata:     ciMetaBytes,
+		CreatedByEmail: "user@example.com",
+		CreatedByName:  "Test User",
+		CreatedAt:      now,
+	}
 
-		require.Contains(t, text, "feature-branch")
+	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
 
-		blocksJSON, err := json.Marshal(blocks)
-		require.NoError(t, err)
-		blocksStr := string(blocksJSON)
+	require.Contains(t, text, "feature-branch")
 
-		// Check all links are present
-		require.Contains(t, blocksStr, "github.com/org/repo/pull/42")
-		require.Contains(t, blocksStr, "circleci.com/gh/org/repo/123")
-		require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approvals/req_abc123")
-		require.Contains(t, blocksStr, "Test User")
-		require.Contains(t, blocksStr, "user@example.com")
-	})
+	blocksJSON, err := json.Marshal(blocks)
+	require.NoError(t, err)
+	blocksStr := string(blocksJSON)
 
-	t.Run("formats message with API token creator", func(t *testing.T) {
-		now := time.Now()
-		req := &db.DeployApprovalRequest{
-			ID:                    1,
-			PublicID:              "req_abc123",
-			App:                   "myapp",
-			GitBranch:             "feature-branch",
-			GitCommitHash:         "abc123def456789",
-			Message:               "Deploy feature X",
-			CreatedByAPITokenName: "CI Token",
-			CreatedAt:             now,
-		}
+	// Check all links are present
+	require.Contains(t, blocksStr, "github.com/org/repo/pull/42")
+	require.Contains(t, blocksStr, "circleci.com/gh/org/repo/123")
+	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approvals/req_abc123")
+	require.Contains(t, blocksStr, "Test User")
+	require.Contains(t, blocksStr, "user@example.com")
+}
 
-		text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+func TestFormatDeployApprovalAlert_WithAPIToken(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+	notifier := NewNotifier(database)
 
-		require.Contains(t, text, "feature-branch")
+	now := time.Now()
+	req := &db.DeployApprovalRequest{
+		ID:                    1,
+		PublicID:              "req_abc123",
+		App:                   "myapp",
+		GitBranch:             "feature-branch",
+		GitCommitHash:         "abc123def456789",
+		Message:               "Deploy feature X",
+		CreatedByAPITokenName: "CI Token",
+		CreatedAt:             now,
+	}
 
-		blocksJSON, err := json.Marshal(blocks)
-		require.NoError(t, err)
-		blocksStr := string(blocksJSON)
+	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
 
-		require.Contains(t, blocksStr, "CI Token")
-		require.Contains(t, blocksStr, "API token")
-	})
+	require.Contains(t, text, "feature-branch")
 
-	t.Run("formats message without branch name", func(t *testing.T) {
-		now := time.Now()
-		req := &db.DeployApprovalRequest{
-			ID:            1,
-			PublicID:      "req_abc123",
-			App:           "myapp",
-			GitBranch:     "",
-			GitCommitHash: "abc123def456789",
-			Message:       "Deploy feature X",
-			CreatedAt:     now,
-		}
+	blocksJSON, err := json.Marshal(blocks)
+	require.NoError(t, err)
+	blocksStr := string(blocksJSON)
 
-		text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+	require.Contains(t, blocksStr, "CI Token")
+	require.Contains(t, blocksStr, "API token")
+}
 
-		// Should fall back to "unknown branch"
-		require.Contains(t, text, "unknown branch")
+func TestFormatDeployApprovalAlert_WithoutBranch(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { dbtest.Reset(t, database) })
+	notifier := NewNotifier(database)
 
-		blocksJSON, err := json.Marshal(blocks)
-		require.NoError(t, err)
-		blocksStr := string(blocksJSON)
+	now := time.Now()
+	req := &db.DeployApprovalRequest{
+		ID:            1,
+		PublicID:      "req_abc123",
+		App:           "myapp",
+		GitBranch:     "",
+		GitCommitHash: "abc123def456789",
+		Message:       "Deploy feature X",
+		CreatedAt:     now,
+	}
 
-		require.Contains(t, blocksStr, "unknown branch")
-	})
+	text, blocks := notifier.formatDeployApprovalAlert(req, "gateway.example.com")
+
+	// Should fall back to "unknown branch"
+	require.Contains(t, text, "unknown branch")
+
+	blocksJSON, err := json.Marshal(blocks)
+	require.NoError(t, err)
+	blocksStr := string(blocksJSON)
+
+	require.Contains(t, blocksStr, "unknown branch")
 }

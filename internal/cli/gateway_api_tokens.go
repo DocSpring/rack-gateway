@@ -49,6 +49,7 @@ type roleOption struct {
 	Permissions []string `json:"permissions"`
 }
 
+// APITokenCommand creates the api-token command for managing API tokens.
 func APITokenCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "api-token",

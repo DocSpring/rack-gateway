@@ -52,74 +52,51 @@ LEFT JOIN users approved_user ON approved_user.id = dr.approved_by_user_id
 LEFT JOIN users rejected_user ON rejected_user.id = dr.rejected_by_user_id
 `
 
+type deployApprovalNullables struct {
+	createdByUserID    sql.NullInt64
+	createdByEmail     sql.NullString
+	createdByName      sql.NullString
+	createdByTokenID   sql.NullInt64
+	createdTokenPublic sql.NullString
+	createdTokenName   sql.NullString
+	targetTokenPublic  sql.NullString
+	targetTokenName    sql.NullString
+	approvedByUserID   sql.NullInt64
+	approvedByEmail    sql.NullString
+	approvedByName     sql.NullString
+	approvedAt         sql.NullTime
+	approvalExpiresAt  sql.NullTime
+	rejectedByUserID   sql.NullInt64
+	rejectedByEmail    sql.NullString
+	rejectedByName     sql.NullString
+	rejectedAt         sql.NullTime
+	approvalNotes      sql.NullString
+	gitBranch          sql.NullString
+	prURL              sql.NullString
+	ciMetadata         []byte
+	app                sql.NullString
+	objectURL          sql.NullString
+	buildID            sql.NullString
+	releaseID          sql.NullString
+	processIDs         []string
+	execCommands       []byte
+}
+
 func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, error) {
 	var dr DeployApprovalRequest
-	var (
-		createdByUserID    sql.NullInt64
-		createdByEmail     sql.NullString
-		createdByName      sql.NullString
-		createdByTokenID   sql.NullInt64
-		createdTokenPublic sql.NullString
-		createdTokenName   sql.NullString
-		targetTokenPublic  sql.NullString
-		targetTokenName    sql.NullString
-		approvedByUserID   sql.NullInt64
-		approvedByEmail    sql.NullString
-		approvedByName     sql.NullString
-		approvedAt         sql.NullTime
-		approvalExpiresAt  sql.NullTime
-		rejectedByUserID   sql.NullInt64
-		rejectedByEmail    sql.NullString
-		rejectedByName     sql.NullString
-		rejectedAt         sql.NullTime
-		approvalNotes      sql.NullString
-		gitBranch          sql.NullString
-		prURL              sql.NullString
-		ciMetadata         []byte
-		app                sql.NullString
-		objectURL          sql.NullString
-		buildID            sql.NullString
-		releaseID          sql.NullString
-		processIDs         []string
-		execCommands       []byte // JSONB from PostgreSQL
-	)
+	var n deployApprovalNullables
 
 	if err := scanner.Scan(
-		&dr.ID,
-		&dr.PublicID,
-		&dr.Message,
-		&dr.Status,
-		&dr.CreatedAt,
-		&dr.UpdatedAt,
-		&createdByUserID,
-		&createdByEmail,
-		&createdByName,
-		&createdByTokenID,
-		&createdTokenPublic,
-		&createdTokenName,
-		&dr.TargetAPITokenID,
-		&targetTokenPublic,
-		&targetTokenName,
-		&approvedByUserID,
-		&approvedByEmail,
-		&approvedByName,
-		&approvedAt,
-		&approvalExpiresAt,
-		&rejectedByUserID,
-		&rejectedByEmail,
-		&rejectedByName,
-		&rejectedAt,
-		&approvalNotes,
-		&dr.GitCommitHash,
-		&gitBranch,
-		&prURL,
-		&ciMetadata,
-		&app,
-		&objectURL,
-		&buildID,
-		&releaseID,
-		pq.Array(&processIDs),
-		&execCommands,
+		&dr.ID, &dr.PublicID, &dr.Message, &dr.Status, &dr.CreatedAt, &dr.UpdatedAt,
+		&n.createdByUserID, &n.createdByEmail, &n.createdByName,
+		&n.createdByTokenID, &n.createdTokenPublic, &n.createdTokenName,
+		&dr.TargetAPITokenID, &n.targetTokenPublic, &n.targetTokenName,
+		&n.approvedByUserID, &n.approvedByEmail, &n.approvedByName,
+		&n.approvedAt, &n.approvalExpiresAt,
+		&n.rejectedByUserID, &n.rejectedByEmail, &n.rejectedByName, &n.rejectedAt,
+		&n.approvalNotes, &dr.GitCommitHash, &n.gitBranch, &n.prURL,
+		&n.ciMetadata, &n.app, &n.objectURL, &n.buildID, &n.releaseID,
+		pq.Array(&n.processIDs), &n.execCommands,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeployApprovalRequestNotFound
@@ -127,89 +104,109 @@ func scanDeployApprovalRequest(scanner rowScanner) (*DeployApprovalRequest, erro
 		return nil, err
 	}
 
-	if createdByUserID.Valid {
-		dr.CreatedByUserID = &createdByUserID.Int64
+	applyDeployApprovalNullables(&dr, &n)
+	return &dr, nil
+}
+
+func applyDeployApprovalNullables(dr *DeployApprovalRequest, n *deployApprovalNullables) {
+	applyCreatorFields(dr, n)
+	applyApprovalFields(dr, n)
+	applyRejectionFields(dr, n)
+	applyMetadataFields(dr, n)
+}
+
+func applyCreatorFields(dr *DeployApprovalRequest, n *deployApprovalNullables) {
+	if n.createdByUserID.Valid {
+		dr.CreatedByUserID = &n.createdByUserID.Int64
 	}
-	if createdByEmail.Valid {
-		dr.CreatedByEmail = createdByEmail.String
+	if n.createdByEmail.Valid {
+		dr.CreatedByEmail = n.createdByEmail.String
 	}
-	if createdByName.Valid {
-		dr.CreatedByName = createdByName.String
+	if n.createdByName.Valid {
+		dr.CreatedByName = n.createdByName.String
 	}
-	if createdByTokenID.Valid {
-		dr.CreatedByAPITokenID = &createdByTokenID.Int64
+	if n.createdByTokenID.Valid {
+		dr.CreatedByAPITokenID = &n.createdByTokenID.Int64
 	}
-	if createdTokenPublic.Valid {
-		dr.CreatedByAPITokenPublicID = createdTokenPublic.String
+	if n.createdTokenPublic.Valid {
+		dr.CreatedByAPITokenPublicID = n.createdTokenPublic.String
 	}
-	if createdTokenName.Valid {
-		dr.CreatedByAPITokenName = createdTokenName.String
+	if n.createdTokenName.Valid {
+		dr.CreatedByAPITokenName = n.createdTokenName.String
 	}
-	if targetTokenPublic.Valid {
-		dr.TargetAPITokenPublicID = targetTokenPublic.String
+	if n.targetTokenPublic.Valid {
+		dr.TargetAPITokenPublicID = n.targetTokenPublic.String
 	}
-	if targetTokenName.Valid {
-		dr.TargetAPITokenName = targetTokenName.String
+	if n.targetTokenName.Valid {
+		dr.TargetAPITokenName = n.targetTokenName.String
 	}
-	if approvedByUserID.Valid {
-		dr.ApprovedByUserID = &approvedByUserID.Int64
+}
+
+func applyApprovalFields(dr *DeployApprovalRequest, n *deployApprovalNullables) {
+	if n.approvedByUserID.Valid {
+		dr.ApprovedByUserID = &n.approvedByUserID.Int64
 	}
-	if approvedByEmail.Valid {
-		dr.ApprovedByEmail = approvedByEmail.String
+	if n.approvedByEmail.Valid {
+		dr.ApprovedByEmail = n.approvedByEmail.String
 	}
-	if approvedByName.Valid {
-		dr.ApprovedByName = approvedByName.String
+	if n.approvedByName.Valid {
+		dr.ApprovedByName = n.approvedByName.String
 	}
-	if approvedAt.Valid {
-		t := approvedAt.Time
+	if n.approvedAt.Valid {
+		t := n.approvedAt.Time
 		dr.ApprovedAt = &t
 	}
-	if approvalExpiresAt.Valid {
-		t := approvalExpiresAt.Time
+	if n.approvalExpiresAt.Valid {
+		t := n.approvalExpiresAt.Time
 		dr.ApprovalExpiresAt = &t
 	}
-	if rejectedByUserID.Valid {
-		dr.RejectedByUserID = &rejectedByUserID.Int64
+	if n.approvalNotes.Valid {
+		dr.ApprovalNotes = n.approvalNotes.String
 	}
-	if rejectedByEmail.Valid {
-		dr.RejectedByEmail = rejectedByEmail.String
+}
+
+func applyRejectionFields(dr *DeployApprovalRequest, n *deployApprovalNullables) {
+	if n.rejectedByUserID.Valid {
+		dr.RejectedByUserID = &n.rejectedByUserID.Int64
 	}
-	if rejectedByName.Valid {
-		dr.RejectedByName = rejectedByName.String
+	if n.rejectedByEmail.Valid {
+		dr.RejectedByEmail = n.rejectedByEmail.String
 	}
-	if rejectedAt.Valid {
-		t := rejectedAt.Time
+	if n.rejectedByName.Valid {
+		dr.RejectedByName = n.rejectedByName.String
+	}
+	if n.rejectedAt.Valid {
+		t := n.rejectedAt.Time
 		dr.RejectedAt = &t
 	}
-	if approvalNotes.Valid {
-		dr.ApprovalNotes = approvalNotes.String
+}
+
+func applyMetadataFields(dr *DeployApprovalRequest, n *deployApprovalNullables) {
+	if n.gitBranch.Valid {
+		dr.GitBranch = n.gitBranch.String
 	}
-	if gitBranch.Valid {
-		dr.GitBranch = gitBranch.String
+	if n.prURL.Valid {
+		dr.PrURL = n.prURL.String
 	}
-	if prURL.Valid {
-		dr.PrURL = prURL.String
+	if len(n.ciMetadata) > 0 {
+		dr.CIMetadata = n.ciMetadata
 	}
-	if len(ciMetadata) > 0 {
-		dr.CIMetadata = ciMetadata
+	if n.app.Valid {
+		dr.App = n.app.String
 	}
-	if app.Valid {
-		dr.App = app.String
+	if n.objectURL.Valid {
+		dr.ObjectURL = n.objectURL.String
 	}
-	if objectURL.Valid {
-		dr.ObjectURL = objectURL.String
+	if n.buildID.Valid {
+		dr.BuildID = n.buildID.String
 	}
-	if buildID.Valid {
-		dr.BuildID = buildID.String
+	if n.releaseID.Valid {
+		dr.ReleaseID = n.releaseID.String
 	}
-	if releaseID.Valid {
-		dr.ReleaseID = releaseID.String
+	if len(n.processIDs) > 0 {
+		dr.ProcessIDs = append([]string{}, n.processIDs...)
 	}
-	if len(processIDs) > 0 {
-		dr.ProcessIDs = append([]string{}, processIDs...)
+	if len(n.execCommands) > 0 {
+		dr.ExecCommands = n.execCommands
 	}
-	if len(execCommands) > 0 {
-		dr.ExecCommands = execCommands
-	}
-	return &dr, nil
 }

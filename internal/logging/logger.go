@@ -257,26 +257,41 @@ func (l *Logger) addTopicsLocked(topics ...string) {
 		if n == "" {
 			continue
 		}
-		if n == "*" || n == "all" {
-			l.wildcard = true
-			continue
-		}
-		if strings.HasSuffix(n, ".*") {
-			prefix := strings.TrimSuffix(n, ".*")
-			if prefix != "" {
-				l.prefixTopics = append(l.prefixTopics, prefix)
-			}
-			continue
-		}
-		if strings.HasSuffix(n, "*") {
-			prefix := strings.TrimSuffix(n, "*")
-			if prefix != "" {
-				l.prefixTopics = append(l.prefixTopics, prefix)
-			}
-			continue
-		}
-		l.explicit[n] = struct{}{}
+		l.addSingleTopicLocked(n)
 	}
+}
+
+func (l *Logger) addSingleTopicLocked(n string) {
+	if isWildcardTopic(n) {
+		l.wildcard = true
+		return
+	}
+	if addPrefixTopic(n, &l.prefixTopics) {
+		return
+	}
+	l.explicit[n] = struct{}{}
+}
+
+func isWildcardTopic(topic string) bool {
+	return topic == "*" || topic == "all"
+}
+
+func addPrefixTopic(topic string, prefixTopics *[]string) bool {
+	if strings.HasSuffix(topic, ".*") {
+		prefix := strings.TrimSuffix(topic, ".*")
+		if prefix != "" {
+			*prefixTopics = append(*prefixTopics, prefix)
+		}
+		return true
+	}
+	if strings.HasSuffix(topic, "*") {
+		prefix := strings.TrimSuffix(topic, "*")
+		if prefix != "" {
+			*prefixTopics = append(*prefixTopics, prefix)
+		}
+		return true
+	}
+	return false
 }
 
 func parseLevel(raw string, fallback Level) Level {

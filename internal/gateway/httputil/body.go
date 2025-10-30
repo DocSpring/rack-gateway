@@ -17,7 +17,8 @@ func TruncateBytes(body []byte, limit int) []byte {
 	return append(truncated, []byte("…(truncated)")...)
 }
 
-// TruncateString truncates a byte slice to the specified limit and returns it as a string with truncation indicator if needed.
+// TruncateString truncates a byte slice to the specified limit and returns it as a string with
+// truncation indicator if needed.
 func TruncateString(body []byte, limit int) string {
 	if limit <= 0 || len(body) <= limit {
 		return string(body)

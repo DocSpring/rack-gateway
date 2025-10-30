@@ -20,21 +20,6 @@ type LockUserRequest struct {
 
 // LockUser godoc
 // @Summary Lock a user account
-// AdminHandler is the handler for admin operations.
-type AdminHandler struct {
-	_           rbac.Manager
-	database    *db.Database
-	_           *token.Service
-	emailSender email.Sender
-	_           *config.Config
-	_           *rackcert.Manager
-	sessions    *auth.SessionManager
-	_           *db.MFASettings
-	_           *audit.Logger
-	_           *settings.Service
-	_           *jobs.Client
-}
-
 // @Description Locks a user account to prevent login
 // @Tags admin
 // @Accept json

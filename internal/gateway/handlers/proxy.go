@@ -14,9 +14,9 @@ type ProxyHandler struct {
 }
 
 // NewProxyHandler creates a new proxy handler
-func NewProxyHandler(proxy *proxy.Handler) *ProxyHandler {
+func NewProxyHandler(proxyHandler *proxy.Handler) *ProxyHandler {
 	return &ProxyHandler{
-		proxy: proxy,
+		proxy: proxyHandler,
 	}
 }
 

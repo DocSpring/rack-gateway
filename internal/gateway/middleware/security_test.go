@@ -56,7 +56,7 @@ func TestHostValidatorAllowsKubeProbe(t *testing.T) {
 	}, http.StatusOK)
 }
 
-func setupMiddlewareTest(t *testing.T, cfg *config.Config, ginModes ...string) (*gin.Engine, func()) {
+func setupMiddlewareTest(_ *testing.T, cfg *config.Config, ginModes ...string) (*gin.Engine, func()) {
 	originalMode := gin.Mode()
 	targetMode := gin.ReleaseMode
 	if len(ginModes) > 0 {

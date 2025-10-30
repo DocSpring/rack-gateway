@@ -5,7 +5,8 @@ const (
 	webRootPath = "/app"
 
 	// DefaultWebRoute is the landing page for the SPA after login.
-	DefaultWebRoute    = webRootPath + "/rack"
+	DefaultWebRoute = webRootPath + "/rack"
+	// WebLoginErrorRoute is the error page route for web authentication failures.
 	WebLoginErrorRoute = webRootPath + "/auth/error"
 )
 

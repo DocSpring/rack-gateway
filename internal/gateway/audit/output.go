@@ -6,7 +6,8 @@ import (
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
-func writeAuditLine(data []byte) {
+// WriteAuditLine writes an audit log line to stdout with a trailing newline.
+func WriteAuditLine(data []byte) {
 	if len(data) == 0 {
 		data = []byte("{}")
 	}

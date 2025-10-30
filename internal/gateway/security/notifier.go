@@ -249,8 +249,10 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
+			action := audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded)
 			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),"error":%q}`,
+				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
+				action,
 				err,
 			)
 		}

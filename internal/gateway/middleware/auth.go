@@ -16,7 +16,7 @@ import (
 )
 
 // Authenticated enforces authentication for browser/admin API requests, supporting both session tokens and cookies.
-func Authenticated(authService *auth.Service, rbacManager rbac.Manager) gin.HandlerFunc {
+func Authenticated(authService *auth.Service, _ rbac.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if authService == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "authentication unavailable"})

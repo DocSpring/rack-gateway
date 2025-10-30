@@ -121,7 +121,7 @@ func execProcess(w http.ResponseWriter, r *http.Request) {
 	mclog.DebugTopicf(mclog.TopicAppProcesses, "exec request app=%s pid=%s query=%q", app, id, r.URL.RawQuery)
 
 	upgrader := websocket.Upgrader{
-		CheckOrigin:  func(r *http.Request) bool { return true },
+		CheckOrigin:  func(_ *http.Request) bool { return true },
 		Subprotocols: parseSubprotocols(r.Header.Get("Sec-WebSocket-Protocol")),
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)

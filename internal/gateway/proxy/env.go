@@ -70,21 +70,38 @@ func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
 func (h *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
 	keys := make([]string, 0)
 	for name, vals := range hdr {
-		ln := strings.ToLower(name)
-		if ln == "env" || ln == "environment" || ln == "release-env" {
-			for _, v := range vals {
-				for _, line := range strings.Split(v, "\n") {
-					line = strings.TrimSpace(line)
-					if line == "" {
-						continue
-					}
-					parts := strings.SplitN(line, "=", 2)
-					k := strings.TrimSpace(parts[0])
-					if k != "" {
-						keys = append(keys, k)
-					}
-				}
-			}
+		if !isEnvHeader(name) {
+			continue
+		}
+		keys = append(keys, extractKeysFromHeaderValues(vals)...)
+	}
+	return keys
+}
+
+func isEnvHeader(name string) bool {
+	ln := strings.ToLower(name)
+	return ln == "env" || ln == "environment" || ln == "release-env"
+}
+
+func extractKeysFromHeaderValues(vals []string) []string {
+	keys := make([]string, 0)
+	for _, v := range vals {
+		keys = append(keys, extractKeysFromEnvString(v)...)
+	}
+	return keys
+}
+
+func extractKeysFromEnvString(envStr string) []string {
+	keys := make([]string, 0)
+	for _, line := range strings.Split(envStr, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		k := strings.TrimSpace(parts[0])
+		if k != "" {
+			keys = append(keys, k)
 		}
 	}
 	return keys
@@ -95,38 +112,76 @@ func (h *Handler) prepareReleaseCreate(
 	rack config.RackConfig,
 	email string,
 ) (bool, []envutil.EnvDiff, error) {
-	// Read and buffer original body
-	var bodyBuf []byte
-	if r.Body != nil {
-		var err error
-		bodyBuf, err = io.ReadAll(r.Body)
-		if err != nil {
-			return false, nil, fmt.Errorf("failed to read request body: %w", err)
-		}
-		if err := r.Body.Close(); err != nil {
-			return false, nil, fmt.Errorf("failed to close request body: %w", err)
-		}
-	}
-	// Parse form
-	vals, err := url.ParseQuery(string(bodyBuf))
+	bodyBuf, vals, err := readAndParseRequestBody(r)
 	if err != nil {
-		return false, nil, fmt.Errorf("invalid form body: %w", err)
+		return false, nil, err
 	}
+
 	envStr := vals.Get("env")
 	if envStr == "" {
-		// no env set attempt => allow
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
 		return true, nil, nil
 	}
 
-	// Get app name from path /apps/{app}/releases
 	app := extractAppFromPath(r.URL.Path)
 	if app == "" {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
 		return false, nil, fmt.Errorf("could not infer app name from path")
 	}
 
-	// Parse posted env into ordered keys
+	posted, order := parsePostedEnv(envStr)
+
+	if err := h.validateSecretsPermissions(r, email, app, posted, order); err != nil {
+		return false, nil, nil
+	}
+
+	if err := h.validateProtectedKeys(r, email, app, posted); err != nil {
+		return false, nil, nil
+	}
+
+	baseEnv, err := h.fetchBaseEnv(r, rack, app, bodyBuf)
+	if err != nil {
+		return false, nil, err
+	}
+
+	if err := h.validateEnvPermissions(r, email, app, order); err != nil {
+		return false, nil, nil
+	}
+
+	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	merged, diffs, err := h.mergeEnvAndComputeDiffs(r, email, app, posted, order, baseEnv, canSecretsSet)
+	if err != nil {
+		return false, nil, nil
+	}
+
+	newEnvString := recomposeEnvString(merged, order, baseEnv, diffs)
+	vals.Set("env", newEnvString)
+	newBody := []byte(vals.Encode())
+	r.Body = io.NopCloser(bytes.NewReader(newBody))
+	r.ContentLength = int64(len(newBody))
+	return true, diffs, nil
+}
+
+func readAndParseRequestBody(r *http.Request) ([]byte, url.Values, error) {
+	var bodyBuf []byte
+	if r.Body != nil {
+		var err error
+		bodyBuf, err = io.ReadAll(r.Body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		if err := r.Body.Close(); err != nil {
+			return nil, nil, fmt.Errorf("failed to close request body: %w", err)
+		}
+	}
+	vals, err := url.ParseQuery(string(bodyBuf))
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid form body: %w", err)
+	}
+	return bodyBuf, vals, nil
+}
+
+func parsePostedEnv(envStr string) (map[string]string, []string) {
 	postedLines := strings.Split(envStr, "\n")
 	posted := make(map[string]string)
 	order := make([]string, 0, len(postedLines))
@@ -148,151 +203,187 @@ func (h *Handler) prepareReleaseCreate(
 		}
 		posted[key] = val
 	}
+	return posted, order
+}
 
-	// If attempting to set secret values without permission, deny early (no need to fetch base)
+func (h *Handler) validateSecretsPermissions(
+	r *http.Request,
+	email, app string,
+	posted map[string]string,
+	order []string,
+) error {
 	canSecretsSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
-	if !canSecretsSet {
-		offending := make([]string, 0)
-		for _, k := range order {
-			if h.isSecretKey(k) && posted[k] != maskedSecret {
-				offending = append(offending, k)
-			}
-		}
-		if len(offending) > 0 {
-			// Log denied secrets.set per offending key for audit clarity
-			userName := r.Header.Get("X-User-Name")
-			for _, key := range offending {
-				h.logDeniedRBACAction(
-					r,
-					email,
-					userName,
-					rbac.ResourceSecret,
-					rbac.ActionSet,
-					"secret",
-					fmt.Sprintf("%s/%s", app, key),
-					"{}",
-				)
-			}
-			return false, nil, nil
+	if canSecretsSet {
+		return nil
+	}
+	offending := make([]string, 0)
+	for _, k := range order {
+		if h.isSecretKey(k) && posted[k] != maskedSecret {
+			offending = append(offending, k)
 		}
 	}
+	if len(offending) == 0 {
+		return nil
+	}
+	userName := r.Header.Get("X-User-Name")
+	for _, key := range offending {
+		h.logDeniedRBACAction(
+			r, email, userName,
+			rbac.ResourceSecret, rbac.ActionSet,
+			"secret", fmt.Sprintf("%s/%s", app, key), "{}",
+		)
+	}
+	return fmt.Errorf("secrets permission denied")
+}
 
-	// If posting any protected key explicitly, deny immediately (no change to protected keys allowed)
+func (h *Handler) validateProtectedKeys(
+	r *http.Request,
+	email, app string,
+	posted map[string]string,
+) error {
 	for k := range posted {
-		if h.isProtectedKeyForApp(k, app) {
-			userName := r.Header.Get("X-User-Name")
-			h.logDeniedRBACAction(
-				r,
-				email,
-				userName,
-				rbac.ResourceEnv,
-				rbac.ActionSet,
-				"env",
-				fmt.Sprintf("%s/%s", app, k),
-				"{\"error\":\"protected key change denied\"}",
-			)
-			return false, nil, nil
+		if !h.isProtectedKeyForApp(k, app) {
+			continue
 		}
+		userName := r.Header.Get("X-User-Name")
+		h.logDeniedRBACAction(
+			r, email, userName,
+			rbac.ResourceEnv, rbac.ActionSet,
+			"env", fmt.Sprintf("%s/%s", app, k),
+			"{\"error\":\"protected key change denied\"}",
+		)
+		return fmt.Errorf("protected key change denied")
 	}
+	return nil
+}
 
-	// Fetch latest env map from rack (needed to fill back masked values and compute diffs)
+func (h *Handler) fetchBaseEnv(
+	r *http.Request,
+	rack config.RackConfig,
+	app string,
+	bodyBuf []byte,
+) (map[string]string, error) {
 	tlsCfg, err := h.rackTLSConfig(r.Context())
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to prepare rack TLS: %w", err)
+		return nil, fmt.Errorf("failed to prepare rack TLS: %w", err)
 	}
 	baseEnv, err := envutil.FetchLatestEnvMap(rack, app, tlsCfg)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			logRackTLSMismatch("env_fetch", fpErr)
-			return false, nil, fpErr
+			return nil, fpErr
 		}
-		// If fetch fails, fall back to submitted body without rewrite
 		r.Body = io.NopCloser(bytes.NewReader(bodyBuf))
-		return false, nil, fmt.Errorf("failed to fetch latest env: %w", err)
+		return nil, fmt.Errorf("failed to fetch latest env: %w", err)
 	}
+	return baseEnv, nil
+}
 
-	// Permissions
+func (h *Handler) validateEnvPermissions(
+	r *http.Request,
+	email, app string,
+	order []string,
+) error {
 	canEnvSet, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet)
-	canSecretsSet, _ = h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
-	if !canEnvSet {
-		// Log denied env.set entries for submitted keys
-		userName := r.Header.Get("X-User-Name")
-		for _, key := range order {
-			h.logDeniedRBACAction(
-				r,
-				email,
-				userName,
-				rbac.ResourceEnv,
-				rbac.ActionSet,
-				"env",
-				fmt.Sprintf("%s/%s", app, key),
-				"{}",
-			)
-		}
-		return false, nil, nil
+	if canEnvSet {
+		return nil
 	}
+	userName := r.Header.Get("X-User-Name")
+	for _, key := range order {
+		h.logDeniedRBACAction(
+			r, email, userName,
+			rbac.ResourceEnv, rbac.ActionSet,
+			"env", fmt.Sprintf("%s/%s", app, key), "{}",
+		)
+	}
+	return fmt.Errorf("env permission denied")
+}
 
-	// Do not require protected keys to be present in the payload; we will carry them over from base below.
-
-	// Merge masked values and compute diffs
+func (h *Handler) mergeEnvAndComputeDiffs(
+	r *http.Request,
+	email, app string,
+	posted map[string]string,
+	order []string,
+	baseEnv map[string]string,
+	canSecretsSet bool,
+) (map[string]string, []envutil.EnvDiff, error) {
 	merged := make(map[string]string)
 	diffs := make([]envutil.EnvDiff, 0)
-	removed := make(map[string]envutil.EnvDiff)
+
 	for _, key := range order {
 		val := posted[key]
 		base := baseEnv[key]
 		isSecret := h.isSecretKey(key)
-		// If masked, keep base value
 		if val == maskedSecret {
 			merged[key] = base
 			continue
 		}
-		// If changing a secret without permission, deny
 		if isSecret && !canSecretsSet && val != base {
-			return false, nil, nil
+			return nil, nil, fmt.Errorf("secret change denied")
 		}
 		merged[key] = val
 		if val != base {
 			diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: val, Secret: isSecret})
 		}
 	}
+
 	for key, base := range baseEnv {
 		if _, ok := posted[key]; ok {
 			continue
 		}
-		removed[key] = envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)}
-	}
-	if len(removed) > 0 {
-		for _, diff := range removed {
-			diffs = append(diffs, diff)
-		}
+		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)})
 	}
 
-	// Deny any modifications to protected env vars
+	if err := h.validateProtectedDiffs(r, email, app, diffs); err != nil {
+		return nil, nil, err
+	}
+
+	return merged, diffs, nil
+}
+
+func (h *Handler) validateProtectedDiffs(
+	r *http.Request,
+	email, app string,
+	diffs []envutil.EnvDiff,
+) error {
 	for _, d := range diffs {
-		if h.isProtectedKeyForApp(d.Key, app) {
-			// Log denied change for protected key
-			userName := r.Header.Get("X-User-Name")
-			_ = h.logAudit(r, &db.AuditLog{
-				UserEmail:      email,
-				UserName:       userName,
-				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
-				ResourceType:   "env",
-				Resource:       fmt.Sprintf("%s/%s", app, d.Key),
-				Details:        "{\"error\":\"protected key change denied\"}",
-				IPAddress:      clientIPFromRequest(r),
-				UserAgent:      r.UserAgent(),
-				Status:         "denied",
-				RBACDecision:   "deny",
-				HTTPStatus:     http.StatusForbidden,
-				ResponseTimeMs: 0,
-			})
-			return false, nil, nil
+		if !h.isProtectedKeyForApp(d.Key, app) {
+			continue
+		}
+		userName := r.Header.Get("X-User-Name")
+		_ = h.logAudit(r, &db.AuditLog{
+			UserEmail:      email,
+			UserName:       userName,
+			ActionType:     "convox",
+			Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()),
+			ResourceType:   "env",
+			Resource:       fmt.Sprintf("%s/%s", app, d.Key),
+			Details:        "{\"error\":\"protected key change denied\"}",
+			IPAddress:      clientIPFromRequest(r),
+			UserAgent:      r.UserAgent(),
+			Status:         "denied",
+			RBACDecision:   "deny",
+			HTTPStatus:     http.StatusForbidden,
+			ResponseTimeMs: 0,
+		})
+		return fmt.Errorf("protected key change denied")
+	}
+	return nil
+}
+
+func recomposeEnvString(
+	merged map[string]string,
+	order []string,
+	baseEnv map[string]string,
+	diffs []envutil.EnvDiff,
+) string {
+	removedKeys := make(map[string]struct{})
+	for _, d := range diffs {
+		if d.NewVal == "" {
+			removedKeys[d.Key] = struct{}{}
 		}
 	}
 
-	// Recompose env string preserving submitted order and appending any base-only keys
 	var b strings.Builder
 	used := map[string]struct{}{}
 	for i, k := range order {
@@ -304,12 +395,11 @@ func (h *Handler) prepareReleaseCreate(
 		b.WriteString(merged[k])
 		used[k] = struct{}{}
 	}
-	// Append remaining base keys to ensure full env for release
 	for k, v := range baseEnv {
 		if _, ok := used[k]; ok {
 			continue
 		}
-		if _, removed := removed[k]; removed {
+		if _, removed := removedKeys[k]; removed {
 			continue
 		}
 		if b.Len() > 0 {
@@ -319,15 +409,10 @@ func (h *Handler) prepareReleaseCreate(
 		b.WriteString("=")
 		b.WriteString(v)
 	}
-	vals.Set("env", b.String())
-	newBody := []byte(vals.Encode())
-	r.Body = io.NopCloser(bytes.NewReader(newBody))
-	// Ensure Content-Length is ignored downstream (we strip it in response), request side proxy will re-create
-	r.ContentLength = int64(len(newBody))
-	return true, diffs, nil
+	return b.String()
 }
 
-func (h *Handler) logEnvDiffs(r *http.Request, email, rack string, diffs []envutil.EnvDiff) {
+func (h *Handler) logEnvDiffs(r *http.Request, email, _ string, diffs []envutil.EnvDiff) {
 	if len(diffs) == 0 {
 		return
 	}

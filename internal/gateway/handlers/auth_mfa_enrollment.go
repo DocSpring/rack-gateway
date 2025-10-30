@@ -279,3 +279,113 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"status": "enrolled", "method_id": methodID})
 }
+
+func (h *AuthHandler) notifyFailedMFAAttempt(ctx *mfaContext) {
+	if h.securityNotifier != nil {
+		h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
+	}
+}
+
+func (h *AuthHandler) updateMFAMethodLabel(methodID int64, label, defaultLabel string) {
+	if h.database == nil {
+		return
+	}
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		trimmed = defaultLabel
+	}
+	if err := h.database.UpdateMFAMethodLabel(methodID, trimmed); err != nil {
+		log.Printf("failed updating MFA method label: %v", err)
+	}
+}
+
+func (h *AuthHandler) logMFAEnrollmentCompletion(ctx *mfaContext, label, resourceType string) {
+	if h.database == nil {
+		return
+	}
+	methodLabel := strings.TrimSpace(label)
+	if methodLabel == "" {
+		if resourceType == "totp" {
+			methodLabel = "Authenticator App"
+		} else {
+			methodLabel = "Security Key"
+		}
+	}
+	details, _ := json.Marshal(map[string]interface{}{
+		"label": methodLabel,
+	})
+	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
+		UserEmail:    ctx.userRecord.Email,
+		UserName:     ctx.userRecord.Name,
+		ActionType:   "auth",
+		Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
+		ResourceType: "mfa_method",
+		Resource:     resourceType,
+		Details:      string(details),
+		Status:       "success",
+		IPAddress:    ctx.ipAddress,
+		UserAgent:    ctx.userAgent,
+	}); err != nil {
+		log.Printf(
+			`{"level":"error","event":"audit_log_failed",`+
+				`"action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
+			err,
+		)
+	}
+}
+
+func (h *AuthHandler) retrieveWebAuthnEnrollmentSession(c *gin.Context) (int64, string, bool) {
+	sessionID, ok := auth.GetSessionID(c.Request.Context())
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
+		return 0, "", false
+	}
+
+	session, err := h.database.GetSessionByID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load session"})
+		return 0, "", false
+	}
+
+	var sessionMeta map[string]interface{}
+	if len(session.Metadata) > 0 {
+		if err := json.Unmarshal(session.Metadata, &sessionMeta); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid session metadata"})
+			return 0, "", false
+		}
+	}
+
+	sessionDataStr, ok := sessionMeta["webauthn_enrollment_session"].(string)
+	if !ok || sessionDataStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session not found or expired"})
+		return 0, "", false
+	}
+
+	expiresFloat, ok := sessionMeta["webauthn_enrollment_expires"].(float64)
+	if ok && time.Now().Unix() > int64(expiresFloat) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session expired"})
+		return 0, "", false
+	}
+
+	return sessionID, sessionDataStr, true
+}
+
+func (h *AuthHandler) clearWebAuthnEnrollmentSession(sessionID int64) {
+	session, err := h.database.GetSessionByID(sessionID)
+	if err != nil {
+		return
+	}
+
+	var sessionMeta map[string]interface{}
+	if len(session.Metadata) > 0 {
+		if err := json.Unmarshal(session.Metadata, &sessionMeta); err != nil {
+			return
+		}
+	}
+
+	delete(sessionMeta, "webauthn_enrollment_session")
+	delete(sessionMeta, "webauthn_enrollment_expires")
+	if err := h.database.UpdateSessionMetadata(sessionID, sessionMeta); err != nil {
+		log.Printf("failed to clear webauthn session: %v", err)
+	}
+}

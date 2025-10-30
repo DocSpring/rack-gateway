@@ -65,6 +65,48 @@ func (d *Database) GetAllSettings(appName *string) (map[string][]byte, error) {
 	return settings, rows.Err()
 }
 
+func (d *Database) upsertSettingWithUser(
+	appName *string,
+	key, valueJSON string,
+	userID int64,
+) error {
+	if appName == nil {
+		_, err := d.exec(`
+			INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
+			VALUES (NULL, ?, ?::jsonb, NOW(), ?)
+			ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+			SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
+			key, valueJSON, userID)
+		return err
+	}
+	_, err := d.exec(`
+		INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
+		VALUES (?, ?, ?::jsonb, NOW(), ?)
+		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+		SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
+		*appName, key, valueJSON, userID)
+	return err
+}
+
+func (d *Database) upsertSettingWithoutUser(appName *string, key, valueJSON string) error {
+	if appName == nil {
+		_, err := d.exec(`
+			INSERT INTO settings (app_name, key, value, updated_at)
+			VALUES (NULL, ?, ?::jsonb, NOW())
+			ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+			SET value = EXCLUDED.value, updated_at = NOW()`,
+			key, valueJSON)
+		return err
+	}
+	_, err := d.exec(`
+		INSERT INTO settings (app_name, key, value, updated_at)
+		VALUES (?, ?, ?::jsonb, NOW())
+		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+		SET value = EXCLUDED.value, updated_at = NOW()`,
+		*appName, key, valueJSON)
+	return err
+}
+
 // UpsertSetting creates or updates a setting value.
 func (d *Database) UpsertSetting(appName *string, key string, value interface{}, updatedByUserID *int64) error {
 	b, err := json.Marshal(value)
@@ -72,38 +114,11 @@ func (d *Database) UpsertSetting(appName *string, key string, value interface{},
 		return fmt.Errorf("failed to marshal setting %s: %w", key, err)
 	}
 
+	valueJSON := string(b)
 	if updatedByUserID != nil {
-		if appName == nil {
-			_, err = d.exec(`
-				INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
-				VALUES (NULL, ?, ?::jsonb, NOW(), ?)
-				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-				SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
-				key, string(b), *updatedByUserID)
-		} else {
-			_, err = d.exec(`
-				INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
-				VALUES (?, ?, ?::jsonb, NOW(), ?)
-				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-				SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
-				*appName, key, string(b), *updatedByUserID)
-		}
+		err = d.upsertSettingWithUser(appName, key, valueJSON, *updatedByUserID)
 	} else {
-		if appName == nil {
-			_, err = d.exec(`
-				INSERT INTO settings (app_name, key, value, updated_at)
-				VALUES (NULL, ?, ?::jsonb, NOW())
-				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-				SET value = EXCLUDED.value, updated_at = NOW()`,
-				key, string(b))
-		} else {
-			_, err = d.exec(`
-				INSERT INTO settings (app_name, key, value, updated_at)
-				VALUES (?, ?, ?::jsonb, NOW())
-				ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-				SET value = EXCLUDED.value, updated_at = NOW()`,
-				*appName, key, string(b))
-		}
+		err = d.upsertSettingWithoutUser(appName, key, valueJSON)
 	}
 
 	if err != nil {

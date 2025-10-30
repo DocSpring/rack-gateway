@@ -172,7 +172,7 @@ func (h *OAuthHandler) StartWebLogin() (authURL string, state string) {
 }
 
 // CompleteLogin handles OAuth callback - validates code and returns user info
-func (h *OAuthHandler) CompleteLogin(code, state, codeVerifier string) (*LoginResponse, error) {
+func (h *OAuthHandler) CompleteLogin(code, _ string, codeVerifier string) (*LoginResponse, error) {
 	ctx := context.Background()
 
 	// Select the right config based on whether this is CLI or web flow

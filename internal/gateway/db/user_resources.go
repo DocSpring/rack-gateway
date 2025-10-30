@@ -29,8 +29,8 @@ func (d *Database) CreateUserResource(userID int64, resourceType, resourceID str
 // GetResourceCreator returns the user_id for a given resource if present.
 func (d *Database) GetResourceCreator(resourceType, resourceID string) (int64, bool, error) {
 	var uid int64
-	err := d.queryRow(`SELECT user_id FROM user_resources WHERE resource_type = ? AND resource_id = ?`, resourceType, resourceID).
-		Scan(&uid)
+	query := `SELECT user_id FROM user_resources WHERE resource_type = ? AND resource_id = ?`
+	err := d.queryRow(query, resourceType, resourceID).Scan(&uid)
 	if err == sql.ErrNoRows {
 		return 0, false, nil
 	}

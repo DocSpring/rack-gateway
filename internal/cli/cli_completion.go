@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// CompletionCommand creates the completion command for generating shell completions.
 func CompletionCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "completion [bash|zsh|fish|powershell]",

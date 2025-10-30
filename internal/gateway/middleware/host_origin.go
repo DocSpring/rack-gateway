@@ -9,6 +9,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
+// HostValidator returns a middleware that validates the HTTP Host header against the configured domain.
+// It allows localhost/127.0.0.1 and kubernetes health probes without validation.
 func HostValidator(cfg *config.Config) gin.HandlerFunc {
 	allowedHost, isDev := validatorContext(cfg)
 	return func(c *gin.Context) {
@@ -48,6 +50,8 @@ func HostValidator(cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
+// OriginValidator returns a middleware that validates the Origin header for CORS requests.
+// It allows requests without an Origin header and validates configured domains.
 func OriginValidator(cfg *config.Config) gin.HandlerFunc {
 	allowedHost, isDev := validatorContext(cfg)
 	return func(c *gin.Context) {

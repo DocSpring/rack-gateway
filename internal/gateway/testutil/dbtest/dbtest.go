@@ -36,40 +36,78 @@ func Reset(t *testing.T, database *db.Database) {
 // Sets TEST_DATABASE_URL env var to the created database DSN for subprocesses.
 func NewDatabase(t *testing.T) *db.Database {
 	t.Helper()
+	baseDSN := getBaseDSN()
+	admin, adminCleanup := setupAdminConnection(t, baseDSN)
+	defer adminCleanup()
+
+	dbName := generateTestDBName()
+	createDatabase(t, admin, dbName)
+
+	dsn := buildTestDSN(t, baseDSN, dbName)
+	waitForDatabaseReady(t, dsn)
+
+	app := connectAppDatabase(t, dsn)
+	registerCleanup(t, app, admin, dbName)
+
+	return app
+}
+
+func getBaseDSN() string {
 	base := os.Getenv("TEST_DATABASE_URL")
-	if base == "" {
-		// Build from PG* env
-		host := getenv("PGHOST", "localhost")
-		port := getenv("PGPORT", "5432")
-		user := getenv("PGUSER", getenv("USER", "postgres"))
-		dbname := getenv("PGDATABASE", user)
-		ssl := getenv("PGSSLMODE", "disable")
-		base = fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
+	if base != "" {
+		return base
 	}
-	u, err := url.Parse(base)
+
+	// Build from PG* env
+	host := getenv("PGHOST", "localhost")
+	port := getenv("PGPORT", "5432")
+	user := getenv("PGUSER", getenv("USER", "postgres"))
+	dbname := getenv("PGDATABASE", user)
+	ssl := getenv("PGSSLMODE", "disable")
+	return fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
+}
+
+func setupAdminConnection(t *testing.T, baseDSN string) (*sql.DB, func()) {
+	t.Helper()
+	u, err := url.Parse(baseDSN)
 	if err != nil {
 		t.Fatalf("invalid TEST_DATABASE_URL: %v", err)
 	}
-	// Connect to maintenance DB (postgres)
 	u.Path = "/postgres"
-	adminDSN := u.String()
-	admin, err := sql.Open("pgx", adminDSN)
+	admin, err := sql.Open("pgx", u.String())
 	if err != nil {
 		t.Fatalf("open admin: %v", err)
 	}
-	t.Cleanup(func() {
+	return admin, func() {
 		if err := admin.Close(); err != nil {
 			t.Fatalf("close admin connection: %v", err)
 		}
-	})
-	name := fmt.Sprintf("cg_test_%d", time.Now().UnixNano())
+	}
+}
+
+func generateTestDBName() string {
+	return fmt.Sprintf("cg_test_%d", time.Now().UnixNano())
+}
+
+func createDatabase(t *testing.T, admin *sql.DB, name string) {
+	t.Helper()
 	if _, err := admin.Exec("CREATE DATABASE " + pqQuoteIdent(name)); err != nil {
 		t.Fatalf("create database: %v", err)
 	}
-	// Build DSN for the new database and wait until it is connectable
-	u.Path = "/" + name
-	dsn := u.String()
-	// Retry ping a few times; some environments need a moment before new DB is visible
+}
+
+func buildTestDSN(t *testing.T, baseDSN, dbName string) string {
+	t.Helper()
+	u, err := url.Parse(baseDSN)
+	if err != nil {
+		t.Fatalf("invalid base DSN: %v", err)
+	}
+	u.Path = "/" + dbName
+	return u.String()
+}
+
+func waitForDatabaseReady(t *testing.T, dsn string) {
+	t.Helper()
 	for i := 0; i < 20; i++ {
 		testConn, err := sql.Open("pgx", dsn)
 		if err == nil {
@@ -77,7 +115,7 @@ func NewDatabase(t *testing.T) *db.Database {
 				if cerr := testConn.Close(); cerr != nil {
 					t.Fatalf("close test connection: %v", cerr)
 				}
-				break
+				return
 			}
 			if cerr := testConn.Close(); cerr != nil {
 				t.Fatalf("close test connection: %v", cerr)
@@ -85,24 +123,30 @@ func NewDatabase(t *testing.T) *db.Database {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	// Connect via app DB helper with explicit DSN (runs migrations)
+	t.Fatal("database did not become ready in time")
+}
+
+func connectAppDatabase(t *testing.T, dsn string) *db.Database {
+	t.Helper()
 	app, err := db.New(dsn)
 	if err != nil {
 		t.Fatalf("open app db: %v", err)
 	}
-
 	// Set TEST_DATABASE_URL for subprocesses
 	os.Setenv("TEST_DATABASE_URL", dsn) //nolint:errcheck // ignore error
+	return app
+}
 
+func registerCleanup(t *testing.T, app *db.Database, admin *sql.DB, dbName string) {
+	t.Helper()
 	t.Cleanup(func() {
 		if err := app.Close(); err != nil {
 			t.Fatalf("close app database: %v", err)
 		}
-		if _, err := admin.Exec("DROP DATABASE IF EXISTS " + pqQuoteIdent(name)); err != nil {
-			t.Fatalf("drop database %s: %v", name, err)
+		if _, err := admin.Exec("DROP DATABASE IF EXISTS " + pqQuoteIdent(dbName)); err != nil {
+			t.Fatalf("drop database %s: %v", dbName, err)
 		}
 	})
-	return app
 }
 
 func getenv(k, def string) string {

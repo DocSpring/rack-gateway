@@ -21,22 +21,18 @@ func (m *mockYubiAuth) Verify(otp string) (*yubigo.YubiResponse, bool, error) {
 	return &yubigo.YubiResponse{}, true, nil
 }
 
-func TestYubiOTPEnrollment(t *testing.T) {
+func TestYubiOTPEnrollment_Success(t *testing.T) {
 	t.Parallel()
 
-	// Setup test database
 	database := dbtest.NewDatabase(t)
-
 	pepper := []byte("test-pepper-for-mfa")
 	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
 
-	// Inject mock Yubico auth
 	mockAuth := &mockYubiAuth{
 		verifyFunc: func(otp string) (*yubigo.YubiResponse, bool, error) {
-			// Validate it's a valid Yubico OTP format
 			if len(otp) != 44 {
 				return nil, false, nil
 			}
@@ -45,84 +41,130 @@ func TestYubiOTPEnrollment(t *testing.T) {
 	}
 	service.yubiAuth = mockAuth
 
-	// Create test user
 	user, err := database.CreateUser("test@example.com", "Test User", []string{"admin"})
 	if err != nil {
 		t.Fatalf("failed to create user: %v", err)
 	}
 
-	t.Run("successfully enrolls valid Yubikey OTP", func(t *testing.T) {
-		// Simulate a valid Yubico OTP (12 char public ID + 32 char OTP)
-		validOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+	validOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+	result, err := service.StartYubiOTPEnrollment(user, validOTP)
+	if err != nil {
+		t.Fatalf("expected successful enrollment, got error: %v", err)
+	}
 
-		result, err := service.StartYubiOTPEnrollment(user, validOTP)
-		if err != nil {
-			t.Fatalf("expected successful enrollment, got error: %v", err)
-		}
+	if result.MethodID == 0 {
+		t.Error("expected method ID to be set")
+	}
 
-		if result.MethodID == 0 {
-			t.Error("expected method ID to be set")
-		}
+	if len(result.BackupCodes) == 0 {
+		t.Error("expected backup codes on first enrollment")
+	}
 
-		// Verify backup codes are generated on first enrollment
-		if len(result.BackupCodes) == 0 {
-			t.Error("expected backup codes on first enrollment")
-		}
+	methods, err := database.ListMFAMethods(user.ID)
+	if err != nil {
+		t.Fatalf("failed to list methods: %v", err)
+	}
+	if len(methods) != 1 {
+		t.Fatalf("expected 1 method, got %d", len(methods))
+	}
+	if methods[0].Type != "yubiotp" {
+		t.Errorf("expected type yubiotp, got %s", methods[0].Type)
+	}
+	if methods[0].Secret != "ccccccbcgujh" {
+		t.Errorf("expected public ID ccccccbcgujh, got %s", methods[0].Secret)
+	}
+	if methods[0].ConfirmedAt == nil {
+		t.Error("expected method to be auto-confirmed")
+	}
 
-		// Verify the method was created in database
-		methods, err := database.ListMFAMethods(user.ID)
-		if err != nil {
-			t.Fatalf("failed to list methods: %v", err)
-		}
-		if len(methods) != 1 {
-			t.Fatalf("expected 1 method, got %d", len(methods))
-		}
-		if methods[0].Type != "yubiotp" {
-			t.Errorf("expected type yubiotp, got %s", methods[0].Type)
-		}
-		if methods[0].Secret != "ccccccbcgujh" {
-			t.Errorf("expected public ID ccccccbcgujh, got %s", methods[0].Secret)
-		}
-		if methods[0].ConfirmedAt == nil {
-			t.Error("expected method to be auto-confirmed")
-		}
+	updatedUser, err := database.GetUser(user.Email)
+	if err != nil {
+		t.Fatalf("failed to get user: %v", err)
+	}
+	if !updatedUser.MFAEnrolled {
+		t.Error("expected user to be MFA enrolled")
+	}
+}
 
-		// Verify user is marked as MFA enrolled
-		updatedUser, err := database.GetUser(user.Email)
-		if err != nil {
-			t.Fatalf("failed to get user: %v", err)
-		}
-		if !updatedUser.MFAEnrolled {
-			t.Error("expected user to be MFA enrolled")
-		}
-	})
+func TestYubiOTPEnrollment_InvalidFormat(t *testing.T) {
+	t.Parallel()
 
-	t.Run("rejects invalid OTP format", func(t *testing.T) {
-		_, err := service.StartYubiOTPEnrollment(user, "short")
-		if err == nil {
-			t.Error("expected error for invalid OTP format")
-		}
-	})
+	database := dbtest.NewDatabase(t)
+	pepper := []byte("test-pepper-for-mfa")
+	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
 
-	t.Run("rejects duplicate Yubikey", func(t *testing.T) {
-		// Try to enroll the same Yubikey again
-		validOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
-		_, err := service.StartYubiOTPEnrollment(user, validOTP)
-		if err == nil {
-			t.Error("expected error for duplicate Yubikey")
-		}
-		if err != nil && err.Error() != "this Yubikey is already registered" {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
+	mockAuth := &mockYubiAuth{
+		verifyFunc: func(otp string) (*yubigo.YubiResponse, bool, error) {
+			if len(otp) != 44 {
+				return nil, false, nil
+			}
+			return &yubigo.YubiResponse{}, true, nil
+		},
+	}
+	service.yubiAuth = mockAuth
 
-	t.Run("rejects when Yubico OTP not configured", func(t *testing.T) {
-		serviceWithoutYubi, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
-		_, err := serviceWithoutYubi.StartYubiOTPEnrollment(user, "ccccccbcgujhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
-		if err == nil {
-			t.Error("expected error when Yubico OTP not configured")
-		}
-	})
+	user, _ := database.CreateUser("test2@example.com", "Test User", []string{"admin"})
+
+	_, err = service.StartYubiOTPEnrollment(user, "short")
+	if err == nil {
+		t.Error("expected error for invalid OTP format")
+	}
+}
+
+func TestYubiOTPEnrollment_Duplicate(t *testing.T) {
+	t.Parallel()
+
+	database := dbtest.NewDatabase(t)
+	pepper := []byte("test-pepper-for-mfa")
+	service, err := NewService(database, "Test Gateway", 30*24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	mockAuth := &mockYubiAuth{
+		verifyFunc: func(otp string) (*yubigo.YubiResponse, bool, error) {
+			if len(otp) != 44 {
+				return nil, false, nil
+			}
+			return &yubigo.YubiResponse{}, true, nil
+		},
+	}
+	service.yubiAuth = mockAuth
+
+	user, _ := database.CreateUser("test3@example.com", "Test User", []string{"admin"})
+
+	validOTP := "ccccccbcgujh" + "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+	_, err = service.StartYubiOTPEnrollment(user, validOTP)
+	if err != nil {
+		t.Fatalf("first enrollment failed: %v", err)
+	}
+
+	// Try to enroll the same Yubikey again
+	_, err = service.StartYubiOTPEnrollment(user, validOTP)
+	if err == nil {
+		t.Error("expected error for duplicate Yubikey")
+	}
+	if err != nil && err.Error() != "this Yubikey is already registered" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestYubiOTPEnrollment_NotConfigured(t *testing.T) {
+	t.Parallel()
+
+	database := dbtest.NewDatabase(t)
+	pepper := []byte("test-pepper-for-mfa")
+	serviceWithoutYubi, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+
+	user, _ := database.CreateUser("test4@example.com", "Test User", []string{"admin"})
+
+	_, err := serviceWithoutYubi.StartYubiOTPEnrollment(user, "ccccccbcgujhnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
+	if err == nil {
+		t.Error("expected error when Yubico OTP not configured")
+	}
 }
 
 func TestYubiOTPVerification(t *testing.T) {

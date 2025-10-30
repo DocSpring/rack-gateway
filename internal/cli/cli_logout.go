@@ -6,11 +6,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// LogoutCommand creates a cobra command for logging out from the current rack
 func LogoutCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Logout from the current rack",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			rack, err := SelectedRack()
 			if err != nil {
 				return err

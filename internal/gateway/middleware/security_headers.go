@@ -25,106 +25,144 @@ const StyleNonceContextKey ctxKey = "rgw-style-nonce"
 
 var defaultStyleHashes = []string{}
 
+// SecurityHeaders returns a Gin middleware that configures comprehensive security headers including
+// Content Security Policy (CSP), HSTS, frame denial, and optional Sentry reporting integration.
 func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
-	var sentryCfg *sentrySecurityConfig
-	if cfg != nil && strings.TrimSpace(cfg.SentryJSDsn) != "" {
-		if parsed, err := buildSentrySecurityConfig(cfg); err != nil {
-			log.Printf("security: invalid SENTRY_JS_DSN: %v", err)
-		} else {
-			sentryCfg = parsed
-		}
-	}
-
+	sentryCfg := initializeSentryConfig(cfg)
 	return func(c *gin.Context) {
-		isProdLike := true
-		if cfg != nil && cfg.DevMode {
-			if os.Getenv("FORCE_CSP_IN_DEV") != "true" {
-				isProdLike = false
-			}
-		}
-
-		nonce := generateNonce()
-		if nonce != "" {
-			c.Set(string(StyleNonceContextKey), nonce)
-			ctx := context.WithValue(c.Request.Context(), StyleNonceContextKey, nonce)
-			c.Request = c.Request.WithContext(ctx)
-		}
-
-		connectDirectives := []string{"'self'", "ws:", "wss:"}
-		if !isProdLike {
-			connectDirectives = append(connectDirectives, "http://localhost:*", "https://localhost:*")
-		}
-		if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
-			connectDirectives = append(connectDirectives, sentryCfg.ConnectOrigin)
-		}
-		connectSrc := "connect-src " + strings.Join(connectDirectives, " ")
-
-		imageDirectives := []string{"'self'", "data:"}
-		if !isProdLike {
-			imageDirectives = append(imageDirectives, "http://localhost:*", "https://localhost:*")
-		}
-		if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
-			imageDirectives = append(imageDirectives, sentryCfg.ConnectOrigin)
-		}
-		imgSrc := "img-src " + strings.Join(imageDirectives, " ")
-
-		scriptDirectives := []string{"'self'"}
-		styleDirectives := []string{"'self'"}
-		if nonce != "" {
-			scriptDirectives = append(scriptDirectives, fmt.Sprintf("'nonce-%s'", nonce))
-			styleDirectives = append(styleDirectives, fmt.Sprintf("'nonce-%s'", nonce))
-		}
-		styleDirectives = append(styleDirectives, defaultStyleHashes...)
-		if !isProdLike {
-			scriptDirectives = append(scriptDirectives, "'unsafe-inline'")
-			styleDirectives = append(styleDirectives, "'unsafe-inline'")
-		}
-		scriptSrc := "script-src " + strings.Join(scriptDirectives, " ")
-		styleSrc := "style-src " + strings.Join(styleDirectives, " ")
-
-		cspParts := []string{
-			"default-src 'self'",
-			connectSrc,
-			scriptSrc,
-			styleSrc,
-			imgSrc,
-		}
-		if sentryCfg != nil {
-			cspParts = append(cspParts,
-				fmt.Sprintf("report-uri %s", sentryCfg.ReportURL),
-				fmt.Sprintf("report-to %s", sentryCfg.ReportGroup),
-			)
-		}
-		csp := strings.Join(cspParts, "; ")
-
-		secCfg := securemw.Config{
-			SSLRedirect: false,
-			STSSeconds: func() int64 {
-				if !isProdLike {
-					return 0
-				}
-				return 63072000
-			}(),
-			STSIncludeSubdomains:  false,
-			FrameDeny:             true,
-			ContentTypeNosniff:    true,
-			BrowserXssFilter:      true,
-			ContentSecurityPolicy: csp,
-			ReferrerPolicy:        "strict-origin-when-cross-origin",
-			SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
-			IsDevelopment:         !isProdLike,
-			BadHostHandler: func(c *gin.Context) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
-				c.Abort()
-			},
-		}
-
-		securemw.New(secCfg)(c)
-		if sentryCfg != nil {
-			c.Header("Report-To", sentryCfg.ReportToHeader)
-			c.Header("Reporting-Endpoints", sentryCfg.ReportingEndpointsHeader)
-		}
+		isProdLike := determineProductionMode(cfg)
+		nonce := injectNonce(c)
+		csp := buildCSP(nonce, isProdLike, sentryCfg)
+		applySecurityHeaders(c, csp, isProdLike, sentryCfg)
 	}
+}
+
+func initializeSentryConfig(cfg *config.Config) *sentrySecurityConfig {
+	if cfg == nil || strings.TrimSpace(cfg.SentryJSDsn) == "" {
+		return nil
+	}
+	parsed, err := buildSentrySecurityConfig(cfg)
+	if err != nil {
+		log.Printf("security: invalid SENTRY_JS_DSN: %v", err)
+		return nil
+	}
+	return parsed
+}
+
+func determineProductionMode(cfg *config.Config) bool {
+	if cfg != nil && cfg.DevMode && os.Getenv("FORCE_CSP_IN_DEV") != "true" {
+		return false
+	}
+	return true
+}
+
+func injectNonce(c *gin.Context) string {
+	nonce := generateNonce()
+	if nonce != "" {
+		c.Set(string(StyleNonceContextKey), nonce)
+		ctx := context.WithValue(c.Request.Context(), StyleNonceContextKey, nonce)
+		c.Request = c.Request.WithContext(ctx)
+	}
+	return nonce
+}
+
+func buildCSP(nonce string, isProdLike bool, sentryCfg *sentrySecurityConfig) string {
+	connectSrc := buildConnectSrc(isProdLike, sentryCfg)
+	imgSrc := buildImgSrc(isProdLike, sentryCfg)
+	scriptSrc := buildScriptSrc(nonce, isProdLike)
+	styleSrc := buildStyleSrc(nonce, isProdLike)
+
+	cspParts := []string{
+		"default-src 'self'",
+		connectSrc,
+		scriptSrc,
+		styleSrc,
+		imgSrc,
+	}
+	if sentryCfg != nil {
+		cspParts = append(cspParts,
+			fmt.Sprintf("report-uri %s", sentryCfg.ReportURL),
+			fmt.Sprintf("report-to %s", sentryCfg.ReportGroup),
+		)
+	}
+	return strings.Join(cspParts, "; ")
+}
+
+func buildConnectSrc(isProdLike bool, sentryCfg *sentrySecurityConfig) string {
+	directives := []string{"'self'", "ws:", "wss:"}
+	if !isProdLike {
+		directives = append(directives, "http://localhost:*", "https://localhost:*")
+	}
+	if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
+		directives = append(directives, sentryCfg.ConnectOrigin)
+	}
+	return "connect-src " + strings.Join(directives, " ")
+}
+
+func buildImgSrc(isProdLike bool, sentryCfg *sentrySecurityConfig) string {
+	directives := []string{"'self'", "data:"}
+	if !isProdLike {
+		directives = append(directives, "http://localhost:*", "https://localhost:*")
+	}
+	if sentryCfg != nil && sentryCfg.ConnectOrigin != "" {
+		directives = append(directives, sentryCfg.ConnectOrigin)
+	}
+	return "img-src " + strings.Join(directives, " ")
+}
+
+func buildScriptSrc(nonce string, isProdLike bool) string {
+	directives := []string{"'self'"}
+	if nonce != "" {
+		directives = append(directives, fmt.Sprintf("'nonce-%s'", nonce))
+	}
+	if !isProdLike {
+		directives = append(directives, "'unsafe-inline'")
+	}
+	return "script-src " + strings.Join(directives, " ")
+}
+
+func buildStyleSrc(nonce string, isProdLike bool) string {
+	directives := []string{"'self'"}
+	if nonce != "" {
+		directives = append(directives, fmt.Sprintf("'nonce-%s'", nonce))
+	}
+	directives = append(directives, defaultStyleHashes...)
+	if !isProdLike {
+		directives = append(directives, "'unsafe-inline'")
+	}
+	return "style-src " + strings.Join(directives, " ")
+}
+
+func applySecurityHeaders(c *gin.Context, csp string, isProdLike bool, sentryCfg *sentrySecurityConfig) {
+	secCfg := securemw.Config{
+		SSLRedirect:           false,
+		STSSeconds:            calculateSTSSeconds(isProdLike),
+		STSIncludeSubdomains:  false,
+		FrameDeny:             true,
+		ContentTypeNosniff:    true,
+		BrowserXssFilter:      true,
+		ContentSecurityPolicy: csp,
+		ReferrerPolicy:        "strict-origin-when-cross-origin",
+		SSLProxyHeaders:       map[string]string{"X-Forwarded-Proto": "https"},
+		IsDevelopment:         !isProdLike,
+		BadHostHandler: func(c *gin.Context) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host"})
+			c.Abort()
+		},
+	}
+
+	securemw.New(secCfg)(c)
+	if sentryCfg != nil {
+		c.Header("Report-To", sentryCfg.ReportToHeader)
+		c.Header("Reporting-Endpoints", sentryCfg.ReportingEndpointsHeader)
+	}
+}
+
+func calculateSTSSeconds(isProdLike bool) int64 {
+	if !isProdLike {
+		return 0
+	}
+	return 63072000
 }
 
 // StyleNonceFromContext retrieves the CSP nonce from the given context, or returns an empty string if not found.

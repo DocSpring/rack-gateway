@@ -13,30 +13,28 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func TestAuditLogger(t *testing.T) {
+func TestParseConvoxAction(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-
 	logger := NewLogger(database)
 
-	t.Run("ParseConvoxAction", func(t *testing.T) {
-		for _, spec := range rbac.RackRouteSpecs() {
-			path := rbac.RackRouteExample(spec)
-			method := spec.Method
-			if method == "SOCKET" {
-				method = http.MethodGet
-			}
-			action, resource := logger.ParseConvoxAction(path, method, "")
-			expectedAction := fmt.Sprintf("%s.%s", spec.Resource, spec.Action)
-			expectedResource := resourceInstance(path, spec.Resource.String(), spec.Action.String())
-			assert.Equal(t, expectedAction, action, "pattern %s %s", spec.Method, spec.Pattern)
-			assert.Equal(t, expectedResource, resource, "pattern %s %s", spec.Method, spec.Pattern)
+	for _, spec := range rbac.RackRouteSpecs() {
+		path := rbac.RackRouteExample(spec)
+		method := spec.Method
+		if method == "SOCKET" {
+			method = http.MethodGet
 		}
-	})
+		action, resource := logger.ParseConvoxAction(path, method, "")
+		expectedAction := fmt.Sprintf("%s.%s", spec.Resource, spec.Action)
+		expectedResource := resourceInstance(path, spec.Resource.String(), spec.Action.String())
+		assert.Equal(t, expectedAction, action, "pattern %s %s", spec.Method, spec.Pattern)
+		assert.Equal(t, expectedResource, resource, "pattern %s %s", spec.Method, spec.Pattern)
+	}
+}
 
-	// Comprehensive coverage of method/path → action mapping
-	// Note: exhaustive mapping now lives in internal/gateway/routes and is source of truth.
+func TestMapHttpStatusToStatus(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	logger := NewLogger(database)
 
-	// 101 Switching Protocols should be success
 	t.Run("Status101IsSuccess", func(t *testing.T) {
 		st := logger.MapHttpStatusToStatus(101)
 		assert.Equal(t, "success", st)
@@ -51,70 +49,82 @@ func TestAuditLogger(t *testing.T) {
 		st := logger.MapHttpStatusToStatus(-1)
 		assert.Equal(t, "error", st)
 	})
+}
 
-	t.Run("RedactEnvVars_RedactsValues", func(t *testing.T) {
-		vars := map[string]string{"FOO": "bar", "SECRET_TOKEN": "abc"}
-		red := logger.RedactEnvVars(vars)
-		assert.Equal(t, "[REDACTED]", red["FOO"])
-		assert.Equal(t, "[REDACTED]", red["SECRET_TOKEN"])
-	})
+func TestRedactEnvVars(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	logger := NewLogger(database)
 
-	t.Run("LogRequest_OnlyLogsToStdout", func(t *testing.T) {
-		// LogRequest only logs to stdout now, not database
-		req, err := http.NewRequest("GET", "/apps/myapp/releases?limit=1", nil)
-		require.NoError(t, err)
+	vars := map[string]string{"FOO": "bar", "SECRET_TOKEN": "abc"}
+	red := logger.RedactEnvVars(vars)
+	assert.Equal(t, "[REDACTED]", red["FOO"])
+	assert.Equal(t, "[REDACTED]", red["SECRET_TOKEN"])
+}
 
-		req.Header.Set("X-User-Name", "Test User")
-		req.RemoteAddr = "192.168.1.1:1234"
+func TestLogRequest(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	logger := NewLogger(database)
 
-		// This should not panic and should not create database entries
-		logger.LogRequest(req, "test@example.com", "production", "allow", 200, 150*time.Millisecond, nil)
+	// LogRequest only logs to stdout now, not database
+	req, err := http.NewRequest("GET", "/apps/myapp/releases?limit=1", nil)
+	require.NoError(t, err)
 
-		// Verify NO database entry was created by LogRequest
-		logs, err := database.GetAuditLogs("test@example.com", time.Time{}, 0)
-		require.NoError(t, err)
-		require.Len(t, logs, 0, "LogRequest should not create database entries")
-	})
+	req.Header.Set("X-User-Name", "Test User")
+	req.RemoteAddr = "192.168.1.1:1234"
 
-	t.Run("ParseConvoxAction_ListEndpoints", func(t *testing.T) {
-		// Test that all list endpoints return proper action and resource
-		// (should never return "unknown")
-		testCases := []struct {
-			method           string
-			path             string
-			expectedAction   string
-			expectedResource string
-		}{
-			{"GET", "/apps", BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()), "all"},
-			{"GET", "/instances", BuildAction(rbac.ResourceInstance.String(), rbac.ActionList.String()), "all"},
-			{
-				"GET",
-				"/apps/myapp/processes",
-				BuildAction(rbac.ResourceProcess.String(), rbac.ActionList.String()),
-				"all",
-			},
-			{"GET", "/apps/myapp/builds", BuildAction(rbac.ResourceBuild.String(), rbac.ActionList.String()), "all"},
-			{
-				"GET",
-				"/apps/myapp/releases",
-				BuildAction(rbac.ResourceRelease.String(), rbac.ActionList.String()),
-				"all",
-			},
-		}
+	// This should not panic and should not create database entries
+	logger.LogRequest(req, "test@example.com", "production", "allow", 200, 150*time.Millisecond, nil)
 
-		for _, tc := range testCases {
-			t.Run(fmt.Sprintf("%s %s", tc.method, tc.path), func(t *testing.T) {
-				action, resource := logger.ParseConvoxAction(tc.path, tc.method, "")
-				assert.Equal(t, tc.expectedAction, action, "action mismatch for %s %s", tc.method, tc.path)
-				assert.Equal(t, tc.expectedResource, resource, "resource mismatch for %s %s", tc.method, tc.path)
-				assert.NotEqual(t, "unknown", action, "action should not be unknown")
-				assert.NotEqual(t, "unknown", resource, "resource should not be unknown")
-			})
-		}
-	})
+	// Verify NO database entry was created by LogRequest
+	logs, err := database.GetAuditLogs("test@example.com", time.Time{}, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 0, "LogRequest should not create database entries")
+}
 
-	t.Run("InferResourceType_NeverUnknown", func(t *testing.T) {
-		// Test that InferResourceType returns proper resource type for common paths
+func TestParseConvoxActionListEndpoints(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	logger := NewLogger(database)
+
+	// Test that all list endpoints return proper action and resource
+	testCases := []struct {
+		method           string
+		path             string
+		expectedAction   string
+		expectedResource string
+	}{
+		{"GET", "/apps", BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()), "all"},
+		{"GET", "/instances", BuildAction(rbac.ResourceInstance.String(), rbac.ActionList.String()), "all"},
+		{
+			"GET",
+			"/apps/myapp/processes",
+			BuildAction(rbac.ResourceProcess.String(), rbac.ActionList.String()),
+			"all",
+		},
+		{"GET", "/apps/myapp/builds", BuildAction(rbac.ResourceBuild.String(), rbac.ActionList.String()), "all"},
+		{
+			"GET",
+			"/apps/myapp/releases",
+			BuildAction(rbac.ResourceRelease.String(), rbac.ActionList.String()),
+			"all",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s %s", tc.method, tc.path), func(t *testing.T) {
+			action, resource := logger.ParseConvoxAction(tc.path, tc.method, "")
+			assert.Equal(t, tc.expectedAction, action, "action mismatch for %s %s", tc.method, tc.path)
+			assert.Equal(t, tc.expectedResource, resource, "resource mismatch for %s %s", tc.method, tc.path)
+			assert.NotEqual(t, "unknown", action, "action should not be unknown")
+			assert.NotEqual(t, "unknown", resource, "resource should not be unknown")
+		})
+	}
+}
+
+func TestInferResourceType(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	logger := NewLogger(database)
+
+	t.Run("CommonPaths", func(t *testing.T) {
 		testCases := []struct {
 			path         string
 			action       string
@@ -130,7 +140,7 @@ func TestAuditLogger(t *testing.T) {
 				"/system",
 				BuildAction(rbac.ResourceRack.String(), rbac.ActionRead.String()),
 				"rack",
-			}, // System endpoints have action "rack.*" so type is "rack"
+			},
 		}
 
 		for _, tc := range testCases {
@@ -142,7 +152,7 @@ func TestAuditLogger(t *testing.T) {
 		}
 	})
 
-	t.Run("InferResourceType_Fallback", func(t *testing.T) {
+	t.Run("Fallback", func(t *testing.T) {
 		resourceType := logger.InferResourceType("/totally/new/path", "")
 		assert.Equal(t, "totally/new/path", resourceType)
 

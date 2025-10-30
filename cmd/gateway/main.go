@@ -54,9 +54,11 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 	case "reset-db":
 		return true, resetDatabase()
 	case "help", "--help", "-h":
-		fmt.Println(
-			"rack-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (requires env guards)",
-		)
+		helpText := "rack-gateway commands:\n" +
+			"  (no args)            Start the API server\n" +
+			"  migrate             Apply database migrations\n" +
+			"  reset-db            Drop and recreate the database (requires env guards)"
+		fmt.Println(helpText)
 		return true, nil
 	default:
 		return false, nil

@@ -32,7 +32,7 @@ func NewTokenCreatedOwnerWorker(emailSender gtwemail.Sender) *TokenCreatedOwnerW
 }
 
 // Work sends the token created email to the owner
-func (w *TokenCreatedOwnerWorker) Work(ctx context.Context, job *river.Job[TokenCreatedOwnerArgs]) error {
+func (w *TokenCreatedOwnerWorker) Work(_ context.Context, job *river.Job[TokenCreatedOwnerArgs]) error {
 	args := job.Args
 	if args.OwnerEmail == "" {
 		return nil
@@ -70,7 +70,7 @@ func NewTokenCreatedAdminWorker(emailSender gtwemail.Sender) *TokenCreatedAdminW
 }
 
 // Work sends the admin notification emails
-func (w *TokenCreatedAdminWorker) Work(ctx context.Context, job *river.Job[TokenCreatedAdminArgs]) error {
+func (w *TokenCreatedAdminWorker) Work(_ context.Context, job *river.Job[TokenCreatedAdminArgs]) error {
 	args := job.Args
 	if len(args.AdminEmails) == 0 {
 		return nil

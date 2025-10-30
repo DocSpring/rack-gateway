@@ -34,7 +34,7 @@ func NewAuditEventWorker(database *db.Database, slackNotifier *slack.Notifier) *
 }
 
 // Work sends the Slack audit event notification
-func (w *AuditEventWorker) Work(ctx context.Context, job *river.Job[AuditEventArgs]) error {
+func (w *AuditEventWorker) Work(_ context.Context, job *river.Job[AuditEventArgs]) error {
 	// Load the audit log from database
 	auditLog, err := w.database.GetAuditLogByID(job.Args.AuditLogID)
 	if err != nil {
@@ -74,7 +74,7 @@ func NewDeployApprovalWorker(database *db.Database, slackNotifier *slack.Notifie
 }
 
 // Work sends the Slack deploy approval notification
-func (w *DeployApprovalWorker) Work(ctx context.Context, job *river.Job[DeployApprovalArgs]) error {
+func (w *DeployApprovalWorker) Work(_ context.Context, job *river.Job[DeployApprovalArgs]) error {
 	// Load the deploy approval request from database
 	deployApprovalRequest, err := w.database.GetDeployApprovalRequest(job.Args.DeployApprovalRequestID)
 	if err != nil {

@@ -13,288 +13,302 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func TestDatabase(t *testing.T) {
+func TestDatabaseInitializeAdmin(t *testing.T) {
 	db, err := gwdb.NewFromEnv()
 	require.NoError(t, err)
 	defer db.Close() //nolint:errcheck // test cleanup
 	dbtest.Reset(t, db)
 
-	t.Run("InitializeAdmin", func(t *testing.T) {
-		// First initialization should succeed
-		err := db.InitializeAdmin("admin@example.com", "Admin User")
-		assert.NoError(t, err)
+	// First initialization should succeed
+	err = db.InitializeAdmin("admin@example.com", "Admin User")
+	assert.NoError(t, err)
 
-		// Second initialization should be a no-op (users exist)
-		err = db.InitializeAdmin("other@example.com", "Other User")
-		assert.NoError(t, err)
+	// Second initialization should be a no-op (users exist)
+	err = db.InitializeAdmin("other@example.com", "Other User")
+	assert.NoError(t, err)
 
-		// Admin user should exist
-		user, err := db.GetUser("admin@example.com")
-		require.NoError(t, err)
-		assert.Equal(t, "admin@example.com", user.Email)
-		assert.Equal(t, "Admin User", user.Name)
-		assert.Equal(t, []string{"admin"}, user.Roles)
+	// Admin user should exist
+	user, err := db.GetUser("admin@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, "admin@example.com", user.Email)
+	assert.Equal(t, "Admin User", user.Name)
+	assert.Equal(t, []string{"admin"}, user.Roles)
 
-		// Other user should not exist
-		user, err = db.GetUser("other@example.com")
-		assert.NoError(t, err)
-		assert.Nil(t, user)
+	// Other user should not exist
+	user, err = db.GetUser("other@example.com")
+	assert.NoError(t, err)
+	assert.Nil(t, user)
+}
+
+func TestDatabaseUserCRUD(t *testing.T) {
+	db, err := gwdb.NewFromEnv()
+	require.NoError(t, err)
+	defer db.Close() //nolint:errcheck // test cleanup
+	dbtest.Reset(t, db)
+
+	// Create user
+	user, err := db.CreateUser("test@example.com", "Test User", []string{"viewer", "ops"})
+	require.NoError(t, err)
+	assert.Equal(t, "test@example.com", user.Email)
+	assert.Equal(t, []string{"viewer", "ops"}, user.Roles)
+
+	// Get user
+	retrieved, err := db.GetUser("test@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, user.Email, retrieved.Email)
+	assert.Equal(t, user.Roles, retrieved.Roles)
+
+	// Update roles
+	err = db.UpdateUserRoles("test@example.com", []string{"admin"})
+	require.NoError(t, err)
+
+	// Verify update
+	updated, err := db.GetUser("test@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"admin"}, updated.Roles)
+
+	// List users
+	users, err := db.ListUsers()
+	require.NoError(t, err)
+	assert.Len(t, users, 2) // admin + test user
+
+	// Delete user
+	err = db.DeleteUser("test@example.com")
+	require.NoError(t, err)
+
+	// Verify deletion
+	deleted, err := db.GetUser("test@example.com")
+	assert.NoError(t, err)
+	assert.Nil(t, deleted)
+}
+
+func TestDatabaseAuditLogs(t *testing.T) {
+	db, err := gwdb.NewFromEnv()
+	require.NoError(t, err)
+	defer db.Close() //nolint:errcheck // test cleanup
+	dbtest.Reset(t, db)
+
+	// Create audit logs
+	log1 := &gwdb.AuditLog{
+		UserEmail:      "user1@example.com",
+		UserName:       "User One",
+		ActionType:     "convox",
+		Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionRead.String()),
+		Resource:       "myapp",
+		Details:        `{"key": "SECRET_TOKEN"}`,
+		IPAddress:      "192.168.1.1",
+		UserAgent:      "convox-cli/3.0",
+		Status:         "success",
+		ResponseTimeMs: 123,
+	}
+
+	log2 := &gwdb.AuditLog{
+		UserEmail:      "user2@example.com",
+		UserName:       "User Two",
+		ActionType:     "users",
+		Action:         audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+		Resource:       "newuser@example.com",
+		Status:         "success",
+		ResponseTimeMs: 45,
+	}
+
+	log3 := &gwdb.AuditLog{
+		UserEmail:      "attacker@evil.com",
+		ActionType:     "auth",
+		Action:         audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed),
+		Status:         "failed",
+		ResponseTimeMs: 5,
+	}
+
+	err = db.CreateAuditLog(log1)
+	require.NoError(t, err, "Failed to create log1: %v", err)
+
+	// Verify the first log was created by counting
+	var count int
+	err = db.DB().QueryRow("SELECT COUNT(*) FROM audit.audit_event").Scan(&count)
+	require.NoError(t, err)
+	t.Logf("After log1: %d audit logs in database", count)
+
+	time.Sleep(10 * time.Millisecond) // Ensure different timestamps
+	err = db.CreateAuditLog(log2)
+	require.NoError(t, err, "Failed to create log2: %v", err)
+
+	time.Sleep(10 * time.Millisecond)
+	err = db.CreateAuditLog(log3)
+	require.NoError(t, err, "Failed to create log3: %v", err)
+
+	// Count total logs before query
+	err = db.DB().QueryRow("SELECT COUNT(*) FROM audit.audit_event").Scan(&count)
+	require.NoError(t, err)
+	t.Logf("Total audit logs before GetAuditLogs: %d", count)
+
+	// Get all logs
+	logs, err := db.GetAuditLogs("", time.Time{}, 0)
+	require.NoError(t, err, "Failed to get audit logs: %v", err)
+	t.Logf("GetAuditLogs returned %d logs", len(logs))
+	for i, log := range logs {
+		t.Logf("Log %d: %+v", i, log)
+	}
+	require.Len(t, logs, 3, "Expected 3 audit logs but got %d", len(logs))
+
+	// Filter by user
+	userLogs, err := db.GetAuditLogs("user1@example.com", time.Time{}, 0)
+	require.NoError(t, err)
+	assert.Len(t, userLogs, 1)
+	assert.Equal(t, audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionRead.String()), userLogs[0].Action)
+	assert.Equal(t, "192.168.1.1", userLogs[0].IPAddress)
+
+	// Filter by time (use a time well before we created the logs, in UTC)
+	startTime := time.Now().UTC().Add(-5 * time.Minute)
+	recentLogs, err := db.GetAuditLogs("", startTime, 0)
+	require.NoError(t, err)
+	assert.Len(t, recentLogs, 3)
+
+	// Test filtering with future time returns nothing
+	futureLogs, err := db.GetAuditLogs("", time.Now().UTC().Add(1*time.Hour), 0)
+	require.NoError(t, err)
+	assert.Len(t, futureLogs, 0)
+
+	// Limit results
+	limitedLogs, err := db.GetAuditLogs("", time.Time{}, 2)
+	require.NoError(t, err)
+	assert.Len(t, limitedLogs, 2)
+}
+
+func TestDatabaseAuditAggregation(t *testing.T) {
+	db, err := gwdb.NewFromEnv()
+	require.NoError(t, err)
+	defer db.Close() //nolint:errcheck // test cleanup
+	dbtest.Reset(t, db)
+
+	base := &gwdb.AuditLog{
+		UserEmail:      "poller@example.com",
+		UserName:       "Poller",
+		ActionType:     "convox",
+		Action:         audit.BuildAction(rbac.ResourceProcess.String(), rbac.ActionRead.String()),
+		Resource:       "app-123/process-abc",
+		ResourceType:   "process",
+		Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-001"}`,
+		IPAddress:      "10.0.0.1",
+		UserAgent:      "convox-cli/3.0",
+		Status:         "success",
+		RBACDecision:   "allow",
+		HTTPStatus:     200,
+		ResponseTimeMs: 95,
+	}
+	require.NoError(t, db.CreateAuditLog(base))
+
+	follow := &gwdb.AuditLog{
+		UserEmail:      base.UserEmail,
+		UserName:       base.UserName,
+		ActionType:     base.ActionType,
+		Action:         base.Action,
+		Resource:       base.Resource,
+		ResourceType:   base.ResourceType,
+		Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-002"}`,
+		IPAddress:      base.IPAddress,
+		UserAgent:      base.UserAgent,
+		Status:         base.Status,
+		RBACDecision:   base.RBACDecision,
+		HTTPStatus:     base.HTTPStatus,
+		ResponseTimeMs: 128,
+	}
+	require.NoError(t, db.CreateAuditLog(follow))
+
+	// Aggregated view should combine events with same fields (different request_id)
+	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+		UserEmail: base.UserEmail,
+		Limit:     50,
 	})
+	require.NoError(t, err)
+	require.Equal(t, 1, total, "should have 1 aggregated entry")
+	require.Len(t, aggs, 1)
+	assert.Equal(t, 2, aggs[0].EventCount, "event count should be 2")
+	assert.Equal(t, 95, aggs[0].MinResponseTimeMs)
+	assert.Equal(t, 128, aggs[0].MaxResponseTimeMs)
+	assert.Contains(t, aggs[0].Details, "/apps/app-123/processes/process-abc", "details should contain path")
 
-	t.Run("UserCRUD", func(t *testing.T) {
-		// Create user
-		user, err := db.CreateUser("test@example.com", "Test User", []string{"viewer", "ops"})
-		require.NoError(t, err)
-		assert.Equal(t, "test@example.com", user.Email)
-		assert.Equal(t, []string{"viewer", "ops"}, user.Roles)
+	// Create event with different resource (should NOT aggregate)
+	different := &gwdb.AuditLog{
+		UserEmail:      base.UserEmail,
+		UserName:       base.UserName,
+		ActionType:     base.ActionType,
+		Action:         base.Action,
+		Resource:       "app-123/process-def", // Different resource
+		ResourceType:   base.ResourceType,
+		Details:        `{"path":"/apps/app-123/processes/process-def","request_id":"req-003"}`,
+		IPAddress:      base.IPAddress,
+		UserAgent:      base.UserAgent,
+		Status:         base.Status,
+		RBACDecision:   base.RBACDecision,
+		HTTPStatus:     base.HTTPStatus,
+		ResponseTimeMs: 143,
+	}
+	require.NoError(t, db.CreateAuditLog(different))
 
-		// Get user
-		retrieved, err := db.GetUser("test@example.com")
-		require.NoError(t, err)
-		assert.Equal(t, user.Email, retrieved.Email)
-		assert.Equal(t, user.Roles, retrieved.Roles)
-
-		// Update roles
-		err = db.UpdateUserRoles("test@example.com", []string{"admin"})
-		require.NoError(t, err)
-
-		// Verify update
-		updated, err := db.GetUser("test@example.com")
-		require.NoError(t, err)
-		assert.Equal(t, []string{"admin"}, updated.Roles)
-
-		// List users
-		users, err := db.ListUsers()
-		require.NoError(t, err)
-		assert.Len(t, users, 2) // admin + test user
-
-		// Delete user
-		err = db.DeleteUser("test@example.com")
-		require.NoError(t, err)
-
-		// Verify deletion
-		deleted, err := db.GetUser("test@example.com")
-		assert.NoError(t, err)
-		assert.Nil(t, deleted)
+	// Should now have 2 aggregated entries
+	all, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+		UserEmail: base.UserEmail,
+		Limit:     50,
 	})
+	require.NoError(t, err)
+	require.Equal(t, 2, total)
+	require.Len(t, all, 2)
+	// Ordered by last_seen DESC, so newest first
+	assert.Equal(t, 1, all[0].EventCount, "different resource should have event count 1")
+	assert.Equal(t, 2, all[1].EventCount, "aggregated events should have event count 2")
+}
 
-	t.Run("AuditLogs", func(t *testing.T) {
-		// Create audit logs
-		log1 := &gwdb.AuditLog{
-			UserEmail:      "user1@example.com",
-			UserName:       "User One",
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionRead.String()),
-			Resource:       "myapp",
-			Details:        `{"key": "SECRET_TOKEN"}`,
-			IPAddress:      "192.168.1.1",
-			UserAgent:      "convox-cli/3.0",
-			Status:         "success",
-			ResponseTimeMs: 123,
-		}
+func TestDatabaseAuditAggregationNoTimeWindow(t *testing.T) {
+	db, err := gwdb.NewFromEnv()
+	require.NoError(t, err)
+	defer db.Close() //nolint:errcheck // test cleanup
+	dbtest.Reset(t, db)
 
-		log2 := &gwdb.AuditLog{
-			UserEmail:      "user2@example.com",
-			UserName:       "User Two",
-			ActionType:     "users",
-			Action:         audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-			Resource:       "newuser@example.com",
-			Status:         "success",
-			ResponseTimeMs: 45,
-		}
+	base := time.Now().UTC()
 
-		log3 := &gwdb.AuditLog{
-			UserEmail:      "attacker@evil.com",
-			ActionType:     "auth",
-			Action:         audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed),
-			Status:         "failed",
-			ResponseTimeMs: 5,
-		}
+	// Create first audit log with old timestamp
+	first := &gwdb.AuditLog{
+		Timestamp:      base.Add(-15 * time.Second),
+		UserEmail:      "test@example.com",
+		ActionType:     "convox",
+		Action:         audit.BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()),
+		Resource:       "all",
+		ResourceType:   "app",
+		Status:         "success",
+		ResponseTimeMs: 100,
+	}
+	require.NoError(t, db.CreateAuditLog(first))
 
-		err = db.CreateAuditLog(log1)
-		require.NoError(t, err, "Failed to create log1: %v", err)
+	// Create second audit log with current timestamp (same fields, different timestamp)
+	second := &gwdb.AuditLog{
+		Timestamp:      base,
+		UserEmail:      "test@example.com",
+		ActionType:     "convox",
+		Action:         audit.BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()),
+		Resource:       "all",
+		ResourceType:   "app",
+		Status:         "success",
+		ResponseTimeMs: 105,
+	}
+	require.NoError(t, db.CreateAuditLog(second))
 
-		// Verify the first log was created by counting
-		var count int
-		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit.audit_event").Scan(&count)
-		require.NoError(t, err)
-		t.Logf("After log1: %d audit logs in database", count)
+	// Raw table should have 2 separate entries
+	logs, err := db.GetAuditLogs(first.UserEmail, time.Time{}, 0)
+	require.NoError(t, err)
+	require.Len(t, logs, 2, "raw audit_event table should have 2 entries")
+	assert.Equal(t, 1, logs[0].EventCount)
+	assert.Equal(t, 1, logs[1].EventCount)
 
-		time.Sleep(10 * time.Millisecond) // Ensure different timestamps
-		err = db.CreateAuditLog(log2)
-		require.NoError(t, err, "Failed to create log2: %v", err)
-
-		time.Sleep(10 * time.Millisecond)
-		err = db.CreateAuditLog(log3)
-		require.NoError(t, err, "Failed to create log3: %v", err)
-
-		// Count total logs before query
-		err = db.DB().QueryRow("SELECT COUNT(*) FROM audit.audit_event").Scan(&count)
-		require.NoError(t, err)
-		t.Logf("Total audit logs before GetAuditLogs: %d", count)
-
-		// Get all logs
-		logs, err := db.GetAuditLogs("", time.Time{}, 0)
-		require.NoError(t, err, "Failed to get audit logs: %v", err)
-		t.Logf("GetAuditLogs returned %d logs", len(logs))
-		for i, log := range logs {
-			t.Logf("Log %d: %+v", i, log)
-		}
-		require.Len(t, logs, 3, "Expected 3 audit logs but got %d", len(logs))
-
-		// Filter by user
-		userLogs, err := db.GetAuditLogs("user1@example.com", time.Time{}, 0)
-		require.NoError(t, err)
-		assert.Len(t, userLogs, 1)
-		assert.Equal(t, audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionRead.String()), userLogs[0].Action)
-		assert.Equal(t, "192.168.1.1", userLogs[0].IPAddress)
-
-		// Filter by time (use a time well before we created the logs, in UTC)
-		startTime := time.Now().UTC().Add(-5 * time.Minute)
-		recentLogs, err := db.GetAuditLogs("", startTime, 0)
-		require.NoError(t, err)
-		assert.Len(t, recentLogs, 3)
-
-		// Test filtering with future time returns nothing
-		futureLogs, err := db.GetAuditLogs("", time.Now().UTC().Add(1*time.Hour), 0)
-		require.NoError(t, err)
-		assert.Len(t, futureLogs, 0)
-
-		// Limit results
-		limitedLogs, err := db.GetAuditLogs("", time.Time{}, 2)
-		require.NoError(t, err)
-		assert.Len(t, limitedLogs, 2)
+	// Aggregated table should combine them (no time window restriction)
+	aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
+		UserEmail: first.UserEmail,
+		Limit:     50,
 	})
-
-	t.Run("AuditAggregation", func(t *testing.T) {
-		dbtest.Reset(t, db)
-
-		base := &gwdb.AuditLog{
-			UserEmail:      "poller@example.com",
-			UserName:       "Poller",
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceProcess.String(), rbac.ActionRead.String()),
-			Resource:       "app-123/process-abc",
-			ResourceType:   "process",
-			Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-001"}`,
-			IPAddress:      "10.0.0.1",
-			UserAgent:      "convox-cli/3.0",
-			Status:         "success",
-			RBACDecision:   "allow",
-			HTTPStatus:     200,
-			ResponseTimeMs: 95,
-		}
-		require.NoError(t, db.CreateAuditLog(base))
-
-		follow := &gwdb.AuditLog{
-			UserEmail:      base.UserEmail,
-			UserName:       base.UserName,
-			ActionType:     base.ActionType,
-			Action:         base.Action,
-			Resource:       base.Resource,
-			ResourceType:   base.ResourceType,
-			Details:        `{"path":"/apps/app-123/processes/process-abc","request_id":"req-002"}`,
-			IPAddress:      base.IPAddress,
-			UserAgent:      base.UserAgent,
-			Status:         base.Status,
-			RBACDecision:   base.RBACDecision,
-			HTTPStatus:     base.HTTPStatus,
-			ResponseTimeMs: 128,
-		}
-		require.NoError(t, db.CreateAuditLog(follow))
-
-		// Aggregated view should combine events with same fields (different request_id)
-		aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
-			UserEmail: base.UserEmail,
-			Limit:     50,
-		})
-		require.NoError(t, err)
-		require.Equal(t, 1, total, "should have 1 aggregated entry")
-		require.Len(t, aggs, 1)
-		assert.Equal(t, 2, aggs[0].EventCount, "event count should be 2")
-		assert.Equal(t, 95, aggs[0].MinResponseTimeMs)
-		assert.Equal(t, 128, aggs[0].MaxResponseTimeMs)
-		assert.Contains(t, aggs[0].Details, "/apps/app-123/processes/process-abc", "details should contain path")
-
-		// Create event with different resource (should NOT aggregate)
-		different := &gwdb.AuditLog{
-			UserEmail:      base.UserEmail,
-			UserName:       base.UserName,
-			ActionType:     base.ActionType,
-			Action:         base.Action,
-			Resource:       "app-123/process-def", // Different resource
-			ResourceType:   base.ResourceType,
-			Details:        `{"path":"/apps/app-123/processes/process-def","request_id":"req-003"}`,
-			IPAddress:      base.IPAddress,
-			UserAgent:      base.UserAgent,
-			Status:         base.Status,
-			RBACDecision:   base.RBACDecision,
-			HTTPStatus:     base.HTTPStatus,
-			ResponseTimeMs: 143,
-		}
-		require.NoError(t, db.CreateAuditLog(different))
-
-		// Should now have 2 aggregated entries
-		all, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
-			UserEmail: base.UserEmail,
-			Limit:     50,
-		})
-		require.NoError(t, err)
-		require.Equal(t, 2, total)
-		require.Len(t, all, 2)
-		// Ordered by last_seen DESC, so newest first
-		assert.Equal(t, 1, all[0].EventCount, "different resource should have event count 1")
-		assert.Equal(t, 2, all[1].EventCount, "aggregated events should have event count 2")
-	})
-
-	t.Run("AuditAggregationNoTimeWindow", func(t *testing.T) {
-		dbtest.Reset(t, db)
-
-		base := time.Now().UTC()
-
-		// Create first audit log with old timestamp
-		first := &gwdb.AuditLog{
-			Timestamp:      base.Add(-15 * time.Second),
-			UserEmail:      "test@example.com",
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()),
-			Resource:       "all",
-			ResourceType:   "app",
-			Status:         "success",
-			ResponseTimeMs: 100,
-		}
-		require.NoError(t, db.CreateAuditLog(first))
-
-		// Create second audit log with current timestamp (same fields, different timestamp)
-		second := &gwdb.AuditLog{
-			Timestamp:      base,
-			UserEmail:      "test@example.com",
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()),
-			Resource:       "all",
-			ResourceType:   "app",
-			Status:         "success",
-			ResponseTimeMs: 105,
-		}
-		require.NoError(t, db.CreateAuditLog(second))
-
-		// Raw table should have 2 separate entries
-		logs, err := db.GetAuditLogs(first.UserEmail, time.Time{}, 0)
-		require.NoError(t, err)
-		require.Len(t, logs, 2, "raw audit_event table should have 2 entries")
-		assert.Equal(t, 1, logs[0].EventCount)
-		assert.Equal(t, 1, logs[1].EventCount)
-
-		// Aggregated table should combine them (no time window restriction)
-		aggs, total, err := db.GetAuditLogsAggregated(gwdb.AuditLogFilters{
-			UserEmail: first.UserEmail,
-			Limit:     50,
-		})
-		require.NoError(t, err)
-		require.Equal(t, 1, total, "aggregated table should combine events regardless of timestamp")
-		require.Len(t, aggs, 1)
-		assert.Equal(t, 2, aggs[0].EventCount)
-	})
+	require.NoError(t, err)
+	require.Equal(t, 1, total, "aggregated table should combine events regardless of timestamp")
+	require.Len(t, aggs, 1)
+	assert.Equal(t, 2, aggs[0].EventCount)
 }
 
 func TestGetAuditLogsPaged(t *testing.T) {
@@ -450,12 +464,9 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	require.NoError(t, err, "expected postgres inet column to accept value after NULL initialization")
 
 	var stored string
-	require.NoError(
-		t,
-		db.DB().
-			QueryRow(`SELECT host(ip_address) FROM audit.audit_event WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`).
-			Scan(&stored),
-	)
+	query := `SELECT host(ip_address) FROM audit.audit_event ` +
+		`WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`
+	require.NoError(t, db.DB().QueryRow(query).Scan(&stored))
 	assert.Equal(t, "203.0.113.10", stored)
 }
 
@@ -508,24 +519,22 @@ func TestAuditLogIndexes(t *testing.T) {
 }
 
 func TestDatabaseInitialization(t *testing.T) {
-	t.Run("ReinitializesCorrectly", func(t *testing.T) {
-		db1, err := gwdb.NewFromEnv()
-		require.NoError(t, err)
-		dbtest.Reset(t, db1)
+	db1, err := gwdb.NewFromEnv()
+	require.NoError(t, err)
+	dbtest.Reset(t, db1)
 
-		err = db1.InitializeAdmin("admin@example.com", "Admin")
-		require.NoError(t, err)
-		_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
-		require.NoError(t, err)
-		// Close the first connection before creating another instance (connection pool reuse)
-		//nolint:errcheck // closing during cleanup; failure handled in subsequent operations
-		db1.Close()
+	err = db1.InitializeAdmin("admin@example.com", "Admin")
+	require.NoError(t, err)
+	_, err = db1.CreateUser("user@example.com", "User", []string{"viewer"})
+	require.NoError(t, err)
+	// Close the first connection before creating another instance (connection pool reuse)
+	//nolint:errcheck // closing during cleanup; failure handled in subsequent operations
+	db1.Close()
 
-		db2, err := gwdb.NewFromEnv()
-		require.NoError(t, err)
-		defer db2.Close() //nolint:errcheck // test cleanup
-		users, err := db2.ListUsers()
-		require.NoError(t, err)
-		assert.GreaterOrEqual(t, len(users), 2)
-	})
+	db2, err := gwdb.NewFromEnv()
+	require.NoError(t, err)
+	defer db2.Close() //nolint:errcheck // test cleanup
+	users, err := db2.ListUsers()
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(users), 2)
 }

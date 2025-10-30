@@ -44,6 +44,7 @@ func (e *DeployApprovalRequestConflictError) Unwrap() error {
 	return ErrDeployApprovalRequestActive
 }
 
+// CreateDeployApprovalRequest creates a new deploy approval request for the specified parameters.
 func (d *Database) CreateDeployApprovalRequest(
 	message, app, gitCommitHash, gitBranch, prURL string,
 	ciMetadata []byte,

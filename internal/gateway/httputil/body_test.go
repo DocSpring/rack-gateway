@@ -165,6 +165,28 @@ func TestIsJSONContentType(t *testing.T) {
 	}
 }
 
+func assertHeaderValuesMatch(t *testing.T, key string, got, expected []string) {
+	t.Helper()
+	if len(got) != len(expected) {
+		t.Errorf("Header %q: got %d values, want %d", key, len(got), len(expected))
+		return
+	}
+	for i, expectedValue := range expected {
+		if got[i] != expectedValue {
+			t.Errorf("Header %q[%d]: got %q, want %q", key, i, got[i], expectedValue)
+		}
+	}
+}
+
+func assertNoUnexpectedHeaders(t *testing.T, dst, expected http.Header) {
+	t.Helper()
+	for key := range dst {
+		if _, ok := expected[key]; !ok {
+			t.Errorf("Unexpected header %q in result", key)
+		}
+	}
+}
+
 func TestCopyHeaders(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -240,23 +262,10 @@ func TestCopyHeaders(t *testing.T) {
 			CopyHeaders(dst, tt.src, tt.skip...)
 
 			for key, expectedValues := range tt.expected {
-				gotValues := dst[key]
-				if len(gotValues) != len(expectedValues) {
-					t.Errorf("Header %q: got %d values, want %d", key, len(gotValues), len(expectedValues))
-					continue
-				}
-				for i, expectedValue := range expectedValues {
-					if gotValues[i] != expectedValue {
-						t.Errorf("Header %q[%d]: got %q, want %q", key, i, gotValues[i], expectedValue)
-					}
-				}
+				assertHeaderValuesMatch(t, key, dst[key], expectedValues)
 			}
 
-			for key := range dst {
-				if _, ok := tt.expected[key]; !ok {
-					t.Errorf("Unexpected header %q in result", key)
-				}
-			}
+			assertNoUnexpectedHeaders(t, dst, tt.expected)
 		})
 	}
 }

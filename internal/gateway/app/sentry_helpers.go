@@ -17,7 +17,7 @@ func CaptureError(c *gin.Context, err error) {
 		return
 	}
 
-	withGinScope(c, true, func(scope *sentry.Scope, hub *sentry.Hub) {
+	withGinScope(c, true, func(_ *sentry.Scope, hub *sentry.Hub) {
 		hub.CaptureException(err)
 	})
 }
@@ -36,7 +36,7 @@ func CaptureHTTPError(r *http.Request, err error) {
 
 // CaptureMessage captures a message to Sentry (for cases where you don't have an error object).
 func CaptureMessage(c *gin.Context, message string) {
-	withGinScope(c, false, func(scope *sentry.Scope, hub *sentry.Hub) {
+	withGinScope(c, false, func(_ *sentry.Scope, hub *sentry.Hub) {
 		hub.CaptureMessage(message)
 	})
 }

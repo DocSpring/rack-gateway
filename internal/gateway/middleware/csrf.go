@@ -41,7 +41,9 @@ func CSRF(sessionManager *auth.SessionManager) gin.HandlerFunc {
 		}
 
 		trimmedSession := strings.TrimSpace(sessionToken)
-		if _, err := sessionManager.ValidateSession(trimmedSession, ClientIPFromRequest(c.Request), c.GetHeader("User-Agent")); err != nil {
+		clientIP := ClientIPFromRequest(c.Request)
+		userAgent := c.GetHeader("User-Agent")
+		if _, err := sessionManager.ValidateSession(trimmedSession, clientIP, userAgent); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid CSRF token"})
 			c.Abort()
 			return

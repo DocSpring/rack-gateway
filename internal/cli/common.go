@@ -124,7 +124,7 @@ func newStdCLIEngine(cobraCmd *cobra.Command) *stdcli.Engine {
 }
 
 func collectStdCLIFlags(cobraCmd *cobra.Command, flagNames []string) []*stdcli.Flag {
-	var flags []*stdcli.Flag
+	flags := make([]*stdcli.Flag, 0, len(flagNames))
 	for _, name := range flagNames {
 		cobraFlag := cobraCmd.Flags().Lookup(name)
 		if cobraFlag == nil {

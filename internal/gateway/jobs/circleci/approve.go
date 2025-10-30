@@ -31,7 +31,7 @@ func NewApproveJobWorker() *ApproveJobWorker {
 }
 
 // Work approves the CircleCI job
-func (w *ApproveJobWorker) Work(ctx context.Context, job *river.Job[ApproveJobArgs]) error {
+func (w *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs]) error {
 	args := job.Args
 
 	// Create client with token from job args

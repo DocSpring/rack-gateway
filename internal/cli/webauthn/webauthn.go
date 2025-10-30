@@ -151,7 +151,8 @@ func intersectCredentialLists(allowList [][]byte, deviceCreds []*libfido2.Creden
 
 	if len(filtered) == 0 {
 		return nil, fmt.Errorf(
-			"none of your registered credentials are on this device (device has %d credential(s) for this service, but none match)",
+			"none of your registered credentials are on this device "+
+				"(device has %d credential(s) for this service, but none match)",
 			len(deviceCreds),
 		)
 	}

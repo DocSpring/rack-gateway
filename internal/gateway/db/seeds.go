@@ -74,7 +74,8 @@ func (d *Database) InitializeAdmin(email, name string) error {
 	rolesJSON, _ := json.Marshal(roles)
 
 	var id int64
-	if err := d.queryRow("INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id", email, name, string(rolesJSON)).Scan(&id); err != nil {
+	query := "INSERT INTO users (email, name, roles) VALUES (?, ?, ?) RETURNING id"
+	if err := d.queryRow(query, email, name, string(rolesJSON)).Scan(&id); err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)
 	}
 	return nil

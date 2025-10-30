@@ -27,9 +27,22 @@ func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.Manager) {
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
 	settingsService := settings.NewService(database)
-	h := NewHandler(&config.Config{Racks: map[string]config.RackConfig{
+	rackConfig := map[string]config.RackConfig{
 		"default": {Name: "default", URL: "http://mock", Username: "convox", APIKey: "token", Enabled: true},
-	}}, mgr, audit.NewLogger(database), database, settingsService, email.NoopSender{}, "testrack", "testrack", nil, nil, nil)
+	}
+	h := NewHandler(
+		&config.Config{Racks: rackConfig},
+		mgr,
+		audit.NewLogger(database),
+		database,
+		settingsService,
+		email.NoopSender{},
+		"testrack",
+		"testrack",
+		nil,
+		nil,
+		nil,
+	)
 	// Configure extra secret names
 	h.secretNames["DATABASE_URL"] = struct{}{}
 	h.secretNames["REDIS_URL"] = struct{}{}

@@ -15,7 +15,7 @@ func RackCommand() *cobra.Command {
 		Short: "Show current rack configuration",
 		Long:  "Display the current rack name, gateway URL, and login status from local configuration (no API call)",
 		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(_ *cobra.Command, _ []string) error {
 			status, err := ResolveRackStatus(time.Now())
 			if err != nil {
 				return err
