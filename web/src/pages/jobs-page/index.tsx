@@ -133,7 +133,11 @@ function JobsPageInner() {
           </TableHeader>
           <TableBody>
             {jobs.map((job: JobResponse) => (
-              <TableRow key={job.id}>
+              <TableRow
+                key={job.id}
+                className="cursor-pointer"
+                onClick={() => setSelectedJob(job)}
+              >
                 <TableCell className="font-mono text-sm">{job.id}</TableCell>
                 <TableCell className="font-mono text-xs">{job.kind}</TableCell>
                 <TableCell>
@@ -157,7 +161,6 @@ function JobsPageInner() {
                   className="text-right"
                   onClick={(event) => {
                     event.stopPropagation()
-                    setSelectedJob(job)
                   }}
                 >
                   <Button size="sm" variant="ghost">
@@ -258,7 +261,7 @@ function JobDetailDialog({ job, onClose }: JobDetailDialogProps) {
             {job.last_error && (
               <div>
                 <span className="text-muted-foreground">Last Error:</span>
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs break-words">
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs wrap-break-word">
                   {job.last_error}
                 </pre>
               </div>
@@ -266,7 +269,7 @@ function JobDetailDialog({ job, onClose }: JobDetailDialogProps) {
             {job.errors && job.errors.length > 0 && (
               <div>
                 <span className="text-muted-foreground">Errors:</span>
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs break-words">
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs wrap-break-word">
                   {JSON.stringify(job.errors, null, 2)}
                 </pre>
               </div>
@@ -274,7 +277,7 @@ function JobDetailDialog({ job, onClose }: JobDetailDialogProps) {
             {job.args && (
               <div>
                 <span className="text-muted-foreground">Arguments:</span>
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs break-words">
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs wrap-break-word">
                   {typeof job.args === 'string' ? job.args : JSON.stringify(job.args, null, 2)}
                 </pre>
               </div>
