@@ -30,7 +30,7 @@ type Service struct {
 	backupCodePepper []byte
 	yubiAuth         yubiAuthVerifier
 	webAuthn         *webauthn.WebAuthn
-	emailSender      email.Sender
+    emailSender      email.Sender
 	timeFunc         func() time.Time
 }
 
@@ -119,7 +119,7 @@ func NewService(database *db.Database, issuer string, trustedDeviceTTL, stepUpWi
 		backupCodePepper: backupCodePepper,
 		yubiAuth:         yubiAuth,
 		webAuthn:         webAuthnClient,
-		emailSender:      emailSender,
+        emailSender:      emailSender,
 	}, nil
 }
 
@@ -142,15 +142,15 @@ func (s *Service) checkAndLockAccount(userID int64) error {
 		return fmt.Errorf("failed to lock account: %w", err)
 	}
 
-	if s.emailSender != nil && user != nil {
-		subject := "Account Locked - Multiple Failed Login Attempts"
-		textBody := "Your account has been automatically locked due to multiple failed authentication attempts.\n\nReason: 5 failed MFA attempts in 5 minutes\n\nIf this was not you, please contact your administrator immediately.\n\nFor assistance, please contact your system administrator."
-		htmlBody := `<p><strong>Your account has been automatically locked</strong> due to multiple failed authentication attempts.</p>
+    if s.emailSender != nil && user != nil {
+        subject := "Account Locked - Multiple Failed Login Attempts"
+        textBody := "Your account has been automatically locked due to multiple failed authentication attempts.\n\nReason: 5 failed MFA attempts in 5 minutes\n\nIf this was not you, please contact your administrator immediately.\n\nFor assistance, please contact your system administrator."
+        htmlBody := `<p><strong>Your account has been automatically locked</strong> due to multiple failed authentication attempts.</p>
 <p><strong>Reason:</strong> 5 failed MFA attempts in 5 minutes</p>
 <p><strong style="color: #d9534f;">If this was not you, please contact your administrator immediately.</strong></p>
 <p>For assistance, please contact your system administrator.</p>`
-		_ = s.emailSender.Send(user.Email, subject, textBody, htmlBody)
-	}
+        _ = s.emailSender.Send(user.Email, subject, textBody, htmlBody)
+    }
 
 	return fmt.Errorf("account locked due to multiple failed attempts - contact administrator")
 }

@@ -253,7 +253,9 @@ export function CreateTokenDialog({
                             : undefined
                         }
                         isPermissionLoading={isPermissionLoading}
-                        onPermissionToggle={(permission) => handlePermissionToggle(permission, field)}
+                        onPermissionToggle={(permission) =>
+                          handlePermissionToggle(permission, field)
+                        }
                         onRoleSelect={(role) => handleRoleSelect(role, field)}
                         roleShortcuts={roleShortcuts}
                         selectedPermissions={permissions}

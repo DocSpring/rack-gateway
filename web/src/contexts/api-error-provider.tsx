@@ -13,7 +13,7 @@ type InterceptorError = AxiosError & { suppressToast?: boolean }
 const shouldSuppressError = (error: InterceptorError): boolean => {
   const suppressGlobal = (error?.config as { __suppressGlobalError?: boolean } | undefined)
     ?.__suppressGlobalError
-  if (Boolean(suppressGlobal || error.suppressToast)) {
+  if (suppressGlobal || error.suppressToast) {
     return true
   }
 

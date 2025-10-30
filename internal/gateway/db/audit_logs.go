@@ -115,33 +115,7 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 		log.Timestamp = time.Now().UTC()
 	}
 
-	// Get the latest event in the chain
-	latest, err := d.getLatestEvent()
-	if err != nil {
-		return fmt.Errorf("failed to get latest event: %w", err)
-	}
-
-	// Compute chain parameters
-	var chainIndex int64
-	var previousHash []byte
-	var checkpointID string
-	var checkpointHash []byte
-
-	if latest == nil {
-		// Genesis event
-		chainIndex = 0
-		previousHash = nil
-	} else {
-		// Next event in chain
-		chainIndex = latest.ChainIndex + 1
-		previousHash = latest.EventHash
-		if latest.CheckpointID.Valid {
-			checkpointID = latest.CheckpointID.String
-		}
-		checkpointHash = latest.CheckpointHash
-	}
-
-	// Extract request_id from details JSON if not already set
+    // Extract request_id from details JSON if not already set
 	if log.RequestID == "" && log.Details != "" {
 		var detailsMap map[string]interface{}
 		if err := json.Unmarshal([]byte(log.Details), &detailsMap); err == nil {
@@ -157,55 +131,109 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 		}
 	}
 
-	// Compute event hash
-	secret := getAuditHMACSecret()
-	eventHash := computeEventHash(secret, chainIndex, previousHash, log)
+    // SERIALIZE: perform read->compute->insert inside a tx with advisory lock
+    tx, err := d.db.Begin()
+    if err != nil {
+        return fmt.Errorf("failed to begin audit log tx: %w", err)
+    }
+    defer func() { _ = tx.Rollback() }()
 
-	// Call the append function
-	var newID int64
-	err = d.queryRow(`
-		SELECT audit.append_audit_event(
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
-		)
-	`,
-		log.Timestamp,
-		previousHash,
-		eventHash,
-		nullableString(checkpointID, 255),
-		checkpointHash,
-		log.UserEmail,
-		log.UserName,
-		nullableInt64(log.APITokenID),
-		nullableString(log.APITokenName, 150),
-		log.ActionType,
-		log.Action,
-		log.Command,
-		log.Resource,
-		log.ResourceType,
-		log.Details,
-		nullableString(log.RequestID, 255),
-		nullableIP(log.IPAddress),
-		log.UserAgent,
-		log.Status,
-		log.RBACDecision,
-		log.HTTPStatus,
-		log.ResponseTimeMs,
-		log.EventCount,
-		nullableInt64(log.DeployApprovalRequestID),
-	).Scan(&newID)
+    // Acquire a transaction-scoped advisory lock to serialize appends.
+    // Use a constant chosen for the audit chain. Must match across processes.
+    if _, err := d.execTx(tx, "SELECT pg_advisory_xact_lock(?)", AdvisoryLockAuditChain); err != nil { // different from migration lock
+        return fmt.Errorf("failed to acquire audit chain lock: %w", err)
+    }
 
-	if err != nil {
-		return fmt.Errorf("failed to append audit log: %w", err)
-	}
+    // Read latest event under the lock
+    var latest latestEvent
+    // Use a direct SELECT to ensure it runs in this tx context
+    row := tx.QueryRow(d.rebind(`
+        SELECT chain_index, event_hash, checkpoint_id, checkpoint_hash
+        FROM audit.audit_event
+        ORDER BY chain_index DESC
+        LIMIT 1
+    `))
+    switch err := row.Scan(&latest.ChainIndex, &latest.EventHash, &latest.CheckpointID, &latest.CheckpointHash); err {
+    case sql.ErrNoRows:
+        // no-op; treat as nil latest
+        latest = latestEvent{}
+        latest.ChainIndex = -1 // sentinel to indicate genesis next
+    case nil:
+        // ok
+    default:
+        return fmt.Errorf("failed to get latest event (tx): %w", err)
+    }
 
-	log.ID = newID
-	log.ChainIndex = chainIndex
-	log.PreviousHash = previousHash
-	log.EventHash = eventHash
-	log.CheckpointID = checkpointID
-	log.CheckpointHash = checkpointHash
+    // Compute chain parameters now that we hold the lock
+    var chainIndex int64
+    var previousHash []byte
+    var checkpointID string
+    var checkpointHash []byte
 
-	return nil
+    if latest.ChainIndex < 0 {
+        chainIndex = 0
+        previousHash = nil
+    } else {
+        chainIndex = latest.ChainIndex + 1
+        previousHash = latest.EventHash
+        if latest.CheckpointID.Valid {
+            checkpointID = latest.CheckpointID.String
+        }
+        checkpointHash = latest.CheckpointHash
+    }
+
+    // Compute event hash under the same lock
+    secret := getAuditHMACSecret()
+    eventHash := computeEventHash(secret, chainIndex, previousHash, log)
+
+    // Append the event via function within this tx
+    var newID int64
+    q := `
+        SELECT audit.append_audit_event(
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        )
+    `
+    if err := tx.QueryRow(d.rebind(q),
+        log.Timestamp,
+        previousHash,
+        eventHash,
+        nullableString(checkpointID, 255),
+        checkpointHash,
+        log.UserEmail,
+        log.UserName,
+        nullableInt64(log.APITokenID),
+        nullableString(log.APITokenName, 150),
+        log.ActionType,
+        log.Action,
+        log.Command,
+        log.Resource,
+        log.ResourceType,
+        log.Details,
+        nullableString(log.RequestID, 255),
+        nullableIP(log.IPAddress),
+        log.UserAgent,
+        log.Status,
+        log.RBACDecision,
+        log.HTTPStatus,
+        log.ResponseTimeMs,
+        log.EventCount,
+        nullableInt64(log.DeployApprovalRequestID),
+    ).Scan(&newID); err != nil {
+        return fmt.Errorf("failed to append audit log: %w", err)
+    }
+
+    if err := tx.Commit(); err != nil {
+        return fmt.Errorf("failed to commit audit log tx: %w", err)
+    }
+
+    log.ID = newID
+    log.ChainIndex = chainIndex
+    log.PreviousHash = previousHash
+    log.EventHash = eventHash
+    log.CheckpointID = checkpointID
+    log.CheckpointHash = checkpointHash
+
+    return nil
 }
 
 // GetAuditLogs retrieves audit logs with optional filters

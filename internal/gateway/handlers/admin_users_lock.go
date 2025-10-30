@@ -74,12 +74,12 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		_, _ = h.sessions.RevokeAllForUser(user.ID, &adminUser.ID)
 	}
 
-	if h.emailSender != nil {
-		subject := "Account Locked"
-		textBody := fmt.Sprintf("Your account has been locked by an administrator.\n\nReason: %s\n\nPlease contact your administrator for assistance.", req.Reason)
-		htmlBody := fmt.Sprintf("<p>Your account has been locked by an administrator.</p><p><strong>Reason:</strong> %s</p><p>Please contact your administrator for assistance.</p>", req.Reason)
-		_ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
-	}
+    if h.emailSender != nil {
+        subject := "Account Locked"
+        textBody := fmt.Sprintf("Your account has been locked by an administrator.\n\nReason: %s\n\nPlease contact your administrator for assistance.", req.Reason)
+        htmlBody := fmt.Sprintf("<p>Your account has been locked by an administrator.</p><p><strong>Reason:</strong> %s</p><p>Please contact your administrator for assistance.</p>", req.Reason)
+        _ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
+    }
 
 	details := map[string]interface{}{
 		"reason":      req.Reason,
@@ -137,12 +137,12 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 		return
 	}
 
-	if h.emailSender != nil {
-		subject := "Account Unlocked"
-		textBody := "Your account has been unlocked by an administrator.\n\nYou can now log in again."
-		htmlBody := "<p>Your account has been unlocked by an administrator.</p><p>You can now log in again.</p>"
-		_ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
-	}
+    if h.emailSender != nil {
+        subject := "Account Unlocked"
+        textBody := "Your account has been unlocked by an administrator.\n\nYou can now log in again."
+        htmlBody := "<p>Your account has been unlocked by an administrator.</p><p>You can now log in again.</p>"
+        _ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
+    }
 
 	details := map[string]interface{}{
 		"unlocked_by": adminUser.Email,

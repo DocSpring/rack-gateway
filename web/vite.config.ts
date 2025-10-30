@@ -1,9 +1,9 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import type { PluginOption } from 'vite'
 import { defineConfig } from 'vite'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
@@ -60,7 +60,13 @@ export default defineConfig(() => {
   return {
     // Serve UI consistently under /app/ in all envs
     base: '/app/',
-    plugins: [reactPlugin, tailwindPlugin, gzipCompression, brotliCompression, gatewayRedirectPlugin],
+    plugins: [
+      reactPlugin,
+      tailwindPlugin,
+      gzipCompression,
+      brotliCompression,
+      gatewayRedirectPlugin,
+    ],
     build: {
       manifest: true,
       minify: false,

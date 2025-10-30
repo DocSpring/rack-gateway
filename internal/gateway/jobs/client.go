@@ -47,6 +47,24 @@ func NewClient(dbPool *pgxpool.Pool, deps *Dependencies) (*Client, error) {
 	river.AddWorker(workers, jobemail.NewWelcomeWorker(deps.EmailSender))
 	river.AddWorker(workers, jobemail.NewUserAddedAdminWorker(deps.EmailSender))
 
+	// Email workers - generic async delivery
+	river.AddWorker(workers, jobemail.NewSendSingleWorker(deps.EmailSender))
+	river.AddWorker(workers, jobemail.NewSendManyWorker(deps.EmailSender))
+
+	// Email workers - API tokens
+	river.AddWorker(workers, jobemail.NewTokenCreatedOwnerWorker(deps.EmailSender))
+	river.AddWorker(workers, jobemail.NewTokenCreatedAdminWorker(deps.EmailSender))
+
+	// Email workers - user lock/unlock
+	river.AddWorker(workers, jobemail.NewUserLockedWorker(deps.EmailSender))
+	river.AddWorker(workers, jobemail.NewUserUnlockedWorker(deps.EmailSender))
+
+	// Email workers - MFA auto-lock
+	river.AddWorker(workers, jobemail.NewMFAAutoLockWorker(deps.EmailSender))
+
+	// Email workers - rack params changed
+	river.AddWorker(workers, jobemail.NewRackParamsChangedWorker(deps.EmailSender))
+
 	// Slack workers
 	river.AddWorker(workers, jobslack.NewAuditEventWorker(deps.Database, deps.SlackNotifier))
 	river.AddWorker(workers, jobslack.NewDeployApprovalWorker(deps.Database, deps.SlackNotifier))

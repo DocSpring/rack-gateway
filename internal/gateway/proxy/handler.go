@@ -45,6 +45,8 @@ type Handler struct {
 	sessionManager   *auth.SessionManager
 }
 
+// no async jobs client here; emailer may be an async sender
+
 const maskedSecret = envutil.MaskedSecret
 
 func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, settingsService *settings.Service, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {

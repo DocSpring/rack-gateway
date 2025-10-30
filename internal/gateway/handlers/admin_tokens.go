@@ -335,7 +335,7 @@ func (h *AdminHandler) GetTokenPermissionMetadata(c *gin.Context) {
 }
 
 func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenName string) {
-	if h == nil || h.emailSender == nil {
+    if h == nil || h.emailSender == nil {
 		return
 	}
 	ownerEmail = strings.TrimSpace(ownerEmail)
@@ -355,12 +355,12 @@ func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenNa
 	if creatorLabel == "" {
 		creatorLabel = "an administrator"
 	}
-	subjectOwner := fmt.Sprintf("Rack Gateway (%s): New API token created", rack)
-	textOwner, htmlOwner, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
-	if err != nil || (textOwner == "" && htmlOwner == "") {
-		textOwner = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
-	}
-	_ = h.emailSender.Send(ownerEmail, subjectOwner, textOwner, htmlOwner)
+    subjectOwner := fmt.Sprintf("Rack Gateway (%s): New API token created", rack)
+    textOwner, htmlOwner, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
+    if err != nil || (textOwner == "" && htmlOwner == "") {
+        textOwner = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
+    }
+    _ = h.emailSender.Send(ownerEmail, subjectOwner, textOwner, htmlOwner)
 
 	admins := h.getAdminEmails()
 	if len(admins) == 0 {
@@ -378,10 +378,10 @@ func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenNa
 	}
 	sort.Strings(filtered)
 	recipients := prioritiseInviterFirst(filtered, creatorEmail)
-	subjectAdmin := fmt.Sprintf("Rack Gateway (%s): API token created for %s", rack, ownerEmail)
-	textAdmin, htmlAdmin, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
-	if err != nil || (textAdmin == "" && htmlAdmin == "") {
-		textAdmin = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)
-	}
-	_ = h.emailSender.SendMany(recipients, subjectAdmin, textAdmin, htmlAdmin)
+    subjectAdmin := fmt.Sprintf("Rack Gateway (%s): API token created for %s", rack, ownerEmail)
+    textAdmin, htmlAdmin, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
+    if err != nil || (textAdmin == "" && htmlAdmin == "") {
+        textAdmin = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)
+    }
+    _ = h.emailSender.SendMany(recipients, subjectAdmin, textAdmin, htmlAdmin)
 }

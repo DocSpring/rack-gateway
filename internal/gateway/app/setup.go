@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/asyncmail"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
@@ -163,9 +164,9 @@ func (a *App) initializeServices() error {
 		}
 	}
 
-	// Email sender (Postmark)
-	pmToken := os.Getenv("POSTMARK_API_TOKEN")
-	from := os.Getenv("POSTMARK_FROM")
+    // Email delivery sender (Postmark/Logger)
+    pmToken := os.Getenv("POSTMARK_API_TOKEN")
+    from := os.Getenv("POSTMARK_FROM")
 	if from == "" {
 		domain := a.Config.GoogleAllowedDomain
 		if domain == "" {
@@ -173,15 +174,29 @@ func (a *App) initializeServices() error {
 		}
 		from = "no-reply@" + domain
 	}
-	pmStream := os.Getenv("POSTMARK_STREAM")
-	a.EmailSender = email.NewSender(pmToken, from, pmStream)
+    pmStream := os.Getenv("POSTMARK_STREAM")
+    deliverySender := email.NewSender(pmToken, from, pmStream)
 
-	// Initialize MFA service (after email sender)
-	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.SessionSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin, a.EmailSender)
-	if err != nil {
-		return fmt.Errorf("failed to initialize MFA service: %w", err)
-	}
-	a.MFAService = mfaService
+    // Initialize River jobs client for background job processing (before SecurityNotifier)
+    jobsClient, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
+        Database:      a.Database,
+        EmailSender:   deliverySender, // workers deliver using real sender
+        SlackNotifier: a.SlackNotifier,
+    })
+    if err != nil {
+        return fmt.Errorf("failed to initialize jobs client: %w", err)
+    }
+    a.JobsClient = jobsClient
+
+    // Wrap jobs client with async email sender for all app usage
+    a.EmailSender = asyncmail.NewSender(a.JobsClient)
+
+    // Initialize MFA service (after jobs client so it can enqueue emails)
+    mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.SessionSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin, a.EmailSender)
+    if err != nil {
+        return fmt.Errorf("failed to initialize MFA service: %w", err)
+    }
+    a.MFAService = mfaService
 
 	// Collect admin emails for security notifications
 	adminEmails := []string{}
@@ -201,16 +216,6 @@ func (a *App) initializeServices() error {
 		}
 	}
 
-	// Initialize River jobs client for background job processing (before SecurityNotifier)
-	jobsClient, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
-		Database:      a.Database,
-		EmailSender:   a.EmailSender,
-		SlackNotifier: a.SlackNotifier,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to initialize jobs client: %w", err)
-	}
-	a.JobsClient = jobsClient
 
 	// Set audit event enqueuer on audit logger for Slack notification jobs
 	auditEventEnqueuer := jobs.NewAuditEventEnqueuer(a.JobsClient)
@@ -257,7 +262,7 @@ func (a *App) initializeServices() error {
 		pinnedMgr = nil
 	}
 
-	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
+    a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
 	a.DefaultRack = rackAlias
 
 	return nil
