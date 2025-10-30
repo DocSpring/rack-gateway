@@ -8,5 +8,3 @@ const AdvisoryLockAuditChain int64 = 728443219
 
 // AdvisoryLockMigration protects the audit migration from concurrent execution.
 const AdvisoryLockMigration int64 = 728443218
-
-

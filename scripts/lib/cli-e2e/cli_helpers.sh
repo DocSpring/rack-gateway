@@ -3,7 +3,8 @@
 login_cli_as() {
     local user_email="$1"
     local rack_name="${2:-e2e}"
-    local secret="${MFA_TOTP_SECRETS[$user_email]:-}"
+    local secret
+    secret="$(get_totp_secret "$user_email")"
 
     clear_mfa_replay_protection
 

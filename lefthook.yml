@@ -80,7 +80,7 @@ pre-commit:
     biome-ignores:
       root: "web/"
       glob: "**/*.{ts,tsx}"
-      run: task web:check-ignores
+      run: task check-ignores
 
     shellcheck:
       glob: "{*.sh,**/*.sh}"

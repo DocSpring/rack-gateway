@@ -1,6 +1,17 @@
+// Minimal field API type for permissions field (avoids importing heavy generics)
+type PermissionsFieldApi = {
+  state: { value: string[]; meta: { errors: unknown[] } }
+  setValue: (next: string[]) => void
+  [key: string]: unknown
+}
+
+function asPermissionsFieldApi(f: unknown): PermissionsFieldApi {
+  return f as PermissionsFieldApi
+}
+
 import { useForm } from '@tanstack/react-form'
 import { Copy } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from '@/components/ui/use-toast'
 import { Button } from '../../components/ui/button'
 import {
@@ -108,19 +119,21 @@ export function CreateTokenDialog({
     }
   }, [isOpen, form])
 
-  const handleRoleSelect = (role: TokenRoleInfo, fieldApi: any) => {
+  const handleRoleSelect = (role: TokenRoleInfo, fieldApi: unknown) => {
+    const f = asPermissionsFieldApi(fieldApi)
     const normalized = normalizePermissions(role.permissions)
     if (!normalized.every(canAssignPermission)) {
       return
     }
-    fieldApi.setValue(normalized)
+    f.setValue(normalized)
   }
 
-  const handlePermissionToggle = (permission: string, fieldApi: any) => {
+  const handlePermissionToggle = (permission: string, fieldApi: unknown) => {
+    const f = asPermissionsFieldApi(fieldApi)
     if (!canAssignPermission(permission)) {
       return
     }
-    const current = fieldApi.state.value
+    const current = f.state.value
     const nextSet = new Set(current)
     if (nextSet.has(permission)) {
       nextSet.delete(permission)
@@ -128,7 +141,7 @@ export function CreateTokenDialog({
       nextSet.add(permission)
     }
     const next = Array.from(nextSet).sort()
-    fieldApi.setValue(next)
+    f.setValue(next)
   }
 
   const handleClose = () => {
@@ -237,11 +250,8 @@ export function CreateTokenDialog({
                 <form.Field name="permissions">
                   {(field) => {
                     const permissions = field.state.value
-                    const permissionsSet = useMemo(() => new Set(permissions), [permissions])
-                    const activeRole = useMemo(
-                      () => findMatchingRole(permissions, roleShortcuts),
-                      [permissions, roleShortcuts]
-                    )
+                    const permissionsSet = new Set(permissions)
+                    const activeRole = findMatchingRole(permissions, roleShortcuts)
                     return (
                       <TokenPermissionsEditor
                         activeRole={activeRole}

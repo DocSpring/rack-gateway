@@ -1,11 +1,15 @@
 # shellcheck shell=bash
 
-# shellcheck disable=SC2034
-declare -Ag MFA_TOTP_SECRETS=(
-    ["admin@example.com"]="K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU"
-    ["deployer@example.com"]="KB6VQXGZLMN4Y3DC"
-    ["viewer@example.com"]="NB2WY5DPFVXHI6ZT"
-)
+# Avoid bash associative arrays for portability; provide a lookup function instead
+get_totp_secret() {
+    # $1 = user email
+    case "$1" in
+        "admin@example.com") echo "K745D33R6A3NCWP5C3NYDQMBQF5ZFFHU" ;;
+        "deployer@example.com") echo "KB6VQXGZLMN4Y3DC" ;;
+        "viewer@example.com") echo "NB2WY5DPFVXHI6ZT" ;;
+        *) echo "" ;;
+    esac
+}
 
 generate_totp_code() {
     local secret="$1"

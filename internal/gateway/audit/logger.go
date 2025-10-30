@@ -293,11 +293,6 @@ func (l *Logger) RedactEnvVars(envVars map[string]string) map[string]string {
 	return redacted
 }
 
-// no ephemeral exec hints; authoritative source is the 'command' header from the WS request
-
-// SaveProcessCommand stores a pid->command mapping (used to enrich exec audit entries)
-// No-op migration helper removed; exec commands are stored directly on audit logs.
-
 func getRequestID(r *http.Request) string {
 	requestID := r.Header.Get("X-Request-ID")
 	if requestID == "" {

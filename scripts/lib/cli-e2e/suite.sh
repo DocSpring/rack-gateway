@@ -27,7 +27,7 @@ configure_stage_skips() {
     for stage in $stages; do
         local var="ONLY_${stage}_TESTS"
         local val=""
-        if [[ -v $var ]]; then
+        if [[ -n ${!var+x} ]]; then
             val="${!var}"
         fi
         if [[ -n "$val" ]]; then
@@ -42,7 +42,7 @@ configure_stage_skips() {
 
     for stage in $stages; do
         local var="SKIP_${stage}_TESTS"
-        if [[ ! -v $var ]]; then
+        if [[ -z ${!var+x} ]]; then
             printf -v "$var" %s ""
         fi
     done
@@ -110,7 +110,7 @@ enforce_mfa_and_validate_cli_blocking() {
 
 provision_mfa() {
     for user_email in "admin@example.com" "deployer@example.com" "viewer@example.com"; do
-        setup_user_mfa "$user_email" "${MFA_TOTP_SECRETS[$user_email]}"
+        setup_user_mfa "$user_email" "$(get_totp_secret "$user_email")"
     done
 }
 

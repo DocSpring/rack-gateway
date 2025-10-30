@@ -72,7 +72,7 @@ run_api_token_tests() {
 
     clear_mfa_replay_protection
     local mfa_code api_token_json API_TOKEN API_TOKEN_PUBLIC_ID
-    mfa_code=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
+    mfa_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
     api_token_json=$(./bin/rack-gateway api-token create \
         --name "E2E CLI API Token ${E2E_TS}" \
         --role cicd \
@@ -150,7 +150,7 @@ run_api_token_tests() {
 
     clear_mfa_replay_protection
     local approve_code
-    approve_code=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
+    approve_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
     verify_rgw_command \
         "deploy-approval approve $REQUEST_ID --notes 'Approved for E2E test' --mfa-code $approve_code" \
         "Deploy approval request" "approved"
@@ -337,7 +337,7 @@ EOF
 
     clear_mfa_replay_protection
     local delete_code
-    delete_code=$(generate_totp_code "${MFA_TOTP_SECRETS[admin@example.com]}")
+    delete_code=$(generate_totp_code "$(get_totp_secret 'admin@example.com')")
     verify_rgw_command "api-token delete $API_TOKEN_PUBLIC_ID --mfa-code $delete_code" "Deleted token $API_TOKEN_PUBLIC_ID"
     logout_cli
 }
@@ -356,7 +356,7 @@ run_deployer_tests() {
 
     clear_mfa_replay_protection
     local delete_code
-    delete_code=$(generate_totp_code "${MFA_TOTP_SECRETS[deployer@example.com]}")
+    delete_code=$(generate_totp_code "$(get_totp_secret 'deployer@example.com')")
     verify_rgw_command_failure "apps delete rack-gateway --mfa-code $delete_code" "Error: permission denied"
 
     logout_cli
@@ -377,7 +377,7 @@ run_viewer_tests() {
 
     clear_mfa_replay_protection
     local delete_code
-    delete_code=$(generate_totp_code "${MFA_TOTP_SECRETS[viewer@example.com]}")
+    delete_code=$(generate_totp_code "$(get_totp_secret 'viewer@example.com')")
     verify_rgw_command_failure "env set NOTALLOWED=1" "Error: permission denied"
     verify_rgw_command_failure "apps delete rack-gateway --mfa-code $delete_code" "Error: permission denied"
 }

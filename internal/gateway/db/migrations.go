@@ -17,13 +17,13 @@ var migrationsFS embed.FS
 
 // migrateAll applies embedded migrations in lexical order using a simple schema_migrations table.
 func (d *Database) migrateAll() error {
-    // Acquire a cluster-wide advisory lock to serialize migration runs.
-    if _, err := d.db.Exec(`SELECT pg_advisory_lock($1)`, AdvisoryLockMigration); err != nil {
-        return err
-    }
-    defer func() {
-        _, _ = d.db.Exec(`SELECT pg_advisory_unlock($1)`, AdvisoryLockMigration)
-    }()
+	// Acquire a cluster-wide advisory lock to serialize migration runs.
+	if _, err := d.db.Exec(`SELECT pg_advisory_lock($1)`, AdvisoryLockMigration); err != nil {
+		return err
+	}
+	defer func() {
+		_, _ = d.db.Exec(`SELECT pg_advisory_unlock($1)`, AdvisoryLockMigration)
+	}()
 
 	if _, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`); err != nil {
 		return err

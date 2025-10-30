@@ -88,7 +88,7 @@ func diffParams(before, after map[string]string) []paramChange {
 }
 
 func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes []paramChange) {
-    if h.rbacManager == nil || len(changes) == 0 {
+	if h.rbacManager == nil || len(changes) == 0 {
 		return
 	}
 	admins := h.getAdminEmails()
@@ -96,16 +96,16 @@ func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes
 		return
 	}
 	// Build value string listing changes
-    var b strings.Builder
+	var b strings.Builder
 	for i, c := range changes {
 		if i > 0 {
 			b.WriteString("\n")
 		}
 		fmt.Fprintf(&b, "%s: %s -> %s", c.Key, c.Old, c.New)
 	}
-    subject := fmt.Sprintf("Rack Gateway (%s): %s changed rack parameters", h.rackDisplay(), actor)
-    text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, b.String())
-    _ = h.emailer.SendMany(admins, subject, text, html)
+	subject := fmt.Sprintf("Rack Gateway (%s): %s changed rack parameters", h.rackDisplay(), actor)
+	text, html, _ := emailtemplates.RenderRackParamsChanged(h.rackDisplay(), actor, b.String())
+	_ = h.emailer.SendMany(admins, subject, text, html)
 }
 
 func (h *Handler) auditRackParamsChanged(r *http.Request, actor string, changes []paramChange) {
