@@ -3167,6 +3167,143 @@
                 }
             }
         },
+        "/jobs": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns a list of background jobs with optional filtering",
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "List background jobs",
+                "parameters": [
+                    {
+                        "description": "Filter by queue name",
+                        "name": "queue",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Filter by state (available, cancelled, completed, discarded, pending, retryable, running, scheduled)",
+                        "name": "state",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Filter by job kind",
+                        "name": "kind",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Maximum number of results (default: 100, max: 1000)",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.JobListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns details of a specific background job by ID",
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Get a background job",
+                "parameters": [
+                    {
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.JobResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/rack": {
             "get": {
                 "security": [
@@ -5040,6 +5177,88 @@
                     },
                     "slack": {
                         "type": "boolean"
+                    }
+                }
+            },
+            "handlers.JobErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "at": {
+                        "type": "string"
+                    },
+                    "attempt": {
+                        "type": "integer"
+                    },
+                    "error": {
+                        "type": "string"
+                    }
+                }
+            },
+            "handlers.JobListResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "description": "Number of jobs in this response (not total count across all pages)",
+                        "type": "integer"
+                    },
+                    "jobs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/handlers.JobResponse"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "handlers.JobResponse": {
+                "type": "object",
+                "properties": {
+                    "args": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    },
+                    "attempt": {
+                        "type": "integer"
+                    },
+                    "attempted_at": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/handlers.JobErrorResponse"
+                        }
+                    },
+                    "finalized_at": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "integer"
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "last_error": {
+                        "type": "string"
+                    },
+                    "max_attempts": {
+                        "type": "integer"
+                    },
+                    "queue": {
+                        "type": "string"
+                    },
+                    "scheduled_at": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string"
                     }
                 }
             },

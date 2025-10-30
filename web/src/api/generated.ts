@@ -28,6 +28,7 @@ import type {
   GetCreatedBy200,
   GetCreatedByParams,
   GetDeployApprovalRequestsParams,
+  GetJobsParams,
   GetRack200,
   GetRoles200,
   GetSettings200,
@@ -45,6 +46,8 @@ import type {
   HandlersEnvValuesResponse,
   HandlersHealthResponse,
   HandlersInfoResponse,
+  HandlersJobListResponse,
+  HandlersJobResponse,
   HandlersLockUserRequest,
   HandlersMFAStatusResponse,
   HandlersRevokeAllSessionsResponse,
@@ -941,6 +944,36 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
+   * Returns a list of background jobs with optional filtering
+   * @summary List background jobs
+   */
+  const getJobs = (
+    params?: GetJobsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersJobListResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersJobListResponse>(
+      { url: `/jobs`, method: 'GET', params },
+      options,
+    );
+  };
+
+  /**
+   * Returns details of a specific background job by ID
+   * @summary Get a background job
+   */
+  const getJobsId = (
+    id: number,
+    options?: SecondParameter<typeof createGatewayClient<HandlersJobResponse>>,
+  ) => {
+    return createGatewayClient<HandlersJobResponse>(
+      { url: `/jobs/${id}`, method: 'GET' },
+      options,
+    );
+  };
+
+  /**
    * Proxies the rack /system endpoint returning the rack's metadata.
    * @summary Get rack system information
    */
@@ -1276,6 +1309,8 @@ export const getRackGatewayAPI = () => {
     getHealth,
     getInfo,
     getIntegrationsSlack,
+    getJobs,
+    getJobsId,
     getRack,
     getRoles,
     getSettings,
@@ -1576,6 +1611,12 @@ export type GetIntegrationsSlackResult = NonNullable<
   Awaited<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['getIntegrationsSlack']>
   >
+>;
+export type GetJobsResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getJobs']>>
+>;
+export type GetJobsIdResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getJobsId']>>
 >;
 export type GetRackResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getRack']>>

@@ -2,6 +2,7 @@ import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
 import {
   Blocks,
   Boxes,
+  Briefcase,
   Cpu,
   Hammer,
   HardDrive,
@@ -97,6 +98,7 @@ export function Layout() {
     ]
 
     if (user?.roles?.includes('admin')) {
+      nav.push({ name: 'Jobs', href: '/jobs', icon: Briefcase })
       nav.push({
         name: 'Deploy Approvals',
         href: '/deploy-approval-requests',

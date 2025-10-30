@@ -3004,6 +3004,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List background jobs
+         * @description Returns a list of background jobs with optional filtering
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Filter by queue name */
+                    queue?: string;
+                    /** @description Filter by state (available, cancelled, completed, discarded, pending, retryable, running, scheduled) */
+                    state?: string;
+                    /** @description Filter by job kind */
+                    kind?: string;
+                    /** @description Maximum number of results (default: 100, max: 1000) */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.JobListResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a background job
+         * @description Returns details of a specific background job by ID
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Job ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.JobResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rack": {
         parameters: {
             query?: never;
@@ -4306,6 +4432,32 @@ export interface components {
             circleci: boolean;
             github: boolean;
             slack: boolean;
+        };
+        "handlers.JobErrorResponse": {
+            at?: string;
+            attempt?: number;
+            error?: string;
+        };
+        "handlers.JobListResponse": {
+            /** @description Number of jobs in this response (not total count across all pages) */
+            count?: number;
+            jobs?: components["schemas"]["handlers.JobResponse"][];
+            limit?: number;
+        };
+        "handlers.JobResponse": {
+            args?: number[];
+            attempt?: number;
+            attempted_at?: string;
+            created_at?: string;
+            errors?: components["schemas"]["handlers.JobErrorResponse"][];
+            finalized_at?: string;
+            id?: number;
+            kind?: string;
+            last_error?: string;
+            max_attempts?: number;
+            queue?: string;
+            scheduled_at?: string;
+            state?: string;
         };
         "handlers.LockUserRequest": {
             reason: string;

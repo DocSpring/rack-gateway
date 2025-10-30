@@ -30,6 +30,7 @@ import { DeployApprovalRequestDetailPage } from './pages/deploy-approval-request
 import { DeployApprovalRequestsPage } from './pages/deploy-approval-requests-page'
 import { InstancesPage } from './pages/instances-page'
 import { IntegrationsPage } from './pages/integrations-page'
+import { JobsPage } from './pages/jobs-page/index'
 import { LoginErrorPage } from './pages/login-error-page'
 import { LoginPage } from './pages/login-page'
 import { MFAChallengePage } from './pages/mfa-challenge-page'
@@ -111,6 +112,12 @@ function buildRouteTree() {
     getParentRoute: () => layoutRoute,
     path: 'api-tokens',
     component: TokensPage,
+  })
+
+  const jobsRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: 'jobs',
+    component: JobsPage,
   })
 
   const deployApprovalRequestsRoute = createRoute({
@@ -231,6 +238,7 @@ function buildRouteTree() {
     userRoute,
     userAuditRoute,
     tokensRoute,
+    jobsRoute,
     deployApprovalRequestsRoute,
     deployApprovalRequestDetailRoute,
     auditRoute,
