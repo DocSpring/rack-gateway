@@ -5,36 +5,28 @@ pre-commit:
       file_types:
         - text
       exclude: "**/.*"
-      run: |
-        for file in {staged_files}; do
-          if [[ -f "$file" ]]; then
-            # Remove trailing whitespace (portable sed usage)
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-              sed -i '' 's/[[:space:]]*$//' "$file"
-            else
-              sed -i 's/[[:space:]]*$//' "$file"
-            fi
-            # Ensure file ends with newline
-            if [[ -s "$file" ]] && [[ $(tail -c1 "$file" | wc -l) -eq 0 ]]; then
-              echo >> "$file"
-            fi
-          fi
-        done
+      run: scripts/fix_whitespace.sh {staged_files}
+      stage_fixed: true
+
+    go-golines:
+      glob: "**/*.go"
+      run: golines --max-len=120 -w {staged_files}
       stage_fixed: true
 
     go-format:
       glob: "**/*.go"
-      run: task go:format
+      run: go fmt {staged_files}
       stage_fixed: true
 
     go-imports:
       glob: "**/*.go"
-      run: task go:imports
+      run: goimports -w {staged_files}
       stage_fixed: true
 
     go-lint:
       glob: "**/*.go"
-      run: task go:lint
+      run: golangci-lint run --fix {staged_files}
+      stage_fixed: true
 
     go-test:
       glob: "**/*.go"
