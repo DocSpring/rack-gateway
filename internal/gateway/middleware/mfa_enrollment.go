@@ -35,7 +35,11 @@ func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, auth
 	return loaded, nil
 }
 
-func requireMFAEnrollment(database *db.Database, settings *db.MFASettings, handler func(*gin.Context, *auth.AuthUser, *db.User) bool) gin.HandlerFunc {
+func requireMFAEnrollment(
+	database *db.Database,
+	settings *db.MFASettings,
+	handler func(*gin.Context, *auth.AuthUser, *db.User) bool,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authUser, ok := auth.GetAuthUser(c.Request.Context())
 		if !ok || authUser == nil || authUser.IsAPIToken {

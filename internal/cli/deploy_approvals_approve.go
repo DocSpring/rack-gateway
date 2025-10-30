@@ -39,7 +39,11 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 
 			statusLine := fmt.Sprintf("Deploy approval request %s approved", approved.PublicID)
 			if approved.ApprovalExpiresAt != nil {
-				statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
+				statusLine = fmt.Sprintf(
+					"%s (expires at %s)",
+					statusLine,
+					approved.ApprovalExpiresAt.UTC().Format(time.RFC3339),
+				)
 			}
 			return writeLine(cmd.OutOrStdout(), statusLine)
 		}),

@@ -200,7 +200,13 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 
 	var scriptBlock string
 	if nonce != "" {
-		scriptBlock = fmt.Sprintf(`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, nonce, e2eScript)
+		scriptBlock = fmt.Sprintf(
+			`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`,
+			nonce,
+			nonce,
+			nonce,
+			e2eScript,
+		)
 	} else {
 		scriptBlock = fmt.Sprintf(`<script>window.__nonce__="";window.__webpack_nonce__="";%s</script>`, e2eScript)
 	}

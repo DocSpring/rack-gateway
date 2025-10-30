@@ -18,7 +18,18 @@ func TestMockCredentialGeneratesValidAssertion(t *testing.T) {
 	database := dbtest.NewDatabase(t)
 	pepper := []byte("test-pepper")
 
-	service, err := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "localhost", "http://localhost", nil)
+	service, err := NewService(
+		database,
+		"Test Gateway",
+		24*time.Hour,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"localhost",
+		"http://localhost",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to create MFA service: %v", err)
 	}
@@ -33,7 +44,16 @@ func TestMockCredentialGeneratesValidAssertion(t *testing.T) {
 		t.Fatalf("failed to generate mock credential: %v", err)
 	}
 
-	method, err := database.CreateMFAMethod(user.ID, "webauthn", "Test Credential", "", credential.ID, credential.PublicKey, nil, nil)
+	method, err := database.CreateMFAMethod(
+		user.ID,
+		"webauthn",
+		"Test Credential",
+		"",
+		credential.ID,
+		credential.PublicKey,
+		nil,
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to create MFA method: %v", err)
 	}
@@ -51,7 +71,14 @@ func TestMockCredentialGeneratesValidAssertion(t *testing.T) {
 		t.Fatalf("failed to generate assertion: %v", err)
 	}
 
-	result, err := service.VerifyWebAuthnAssertion(user, sessionData, []byte(assertionJSON), "127.0.0.1", "test-agent", nil)
+	result, err := service.VerifyWebAuthnAssertion(
+		user,
+		sessionData,
+		[]byte(assertionJSON),
+		"127.0.0.1",
+		"test-agent",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to verify assertion: %v", err)
 	}
@@ -69,7 +96,18 @@ func TestWebAuthnEnrollment(t *testing.T) {
 	pepper := []byte("test-pepper")
 
 	// Create service with WebAuthn configured
-	service, err := NewService(database, "Test Gateway", 24*time.Hour, 10*time.Minute, pepper, "", "", "example.com", "https://example.com", nil)
+	service, err := NewService(
+		database,
+		"Test Gateway",
+		24*time.Hour,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"example.com",
+		"https://example.com",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
 	}
@@ -107,7 +145,18 @@ func TestWebAuthnEnrollment(t *testing.T) {
 	})
 
 	t.Run("fails when WebAuthn not configured", func(t *testing.T) {
-		serviceWithoutWebAuthn, _ := NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
+		serviceWithoutWebAuthn, _ := NewService(
+			database,
+			"Test",
+			24*time.Hour,
+			10*time.Minute,
+			pepper,
+			"",
+			"",
+			"",
+			"",
+			nil,
+		)
 		_, _, err := serviceWithoutWebAuthn.StartWebAuthnEnrollment(user)
 		if err == nil {
 			t.Error("expected error when WebAuthn not configured")
@@ -154,7 +203,16 @@ func TestWebAuthnUserInterface(t *testing.T) {
 
 	credID2 := []byte("credential-id-2")
 	pubKey2 := []byte("public-key-2")
-	method2, _ := database.CreateMFAMethod(user.ID, "webauthn", "Key 2", "", credID2, pubKey2, []string{"nfc", "ble"}, nil)
+	method2, _ := database.CreateMFAMethod(
+		user.ID,
+		"webauthn",
+		"Key 2",
+		"",
+		credID2,
+		pubKey2,
+		[]string{"nfc", "ble"},
+		nil,
+	)
 	_ = database.ConfirmMFAMethod(method2.ID, now)
 
 	methods, _ := database.ListMFAMethods(user.ID)
@@ -282,7 +340,16 @@ func TestEnrollmentHelpers(t *testing.T) {
 		}
 
 		// Create an unconfirmed method
-		unconfirmedMethod, err := database.CreateMFAMethod(testUser.ID, "totp", "Unconfirmed", "secret", nil, nil, nil, nil)
+		unconfirmedMethod, err := database.CreateMFAMethod(
+			testUser.ID,
+			"totp",
+			"Unconfirmed",
+			"secret",
+			nil,
+			nil,
+			nil,
+			nil,
+		)
 		if err != nil {
 			t.Fatalf("failed to create MFA method: %v", err)
 		}

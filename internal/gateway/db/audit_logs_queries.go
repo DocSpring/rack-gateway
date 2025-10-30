@@ -132,7 +132,10 @@ func (d *Database) queryAuditLogs(query string, args []interface{}) ([]*AuditLog
 }
 
 // GetAuditLogsByDeployApprovalRequestID retrieves audit logs for a specific deploy approval request
-func (d *Database) GetAuditLogsByDeployApprovalRequestID(deployApprovalRequestID int64, limit int) ([]*AuditLog, error) {
+func (d *Database) GetAuditLogsByDeployApprovalRequestID(
+	deployApprovalRequestID int64,
+	limit int,
+) ([]*AuditLog, error) {
 	if limit <= 0 {
 		limit = 100
 	}

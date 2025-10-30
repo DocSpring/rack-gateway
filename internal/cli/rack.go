@@ -100,7 +100,9 @@ func resolveStatusFromEnv() (*RackStatus, error) {
 	tokenEnv := strings.TrimSpace(os.Getenv("RACK_GATEWAY_API_TOKEN"))
 	if label == "" {
 		if tokenEnv == "" {
-			return nil, fmt.Errorf("RACK_GATEWAY_API_TOKEN must be set when relying on RACK_GATEWAY_URL without a rack name")
+			return nil, fmt.Errorf(
+				"RACK_GATEWAY_API_TOKEN must be set when relying on RACK_GATEWAY_URL without a rack name",
+			)
 		}
 		label = "Using RACK_GATEWAY_API_TOKEN from environment"
 	}

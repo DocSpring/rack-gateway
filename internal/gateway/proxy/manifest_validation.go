@@ -37,7 +37,12 @@ type convoxService struct {
 }
 
 // validateBuildManifest fetches the tarball from the Convox API and validates the manifest
-func (h *Handler) validateBuildManifest(ctx context.Context, app, objectURL, manifestPath string, servicePatterns map[string]string, gitCommit string) error {
+func (h *Handler) validateBuildManifest(
+	ctx context.Context,
+	app, objectURL, manifestPath string,
+	servicePatterns map[string]string,
+	gitCommit string,
+) error {
 	// Extract the object key from the URL (e.g., "object://myapp/tmp/file.tgz" -> "tmp/file.tgz")
 	// The object URL format is: object://app/key
 	if !strings.HasPrefix(objectURL, "object://") {
@@ -220,7 +225,11 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 			// Check total extracted size
 			totalSize += header.Size
 			if totalSize > maxExtractedSize {
-				return "", fmt.Errorf("total extracted size exceeds limit: %d bytes (max %d)", totalSize, maxExtractedSize)
+				return "", fmt.Errorf(
+					"total extracted size exceeds limit: %d bytes (max %d)",
+					totalSize,
+					maxExtractedSize,
+				)
 			}
 
 			// Create parent directory
@@ -293,12 +302,20 @@ func validateServiceImages(manifest *convoxManifest, servicePatterns map[string]
 
 		// When image pattern is configured for a service, it must use a pre-built image
 		if service.Image == "" {
-			return fmt.Errorf("service %s must use a pre-built image (image pattern is configured for this service)", serviceName)
+			return fmt.Errorf(
+				"service %s must use a pre-built image (image pattern is configured for this service)",
+				serviceName,
+			)
 		}
 
 		// Validate image matches pattern
 		if !pattern.MatchString(service.Image) {
-			return fmt.Errorf("service %s image %q does not match required pattern %q", serviceName, service.Image, servicePatterns[serviceName])
+			return fmt.Errorf(
+				"service %s image %q does not match required pattern %q",
+				serviceName,
+				service.Image,
+				servicePatterns[serviceName],
+			)
 		}
 	}
 

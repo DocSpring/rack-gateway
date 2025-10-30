@@ -37,7 +37,13 @@ type Notifier struct {
 }
 
 // NewNotifier creates a new security notifier
-func NewNotifier(emailSender email.Sender, auditLogger *audit.Logger, database *db.Database, adminEmails []string, jobsClient *jobs.Client) *Notifier {
+func NewNotifier(
+	emailSender email.Sender,
+	auditLogger *audit.Logger,
+	database *db.Database,
+	adminEmails []string,
+	jobsClient *jobs.Client,
+) *Notifier {
 	// Check if email sender is actually configured (not noop)
 	emailsEnabled := false
 	if emailSender != nil {
@@ -103,7 +109,11 @@ func (n *Notifier) enqueueSecurityNotification(recipient, subject, eventType str
 		return
 	}
 	if n.jobsClient == nil {
-		log.Printf("WARNING: security notification dropped (no jobs client configured): type=%s, recipient=%s", eventType, recipient)
+		log.Printf(
+			"WARNING: security notification dropped (no jobs client configured): type=%s, recipient=%s",
+			eventType,
+			recipient,
+		)
 		return
 	}
 
@@ -239,7 +249,10 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),"error":%q}`, err)
+			log.Printf(
+				`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeRateLimit, audit.ActionVerbExceeded),"error":%q}`,
+				err,
+			)
 		}
 	}
 
@@ -266,7 +279,10 @@ func (n *Notifier) RateLimitExceeded(userEmail, userName, path, ipAddress, userA
 }
 
 // SuspiciousActivity logs and notifies about suspicious login patterns
-func (n *Notifier) SuspiciousActivity(userEmail, userName, reason, ipAddress, userAgent string, details map[string]string) {
+func (n *Notifier) SuspiciousActivity(
+	userEmail, userName, reason, ipAddress, userAgent string,
+	details map[string]string,
+) {
 	// Audit log
 	if n.database != nil {
 		if err := n.auditLogger.LogDBEntry(&db.AuditLog{
@@ -280,29 +296,43 @@ func (n *Notifier) SuspiciousActivity(userEmail, userName, reason, ipAddress, us
 			IPAddress:    ipAddress,
 			UserAgent:    userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`, audit.ActionScopeSuspiciousActivity, err)
+			log.Printf(
+				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
+				audit.ActionScopeSuspiciousActivity,
+				err,
+			)
 		}
 	}
 
 	// Email notification to user (with rate limiting)
-	n.enqueueSecurityNotification(userEmail, "Suspicious Activity", "suspicious_activity", jobemail.SuspiciousActivityUserArgs{
-		UserEmail: userEmail,
-		UserName:  userName,
-		Reason:    reason,
-		IPAddress: ipAddress,
-		UserAgent: userAgent,
-		Details:   details,
-	})
+	n.enqueueSecurityNotification(
+		userEmail,
+		"Suspicious Activity",
+		"suspicious_activity",
+		jobemail.SuspiciousActivityUserArgs{
+			UserEmail: userEmail,
+			UserName:  userName,
+			Reason:    reason,
+			IPAddress: ipAddress,
+			UserAgent: userAgent,
+			Details:   details,
+		},
+	)
 
 	// Notify admins about suspicious activity (with deduplication per user+reason)
 	adminKey := fmt.Sprintf("admins-%s-%s", userEmail, reason)
-	n.enqueueSecurityNotification(adminKey, "Suspicious Activity", "suspicious_activity_admin", jobemail.SuspiciousActivityAdminArgs{
-		AdminEmails: n.adminEmails,
-		UserEmail:   userEmail,
-		UserName:    userName,
-		Reason:      reason,
-		IPAddress:   ipAddress,
-		UserAgent:   userAgent,
-		Details:     details,
-	})
+	n.enqueueSecurityNotification(
+		adminKey,
+		"Suspicious Activity",
+		"suspicious_activity_admin",
+		jobemail.SuspiciousActivityAdminArgs{
+			AdminEmails: n.adminEmails,
+			UserEmail:   userEmail,
+			UserName:    userName,
+			Reason:      reason,
+			IPAddress:   ipAddress,
+			UserAgent:   userAgent,
+			Details:     details,
+		},
+	)
 }

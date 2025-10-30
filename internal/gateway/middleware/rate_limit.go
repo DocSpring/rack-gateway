@@ -58,7 +58,13 @@ func RateLimit(cfg *config.Config, securityNotifier *security.Notifier) gin.Hand
 			}
 
 			if securityNotifier != nil {
-				securityNotifier.RateLimitExceeded(userEmail, userName, c.Request.URL.Path, clientIP, c.GetHeader("User-Agent"))
+				securityNotifier.RateLimitExceeded(
+					userEmail,
+					userName,
+					c.Request.URL.Path,
+					clientIP,
+					c.GetHeader("User-Agent"),
+				)
 			}
 
 			c.Abort()

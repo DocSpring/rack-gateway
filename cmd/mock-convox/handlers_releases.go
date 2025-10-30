@@ -53,7 +53,14 @@ func getRelease(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !found {
-		rel = Release{ID: id, App: app, Build: "B" + id[1:], Description: "Deployed by mock", Version: 10, Created: time.Now().Add(-24 * time.Hour)}
+		rel = Release{
+			ID:          id,
+			App:         app,
+			Build:       "B" + id[1:],
+			Description: "Deployed by mock",
+			Version:     10,
+			Created:     time.Now().Add(-24 * time.Hour),
+		}
 	}
 	if rel.Env == "" {
 		rel.Env = envString()

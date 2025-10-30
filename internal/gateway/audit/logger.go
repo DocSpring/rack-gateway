@@ -198,7 +198,13 @@ func HasAuditLogBeenCreated(ctx context.Context) bool {
 	return false
 }
 
-func (l *Logger) LogRequest(r *http.Request, userEmail, rack, rbacDecision string, status int, latency time.Duration, err error) {
+func (l *Logger) LogRequest(
+	r *http.Request,
+	userEmail, rack, rbacDecision string,
+	status int,
+	latency time.Duration,
+	err error,
+) {
 	// Use original path if available (before prefix stripping)
 	path := r.Header.Get("X-Original-Path")
 	if path == "" {

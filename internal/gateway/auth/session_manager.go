@@ -144,7 +144,13 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 	} else {
 		stepUpAtStr = "nil"
 	}
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "validate_session_loaded session_id=%d user_email=%q recent_step_up_at=%q", session.ID, user.Email, stepUpAtStr)
+	gtwlog.DebugTopicf(
+		gtwlog.TopicMFAStepUp,
+		"validate_session_loaded session_id=%d user_email=%q recent_step_up_at=%q",
+		session.ID,
+		user.Email,
+		stepUpAtStr,
+	)
 
 	if session.RevokedAt != nil {
 		return nil, fmt.Errorf("session revoked")

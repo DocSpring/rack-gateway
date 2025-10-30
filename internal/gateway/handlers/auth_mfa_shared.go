@@ -81,7 +81,12 @@ func (h *AuthHandler) handleTrustedDevice(c *gin.Context, ctx *mfaContext, trust
 
 // updateSessionAfterMFA updates session timestamps after successful MFA verification.
 // Returns (now, success).
-func (h *AuthHandler) updateSessionAfterMFA(c *gin.Context, ctx *mfaContext, trustedDeviceID *int64, trustedCookieSet bool) (time.Time, bool) {
+func (h *AuthHandler) updateSessionAfterMFA(
+	c *gin.Context,
+	ctx *mfaContext,
+	trustedDeviceID *int64,
+	trustedCookieSet bool,
+) (time.Time, bool) {
 	if ctx.authUser.Session == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "session missing"})
 		return time.Time{}, false
@@ -115,7 +120,15 @@ func (h *AuthHandler) updateSessionAfterMFA(c *gin.Context, ctx *mfaContext, tru
 // notifyLoginComplete sends login completion notification if this was the initial MFA verification during login.
 func (h *AuthHandler) notifyLoginComplete(ctx *mfaContext, c *gin.Context, wasLoginFlow bool) {
 	if wasLoginFlow && h.database != nil && h.securityNotifier != nil {
-		h.securityNotifier.LoginAttempt(ctx.userRecord.Email, ctx.userRecord.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
+		h.securityNotifier.LoginAttempt(
+			ctx.userRecord.Email,
+			ctx.userRecord.Name,
+			"web",
+			"complete",
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			true,
+		)
 	}
 }
 

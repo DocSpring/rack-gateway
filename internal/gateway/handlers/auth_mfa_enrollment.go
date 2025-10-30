@@ -129,7 +129,10 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 			IPAddress:    ctx.ipAddress,
 			UserAgent:    ctx.userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`, err)
+			log.Printf(
+				`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
+				err,
+			)
 		}
 	}
 
@@ -170,7 +173,11 @@ func (h *AuthHandler) StartYubiOTPEnrollment(c *gin.Context) {
 
 	result, err := h.mfaService.StartYubiOTPEnrollment(ctx.userRecord, req.YubiOTP)
 	if err != nil {
-		log.Printf(`{"level":"error","event":"yubiotp_enrollment_failed","user":%q,"error":%q}`, ctx.authUser.Email, err.Error())
+		log.Printf(
+			`{"level":"error","event":"yubiotp_enrollment_failed","user":%q,"error":%q}`,
+			ctx.authUser.Email,
+			err.Error(),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -199,7 +206,11 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 
 	result, sessionData, err := h.mfaService.StartWebAuthnEnrollment(ctx.userRecord)
 	if err != nil {
-		log.Printf(`{"level":"error","event":"webauthn_start_failed","user":%q,"error":%q}`, ctx.authUser.Email, err.Error())
+		log.Printf(
+			`{"level":"error","event":"webauthn_start_failed","user":%q,"error":%q}`,
+			ctx.authUser.Email,
+			err.Error(),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -224,7 +235,11 @@ func (h *AuthHandler) StartWebAuthnEnrollment(c *gin.Context) {
 
 	// Debug: log what we're returning
 	optionsJSON, _ := json.Marshal(result.PublicKeyOptions)
-	log.Printf("WebAuthn enrollment start - MethodID: %d, PublicKeyOptions JSON: %s", result.MethodID, string(optionsJSON))
+	log.Printf(
+		"WebAuthn enrollment start - MethodID: %d, PublicKeyOptions JSON: %s",
+		result.MethodID,
+		string(optionsJSON),
+	)
 
 	response := StartWebAuthnEnrollmentResponse{
 		MethodID:         result.MethodID,
@@ -306,7 +321,13 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		label = "Security Key"
 	}
 
-	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(ctx.userRecord, req.MethodID, []byte(sessionDataStr), credentialJSON, label)
+	methodID, err := h.mfaService.ConfirmWebAuthnEnrollment(
+		ctx.userRecord,
+		req.MethodID,
+		[]byte(sessionDataStr),
+		credentialJSON,
+		label,
+	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -341,7 +362,10 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 			IPAddress:    ctx.ipAddress,
 			UserAgent:    ctx.userAgent,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`, err)
+			log.Printf(
+				`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
+				err,
+			)
 		}
 	}
 

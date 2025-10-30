@@ -28,14 +28,38 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	currentUser := c.GetString("user_email")
 
 	if email == currentUser {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionDelete.String()), strings.TrimSpace(email), "cannot delete yourself", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionDelete.String()),
+			strings.TrimSpace(email),
+			"cannot delete yourself",
+			start,
+			nil,
+		)
 		return
 	}
 
 	if err := h.rbac.DeleteUser(email); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionDelete.String()), strings.TrimSpace(email), "failed to delete user", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionDelete.String()),
+			strings.TrimSpace(email),
+			"failed to delete user",
+			start,
+			nil,
+		)
 		return
 	}
 
-	h.respondAuditSuccess(c, http.StatusNoContent, nil, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionDelete.String()), strings.TrimSpace(email), start, nil)
+	h.respondAuditSuccess(
+		c,
+		http.StatusNoContent,
+		nil,
+		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionDelete.String()),
+		strings.TrimSpace(email),
+		start,
+		nil,
+	)
 }

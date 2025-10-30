@@ -184,10 +184,22 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("GET", "/api/v1/rack", Convox(ResourceRack, ActionRead)),
 	newHTTPRoute("GET", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionRead)),
 	newHTTPRoute("GET", "/api/v1/deploy-approval-requests/:id", Gateway(ResourceDeployApprovalRequest, ActionRead)),
-	newHTTPRoute("GET", "/api/v1/deploy-approval-requests/:id/audit-logs", Gateway(ResourceDeployApprovalRequest, ActionRead)),
+	newHTTPRoute(
+		"GET",
+		"/api/v1/deploy-approval-requests/:id/audit-logs",
+		Gateway(ResourceDeployApprovalRequest, ActionRead),
+	),
 	newHTTPRoute("POST", "/api/v1/deploy-approval-requests", Gateway(ResourceDeployApprovalRequest, ActionCreate)),
-	newHTTPRoute("POST", "/api/v1/deploy-approval-requests/:id/approve", Gateway(ResourceDeployApprovalRequest, ActionApprove)),
-	newHTTPRoute("POST", "/api/v1/deploy-approval-requests/:id/reject", Gateway(ResourceDeployApprovalRequest, ActionApprove)),
+	newHTTPRoute(
+		"POST",
+		"/api/v1/deploy-approval-requests/:id/approve",
+		Gateway(ResourceDeployApprovalRequest, ActionApprove),
+	),
+	newHTTPRoute(
+		"POST",
+		"/api/v1/deploy-approval-requests/:id/reject",
+		Gateway(ResourceDeployApprovalRequest, ActionApprove),
+	),
 	newHTTPRoute("GET", "/api/v1/apps/:app/env", Convox(ResourceEnv, ActionRead)),
 	newHTTPRoute("PUT", "/api/v1/apps/:app/env", Convox(ResourceEnv, ActionSet)),
 
@@ -199,14 +211,46 @@ var httpRouteSpecs = []RouteSpec{
 
 	// Configuration & diagnostics
 	newHTTPRoute("GET", "/api/v1/settings"),
-	newHTTPRoute("PUT", globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration), GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration)),
-	newHTTPRoute("DELETE", globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration), GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration)),
-	newHTTPRoute("PUT", globalSettingsGroupPath(settings.GlobalSettingGroupAllowDestructive), GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive)),
-	newHTTPRoute("DELETE", globalSettingsGroupPath(settings.GlobalSettingGroupAllowDestructive), GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive)),
-	newHTTPRoute("PUT", globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults), GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults)),
-	newHTTPRoute("DELETE", globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults), GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults)),
-	newHTTPRoute("PUT", globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals), GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals)),
-	newHTTPRoute("DELETE", globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals), GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals)),
+	newHTTPRoute(
+		"PUT",
+		globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration),
+	),
+	newHTTPRoute(
+		"DELETE",
+		globalSettingsGroupPath(settings.GlobalSettingGroupMFAConfiguration),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration),
+	),
+	newHTTPRoute(
+		"PUT",
+		globalSettingsGroupPath(settings.GlobalSettingGroupAllowDestructive),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive),
+	),
+	newHTTPRoute(
+		"DELETE",
+		globalSettingsGroupPath(settings.GlobalSettingGroupAllowDestructive),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive),
+	),
+	newHTTPRoute(
+		"PUT",
+		globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults),
+	),
+	newHTTPRoute(
+		"DELETE",
+		globalSettingsGroupPath(settings.GlobalSettingGroupVCSAndCIDefaults),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults),
+	),
+	newHTTPRoute(
+		"PUT",
+		globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals),
+	),
+	newHTTPRoute(
+		"DELETE",
+		globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals),
+	),
 	newHTTPRoute("POST", settingsActionPath("rack_tls_cert/refresh"), Security(ResourceSecret, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/diagnostics/sentry", Gateway(ResourceIntegration, ActionUpdate)),
 
@@ -251,16 +295,56 @@ var httpRouteSpecs = []RouteSpec{
 
 	// App-specific settings
 	newHTTPRoute("GET", "/api/v1/apps/:app/settings"),
-	newHTTPRoute("PUT", appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy), GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy)),
-	newHTTPRoute("DELETE", appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy), GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy)),
-	newHTTPRoute("PUT", appSettingPath(settings.AppSettingProtectedEnvVars), GatewayAppSetting(settings.AppSettingProtectedEnvVars)),
-	newHTTPRoute("DELETE", appSettingPath(settings.AppSettingProtectedEnvVars), GatewayAppSetting(settings.AppSettingProtectedEnvVars)),
-	newHTTPRoute("PUT", appSettingPath(settings.AppSettingSecretEnvVars), GatewayAppSetting(settings.AppSettingSecretEnvVars)),
-	newHTTPRoute("DELETE", appSettingPath(settings.AppSettingSecretEnvVars), GatewayAppSetting(settings.AppSettingSecretEnvVars)),
-	newHTTPRoute("PUT", appSettingPath(settings.AppSettingApprovedDeployCommands), GatewayAppSetting(settings.AppSettingApprovedDeployCommands)),
-	newHTTPRoute("DELETE", appSettingPath(settings.AppSettingApprovedDeployCommands), GatewayAppSetting(settings.AppSettingApprovedDeployCommands)),
-	newHTTPRoute("PUT", appSettingPath(settings.AppSettingServiceImagePatterns), GatewayAppSetting(settings.AppSettingServiceImagePatterns)),
-	newHTTPRoute("DELETE", appSettingPath(settings.AppSettingServiceImagePatterns), GatewayAppSetting(settings.AppSettingServiceImagePatterns)),
+	newHTTPRoute(
+		"PUT",
+		appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy),
+		GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingsGroupPath(settings.AppSettingGroupVCSCIDeploy),
+		GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy),
+	),
+	newHTTPRoute(
+		"PUT",
+		appSettingPath(settings.AppSettingProtectedEnvVars),
+		GatewayAppSetting(settings.AppSettingProtectedEnvVars),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingProtectedEnvVars),
+		GatewayAppSetting(settings.AppSettingProtectedEnvVars),
+	),
+	newHTTPRoute(
+		"PUT",
+		appSettingPath(settings.AppSettingSecretEnvVars),
+		GatewayAppSetting(settings.AppSettingSecretEnvVars),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingSecretEnvVars),
+		GatewayAppSetting(settings.AppSettingSecretEnvVars),
+	),
+	newHTTPRoute(
+		"PUT",
+		appSettingPath(settings.AppSettingApprovedDeployCommands),
+		GatewayAppSetting(settings.AppSettingApprovedDeployCommands),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingApprovedDeployCommands),
+		GatewayAppSetting(settings.AppSettingApprovedDeployCommands),
+	),
+	newHTTPRoute(
+		"PUT",
+		appSettingPath(settings.AppSettingServiceImagePatterns),
+		GatewayAppSetting(settings.AppSettingServiceImagePatterns),
+	),
+	newHTTPRoute(
+		"DELETE",
+		appSettingPath(settings.AppSettingServiceImagePatterns),
+		GatewayAppSetting(settings.AppSettingServiceImagePatterns),
+	),
 }
 
 var httpRouteIndex map[string]RouteSpec

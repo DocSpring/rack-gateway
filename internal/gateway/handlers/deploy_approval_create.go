@@ -233,9 +233,17 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 				c.JSON(http.StatusConflict, toDeployApprovalRequestResponse(conflict.Request))
 				return
 			}
-			c.JSON(http.StatusConflict, gin.H{"error": "an approval request is already pending or approved for this token and git commit"})
+			c.JSON(
+				http.StatusConflict,
+				gin.H{"error": "an approval request is already pending or approved for this token and git commit"},
+			)
 		default:
-			gtwlog.Errorf("deploy approvals: failed to create approval request for token_id=%d git_commit=%s: %v", token.ID, gitCommitHash, err)
+			gtwlog.Errorf(
+				"deploy approvals: failed to create approval request for token_id=%d git_commit=%s: %v",
+				token.ID,
+				gitCommitHash,
+				err,
+			)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
 		}
 		return
@@ -333,7 +341,10 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	comment := fmt.Sprintf("## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s", approvalURL)
+	comment := fmt.Sprintf(
+		"## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s",
+		approvalURL,
+	)
 
 	// Post comment via background job
 	if h.jobsClient != nil {
@@ -393,7 +404,12 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	allowedAdmin, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
+	allowedAdmin, err := h.rbac.Enforce(
+		userEmail,
+		rbac.ScopeGateway,
+		rbac.ResourceDeployApprovalRequest,
+		rbac.ActionApprove,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
 		return

@@ -120,7 +120,18 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 
 func setupMFAHelpers(t *testing.T, database *db.Database) (*mfa.Service, *db.MFASettings, *auth.SessionManager) {
 	pepper := []byte("0123456789abcdef0123456789abcdef")
-	mfaService, err := mfa.NewService(database, "Rack Gateway Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "localhost", "http://localhost", nil)
+	mfaService, err := mfa.NewService(
+		database,
+		"Rack Gateway Test",
+		24*time.Hour,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"localhost",
+		"http://localhost",
+		nil,
+	)
 	require.NoError(t, err)
 
 	settingsService := settings.NewService(database)
@@ -145,7 +156,13 @@ func confirmSession(t *testing.T, sessionManager *auth.SessionManager, user *db.
 	return session
 }
 
-func buildStepUpRouter(endpoint string, session *db.UserSession, user *db.User, middleware gin.HandlerFunc, configure func(*auth.AuthUser, *gin.Context)) *gin.Engine {
+func buildStepUpRouter(
+	endpoint string,
+	session *db.UserSession,
+	user *db.User,
+	middleware gin.HandlerFunc,
+	configure func(*auth.AuthUser, *gin.Context),
+) *gin.Engine {
 	router := gin.New()
 	router.POST(endpoint, func(c *gin.Context) {
 		authUser := &auth.AuthUser{

@@ -88,7 +88,14 @@ func (s *Service) GenerateAPIToken(req *APITokenRequest) (*APITokenResponse, err
 	tokenHash := hex.EncodeToString(hash[:])
 
 	// Store in database
-	apiToken, err := s.db.CreateAPIToken(tokenHash, name, req.UserID, req.Permissions, req.ExpiresAt, req.CreatedByUserID)
+	apiToken, err := s.db.CreateAPIToken(
+		tokenHash,
+		name,
+		req.UserID,
+		req.Permissions,
+		req.ExpiresAt,
+		req.CreatedByUserID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create API token: %w", err)
 	}

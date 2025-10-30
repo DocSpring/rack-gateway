@@ -81,7 +81,13 @@ func (s *Service) ConfirmTOTP(user *db.User, methodID int64, code string) error 
 // VerifyTOTP validates a TOTP or backup code during login or step-up.
 // Also supports Yubico OTP if the code looks like a Yubikey OTP.
 // Includes atomic time-step replay protection, rate limiting, and automatic account locking.
-func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userAgent string, sessionID *int64) (*VerificationResult, error) {
+func (s *Service) VerifyTOTP(
+	user *db.User,
+	code string,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (*VerificationResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")
 	}
@@ -102,11 +108,13 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 		return result, nil
 	}
 
-	if result, err := s.verifyTOTPMethods(user.ID, sanitized, ipAddress, userAgent, sessionID); err != nil || result != nil {
+	if result, err := s.verifyTOTPMethods(user.ID, sanitized, ipAddress, userAgent, sessionID); err != nil ||
+		result != nil {
 		return result, err
 	}
 
-	if result, err := s.verifyBackupCodes(user.ID, sanitized, ipAddress, userAgent, sessionID); err != nil || result != nil {
+	if result, err := s.verifyBackupCodes(user.ID, sanitized, ipAddress, userAgent, sessionID); err != nil ||
+		result != nil {
 		return result, err
 	}
 
@@ -143,7 +151,11 @@ func (s *Service) tryYubiOTP(user *db.User, code string) (*VerificationResult, b
 	return nil, false
 }
 
-func (s *Service) verifyTOTPMethods(userID int64, code, ipAddress, userAgent string, sessionID *int64) (*VerificationResult, error) {
+func (s *Service) verifyTOTPMethods(
+	userID int64,
+	code, ipAddress, userAgent string,
+	sessionID *int64,
+) (*VerificationResult, error) {
 	methods, err := s.db.ListMFAMethods(userID)
 	if err != nil {
 		return nil, err
@@ -159,7 +171,12 @@ func (s *Service) verifyTOTPMethods(userID int64, code, ipAddress, userAgent str
 	return nil, nil
 }
 
-func (s *Service) verifySingleTOTPMethod(userID int64, method *db.MFAMethod, code, ipAddress, userAgent string, sessionID *int64) (*VerificationResult, bool, error) {
+func (s *Service) verifySingleTOTPMethod(
+	userID int64,
+	method *db.MFAMethod,
+	code, ipAddress, userAgent string,
+	sessionID *int64,
+) (*VerificationResult, bool, error) {
 	timeStep, err := s.validateTOTPCodeWithTimeStep(method.Secret, code)
 	if err != nil {
 		return nil, false, nil
@@ -185,7 +202,11 @@ func (s *Service) verifySingleTOTPMethod(userID int64, method *db.MFAMethod, cod
 	return &VerificationResult{MethodID: method.ID}, true, nil
 }
 
-func (s *Service) verifyBackupCodes(userID int64, code, ipAddress, userAgent string, sessionID *int64) (*VerificationResult, error) {
+func (s *Service) verifyBackupCodes(
+	userID int64,
+	code, ipAddress, userAgent string,
+	sessionID *int64,
+) (*VerificationResult, error) {
 	used, err := s.db.MarkBackupCodeUsed(userID, s.hashBackupCode(code))
 	if err != nil {
 		return nil, err

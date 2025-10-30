@@ -120,7 +120,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/api/v1/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest(
+			"POST",
+			"/api/v1/deploy-approval-requests/"+req.PublicID+"/approve",
+			bytes.NewReader(bodyBytes),
+		)
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -182,7 +186,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/api/v1/deploy-approval-requests/"+req2.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest(
+			"POST",
+			"/api/v1/deploy-approval-requests/"+req2.PublicID+"/approve",
+			bytes.NewReader(bodyBytes),
+		)
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -225,7 +233,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/api/v1/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest(
+			"POST",
+			"/api/v1/deploy-approval-requests/"+req.PublicID+"/approve",
+			bytes.NewReader(bodyBytes),
+		)
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 
@@ -258,7 +270,11 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		reqBody := UpdateDeployApprovalRequestStatusRequest{}
 		bodyBytes, _ := json.Marshal(reqBody)
 		w := httptest.NewRecorder()
-		httpReq, _ := http.NewRequest("POST", "/api/v1/deploy-approval-requests/"+req.PublicID+"/approve", bytes.NewReader(bodyBytes))
+		httpReq, _ := http.NewRequest(
+			"POST",
+			"/api/v1/deploy-approval-requests/"+req.PublicID+"/approve",
+			bytes.NewReader(bodyBytes),
+		)
 		httpReq.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, httpReq)
 

@@ -87,9 +87,19 @@ func TestAuditLogger(t *testing.T) {
 		}{
 			{"GET", "/apps", BuildAction(rbac.ResourceApp.String(), rbac.ActionList.String()), "all"},
 			{"GET", "/instances", BuildAction(rbac.ResourceInstance.String(), rbac.ActionList.String()), "all"},
-			{"GET", "/apps/myapp/processes", BuildAction(rbac.ResourceProcess.String(), rbac.ActionList.String()), "all"},
+			{
+				"GET",
+				"/apps/myapp/processes",
+				BuildAction(rbac.ResourceProcess.String(), rbac.ActionList.String()),
+				"all",
+			},
 			{"GET", "/apps/myapp/builds", BuildAction(rbac.ResourceBuild.String(), rbac.ActionList.String()), "all"},
-			{"GET", "/apps/myapp/releases", BuildAction(rbac.ResourceRelease.String(), rbac.ActionList.String()), "all"},
+			{
+				"GET",
+				"/apps/myapp/releases",
+				BuildAction(rbac.ResourceRelease.String(), rbac.ActionList.String()),
+				"all",
+			},
 		}
 
 		for _, tc := range testCases {
@@ -116,7 +126,11 @@ func TestAuditLogger(t *testing.T) {
 			{"/apps/myapp/processes", BuildAction(rbac.ResourceProcess.String(), rbac.ActionList.String()), "process"},
 			{"/apps/myapp/builds", BuildAction(rbac.ResourceBuild.String(), rbac.ActionList.String()), "build"},
 			{"/apps/myapp/releases", BuildAction(rbac.ResourceRelease.String(), rbac.ActionList.String()), "release"},
-			{"/system", BuildAction(rbac.ResourceRack.String(), rbac.ActionRead.String()), "rack"}, // System endpoints have action "rack.*" so type is "rack"
+			{
+				"/system",
+				BuildAction(rbac.ResourceRack.String(), rbac.ActionRead.String()),
+				"rack",
+			}, // System endpoints have action "rack.*" so type is "rack"
 		}
 
 		for _, tc := range testCases {

@@ -265,10 +265,31 @@ func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, e
 	var checkpointHash []byte
 
 	err := scanner.Scan(
-		&log.ID, &log.Timestamp, &log.ChainIndex, &previousHash, &log.EventHash, &checkpointID, &checkpointHash,
-		&log.UserEmail, &log.UserName,
-		&tokenID, &tokenName, &log.ActionType, &log.Action, &log.Command, &log.Resource, &log.ResourceType, &log.Details,
-		&log.RequestID, &log.IPAddress, &log.UserAgent, &log.Status, &log.RBACDecision, &log.HTTPStatus, &log.ResponseTimeMs, &log.EventCount,
+		&log.ID,
+		&log.Timestamp,
+		&log.ChainIndex,
+		&previousHash,
+		&log.EventHash,
+		&checkpointID,
+		&checkpointHash,
+		&log.UserEmail,
+		&log.UserName,
+		&tokenID,
+		&tokenName,
+		&log.ActionType,
+		&log.Action,
+		&log.Command,
+		&log.Resource,
+		&log.ResourceType,
+		&log.Details,
+		&log.RequestID,
+		&log.IPAddress,
+		&log.UserAgent,
+		&log.Status,
+		&log.RBACDecision,
+		&log.HTTPStatus,
+		&log.ResponseTimeMs,
+		&log.EventCount,
 		&deployApprovalRequestID,
 	)
 	if err != nil {
@@ -308,7 +329,11 @@ type auditTokenFieldSet struct {
 	deployID *int64
 }
 
-func extractAuditTokenFields(tokenID sql.NullInt64, tokenName sql.NullString, deployID sql.NullInt64) auditTokenFieldSet {
+func extractAuditTokenFields(
+	tokenID sql.NullInt64,
+	tokenName sql.NullString,
+	deployID sql.NullInt64,
+) auditTokenFieldSet {
 	fields := auditTokenFieldSet{}
 	if id := optionalInt64Ptr(tokenID); id != nil {
 		fields.tokenID = id

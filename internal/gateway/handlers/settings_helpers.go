@@ -84,7 +84,11 @@ func validateSettingKeys(keys []string, allowed map[string]struct{}, ops setting
 
 // buildSettingsResponse builds a response map for a list of keys by fetching settings with defaults.
 // Returns the result map and an error message if any operation fails.
-func buildSettingsResponse(ops settingsOperations, appName string, keys []string) (map[string]settings.Setting, string) {
+func buildSettingsResponse(
+	ops settingsOperations,
+	appName string,
+	keys []string,
+) (map[string]settings.Setting, string) {
 	result := make(map[string]settings.Setting)
 	for _, key := range keys {
 		defaultValue, err := ops.getDefault(key)

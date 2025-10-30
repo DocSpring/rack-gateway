@@ -39,7 +39,12 @@ func IsMFAChallengeRequired(settings *MFASettings, user *User) bool {
 }
 
 func (d *Database) SetUserMFAEnrolled(userID int64, enrolled bool) error {
-	_, err := d.exec("UPDATE users SET mfa_enrolled = ?, mfa_enforced_at = CASE WHEN ? THEN COALESCE(mfa_enforced_at, NOW()) ELSE mfa_enforced_at END, updated_at = NOW() WHERE id = ?", enrolled, enrolled, userID)
+	_, err := d.exec(
+		"UPDATE users SET mfa_enrolled = ?, mfa_enforced_at = CASE WHEN ? THEN COALESCE(mfa_enforced_at, NOW()) ELSE mfa_enforced_at END, updated_at = NOW() WHERE id = ?",
+		enrolled,
+		enrolled,
+		userID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update user MFA enrollment: %w", err)
 	}
@@ -75,7 +80,16 @@ func (d *Database) ResetUserMFA(userID int64) error {
 	return nil
 }
 
-func (d *Database) CreateMFAMethod(userID int64, methodType string, label string, secret string, credentialID []byte, publicKey []byte, transports []string, metadata map[string]interface{}) (*MFAMethod, error) {
+func (d *Database) CreateMFAMethod(
+	userID int64,
+	methodType string,
+	label string,
+	secret string,
+	credentialID []byte,
+	publicKey []byte,
+	transports []string,
+	metadata map[string]interface{},
+) (*MFAMethod, error) {
 	var meta interface{}
 	if metadata != nil {
 		b, err := json.Marshal(metadata)
@@ -108,7 +122,12 @@ func (d *Database) CreateMFAMethod(userID int64, methodType string, label string
 }
 
 func (d *Database) ConfirmMFAMethod(methodID int64, confirmedAt time.Time) error {
-	_, err := d.exec("UPDATE mfa_methods SET confirmed_at = ?, last_used_at = ? WHERE id = ?", confirmedAt, confirmedAt, methodID)
+	_, err := d.exec(
+		"UPDATE mfa_methods SET confirmed_at = ?, last_used_at = ? WHERE id = ?",
+		confirmedAt,
+		confirmedAt,
+		methodID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to confirm MFA method: %w", err)
 	}
@@ -184,13 +203,30 @@ func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
 	return nil
 }
 
-func (d *Database) UpdateMFAMethodCredential(methodID int64, methodType string, label string, credentialID []byte, publicKey []byte, transports []string, metadata []byte) error {
+func (d *Database) UpdateMFAMethodCredential(
+	methodID int64,
+	methodType string,
+	label string,
+	credentialID []byte,
+	publicKey []byte,
+	transports []string,
+	metadata []byte,
+) error {
 	query := `
 		UPDATE mfa_methods
 		SET type = ?, label = ?, credential_id = ?, public_key = ?, transports = ?, metadata = ?
 		WHERE id = ?
 	`
-	_, err := d.exec(query, methodType, nullableString(label, 150), credentialID, publicKey, jsonStringArray(transports), string(metadata), methodID)
+	_, err := d.exec(
+		query,
+		methodType,
+		nullableString(label, 150),
+		credentialID,
+		publicKey,
+		jsonStringArray(transports),
+		string(metadata),
+		methodID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update mfa method credential: %w", err)
 	}
@@ -252,7 +288,10 @@ func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
 }
 
 func (d *Database) ListBackupCodes(userID int64) ([]*MFABackupCode, error) {
-	rows, err := d.query("SELECT id, user_id, code_hash, created_at, used_at FROM mfa_backup_codes WHERE user_id = ? ORDER BY created_at", userID)
+	rows, err := d.query(
+		"SELECT id, user_id, code_hash, created_at, used_at FROM mfa_backup_codes WHERE user_id = ? ORDER BY created_at",
+		userID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list backup codes: %w", err)
 	}
@@ -278,7 +317,11 @@ func (d *Database) ListBackupCodes(userID int64) ([]*MFABackupCode, error) {
 }
 
 func (d *Database) MarkBackupCodeUsed(userID int64, hash string) (bool, error) {
-	res, err := d.exec("UPDATE mfa_backup_codes SET used_at = NOW() WHERE user_id = ? AND code_hash = ? AND used_at IS NULL", userID, hash)
+	res, err := d.exec(
+		"UPDATE mfa_backup_codes SET used_at = NOW() WHERE user_id = ? AND code_hash = ? AND used_at IS NULL",
+		userID,
+		hash,
+	)
 	if err != nil {
 		return false, fmt.Errorf("failed to mark backup code used: %w", err)
 	}
@@ -313,7 +356,14 @@ func jsonStringArray(values []string) interface{} {
 // ConsumeTOTPTimeStep atomically marks a TOTP time-step as used.
 // Returns true if successfully consumed (first use), false if already used (replay).
 // This prevents replay attacks by ensuring each time-step can only be used once.
-func (d *Database) ConsumeTOTPTimeStep(userID int64, timeStep int64, methodID *int64, ipAddress string, userAgent string, sessionID *int64) (bool, error) {
+func (d *Database) ConsumeTOTPTimeStep(
+	userID int64,
+	timeStep int64,
+	methodID *int64,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (bool, error) {
 	result, err := d.exec(`
         INSERT INTO used_totp_steps (user_id, time_step, method_id, ip_address, user_agent, session_id)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -341,17 +391,51 @@ const (
 )
 
 // LogTOTPAttempt records a TOTP verification attempt for rate limiting and audit
-func (d *Database) LogTOTPAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+func (d *Database) LogTOTPAttempt(
+	userID int64,
+	methodID *int64,
+	success bool,
+	failureReason string,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) error {
 	return d.logMFAAttempt(userID, methodID, MFAMethodTypeTOTP, success, failureReason, ipAddress, userAgent, sessionID)
 }
 
 // LogWebAuthnAttempt records a WebAuthn verification attempt for rate limiting and audit
-func (d *Database) LogWebAuthnAttempt(userID int64, methodID *int64, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
-	return d.logMFAAttempt(userID, methodID, MFAMethodTypeWebAuthn, success, failureReason, ipAddress, userAgent, sessionID)
+func (d *Database) LogWebAuthnAttempt(
+	userID int64,
+	methodID *int64,
+	success bool,
+	failureReason string,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) error {
+	return d.logMFAAttempt(
+		userID,
+		methodID,
+		MFAMethodTypeWebAuthn,
+		success,
+		failureReason,
+		ipAddress,
+		userAgent,
+		sessionID,
+	)
 }
 
 // logMFAAttempt is the consolidated implementation for logging MFA attempts
-func (d *Database) logMFAAttempt(userID int64, methodID *int64, methodType int, success bool, failureReason string, ipAddress string, userAgent string, sessionID *int64) error {
+func (d *Database) logMFAAttempt(
+	userID int64,
+	methodID *int64,
+	methodType int,
+	success bool,
+	failureReason string,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) error {
 	_, err := d.exec(`
         INSERT INTO mfa_attempts (user_id, method_id, method_type, success, failure_reason, ip_address, user_agent, session_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)

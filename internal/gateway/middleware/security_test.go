@@ -36,7 +36,11 @@ func TestHostValidatorRejectsMismatchedOrigin(t *testing.T) {
 }
 
 func TestHostValidatorAllowsDevLocalhost(t *testing.T) {
-	router, cancel := setupMiddlewareTest(t, &config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true}, gin.DebugMode)
+	router, cancel := setupMiddlewareTest(
+		t,
+		&config.Config{Domain: "gateway.example.com", Port: "8447", DevMode: true},
+		gin.DebugMode,
+	)
 	defer cancel()
 	driveRequest(t, router, func(req *http.Request) {
 		req.Host = "localhost:8447"
@@ -134,7 +138,8 @@ func TestSecurityHeadersAddsSentryReporting(t *testing.T) {
 	}
 
 	reportTo := resp.Header().Get("Report-To")
-	if !strings.Contains(reportTo, "\"group\":\"rgw-sentry-csp\"") || !strings.Contains(reportTo, "https://o75.ingest.us.sentry.io/api/9001/security/") {
+	if !strings.Contains(reportTo, "\"group\":\"rgw-sentry-csp\"") ||
+		!strings.Contains(reportTo, "https://o75.ingest.us.sentry.io/api/9001/security/") {
 		t.Fatalf("expected Report-To header to include Sentry endpoint, got %q", reportTo)
 	}
 

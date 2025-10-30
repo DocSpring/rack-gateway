@@ -68,12 +68,24 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 		userInfo.MFARequired = true
 	}
 
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_check user_email=%q has_auth_user=%t has_session=%t", email, authUser != nil, authUser != nil && authUser.Session != nil)
+	gtwlog.DebugTopicf(
+		gtwlog.TopicMFAStepUp,
+		"auth_info_step_up_check user_email=%q has_auth_user=%t has_session=%t",
+		email,
+		authUser != nil,
+		authUser != nil && authUser.Session != nil,
+	)
 	if authUser != nil && authUser.Session != nil {
 		if authUser.Session.RecentStepUpAt != nil {
 			expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
 			userInfo.RecentStepUpExpiresAt = &expires
-			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_set user_email=%q recent_step_up_at=%q expires_at=%q", email, authUser.Session.RecentStepUpAt.Format(time.RFC3339), expires.Format(time.RFC3339))
+			gtwlog.DebugTopicf(
+				gtwlog.TopicMFAStepUp,
+				"auth_info_step_up_set user_email=%q recent_step_up_at=%q expires_at=%q",
+				email,
+				authUser.Session.RecentStepUpAt.Format(time.RFC3339),
+				expires.Format(time.RFC3339),
+			)
 		} else {
 			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_nil user_email=%q session_id=%d", email, authUser.Session.ID)
 		}
@@ -103,7 +115,8 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 	}
 
 	integrationsInfo := IntegrationsInfo{
-		Slack:    h.config != nil && strings.TrimSpace(h.config.SlackClientID) != "" && strings.TrimSpace(h.config.SlackClientSecret) != "",
+		Slack: h.config != nil && strings.TrimSpace(h.config.SlackClientID) != "" &&
+			strings.TrimSpace(h.config.SlackClientSecret) != "",
 		GitHub:   h.config != nil && strings.TrimSpace(h.config.GitHubToken) != "",
 		CircleCI: h.config != nil && strings.TrimSpace(h.config.CircleCIToken) != "",
 	}
@@ -246,7 +259,11 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	resp, err := client.Do(req)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-			log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"rack_info","expected_fingerprint":"%s","actual_fingerprint":"%s"}`, fpErr.Expected, fpErr.Actual)
+			log.Printf(
+				`{"level":"error","event":"rack_tls_verification_failed","scope":"rack_info","expected_fingerprint":"%s","actual_fingerprint":"%s"}`,
+				fpErr.Expected,
+				fpErr.Actual,
+			)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "rack certificate verification failed"})
 			return
 		}

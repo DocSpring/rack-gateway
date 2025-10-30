@@ -168,7 +168,12 @@ func (c *Client) PostMessage(channelID, text string, blocks []map[string]interfa
 
 	var result PostMessageResponse
 	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return fmt.Errorf("failed to decode response (status %d, body: %s): %w", resp.StatusCode, string(bodyBytes), err)
+		return fmt.Errorf(
+			"failed to decode response (status %d, body: %s): %w",
+			resp.StatusCode,
+			string(bodyBytes),
+			err,
+		)
 	}
 
 	if !result.OK {
@@ -186,7 +191,11 @@ func ExchangeOAuthCode(clientID, clientSecret, code, redirectURI string) (*OAuth
 	data.Set("code", code)
 	data.Set("redirect_uri", redirectURI)
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/oauth.v2.access", slackAPIBase), bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequest(
+		"POST",
+		fmt.Sprintf("%s/oauth.v2.access", slackAPIBase),
+		bytes.NewBufferString(data.Encode()),
+	)
 	if err != nil {
 		return nil, err
 	}

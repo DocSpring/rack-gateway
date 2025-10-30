@@ -102,7 +102,12 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 }
 
 func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "db_update_step_up_before session_id=%d when=%q", sessionID, when.Format(time.RFC3339))
+	gtwlog.DebugTopicf(
+		gtwlog.TopicMFAStepUp,
+		"db_update_step_up_before session_id=%d when=%q",
+		sessionID,
+		when.Format(time.RFC3339),
+	)
 	res, err := d.exec(
 		"UPDATE user_sessions SET recent_step_up_at = ?, updated_at = NOW() WHERE id = ?",
 		when,

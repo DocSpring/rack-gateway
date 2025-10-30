@@ -27,7 +27,19 @@ type AdminHandler struct {
 	jobsClient      *jobs.Client
 }
 
-func NewAdminHandler(rbac rbac.Manager, database *db.Database, tokenService *token.Service, emailSender email.Sender, config *config.Config, rackCertMgr *rackcert.Manager, sessions *auth.SessionManager, mfaSettings *db.MFASettings, auditLogger *audit.Logger, settingsService *settings.Service, jobsClient *jobs.Client) *AdminHandler {
+func NewAdminHandler(
+	rbac rbac.Manager,
+	database *db.Database,
+	tokenService *token.Service,
+	emailSender email.Sender,
+	config *config.Config,
+	rackCertMgr *rackcert.Manager,
+	sessions *auth.SessionManager,
+	mfaSettings *db.MFASettings,
+	auditLogger *audit.Logger,
+	settingsService *settings.Service,
+	jobsClient *jobs.Client,
+) *AdminHandler {
 	return &AdminHandler{
 		rbac:            rbac,
 		database:        database,

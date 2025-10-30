@@ -21,7 +21,9 @@ const (
 )
 
 var (
-	ErrDeployApprovalRequestActive   = errors.New("a deploy approval request is already pending or approved for this token and git commit")
+	ErrDeployApprovalRequestActive = errors.New(
+		"a deploy approval request is already pending or approved for this token and git commit",
+	)
 	ErrDeployApprovalRequestNotFound = errors.New("deploy approval request not found")
 )
 
@@ -37,7 +39,14 @@ func (e *DeployApprovalRequestConflictError) Unwrap() error {
 	return ErrDeployApprovalRequestActive
 }
 
-func (d *Database) CreateDeployApprovalRequest(message, app, gitCommitHash, gitBranch, prURL string, ciMetadata []byte, createdByUserID int64, createdByAPITokenID *int64, targetAPITokenID int64, targetUserID *int64) (*DeployApprovalRequest, error) {
+func (d *Database) CreateDeployApprovalRequest(
+	message, app, gitCommitHash, gitBranch, prURL string,
+	ciMetadata []byte,
+	createdByUserID int64,
+	createdByAPITokenID *int64,
+	targetAPITokenID int64,
+	targetUserID *int64,
+) (*DeployApprovalRequest, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil, fmt.Errorf("message is required")
@@ -170,7 +179,10 @@ func (d *Database) FindDeployApprovalRequest(lookup DeployApprovalLookup) (*Depl
 		}
 	}
 
-	query := deployApprovalRequestSelect + " WHERE " + strings.Join(clauses, " AND ") + " ORDER BY dr.created_at DESC LIMIT 1"
+	query := deployApprovalRequestSelect + " WHERE " + strings.Join(
+		clauses,
+		" AND ",
+	) + " ORDER BY dr.created_at DESC LIMIT 1"
 	row := d.queryRow(query, args...)
 	return scanDeployApprovalRequest(row)
 }
@@ -206,7 +218,10 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	if limit <= 0 || limit > 200 {
 		limit = 200
 	}
-	query := deployApprovalRequestSelect + " WHERE " + strings.Join(clauses, " AND ") + " ORDER BY dr.created_at DESC LIMIT ? OFFSET ?"
+	query := deployApprovalRequestSelect + " WHERE " + strings.Join(
+		clauses,
+		" AND ",
+	) + " ORDER BY dr.created_at DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, opts.Offset)
 
 	rows, err := d.query(query, args...)
@@ -232,7 +247,15 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 // updateApprovalStatus updates the status of a deploy approval request.
 // whereClause should be "id = ?" or "public_id = ?".
 // whereArg is the corresponding ID or publicID value.
-func (d *Database) updateApprovalStatus(whereClause string, whereArg interface{}, newStatus string, actorUserID int64, approvalExpiresAt *time.Time, notes string, allowedStatuses []string) error {
+func (d *Database) updateApprovalStatus(
+	whereClause string,
+	whereArg interface{},
+	newStatus string,
+	actorUserID int64,
+	approvalExpiresAt *time.Time,
+	notes string,
+	allowedStatuses []string,
+) error {
 	trimmedNotes := strings.TrimSpace(notes)
 
 	var whereColumn string
@@ -286,32 +309,82 @@ func (d *Database) updateApprovalStatus(whereClause string, whereArg interface{}
 	return nil
 }
 
-func (d *Database) ApproveDeployApprovalRequest(id int64, approverUserID int64, expiresAt time.Time, notes string) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus("id = ?", id, DeployApprovalRequestStatusApproved, approverUserID, &expiresAt, notes, []string{DeployApprovalRequestStatusPending})
+func (d *Database) ApproveDeployApprovalRequest(
+	id int64,
+	approverUserID int64,
+	expiresAt time.Time,
+	notes string,
+) (*DeployApprovalRequest, error) {
+	err := d.updateApprovalStatus(
+		"id = ?",
+		id,
+		DeployApprovalRequestStatusApproved,
+		approverUserID,
+		&expiresAt,
+		notes,
+		[]string{DeployApprovalRequestStatusPending},
+	)
 	if err != nil {
 		return nil, err
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
-func (d *Database) ApproveDeployApprovalRequestByPublicID(publicID string, approverUserID int64, expiresAt time.Time, notes string) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus("public_id = ?", publicID, DeployApprovalRequestStatusApproved, approverUserID, &expiresAt, notes, []string{DeployApprovalRequestStatusPending})
+func (d *Database) ApproveDeployApprovalRequestByPublicID(
+	publicID string,
+	approverUserID int64,
+	expiresAt time.Time,
+	notes string,
+) (*DeployApprovalRequest, error) {
+	err := d.updateApprovalStatus(
+		"public_id = ?",
+		publicID,
+		DeployApprovalRequestStatusApproved,
+		approverUserID,
+		&expiresAt,
+		notes,
+		[]string{DeployApprovalRequestStatusPending},
+	)
 	if err != nil {
 		return nil, err
 	}
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }
 
-func (d *Database) RejectDeployApprovalRequest(id int64, approverUserID int64, notes string) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus("id = ?", id, DeployApprovalRequestStatusRejected, approverUserID, nil, notes, []string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved})
+func (d *Database) RejectDeployApprovalRequest(
+	id int64,
+	approverUserID int64,
+	notes string,
+) (*DeployApprovalRequest, error) {
+	err := d.updateApprovalStatus(
+		"id = ?",
+		id,
+		DeployApprovalRequestStatusRejected,
+		approverUserID,
+		nil,
+		notes,
+		[]string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved},
+	)
 	if err != nil {
 		return nil, err
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
-func (d *Database) RejectDeployApprovalRequestByPublicID(publicID string, approverUserID int64, notes string) (*DeployApprovalRequest, error) {
-	err := d.updateApprovalStatus("public_id = ?", publicID, DeployApprovalRequestStatusRejected, approverUserID, nil, notes, []string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved})
+func (d *Database) RejectDeployApprovalRequestByPublicID(
+	publicID string,
+	approverUserID int64,
+	notes string,
+) (*DeployApprovalRequest, error) {
+	err := d.updateApprovalStatus(
+		"public_id = ?",
+		publicID,
+		DeployApprovalRequestStatusRejected,
+		approverUserID,
+		nil,
+		notes,
+		[]string{DeployApprovalRequestStatusPending, DeployApprovalRequestStatusApproved},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +445,12 @@ func (d *Database) UpdateDeployApprovalRequestBuild(id int64, buildID, releaseID
 	return nil
 }
 
-func (d *Database) MarkDeployApprovalRequestPromoted(id int64, app, releaseID string, tokenID int64, when time.Time) error {
+func (d *Database) MarkDeployApprovalRequestPromoted(
+	id int64,
+	app, releaseID string,
+	tokenID int64,
+	when time.Time,
+) error {
 	if strings.TrimSpace(app) == "" {
 		return fmt.Errorf("app is required")
 	}

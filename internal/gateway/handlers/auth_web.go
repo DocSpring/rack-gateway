@@ -55,7 +55,11 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state")
 	if code == "" || state == "" {
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Missing authorization code or state"))
+		errorURL := fmt.Sprintf(
+			"%s?message=%s",
+			WebLoginErrorRoute,
+			url.QueryEscape("Missing authorization code or state"),
+		)
 		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
@@ -90,7 +94,15 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 		// Notify about failed login (with email/name if available)
 		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt(email, name, "web", "oauth_failed", c.ClientIP(), c.GetHeader("User-Agent"), false)
+			h.securityNotifier.LoginAttempt(
+				email,
+				name,
+				"web",
+				"oauth_failed",
+				c.ClientIP(),
+				c.GetHeader("User-Agent"),
+				false,
+			)
 		}
 		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorMsg))
 		c.Redirect(http.StatusFound, errorURL)
@@ -107,7 +119,15 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	if err != nil || userRecord == nil {
 		// Notify about unauthorized login attempt
 		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt(resp.Email, resp.Name, "web", "user_not_authorized", c.ClientIP(), c.GetHeader("User-Agent"), false)
+			h.securityNotifier.LoginAttempt(
+				resp.Email,
+				resp.Name,
+				"web",
+				"user_not_authorized",
+				c.ClientIP(),
+				c.GetHeader("User-Agent"),
+				false,
+			)
 		}
 		errorMsg := "You are not authorized to access this application. Please contact your administrator."
 		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorMsg))
@@ -117,7 +137,11 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 
 	session, err := h.createLoginSession(c, userRecord, "web")
 	if err != nil {
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Failed to create session. Please try again."))
+		errorURL := fmt.Sprintf(
+			"%s?message=%s",
+			WebLoginErrorRoute,
+			url.QueryEscape("Failed to create session. Please try again."),
+		)
 		c.Redirect(http.StatusFound, errorURL)
 		return
 	}
@@ -134,7 +158,15 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 	}
 	// Notify about successful login (includes audit logging)
 	if h.securityNotifier != nil {
-		h.securityNotifier.LoginAttempt(resp.Email, resp.Name, "web", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
+		h.securityNotifier.LoginAttempt(
+			resp.Email,
+			resp.Name,
+			"web",
+			"complete",
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			true,
+		)
 	}
 
 	// Redirect to web UI
@@ -175,7 +207,11 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 			Resource:     "web",
 			Status:       audit.StatusSuccess,
 		}); err != nil {
-			log.Printf(`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`, audit.ActionScopeLogout, err)
+			log.Printf(
+				`{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`,
+				audit.ActionScopeLogout,
+				err,
+			)
 		}
 	}
 

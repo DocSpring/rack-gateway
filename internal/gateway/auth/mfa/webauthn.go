@@ -71,7 +71,13 @@ func (s *Service) StartWebAuthnEnrollment(user *db.User) (*StartWebAuthnEnrollme
 // ConfirmWebAuthnEnrollment finalizes WebAuthn registration.
 // sessionDataJSON is the WebAuthn session data returned from StartWebAuthnEnrollment.
 // methodID is the placeholder method ID returned from StartWebAuthnEnrollment.
-func (s *Service) ConfirmWebAuthnEnrollment(user *db.User, methodID int64, sessionDataJSON []byte, credentialJSON []byte, label string) (int64, error) {
+func (s *Service) ConfirmWebAuthnEnrollment(
+	user *db.User,
+	methodID int64,
+	sessionDataJSON []byte,
+	credentialJSON []byte,
+	label string,
+) (int64, error) {
 	if user == nil {
 		return 0, fmt.Errorf("user required")
 	}
@@ -175,7 +181,14 @@ func (s *Service) StartWebAuthnAssertion(user *db.User) (*protocol.CredentialAss
 
 // VerifyWebAuthnAssertion validates a WebAuthn assertion response using stored session data.
 // Includes rate limiting and automatic account locking.
-func (s *Service) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, credentialJSON []byte, ipAddress string, userAgent string, sessionID *int64) (*VerificationResult, error) {
+func (s *Service) VerifyWebAuthnAssertion(
+	user *db.User,
+	sessionJSON []byte,
+	credentialJSON []byte,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (*VerificationResult, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user required")
 	}
@@ -378,7 +391,10 @@ func boolValue(v interface{}) bool {
 	return false
 }
 
-func (s *Service) maybeHandleE2EWebAuthn(methods []*db.MFAMethod, onSuccess func(*db.MFAMethod) error) (*VerificationResult, bool, error) {
+func (s *Service) maybeHandleE2EWebAuthn(
+	methods []*db.MFAMethod,
+	onSuccess func(*db.MFAMethod) error,
+) (*VerificationResult, bool, error) {
 	if os.Getenv("E2E_TEST_MODE") != "true" {
 		return nil, false, nil
 	}

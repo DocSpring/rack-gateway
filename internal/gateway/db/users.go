@@ -185,7 +185,11 @@ func (d *Database) UpdatePreferredMFAMethod(userID int64, method *string) error 
 	if method != nil && *method != "totp" && *method != "webauthn" {
 		return fmt.Errorf("invalid MFA method: %s", *method)
 	}
-	_, err := d.exec("UPDATE users SET preferred_mfa_method = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", method, userID)
+	_, err := d.exec(
+		"UPDATE users SET preferred_mfa_method = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		method,
+		userID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update preferred MFA method: %w", err)
 	}

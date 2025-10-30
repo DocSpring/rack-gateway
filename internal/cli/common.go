@@ -33,13 +33,22 @@ func buildRackURL(gatewayURL, auth string) string {
 
 // SetupConvoxCommand sets up a convox command with the standard boilerplate
 // Pass flagNames to convert specific cobra flags to stdcli flags
-func SetupConvoxCommand(cobraCmd *cobra.Command, args []string, flagNames ...string) (*sdk.Client, *stdcli.Context, error) {
+func SetupConvoxCommand(
+	cobraCmd *cobra.Command,
+	args []string,
+	flagNames ...string,
+) (*sdk.Client, *stdcli.Context, error) {
 	return SetupConvoxCommandWithMFA(cobraCmd, args, "", flagNames...)
 }
 
 // SetupConvoxCommandWithMFA sets up a convox command with optional MFA verification
 // mfaAuth should be in format "totp.123456" or "webauthn.assertion_data" or empty string for no MFA
-func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth string, flagNames ...string) (*sdk.Client, *stdcli.Context, error) {
+func SetupConvoxCommandWithMFA(
+	cobraCmd *cobra.Command,
+	args []string,
+	mfaAuth string,
+	flagNames ...string,
+) (*sdk.Client, *stdcli.Context, error) {
 	_, gatewayURL, auth, err := resolveRackAuth(mfaAuth)
 	if err != nil {
 		return nil, nil, err
@@ -185,7 +194,12 @@ func injectStdCLIEngine(ctx *stdcli.Context, engine *stdcli.Engine) {
 	}
 }
 
-func setupConvoxWithMFAAction(cobraCmd *cobra.Command, args []string, action string, flagNames ...string) (*sdk.Client, *stdcli.Context, error) {
+func setupConvoxWithMFAAction(
+	cobraCmd *cobra.Command,
+	args []string,
+	action string,
+	flagNames ...string,
+) (*sdk.Client, *stdcli.Context, error) {
 	mfaAuth, err := checkMFAAndGetAuth(cobraCmd, action)
 	if err != nil {
 		return nil, nil, err

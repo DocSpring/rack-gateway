@@ -98,7 +98,13 @@ type VerifyCommitOptions struct {
 //   - target: Optional pointer to decode JSON response into (can be nil)
 //
 // Returns an error if the request fails, returns unexpected status, or JSON decoding fails.
-func (c *Client) doRequest(method, url string, body io.Reader, expectedStatus int, notFoundError string, target interface{}) error {
+func (c *Client) doRequest(
+	method, url string,
+	body io.Reader,
+	expectedStatus int,
+	notFoundError string,
+	target interface{},
+) error {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -143,7 +149,10 @@ func (c *Client) doRequest(method, url string, body io.Reader, expectedStatus in
 // - Mode "branch": commit must exist on the specified branch (uses git compare API)
 // - RequirePR: if true, requires an open PR for the branch
 // Returns the PR URL if found (empty string if not required/found), or an error.
-func (c *Client) VerifyCommitAndFindPR(owner, repo, branch, commitHash string, opts VerifyCommitOptions) (string, error) {
+func (c *Client) VerifyCommitAndFindPR(
+	owner, repo, branch, commitHash string,
+	opts VerifyCommitOptions,
+) (string, error) {
 	if c.token == "" {
 		return "", fmt.Errorf("GitHub token not configured")
 	}
@@ -158,8 +167,14 @@ func (c *Client) VerifyCommitAndFindPR(owner, repo, branch, commitHash string, o
 	switch opts.Mode {
 	case settings.VerifyGitCommitModeLatest:
 		// Check if the commit hash matches the latest commit on the branch
-		if !strings.HasPrefix(branchInfo.Commit.SHA, commitHash) && !strings.HasPrefix(commitHash, branchInfo.Commit.SHA) {
-			return "", fmt.Errorf("commit %s is not the latest commit on branch %s (latest: %s)", commitHash, branch, branchInfo.Commit.SHA)
+		if !strings.HasPrefix(branchInfo.Commit.SHA, commitHash) &&
+			!strings.HasPrefix(commitHash, branchInfo.Commit.SHA) {
+			return "", fmt.Errorf(
+				"commit %s is not the latest commit on branch %s (latest: %s)",
+				commitHash,
+				branch,
+				branchInfo.Commit.SHA,
+			)
 		}
 	case settings.VerifyGitCommitModeBranch:
 		// Verify commit exists on the branch using compare API
@@ -167,7 +182,12 @@ func (c *Client) VerifyCommitAndFindPR(owner, repo, branch, commitHash string, o
 			return "", err
 		}
 	default:
-		return "", fmt.Errorf("invalid verify_git_commit_mode: %s (must be '%s' or '%s')", opts.Mode, settings.VerifyGitCommitModeBranch, settings.VerifyGitCommitModeLatest)
+		return "", fmt.Errorf(
+			"invalid verify_git_commit_mode: %s (must be '%s' or '%s')",
+			opts.Mode,
+			settings.VerifyGitCommitModeBranch,
+			settings.VerifyGitCommitModeLatest,
+		)
 	}
 
 	// 3. Always look up the PR (for informational purposes)

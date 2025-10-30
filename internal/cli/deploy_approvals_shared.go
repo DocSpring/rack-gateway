@@ -38,7 +38,11 @@ func (e *deployApprovalRequestConflictError) Error() string {
 	return "deploy approval request already exists"
 }
 
-func postDeployApprovalRequest(cmd *cobra.Command, rack, endpoint string, payload map[string]interface{}) (*deployApprovalRequest, error) {
+func postDeployApprovalRequest(
+	cmd *cobra.Command,
+	rack, endpoint string,
+	payload map[string]interface{},
+) (*deployApprovalRequest, error) {
 	var result deployApprovalRequest
 	if err := gatewayRequest(cmd, rack, http.MethodPost, endpoint, payload, &result); err != nil {
 		if strings.Contains(err.Error(), "409") {

@@ -40,7 +40,18 @@ func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 	}
 
 	pepper := []byte("mfa-pepper-for-tests")
-	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "", nil)
+	mfaService, err := mfa.NewService(
+		database,
+		"Rack Gateway",
+		30*time.Minute,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"",
+		"",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to init mfa service: %v", err)
 	}
@@ -134,7 +145,18 @@ func TestVerifyMFAHandlesFailure(t *testing.T) {
 	}
 
 	pepper := []byte("mfa-pepper-for-tests")
-	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "", nil)
+	mfaService, err := mfa.NewService(
+		database,
+		"Rack Gateway",
+		30*time.Minute,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"",
+		"",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to init mfa service: %v", err)
 	}

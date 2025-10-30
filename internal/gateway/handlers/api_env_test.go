@@ -376,7 +376,8 @@ func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
 	// Verify the audit log has the right action
 	found := false
 	for _, log := range logs {
-		if log.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionUpdate.String()) && log.Resource == "myapp" {
+		if log.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionUpdate.String()) &&
+			log.Resource == "myapp" {
 			found = true
 			if log.Status != "success" {
 				t.Errorf("expected audit log status=success, got %s", log.Status)

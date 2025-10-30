@@ -156,7 +156,9 @@ func (e *settingsTestEnv) performSettingsRequest(
 	return w
 }
 
-func setupSettingsServices(t *testing.T) (*db.Database, *settings.Service, *auth.SessionManager, *mfa.Service, *db.MFASettings) {
+func setupSettingsServices(
+	t *testing.T,
+) (*db.Database, *settings.Service, *auth.SessionManager, *mfa.Service, *db.MFASettings) {
 	t.Helper()
 
 	database := dbtest.NewDatabase(t)
@@ -193,14 +195,27 @@ type mockMFAService struct {
 	verifyWebAuthnFunc func(*db.User, []byte, []byte, string, string, *int64) (*mfa.VerificationResult, error)
 }
 
-func (m *mockMFAService) VerifyTOTP(user *db.User, code string, ipAddress string, userAgent string, sessionID *int64) (*mfa.VerificationResult, error) {
+func (m *mockMFAService) VerifyTOTP(
+	user *db.User,
+	code string,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (*mfa.VerificationResult, error) {
 	if m.verifyTOTPFunc != nil {
 		return m.verifyTOTPFunc(user, code, ipAddress, userAgent, sessionID)
 	}
 	return &mfa.VerificationResult{MethodID: 1}, nil
 }
 
-func (m *mockMFAService) VerifyWebAuthnAssertion(user *db.User, sessionJSON []byte, credentialJSON []byte, ipAddress string, userAgent string, sessionID *int64) (*mfa.VerificationResult, error) {
+func (m *mockMFAService) VerifyWebAuthnAssertion(
+	user *db.User,
+	sessionJSON []byte,
+	credentialJSON []byte,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (*mfa.VerificationResult, error) {
 	if m.verifyWebAuthnFunc != nil {
 		return m.verifyWebAuthnFunc(user, sessionJSON, credentialJSON, ipAddress, userAgent, sessionID)
 	}

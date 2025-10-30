@@ -39,11 +39,29 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 
 	// Use the shared verification flow with TOTP-specific verification function
 	h.verifyMFAAndComplete(c, ctx, req.TrustDevice, func() (interface{}, error) {
-		return h.mfaService.VerifyTOTP(ctx.userRecord, strings.TrimSpace(req.Code), ctx.ipAddress, ctx.userAgent, ctx.sessionID)
+		return h.mfaService.VerifyTOTP(
+			ctx.userRecord,
+			strings.TrimSpace(req.Code),
+			ctx.ipAddress,
+			ctx.userAgent,
+			ctx.sessionID,
+		)
 	}, func(now time.Time) {
 		// Extra debug logging for TOTP step-up
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "before_update_step_up user_email=%q session_id=%d now=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q", ctx.userRecord.Email, ctx.authUser.Session.ID, now.Format(time.RFC3339))
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"before_update_step_up user_email=%q session_id=%d now=%q",
+			ctx.userRecord.Email,
+			ctx.authUser.Session.ID,
+			now.Format(time.RFC3339),
+		)
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"after_update_step_up user_email=%q session_id=%d recent_step_up_at=%q",
+			ctx.userRecord.Email,
+			ctx.authUser.Session.ID,
+			now.Format(time.RFC3339),
+		)
 	})
 }
 
@@ -107,6 +125,13 @@ func (h *AuthHandler) VerifyWebAuthnAssertion(c *gin.Context) {
 
 	// Use the shared verification flow with WebAuthn-specific verification function
 	h.verifyMFAAndComplete(c, ctx, req.TrustDevice, func() (interface{}, error) {
-		return h.mfaService.VerifyWebAuthnAssertion(ctx.userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ctx.ipAddress, ctx.userAgent, ctx.sessionID)
+		return h.mfaService.VerifyWebAuthnAssertion(
+			ctx.userRecord,
+			[]byte(req.SessionData),
+			[]byte(req.AssertionResponse),
+			ctx.ipAddress,
+			ctx.userAgent,
+			ctx.sessionID,
+		)
 	}, nil) // No extra debug logging for WebAuthn
 }

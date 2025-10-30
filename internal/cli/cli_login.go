@@ -75,7 +75,11 @@ func resolveLoginTarget(args []string) (string, string, error) {
 		}
 		gatewayURL, _, err := LoadRackAuth(rack)
 		if err != nil {
-			return "", "", fmt.Errorf("rack %s not configured: %w. Run: rack-gateway login <rack> <gateway-url>", rack, err)
+			return "", "", fmt.Errorf(
+				"rack %s not configured: %w. Run: rack-gateway login <rack> <gateway-url>",
+				rack,
+				err,
+			)
 		}
 		return rack, gatewayURL, nil
 	case 1:
@@ -95,7 +99,12 @@ func writeAuthFile(path string, startResp *LoginStartResponse) error {
 	if path == "" {
 		return nil
 	}
-	content := fmt.Sprintf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
+	content := fmt.Sprintf(
+		"AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n",
+		startResp.AuthURL,
+		startResp.State,
+		startResp.CodeVerifier,
+	)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("failed to write auth file: %w", err)
 	}
@@ -112,7 +121,11 @@ func notifyBrowser(authURL string, noOpen bool) {
 	}
 }
 
-func pollLoginCompletion(gatewayURL string, startResp *LoginStartResponse, deviceInfo DeviceInfo) (*LoginResponse, error) {
+func pollLoginCompletion(
+	gatewayURL string,
+	startResp *LoginStartResponse,
+	deviceInfo DeviceInfo,
+) (*LoginResponse, error) {
 	deadline := time.Now().Add(2 * time.Minute)
 	pendingNotified := false
 	for {

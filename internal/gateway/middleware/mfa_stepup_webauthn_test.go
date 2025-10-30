@@ -30,7 +30,16 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	credential, err := webauthntest.GenerateMockCredential()
 	require.NoError(t, err)
 
-	method, err := database.CreateMFAMethod(user.ID, "webauthn", "Test Credential", "", credential.ID, credential.PublicKey, nil, nil)
+	method, err := database.CreateMFAMethod(
+		user.ID,
+		"webauthn",
+		"Test Credential",
+		"",
+		credential.ID,
+		credential.PublicKey,
+		nil,
+		nil,
+	)
 	require.NoError(t, err)
 	require.NoError(t, database.ConfirmMFAMethod(method.ID, time.Now()))
 
@@ -59,11 +68,17 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	require.NoError(t, err)
 
 	middleware := EnforceMFARequirements(mfaService, database, mfaSettings)
-	router := buildStepUpRouter("/api/v1/api-tokens", session, user, middleware, func(authUser *auth.AuthUser, c *gin.Context) {
-		authUser.MFAType = "webauthn"
-		authUser.MFAValue = inlineHeader
-		c.Request.Header.Set("X-MFA-WebAuthn", inlineHeader)
-	})
+	router := buildStepUpRouter(
+		"/api/v1/api-tokens",
+		session,
+		user,
+		middleware,
+		func(authUser *auth.AuthUser, c *gin.Context) {
+			authUser.MFAType = "webauthn"
+			authUser.MFAValue = inlineHeader
+			c.Request.Header.Set("X-MFA-WebAuthn", inlineHeader)
+		},
+	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/api-tokens", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
@@ -73,5 +88,10 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	t.Logf("response body: %s", w.Body.String())
-	require.Equal(t, http.StatusOK, w.Code, "EnforceMFARequirements should accept inline WebAuthn verification in the same request")
+	require.Equal(
+		t,
+		http.StatusOK,
+		w.Code,
+		"EnforceMFARequirements should accept inline WebAuthn verification in the same request",
+	)
 }

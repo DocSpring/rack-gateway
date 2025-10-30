@@ -14,7 +14,15 @@ import (
 )
 
 // verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided
-func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, authUser *auth.AuthUser, resource rbac.Resource, action rbac.Action, rackConfig *config.RackConfig, start time.Time) error {
+func (h *Handler) verifyMFAIfRequired(
+	r *http.Request,
+	w http.ResponseWriter,
+	authUser *auth.AuthUser,
+	resource rbac.Resource,
+	action rbac.Action,
+	rackConfig *config.RackConfig,
+	start time.Time,
+) error {
 	// Skip MFA verification if services are not configured (e.g., in tests)
 	if h.mfaService == nil || h.sessionManager == nil {
 		return nil
@@ -40,7 +48,15 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 		// Verify the inline MFA
 		userRecord, err := h.database.GetUser(authUser.Email)
 		if err != nil {
-			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusInternalServerError, time.Since(start), fmt.Errorf("failed to get user: %w", err))
+			h.auditLogger.LogRequest(
+				r,
+				authUser.Email,
+				rackConfig.Name,
+				"deny",
+				http.StatusInternalServerError,
+				time.Since(start),
+				fmt.Errorf("failed to get user: %w", err),
+			)
 			http.Error(w, "failed to verify MFA", http.StatusInternalServerError)
 			return fmt.Errorf("failed to get user")
 		}
@@ -54,7 +70,13 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 				if authUser.Session != nil {
 					sessionIDPtr = &authUser.Session.ID
 				}
-				_, verifyErr = h.mfaService.VerifyTOTP(userRecord, authUser.MFAValue, clientIPFromRequest(r), r.UserAgent(), sessionIDPtr)
+				_, verifyErr = h.mfaService.VerifyTOTP(
+					userRecord,
+					authUser.MFAValue,
+					clientIPFromRequest(r),
+					r.UserAgent(),
+					sessionIDPtr,
+				)
 			} else {
 				verifyErr = fmt.Errorf("MFA service not available")
 			}
@@ -96,7 +118,15 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 		}
 
 		if verifyErr != nil {
-			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("MFA verification failed: %w", verifyErr))
+			h.auditLogger.LogRequest(
+				r,
+				authUser.Email,
+				rackConfig.Name,
+				"deny",
+				http.StatusUnauthorized,
+				time.Since(start),
+				fmt.Errorf("MFA verification failed: %w", verifyErr),
+			)
 			http.Error(w, "MFA verification failed", http.StatusUnauthorized)
 			return verifyErr
 		}
@@ -114,7 +144,15 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 
 	// No inline MFA provided - check for session with recent step-up
 	if authUser.Session == nil {
-		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("session required for MFA verification"))
+		h.auditLogger.LogRequest(
+			r,
+			authUser.Email,
+			rackConfig.Name,
+			"deny",
+			http.StatusUnauthorized,
+			time.Since(start),
+			fmt.Errorf("session required for MFA verification"),
+		)
 		http.Error(w, "session required for MFA verification", http.StatusUnauthorized)
 		return fmt.Errorf("session required")
 	}
@@ -124,7 +162,8 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 		// Get step-up window duration from settings
 		stepUpWindow := 10 * time.Minute // Default
 		if h.settingsService != nil {
-			if settings, err := h.settingsService.GetMFASettings(); err == nil && settings != nil && settings.StepUpWindowMinutes > 0 {
+			if settings, err := h.settingsService.GetMFASettings(); err == nil && settings != nil &&
+				settings.StepUpWindowMinutes > 0 {
 				stepUpWindow = time.Duration(settings.StepUpWindowMinutes) * time.Minute
 			}
 		}
@@ -136,7 +175,15 @@ func (h *Handler) verifyMFAIfRequired(r *http.Request, w http.ResponseWriter, au
 	}
 
 	// MFA required but not provided or expired
-	h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusUnauthorized, time.Since(start), fmt.Errorf("MFA required for this action"))
+	h.auditLogger.LogRequest(
+		r,
+		authUser.Email,
+		rackConfig.Name,
+		"deny",
+		http.StatusUnauthorized,
+		time.Since(start),
+		fmt.Errorf("MFA required for this action"),
+	)
 	w.Header().Set("X-MFA-Required", "true")
 	w.Header().Set("X-MFA-Level", mfaLevel.String())
 	http.Error(w, "Multi-factor authentication is required for this action", http.StatusUnauthorized)

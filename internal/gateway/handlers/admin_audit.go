@@ -53,9 +53,25 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 		case errors.Is(err, errInvalidEndTime):
 			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "invalid end time", start, nil)
 		case errors.Is(err, errInvalidTimeRange):
-			h.respondAuditError(c, http.StatusBadRequest, "audit.list", "", "end time must be after start time", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				"audit.list",
+				"",
+				"end time must be after start time",
+				start,
+				nil,
+			)
 		default:
-			h.respondAuditError(c, http.StatusInternalServerError, "audit.list", "", "failed to fetch audit logs", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusInternalServerError,
+				"audit.list",
+				"",
+				"failed to fetch audit logs",
+				start,
+				nil,
+			)
 		}
 		return
 	}
@@ -114,9 +130,25 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 		case errors.Is(err, errInvalidEndTime):
 			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "invalid end time", start, nil)
 		case errors.Is(err, errInvalidTimeRange):
-			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "end time must be after start time", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				"audit.export",
+				"",
+				"end time must be after start time",
+				start,
+				nil,
+			)
 		default:
-			h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to fetch logs", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusInternalServerError,
+				"audit.export",
+				"",
+				"failed to fetch logs",
+				start,
+				nil,
+			)
 		}
 		return
 	}
@@ -134,7 +166,10 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 
 	// Set CSV headers
 	c.Header("Content-Type", "text/csv")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"audit-logs-%s.csv\"", time.Now().Format("2006-01-02")))
+	c.Header(
+		"Content-Disposition",
+		fmt.Sprintf("attachment; filename=\"audit-logs-%s.csv\"", time.Now().Format("2006-01-02")),
+	)
 
 	// Write CSV
 	writer := csv.NewWriter(c.Writer)
@@ -147,7 +182,15 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 		"min_response_ms", "max_response_ms", "avg_response_ms", "ip_address", "user_agent",
 	}
 	if err := writer.Write(header); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to write CSV header", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"audit.export",
+			"",
+			"failed to write CSV header",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -173,7 +216,15 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 			log.UserAgent,
 		}
 		if err := writer.Write(row); err != nil {
-			h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to write CSV row", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusInternalServerError,
+				"audit.export",
+				"",
+				"failed to write CSV row",
+				start,
+				nil,
+			)
 			return
 		}
 	}
@@ -191,7 +242,13 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, buildAuditDetails(filters, baseDetails), start)
 }
 
-func (h *AdminHandler) auditAdminAction(c *gin.Context, action, resource, status string, httpStatus int, details map[string]interface{}, start time.Time) {
+func (h *AdminHandler) auditAdminAction(
+	c *gin.Context,
+	action, resource, status string,
+	httpStatus int,
+	details map[string]interface{},
+	start time.Time,
+) {
 	if h == nil || h.database == nil {
 		return
 	}
@@ -294,7 +351,14 @@ func buildAuditDetails(filters db.AuditLogFilters, base map[string]interface{}) 
 	return details
 }
 
-func (h *AdminHandler) respondAudit(c *gin.Context, statusCode int, payload interface{}, action, resource, auditStatus string, start time.Time, details map[string]interface{}) {
+func (h *AdminHandler) respondAudit(
+	c *gin.Context,
+	statusCode int,
+	payload interface{},
+	action, resource, auditStatus string,
+	start time.Time,
+	details map[string]interface{},
+) {
 	if payload == nil {
 		c.Status(statusCode)
 	} else {
@@ -303,11 +367,24 @@ func (h *AdminHandler) respondAudit(c *gin.Context, statusCode int, payload inte
 	h.auditAdminAction(c, action, resource, auditStatus, statusCode, details, start)
 }
 
-func (h *AdminHandler) respondAuditSuccess(c *gin.Context, statusCode int, payload interface{}, action, resource string, start time.Time, details map[string]interface{}) {
+func (h *AdminHandler) respondAuditSuccess(
+	c *gin.Context,
+	statusCode int,
+	payload interface{},
+	action, resource string,
+	start time.Time,
+	details map[string]interface{},
+) {
 	h.respondAudit(c, statusCode, payload, action, resource, "success", start, details)
 }
 
-func (h *AdminHandler) respondAuditError(c *gin.Context, statusCode int, action, resource, message string, start time.Time, details map[string]interface{}) {
+func (h *AdminHandler) respondAuditError(
+	c *gin.Context,
+	statusCode int,
+	action, resource, message string,
+	start time.Time,
+	details map[string]interface{},
+) {
 	det := cloneDetails(details)
 	if det == nil {
 		det = make(map[string]interface{})

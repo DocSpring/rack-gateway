@@ -104,11 +104,22 @@ func normalizeEnvKey(value string) (string, string, bool) {
 	return trim, upper, true
 }
 
-func (h *APIHandler) fetchEnvMap(c *gin.Context, scope, app string, rackConfig config.RackConfig, tlsCfg *tls.Config) (map[string]string, bool) {
+func (h *APIHandler) fetchEnvMap(
+	c *gin.Context,
+	scope, app string,
+	rackConfig config.RackConfig,
+	tlsCfg *tls.Config,
+) (map[string]string, bool) {
 	envMap, err := envutil.FetchLatestEnvMap(rackConfig, app, tlsCfg)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-			log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s","app":"%s"}`, scope, fpErr.Expected, fpErr.Actual, app)
+			log.Printf(
+				`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s","app":"%s"}`,
+				scope,
+				fpErr.Expected,
+				fpErr.Actual,
+				app,
+			)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "rack certificate verification failed"})
 			return nil, false
 		}
@@ -136,7 +147,12 @@ func maskEnvForResponse(values map[string]string, secretKeys []string, canViewSe
 	return response
 }
 
-func (h *APIHandler) logEnvUpdateDiffs(c *gin.Context, app, email, name string, diffs []envutil.EnvDiff, elapsed time.Duration) {
+func (h *APIHandler) logEnvUpdateDiffs(
+	c *gin.Context,
+	app, email, name string,
+	diffs []envutil.EnvDiff,
+	elapsed time.Duration,
+) {
 	if h == nil || h.database == nil || len(diffs) == 0 {
 		return
 	}
@@ -346,7 +362,13 @@ func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
 		return
 	}
 
-	releaseID, err := envutil.CreateReleaseWithEnv(c.Request.Context(), ctx.rackConfig, ctx.tlsCfg, ctx.app, envutil.BuildEnvString(merged))
+	releaseID, err := envutil.CreateReleaseWithEnv(
+		c.Request.Context(),
+		ctx.rackConfig,
+		ctx.tlsCfg,
+		ctx.app,
+		envutil.BuildEnvString(merged),
+	)
 	if err != nil {
 		log.Printf(`{"level":"error","event":"env_update_release_failed","app":%q,"error":%q}`, ctx.app, err.Error())
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to create release"})
@@ -475,5 +497,8 @@ func (h *APIHandler) respondNoEnvChanges(c *gin.Context, ctx *envUpdateContext, 
 		ResponseTimeMs: ms,
 	})
 
-	c.JSON(http.StatusOK, UpdateEnvValuesResponse{Env: maskEnvForResponse(merged, ctx.extraSecrets, ctx.canViewSecrets)})
+	c.JSON(
+		http.StatusOK,
+		UpdateEnvValuesResponse{Env: maskEnvForResponse(merged, ctx.extraSecrets, ctx.canViewSecrets)},
+	)
 }

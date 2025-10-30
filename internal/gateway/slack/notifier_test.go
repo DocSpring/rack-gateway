@@ -49,7 +49,15 @@ func TestNotifyAuditEvent_NoMatchingChannels(t *testing.T) {
 		},
 	}
 	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
-	_, err = database.CreateSlackIntegration("T123", "Test", botToken, "U123", "channels:read,chat:write", channelActions, &user.ID)
+	_, err = database.CreateSlackIntegration(
+		"T123",
+		"Test",
+		botToken,
+		"U123",
+		"channels:read,chat:write",
+		channelActions,
+		&user.ID,
+	)
 	require.NoError(t, err)
 
 	notifier := NewNotifier(database)
@@ -106,9 +114,13 @@ func TestMatchActionToChannels(t *testing.T) {
 			"actions": []interface{}{"mfa_method.*", "auth.*", "api-token.*"},
 		},
 		"infrastructure": map[string]interface{}{
-			"id":      "C222",
-			"name":    "#infrastructure",
-			"actions": []interface{}{"deploy-approval-request.*", audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionPromote.String()), "*.created"},
+			"id":   "C222",
+			"name": "#infrastructure",
+			"actions": []interface{}{
+				"deploy-approval-request.*",
+				audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionPromote.String()),
+				"*.created",
+			},
 		},
 		"no-id": map[string]interface{}{
 			"id":      nil,
@@ -160,8 +172,11 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				Timestamp: time.Now(),
 				Details:   "TOTP enrolled",
 			},
-			expectEmoji:   "🔐",
-			expectInText:  []string{audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll), "user@example.com"},
+			expectEmoji: "🔐",
+			expectInText: []string{
+				audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
+				"user@example.com",
+			},
 			expectInBlock: []string{"Test User", audit.StatusSuccess, "TOTP enrolled"},
 		},
 		{
@@ -173,8 +188,11 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				IPAddress: "192.168.1.1",
 				Timestamp: time.Now(),
 			},
-			expectEmoji:   "🚨",
-			expectInText:  []string{audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed), "hacker@example.com"},
+			expectEmoji: "🚨",
+			expectInText: []string{
+				audit.BuildAction(audit.ActionScopeLogin, audit.ActionVerbOAuthFailed),
+				"hacker@example.com",
+			},
 			expectInBlock: []string{audit.StatusFailed, "192.168.1.1"},
 		},
 		{
@@ -201,8 +219,11 @@ func TestFormatAuditLogMessage(t *testing.T) {
 				Status:       audit.StatusSuccess,
 				Timestamp:    time.Now(),
 			},
-			expectEmoji:   "🔑",
-			expectInText:  []string{audit.BuildAction(rbac.ResourceAPIToken.String(), "created"), "API Token: ci-token"},
+			expectEmoji: "🔑",
+			expectInText: []string{
+				audit.BuildAction(rbac.ResourceAPIToken.String(), "created"),
+				"API Token: ci-token",
+			},
 			expectInBlock: []string{audit.StatusSuccess},
 		},
 	}

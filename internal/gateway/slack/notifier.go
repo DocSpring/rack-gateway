@@ -136,7 +136,8 @@ func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[s
 		emoji = "👤"
 	}
 
-	if auditLog.Status == audit.StatusDenied || auditLog.Status == audit.StatusError || auditLog.Status == audit.StatusFailed {
+	if auditLog.Status == audit.StatusDenied || auditLog.Status == audit.StatusError ||
+		auditLog.Status == audit.StatusFailed {
 		if emoji == "📝" {
 			emoji = "❌"
 		}
@@ -278,7 +279,10 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 }
 
 // formatDeployApprovalAlert formats a deploy approval request into a rich Slack message
-func (n *Notifier) formatDeployApprovalAlert(req *db.DeployApprovalRequest, gatewayDomain string) (string, []map[string]interface{}) {
+func (n *Notifier) formatDeployApprovalAlert(
+	req *db.DeployApprovalRequest,
+	gatewayDomain string,
+) (string, []map[string]interface{}) {
 	branchText := deployApprovalBranch(req)
 	text := deployApprovalFallbackText(branchText, req.Message)
 
@@ -358,7 +362,11 @@ func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayDomain strin
 	elements := []map[string]interface{}{
 		{
 			"type": "mrkdwn",
-			"text": fmt.Sprintf("🔗 <https://%s/app/deploy-approvals/%s|View Approval Request>", gatewayDomain, req.PublicID),
+			"text": fmt.Sprintf(
+				"🔗 <https://%s/app/deploy-approvals/%s|View Approval Request>",
+				gatewayDomain,
+				req.PublicID,
+			),
 		},
 	}
 
@@ -415,7 +423,11 @@ func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interf
 			},
 			{
 				"type": "mrkdwn",
-				"text": fmt.Sprintf("<!date^%d^{date_short_pretty} at {time}|%s>", req.CreatedAt.Unix(), req.CreatedAt.Format(time.RFC3339)),
+				"text": fmt.Sprintf(
+					"<!date^%d^{date_short_pretty} at {time}|%s>",
+					req.CreatedAt.Unix(),
+					req.CreatedAt.Format(time.RFC3339),
+				),
 			},
 		},
 	}

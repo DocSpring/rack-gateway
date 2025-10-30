@@ -53,7 +53,7 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
-    if err := a.initRBACManager(); err != nil {
+	if err := a.initRBACManager(); err != nil {
 		return err
 	}
 
@@ -375,7 +375,19 @@ func (a *App) initProxyHandler(auditLogger *audit.Logger, rackName, rackAlias st
 		pinnedMgr = nil
 	}
 
-	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
+	a.ProxyHandler = proxy.NewHandler(
+		a.Config,
+		a.RBACManager,
+		auditLogger,
+		a.Database,
+		a.SettingsService,
+		a.EmailSender,
+		rackName,
+		rackAlias,
+		pinnedMgr,
+		a.MFAService,
+		a.SessionManager,
+	)
 	a.DefaultRack = rackAlias
 }
 

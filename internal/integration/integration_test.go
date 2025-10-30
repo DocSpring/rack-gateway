@@ -49,7 +49,9 @@ func TestIntegration(t *testing.T) {
 
 	// Check if convox CLI is installed - this is a required dependency
 	if _, err := exec.LookPath("convox"); err != nil {
-		t.Fatal("CRITICAL: Convox CLI is not installed. The rack-gateway requires the convox CLI to be installed. Install it from https://docs.convox.com/installation/cli/")
+		t.Fatal(
+			"CRITICAL: Convox CLI is not installed. The rack-gateway requires the convox CLI to be installed. Install it from https://docs.convox.com/installation/cli/",
+		)
 	}
 
 	// Check that binaries exist (should be built by task build before running tests)
@@ -381,7 +383,13 @@ func testAdminEndpointProtection(t *testing.T, s *TestServers) {
 
 // Helper function to create a test session token and store it in the database
 // Returns the session token and TOTP secret for generating MFA codes
-func createTestSession(t *testing.T, database *db.Database, email string, roles []string, expiresIn time.Duration) (string, string) {
+func createTestSession(
+	t *testing.T,
+	database *db.Database,
+	email string,
+	roles []string,
+	expiresIn time.Duration,
+) (string, string) {
 	// Create user if doesn't exist
 	user, err := database.GetUser(email)
 	if err != nil || user == nil {
@@ -617,7 +625,13 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "viewer should be blocked from stopping processes")
-		assert.True(t, strings.Contains(string(output), "You don't have permission to stop processes.") || strings.Contains(string(output), "MFA"), "should be blocked: %s", output)
+		assert.True(
+			t,
+			strings.Contains(string(output), "You don't have permission to stop processes.") ||
+				strings.Contains(string(output), "MFA"),
+			"should be blocked: %s",
+			output,
+		)
 	})
 
 	// Test 2: Ops role - should be blocked from deployment operations
@@ -632,7 +646,13 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		require.Error(t, err, "ops should be blocked from deploying")
 		msg := string(output)
-		assert.True(t, strings.Contains(msg, "You don't have permission to promote releases.") || strings.Contains(msg, "permission denied") || strings.Contains(msg, "MFA"), "should be blocked: %s", msg)
+		assert.True(
+			t,
+			strings.Contains(msg, "You don't have permission to promote releases.") || strings.Contains(msg, "permission denied") ||
+				strings.Contains(msg, "MFA"),
+			"should be blocked: %s",
+			msg,
+		)
 
 		// Try to create an app (should be blocked)
 		cmd = exec.Command("../../bin/rack-gateway", "apps", "create", "newapp")
@@ -641,7 +661,12 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "ops should be blocked from creating apps")
-		assert.True(t, strings.Contains(string(output), "permission denied") || strings.Contains(string(output), "MFA"), "should be blocked: %s", output)
+		assert.True(
+			t,
+			strings.Contains(string(output), "permission denied") || strings.Contains(string(output), "MFA"),
+			"should be blocked: %s",
+			output,
+		)
 
 		// Try to update environment variables (should be blocked)
 		cmd = exec.Command("../../bin/rack-gateway", "env", "set", "KEY=value", "-a", "myapp")
@@ -650,7 +675,13 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		output, err = cmd.CombinedOutput()
 
 		require.Error(t, err, "ops should be blocked from setting env vars")
-		assert.True(t, strings.Contains(string(output), "You don't have permission to promote releases.") || strings.Contains(string(output), "MFA"), "should be blocked: %s", output)
+		assert.True(
+			t,
+			strings.Contains(string(output), "You don't have permission to promote releases.") ||
+				strings.Contains(string(output), "MFA"),
+			"should be blocked: %s",
+			output,
+		)
 	})
 
 	// Test 4: Unknown/unregistered user - should be blocked from everything

@@ -169,7 +169,12 @@ func runMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMethodRe
 	return nil
 }
 
-func tryMFAMethods(cmd *cobra.Command, baseURL, bearer string, ordered []MFAMethodResponse, all []MFAMethodResponse) error {
+func tryMFAMethods(
+	cmd *cobra.Command,
+	baseURL, bearer string,
+	ordered []MFAMethodResponse,
+	all []MFAMethodResponse,
+) error {
 	for _, method := range ordered {
 		fmt.Printf("\nAttempting %s authentication...\n", method.Type)
 		if err := testMFAMethod(cmd, baseURL, bearer, method, all); err != nil {
@@ -228,7 +233,12 @@ func testWebAuthnAuth(baseURL, bearer string, status *MFAStatusResponse) error {
 	return nil
 }
 
-func testMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, allMethods []MFAMethodResponse) error {
+func testMFAMethod(
+	cmd *cobra.Command,
+	baseURL, bearer string,
+	method MFAMethodResponse,
+	allMethods []MFAMethodResponse,
+) error {
 	// Use unified MFA verification module
 	return verifyMFAMethod(cmd, baseURL, bearer, method, allMethods)
 }

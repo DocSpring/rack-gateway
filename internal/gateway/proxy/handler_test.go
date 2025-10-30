@@ -36,7 +36,19 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.Manager)
 			Enabled:  true,
 		},
 	}}
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{}, "default", "default", nil, nil, nil)
+	h := NewHandler(
+		cfg,
+		mgr,
+		audit.NewLogger(database),
+		database,
+		settings.NewService(database),
+		email.NoopSender{},
+		"default",
+		"default",
+		nil,
+		nil,
+		nil,
+	)
 	return h, database, mgr
 }
 
@@ -59,7 +71,19 @@ func newProxyWithRackServer(t *testing.T, rackHandler http.HandlerFunc) (*Handle
 		},
 	}}
 
-	h := NewHandler(cfg, mgr, audit.NewLogger(database), database, settings.NewService(database), email.NoopSender{}, "default", "default", nil, nil, nil)
+	h := NewHandler(
+		cfg,
+		mgr,
+		audit.NewLogger(database),
+		database,
+		settings.NewService(database),
+		email.NoopSender{},
+		"default",
+		"default",
+		nil,
+		nil,
+		nil,
+	)
 
 	cleanup := func() {
 		ts.Close()
@@ -145,7 +169,10 @@ func TestAPITokenPermission_Check(t *testing.T) {
 
 func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 	h, database, mgr := newProxyForCreatorTest(t)
-	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+	)
 
 	cases := []struct {
 		name         string
@@ -182,12 +209,20 @@ func TestCaptureResourceCreatorStoresMappings(t *testing.T) {
 
 func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	h, database, mgr := newProxyForCreatorTest(t)
-	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", nil)
 	req.Header = make(http.Header)
 
-	h.captureResourceCreator(req, "/apps/my-app/builds", []byte(`{"id":"B123","release":"R456"}`), "creator@example.com")
+	h.captureResourceCreator(
+		req,
+		"/apps/my-app/builds",
+		[]byte(`{"id":"B123","release":"R456"}`),
+		"creator@example.com",
+	)
 
 	creators, err := database.GetResourceCreators("release", []string{"R456"})
 	require.NoError(t, err)
@@ -199,7 +234,12 @@ func TestCaptureResourceCreatorRecordsReleaseFromBuild(t *testing.T) {
 	// Subsequent GET for the same build should not enqueue duplicates
 	reqGet := httptest.NewRequest(http.MethodGet, "/apps/my-app/builds/B123", nil)
 	reqGet.Header = make(http.Header)
-	h.captureResourceCreator(reqGet, "/apps/my-app/builds/B123", []byte(`{"id":"B123","release":"R456"}`), "creator@example.com")
+	h.captureResourceCreator(
+		reqGet,
+		"/apps/my-app/builds/B123",
+		[]byte(`{"id":"B123","release":"R456"}`),
+		"creator@example.com",
+	)
 	require.Empty(t, reqGet.Header.Values("X-Release-Created"))
 }
 
@@ -212,7 +252,10 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	})
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rackHandler)
 	defer cleanup()
-	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -227,7 +270,15 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 
 	assertResourceCreator(t, database, "build", "B321", "creator@example.com")
 	assertResourceCreator(t, database, "release", "R654", "creator@example.com")
-	assertAuditLogEntry(t, database, "creator@example.com", audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionCreate.String()), "R654", "release", "success")
+	assertAuditLogEntry(
+		t,
+		database,
+		"creator@example.com",
+		audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionCreate.String()),
+		"R654",
+		"release",
+		"success",
+	)
 }
 
 func TestLogEnvDiffsLogsUnset(t *testing.T) {
@@ -236,14 +287,20 @@ func TestLogEnvDiffsLogsUnset(t *testing.T) {
 	req.Header.Set("X-User-Name", "Tester")
 	req.RemoteAddr = "127.0.0.1:1234"
 
-	h.logEnvDiffs(req, "user@example.com", "default", []envutil.EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}})
+	h.logEnvDiffs(
+		req,
+		"user@example.com",
+		"default",
+		[]envutil.EnvDiff{{Key: "FOO", OldVal: "bar", NewVal: "", Secret: false}},
+	)
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
 	require.NoError(t, err)
 	require.NotEmpty(t, logs)
 	found := false
 	for _, log := range logs {
-		if log.Action == audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset) && log.Resource == "my-app/FOO" {
+		if log.Action == audit.BuildAction(rbac.ResourceEnv.String(), audit.ActionVerbUnset) &&
+			log.Resource == "my-app/FOO" {
 			found = true
 			break
 		}
@@ -257,14 +314,20 @@ func TestLogEnvDiffsLogsSecretUnset(t *testing.T) {
 	req.Header.Set("X-User-Name", "Tester")
 	req.RemoteAddr = "127.0.0.1:1234"
 
-	h.logEnvDiffs(req, "user@example.com", "default", []envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}})
+	h.logEnvDiffs(
+		req,
+		"user@example.com",
+		"default",
+		[]envutil.EnvDiff{{Key: "SECRET_KEY", OldVal: "value", NewVal: "", Secret: true}},
+	)
 
 	logs, err := database.GetAuditLogs("user@example.com", time.Time{}, 10)
 	require.NoError(t, err)
 	require.NotEmpty(t, logs)
 	found := false
 	for _, log := range logs {
-		if log.Action == audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset) && log.Resource == "my-app/SECRET_KEY" {
+		if log.Action == audit.BuildAction(rbac.ResourceSecret.String(), audit.ActionVerbUnset) &&
+			log.Resource == "my-app/SECRET_KEY" {
 			found = true
 			break
 		}
@@ -283,7 +346,10 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 
 	h, database, mgr, cleanup := newProxyWithRackServer(t, rackHandler)
 	defer cleanup()
-	require.NoError(t, mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("creator@example.com", &rbac.UserConfig{Name: "Creator", Roles: []string{"deployer"}}),
+	)
 
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"foo":"bar"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -318,7 +384,11 @@ func assertResourceCreator(t *testing.T, database *db.Database, resourceType, re
 	require.Equal(t, expectedEmail, info.Email)
 }
 
-func assertAuditLogEntry(t *testing.T, database *db.Database, userEmail, action, resource, resourceType, status string) {
+func assertAuditLogEntry(
+	t *testing.T,
+	database *db.Database,
+	userEmail, action, resource, resourceType, status string,
+) {
 	t.Helper()
 
 	logs, err := database.GetAuditLogs(userEmail, time.Time{}, 20)

@@ -126,7 +126,16 @@ func buildsImportCommand() *cobra.Command {
 }
 
 func runBuildCommand(cobraCmd *cobra.Command, args []string) error {
-	client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "build", "app", "description", "file", "manifest", "no-cache")
+	client, ctx, err := setupConvoxWithMFAAction(
+		cobraCmd,
+		args,
+		"build",
+		"app",
+		"description",
+		"file",
+		"manifest",
+		"no-cache",
+	)
 	if err != nil {
 		return err
 	}

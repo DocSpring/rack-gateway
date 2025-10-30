@@ -42,7 +42,12 @@ type MergeOptions struct {
 
 // MergeEnv applies the supplied set/remove operations to the base environment map
 // and returns the merged environment alongside a list of diffs suitable for auditing.
-func MergeEnv(base map[string]string, set map[string]string, remove []string, opts MergeOptions) (map[string]string, []EnvDiff, error) {
+func MergeEnv(
+	base map[string]string,
+	set map[string]string,
+	remove []string,
+	opts MergeOptions,
+) (map[string]string, []EnvDiff, error) {
 	merged := make(map[string]string, len(base))
 	removedOld := make(map[string]string, len(remove))
 	for k, v := range base {
@@ -165,7 +170,12 @@ func BuildEnvString(env map[string]string) string {
 }
 
 // CreateReleaseWithEnv posts a new release to the rack with the supplied env payload and returns the release id.
-func CreateReleaseWithEnv(ctx context.Context, rack config.RackConfig, tlsConfig *tls.Config, app, env string) (string, error) {
+func CreateReleaseWithEnv(
+	ctx context.Context,
+	rack config.RackConfig,
+	tlsConfig *tls.Config,
+	app, env string,
+) (string, error) {
 	base := strings.TrimRight(rack.URL, "/")
 	if base == "" {
 		return "", fmt.Errorf("rack URL is empty")
@@ -179,7 +189,12 @@ func CreateReleaseWithEnv(ctx context.Context, rack config.RackConfig, tlsConfig
 	vals := url.Values{}
 	vals.Set("env", env)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/apps/%s/releases", base, app), strings.NewReader(vals.Encode()))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("%s/apps/%s/releases", base, app),
+		strings.NewReader(vals.Encode()),
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to build release request: %w", err)
 	}

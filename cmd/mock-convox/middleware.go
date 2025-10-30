@@ -113,7 +113,14 @@ func logResponse(sr *statusRecorder, r *http.Request, start time.Time) {
 		mclog.DebugTopicf(mclog.TopicHTTPResponse, "body (%d bytes): %s", len(sr.body), preview)
 	}
 	if mclog.TopicEnabled(mclog.TopicHTTP) {
-		mclog.DebugTopicf(mclog.TopicHTTP, "response %d %s %s in %s", sr.status, r.Method, r.URL.String(), time.Since(start))
+		mclog.DebugTopicf(
+			mclog.TopicHTTP,
+			"response %d %s %s in %s",
+			sr.status,
+			r.Method,
+			r.URL.String(),
+			time.Since(start),
+		)
 	}
 }
 

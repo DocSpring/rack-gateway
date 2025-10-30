@@ -94,7 +94,14 @@ func serviceProcesses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = r.Body.Close()
-	mclog.DebugTopicf(mclog.TopicAppProcesses, "start app=%s service=%s query=%q body=%q", app, service, r.URL.RawQuery, rawBody)
+	mclog.DebugTopicf(
+		mclog.TopicAppProcesses,
+		"start app=%s service=%s query=%q body=%q",
+		app,
+		service,
+		r.URL.RawQuery,
+		rawBody,
+	)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)

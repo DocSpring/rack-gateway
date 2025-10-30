@@ -35,15 +35,30 @@ func newAllowAllRBAC(users ...*db.User) *allowAllRBAC {
 	return &allowAllRBAC{users: m}
 }
 
-func (a *allowAllRBAC) Enforce(userEmail string, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+func (a *allowAllRBAC) Enforce(
+	userEmail string,
+	scope rbac.Scope,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
 	return true, nil
 }
 
-func (a *allowAllRBAC) EnforceUser(user *db.User, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+func (a *allowAllRBAC) EnforceUser(
+	user *db.User,
+	scope rbac.Scope,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
 	return true, nil
 }
 
-func (a *allowAllRBAC) EnforceForAPIToken(tokenID int64, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+func (a *allowAllRBAC) EnforceForAPIToken(
+	tokenID int64,
+	scope rbac.Scope,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
 	return true, nil
 }
 

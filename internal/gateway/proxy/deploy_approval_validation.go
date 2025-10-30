@@ -146,6 +146,11 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 	err := h.database.UpdateDeployApprovalRequestBuild(ctx.approvalID, buildID, releaseID)
 	if err != nil {
 		// Log error but don't fail the request - build already succeeded
-		gtwlog.Warnf("proxy: failed to update deploy approval tracking build_id=%s release_id=%s: %v", buildID, releaseID, err)
+		gtwlog.Warnf(
+			"proxy: failed to update deploy approval tracking build_id=%s release_id=%s: %v",
+			buildID,
+			releaseID,
+			err,
+		)
 	}
 }

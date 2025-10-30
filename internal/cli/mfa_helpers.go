@@ -132,7 +132,12 @@ func preferredMFAMethod(status *MFAStatusResponse) (MFAMethodResponse, bool) {
 	return MFAMethodResponse{}, false
 }
 
-func collectMFAAuth(cmd *cobra.Command, baseURL, bearer, rack string, method MFAMethodResponse, allMethods []MFAMethodResponse) (string, error) {
+func collectMFAAuth(
+	cmd *cobra.Command,
+	baseURL, bearer, rack string,
+	method MFAMethodResponse,
+	allMethods []MFAMethodResponse,
+) (string, error) {
 	out := cmd.ErrOrStderr()
 
 	switch method.Type {

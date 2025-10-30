@@ -36,7 +36,15 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.Email), err.Error(), start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+			strings.TrimSpace(req.Email),
+			err.Error(),
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -50,7 +58,15 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 			}
 		}
 		if !matched {
-			h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.Email), fmt.Sprintf("invalid role: %s", role), start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+				strings.TrimSpace(req.Email),
+				fmt.Sprintf("invalid role: %s", role),
+				start,
+				nil,
+			)
 			return
 		}
 	}
@@ -62,10 +78,26 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	if err := h.rbac.SaveUser(req.Email, userConfig); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			h.respondAuditError(c, http.StatusConflict, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.Email), "user already exists", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusConflict,
+				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+				strings.TrimSpace(req.Email),
+				"user already exists",
+				start,
+				nil,
+			)
 			return
 		}
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.Email), "failed to create user", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+			strings.TrimSpace(req.Email),
+			"failed to create user",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -96,7 +128,15 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		details["name"] = req.Name
 	}
 
-	h.respondAuditSuccess(c, http.StatusCreated, payload, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()), resource, start, details)
+	h.respondAuditSuccess(
+		c,
+		http.StatusCreated,
+		payload,
+		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+		resource,
+		start,
+		details,
+	)
 
 	h.notifyUserCreated(c, req)
 }

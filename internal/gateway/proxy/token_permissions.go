@@ -63,9 +63,18 @@ func tokenHasPermission(perms []string, target string) bool {
 // evaluateAPITokenPermission evaluates whether an API token has permission for the request.
 // Returns (allowed, approvalTracker, error). If deploy_with_approval grants access, it returns
 // the approval tracker in the context for downstream validation.
-func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.AuthUser, rack config.RackConfig, resource rbac.Resource, action rbac.Action) (bool, *deployApprovalTracker, error) {
+func (h *Handler) evaluateAPITokenPermission(
+	r *http.Request,
+	authUser *auth.AuthUser,
+	rack config.RackConfig,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, *deployApprovalTracker, error) {
 	deny := func() (bool, *deployApprovalTracker, error) {
-		return false, nil, &deployApprovalError{status: http.StatusForbidden, message: forbiddenMessage(resource, action)}
+		return false, nil, &deployApprovalError{
+			status:  http.StatusForbidden,
+			message: forbiddenMessage(resource, action),
+		}
 	}
 
 	// Must be an API token
@@ -181,7 +190,13 @@ func (h *Handler) evaluateAPITokenPermission(r *http.Request, authUser *auth.Aut
 	case resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate):
 		// Process exec/terminate requires the process ID to be in an approved deployment's process_ids
 		processID := extractProcessIDFromPath(r.URL.Path)
-		log.Printf("DEBUG: process %s - checking permission for tokenID=%d app=%s processID=%s", action, *authUser.TokenID, app, processID)
+		log.Printf(
+			"DEBUG: process %s - checking permission for tokenID=%d app=%s processID=%s",
+			action,
+			*authUser.TokenID,
+			app,
+			processID,
+		)
 		if processID == "" {
 			log.Printf("DEBUG: process %s - denied: empty processID", action)
 			return deny()

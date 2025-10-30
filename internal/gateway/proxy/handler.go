@@ -53,7 +53,18 @@ type Handler struct {
 const maskedSecret = envutil.MaskedSecret
 
 // NewHandler constructs a proxy handler with all required dependencies.
-func NewHandler(cfg *config.Config, rbacManager rbac.Manager, auditLogger *audit.Logger, database *db.Database, settingsService *settings.Service, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {
+func NewHandler(
+	cfg *config.Config,
+	rbacManager rbac.Manager,
+	auditLogger *audit.Logger,
+	database *db.Database,
+	settingsService *settings.Service,
+	mailer email.Sender,
+	rackName, rackAlias string,
+	rackCertManager *rackcert.Manager,
+	mfaService *mfa.Service,
+	sessionManager *auth.SessionManager,
+) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
@@ -102,7 +113,12 @@ func logRackTLSMismatch(scope string, err *rackcert.FingerprintMismatchError) {
 	if err == nil {
 		return
 	}
-	log.Printf(`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s"}`, scope, err.Expected, err.Actual)
+	log.Printf(
+		`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s"}`,
+		scope,
+		err.Expected,
+		err.Actual,
+	)
 }
 
 func (h *Handler) rackDisplay() string {
@@ -160,7 +176,8 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 
 	// Before any RBAC/audit, enforce an allowlist of Convox API paths.
 	methodForAllow := r.Method
-	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
+		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForAllow = "SOCKET"
 	}
 	if _, _, ok := rbac.MatchRackRoute(methodForAllow, rackPath); !ok {
@@ -176,12 +193,21 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		err             error
 	)
 	methodForRBAC := r.Method
-	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
+		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		methodForRBAC = "SOCKET"
 	}
 	resource, action, ok := rbac.MatchRackRoute(methodForRBAC, rackPath)
 	if !ok {
-		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusNotFound, time.Since(start), fmt.Errorf("unknown route: %s %s", methodForRBAC, path))
+		h.auditLogger.LogRequest(
+			r,
+			authUser.Email,
+			rackConfig.Name,
+			"deny",
+			http.StatusNotFound,
+			time.Since(start),
+			fmt.Errorf("unknown route: %s %s", methodForRBAC, path),
+		)
 		http.NotFound(w, r)
 		return
 	}
@@ -190,11 +216,26 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		allowed, approvalTracker, err = h.evaluateAPITokenPermission(r, authUser, rackConfig, resource, action)
 		if err != nil {
 			if appErr, ok := err.(*deployApprovalError); ok {
-				h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", appErr.status, time.Since(start), errors.New(appErr.message))
+				h.auditLogger.LogRequest(
+					r,
+					authUser.Email,
+					rackConfig.Name,
+					"deny",
+					appErr.status,
+					time.Since(start),
+					errors.New(appErr.message),
+				)
 				http.Error(w, appErr.message, appErr.status)
 				return
 			}
-			h.handleError(w, r, "failed to validate deploy approval", http.StatusInternalServerError, rackConfig.Name, start)
+			h.handleError(
+				w,
+				r,
+				"failed to validate deploy approval",
+				http.StatusInternalServerError,
+				rackConfig.Name,
+				start,
+			)
 			return
 		}
 	} else {
@@ -231,7 +272,14 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 				logRackTLSMismatch("env_fetch", fpErr)
-				h.handleError(w, r, "rack certificate verification failed", http.StatusBadGateway, rackConfig.Name, start)
+				h.handleError(
+					w,
+					r,
+					"rack certificate verification failed",
+					http.StatusBadGateway,
+					rackConfig.Name,
+					start,
+				)
 				return
 			}
 			h.handleError(w, r, err.Error(), http.StatusBadRequest, rackConfig.Name, start)
@@ -253,7 +301,15 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !allowed {
-		h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("permission denied for %s %s", r.Method, path))
+		h.auditLogger.LogRequest(
+			r,
+			authUser.Email,
+			rackConfig.Name,
+			"deny",
+			http.StatusForbidden,
+			time.Since(start),
+			fmt.Errorf("permission denied for %s %s", r.Method, path),
+		)
 		http.Error(w, forbiddenMessage(resource, action), http.StatusForbidden)
 		return
 	}
@@ -268,7 +324,15 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	if !allowDestructive {
 		if isDestructive(methodForRBAC, resource, action) {
 			// Log as denied (RBAC) for consistency
-			h.auditLogger.LogRequest(r, authUser.Email, rackConfig.Name, "deny", http.StatusForbidden, time.Since(start), fmt.Errorf("destructive actions are disabled by policy"))
+			h.auditLogger.LogRequest(
+				r,
+				authUser.Email,
+				rackConfig.Name,
+				"deny",
+				http.StatusForbidden,
+				time.Since(start),
+				fmt.Errorf("destructive actions are disabled by policy"),
+			)
 			http.Error(w, "Destructive rack actions are disabled by policy", http.StatusForbidden)
 			return
 		}
@@ -279,14 +343,29 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
 		if action == "unknown" || resource == "unknown" {
 			errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s", r.Method, r.URL.Path)
-			log.Printf(`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s"}`, errorMsg, r.Method, r.URL.Path, action, resource)
+			log.Printf(
+				`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s"}`,
+				errorMsg,
+				r.Method,
+				r.URL.Path,
+				action,
+				resource,
+			)
 			h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackConfig.Name, start)
 			return
 		}
 		resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
 		if resourceType == "unknown" {
 			errorMsg := fmt.Sprintf("cannot determine resource type for %s %s", r.Method, r.URL.Path)
-			log.Printf(`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s","resource_type":"%s"}`, errorMsg, r.Method, r.URL.Path, action, resource, resourceType)
+			log.Printf(
+				`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s","resource_type":"%s"}`,
+				errorMsg,
+				r.Method,
+				r.URL.Path,
+				action,
+				resource,
+				resourceType,
+			)
 			h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackConfig.Name, start)
 			return
 		}
@@ -411,7 +490,14 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	r.Header.Del("X-Release-Created")
 }
 
-func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, message string, status int, rack string, start time.Time) {
+func (h *Handler) handleError(
+	w http.ResponseWriter,
+	r *http.Request,
+	message string,
+	status int,
+	rack string,
+	start time.Time,
+) {
 	userEmail := "anonymous"
 	if authUser, ok := auth.GetAuthUser(r.Context()); ok {
 		userEmail = authUser.Email

@@ -147,7 +147,12 @@ func GetMFALevel(permissions []string) MFALevel {
 			// ONLY allow read/list actions to default to MFANone
 			// Everything else MUST be explicitly listed
 			if !isReadOnlyAction(perm) {
-				panic(fmt.Sprintf("CRITICAL: Permission %q not found in MFARequirements - all write/mutating operations must be explicitly listed", perm))
+				panic(
+					fmt.Sprintf(
+						"CRITICAL: Permission %q not found in MFARequirements - all write/mutating operations must be explicitly listed",
+						perm,
+					),
+				)
 			}
 			level = MFANone
 		}

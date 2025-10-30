@@ -283,7 +283,10 @@ func (h *AdminHandler) TestSlackNotificationHandler(c *gin.Context) {
 		// Provide user-friendly error messages for common Slack API errors
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not_in_channel") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Bot is not in the channel. Invite the bot with: /invite @Rack Gateway"})
+			c.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": "Bot is not in the channel. Invite the bot with: /invite @Rack Gateway"},
+			)
 			return
 		}
 		if strings.Contains(errMsg, "channel_not_found") {

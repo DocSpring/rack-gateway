@@ -113,7 +113,15 @@ func RunCommand() *cobra.Command {
 		Short: "run a one-off process",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "run", "detach", "entrypoint", "release", "env")
+			client, ctx, err := setupConvoxWithMFAAction(
+				cobraCmd,
+				args,
+				"run",
+				"detach",
+				"entrypoint",
+				"release",
+				"env",
+			)
 			if err != nil {
 				return err
 			}

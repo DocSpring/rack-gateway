@@ -29,7 +29,16 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(oauth OAuthProvider, database *db.Database, cfg *config.Config, sessions *auth.SessionManager, mfaService *mfa.Service, mfaSettings *db.MFASettings, securityNotifier *security.Notifier, auditLogger *audit.Logger) *AuthHandler {
+func NewAuthHandler(
+	oauth OAuthProvider,
+	database *db.Database,
+	cfg *config.Config,
+	sessions *auth.SessionManager,
+	mfaService *mfa.Service,
+	mfaSettings *db.MFASettings,
+	securityNotifier *security.Notifier,
+	auditLogger *audit.Logger,
+) *AuthHandler {
 	return &AuthHandler{
 		oauth:            oauth,
 		database:         database,

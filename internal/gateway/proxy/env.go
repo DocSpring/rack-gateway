@@ -90,7 +90,11 @@ func (h *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
 	return keys
 }
 
-func (h *Handler) prepareReleaseCreate(r *http.Request, rack config.RackConfig, email string) (bool, []envutil.EnvDiff, error) {
+func (h *Handler) prepareReleaseCreate(
+	r *http.Request,
+	rack config.RackConfig,
+	email string,
+) (bool, []envutil.EnvDiff, error) {
 	// Read and buffer original body
 	var bodyBuf []byte
 	if r.Body != nil {

@@ -49,7 +49,11 @@ var welcomeHTML = template.Must(template.New("welcome_html").Parse(
 		"<p>Authenticate the CLI against this gateway:</p>" +
 		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">$ rack-gateway login {{.Rack}} {{.CLIBase}}</pre>" +
 		"<p>After logging in, you can run Convox commands via the gateway using <code>rack-gateway convox …</code></p>" +
-		fmt.Sprintf("<p>See the README for more information:<br/><a href=\"%s\" style=\"color:#0b5fff;text-decoration:none;\">%s</a></p>", readmeURL, readmeURL) +
+		fmt.Sprintf(
+			"<p>See the README for more information:<br/><a href=\"%s\" style=\"color:#0b5fff;text-decoration:none;\">%s</a></p>",
+			readmeURL,
+			readmeURL,
+		) +
 		"<hr style=\"border:none;border-top:1px solid #e5e5e5;margin:24px 0;\"/>" +
 		"<p style=\"font-size:12px;color:#555;\">Added by {{.Inviter}}</p>" +
 		"</body></html>",
@@ -197,7 +201,13 @@ var userAddedAdminHTML = template.Must(template.New("user_added_admin_html").Par
 ))
 
 func RenderUserAddedAdmin(rack, actor, email, name string, roles []string) (string, string, error) {
-	data := map[string]string{"Rack": rack, "Actor": actor, "Email": email, "Name": name, "Roles": strings.Join(roles, ", ")}
+	data := map[string]string{
+		"Rack":  rack,
+		"Actor": actor,
+		"Email": email,
+		"Name":  name,
+		"Roles": strings.Join(roles, ", "),
+	}
 	var tb, hb bytes.Buffer
 	if err := userAddedAdminText.Execute(&tb, data); err != nil {
 		return "", "", err

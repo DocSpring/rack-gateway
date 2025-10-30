@@ -85,8 +85,24 @@ var (
 	}
 	releasesByApp = map[string][]Release{
 		"rack-gateway": {
-			{ID: "RAPI123456", App: "rack-gateway", Build: "BAPI123456", Description: "Deployed by mock", Version: 10, Created: time.Now().Add(-24 * time.Hour), Env: envString()},
-			{ID: "RAPI123455", App: "rack-gateway", Build: "BAPI123455", Description: "Deployed by mock", Version: 9, Created: time.Now().Add(-48 * time.Hour), Env: envString()},
+			{
+				ID:          "RAPI123456",
+				App:         "rack-gateway",
+				Build:       "BAPI123456",
+				Description: "Deployed by mock",
+				Version:     10,
+				Created:     time.Now().Add(-24 * time.Hour),
+				Env:         envString(),
+			},
+			{
+				ID:          "RAPI123455",
+				App:         "rack-gateway",
+				Build:       "BAPI123455",
+				Description: "Deployed by mock",
+				Version:     9,
+				Created:     time.Now().Add(-48 * time.Hour),
+				Env:         envString(),
+			},
 		},
 	}
 	mockSystemParameters = map[string]string{

@@ -83,8 +83,11 @@ var Commands = []Command{
 
 	// Builds
 	{
-		Command:      "build",
-		Permissions:  []string{rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate), rbac.Convox(rbac.ResourceObject, rbac.ActionCreate)},
+		Command: "build",
+		Permissions: []string{
+			rbac.Convox(rbac.ResourceBuild, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceObject, rbac.ActionCreate),
+		},
 		AllowedFlags: []string{"description", "file", "manifest", "no-cache"},
 		Description:  "Create a build",
 	},
@@ -159,8 +162,11 @@ var Commands = []Command{
 		Description:  "Promote a release",
 	},
 	{
-		Command:      "releases rollback",
-		Permissions:  []string{rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate), rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote)},
+		Command: "releases rollback",
+		Permissions: []string{
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote),
+		},
 		AllowedFlags: []string{},
 		Description:  "Copy an old release forward and promote it",
 	},
@@ -211,20 +217,29 @@ var Commands = []Command{
 		Description:  "Get an env var",
 	},
 	{
-		Command:      "env set",
-		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionSet), rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate)},
+		Command: "env set",
+		Permissions: []string{
+			rbac.Convox(rbac.ResourceEnv, rbac.ActionSet),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+		},
 		AllowedFlags: []string{"promote", "replace"},
 		Description:  "Set env var(s)",
 	},
 	{
-		Command:      "env unset",
-		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionUnset), rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate)},
+		Command: "env unset",
+		Permissions: []string{
+			rbac.Convox(rbac.ResourceEnv, rbac.ActionUnset),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+		},
 		AllowedFlags: []string{"promote"},
 		Description:  "Unset env var(s)",
 	},
 	{
-		Command:      "env edit",
-		Permissions:  []string{rbac.Convox(rbac.ResourceEnv, rbac.ActionSet), rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate)},
+		Command: "env edit",
+		Permissions: []string{
+			rbac.Convox(rbac.ResourceEnv, rbac.ActionSet),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+		},
 		AllowedFlags: []string{"promote"},
 		Description:  "Edit env interactively",
 	},

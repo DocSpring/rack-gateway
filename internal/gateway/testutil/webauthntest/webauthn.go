@@ -101,7 +101,13 @@ func (mc *MockCredential) GenerateAssertionForSession(sessionJSON []byte, origin
 	return string(assertionBytes), nil
 }
 
-func (mc *MockCredential) buildAssertion(challengeEncoded string, rpID string, credentialID []byte, origin string, userHandle []byte) (map[string]interface{}, error) {
+func (mc *MockCredential) buildAssertion(
+	challengeEncoded string,
+	rpID string,
+	credentialID []byte,
+	origin string,
+	userHandle []byte,
+) (map[string]interface{}, error) {
 	rpIDHash := sha256.Sum256([]byte(rpID))
 	authData := make([]byte, 37)
 	copy(authData[0:32], rpIDHash[:])

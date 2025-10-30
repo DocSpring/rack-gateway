@@ -12,7 +12,18 @@ func DeployCommand() *cobra.Command {
 		Short: "deploy an app",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "deploy", "app", "description", "file", "manifest", "no-cache", "replace", "wait")
+			client, ctx, err := setupConvoxWithMFAAction(
+				cobraCmd,
+				args,
+				"deploy",
+				"app",
+				"description",
+				"file",
+				"manifest",
+				"no-cache",
+				"replace",
+				"wait",
+			)
 			if err != nil {
 				return err
 			}

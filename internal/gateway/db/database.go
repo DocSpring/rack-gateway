@@ -380,7 +380,9 @@ func (d *Database) ResetDatabase() error {
 	switch currentEnv {
 	case "":
 		if !devMode && !disableEnvCheck {
-			return fmt.Errorf("refusing to reset database with unknown environment (set DEV_MODE=true for development or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)")
+			return fmt.Errorf(
+				"refusing to reset database with unknown environment (set DEV_MODE=true for development or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)",
+			)
 		}
 	case "development":
 		// always allowed

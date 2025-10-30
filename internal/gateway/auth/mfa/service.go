@@ -83,7 +83,17 @@ type VerificationResult struct {
 }
 
 // NewService creates a new MFA service instance.
-func NewService(database *db.Database, issuer string, trustedDeviceTTL, stepUpWindow time.Duration, backupCodePepper []byte, yubiClientID string, yubiSecretKey string, webAuthnRPID string, webAuthnOrigin string, emailSender email.Sender) (*Service, error) {
+func NewService(
+	database *db.Database,
+	issuer string,
+	trustedDeviceTTL, stepUpWindow time.Duration,
+	backupCodePepper []byte,
+	yubiClientID string,
+	yubiSecretKey string,
+	webAuthnRPID string,
+	webAuthnOrigin string,
+	emailSender email.Sender,
+) (*Service, error) {
 	if len(backupCodePepper) == 0 {
 		return nil, fmt.Errorf("backup code pepper is required")
 	}
@@ -179,7 +189,12 @@ func (s *Service) ensureUserUnlocked(userID int64) error {
 	return nil
 }
 
-func (s *Service) enforceAttemptLimit(counter func(int64, int) (int, error), userID int64, window int, onLimit func() error) error {
+func (s *Service) enforceAttemptLimit(
+	counter func(int64, int) (int, error),
+	userID int64,
+	window int,
+	onLimit func() error,
+) error {
 	attempts, err := counter(userID, window)
 	if err != nil {
 		return fmt.Errorf("failed to check rate limit: %w", err)

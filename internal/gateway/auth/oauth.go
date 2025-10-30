@@ -39,20 +39,22 @@ type OAuthHandler struct {
 
 // LoginStartResponse for CLI OAuth flow
 type LoginStartResponse struct {
-	AuthURL      string `json:"auth_url" validate:"required"`
-	State        string `json:"state" validate:"required"`
+	AuthURL      string `json:"auth_url"      validate:"required"`
+	State        string `json:"state"         validate:"required"`
 	CodeVerifier string `json:"code_verifier" validate:"required"`
 }
 
 // LoginResponse for successful OAuth completion
 type LoginResponse struct {
 	Email string `json:"email" validate:"required"`
-	Name  string `json:"name" validate:"required"`
+	Name  string `json:"name"  validate:"required"`
 }
 
 // NewOAuthHandler creates a new OAuth handler using vetted OIDC libraries
 // The third parameter can be either a base URL (scheme+host) or a full web callback URL.
-func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string) (*OAuthHandler, error) {
+func NewOAuthHandler(
+	clientID, clientSecret, redirectURLOrBase, allowedDomain, issuerURL string,
+) (*OAuthHandler, error) {
 	ctx := context.Background()
 
 	// Use vetted OIDC provider discovery with exponential backoff retry

@@ -84,7 +84,12 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 				_ = req.Body.Close()
 				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 				if len(bodyBytes) > 0 && !httputil.IsBinaryContent(req.Header.Get("Content-Type")) {
-					gtwlog.DebugTopicf(gtwlog.TopicHTTPRequestBody, "len=%d body=%s", len(bodyBytes), httputil.TruncateString(bodyBytes, httputil.BodyTruncationLimit))
+					gtwlog.DebugTopicf(
+						gtwlog.TopicHTTPRequestBody,
+						"len=%d body=%s",
+						len(bodyBytes),
+						httputil.TruncateString(bodyBytes, httputil.BodyTruncationLimit),
+					)
 				}
 			} else {
 				gtwlog.Warnf("failed to read request body: %v", err)
@@ -112,7 +117,13 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 		if respJSON && writer != nil {
 			responseBody := writer.body.Bytes()
 			if len(responseBody) > 0 && !httputil.IsBinaryContent(c.Writer.Header().Get("Content-Type")) {
-				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), httputil.TruncateString(responseBody, httputil.BodyTruncationLimit))
+				gtwlog.DebugTopicf(
+					gtwlog.TopicHTTPResponseBody,
+					"status=%d len=%d body=%s",
+					c.Writer.Status(),
+					len(responseBody),
+					httputil.TruncateString(responseBody, httputil.BodyTruncationLimit),
+				)
 			}
 		}
 	}
@@ -147,7 +158,8 @@ func shouldFilterHTTPLog(path string) bool {
 		return false
 	}
 
-	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/app/@") || strings.HasPrefix(path, "/app/src/") {
+	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/app/@") ||
+		strings.HasPrefix(path, "/app/src/") {
 		return true
 	}
 

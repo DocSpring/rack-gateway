@@ -18,7 +18,12 @@ import (
 )
 
 // verifyMFAMethod handles verification for a single MFA method.
-func verifyMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, allMethods []MFAMethodResponse) error {
+func verifyMFAMethod(
+	cmd *cobra.Command,
+	baseURL, bearer string,
+	method MFAMethodResponse,
+	allMethods []MFAMethodResponse,
+) error {
 	out := cmd.ErrOrStderr()
 
 	switch method.Type {
@@ -196,7 +201,11 @@ func printAllowedCredentials(creds []string) {
 	}
 }
 
-func buildAssertionOptions(baseURL string, allowedCreds []string, start *webAuthnStartResponse) (webauthn.AssertionOptions, error) {
+func buildAssertionOptions(
+	baseURL string,
+	allowedCreds []string,
+	start *webAuthnStartResponse,
+) (webauthn.AssertionOptions, error) {
 	parsedURL, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
 		return webauthn.AssertionOptions{}, fmt.Errorf("failed to parse gateway URL: %w", err)

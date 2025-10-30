@@ -42,7 +42,14 @@ func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
 		{"apps update allowed for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionUpdate, true, true},
 		{"apps delete denied for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionDelete, false, true},
 		{"apps restart allowed for deployer", rbac.ScopeConvox, rbac.ResourceApp, rbac.ActionRestart, true, true},
-		{"releases promote allowed for deployer", rbac.ScopeConvox, rbac.ResourceRelease, rbac.ActionPromote, true, true},
+		{
+			"releases promote allowed for deployer",
+			rbac.ScopeConvox,
+			rbac.ResourceRelease,
+			rbac.ActionPromote,
+			true,
+			true,
+		},
 		{"releases create allowed for deployer", rbac.ScopeConvox, rbac.ResourceRelease, rbac.ActionCreate, true, true},
 		{"rack update denied for deployer", rbac.ScopeConvox, rbac.ResourceRack, rbac.ActionUpdate, false, true},
 	}

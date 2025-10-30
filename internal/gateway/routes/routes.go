@@ -83,13 +83,50 @@ func Setup(router *gin.Engine, cfg *Config) {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = allowedOrigins
 	corsConfig.AllowCredentials = true
-	corsConfig.AllowHeaders = append(corsConfig.AllowHeaders, "X-CSRF-Token", "Authorization", "X-Mfa-Totp", "X-MFA-WebAuthn")
+	corsConfig.AllowHeaders = append(
+		corsConfig.AllowHeaders,
+		"X-CSRF-Token",
+		"Authorization",
+		"X-Mfa-Totp",
+		"X-MFA-WebAuthn",
+	)
 	router.Use(cors.New(corsConfig))
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(cfg.OAuthHandler, cfg.Database, cfg.Config, cfg.SessionManager, cfg.MFAService, cfg.MFASettings, cfg.SecurityNotifier, cfg.AuditLogger)
-	apiHandler := handlers.NewAPIHandler(cfg.RBACManager, cfg.Database, cfg.Config, cfg.RackCertManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService, cfg.SlackNotifier, cfg.JobsClient)
-	adminHandler := handlers.NewAdminHandler(cfg.RBACManager, cfg.Database, cfg.TokenService, cfg.EmailSender, cfg.Config, cfg.RackCertManager, cfg.SessionManager, cfg.MFASettings, cfg.AuditLogger, cfg.SettingsService, cfg.JobsClient)
+	authHandler := handlers.NewAuthHandler(
+		cfg.OAuthHandler,
+		cfg.Database,
+		cfg.Config,
+		cfg.SessionManager,
+		cfg.MFAService,
+		cfg.MFASettings,
+		cfg.SecurityNotifier,
+		cfg.AuditLogger,
+	)
+	apiHandler := handlers.NewAPIHandler(
+		cfg.RBACManager,
+		cfg.Database,
+		cfg.Config,
+		cfg.RackCertManager,
+		cfg.MFASettings,
+		cfg.AuditLogger,
+		cfg.SettingsService,
+		cfg.SlackNotifier,
+		cfg.JobsClient,
+	)
+	adminHandler := handlers.NewAdminHandler(
+		cfg.RBACManager,
+		cfg.Database,
+		cfg.TokenService,
+		cfg.EmailSender,
+		cfg.Config,
+		cfg.RackCertManager,
+		cfg.SessionManager,
+		cfg.MFASettings,
+		cfg.AuditLogger,
+		cfg.SettingsService,
+		cfg.JobsClient,
+	)
 	settingsHandler := handlers.NewSettingsHandler(cfg.SettingsService, cfg.RBACManager)
 	proxyHandler := handlers.NewProxyHandler(cfg.ProxyHandler)
 	staticHandler := handlers.NewStaticHandler(cfg.Config, cfg.SessionManager)

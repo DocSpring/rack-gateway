@@ -23,7 +23,9 @@ func main() {
 
 	converter := typescriptify.New().WithInterface(true).WithConstructor(false).WithCreateFromMethod(false)
 	converter.BackupDir = ""
-	converter.WithCustomCodeBefore("/* biome-ignore lint -- generated file */\n/* biome-ignore format -- generated file */")
+	converter.WithCustomCodeBefore(
+		"/* biome-ignore lint -- generated file */\n/* biome-ignore format -- generated file */",
+	)
 
 	converter.Add(db.APIToken{})
 	converter.Add(token.APITokenResponse{})

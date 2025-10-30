@@ -378,7 +378,11 @@ func TestGetAuditLogsPaged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, timeTotal)
 	require.Len(t, timeFiltered, 1)
-	assert.Equal(t, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), timeFiltered[0].Action)
+	assert.Equal(
+		t,
+		audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+		timeFiltered[0].Action,
+	)
 }
 
 func TestGetAuditLogByIDHandlesNulls(t *testing.T) {
@@ -446,7 +450,12 @@ func TestCreateAuditLogHandlesNullThenInet(t *testing.T) {
 	require.NoError(t, err, "expected postgres inet column to accept value after NULL initialization")
 
 	var stored string
-	require.NoError(t, db.DB().QueryRow(`SELECT host(ip_address) FROM audit.audit_event WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`).Scan(&stored))
+	require.NoError(
+		t,
+		db.DB().
+			QueryRow(`SELECT host(ip_address) FROM audit.audit_event WHERE action = 'login.complete' AND user_email = 'sequence@example.com'`).
+			Scan(&stored),
+	)
 	assert.Equal(t, "203.0.113.10", stored)
 }
 

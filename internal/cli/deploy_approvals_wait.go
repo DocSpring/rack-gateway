@@ -28,11 +28,13 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
+	cmd.Flags().
+		StringVar(&opts.racks, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "1s", "Polling interval")
 	cmd.Flags().BoolVar(&opts.autoApprove, "approve", false, "Automatically approve the first pending request found")
 	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval (only used with --approve)")
-	cmd.Flags().BoolVar(&opts.loop, "loop", false, "Continue polling for more requests after displaying or approving one")
+	cmd.Flags().
+		BoolVar(&opts.loop, "loop", false, "Continue polling for more requests after displaying or approving one")
 
 	return cmd
 }
@@ -53,7 +55,10 @@ type deployApprovalWaitConfig struct {
 	loop         bool
 }
 
-func parseDeployApprovalWaitOptions(cmd *cobra.Command, opts deployApprovalWaitOptions) (deployApprovalWaitConfig, error) {
+func parseDeployApprovalWaitOptions(
+	cmd *cobra.Command,
+	opts deployApprovalWaitOptions,
+) (deployApprovalWaitConfig, error) {
 	racks, err := resolveWaitRacks(opts.racks)
 	if err != nil {
 		return deployApprovalWaitConfig{}, err
@@ -162,7 +167,12 @@ func (w *deployApprovalWaiter) printWaitingMessage() error {
 	case 1:
 		return writef(w.cmd.OutOrStdout(), "Waiting for pending deploy approval requests on rack: %s\n", w.racks[0])
 	default:
-		return writef(w.cmd.OutOrStdout(), "Waiting for pending deploy approval requests on %d racks: %s\n", len(w.racks), strings.Join(w.racks, ", "))
+		return writef(
+			w.cmd.OutOrStdout(),
+			"Waiting for pending deploy approval requests on %d racks: %s\n",
+			len(w.racks),
+			strings.Join(w.racks, ", "),
+		)
 	}
 }
 
@@ -248,7 +258,11 @@ func (w *deployApprovalWaiter) autoApproveRequest(rack string, request deployApp
 
 	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
 	if approved.ApprovalExpiresAt != nil {
-		statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
+		statusLine = fmt.Sprintf(
+			"%s (expires at %s)",
+			statusLine,
+			approved.ApprovalExpiresAt.UTC().Format(time.RFC3339),
+		)
 	}
 	return writeLine(w.cmd.OutOrStdout(), statusLine)
 }

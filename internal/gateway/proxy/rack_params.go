@@ -30,7 +30,13 @@ func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
+	req.Header.Set(
+		"Authorization",
+		fmt.Sprintf(
+			"Basic %s",
+			base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey))),
+		),
+	)
 	client, err := h.httpClient(ctx, 15*time.Second)
 	if err != nil {
 		return nil, err

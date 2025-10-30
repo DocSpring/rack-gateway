@@ -21,7 +21,14 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string, originalPath string) (int, error) {
+func (h *Handler) proxyWebSocket(
+	w http.ResponseWriter,
+	r *http.Request,
+	rack config.RackConfig,
+	target string,
+	userEmail string,
+	originalPath string,
+) (int, error) {
 	if rbac.KeyMatch3(originalPath, "/apps/{app}/processes/{id}/exec") {
 		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
 			app := extractAppFromPath(originalPath)
@@ -51,14 +58,38 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 	}
 
 	header := http.Header{}
-	header.Set("Authorization", fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
+	header.Set(
+		"Authorization",
+		fmt.Sprintf(
+			"Basic %s",
+			base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey))),
+		),
+	)
 	header.Set("X-User-Email", userEmail)
 	header.Set("X-Request-ID", uuid.New().String())
-	header.Set("Origin", fmt.Sprintf("%s://%s", map[bool]string{true: "https", false: "http"}[strings.HasPrefix(rack.URL, "https")], u.Host))
+	header.Set(
+		"Origin",
+		fmt.Sprintf(
+			"%s://%s",
+			map[bool]string{true: "https", false: "http"}[strings.HasPrefix(rack.URL, "https")],
+			u.Host,
+		),
+	)
 	for k, vals := range r.Header {
 		lk := strings.ToLower(k)
 		switch lk {
-		case "authorization", "host", "connection", "upgrade", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "origin", "sec-websocket-protocol", "x-user-email", "x-request-id", "x-audit-resource":
+		case "authorization",
+			"host",
+			"connection",
+			"upgrade",
+			"sec-websocket-key",
+			"sec-websocket-version",
+			"sec-websocket-extensions",
+			"origin",
+			"sec-websocket-protocol",
+			"x-user-email",
+			"x-request-id",
+			"x-audit-resource":
 			continue
 		}
 		for _, v := range vals {
@@ -90,7 +121,8 @@ func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack co
 		if err == nil {
 			break
 		}
-		if resp != nil && (resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect || resp.StatusCode == http.StatusSeeOther) {
+		if resp != nil &&
+			(resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect || resp.StatusCode == http.StatusSeeOther) {
 			loc := resp.Header.Get("Location")
 			if loc == "" {
 				break

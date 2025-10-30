@@ -30,7 +30,11 @@ type FingerprintMismatchError struct {
 
 // Error implements the error interface.
 func (e *FingerprintMismatchError) Error() string {
-	return fmt.Sprintf("rack TLS certificate fingerprint mismatch (expected %s, got %s)", strings.ToUpper(e.Expected), strings.ToUpper(e.Actual))
+	return fmt.Sprintf(
+		"rack TLS certificate fingerprint mismatch (expected %s, got %s)",
+		strings.ToUpper(e.Expected),
+		strings.ToUpper(e.Actual),
+	)
 }
 
 // Unwrap allows errors.Is/As to match ErrFingerprintMismatch.

@@ -36,7 +36,12 @@ func (m *MockTokenService) ValidateAPIToken(token string) (*db.APIToken, error) 
 	return nil, fmt.Errorf("invalid token")
 }
 
-func (m *MockTokenService) CreateAPIToken(userID uint, name string, permissions []string, expiresAt time.Time) (*db.APIToken, string, error) {
+func (m *MockTokenService) CreateAPIToken(
+	userID uint,
+	name string,
+	permissions []string,
+	expiresAt time.Time,
+) (*db.APIToken, string, error) {
 	return nil, "", fmt.Errorf("not implemented")
 }
 

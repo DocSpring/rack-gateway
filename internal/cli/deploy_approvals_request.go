@@ -26,14 +26,17 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVarP(&opts.appFlag, "app", "a", "", "App name (auto-detected from .convox/app or current directory)")
+	cmd.Flags().
+		StringVarP(&opts.appFlag, "app", "a", "", "App name (auto-detected from .convox/app or current directory)")
 	cmd.Flags().StringVar(&opts.rackFlag, "rack", "", "Rack name")
 	cmd.Flags().BoolVar(&opts.wait, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "5s", "Polling interval when --wait is set")
-	cmd.Flags().StringVar(&opts.timeout, "timeout", "20m", "Maximum time to wait before giving up (set to 0 to wait indefinitely)")
+	cmd.Flags().
+		StringVar(&opts.timeout, "timeout", "20m", "Maximum time to wait before giving up (set to 0 to wait indefinitely)")
 	cmd.Flags().StringVar(&opts.gitCommitHash, "git-commit", "", "Git commit SHA (required)")
 	cmd.Flags().StringVar(&opts.gitBranch, "branch", "", "Git branch name")
-	cmd.Flags().StringVar(&opts.ciMetadata, "ci-metadata", "", "CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')")
+	cmd.Flags().
+		StringVar(&opts.ciMetadata, "ci-metadata", "", "CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')")
 	cmd.Flags().StringVar(&opts.message, "message", "", "Deploy approval message (required)")
 
 	_ = cmd.MarkFlagRequired("git-commit")
@@ -66,7 +69,10 @@ type deployApprovalRequestConfig struct {
 	message       string
 }
 
-func parseDeployApprovalRequestOptions(cmd *cobra.Command, opts deployApprovalRequestOptions) (deployApprovalRequestConfig, error) {
+func parseDeployApprovalRequestOptions(
+	cmd *cobra.Command,
+	opts deployApprovalRequestOptions,
+) (deployApprovalRequestConfig, error) {
 	commit := strings.TrimSpace(opts.gitCommitHash)
 	if commit == "" {
 		return deployApprovalRequestConfig{}, fmt.Errorf("--git-commit is required")
@@ -226,7 +232,11 @@ func createDeployApproval(
 	return postDeployApprovalRequest(cmd, rack, "/deploy-approval-requests", payload)
 }
 
-func waitForDeployApproval(cmd *cobra.Command, rack, publicID string, interval, timeout time.Duration) (*deployApprovalRequest, error) {
+func waitForDeployApproval(
+	cmd *cobra.Command,
+	rack, publicID string,
+	interval, timeout time.Duration,
+) (*deployApprovalRequest, error) {
 	start := time.Now()
 	var lastStatus string
 	for {

@@ -114,12 +114,19 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.GetHeader("User-Agent"),
 	}); err != nil {
-		log.Printf(`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String()),"error":%q}`, err)
+		log.Printf(
+			`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String()),"error":%q}`,
+			err,
+		)
 	}
 }
 
 // createLoginSession creates a session after OAuth completion and handles post-login MFA checks
-func (h *AuthHandler) createLoginSession(c *gin.Context, userRecord *db.User, loginFlow string) (*db.UserSession, error) {
+func (h *AuthHandler) createLoginSession(
+	c *gin.Context,
+	userRecord *db.User,
+	loginFlow string,
+) (*db.UserSession, error) {
 	if h.sessions == nil {
 		return nil, fmt.Errorf("session manager not available")
 	}
@@ -138,7 +145,13 @@ func (h *AuthHandler) createLoginSession(c *gin.Context, userRecord *db.User, lo
 
 	// Try to mark as MFA verified if trusted device exists
 	if err := h.handlePostLoginMFA(c, userRecord, session); err != nil {
-		log.Printf("post-login mfa failed: user=%s session=%d flow=%s err=%v", userRecord.Email, session.ID, loginFlow, err)
+		log.Printf(
+			"post-login mfa failed: user=%s session=%d flow=%s err=%v",
+			userRecord.Email,
+			session.ID,
+			loginFlow,
+			err,
+		)
 	}
 
 	h.setSessionCookie(c, sessionToken)

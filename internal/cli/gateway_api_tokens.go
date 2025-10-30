@@ -87,7 +87,12 @@ func fetchTokenPermissionMetadata(cmd *cobra.Command, rack string) (*tokenPermis
 	return &metadata, nil
 }
 
-func createAPIToken(cmd *cobra.Command, rack, name, userEmail string, permissions []string, expiresAt *time.Time) (*apiTokenResponse, error) {
+func createAPIToken(
+	cmd *cobra.Command,
+	rack, name, userEmail string,
+	permissions []string,
+	expiresAt *time.Time,
+) (*apiTokenResponse, error) {
 	payload := map[string]interface{}{
 		"name":        name,
 		"permissions": permissions,
@@ -120,7 +125,10 @@ type gatewayMFAContext struct {
 }
 
 // checkAndPromptGatewayMFA checks if the gateway operation requires MFA and returns MFA context
-func checkAndPromptGatewayMFA(cmd *cobra.Command, baseURL, bearer, rack, method, path string) (*gatewayMFAContext, error) {
+func checkAndPromptGatewayMFA(
+	cmd *cobra.Command,
+	baseURL, bearer, rack, method, path string,
+) (*gatewayMFAContext, error) {
 	// Map gateway API paths to permissions
 	var permissions []string
 
@@ -187,7 +195,17 @@ func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interfac
 		return err
 	}
 
-	statusCode, responseBody, err = maybeRetryWithMFA(cmd, statusCode, responseBody, gatewayURL, bearer, rack, method, path, body)
+	statusCode, responseBody, err = maybeRetryWithMFA(
+		cmd,
+		statusCode,
+		responseBody,
+		gatewayURL,
+		bearer,
+		rack,
+		method,
+		path,
+		body,
+	)
 	if err != nil {
 		return err
 	}
@@ -214,7 +232,13 @@ func applyInlineMFA(bearer string, ctx *gatewayMFAContext) string {
 	return bearer + "." + ctx.mfaAuth
 }
 
-func maybeRetryWithMFA(cmd *cobra.Command, statusCode int, responseBody []byte, gatewayURL, bearer, rack, method, path string, body interface{}) (int, []byte, error) {
+func maybeRetryWithMFA(
+	cmd *cobra.Command,
+	statusCode int,
+	responseBody []byte,
+	gatewayURL, bearer, rack, method, path string,
+	body interface{},
+) (int, []byte, error) {
 	if statusCode != http.StatusUnauthorized {
 		return statusCode, responseBody, nil
 	}

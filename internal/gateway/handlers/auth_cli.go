@@ -228,14 +228,22 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		enrollParams.Set("enrollment", "required")
 		enrollParams.Set("channel", "cli")
 		enrollParams.Set("state", state)
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s?%s", WebRoute("account/security"), enrollParams.Encode()))
+		c.Redirect(
+			http.StatusTemporaryRedirect,
+			fmt.Sprintf("%s?%s", WebRoute("account/security"), enrollParams.Encode()),
+		)
 		return
 	}
 
 	params := url.Values{}
 	params.Set("state", state)
 	challengeURL := buildChallengeURL(params)
-	log.Printf("CLI callback: redirecting to MFA challenge: url=%s user=%s state=%s", challengeURL, userRecord.Email, state)
+	log.Printf(
+		"CLI callback: redirecting to MFA challenge: url=%s user=%s state=%s",
+		challengeURL,
+		userRecord.Email,
+		state,
+	)
 	c.Redirect(http.StatusTemporaryRedirect, challengeURL)
 }
 
@@ -322,7 +330,14 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	case "totp":
 		verification, err = h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code), ipAddress, userAgent, nil)
 	case "webauthn":
-		verification, err = h.mfaService.VerifyWebAuthnAssertion(userRecord, []byte(req.SessionData), []byte(req.AssertionResponse), ipAddress, userAgent, nil)
+		verification, err = h.mfaService.VerifyWebAuthnAssertion(
+			userRecord,
+			[]byte(req.SessionData),
+			[]byte(req.AssertionResponse),
+			ipAddress,
+			userAgent,
+			nil,
+		)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_method"})
 		return
@@ -330,7 +345,12 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 
 	if err != nil {
 		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(userRecord.Email, userRecord.Name, c.ClientIP(), c.GetHeader("User-Agent"))
+			h.securityNotifier.FailedMFAAttempt(
+				userRecord.Email,
+				userRecord.Name,
+				c.ClientIP(),
+				c.GetHeader("User-Agent"),
+			)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_code"})
 		return
@@ -397,7 +417,15 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 			userName = record.LoginName.String
 		}
 		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt(record.LoginEmail.String, userName, "cli", "user_not_authorized", c.ClientIP(), c.GetHeader("User-Agent"), false)
+			h.securityNotifier.LoginAttempt(
+				record.LoginEmail.String,
+				userName,
+				"cli",
+				"user_not_authorized",
+				c.ClientIP(),
+				c.GetHeader("User-Agent"),
+				false,
+			)
 		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
 		return
@@ -478,7 +506,15 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 
 	// Notify about successful CLI login
 	if h.securityNotifier != nil {
-		h.securityNotifier.LoginAttempt(userRecord.Email, userRecord.Name, "cli", "complete", c.ClientIP(), c.GetHeader("User-Agent"), true)
+		h.securityNotifier.LoginAttempt(
+			userRecord.Email,
+			userRecord.Name,
+			"cli",
+			"complete",
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			true,
+		)
 	}
 
 	c.JSON(http.StatusOK, response)

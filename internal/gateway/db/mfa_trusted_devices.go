@@ -8,7 +8,15 @@ import (
 	"time"
 )
 
-func (d *Database) CreateTrustedDevice(userID int64, deviceID string, tokenHash string, expiresAt time.Time, ip string, uaHash string, metadata map[string]interface{}) (*TrustedDevice, error) {
+func (d *Database) CreateTrustedDevice(
+	userID int64,
+	deviceID string,
+	tokenHash string,
+	expiresAt time.Time,
+	ip string,
+	uaHash string,
+	metadata map[string]interface{},
+) (*TrustedDevice, error) {
 	var id int64
 	var createdAt, updatedAt time.Time
 	var meta interface{}
@@ -43,7 +51,11 @@ func (d *Database) CreateTrustedDevice(userID int64, deviceID string, tokenHash 
 }
 
 func (d *Database) TouchTrustedDevice(id int64, ip string) error {
-	_, err := d.exec("UPDATE trusted_devices SET last_used_at = NOW(), ip_last = COALESCE(?, ip_last), updated_at = NOW() WHERE id = ?", nullableIP(ip), id)
+	_, err := d.exec(
+		"UPDATE trusted_devices SET last_used_at = NOW(), ip_last = COALESCE(?, ip_last), updated_at = NOW() WHERE id = ?",
+		nullableIP(ip),
+		id,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update trusted device usage: %w", err)
 	}
@@ -81,7 +93,11 @@ func (d *Database) GetTrustedDeviceByID(id int64) (*TrustedDevice, error) {
 }
 
 func (d *Database) RevokeTrustedDevice(id int64, reason string) error {
-	_, err := d.exec("UPDATE trusted_devices SET revoked_at = NOW(), revoked_reason = ?, updated_at = NOW() WHERE id = ? AND revoked_at IS NULL", nullableString(reason, 255), id)
+	_, err := d.exec(
+		"UPDATE trusted_devices SET revoked_at = NOW(), revoked_reason = ?, updated_at = NOW() WHERE id = ? AND revoked_at IS NULL",
+		nullableString(reason, 255),
+		id,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to revoke trusted device: %w", err)
 	}
@@ -89,7 +105,10 @@ func (d *Database) RevokeTrustedDevice(id int64, reason string) error {
 }
 
 func (d *Database) ListTrustedDevices(userID int64) ([]*TrustedDevice, error) {
-	rows, err := d.query(`SELECT id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at, ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata FROM trusted_devices WHERE user_id = ? ORDER BY created_at DESC`, userID)
+	rows, err := d.query(
+		`SELECT id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at, ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata FROM trusted_devices WHERE user_id = ? ORDER BY created_at DESC`,
+		userID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query trusted devices: %w", err)
 	}

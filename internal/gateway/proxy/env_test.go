@@ -42,7 +42,10 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 	// Users
 	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
 	require.NoError(t, mgr.SaveUser("ops@test.com", &rbac.UserConfig{Name: "Ops", Roles: []string{"ops"}}))
-	require.NoError(t, mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
+	)
 
 	// Body with env field
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
@@ -98,7 +101,8 @@ func TestAuditLogsForEnvChanges_MultipleRows(t *testing.T) {
 	// Find at least two env-related entries (env.set and secrets.set)
 	count := 0
 	for _, l := range logs {
-		if l.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()) || l.Action == audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()) {
+		if l.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()) ||
+			l.Action == audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionSet.String()) {
 			count++
 		}
 	}
@@ -109,7 +113,10 @@ func TestEnvSetPermissions(t *testing.T) {
 	h, _, mgr := newProxyForEnvTest(t)
 	// Users
 	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
-	require.NoError(t, mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
+	)
 
 	// Request with headers Env containing mixed keys
 	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", nil)
@@ -136,7 +143,10 @@ func TestEnvSetPermissions(t *testing.T) {
 
 func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	h, _, mgr := newProxyForEnvTest(t)
-	require.NoError(t, mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}))
+	require.NoError(
+		t,
+		mgr.SaveUser("deployer@test.com", &rbac.UserConfig{Name: "Deployer", Roles: []string{"deployer"}}),
+	)
 
 	// Build request with form-encoded body simulating CLI
 	form := url.Values{}
@@ -175,7 +185,8 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	require.NoError(t, err)
 	found := false
 	for _, l := range logs {
-		if l.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()) && l.Status == "denied" && strings.Contains(l.Resource, "/DATABASE_URL") {
+		if l.Action == audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionSet.String()) && l.Status == "denied" &&
+			strings.Contains(l.Resource, "/DATABASE_URL") {
 			found = true
 			break
 		}

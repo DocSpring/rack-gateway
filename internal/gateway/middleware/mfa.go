@@ -76,12 +76,23 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) bool {
 	authUser, ok := auth.GetAuthUser(c.Request.Context())
 	if !ok || authUser == nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "no auth user on context, method=%s path=%s", c.Request.Method, c.FullPath())
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"no auth user on context, method=%s path=%s",
+			c.Request.Method,
+			c.FullPath(),
+		)
 		denyStepUp(c)
 		return false
 	}
 
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "evaluating user=%s method=%s path=%s", authUser.Email, c.Request.Method, c.FullPath())
+	gtwlog.DebugTopicf(
+		gtwlog.TopicMFAStepUp,
+		"evaluating user=%s method=%s path=%s",
+		authUser.Email,
+		c.Request.Method,
+		c.FullPath(),
+	)
 
 	// API tokens bypass step-up MFA
 	if authUser.IsAPIToken {
@@ -103,7 +114,11 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 		// If user has MFA enrolled, they just need to verify (step-up)
 		// If not enrolled, they need to enroll first
 		if user != nil && user.MFAEnrolled {
-			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s is enrolled but not verified, sending step-up required", authUser.Email)
+			gtwlog.DebugTopicf(
+				gtwlog.TopicMFAStepUp,
+				"user=%s is enrolled but not verified, sending step-up required",
+				authUser.Email,
+			)
 			denyStepUp(c)
 		} else {
 			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s not enrolled, sending enrollment required", authUser.Email)
@@ -114,11 +129,21 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 
 	window := stepUpWindow(settings)
 	if recent := session.RecentStepUpAt; recent != nil && time.Since(*recent) <= window {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s has recent step up at %s (window %s)", authUser.Email, recent.UTC().Format(time.RFC3339Nano), window)
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"user=%s has recent step up at %s (window %s)",
+			authUser.Email,
+			recent.UTC().Format(time.RFC3339Nano),
+			window,
+		)
 		return true
 	}
 
-	gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s no recent step up, attempting inline verification", authUser.Email)
+	gtwlog.DebugTopicf(
+		gtwlog.TopicMFAStepUp,
+		"user=%s no recent step up, attempting inline verification",
+		authUser.Email,
+	)
 	if verifyInlineMFA(c, mfaService, database, authUser) {
 		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s inline verification succeeded", authUser.Email)
 		return true
@@ -166,9 +191,23 @@ func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 	sessionID := &session.ID
 	switch authUser.MFAType {
 	case "totp":
-		_, verifyErr = mfaService.VerifyTOTP(user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
+		_, verifyErr = mfaService.VerifyTOTP(
+			user,
+			authUser.MFAValue,
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			sessionID,
+		)
 	case "webauthn":
-		verifyErr = verifyInlineWebAuthn(mfaService, database, user, authUser.MFAValue, c.ClientIP(), c.GetHeader("User-Agent"), sessionID)
+		verifyErr = verifyInlineWebAuthn(
+			mfaService,
+			database,
+			user,
+			authUser.MFAValue,
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			sessionID,
+		)
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid_mfa_type",
@@ -237,7 +276,13 @@ func denyMFA(c *gin.Context) {
 }
 
 // verifyInlineWebAuthn decodes and verifies inline WebAuthn assertion data
-func verifyInlineWebAuthn(mfaService MFAVerifier, database *db.Database, user *db.User, encodedData, ipAddress, userAgent string, sessionID *int64) error {
+func verifyInlineWebAuthn(
+	mfaService MFAVerifier,
+	database *db.Database,
+	user *db.User,
+	encodedData, ipAddress, userAgent string,
+	sessionID *int64,
+) error {
 	// Decode base64
 	jsonData, err := base64.StdEncoding.DecodeString(encodedData)
 	if err != nil {

@@ -9,7 +9,13 @@ import (
 )
 
 // CreateAPIToken creates a new API token
-func (d *Database) CreateAPIToken(tokenHash, name string, userID int64, permissions []string, expiresAt *time.Time, createdByUserID *int64) (*APIToken, error) {
+func (d *Database) CreateAPIToken(
+	tokenHash, name string,
+	userID int64,
+	permissions []string,
+	expiresAt *time.Time,
+	createdByUserID *int64,
+) (*APIToken, error) {
 	permissionsJSON, err := json.Marshal(permissions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal permissions: %w", err)
@@ -84,7 +90,20 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 		"SELECT t.id, t.public_id, t.token_hash, t.name, t.user_id, t.permissions, t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name FROM api_tokens t LEFT JOIN users cu ON cu.id = t.created_by_user_id WHERE t.id = ?",
 		id,
 	)
-	err := row.Scan(&token.ID, &token.PublicID, &token.TokenHash, &token.Name, &token.UserID, &permissionsJSON, &token.CreatedAt, &expiresAtNull, &lastUsedAtNull, &createdByNull, &createdByEmail, &createdByName)
+	err := row.Scan(
+		&token.ID,
+		&token.PublicID,
+		&token.TokenHash,
+		&token.Name,
+		&token.UserID,
+		&permissionsJSON,
+		&token.CreatedAt,
+		&expiresAtNull,
+		&lastUsedAtNull,
+		&createdByNull,
+		&createdByEmail,
+		&createdByName,
+	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -266,7 +285,13 @@ func (d *Database) HasActiveDeployApprovalForApp(tokenID int64, app string) (boo
 	return count > 0, nil
 }
 
-func applyAPITokenMetadata(token *APIToken, permissionsJSON string, expiresAtNull, lastUsedAtNull sql.NullTime, createdByNull sql.NullInt64, createdByEmail, createdByName sql.NullString) error {
+func applyAPITokenMetadata(
+	token *APIToken,
+	permissionsJSON string,
+	expiresAtNull, lastUsedAtNull sql.NullTime,
+	createdByNull sql.NullInt64,
+	createdByEmail, createdByName sql.NullString,
+) error {
 	if err := json.Unmarshal([]byte(permissionsJSON), &token.Permissions); err != nil {
 		return fmt.Errorf("failed to unmarshal permissions: %w", err)
 	}

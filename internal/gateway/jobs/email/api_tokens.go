@@ -76,7 +76,12 @@ func (w *TokenCreatedAdminWorker) Work(ctx context.Context, job *river.Job[Token
 		return nil
 	}
 	subject := fmt.Sprintf("Rack Gateway (%s): API token created for %s", args.Rack, args.OwnerEmail)
-	text := fmt.Sprintf("An API token '%s' was created for %s by %s.", args.TokenName, args.OwnerEmail, args.CreatorLabel)
+	text := fmt.Sprintf(
+		"An API token '%s' was created for %s by %s.",
+		args.TokenName,
+		args.OwnerEmail,
+		args.CreatorLabel,
+	)
 	html := ""
 	if err := w.emailSender.SendMany(args.AdminEmails, subject, text, html); err != nil {
 		return fmt.Errorf("failed to send token created admin emails: %w", err)

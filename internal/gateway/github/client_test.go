@@ -278,7 +278,14 @@ func TestGetBranchIntegration(t *testing.T) {
 	client := NewClient("test-token")
 
 	var branch Branch
-	err := client.doRequest("GET", server.URL, nil, http.StatusOK, "branch main not found in repository owner/repo", &branch)
+	err := client.doRequest(
+		"GET",
+		server.URL,
+		nil,
+		http.StatusOK,
+		"branch main not found in repository owner/repo",
+		&branch,
+	)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}

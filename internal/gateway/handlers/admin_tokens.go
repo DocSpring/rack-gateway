@@ -36,7 +36,15 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	var req CreateAPITokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.UserEmail), err.Error(), start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+			strings.TrimSpace(req.UserEmail),
+			err.Error(),
+			start,
+			nil,
+		)
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
@@ -55,7 +63,15 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 
 	// Validate that permissions are provided
 	if len(req.Permissions) == 0 {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.UserEmail), "permissions required - specify --role or --permission", start, map[string]interface{}{"name": req.Name})
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+			strings.TrimSpace(req.UserEmail),
+			"permissions required - specify --role or --permission",
+			start,
+			map[string]interface{}{"name": req.Name},
+		)
 		return
 	}
 
@@ -68,7 +84,15 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	// Get user ID
 	user, err := h.database.GetUser(targetEmail)
 	if err != nil {
-		h.respondAuditError(c, http.StatusNotFound, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), targetEmail, "user not found", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+			targetEmail,
+			"user not found",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -90,13 +114,37 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		details := map[string]interface{}{"name": tokenReq.Name}
 		switch {
 		case errors.Is(err, token.ErrAPITokenNameExists):
-			h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), targetEmail, "token name already exists", start, details)
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+				targetEmail,
+				"token name already exists",
+				start,
+				details,
+			)
 			return
 		case errors.Is(err, token.ErrAPITokenNameRequired):
-			h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), targetEmail, "token name is required", start, details)
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+				targetEmail,
+				"token name is required",
+				start,
+				details,
+			)
 			return
 		default:
-			h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), targetEmail, "failed to create token", start, details)
+			h.respondAuditError(
+				c,
+				http.StatusInternalServerError,
+				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+				targetEmail,
+				"failed to create token",
+				start,
+				details,
+			)
 			return
 		}
 	}
@@ -117,7 +165,15 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 		"user_email":  targetEmail,
 	}
 	resource := fmt.Sprintf("%d", resp.APIToken.ID)
-	h.respondAuditSuccess(c, http.StatusOK, payload, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), resource, start, details)
+	h.respondAuditSuccess(
+		c,
+		http.StatusOK,
+		payload,
+		audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+		resource,
+		start,
+		details,
+	)
 }
 
 // ListAPITokens godoc
@@ -187,24 +243,56 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
 	if tokenIDStr == "" {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "invalid token ID", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+			tokenIDStr,
+			"invalid token ID",
+			start,
+			nil,
+		)
 		return
 	}
 
 	var req UpdateAPITokenRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, err.Error(), start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+			tokenIDStr,
+			err.Error(),
+			start,
+			nil,
+		)
 		return
 	}
 
 	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "failed to load token", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+			tokenIDStr,
+			"failed to load token",
+			start,
+			nil,
+		)
 		return
 	}
 	if existing == nil {
-		h.respondAuditError(c, http.StatusNotFound, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "token not found", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+			tokenIDStr,
+			"token not found",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -216,13 +304,37 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 		if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
 			switch {
 			case errors.Is(err, token.ErrAPITokenNameExists):
-				h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "token name already exists", start, map[string]interface{}{"name": name})
+				h.respondAuditError(
+					c,
+					http.StatusBadRequest,
+					audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+					tokenIDStr,
+					"token name already exists",
+					start,
+					map[string]interface{}{"name": name},
+				)
 				return
 			case errors.Is(err, token.ErrAPITokenNameRequired):
-				h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "token name is required", start, nil)
+				h.respondAuditError(
+					c,
+					http.StatusBadRequest,
+					audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+					tokenIDStr,
+					"token name is required",
+					start,
+					nil,
+				)
 				return
 			default:
-				h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "failed to update token name", start, map[string]interface{}{"name": name})
+				h.respondAuditError(
+					c,
+					http.StatusInternalServerError,
+					audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+					tokenIDStr,
+					"failed to update token name",
+					start,
+					map[string]interface{}{"name": name},
+				)
 				return
 			}
 		}
@@ -231,7 +343,15 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 
 	if req.Permissions != nil {
 		if err := h.tokenService.UpdateTokenPermissions(tokenID, req.Permissions); err != nil {
-			h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "failed to update token permissions", start, nil)
+			h.respondAuditError(
+				c,
+				http.StatusInternalServerError,
+				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+				tokenIDStr,
+				"failed to update token permissions",
+				start,
+				nil,
+			)
 			return
 		}
 		details["permissions"] = req.Permissions
@@ -239,11 +359,27 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 
 	updated, err := h.database.GetAPITokenByID(tokenID)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "failed to load token", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+			tokenIDStr,
+			"failed to load token",
+			start,
+			nil,
+		)
 		return
 	}
 	if updated == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, "token disappeared", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+			tokenIDStr,
+			"token disappeared",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -253,7 +389,15 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	details["current_name"] = updated.Name
 	details["current_permissions"] = updated.Permissions
 
-	h.respondAuditSuccess(c, http.StatusOK, updated, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()), tokenIDStr, start, details)
+	h.respondAuditSuccess(
+		c,
+		http.StatusOK,
+		updated,
+		audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
+		tokenIDStr,
+		start,
+		details,
+	)
 }
 
 // DeleteAPIToken godoc
@@ -272,22 +416,54 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	start := time.Now()
 	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
 	if tokenIDStr == "" {
-		h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()), tokenIDStr, "invalid token ID", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()),
+			tokenIDStr,
+			"invalid token ID",
+			start,
+			nil,
+		)
 		return
 	}
 
 	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()), tokenIDStr, "failed to load token", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()),
+			tokenIDStr,
+			"failed to load token",
+			start,
+			nil,
+		)
 		return
 	}
 	if existing == nil {
-		h.respondAuditError(c, http.StatusNotFound, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()), tokenIDStr, "token not found", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()),
+			tokenIDStr,
+			"token not found",
+			start,
+			nil,
+		)
 		return
 	}
 
 	if err := h.database.DeleteAPIToken(existing.ID); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()), tokenIDStr, "failed to delete token", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()),
+			tokenIDStr,
+			"failed to delete token",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -295,7 +471,15 @@ func (h *AdminHandler) DeleteAPIToken(c *gin.Context) {
 	if strings.TrimSpace(existing.Name) != "" {
 		details["name"] = existing.Name
 	}
-	h.respondAuditSuccess(c, http.StatusNoContent, nil, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()), tokenIDStr, start, details)
+	h.respondAuditSuccess(
+		c,
+		http.StatusNoContent,
+		nil,
+		audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionDelete.String()),
+		tokenIDStr,
+		start,
+		details,
+	)
 }
 
 // GetTokenPermissionMetadata godoc

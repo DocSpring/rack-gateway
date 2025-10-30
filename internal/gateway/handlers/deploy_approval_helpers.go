@@ -24,7 +24,13 @@ var (
 	errDeployApprovalRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
 )
 
-func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.Manager, user *db.User, req CreateDeployApprovalRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
+func resolveDeployApprovalRequestToken(
+	database *db.Database,
+	rbacSvc rbac.Manager,
+	user *db.User,
+	req CreateDeployApprovalRequestRequest,
+	authUser *auth.AuthUser,
+) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPITokenName)
 	var token *db.APIToken
 	var err error
@@ -62,7 +68,12 @@ func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.Manag
 	}
 
 	if token.UserID != user.ID {
-		allowedAdmin, err := rbacSvc.Enforce(user.Email, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionApprove)
+		allowedAdmin, err := rbacSvc.Enforce(
+			user.Email,
+			rbac.ScopeGateway,
+			rbac.ResourceDeployApprovalRequest,
+			rbac.ActionApprove,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check admin permission: %w", err)
 		}
@@ -198,7 +209,11 @@ func validatePublicID(c *gin.Context) (string, bool) {
 }
 
 // loadDeployApprovalRequest retrieves a deploy approval record by public ID.
-func loadDeployApprovalRequest(c *gin.Context, database *db.Database, publicID string) (*db.DeployApprovalRequest, bool) {
+func loadDeployApprovalRequest(
+	c *gin.Context,
+	database *db.Database,
+	publicID string,
+) (*db.DeployApprovalRequest, bool) {
 	record, err := database.GetDeployApprovalRequestByPublicID(publicID)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
@@ -222,7 +237,11 @@ func loadApprover(c *gin.Context, database *db.Database, email string) (*db.User
 }
 
 // logDeployApprovalAudit wraps audit logging for deploy approval operations.
-func logDeployApprovalAudit(logger *audit.Logger, userEmail, userName, action, resourceID, details, status string, httpStatus int) {
+func logDeployApprovalAudit(
+	logger *audit.Logger,
+	userEmail, userName, action, resourceID, details, status string,
+	httpStatus int,
+) {
 	if logger == nil {
 		return
 	}

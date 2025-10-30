@@ -109,12 +109,21 @@ func (c *Client) Stop(ctx context.Context) error {
 }
 
 // Insert enqueues a new job for background processing
-func (c *Client) Insert(ctx context.Context, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error) {
+func (c *Client) Insert(
+	ctx context.Context,
+	args river.JobArgs,
+	opts *river.InsertOpts,
+) (*rivertype.JobInsertResult, error) {
 	return c.river.Insert(ctx, args, opts)
 }
 
 // InsertTx enqueues a new job within a transaction
-func (c *Client) InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error) {
+func (c *Client) InsertTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	args river.JobArgs,
+	opts *river.InsertOpts,
+) (*rivertype.JobInsertResult, error) {
 	return c.river.InsertTx(ctx, tx, args, opts)
 }
 

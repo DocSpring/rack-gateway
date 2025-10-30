@@ -114,7 +114,12 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 
 	window := time.Duration(windowMinutes) * time.Minute
 	expiresAt := time.Now().Add(window)
-	record, err := h.database.ApproveDeployApprovalRequestByPublicID(input.publicID, input.approver.ID, expiresAt, input.notes)
+	record, err := h.database.ApproveDeployApprovalRequestByPublicID(
+		input.publicID,
+		input.approver.ID,
+		expiresAt,
+		input.notes,
+	)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
@@ -160,7 +165,12 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	autoApprove, err := getAppSettingBool(h.settingsService, record.App, settings.KeyCircleCIAutoApproveOnApproval, false)
+	autoApprove, err := getAppSettingBool(
+		h.settingsService,
+		record.App,
+		settings.KeyCircleCIAutoApproveOnApproval,
+		false,
+	)
 	if err != nil {
 		log.Printf("WARN: Failed to get circleci_auto_approve_on_approval setting: %v", err)
 		c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))

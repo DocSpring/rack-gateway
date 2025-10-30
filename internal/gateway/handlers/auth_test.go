@@ -96,7 +96,18 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 	}
 
 	pepper := []byte("mfa-pepper-for-tests")
-	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "", nil)
+	mfaService, err := mfa.NewService(
+		database,
+		"Rack Gateway",
+		30*time.Minute,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"",
+		"",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to init mfa service: %v", err)
 	}
@@ -139,7 +150,16 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 	}
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil, auditLogger)
+	handler := NewAuthHandler(
+		oauth,
+		database,
+		&config.Config{DevMode: true},
+		sessionManager,
+		nil,
+		nil,
+		nil,
+		auditLogger,
+	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=state")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
@@ -177,7 +197,16 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 	}
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil, nil, auditLogger)
+	handler := NewAuthHandler(
+		oauth,
+		database,
+		&config.Config{DevMode: false},
+		sessionManager,
+		nil,
+		nil,
+		nil,
+		auditLogger,
+	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=state")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state", Secure: true})
@@ -202,7 +231,16 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil, auditLogger)
+	handler := NewAuthHandler(
+		oauth,
+		database,
+		&config.Config{DevMode: true},
+		sessionManager,
+		nil,
+		nil,
+		nil,
+		auditLogger,
+	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/logout")
 	handler.WebLogout(c)
@@ -229,7 +267,16 @@ func TestWebLoginStartSetsStateCookie(t *testing.T) {
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: false}, sessionManager, nil, nil, nil, auditLogger)
+	handler := NewAuthHandler(
+		oauth,
+		database,
+		&config.Config{DevMode: false},
+		sessionManager,
+		nil,
+		nil,
+		nil,
+		auditLogger,
+	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/login")
 	handler.WebLoginStart(c)
@@ -259,7 +306,16 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
-	handler := NewAuthHandler(oauth, database, &config.Config{DevMode: true}, sessionManager, nil, nil, nil, auditLogger)
+	handler := NewAuthHandler(
+		oauth,
+		database,
+		&config.Config{DevMode: true},
+		sessionManager,
+		nil,
+		nil,
+		nil,
+		auditLogger,
+	)
 
 	c, w := newTestContext(http.MethodGet, "/api/v1/auth/web/callback?code=abc&state=other")
 	c.Request.AddCookie(&http.Cookie{Name: webOAuthStateCookie, Value: "state"})
@@ -305,11 +361,27 @@ func TestDeleteMFAMethodClearsTrustedDevicesWhenFullyDisabled(t *testing.T) {
 
 	// Create trusted devices
 	expiresAt := time.Now().Add(30 * 24 * time.Hour)
-	_, err = database.CreateTrustedDevice(user.ID, "11111111-1111-1111-1111-111111111111", "device1-token-hash", expiresAt, "127.0.0.1", "ua-hash-1", nil)
+	_, err = database.CreateTrustedDevice(
+		user.ID,
+		"11111111-1111-1111-1111-111111111111",
+		"device1-token-hash",
+		expiresAt,
+		"127.0.0.1",
+		"ua-hash-1",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to create device1: %v", err)
 	}
-	_, err = database.CreateTrustedDevice(user.ID, "22222222-2222-2222-2222-222222222222", "device2-token-hash", expiresAt, "127.0.0.1", "ua-hash-2", nil)
+	_, err = database.CreateTrustedDevice(
+		user.ID,
+		"22222222-2222-2222-2222-222222222222",
+		"device2-token-hash",
+		expiresAt,
+		"127.0.0.1",
+		"ua-hash-2",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to create device2: %v", err)
 	}
@@ -323,7 +395,18 @@ func TestDeleteMFAMethodClearsTrustedDevicesWhenFullyDisabled(t *testing.T) {
 
 	// Setup MFA service and handler
 	pepper := []byte("mfa-pepper-for-tests")
-	mfaService, err := mfa.NewService(database, "Rack Gateway", 30*time.Minute, 10*time.Minute, pepper, "", "", "", "", nil)
+	mfaService, err := mfa.NewService(
+		database,
+		"Rack Gateway",
+		30*time.Minute,
+		10*time.Minute,
+		pepper,
+		"",
+		"",
+		"",
+		"",
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("failed to init mfa service: %v", err)
 	}

@@ -68,7 +68,11 @@ func (d *Database) GetSlackIntegration() (*SlackIntegration, error) {
 }
 
 // CreateSlackIntegration creates a new Slack integration
-func (d *Database) CreateSlackIntegration(workspaceID, workspaceName, botTokenEncrypted, botUserID, scope string, channelActions map[string]interface{}, createdByUserID *int64) (*SlackIntegration, error) {
+func (d *Database) CreateSlackIntegration(
+	workspaceID, workspaceName, botTokenEncrypted, botUserID, scope string,
+	channelActions map[string]interface{},
+	createdByUserID *int64,
+) (*SlackIntegration, error) {
 	channelActionsJSON, err := json.Marshal(channelActions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal channel_actions: %w", err)

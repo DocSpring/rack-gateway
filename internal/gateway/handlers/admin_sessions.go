@@ -30,13 +30,29 @@ func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 		return
 	}
 	if h.sessions == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.list", email, "session management unavailable", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.list",
+			email,
+			"session management unavailable",
+			start,
+			nil,
+		)
 		return
 	}
 
 	user, err := h.database.GetUser(email)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.list", email, "failed to load user", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.list",
+			email,
+			"failed to load user",
+			start,
+			nil,
+		)
 		return
 	}
 	if user == nil {
@@ -46,7 +62,15 @@ func (h *AdminHandler) ListUserSessions(c *gin.Context) {
 
 	sessions, err := h.database.ListActiveSessionsByUser(user.ID)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.list", email, "failed to list sessions", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.list",
+			email,
+			"failed to list sessions",
+			start,
+			nil,
+		)
 		return
 	}
 
@@ -102,41 +126,97 @@ func (h *AdminHandler) RevokeUserSession(c *gin.Context) {
 		return
 	}
 	if h.sessions == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "session management unavailable", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke",
+			email,
+			"session management unavailable",
+			start,
+			nil,
+		)
 		return
 	}
 
 	sessionIDStr := strings.TrimSpace(c.Param("sessionID"))
 	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil || sessionID <= 0 {
-		h.respondAuditError(c, http.StatusBadRequest, "user.sessions.revoke", email, "invalid session id", start, map[string]interface{}{"session_id": sessionIDStr})
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			"user.sessions.revoke",
+			email,
+			"invalid session id",
+			start,
+			map[string]interface{}{"session_id": sessionIDStr},
+		)
 		return
 	}
 
 	user, err := h.database.GetUser(email)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "failed to load user", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke",
+			email,
+			"failed to load user",
+			start,
+			nil,
+		)
 		return
 	}
 	if user == nil {
-		h.respondAuditError(c, http.StatusNotFound, "user.sessions.revoke", email, "user not found", start, map[string]interface{}{"session_id": sessionID})
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			"user.sessions.revoke",
+			email,
+			"user not found",
+			start,
+			map[string]interface{}{"session_id": sessionID},
+		)
 		return
 	}
 
 	session, err := h.database.GetUserSessionByID(sessionID)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "failed to load session", start, map[string]interface{}{"session_id": sessionID})
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke",
+			email,
+			"failed to load session",
+			start,
+			map[string]interface{}{"session_id": sessionID},
+		)
 		return
 	}
 	if session == nil || session.UserID != user.ID {
-		h.respondAuditError(c, http.StatusNotFound, "user.sessions.revoke", email, "session not found", start, map[string]interface{}{"session_id": sessionID})
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			"user.sessions.revoke",
+			email,
+			"session not found",
+			start,
+			map[string]interface{}{"session_id": sessionID},
+		)
 		return
 	}
 
 	actorID := h.sessionActorID(c)
 	revoked, err := h.sessions.RevokeByID(sessionID, actorID)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke", email, "failed to revoke session", start, map[string]interface{}{"session_id": sessionID})
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke",
+			email,
+			"failed to revoke session",
+			start,
+			map[string]interface{}{"session_id": sessionID},
+		)
 		return
 	}
 
@@ -162,17 +242,41 @@ func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 	start := time.Now()
 	email := strings.TrimSpace(c.Param("email"))
 	if email == "" {
-		h.respondAuditError(c, http.StatusBadRequest, "user.sessions.revoke_all", email, "email is required", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			"user.sessions.revoke_all",
+			email,
+			"email is required",
+			start,
+			nil,
+		)
 		return
 	}
 	if h.sessions == nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke_all", email, "session management unavailable", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke_all",
+			email,
+			"session management unavailable",
+			start,
+			nil,
+		)
 		return
 	}
 
 	user, err := h.database.GetUser(email)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke_all", email, "failed to load user", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke_all",
+			email,
+			"failed to load user",
+			start,
+			nil,
+		)
 		return
 	}
 	if user == nil {
@@ -183,7 +287,15 @@ func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 	actorID := h.sessionActorID(c)
 	revokedCount, err := h.sessions.RevokeAllForUser(user.ID, actorID)
 	if err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "user.sessions.revoke_all", email, "failed to revoke sessions", start, nil)
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			"user.sessions.revoke_all",
+			email,
+			"failed to revoke sessions",
+			start,
+			nil,
+		)
 		return
 	}
 

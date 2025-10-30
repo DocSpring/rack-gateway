@@ -36,9 +36,11 @@ Rack management:
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&ConfigPath, "config", ConfigPath, "Config directory")
 	rootCmd.PersistentFlags().StringVar(&RackFlag, "rack", "", "Rack to use (overrides current rack)")
-	rootCmd.PersistentFlags().StringVar(&APITokenFlag, "api-token", "", "API token to use for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
+	rootCmd.PersistentFlags().
+		StringVar(&APITokenFlag, "api-token", "", "API token to use for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
 	rootCmd.PersistentFlags().StringVar(&MFAMethodFlag, "mfa-method", "", "MFA method to use (totp or webauthn)")
-	rootCmd.PersistentFlags().StringVar(&MFACodeFlag, "mfa-code", "", "MFA code (TOTP/Yubikey/backup) for step-up authentication")
+	rootCmd.PersistentFlags().
+		StringVar(&MFACodeFlag, "mfa-code", "", "MFA code (TOTP/Yubikey/backup) for step-up authentication")
 
 	// Add all commands
 	rootCmd.AddCommand(

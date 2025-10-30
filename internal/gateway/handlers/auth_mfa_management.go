@@ -341,7 +341,10 @@ func (h *AuthHandler) ensureMFAService(c *gin.Context) bool {
 	return false
 }
 
-func (h *AuthHandler) loadMFAMethodForCurrentUser(c *gin.Context, paramName string) (*mfaUserContext, *db.MFAMethod, bool) {
+func (h *AuthHandler) loadMFAMethodForCurrentUser(
+	c *gin.Context,
+	paramName string,
+) (*mfaUserContext, *db.MFAMethod, bool) {
 	userCtx, ok := loadMFAUserContext(c, h.database)
 	if !ok {
 		return nil, nil, false

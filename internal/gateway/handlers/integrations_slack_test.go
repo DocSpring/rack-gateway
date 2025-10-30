@@ -26,15 +26,30 @@ func newDenyAllRBAC() *denyAllRBAC {
 	return &denyAllRBAC{}
 }
 
-func (d *denyAllRBAC) Enforce(userEmail string, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+func (d *denyAllRBAC) Enforce(
+	userEmail string,
+	scope rbac.Scope,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
 	return false, nil
 }
 
-func (d *denyAllRBAC) EnforceUser(user *db.User, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+func (d *denyAllRBAC) EnforceUser(
+	user *db.User,
+	scope rbac.Scope,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
 	return false, nil
 }
 
-func (d *denyAllRBAC) EnforceForAPIToken(tokenID int64, scope rbac.Scope, resource rbac.Resource, action rbac.Action) (bool, error) {
+func (d *denyAllRBAC) EnforceForAPIToken(
+	tokenID int64,
+	scope rbac.Scope,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
 	return false, nil
 }
 
@@ -144,7 +159,15 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 		},
 	}
 	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
-	integration, err := database.CreateSlackIntegration("T123456", "Test Workspace", botToken, "U123456", "channels:read,chat:write", channelActions, &user.ID)
+	integration, err := database.CreateSlackIntegration(
+		"T123456",
+		"Test Workspace",
+		botToken,
+		"U123456",
+		"channels:read,chat:write",
+		channelActions,
+		&user.ID,
+	)
 	require.NoError(t, err)
 
 	handler := &AdminHandler{
@@ -196,7 +219,15 @@ func TestUpdateSlackChannels(t *testing.T) {
 		},
 	}
 	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
-	_, err = database.CreateSlackIntegration("T123456", "Test Workspace", botToken, "U123456", "channels:read,chat:write", channelActions, &user.ID)
+	_, err = database.CreateSlackIntegration(
+		"T123456",
+		"Test Workspace",
+		botToken,
+		"U123456",
+		"channels:read,chat:write",
+		channelActions,
+		&user.ID,
+	)
 	require.NoError(t, err)
 
 	handler := &AdminHandler{
@@ -224,7 +255,11 @@ func TestUpdateSlackChannels(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/integrations/slack/channels", strings.NewReader(string(payload)))
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/integrations/slack/channels",
+		strings.NewReader(string(payload)),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,
@@ -274,7 +309,15 @@ func TestDeleteSlackIntegration(t *testing.T) {
 		},
 	}
 	botToken := base64.StdEncoding.EncodeToString([]byte("xoxb-test-token"))
-	_, err = database.CreateSlackIntegration("T123456", "Test Workspace", botToken, "U123456", "channels:read,chat:write", channelActions, &user.ID)
+	_, err = database.CreateSlackIntegration(
+		"T123456",
+		"Test Workspace",
+		botToken,
+		"U123456",
+		"channels:read,chat:write",
+		channelActions,
+		&user.ID,
+	)
 	require.NoError(t, err)
 
 	handler := &AdminHandler{
@@ -328,7 +371,11 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/integrations/slack/channels", strings.NewReader(string(payload)))
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/integrations/slack/channels",
+		strings.NewReader(string(payload)),
+	)
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
 		Email: user.Email,

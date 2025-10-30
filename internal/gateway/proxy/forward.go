@@ -22,7 +22,13 @@ import (
 
 const proxyLogBodyLimit = 16384
 
-func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack config.RackConfig, path string, authUser *auth.AuthUser) (int, error) {
+func (h *Handler) forwardRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	rack config.RackConfig,
+	path string,
+	authUser *auth.AuthUser,
+) (int, error) {
 	original := path
 	base := strings.TrimRight(rack.URL, "/")
 	p := "/" + strings.TrimLeft(path, "/")
@@ -31,7 +37,8 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") && strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
+		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email, original)
 	}
 
@@ -77,7 +84,15 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 		return 0, fmt.Errorf("failed to create proxy request: %w", err)
 	}
 
-	httputil.CopyHeaders(proxyReq.Header, r.Header, "authorization", "env", "environment", "release-env", "x-audit-resource")
+	httputil.CopyHeaders(
+		proxyReq.Header,
+		r.Header,
+		"authorization",
+		"env",
+		"environment",
+		"release-env",
+		"x-audit-resource",
+	)
 
 	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s",
 		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
@@ -102,7 +117,8 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	isJSON := strings.Contains(ct, "application/json")
 	pth := original
-	filterRelease := isJSON && (rbac.KeyMatch3(pth, "/apps/{app}/releases") || rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
+	filterRelease := isJSON &&
+		(rbac.KeyMatch3(pth, "/apps/{app}/releases") || rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
 	shouldCapture := false
 	captureProcess := false
 	if isJSON {
@@ -146,7 +162,9 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 				h.captureProcessCreation(r, body, tracker)
 			}
 		}
-		if r.Method == http.MethodPost && rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if r.Method == http.MethodPost && rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") &&
+			resp.StatusCode >= 200 &&
+			resp.StatusCode < 300 {
 			if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
 				if h.database != nil {
 					if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
@@ -212,13 +230,38 @@ func (h *Handler) forwardRequest(w http.ResponseWriter, r *http.Request, rack co
 			}
 		}
 		if logProxy {
-			gtwlog.DebugTopicf(gtwlog.TopicProxy, "upstream response %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q", r.Method, path, resp.StatusCode, contentType, bytesWritten, upstreamMethod, upstreamURL)
+			gtwlog.DebugTopicf(
+				gtwlog.TopicProxy,
+				"upstream response %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q",
+				r.Method,
+				path,
+				resp.StatusCode,
+				contentType,
+				bytesWritten,
+				upstreamMethod,
+				upstreamURL,
+			)
 		}
 		if logResponse {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponse, "upstream response %s %s -> %d ct=%q len=%d", r.Method, path, resp.StatusCode, contentType, bytesWritten)
+			gtwlog.DebugTopicf(
+				gtwlog.TopicHTTPResponse,
+				"upstream response %s %s -> %d ct=%q len=%d",
+				r.Method,
+				path,
+				resp.StatusCode,
+				contentType,
+				bytesWritten,
+			)
 		}
 		if logResponseBody && len(logSnippet) > 0 {
-			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "upstream response %s %s -> %d body=%s", r.Method, path, resp.StatusCode, string(logSnippet))
+			gtwlog.DebugTopicf(
+				gtwlog.TopicHTTPResponseBody,
+				"upstream response %s %s -> %d body=%s",
+				r.Method,
+				path,
+				resp.StatusCode,
+				string(logSnippet),
+			)
 		}
 	}
 
