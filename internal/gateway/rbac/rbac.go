@@ -46,8 +46,7 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) &&` + `
- (p.act == "*" || r.act == p.act)
+m = g(r.sub, p.sub) && (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) && (p.act == "*" || r.act == p.act)
 `
 
 // NewDBManager creates a new RBAC manager using the database

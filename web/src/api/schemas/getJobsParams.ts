@@ -12,7 +12,7 @@ export type GetJobsParams = {
    */
   queue?: string;
   /**
-   * Filter by state (available, cancelled, completed, discarded, pending, retryable, running, scheduled)
+   * Filter by job state
    */
   state?: string;
   /**

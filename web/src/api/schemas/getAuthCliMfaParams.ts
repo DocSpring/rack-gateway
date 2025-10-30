@@ -6,9 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 
-export type GetDeployApprovalRequestsIdAuditLogsParams = {
+export type GetAuthCliMfaParams = {
   /**
-   * Maximum number of results (default: 100)
+   * State
    */
-  limit?: number;
+  state: string;
 };

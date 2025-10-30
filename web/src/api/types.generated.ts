@@ -412,7 +412,8 @@ export interface paths {
         };
         /**
          * Update environment variables
-         * @description Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+         * @description Applies environment variable changes for a Convox app by creating a new release.
+         *     Secrets remain masked unless the user has secrets permissions.
          */
         put: {
             parameters: {
@@ -1364,6 +1365,57 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/cli/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Display MFA challenge form
+         * @description Displays the MFA challenge form for CLI login.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description State */
+                    state: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Temporary Redirect */
+                307: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": string;
+                    };
+                };
+                /** @description Missing parameters */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2807,6 +2859,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/deploy-approval-requests/{id}/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get audit logs for a deploy approval request
+         * @description Returns audit logs for a specific deploy approval request
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Maximum number of results (default: 100) */
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description Deploy approval request public ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.RawAuditLogsResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/deploy-approval-requests/{id}/reject": {
         parameters: {
             query?: never;
@@ -3020,7 +3135,7 @@ export interface paths {
                 query?: {
                     /** @description Filter by queue name */
                     queue?: string;
-                    /** @description Filter by state (available, cancelled, completed, discarded, pending, retryable, running, scheduled) */
+                    /** @description Filter by job state */
                     state?: string;
                     /** @description Filter by job kind */
                     kind?: string;
@@ -4235,6 +4350,41 @@ export interface components {
             public_id?: string;
             user_id?: number;
         };
+        "db.AuditLog": {
+            /** @description e.g., "env.read", "user.create", "login.oauth_failed" */
+            action?: string;
+            /** @description "convox", "users", "auth" */
+            action_type?: string;
+            api_token_id?: number;
+            api_token_name?: string;
+            chain_index?: number;
+            checkpoint_hash?: number[];
+            checkpoint_id?: string;
+            command?: string;
+            deploy_approval_request_id?: number;
+            /** @description JSON string */
+            details?: string;
+            /** @description Always 1 (aggregation removed) */
+            event_count?: number;
+            event_hash?: number[];
+            http_status?: number;
+            id?: number;
+            ip_address?: string;
+            /** @description NULL for genesis event */
+            previous_hash?: number[];
+            /** @description "allow" or "deny" */
+            rbac_decision?: string;
+            request_id?: string;
+            resource?: string;
+            resource_type?: string;
+            response_time_ms?: number;
+            /** @description "success", "denied", "error", "blocked" */
+            status?: string;
+            timestamp?: string;
+            user_agent?: string;
+            user_email?: string;
+            user_name?: string;
+        };
         "db.AuditLogAggregated": {
             action?: string;
             action_type?: string;
@@ -4491,6 +4641,12 @@ export interface components {
             host: string;
             name: string;
         };
+        "handlers.RawAuditLogsResponse": {
+            limit: number;
+            logs: components["schemas"]["db.AuditLog"][];
+            page: number;
+            total: number;
+        };
         "handlers.RevokeAllSessionsResponse": {
             revoked_count: number;
         };
@@ -4620,7 +4776,7 @@ export interface components {
         "handlers.WebAuthnAssertionStartResponse": {
             /** @description protocol.CredentialAssertion */
             options: unknown;
-            /** @description Serialized session to send back with verification */
+            /** @description SessionData is the serialized session to send back with verification */
             session_data: string;
         };
         "handlers.WebAuthnEnrollmentResponse": {

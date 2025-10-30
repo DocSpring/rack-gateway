@@ -5,10 +5,11 @@
  * API for the Rack Gateway administration and proxy services.
  * OpenAPI spec version: 1.0
  */
+import type { DbAuditLog } from './dbAuditLog';
 
-export type GetDeployApprovalRequestsIdAuditLogsParams = {
-  /**
-   * Maximum number of results (default: 100)
-   */
-  limit?: number;
-};
+export interface HandlersRawAuditLogsResponse {
+  limit: number;
+  logs: DbAuditLog[];
+  page: number;
+  total: number;
+}

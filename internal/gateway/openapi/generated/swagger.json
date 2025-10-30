@@ -380,7 +380,7 @@
                         "CSRFToken": []
                     }
                 ],
-                "description": "Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.",
+                "description": "Applies environment variable changes for a Convox app by creating a new release.\nSecrets remain masked unless the user has secrets permissions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1350,6 +1350,38 @@
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/cli/mfa": {
+            "get": {
+                "description": "Displays the MFA challenge form for CLI login.",
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Display MFA challenge form",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "State",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "307": {
+                        "description": "Temporary Redirect",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing parameters",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -2455,6 +2487,58 @@
                 }
             }
         },
+        "/deploy-approval-requests/{id}/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Returns audit logs for a specific deploy approval request",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deploy Approvals"
+                ],
+                "summary": "Get audit logs for a deploy approval request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deploy approval request public ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of results (default: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RawAuditLogsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/deploy-approval-requests/{id}/reject": {
             "post": {
                 "security": [
@@ -2612,7 +2696,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "Filter by state (available, cancelled, completed, discarded, pending, retryable, running, scheduled)",
+                        "description": "Filter by job state",
                         "name": "state",
                         "in": "query"
                     },
@@ -3690,6 +3774,105 @@
                 }
             }
         },
+        "db.AuditLog": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "e.g., \"env.read\", \"user.create\", \"login.oauth_failed\"",
+                    "type": "string"
+                },
+                "action_type": {
+                    "description": "\"convox\", \"users\", \"auth\"",
+                    "type": "string"
+                },
+                "api_token_id": {
+                    "type": "integer"
+                },
+                "api_token_name": {
+                    "type": "string"
+                },
+                "chain_index": {
+                    "type": "integer"
+                },
+                "checkpoint_hash": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "checkpoint_id": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "string"
+                },
+                "deploy_approval_request_id": {
+                    "type": "integer"
+                },
+                "details": {
+                    "description": "JSON string",
+                    "type": "string"
+                },
+                "event_count": {
+                    "description": "Always 1 (aggregation removed)",
+                    "type": "integer"
+                },
+                "event_hash": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "http_status": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "previous_hash": {
+                    "description": "NULL for genesis event",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "rbac_decision": {
+                    "description": "\"allow\" or \"deny\"",
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "resource": {
+                    "type": "string"
+                },
+                "resource_type": {
+                    "type": "string"
+                },
+                "response_time_ms": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "\"success\", \"denied\", \"error\", \"blocked\"",
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "user_agent": {
+                    "type": "string"
+                },
+                "user_email": {
+                    "type": "string"
+                },
+                "user_name": {
+                    "type": "string"
+                }
+            }
+        },
         "db.AuditLogAggregated": {
             "type": "object",
             "properties": {
@@ -4542,6 +4725,32 @@
                 }
             }
         },
+        "handlers.RawAuditLogsResponse": {
+            "type": "object",
+            "required": [
+                "limit",
+                "logs",
+                "page",
+                "total"
+            ],
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                },
+                "logs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/db.AuditLog"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.RevokeAllSessionsResponse": {
             "type": "object",
             "required": [
@@ -5023,7 +5232,7 @@
                     "description": "protocol.CredentialAssertion"
                 },
                 "session_data": {
-                    "description": "Serialized session to send back with verification",
+                    "description": "SessionData is the serialized session to send back with verification",
                     "type": "string"
                 }
             }

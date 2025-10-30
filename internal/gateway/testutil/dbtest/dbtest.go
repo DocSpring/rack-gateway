@@ -38,7 +38,6 @@ func NewDatabase(t *testing.T) *db.Database {
 	t.Helper()
 	baseDSN := getBaseDSN()
 	admin, adminCleanup := setupAdminConnection(t, baseDSN)
-	defer adminCleanup()
 
 	dbName := generateTestDBName()
 	createDatabase(t, admin, dbName)
@@ -47,7 +46,7 @@ func NewDatabase(t *testing.T) *db.Database {
 	waitForDatabaseReady(t, dsn)
 
 	app := connectAppDatabase(t, dsn)
-	registerCleanup(t, app, admin, dbName)
+	registerCleanup(t, app, admin, adminCleanup, dbName)
 
 	return app
 }
@@ -137,7 +136,7 @@ func connectAppDatabase(t *testing.T, dsn string) *db.Database {
 	return app
 }
 
-func registerCleanup(t *testing.T, app *db.Database, admin *sql.DB, dbName string) {
+func registerCleanup(t *testing.T, app *db.Database, admin *sql.DB, adminCleanup func(), dbName string) {
 	t.Helper()
 	t.Cleanup(func() {
 		if err := app.Close(); err != nil {
@@ -146,6 +145,8 @@ func registerCleanup(t *testing.T, app *db.Database, admin *sql.DB, dbName strin
 		if _, err := admin.Exec("DROP DATABASE IF EXISTS " + pqQuoteIdent(dbName)); err != nil {
 			t.Fatalf("drop database %s: %v", dbName, err)
 		}
+		// Close admin connection after dropping the test database
+		adminCleanup()
 	})
 }
 

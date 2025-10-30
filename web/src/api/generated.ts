@@ -24,9 +24,11 @@ import type {
   GetAuditLogsExportParams,
   GetAuditLogsParams,
   GetAuthCliCallbackParams,
+  GetAuthCliMfaParams,
   GetAuthWebCallbackParams,
   GetCreatedBy200,
   GetCreatedByParams,
+  GetDeployApprovalRequestsIdAuditLogsParams,
   GetDeployApprovalRequestsParams,
   GetJobsParams,
   GetRack200,
@@ -50,6 +52,7 @@ import type {
   HandlersJobResponse,
   HandlersLockUserRequest,
   HandlersMFAStatusResponse,
+  HandlersRawAuditLogsResponse,
   HandlersRevokeAllSessionsResponse,
   HandlersRevokeSessionResponse,
   HandlersStartTOTPEnrollmentResponse,
@@ -203,9 +206,10 @@ export const getRackGatewayAPI = () => {
   };
 
   /**
-   * Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
-   * @summary Update environment variables
-   */
+ * Applies environment variable changes for a Convox app by creating a new release.
+Secrets remain masked unless the user has secrets permissions.
+ * @summary Update environment variables
+ */
   const putAppsAppEnv = (
     app: string,
     handlersUpdateEnvValuesRequest: HandlersUpdateEnvValuesRequest,
@@ -500,6 +504,20 @@ export const getRackGatewayAPI = () => {
         headers: { 'Content-Type': 'application/json' },
         data: handlersCLILoginCompleteRequest,
       },
+      options,
+    );
+  };
+
+  /**
+   * Displays the MFA challenge form for CLI login.
+   * @summary Display MFA challenge form
+   */
+  const getAuthCliMfa = (
+    params: GetAuthCliMfaParams,
+    options?: SecondParameter<typeof createGatewayClient<unknown>>,
+  ) => {
+    return createGatewayClient<unknown>(
+      { url: `/auth/cli/mfa`, method: 'GET', params },
       options,
     );
   };
@@ -876,6 +894,27 @@ export const getRackGatewayAPI = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         data: handlersUpdateDeployApprovalRequestStatusRequest,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Returns audit logs for a specific deploy approval request
+   * @summary Get audit logs for a deploy approval request
+   */
+  const getDeployApprovalRequestsIdAuditLogs = (
+    id: string,
+    params?: GetDeployApprovalRequestsIdAuditLogsParams,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersRawAuditLogsResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersRawAuditLogsResponse>(
+      {
+        url: `/deploy-approval-requests/${id}/audit-logs`,
+        method: 'GET',
+        params,
       },
       options,
     );
@@ -1283,6 +1322,7 @@ export const getRackGatewayAPI = () => {
     getAuditLogsExport,
     getAuthCliCallback,
     postAuthCliComplete,
+    getAuthCliMfa,
     postAuthCliStart,
     postAuthMfaBackupCodesRegenerate,
     postAuthMfaEnrollTotpConfirm,
@@ -1305,6 +1345,7 @@ export const getRackGatewayAPI = () => {
     getCreatedBy,
     getDeployApprovalRequests,
     postDeployApprovalRequestsIdApprove,
+    getDeployApprovalRequestsIdAuditLogs,
     postDeployApprovalRequestsIdReject,
     getHealth,
     getInfo,
@@ -1462,6 +1503,9 @@ export type PostAuthCliCompleteResult = NonNullable<
     ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliComplete']>
   >
 >;
+export type GetAuthCliMfaResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getAuthCliMfa']>>
+>;
 export type PostAuthCliStartResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postAuthCliStart']>>
 >;
@@ -1591,6 +1635,15 @@ export type PostDeployApprovalRequestsIdApproveResult = NonNullable<
       ReturnType<
         typeof getRackGatewayAPI
       >['postDeployApprovalRequestsIdApprove']
+    >
+  >
+>;
+export type GetDeployApprovalRequestsIdAuditLogsResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<
+        typeof getRackGatewayAPI
+      >['getDeployApprovalRequestsIdAuditLogs']
     >
   >
 >;
