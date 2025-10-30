@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
@@ -66,7 +65,6 @@ func tokenHasPermission(perms []string, target string) bool {
 func (h *Handler) evaluateAPITokenPermission(
 	r *http.Request,
 	authUser *auth.AuthUser,
-	rack config.RackConfig,
 	resource rbac.Resource,
 	action rbac.Action,
 ) (bool, *deployApprovalTracker, error) {

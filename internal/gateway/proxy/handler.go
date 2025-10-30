@@ -213,7 +213,7 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if authUser.IsAPIToken {
-		allowed, approvalTracker, err = h.evaluateAPITokenPermission(r, authUser, rackConfig, resource, action)
+		allowed, approvalTracker, err = h.evaluateAPITokenPermission(r, authUser, resource, action)
 		if err != nil {
 			if appErr, ok := err.(*deployApprovalError); ok {
 				h.auditLogger.LogRequest(
