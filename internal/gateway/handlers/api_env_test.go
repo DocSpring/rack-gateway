@@ -51,11 +51,13 @@ func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handle
 	return handler, rbacManager
 }
 
-func newJSONContext(method, path string, body []byte) (*gin.Context, *httptest.ResponseRecorder) {
+const envValuesPath = "/api/v1/apps/myapp/env"
+
+func newJSONContext(body []byte) (*gin.Context, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	req := httptest.NewRequest(method, path, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, envValuesPath, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 	return c, w
@@ -104,7 +106,7 @@ func TestUpdateEnvValuesSuccess(t *testing.T) {
 		"set": map[string]string{"FOO": "baz"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newJSONContext(http.MethodPut, "/api/v1/apps/myapp/env", body)
+	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
 	attachUser(c, "deployer@example.com", "Deployer User")
 
@@ -165,7 +167,7 @@ func TestUpdateEnvValuesRequiresEnvSetPermission(t *testing.T) {
 		"set": map[string]string{"FOO": "baz"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newJSONContext(http.MethodPut, "/api/v1/apps/myapp/env", body)
+	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
 	attachUser(c, "viewer@example.com", "Viewer User")
 
@@ -204,7 +206,7 @@ func TestUpdateEnvValuesSecretRequiresPermission(t *testing.T) {
 		"set": map[string]string{"SECRET_KEY": "updated"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newJSONContext(http.MethodPut, "/api/v1/apps/myapp/env", body)
+	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
 	attachUser(c, "deployer@example.com", "Deployer User")
 
@@ -247,7 +249,7 @@ func TestUpdateEnvValuesMaskedSecretWithoutExistingValueFails(t *testing.T) {
 		"set": map[string]string{"SECRET_KEY": envutil.MaskedSecret},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newJSONContext(http.MethodPut, "/api/v1/apps/myapp/env", body)
+	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
 	attachUser(c, "admin@example.com", "Admin User")
 
@@ -302,7 +304,7 @@ func TestUpdateEnvValuesProtectedKeyDenied(t *testing.T) {
 		"set": map[string]string{"PROTECTED": "2"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newJSONContext(http.MethodPut, "/api/v1/apps/myapp/env", body)
+	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
 	attachUser(c, "admin@example.com", "Admin User")
 
@@ -341,7 +343,7 @@ func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
 		"set": map[string]string{"FOO": "bar"},
 	}
 	body, _ := json.Marshal(payload)
-	c, w := newJSONContext(http.MethodPut, "/api/v1/apps/myapp/env", body)
+	c, w := newJSONContext(body)
 	c.Params = gin.Params{{Key: "app", Value: "myapp"}}
 	attachUser(c, "deployer@example.com", "Deployer User")
 

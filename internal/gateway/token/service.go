@@ -192,5 +192,5 @@ func DefaultCICDPermissions() []string {
 	return perms
 }
 
-// DefaultTokenExpiry: tokens do not expire by default (nil)
+// DefaultTokenExpiry returns nil so tokens do not expire by default.
 func DefaultTokenExpiry() *time.Time { return nil }

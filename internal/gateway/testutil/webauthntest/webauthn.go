@@ -69,8 +69,7 @@ func (mc *MockCredential) GenerateAssertionForSession(sessionJSON []byte, origin
 		return "", fmt.Errorf("session missing relying party id")
 	}
 
-	challenge, err := base64.RawURLEncoding.DecodeString(session.Challenge)
-	if err != nil {
+	if _, err := base64.RawURLEncoding.DecodeString(session.Challenge); err != nil {
 		return "", fmt.Errorf("failed to decode challenge: %w", err)
 	}
 
@@ -89,7 +88,7 @@ func (mc *MockCredential) GenerateAssertionForSession(sessionJSON []byte, origin
 		origin = fmt.Sprintf("http://%s", session.RelyingPartyID)
 	}
 
-	assertion, err := mc.buildAssertion(challenge, session.Challenge, session.RelyingPartyID, credentialID, origin, session.UserID)
+	assertion, err := mc.buildAssertion(session.Challenge, session.RelyingPartyID, credentialID, origin, session.UserID)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +101,7 @@ func (mc *MockCredential) GenerateAssertionForSession(sessionJSON []byte, origin
 	return string(assertionBytes), nil
 }
 
-func (mc *MockCredential) buildAssertion(challenge []byte, challengeEncoded string, rpID string, credentialID []byte, origin string, userHandle []byte) (map[string]interface{}, error) {
+func (mc *MockCredential) buildAssertion(challengeEncoded string, rpID string, credentialID []byte, origin string, userHandle []byte) (map[string]interface{}, error) {
 	rpIDHash := sha256.Sum256([]byte(rpID))
 	authData := make([]byte, 37)
 	copy(authData[0:32], rpIDHash[:])

@@ -131,7 +131,7 @@ func newTestDBManager(perms []string) *DBManager {
 	}
 }
 
-// mockDatabase implements RBACDatabase interface for testing
+// mockDatabase implements the Database interface for testing.
 type mockDatabase struct {
 	apiToken          *db.APIToken
 	hasActiveApproval bool
@@ -139,19 +139,19 @@ type mockDatabase struct {
 	users             []*db.User
 }
 
-func (m *mockDatabase) GetAPITokenByID(id int64) (*db.APIToken, error) {
+func (m *mockDatabase) GetAPITokenByID(_ int64) (*db.APIToken, error) {
 	return m.apiToken, nil
 }
 
-func (m *mockDatabase) HasActiveDeployApproval(tokenID int64) (bool, error) {
+func (m *mockDatabase) HasActiveDeployApproval(_ int64) (bool, error) {
 	return m.hasActiveApproval, nil
 }
 
-func (m *mockDatabase) HasActiveDeployApprovalForApp(tokenID int64, app string) (bool, error) {
+func (m *mockDatabase) HasActiveDeployApprovalForApp(_ int64, _ string) (bool, error) {
 	return m.hasActiveApproval, nil
 }
 
-func (m *mockDatabase) GetUser(email string) (*db.User, error) {
+func (m *mockDatabase) GetUser(_ string) (*db.User, error) {
 	return m.user, nil
 }
 
@@ -159,18 +159,18 @@ func (m *mockDatabase) ListUsers() ([]*db.User, error) {
 	return m.users, nil
 }
 
-func (m *mockDatabase) CreateUser(email, name string, roles []string) (*db.User, error) {
+func (m *mockDatabase) CreateUser(_ string, _ string, _ []string) (*db.User, error) {
 	return nil, nil
 }
 
-func (m *mockDatabase) UpdateUserRoles(email string, roles []string) error {
+func (m *mockDatabase) UpdateUserRoles(_ string, _ []string) error {
 	return nil
 }
 
-func (m *mockDatabase) UpdateUserName(email, name string) error {
+func (m *mockDatabase) UpdateUserName(_ string, _ string) error {
 	return nil
 }
 
-func (m *mockDatabase) DeleteUser(email string) error {
+func (m *mockDatabase) DeleteUser(_ string) error {
 	return nil
 }

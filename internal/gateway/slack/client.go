@@ -14,11 +14,13 @@ const (
 	slackAPIBase = "https://slack.com/api"
 )
 
+// Client wraps the Slack API interactions we need for notifications.
 type Client struct {
 	botToken   string
 	httpClient *http.Client
 }
 
+// NewClient returns a Slack API client configured with the provided bot token.
 func NewClient(botToken string) *Client {
 	return &Client{
 		botToken: botToken,

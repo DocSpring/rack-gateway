@@ -130,6 +130,10 @@ func NewOAuthHandler(clientID, clientSecret, redirectURLOrBase, allowedDomain, i
 
 // StartLogin initiates OAuth flow - returns auth URL and PKCE params for CLI
 func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
+	if h == nil || h.oauth2ConfigCLI == nil {
+		return nil, fmt.Errorf("oauth handler not configured for CLI login")
+	}
+
 	// Generate PKCE parameters using secure methods
 	codeVerifier := generateSecureRandomString(128)
 	codeChallenge := generatePKCEChallenge(codeVerifier)

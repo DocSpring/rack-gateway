@@ -40,15 +40,14 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
-	setResource := func(resourceType, resourceID string, setAudit bool) bool {
+	setResource := func(resourceType, resourceID string, setAudit bool) {
 		if strings.TrimSpace(resourceID) == "" {
-			return false
+			return
 		}
 		created := h.recordResourceCreator(resourceType, resourceID, email)
 		if setAudit && created {
 			r.Header.Set("X-Audit-Resource", resourceID)
 		}
-		return created
 	}
 
 	obj, ok := payload.(map[string]interface{})

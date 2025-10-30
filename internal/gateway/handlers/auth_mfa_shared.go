@@ -125,34 +125,32 @@ func (h *AuthHandler) notifyLoginComplete(ctx *mfaContext, c *gin.Context, wasLo
 //
 // The verifyFunc should return (credential, error) where credential is the verified credential or nil on error.
 // This function handles all error responses, trusted device logic, session updates, and notifications.
-//
-// Returns true if the verification flow completed successfully (response sent to client).
 func (h *AuthHandler) verifyMFAAndComplete(
 	c *gin.Context,
 	ctx *mfaContext,
 	trustDevice bool,
 	verifyFunc func() (interface{}, error),
 	extraDebugLog func(now time.Time),
-) bool {
+) {
 	// Perform the specific verification (TOTP, WebAuthn, etc.)
 	if _, err := verifyFunc(); err != nil {
 		if h.securityNotifier != nil {
 			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return false
+		return
 	}
 
 	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, trustDevice)
 	if !ok {
-		return false
+		return
 	}
 
 	wasLoginFlow := ctx.authUser.Session != nil && ctx.authUser.Session.MFAVerifiedAt == nil
 
 	now, ok := h.updateSessionAfterMFA(c, ctx, trustedDeviceID, trustedCookieSet)
 	if !ok {
-		return false
+		return
 	}
 
 	// Call extra debug logging if provided (for TOTP step-up)
@@ -168,5 +166,4 @@ func (h *AuthHandler) verifyMFAAndComplete(
 		TrustedDeviceCookie:   trustedCookieSet,
 	}
 	c.JSON(http.StatusOK, response)
-	return true
 }

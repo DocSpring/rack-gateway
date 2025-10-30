@@ -2,6 +2,7 @@ package rbac
 
 import "sort"
 
+// RoleMetadata describes how a role should be presented to users.
 type RoleMetadata struct {
 	Label       string
 	Description string
@@ -166,10 +167,12 @@ func buildDefaultRolePermissions(cfg map[string]roleConfig) map[string][]string 
 	return result
 }
 
+// RoleOrder returns the canonical ordering of roles from least to most privileged.
 func RoleOrder() []string {
 	return append([]string(nil), roleOrder...)
 }
 
+// RoleMetadataMap returns a copy of role metadata keyed by role name.
 func RoleMetadataMap() map[string]RoleMetadata {
 	out := make(map[string]RoleMetadata, len(roleMetadata))
 	for k, v := range roleMetadata {
@@ -178,6 +181,7 @@ func RoleMetadataMap() map[string]RoleMetadata {
 	return out
 }
 
+// DefaultRolePermissions returns a copy of the default permission set for every role.
 func DefaultRolePermissions() map[string][]string {
 	clone := make(map[string][]string, len(defaultRolePermissions))
 	for role, perms := range defaultRolePermissions {
@@ -186,6 +190,7 @@ func DefaultRolePermissions() map[string][]string {
 	return clone
 }
 
+// DefaultPermissionsForRole returns the default permissions granted to the supplied role.
 func DefaultPermissionsForRole(role string) []string {
 	if perms, ok := defaultRolePermissions[role]; ok {
 		return append([]string(nil), perms...)

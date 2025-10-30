@@ -5,6 +5,7 @@ import "fmt"
 // GlobalSettingKey is an enum for global setting keys
 type GlobalSettingKey uint8
 
+// Global setting keys enumerate supported global-level configuration options.
 const (
 	GlobalSettingAllowDestructiveActions GlobalSettingKey = iota
 	GlobalSettingDefaultCIOrgSlug
@@ -52,6 +53,7 @@ func (g GlobalSettingKey) String() string {
 	return fmt.Sprintf("GlobalSettingKey(%d)", g)
 }
 
+// IsValid reports whether the key represents a defined global setting.
 func (g GlobalSettingKey) IsValid() bool { return g <= GlobalSettingTrustedDeviceTTLDays }
 
 // ParseGlobalSettingKey converts a string key to a GlobalSettingKey enum
@@ -67,6 +69,7 @@ func ParseGlobalSettingKey(key string) (GlobalSettingKey, error) {
 // AppSettingKey is an enum for app setting keys
 type AppSettingKey uint8
 
+// App setting keys enumerate supported per-app configuration options.
 const (
 	AppSettingAllowDeployFromDefaultBranch AppSettingKey = iota
 	AppSettingApprovedDeployCommands
@@ -132,6 +135,7 @@ func (a AppSettingKey) String() string {
 	return fmt.Sprintf("AppSettingKey(%d)", a)
 }
 
+// IsValid reports whether the key represents a defined app setting.
 func (a AppSettingKey) IsValid() bool { return a <= AppSettingVerifyGitCommitMode }
 
 // ParseAppSettingKey converts a string key to an AppSettingKey enum

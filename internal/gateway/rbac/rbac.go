@@ -12,8 +12,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-// RBACDatabase defines the database operations needed by the RBAC manager
-type RBACDatabase interface {
+// Database defines the database operations needed by the RBAC manager.
+type Database interface {
 	GetUser(email string) (*db.User, error)
 	GetAPITokenByID(id int64) (*db.APIToken, error)
 	HasActiveDeployApprovalForApp(tokenID int64, app string) (bool, error)
@@ -26,7 +26,7 @@ type RBACDatabase interface {
 
 // DBManager implements RBAC using the database
 type DBManager struct {
-	db       RBACDatabase
+	db       Database
 	enforcer *casbin.Enforcer
 	mu       sync.RWMutex
 	domain   string

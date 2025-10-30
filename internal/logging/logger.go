@@ -10,6 +10,7 @@ import (
 // Level represents the severity of a log message.
 type Level int
 
+// Log levels in ascending order of severity.
 const (
 	Debug Level = iota
 	Info

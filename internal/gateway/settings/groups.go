@@ -5,6 +5,7 @@ package settings
 type GlobalSettingGroup string
 
 // Global setting groups mapped to their constituent keys.
+// App setting groups mapped to their constituent keys.
 const (
 	GlobalSettingGroupMFAConfiguration GlobalSettingGroup = "mfa_configuration"
 	GlobalSettingGroupAllowDestructive GlobalSettingGroup = "allow_destructive_actions"
@@ -65,6 +66,7 @@ func IsGlobalSettingInGroup(group GlobalSettingGroup, key string) bool {
 type AppSettingGroup string
 
 const (
+	// AppSettingGroupVCSCIDeploy groups version control and CI related app settings.
 	AppSettingGroupVCSCIDeploy AppSettingGroup = "vcs_ci_deploy"
 )
 

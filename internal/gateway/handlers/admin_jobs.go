@@ -16,18 +16,17 @@ import (
 )
 
 // requireJobsAccess checks authentication, authorization, and jobs client availability
-func (h *AdminHandler) requireJobsAccess(c *gin.Context, action rbac.Action) (string, bool) {
-	userEmail, ok := requireAuth(c, h.rbac, rbac.ResourceJob, action)
-	if !ok {
-		return "", false
+func (h *AdminHandler) requireJobsAccess(c *gin.Context, action rbac.Action) bool {
+	if _, ok := requireAuth(c, h.rbac, rbac.ResourceJob, action); !ok {
+		return false
 	}
 
 	if h.jobsClient == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "jobs system unavailable"})
-		return "", false
+		return false
 	}
 
-	return userEmail, true
+	return true
 }
 
 // ListJobs godoc
@@ -45,7 +44,7 @@ func (h *AdminHandler) requireJobsAccess(c *gin.Context, action rbac.Action) (st
 // @Security SessionCookie
 // @Router /jobs [get]
 func (h *AdminHandler) ListJobs(c *gin.Context) {
-	if _, ok := h.requireJobsAccess(c, rbac.ActionList); !ok {
+	if !h.requireJobsAccess(c, rbac.ActionList) {
 		return
 	}
 
@@ -133,7 +132,7 @@ func (h *AdminHandler) ListJobs(c *gin.Context) {
 // @Security SessionCookie
 // @Router /jobs/{id} [get]
 func (h *AdminHandler) GetJob(c *gin.Context) {
-	if _, ok := h.requireJobsAccess(c, rbac.ActionRead); !ok {
+	if !h.requireJobsAccess(c, rbac.ActionRead) {
 		return
 	}
 

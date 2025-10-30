@@ -131,14 +131,14 @@ func testAssertion(device *libfido2.Device, userVerification, pin string) error 
 		return fmt.Errorf("failed to get assertion: %w", err)
 	}
 
-	fmt.Printf("✓ Assertion signature: %x...\n", assertion.Sig[:min(32, len(assertion.Sig))])
-	fmt.Printf("✓ Auth data CBOR: %x...\n", assertion.AuthDataCBOR[:min(32, len(assertion.AuthDataCBOR))])
+	fmt.Printf("✓ Assertion signature: %x...\n", assertion.Sig[:minInt(32, len(assertion.Sig))])
+	fmt.Printf("✓ Auth data CBOR: %x...\n", assertion.AuthDataCBOR[:minInt(32, len(assertion.AuthDataCBOR))])
 	fmt.Printf("✓ Credential ID: %s\n", base64.RawURLEncoding.EncodeToString(assertion.CredentialID))
 
 	return nil
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

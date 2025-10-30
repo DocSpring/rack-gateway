@@ -25,6 +25,7 @@ func NewService(database *db.Database) *Service {
 // SettingSource indicates where a setting value came from.
 type SettingSource string
 
+// Setting sources describe where a resolved value originated.
 const (
 	SourceDB            SettingSource = "db"
 	SourceEnv           SettingSource = "env"
@@ -119,16 +120,15 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 	// 2. Check environment variable
 	if envValue := strings.TrimSpace(os.Getenv(envVarName)); envValue != "" {
 		parsedValue, err := parseEnvValue(envValue, defaultValue)
-		if err != nil {
-			// If parsing fails, log and fall through to default
-			gtwlog.Warnf("settings: failed to parse env var %s: %v", envVarName, err)
-		} else {
+		if err == nil {
 			return &Setting{
 				Value:  parsedValue,
 				Source: SourceEnv,
 				EnvVar: envVarName,
 			}, nil
 		}
+		// If parsing fails, log and fall through to default
+		gtwlog.Warnf("settings: failed to parse env var %s: %v", envVarName, err)
 	}
 
 	// 3. Return default
@@ -289,11 +289,7 @@ func (s *Service) SetMFASettings(settings *db.MFASettings, updatedByUserID *int6
 	if err := s.SetGlobalSetting(KeyTrustedDeviceTTLDays, settings.TrustedDeviceTTLDays, updatedByUserID); err != nil {
 		return err
 	}
-	if err := s.SetGlobalSetting(KeyStepUpWindowMinutes, settings.StepUpWindowMinutes, updatedByUserID); err != nil {
-		return err
-	}
-
-	return nil
+	return s.SetGlobalSetting(KeyStepUpWindowMinutes, settings.StepUpWindowMinutes, updatedByUserID)
 }
 
 // GetAllowDestructiveActions returns whether destructive actions are allowed.
