@@ -1,7 +1,9 @@
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type PluginOption } from 'vite'
+import type { PluginOption } from 'vite'
+import { defineConfig } from 'vite'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
@@ -24,10 +26,41 @@ export default defineConfig(() => {
     filter: (file) => /\.(js|css|html|svg|json)$/i.test(file),
   }) as PluginOption
 
+  // Dev-only: redirect root page to gateway for proper token injection
+  const gatewayRedirectPlugin: PluginOption = {
+    name: 'gateway-redirect',
+    configureServer(server) {
+      if (process.env.NODE_ENV === 'production') {
+        return
+      }
+      // Use GATEWAY_PORT from env (set by mise) or fall back to default
+      // Note: GATEWAY_PORT should match mise.toml configuration
+      const gatewayPort = process.env.GATEWAY_PORT || '8447'
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        // Skip redirect for proxied requests from the gateway (prevents infinite redirect loop)
+        // Node.js automatically lowercases header names
+        if (req.headers['x-gateway-proxy'] === 'true') {
+          next()
+          return
+        }
+        // Redirect any app page to gateway for proper token injection
+        // This handles /, /app, /app/, /app/rack, etc.
+        if (req.url && (req.url === '/' || req.url.startsWith('/app'))) {
+          res.writeHead(302, {
+            Location: `http://localhost:${gatewayPort}${req.url}`,
+          })
+          res.end()
+          return
+        }
+        next()
+      })
+    },
+  }
+
   return {
     // Serve UI consistently under /app/ in all envs
     base: '/app/',
-    plugins: [reactPlugin, tailwindPlugin, gzipCompression, brotliCompression],
+    plugins: [reactPlugin, tailwindPlugin, gzipCompression, brotliCompression, gatewayRedirectPlugin],
     build: {
       manifest: true,
       minify: false,

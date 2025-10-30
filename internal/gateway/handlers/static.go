@@ -60,6 +60,14 @@ func NewStaticHandler(cfg *config.Config, sessions *auth.SessionManager) *Static
 		if raw := os.Getenv("WEB_DEV_SERVER_URL"); raw != "" {
 			if target, err := url.Parse(raw); err == nil {
 				proxy := httputil.NewSingleHostReverseProxy(target)
+				// Set a header to indicate this is a proxied request from the gateway
+				// This prevents Vite from redirecting proxied requests back to the gateway
+				proxy.Director = func(req *http.Request) {
+					req.URL.Scheme = target.Scheme
+					req.URL.Host = target.Host
+					req.URL.Path = target.Path + req.URL.Path
+					req.Header.Set("X-Gateway-Proxy", "true")
+				}
 				proxy.ModifyResponse = func(resp *http.Response) error {
 					if resp == nil || resp.Request == nil {
 						return nil
@@ -181,16 +189,21 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 
 	result := content
 
-	if nonce := middleware.StyleNonceFromContext(r.Context()); nonce != "" {
-		// Build script block with nonce
-		isE2E := os.Getenv("E2E_TEST_MODE") == "true"
-		e2eScript := ""
-		if isE2E {
-			e2eScript = "window.__e2e_test_mode__=true;"
-		}
-		scriptBlock := fmt.Sprintf(`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, nonce, e2eScript)
-		result = bytes.ReplaceAll(result, []byte("{{RGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
+	// Always inject the script block - nonce support is optional
+	nonce := middleware.StyleNonceFromContext(r.Context())
+	isE2E := os.Getenv("E2E_TEST_MODE") == "true"
+	e2eScript := ""
+	if isE2E {
+		e2eScript = "window.__e2e_test_mode__=true;"
 	}
+
+	var scriptBlock string
+	if nonce != "" {
+		scriptBlock = fmt.Sprintf(`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`, nonce, nonce, nonce, e2eScript)
+	} else {
+		scriptBlock = fmt.Sprintf(`<script>window.__nonce__="";window.__webpack_nonce__="";%s</script>`, e2eScript)
+	}
+	result = bytes.ReplaceAll(result, []byte("{{RGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
 
 	if h.sessions != nil {
 		if sessionCookie, err := r.Cookie("session_token"); err == nil {

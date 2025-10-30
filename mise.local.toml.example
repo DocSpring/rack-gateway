@@ -1,5 +1,8 @@
 [env]
 # PORT CONFIGURATION - SINGLE SOURCE OF TRUTH
+# Use prefixed perspective-specific port variables (GATEWAY_PORT, WEB_PORT, etc.)
+# Never set PORT directly - it's set explicitly in Procfile.dev from these variables
+# This prevents conflicts with Overmind's automatic PORT assignment
 GATEWAY_PORT = "8447"
 WEB_PORT = "5223"
 MOCK_OAUTH_PORT = "3345"

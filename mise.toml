@@ -16,7 +16,8 @@ TEST_MOCK_CONVOX_PORT = "6443"
 DEV_MODE = "true"
 LOG_LEVEL = "debug"
 DOMAIN = "localhost"
-PORT = "8447"  # Gateway listens on this port
+# Note: PORT is set explicitly in Procfile.dev from GATEWAY_PORT, WEB_PORT, etc.
+# Never set PORT directly here - Overmind auto-assigns it which causes conflicts.
 
 # Web dev server (for local Procfile dev, gateway proxies to this)
 WEB_DEV_SERVER_URL = "http://localhost:5223"

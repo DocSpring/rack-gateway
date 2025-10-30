@@ -1,9 +1,9 @@
 # Mock services
-mock-oauth: cd mock-oauth && bun run dev
-mock-convox: air -c .air-mock-convox.toml
+mock-oauth: PORT=$MOCK_OAUTH_PORT cd mock-oauth && bun run dev
+mock-convox: PORT=$MOCK_CONVOX_PORT air -c .air-mock-convox.toml
 
 # Gateway API (with hot reload)
-gateway: LOG_LEVEL=debug DEBUG_TOPICS=http.request.info,mfa,sql,email air -c .air-gateway.toml
+gateway: PORT=$GATEWAY_PORT LOG_LEVEL=debug DEBUG_TOPICS=http.request.info,mfa,sql,email air -c .air-gateway.toml
 
 # Frontend (Vite dev server with hot reload)
-web: cd web && bun run dev
+web: PORT=$WEB_PORT cd web && bun run dev
