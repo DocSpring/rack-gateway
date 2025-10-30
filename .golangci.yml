@@ -69,6 +69,12 @@ linters:
           msg: "avoid time.Sleep; use context with timeout"
     misspell:
       locale: US
+  exclusions:
+    rules:
+      - path: (.+)_test\\.go$
+        linters:
+          - gocognit
+          - funlen
 
 formatters:
   enable:
@@ -86,8 +92,3 @@ formatters:
 issues:
   max-same-issues: 0
   max-issues-per-linter: 0
-  exclude-rules:
-    - path: ".+_test\\.go$"
-      linters:
-        - gocognit
-        - funlen
