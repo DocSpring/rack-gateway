@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -23,21 +24,26 @@ const (
 	auditLogCreatedKey contextKey = "rgw-audit-log-created"
 )
 
+// Logger provides structured audit logging with automatic secret redaction
+// and integration with database persistence and external notification systems.
 type Logger struct {
 	redactPatterns     []*regexp.Regexp
 	database           *db.Database
 	slackNotifier      SlackNotifier
-	auditEventEnqueuer AuditEventEnqueuer
+	auditEventEnqueuer EventEnqueuer
 }
 
+// SlackNotifier sends audit event notifications to Slack.
 type SlackNotifier interface {
 	NotifyAuditEvent(auditLog *db.AuditLog) error
 }
 
-type AuditEventEnqueuer interface {
+// EventEnqueuer queues audit events for asynchronous processing.
+type EventEnqueuer interface {
 	EnqueueAuditEvent(auditLogID int64) error
 }
 
+// LogEntry represents a structured audit log entry for CloudWatch ingestion.
 type LogEntry struct {
 	Timestamp     string                 `json:"ts"`
 	UserEmail     string                 `json:"user_email"`
@@ -53,6 +59,7 @@ type LogEntry struct {
 	ResponseError string                 `json:"response_error,omitempty"`
 }
 
+// NewLogger creates a new audit logger with automatic secret redaction patterns.
 func NewLogger(database *db.Database) *Logger {
 	patterns := []string{
 		`(?i)(secret|token|password|key|authorization|cookie|set-cookie|session)`,
@@ -72,11 +79,13 @@ func NewLogger(database *db.Database) *Logger {
 	}
 }
 
+// SetSlackNotifier configures the Slack notification integration for audit events.
 func (l *Logger) SetSlackNotifier(notifier SlackNotifier) {
 	l.slackNotifier = notifier
 }
 
-func (l *Logger) SetAuditEventEnqueuer(enqueuer AuditEventEnqueuer) {
+// SetAuditEventEnqueuer configures the audit event queue for asynchronous processing.
+func (l *Logger) SetAuditEventEnqueuer(enqueuer EventEnqueuer) {
 	l.auditEventEnqueuer = enqueuer
 }
 
@@ -100,6 +109,7 @@ func (l *Logger) LogDBEntryWithContext(ctx context.Context, al *db.AuditLog) (co
 	return ctx, err
 }
 
+// Log writes a structured audit log entry to stdout for CloudWatch ingestion.
 func (l *Logger) Log(entry *LogEntry) {
 	if entry.RequestBody != nil {
 		entry.RequestBody = l.redactMap(entry.RequestBody)
@@ -112,7 +122,15 @@ func (l *Logger) Log(entry *LogEntry) {
 	}
 
 	// Output structured JSON to stdout for CloudWatch ingestion
-	writeAuditLine(data)
+	if len(data) == 0 {
+		data = []byte("{}")
+	}
+	buf := make([]byte, len(data)+1)
+	copy(buf, data)
+	buf[len(data)] = '\n'
+	if _, err := os.Stdout.Write(buf); err != nil {
+		gtwlog.Errorf("audit: failed to write audit log line: %v", err)
+	}
 }
 
 // LogDB writes a DB-style audit entry to stdout as structured JSON and persists it.
@@ -150,7 +168,15 @@ func LogDB(database *db.Database, al *db.AuditLog) error {
 	}
 	// Omit verbose request details; method/path are already logged separately
 	if data, err := json.Marshal(payload); err == nil {
-		writeAuditLine(data)
+		if len(data) == 0 {
+			data = []byte("{}")
+		}
+		buf := make([]byte, len(data)+1)
+		copy(buf, data)
+		buf[len(data)] = '\n'
+		if _, writeErr := os.Stdout.Write(buf); writeErr != nil {
+			gtwlog.Errorf("audit: failed to write audit log line: %v", writeErr)
+		}
 	} else {
 		gtwlog.Errorf("audit: failed to marshal audit db log: %v", err)
 	}
@@ -198,9 +224,10 @@ func HasAuditLogBeenCreated(ctx context.Context) bool {
 	return false
 }
 
+// LogRequest logs an HTTP request with user context, RBAC decision, and response details.
 func (l *Logger) LogRequest(
 	r *http.Request,
-	userEmail, rack, rbacDecision string,
+	userEmail, _ /* rack */, rbacDecision string,
 	status int,
 	latency time.Duration,
 	err error,
@@ -291,6 +318,7 @@ func (l *Logger) shouldRedact(value string) bool {
 	return false
 }
 
+// RedactEnvVars redacts all environment variables for security in audit logs.
 func (l *Logger) RedactEnvVars(envVars map[string]string) map[string]string {
 	redacted := make(map[string]string)
 	for key := range envVars {
@@ -315,6 +343,7 @@ func markRequestLogged(r *http.Request) {
 	*r = *r.WithContext(ctx)
 }
 
+// RequestAlreadyLogged checks if a request has already been logged to prevent duplicate logging.
 func RequestAlreadyLogged(r *http.Request) bool {
 	if r == nil {
 		return false
@@ -465,14 +494,6 @@ func (l *Logger) MapHttpStatusToStatus(httpStatus int) string {
 		gtwlog.Warnf("audit: unexpected HTTP status %d, treating as error", httpStatus)
 		return "error"
 	}
-}
-
-// mapStatusToString delegates to RBAC + HTTP mapping
-func (l *Logger) mapStatusToString(httpStatus int, rbacDecision string) string {
-	if strings.ToLower(rbacDecision) == "deny" {
-		return "denied"
-	}
-	return l.MapHttpStatusToStatus(httpStatus)
 }
 
 // InferResourceType attempts to derive a normalized resource type label for UI display.

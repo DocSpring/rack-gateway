@@ -11,7 +11,7 @@ type ErrorResponse struct {
 	Error string `json:"error" validate:"required"`
 }
 
-// MFA enrollment and verification payloads.
+// StartTOTPEnrollmentResponse contains TOTP enrollment data including secret and backup codes.
 type StartTOTPEnrollmentResponse struct {
 	MethodID    int64    `json:"method_id"    validate:"required"`
 	Secret      string   `json:"secret"       validate:"required"`
@@ -19,6 +19,7 @@ type StartTOTPEnrollmentResponse struct {
 	BackupCodes []string `json:"backup_codes" validate:"required"`
 }
 
+// ConfirmTOTPEnrollmentRequest contains the code to verify TOTP enrollment.
 type ConfirmTOTPEnrollmentRequest struct {
 	MethodID    int64  `json:"method_id"    binding:"required"`
 	Code        string `json:"code"         binding:"required"`
@@ -26,58 +27,70 @@ type ConfirmTOTPEnrollmentRequest struct {
 	Label       string `json:"label"`
 }
 
+// StartYubiOTPEnrollmentRequest contains the YubiKey OTP to enroll.
 type StartYubiOTPEnrollmentRequest struct {
 	YubiOTP string `json:"yubi_otp" binding:"required"`
 	Label   string `json:"label"`
 }
 
+// StartYubiOTPEnrollmentResponse contains YubiKey enrollment result with backup codes.
 type StartYubiOTPEnrollmentResponse struct {
 	MethodID    int64    `json:"method_id"              validate:"required"`
 	BackupCodes []string `json:"backup_codes,omitempty"`
 }
 
+// StartWebAuthnEnrollmentResponse contains WebAuthn enrollment options and backup codes.
 type StartWebAuthnEnrollmentResponse struct {
 	MethodID         int64       `json:"method_id"              validate:"required"`
 	PublicKeyOptions interface{} `json:"public_key_options"     validate:"required"`
 	BackupCodes      []string    `json:"backup_codes,omitempty"`
 }
 
+// ConfirmWebAuthnEnrollmentRequest contains the WebAuthn credential to complete enrollment.
 type ConfirmWebAuthnEnrollmentRequest struct {
 	MethodID   int64       `json:"method_id"  binding:"required"`
 	Credential interface{} `json:"credential" binding:"required"`
 	Label      string      `json:"label"`
 }
 
+// VerifyMFARequest contains the MFA code and optional device trust setting.
 type VerifyMFARequest struct {
 	Code        string `json:"code"         binding:"required"`
 	TrustDevice bool   `json:"trust_device"`
 }
 
+// VerifyMFAResponse contains MFA verification timestamps and device trust status.
 type VerifyMFAResponse struct {
 	MFAVerifiedAt         time.Time `json:"mfa_verified_at"           validate:"required"`
 	RecentStepUpExpiresAt time.Time `json:"recent_step_up_expires_at" validate:"required"`
 	TrustedDeviceCookie   bool      `json:"trusted_device_cookie"     validate:"required"`
 }
 
+// WebAuthnAssertionStartResponse contains WebAuthn assertion options and session data.
 type WebAuthnAssertionStartResponse struct {
-	Options     interface{} `json:"options"      validate:"required"` // protocol.CredentialAssertion
-	SessionData string      `json:"session_data" validate:"required"` // Serialized session to send back with verification
+	Options interface{} `json:"options"      validate:"required"` // protocol.CredentialAssertion
+	// SessionData is the serialized session to send back with verification
+	SessionData string `json:"session_data" validate:"required"`
 }
 
+// VerifyWebAuthnAssertionRequest contains the WebAuthn assertion response to verify.
 type VerifyWebAuthnAssertionRequest struct {
 	SessionData       string `json:"session_data"       binding:"required"`
 	AssertionResponse string `json:"assertion_response" binding:"required"`
 	TrustDevice       bool   `json:"trust_device"`
 }
 
+// UpdateMFAMethodRequest contains the new label for an MFA method.
 type UpdateMFAMethodRequest struct {
 	Label string `json:"label" binding:"required,max=150"`
 }
 
+// BackupCodesResponse contains MFA backup codes.
 type BackupCodesResponse struct {
 	BackupCodes []string `json:"backup_codes" validate:"required"`
 }
 
+// MFAMethodResponse describes an MFA method with its usage details.
 type MFAMethodResponse struct {
 	ID          int64      `json:"id"                     validate:"required"`
 	Type        string     `json:"type"                   validate:"required"`
@@ -87,6 +100,7 @@ type MFAMethodResponse struct {
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 }
 
+// TrustedDeviceResponse describes a trusted device with its metadata.
 type TrustedDeviceResponse struct {
 	ID            int64      `json:"id"                       validate:"required"`
 	Label         string     `json:"label"                    validate:"required"`
@@ -99,6 +113,7 @@ type TrustedDeviceResponse struct {
 	RevokedReason string     `json:"revoked_reason,omitempty"`
 }
 
+// MFABackupCodesSummary provides statistics about MFA backup codes.
 type MFABackupCodesSummary struct {
 	Total           int        `json:"total"                       validate:"required"`
 	Unused          int        `json:"unused"                      validate:"required"`
@@ -106,6 +121,7 @@ type MFABackupCodesSummary struct {
 	LastGeneratedAt *time.Time `json:"last_generated_at,omitempty"`
 }
 
+// MFAStatusResponse provides comprehensive MFA status for a user.
 type MFAStatusResponse struct {
 	Enrolled              bool                    `json:"enrolled"                            validate:"required"`
 	Required              bool                    `json:"required"                            validate:"required"`
@@ -363,26 +379,26 @@ type UpdateDeployApprovalRequestStatusRequest struct {
 
 // DeployApprovalRequestResponse exposes deploy approval state to the CLI and admin UI.
 type DeployApprovalRequestResponse struct {
-	PublicID                  string                 `json:"public_id"                                  validate:"required"`
-	Message                   string                 `json:"message"                                    validate:"required"`
-	Status                    string                 `json:"status"                                     validate:"required"`
-	CreatedAt                 time.Time              `json:"created_at"                                 validate:"required" ts_type:"string"`
-	UpdatedAt                 time.Time              `json:"updated_at"                                 validate:"required" ts_type:"string"`
+	PublicID                  string                 `json:"public_id" validate:"required"`
+	Message                   string                 `json:"message" validate:"required"`
+	Status                    string                 `json:"status" validate:"required"`
+	CreatedAt                 time.Time              `json:"created_at" validate:"required" ts_type:"string"`
+	UpdatedAt                 time.Time              `json:"updated_at" validate:"required" ts_type:"string"`
 	CreatedByEmail            string                 `json:"created_by_email,omitempty"`
 	CreatedByName             string                 `json:"created_by_name,omitempty"`
 	CreatedByAPITokenPublicID string                 `json:"created_by_api_token_id,omitempty"`
 	CreatedByAPITokenName     string                 `json:"created_by_api_token_name,omitempty"`
-	TargetAPITokenID          string                 `json:"target_api_token_id"                        validate:"required"`
+	TargetAPITokenID          string                 `json:"target_api_token_id" validate:"required"`
 	TargetAPITokenName        string                 `json:"target_api_token_name,omitempty"`
 	ApprovedByEmail           string                 `json:"approved_by_email,omitempty"`
 	ApprovedByName            string                 `json:"approved_by_name,omitempty"`
-	ApprovedAt                *time.Time             `json:"approved_at,omitempty"                                          ts_type:"string"`
-	ApprovalExpiresAt         *time.Time             `json:"approval_expires_at,omitempty"                                  ts_type:"string"`
+	ApprovedAt                *time.Time             `json:"approved_at,omitempty" ts_type:"string"`
+	ApprovalExpiresAt         *time.Time             `json:"approval_expires_at,omitempty" ts_type:"string"`
 	RejectedByEmail           string                 `json:"rejected_by_email,omitempty"`
 	RejectedByName            string                 `json:"rejected_by_name,omitempty"`
-	RejectedAt                *time.Time             `json:"rejected_at,omitempty"                                          ts_type:"string"`
+	RejectedAt                *time.Time             `json:"rejected_at,omitempty" ts_type:"string"`
 	ApprovalNotes             string                 `json:"approval_notes,omitempty"`
-	GitCommitHash             string                 `json:"git_commit_hash"                            validate:"required"`
+	GitCommitHash             string                 `json:"git_commit_hash" validate:"required"`
 	GitBranch                 string                 `json:"git_branch,omitempty"`
 	PrURL                     string                 `json:"pr_url,omitempty"`
 	CIMetadata                map[string]interface{} `json:"ci_metadata,omitempty"`
@@ -392,11 +408,12 @@ type DeployApprovalRequestResponse struct {
 	ReleaseID                 string                 `json:"release_id,omitempty"`
 	ProcessIDs                []string               `json:"process_ids,omitempty"`
 	ExecCommands              map[string]interface{} `json:"exec_commands,omitempty"`
-	ReleaseCreatedAt          *time.Time             `json:"release_created_at,omitempty"                                   ts_type:"string"`
-	ReleasePromotedAt         *time.Time             `json:"release_promoted_at,omitempty"                                  ts_type:"string"`
+	ReleaseCreatedAt          *time.Time             `json:"release_created_at,omitempty" ts_type:"string"`
+	ReleasePromotedAt         *time.Time             `json:"release_promoted_at,omitempty" ts_type:"string"`
 	ReleasePromotedByTokenID  *int64                 `json:"release_promoted_by_api_token_id,omitempty"`
 }
 
+// DeployApprovalRequestList wraps a list of deploy approval requests.
 type DeployApprovalRequestList struct {
 	DeployApprovalRequests []DeployApprovalRequestResponse `json:"deploy_approval_requests" validate:"required"`
 }

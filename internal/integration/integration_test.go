@@ -467,7 +467,7 @@ func testCLIWithInvalidToken(t *testing.T, s *TestServers) {
 
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(tokenFile, configData, 0600))
+	require.NoError(t, os.WriteFile(tokenFile, configData, 0o600))
 
 	// Try to run a command with invalid token
 	cmd := exec.Command("../../bin/rack-gateway", "apps")
@@ -504,7 +504,7 @@ func testProxyE2EAuthorized(t *testing.T, s *TestServers) {
 
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	require.NoError(t, os.WriteFile(configFile, configData, 0o600))
 
 	// Test 1: ps (lists processes)
 	t.Run("ps", func(t *testing.T) {
@@ -588,7 +588,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		configData, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(configFile, configData, 0600))
+		require.NoError(t, os.WriteFile(configFile, configData, 0o600))
 
 		return configDir, totpSecret
 	}
@@ -704,7 +704,7 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 
 		configData, err := json.MarshalIndent(config, "", "  ")
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(configFile, configData, 0600))
+		require.NoError(t, os.WriteFile(configFile, configData, 0o600))
 
 		// Try to list apps (should be blocked)
 		cmd := exec.Command("../../bin/rack-gateway", "apps")

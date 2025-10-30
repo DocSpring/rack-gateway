@@ -38,17 +38,17 @@ func TestAuditLogger(t *testing.T) {
 
 	// 101 Switching Protocols should be success
 	t.Run("Status101IsSuccess", func(t *testing.T) {
-		st := logger.mapStatusToString(101, "allow")
+		st := logger.MapHttpStatusToStatus(101)
 		assert.Equal(t, "success", st)
 	})
 
 	t.Run("Status302IsSuccess", func(t *testing.T) {
-		st := logger.mapStatusToString(302, "allow")
+		st := logger.MapHttpStatusToStatus(302)
 		assert.Equal(t, "success", st)
 	})
 
 	t.Run("UnknownStatusTreatedAsError", func(t *testing.T) {
-		st := logger.mapStatusToString(-1, "allow")
+		st := logger.MapHttpStatusToStatus(-1)
 		assert.Equal(t, "error", st)
 	})
 

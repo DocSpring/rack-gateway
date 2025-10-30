@@ -38,19 +38,25 @@ func IsMFAChallengeRequired(settings *MFASettings, user *User) bool {
 	return ShouldEnforceMFA(settings, user)
 }
 
+// SetUserMFAEnrolled updates the MFA enrollment status for a user.
+// If enrolled is true, it also sets mfa_enforced_at if not already set.
 func (d *Database) SetUserMFAEnrolled(userID int64, enrolled bool) error {
-	_, err := d.exec(
-		"UPDATE users SET mfa_enrolled = ?, mfa_enforced_at = CASE WHEN ? THEN COALESCE(mfa_enforced_at, NOW()) ELSE mfa_enforced_at END, updated_at = NOW() WHERE id = ?",
-		enrolled,
-		enrolled,
-		userID,
-	)
+	query := `
+		UPDATE users
+		SET mfa_enrolled = ?,
+		    mfa_enforced_at = CASE WHEN ? THEN COALESCE(mfa_enforced_at, NOW()) ELSE mfa_enforced_at END,
+		    updated_at = NOW()
+		WHERE id = ?
+	`
+	_, err := d.exec(query, enrolled, enrolled, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update user MFA enrollment: %w", err)
 	}
 	return nil
 }
 
+// ResetUserMFA completely removes all MFA configuration for a user.
+// This includes methods, backup codes, trusted devices, and active sessions.
 func (d *Database) ResetUserMFA(userID int64) error {
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -64,12 +70,25 @@ func (d *Database) ResetUserMFA(userID int64) error {
 	if _, err := d.execTx(tx, "DELETE FROM mfa_backup_codes WHERE user_id = ?", userID); err != nil {
 		return fmt.Errorf("failed to delete backup codes: %w", err)
 	}
-	if _, err := d.execTx(tx, "UPDATE trusted_devices SET revoked_at = NOW(), revoked_reason = 'reset', updated_at = NOW() WHERE user_id = ? AND revoked_at IS NULL", userID); err != nil {
+
+	revokeDevicesQuery := `
+		UPDATE trusted_devices
+		SET revoked_at = NOW(), revoked_reason = 'reset', updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL
+	`
+	if _, err := d.execTx(tx, revokeDevicesQuery, userID); err != nil {
 		return fmt.Errorf("failed to revoke trusted devices: %w", err)
 	}
-	if _, err := d.execTx(tx, "UPDATE user_sessions SET revoked_at = NOW(), updated_at = NOW() WHERE user_id = ? AND revoked_at IS NULL", userID); err != nil {
+
+	revokeSessionsQuery := `
+		UPDATE user_sessions
+		SET revoked_at = NOW(), updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL
+	`
+	if _, err := d.execTx(tx, revokeSessionsQuery, userID); err != nil {
 		return fmt.Errorf("failed to revoke active sessions: %w", err)
 	}
+
 	if _, err := d.execTx(tx, "UPDATE users SET mfa_enrolled = FALSE WHERE id = ?", userID); err != nil {
 		return fmt.Errorf("failed to update user MFA flag: %w", err)
 	}
@@ -80,6 +99,8 @@ func (d *Database) ResetUserMFA(userID int64) error {
 	return nil
 }
 
+// CreateMFAMethod creates a new MFA method for a user.
+// It supports both TOTP (with secret) and WebAuthn (with credentialID/publicKey).
 func (d *Database) CreateMFAMethod(
 	userID int64,
 	methodType string,
@@ -107,7 +128,18 @@ func (d *Database) CreateMFAMethod(
         RETURNING id, created_at
     `
 
-	if err := d.queryRow(query, userID, methodType, nullableString(label, 150), secret, credentialID, publicKey, jsonStringArray(transports), meta).Scan(&id, &createdAt); err != nil {
+	row := d.queryRow(
+		query,
+		userID,
+		methodType,
+		nullableString(label, 150),
+		secret,
+		credentialID,
+		publicKey,
+		jsonStringArray(transports),
+		meta,
+	)
+	if err := row.Scan(&id, &createdAt); err != nil {
 		return nil, fmt.Errorf("failed to create MFA method: %w", err)
 	}
 
@@ -121,6 +153,7 @@ func (d *Database) CreateMFAMethod(
 	}, nil
 }
 
+// ConfirmMFAMethod marks an MFA method as confirmed and updates its last used time.
 func (d *Database) ConfirmMFAMethod(methodID int64, confirmedAt time.Time) error {
 	_, err := d.exec(
 		"UPDATE mfa_methods SET confirmed_at = ?, last_used_at = ? WHERE id = ?",
@@ -134,6 +167,7 @@ func (d *Database) ConfirmMFAMethod(methodID int64, confirmedAt time.Time) error
 	return nil
 }
 
+// DeleteUnconfirmedMFAMethods removes all unconfirmed MFA methods for a user.
 func (d *Database) DeleteUnconfirmedMFAMethods(userID int64) error {
 	_, err := d.exec("DELETE FROM mfa_methods WHERE user_id = ? AND confirmed_at IS NULL", userID)
 	if err != nil {
@@ -142,6 +176,7 @@ func (d *Database) DeleteUnconfirmedMFAMethods(userID int64) error {
 	return nil
 }
 
+// UpdateMFAMethodLastUsed updates the last used timestamp for an MFA method.
 func (d *Database) UpdateMFAMethodLastUsed(methodID int64, lastUsedAt time.Time) error {
 	_, err := d.exec("UPDATE mfa_methods SET last_used_at = ? WHERE id = ?", lastUsedAt, methodID)
 	if err != nil {
@@ -150,6 +185,7 @@ func (d *Database) UpdateMFAMethodLastUsed(methodID int64, lastUsedAt time.Time)
 	return nil
 }
 
+// DeleteMFAMethod removes an MFA method by its ID.
 func (d *Database) DeleteMFAMethod(methodID int64) error {
 	_, err := d.exec("DELETE FROM mfa_methods WHERE id = ?", methodID)
 	if err != nil {
@@ -158,17 +194,20 @@ func (d *Database) DeleteMFAMethod(methodID int64) error {
 	return nil
 }
 
+// ListMFAMethods returns all confirmed MFA methods for a user.
 func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
 	return d.listMFAMethods(userID, false)
 }
 
+// ListAllMFAMethods returns all MFA methods for a user, including unconfirmed ones.
 func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
 	return d.listMFAMethods(userID, true)
 }
 
 func (d *Database) listMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFAMethod, error) {
 	query := `
-        SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at
+        SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
+               created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE user_id = ?`
 	if !includeUnconfirmed {
 		query += " AND confirmed_at IS NOT NULL"
@@ -195,6 +234,7 @@ func (d *Database) listMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFA
 	return methods, nil
 }
 
+// UpdateMFAMethodLabel updates the label of an MFA method.
 func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
 	_, err := d.exec("UPDATE mfa_methods SET label = ? WHERE id = ?", nullableString(label, 150), methodID)
 	if err != nil {
@@ -203,6 +243,7 @@ func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
 	return nil
 }
 
+// UpdateMFAMethodCredential updates a WebAuthn credential's details.
 func (d *Database) UpdateMFAMethodCredential(
 	methodID int64,
 	methodType string,
@@ -233,9 +274,11 @@ func (d *Database) UpdateMFAMethodCredential(
 	return nil
 }
 
+// GetMFAMethodByID retrieves an MFA method by its ID.
 func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
 	query := `
-        SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata, created_at, confirmed_at, last_used_at
+        SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
+               created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE id = ?
     `
 	method, err := scanMFAMethod(d.queryRow(query, id))
@@ -248,6 +291,7 @@ func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
 	return method, nil
 }
 
+// ReplaceBackupCodes replaces all backup codes for a user with a new set.
 func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -287,11 +331,15 @@ func (d *Database) ReplaceBackupCodes(userID int64, codeHashes []string) error {
 	return nil
 }
 
+// ListBackupCodes returns all backup codes for a user.
 func (d *Database) ListBackupCodes(userID int64) ([]*MFABackupCode, error) {
-	rows, err := d.query(
-		"SELECT id, user_id, code_hash, created_at, used_at FROM mfa_backup_codes WHERE user_id = ? ORDER BY created_at",
-		userID,
-	)
+	query := `
+		SELECT id, user_id, code_hash, created_at, used_at
+		FROM mfa_backup_codes
+		WHERE user_id = ?
+		ORDER BY created_at
+	`
+	rows, err := d.query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list backup codes: %w", err)
 	}
@@ -316,6 +364,8 @@ func (d *Database) ListBackupCodes(userID int64) ([]*MFABackupCode, error) {
 	return codes, nil
 }
 
+// MarkBackupCodeUsed marks a backup code as used for a user.
+// Returns true if a code was successfully marked, false if it was already used.
 func (d *Database) MarkBackupCodeUsed(userID int64, hash string) (bool, error) {
 	res, err := d.exec(
 		"UPDATE mfa_backup_codes SET used_at = NOW() WHERE user_id = ? AND code_hash = ? AND used_at IS NULL",
@@ -364,11 +414,20 @@ func (d *Database) ConsumeTOTPTimeStep(
 	userAgent string,
 	sessionID *int64,
 ) (bool, error) {
-	result, err := d.exec(`
+	query := `
         INSERT INTO used_totp_steps (user_id, time_step, method_id, ip_address, user_agent, session_id)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (user_id, time_step) DO NOTHING
-    `, userID, timeStep, methodID, nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+    `
+	result, err := d.exec(
+		query,
+		userID,
+		timeStep,
+		methodID,
+		nullableString(ipAddress, 45),
+		nullableString(userAgent, 512),
+		sessionID,
+	)
 	if err != nil {
 		return false, fmt.Errorf("failed to consume TOTP time-step: %w", err)
 	}
@@ -385,6 +444,7 @@ func (d *Database) ConsumeTOTPTimeStep(
 	return rowsAffected > 0, nil
 }
 
+// MFA method type constants used for logging and rate limiting.
 const (
 	MFAMethodTypeTOTP     = 1
 	MFAMethodTypeWebAuthn = 2
@@ -436,10 +496,22 @@ func (d *Database) logMFAAttempt(
 	userAgent string,
 	sessionID *int64,
 ) error {
-	_, err := d.exec(`
-        INSERT INTO mfa_attempts (user_id, method_id, method_type, success, failure_reason, ip_address, user_agent, session_id)
+	query := `
+        INSERT INTO mfa_attempts
+        (user_id, method_id, method_type, success, failure_reason, ip_address, user_agent, session_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, userID, methodID, methodType, success, nullableString(failureReason, 255), nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
+    `
+	_, err := d.exec(
+		query,
+		userID,
+		methodID,
+		methodType,
+		success,
+		nullableString(failureReason, 255),
+		nullableString(ipAddress, 45),
+		nullableString(userAgent, 512),
+		sessionID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to log MFA attempt: %w", err)
 	}
@@ -470,12 +542,14 @@ func (d *Database) countRecentMFAAttempts(userID int64, methodType int, minutes 
 	return count, nil
 }
 
-// CountRecentFailedMFAAttempts counts all failed MFA attempts (TOTP + WebAuthn) in the last N minutes
+// CountRecentFailedMFAAttempts counts all failed MFA attempts (TOTP + WebAuthn) in the last N minutes.
 func (d *Database) CountRecentFailedMFAAttempts(userID int64, minutes int) (int, error) {
 	var count int
 	query := `
         SELECT COUNT(*) FROM mfa_attempts
-        WHERE user_id = $1 AND attempted_at > NOW() - INTERVAL '1 minute' * $2 AND success = FALSE
+        WHERE user_id = $1
+          AND attempted_at > NOW() - INTERVAL '1 minute' * $2
+          AND success = FALSE
     `
 	err := d.queryRow(query, userID, minutes).Scan(&count)
 	if err != nil {
@@ -497,8 +571,8 @@ func (d *Database) LockUser(userID int64, reason string, lockedByUserID *int64) 
 	return nil
 }
 
-// UnlockUser unlocks a user account by clearing the lock fields
-func (d *Database) UnlockUser(userID int64, unlockedByUserID int64) error {
+// UnlockUser unlocks a user account by clearing the lock fields.
+func (d *Database) UnlockUser(userID int64, _ int64) error {
 	_, err := d.exec(`
         UPDATE users
         SET locked_at = NULL, locked_reason = NULL, locked_by_user_id = NULL, updated_at = NOW()

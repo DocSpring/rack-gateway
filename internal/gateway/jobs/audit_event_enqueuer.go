@@ -8,7 +8,7 @@ import (
 	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 )
 
-// AuditEventEnqueuer implements audit.AuditEventEnqueuer interface
+// AuditEventEnqueuer implements audit.EventEnqueuer interface
 type AuditEventEnqueuer struct {
 	client *Client
 }

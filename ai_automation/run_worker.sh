@@ -23,9 +23,9 @@ WORKTREE="$2"
 INSTRUCTIONS="$3"
 
 ROOT_DIR=$(git rev-parse --show-toplevel)
-PROMPT_TEMPLATE="$ROOT_DIR/ai_automation/agents/worker_prompt_template.txt"
-LOG_DIR="$ROOT_DIR/ai_automation/agents/logs"
-TEMP_DIR="$ROOT_DIR/ai_automation/agents/tmp"
+PROMPT_TEMPLATE="$ROOT_DIR/ai_automation/worker_prompt_template.txt"
+LOG_DIR="$ROOT_DIR/ai_automation/logs"
+TEMP_DIR="$ROOT_DIR/ai_automation/tmp"
 PROMPT_FILE="$TEMP_DIR/${TASK_ID}_prompt.txt"
 LOG_FILE="$LOG_DIR/${TASK_ID}.log"
 
@@ -71,6 +71,6 @@ PID=$!
 cd "$ROOT_DIR"
 
 # Register the worker PID for monitoring
-"$ROOT_DIR/ai_automation/agents/register_worker.sh" "$TASK_ID" "$PID"
+"$ROOT_DIR/ai_automation/register_worker.sh" "$TASK_ID" "$PID"
 
 echo "Launched worker for task $TASK_ID (PID $PID). Logs: $LOG_FILE"

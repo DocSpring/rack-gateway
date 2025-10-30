@@ -21,12 +21,14 @@ const (
 	cliDefaultAbsoluteTTL     = 90 * 24 * time.Hour
 )
 
+// SessionManager manages user sessions including creation, validation, and revocation.
 type SessionManager struct {
 	db     *db.Database
 	secret []byte
 	ttl    time.Duration
 }
 
+// SessionMetadata contains metadata for creating a new session.
 type SessionMetadata struct {
 	Channel        string
 	DeviceID       string
@@ -38,11 +40,13 @@ type SessionMetadata struct {
 	TTLOverride    time.Duration
 }
 
+// SessionValidationResult contains the result of validating a session token.
 type SessionValidationResult struct {
 	Session *db.UserSession
 	User    *db.User
 }
 
+// NewSessionManager creates a new session manager with the given configuration.
 func NewSessionManager(database *db.Database, secret string, ttl time.Duration) *SessionManager {
 	timeout := ttl
 	if timeout <= 0 {
@@ -55,6 +59,7 @@ func NewSessionManager(database *db.Database, secret string, ttl time.Duration) 
 	}
 }
 
+// TTL returns the default session time-to-live duration.
 func (m *SessionManager) TTL() time.Duration {
 	if m == nil {
 		return 0
@@ -62,6 +67,7 @@ func (m *SessionManager) TTL() time.Duration {
 	return m.ttl
 }
 
+// CreateSession creates a new session for the given user with metadata.
 func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (string, *db.UserSession, error) {
 	if m == nil {
 		return "", nil, fmt.Errorf("session manager not initialized")
@@ -119,6 +125,7 @@ func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (str
 	return sessionToken, session, nil
 }
 
+// ValidateSession validates a session token and returns the session and user if valid.
 func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent string) (*SessionValidationResult, error) {
 	if m == nil {
 		return nil, fmt.Errorf("session manager not initialized")
@@ -128,16 +135,36 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 		return nil, fmt.Errorf("empty session token")
 	}
 
-	tokenHash := hashSessionToken(trimmed)
-	session, user, err := m.db.GetUserSessionWithUserByHash(tokenHash)
+	session, user, err := m.loadSessionAndUser(trimmed)
 	if err != nil {
 		return nil, err
 	}
-	if session == nil {
-		return nil, fmt.Errorf("session not found")
+
+	m.logSessionDebugInfo(session, user)
+
+	if err := m.validateSessionState(session, user); err != nil {
+		return nil, err
 	}
 
-	// Debug logging for step-up state
+	ttl := m.sessionTTLFor(session)
+	m.refreshSessionActivity(session, ipAddress, userAgent, ttl)
+
+	return &SessionValidationResult{Session: session, User: user}, nil
+}
+
+func (m *SessionManager) loadSessionAndUser(sessionToken string) (*db.UserSession, *db.User, error) {
+	tokenHash := hashSessionToken(sessionToken)
+	session, user, err := m.db.GetUserSessionWithUserByHash(tokenHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	if session == nil {
+		return nil, nil, fmt.Errorf("session not found")
+	}
+	return session, user, nil
+}
+
+func (m *SessionManager) logSessionDebugInfo(session *db.UserSession, user *db.User) {
 	var stepUpAtStr string
 	if session.RecentStepUpAt != nil {
 		stepUpAtStr = session.RecentStepUpAt.Format(time.RFC3339)
@@ -151,37 +178,52 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 		user.Email,
 		stepUpAtStr,
 	)
+}
 
+func (m *SessionManager) validateSessionState(session *db.UserSession, user *db.User) error {
 	if session.RevokedAt != nil {
-		return nil, fmt.Errorf("session revoked")
+		return fmt.Errorf("session revoked")
 	}
+
 	now := time.Now()
 	if session.ExpiresAt.Before(now) {
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
-		return nil, fmt.Errorf("session expired")
+		return fmt.Errorf("session expired")
 	}
 
 	ttl := m.sessionTTLFor(session)
 	if ttl > 0 && session.LastSeenAt.Add(ttl).Before(now) {
 		_, _ = m.db.RevokeUserSession(session.ID, nil)
-		return nil, fmt.Errorf("session expired")
+		return fmt.Errorf("session expired")
 	}
 
+	return m.validateUserState(session.ID, user)
+}
+
+func (m *SessionManager) validateUserState(sessionID int64, user *db.User) error {
 	if user == nil {
-		_, _ = m.db.RevokeUserSession(session.ID, nil)
-		return nil, fmt.Errorf("session user missing")
+		_, _ = m.db.RevokeUserSession(sessionID, nil)
+		return fmt.Errorf("session user missing")
 	}
 	if user.Suspended {
-		_, _ = m.db.RevokeUserSession(session.ID, nil)
-		return nil, fmt.Errorf("user suspended")
+		_, _ = m.db.RevokeUserSession(sessionID, nil)
+		return fmt.Errorf("user suspended")
 	}
 	if user.LockedAt != nil {
-		_, _ = m.db.RevokeUserSession(session.ID, nil)
-		return nil, fmt.Errorf("user locked")
+		_, _ = m.db.RevokeUserSession(sessionID, nil)
+		return fmt.Errorf("user locked")
 	}
+	return nil
+}
 
-	// Refresh idle timeout to enforce sliding expiration on activity.
-	if err := m.db.TouchUserSession(session.ID, ipAddress, userAgent, now, now.Add(ttl)); err == nil {
+func (m *SessionManager) refreshSessionActivity(
+	session *db.UserSession,
+	ipAddress, userAgent string,
+	ttl time.Duration,
+) {
+	now := time.Now()
+	err := m.db.TouchUserSession(session.ID, ipAddress, userAgent, now, now.Add(ttl))
+	if err == nil {
 		session.LastSeenAt = now
 		session.ExpiresAt = now.Add(ttl)
 		if trimmedIP := strings.TrimSpace(ipAddress); trimmedIP != "" {
@@ -191,10 +233,9 @@ func (m *SessionManager) ValidateSession(sessionToken, ipAddress, userAgent stri
 			session.UserAgent = trimmedUA
 		}
 	}
-
-	return &SessionValidationResult{Session: session, User: user}, nil
 }
 
+// RevokeByToken revokes a session using its token string.
 func (m *SessionManager) RevokeByToken(sessionToken string, revokedBy *int64) (bool, error) {
 	if m == nil {
 		return false, fmt.Errorf("session manager not initialized")
@@ -206,6 +247,7 @@ func (m *SessionManager) RevokeByToken(sessionToken string, revokedBy *int64) (b
 	return m.db.RevokeUserSessionByHash(hashSessionToken(trimmed), revokedBy)
 }
 
+// RevokeByID revokes a session using its database ID.
 func (m *SessionManager) RevokeByID(id int64, revokedBy *int64) (bool, error) {
 	if m == nil {
 		return false, fmt.Errorf("session manager not initialized")
@@ -216,6 +258,7 @@ func (m *SessionManager) RevokeByID(id int64, revokedBy *int64) (bool, error) {
 	return m.db.RevokeUserSession(id, revokedBy)
 }
 
+// RevokeAllForUser revokes all active sessions for the given user.
 func (m *SessionManager) RevokeAllForUser(userID int64, revokedBy *int64) (int64, error) {
 	if m == nil {
 		return 0, fmt.Errorf("session manager not initialized")
@@ -226,6 +269,7 @@ func (m *SessionManager) RevokeAllForUser(userID int64, revokedBy *int64) (int64
 	return m.db.RevokeAllUserSessions(userID, revokedBy)
 }
 
+// ListActiveForUser returns all active sessions for the given user.
 func (m *SessionManager) ListActiveForUser(userID int64) ([]*db.UserSession, error) {
 	if m == nil {
 		return nil, fmt.Errorf("session manager not initialized")
@@ -236,6 +280,7 @@ func (m *SessionManager) ListActiveForUser(userID int64) ([]*db.UserSession, err
 	return m.db.ListActiveSessionsByUser(userID)
 }
 
+// UpdateSessionMFAVerified marks the session as MFA verified.
 func (m *SessionManager) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Time, trustedDeviceID *int64) error {
 	if m == nil {
 		return fmt.Errorf("session manager not initialized")
@@ -243,6 +288,7 @@ func (m *SessionManager) UpdateSessionMFAVerified(sessionID int64, verifiedAt ti
 	return m.db.UpdateSessionMFAVerified(sessionID, verifiedAt, trustedDeviceID)
 }
 
+// UpdateSessionRecentStepUp updates the recent step-up timestamp for the session.
 func (m *SessionManager) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
 	if m == nil {
 		return fmt.Errorf("session manager not initialized")
@@ -250,6 +296,7 @@ func (m *SessionManager) UpdateSessionRecentStepUp(sessionID int64, when time.Ti
 	return m.db.UpdateSessionRecentStepUp(sessionID, when)
 }
 
+// AttachTrustedDeviceToSession attaches a trusted device to the session.
 func (m *SessionManager) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID int64) error {
 	if m == nil {
 		return fmt.Errorf("session manager not initialized")
@@ -257,6 +304,7 @@ func (m *SessionManager) AttachTrustedDeviceToSession(sessionID int64, trustedDe
 	return m.db.AttachTrustedDeviceToSession(sessionID, trustedDeviceID)
 }
 
+// DeriveCSRFToken derives a CSRF token from a session token using HMAC.
 func (m *SessionManager) DeriveCSRFToken(sessionToken string) (string, error) {
 	trimmed := strings.TrimSpace(sessionToken)
 	if trimmed == "" || len(m.secret) == 0 {
@@ -269,6 +317,7 @@ func (m *SessionManager) DeriveCSRFToken(sessionToken string) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(sum), nil
 }
 
+// ValidateCSRFToken validates a CSRF token against a session token.
 func (m *SessionManager) ValidateCSRFToken(sessionToken, csrfToken string) bool {
 	expected, err := m.DeriveCSRFToken(sessionToken)
 	if err != nil {
@@ -288,26 +337,8 @@ func (m *SessionManager) sessionTTLFor(session *db.UserSession) time.Duration {
 		return ttl
 	}
 
-	if len(session.Metadata) > 0 {
-		var meta map[string]interface{}
-		if err := json.Unmarshal(session.Metadata, &meta); err == nil {
-			if raw, ok := meta["ttl_seconds"]; ok {
-				switch v := raw.(type) {
-				case float64:
-					if v > 0 {
-						ttl = time.Duration(v * float64(time.Second))
-					}
-				case int64:
-					if v > 0 {
-						ttl = time.Duration(v) * time.Second
-					}
-				case int:
-					if v > 0 {
-						ttl = time.Duration(v) * time.Second
-					}
-				}
-			}
-		}
+	if overrideTTL := m.extractTTLFromMetadata(session.Metadata); overrideTTL > 0 {
+		ttl = overrideTTL
 	}
 
 	if session.Channel == "cli" && ttl < cliDefaultAbsoluteTTL {
@@ -315,4 +346,40 @@ func (m *SessionManager) sessionTTLFor(session *db.UserSession) time.Duration {
 	}
 
 	return ttl
+}
+
+func (m *SessionManager) extractTTLFromMetadata(metadata []byte) time.Duration {
+	if len(metadata) == 0 {
+		return 0
+	}
+
+	var meta map[string]interface{}
+	if err := json.Unmarshal(metadata, &meta); err != nil {
+		return 0
+	}
+
+	raw, ok := meta["ttl_seconds"]
+	if !ok {
+		return 0
+	}
+
+	return m.parseTTLSeconds(raw)
+}
+
+func (m *SessionManager) parseTTLSeconds(raw interface{}) time.Duration {
+	switch v := raw.(type) {
+	case float64:
+		if v > 0 {
+			return time.Duration(v * float64(time.Second))
+		}
+	case int64:
+		if v > 0 {
+			return time.Duration(v) * time.Second
+		}
+	case int:
+		if v > 0 {
+			return time.Duration(v) * time.Second
+		}
+	}
+	return 0
 }

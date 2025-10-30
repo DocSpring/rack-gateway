@@ -27,28 +27,28 @@ func newDenyAllRBAC() *denyAllRBAC {
 }
 
 func (d *denyAllRBAC) Enforce(
-	userEmail string,
-	scope rbac.Scope,
-	resource rbac.Resource,
-	action rbac.Action,
+	_ string,
+	_ rbac.Scope,
+	_ rbac.Resource,
+	_ rbac.Action,
 ) (bool, error) {
 	return false, nil
 }
 
 func (d *denyAllRBAC) EnforceUser(
-	user *db.User,
-	scope rbac.Scope,
-	resource rbac.Resource,
-	action rbac.Action,
+	_ *db.User,
+	_ rbac.Scope,
+	_ rbac.Resource,
+	_ rbac.Action,
 ) (bool, error) {
 	return false, nil
 }
 
 func (d *denyAllRBAC) EnforceForAPIToken(
-	tokenID int64,
-	scope rbac.Scope,
-	resource rbac.Resource,
-	action rbac.Action,
+	_ int64,
+	_ rbac.Scope,
+	_ rbac.Resource,
+	_ rbac.Action,
 ) (bool, error) {
 	return false, nil
 }
@@ -57,19 +57,19 @@ func (d *denyAllRBAC) GetAllowedDomain() string {
 	return "example.com"
 }
 
-func (d *denyAllRBAC) GetUserByEmail(email string) (*db.User, error) {
+func (d *denyAllRBAC) GetUserByEmail(_ string) (*db.User, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) DeleteUser(email string) error {
+func (d *denyAllRBAC) DeleteUser(_ string) error {
 	return nil
 }
 
-func (d *denyAllRBAC) GetUser(email string) (*rbac.UserConfig, error) {
+func (d *denyAllRBAC) GetUser(_ string) (*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetUserWithID(email string) (*rbac.UserWithID, error) {
+func (d *denyAllRBAC) GetUserWithID(_ string) (*rbac.UserWithID, error) {
 	return nil, nil
 }
 
@@ -77,15 +77,15 @@ func (d *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) SaveUser(email string, user *rbac.UserConfig) error {
+func (d *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
 	return nil
 }
 
-func (d *denyAllRBAC) GetUserRoles(email string) ([]string, error) {
+func (d *denyAllRBAC) GetUserRoles(_ string) ([]string, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetRolePermissions(role string) ([]string, error) {
+func (d *denyAllRBAC) GetRolePermissions(_ string) ([]string, error) {
 	return nil, nil
 }
 

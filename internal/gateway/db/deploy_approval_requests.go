@@ -12,6 +12,7 @@ type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
 
+// Deploy approval request status constants
 const (
 	DeployApprovalRequestStatusPending  = "pending"
 	DeployApprovalRequestStatusApproved = "approved"
@@ -20,13 +21,17 @@ const (
 	DeployApprovalRequestStatusDeployed = "deployed"
 )
 
+// Deploy approval request error variables
 var (
+	// ErrDeployApprovalRequestActive is returned when an active approval already exists for the same token and commit
 	ErrDeployApprovalRequestActive = errors.New(
 		"a deploy approval request is already pending or approved for this token and git commit",
 	)
+	// ErrDeployApprovalRequestNotFound is returned when a deploy approval request cannot be found
 	ErrDeployApprovalRequestNotFound = errors.New("deploy approval request not found")
 )
 
+// DeployApprovalRequestConflictError wraps an existing approval request when a conflict is detected
 type DeployApprovalRequestConflictError struct {
 	Request *DeployApprovalRequest
 }
@@ -45,95 +50,156 @@ func (d *Database) CreateDeployApprovalRequest(
 	createdByUserID int64,
 	createdByAPITokenID *int64,
 	targetAPITokenID int64,
-	targetUserID *int64,
+	_ *int64,
 ) (*DeployApprovalRequest, error) {
-	message = strings.TrimSpace(message)
-	if message == "" {
-		return nil, fmt.Errorf("message is required")
-	}
-	app = strings.TrimSpace(app)
-	if app == "" {
-		return nil, fmt.Errorf("app is required")
-	}
-	gitCommitHash = strings.TrimSpace(gitCommitHash)
-	if gitCommitHash == "" {
-		return nil, fmt.Errorf("git_commit_hash is required")
-	}
-	if targetAPITokenID <= 0 {
-		return nil, fmt.Errorf("target api token required")
+	if err := validateDeployApprovalRequestInput(message, app, gitCommitHash, targetAPITokenID); err != nil {
+		return nil, err
 	}
 
-	// Check for existing approval with same (git_commit_hash, token) pair
-	existing, err := d.FindDeployApprovalRequest(DeployApprovalLookup{
-		TokenID:       targetAPITokenID,
-		GitCommitHash: gitCommitHash,
-		StatusFilter:  "any",
-	})
-	if err == nil && existing != nil {
-		return nil, &DeployApprovalRequestConflictError{Request: existing}
-	}
-	if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
-		return nil, fmt.Errorf("failed to check existing deploy approval requests: %w", err)
+	if err := d.checkDeployApprovalConflict(targetAPITokenID, gitCommitHash); err != nil {
+		return nil, err
 	}
 
-	var createdAPIToken sql.NullInt64
-	if createdByAPITokenID != nil {
-		createdAPIToken = sql.NullInt64{Int64: *createdByAPITokenID, Valid: true}
-	}
-	var gitBranchNull sql.NullString
-	if trimmed := strings.TrimSpace(gitBranch); trimmed != "" {
-		gitBranchNull = sql.NullString{String: trimmed, Valid: true}
-	}
-	var prURLNull sql.NullString
-	if trimmed := strings.TrimSpace(prURL); trimmed != "" {
-		prURLNull = sql.NullString{String: trimmed, Valid: true}
-	}
+	nullValues := buildDeployApprovalNullValues(createdByAPITokenID, gitBranch, prURL)
 
-	var id int64
-	err = d.queryRow(
-		`INSERT INTO deploy_approval_requests (message, app, git_commit_hash, git_branch, pr_url, ci_metadata, status, created_by_user_id, created_by_api_token_id, target_api_token_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		message,
-		app,
-		gitCommitHash,
-		gitBranchNull,
-		prURLNull,
-		ciMetadata,
-		DeployApprovalRequestStatusPending,
-		createdByUserID,
-		createdAPIToken,
-		targetAPITokenID,
-	).Scan(&id)
+	id, err := d.insertDeployApprovalRequest(
+		message, app, gitCommitHash, ciMetadata,
+		createdByUserID, nullValues, targetAPITokenID,
+	)
 	if err != nil {
-		// Check for unique constraint violation (race condition between check and insert)
-		if strings.Contains(err.Error(), "idx_deploy_approval_requests_active_commit") ||
-			strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-			// Try to fetch the conflicting record
-			existing, fetchErr := d.FindDeployApprovalRequest(DeployApprovalLookup{
-				TokenID:       targetAPITokenID,
-				GitCommitHash: gitCommitHash,
-				StatusFilter:  "any",
-			})
-			if fetchErr == nil && existing != nil {
-				return nil, &DeployApprovalRequestConflictError{Request: existing}
-			}
-			return nil, ErrDeployApprovalRequestActive
-		}
-		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
+		return d.handleDeployApprovalInsertError(err, targetAPITokenID, gitCommitHash)
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
+func validateDeployApprovalRequestInput(
+	message, app, gitCommitHash string,
+	targetAPITokenID int64,
+) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return fmt.Errorf("message is required")
+	}
+	app = strings.TrimSpace(app)
+	if app == "" {
+		return fmt.Errorf("app is required")
+	}
+	gitCommitHash = strings.TrimSpace(gitCommitHash)
+	if gitCommitHash == "" {
+		return fmt.Errorf("git_commit_hash is required")
+	}
+	if targetAPITokenID <= 0 {
+		return fmt.Errorf("target api token required")
+	}
+	return nil
+}
+
+func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash string) error {
+	existing, err := d.FindDeployApprovalRequest(DeployApprovalLookup{
+		TokenID:       tokenID,
+		GitCommitHash: gitCommitHash,
+		StatusFilter:  "any",
+	})
+	if err == nil && existing != nil {
+		return &DeployApprovalRequestConflictError{Request: existing}
+	}
+	if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
+		return fmt.Errorf("failed to check existing deploy approval requests: %w", err)
+	}
+	return nil
+}
+
+type deployApprovalNullValues struct {
+	createdAPIToken sql.NullInt64
+	gitBranch       sql.NullString
+	prURL           sql.NullString
+}
+
+func buildDeployApprovalNullValues(
+	createdByAPITokenID *int64,
+	gitBranch, prURL string,
+) deployApprovalNullValues {
+	var result deployApprovalNullValues
+	if createdByAPITokenID != nil {
+		result.createdAPIToken = sql.NullInt64{Int64: *createdByAPITokenID, Valid: true}
+	}
+	if trimmed := strings.TrimSpace(gitBranch); trimmed != "" {
+		result.gitBranch = sql.NullString{String: trimmed, Valid: true}
+	}
+	if trimmed := strings.TrimSpace(prURL); trimmed != "" {
+		result.prURL = sql.NullString{String: trimmed, Valid: true}
+	}
+	return result
+}
+
+const deployApprovalInsertSQL = `INSERT INTO deploy_approval_requests
+	(message, app, git_commit_hash, git_branch, pr_url, ci_metadata, status,
+	created_by_user_id, created_by_api_token_id, target_api_token_id)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
+
+func (d *Database) insertDeployApprovalRequest(
+	message, app, gitCommitHash string,
+	ciMetadata []byte,
+	createdByUserID int64,
+	nulls deployApprovalNullValues,
+	targetAPITokenID int64,
+) (int64, error) {
+	var id int64
+	err := d.queryRow(
+		deployApprovalInsertSQL,
+		message,
+		app,
+		gitCommitHash,
+		nulls.gitBranch,
+		nulls.prURL,
+		ciMetadata,
+		DeployApprovalRequestStatusPending,
+		createdByUserID,
+		nulls.createdAPIToken,
+		targetAPITokenID,
+	).Scan(&id)
+	return id, err
+}
+
+func (d *Database) handleDeployApprovalInsertError(
+	err error,
+	tokenID int64,
+	gitCommitHash string,
+) (*DeployApprovalRequest, error) {
+	if !isUniqueConstraintViolation(err) {
+		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
+	}
+
+	existing, fetchErr := d.FindDeployApprovalRequest(DeployApprovalLookup{
+		TokenID:       tokenID,
+		GitCommitHash: gitCommitHash,
+		StatusFilter:  "any",
+	})
+	if fetchErr == nil && existing != nil {
+		return nil, &DeployApprovalRequestConflictError{Request: existing}
+	}
+	return nil, ErrDeployApprovalRequestActive
+}
+
+func isUniqueConstraintViolation(err error) bool {
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "idx_deploy_approval_requests_active_commit") ||
+		strings.Contains(errMsg, "duplicate key value violates unique constraint")
+}
+
+// GetDeployApprovalRequest retrieves a deploy approval request by its internal ID
 func (d *Database) GetDeployApprovalRequest(id int64) (*DeployApprovalRequest, error) {
 	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.id = ?", id)
 	return scanDeployApprovalRequest(row)
 }
 
+// GetDeployApprovalRequestByPublicID retrieves a deploy approval request by its public ID
 func (d *Database) GetDeployApprovalRequestByPublicID(publicID string) (*DeployApprovalRequest, error) {
 	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.public_id = ?", publicID)
 	return scanDeployApprovalRequest(row)
 }
 
+// DeployApprovalLookup contains criteria for finding a deploy approval request
 type DeployApprovalLookup struct {
 	TokenID       int64
 	GitCommitHash string
@@ -144,6 +210,7 @@ type DeployApprovalLookup struct {
 	StatusFilter  string // "any", "approved", or specific status
 }
 
+// FindDeployApprovalRequest finds a deploy approval request matching the given lookup criteria
 func (d *Database) FindDeployApprovalRequest(lookup DeployApprovalLookup) (*DeployApprovalRequest, error) {
 	clauses := []string{"dr.target_api_token_id = ?"}
 	args := []interface{}{lookup.TokenID}
@@ -187,11 +254,13 @@ func (d *Database) FindDeployApprovalRequest(lookup DeployApprovalLookup) (*Depl
 	return scanDeployApprovalRequest(row)
 }
 
+// GetDeployApprovalRequestForUser retrieves a deploy approval request by ID, verifying it belongs to the specified user
 func (d *Database) GetDeployApprovalRequestForUser(id, userID int64) (*DeployApprovalRequest, error) {
 	row := d.queryRow(deployApprovalRequestSelect+" WHERE dr.id = ? AND dr.created_by_user_id = ?", id, userID)
 	return scanDeployApprovalRequest(row)
 }
 
+// DeployApprovalRequestListOptions contains options for listing deploy approval requests
 type DeployApprovalRequestListOptions struct {
 	Status   string
 	Limit    int
@@ -200,6 +269,7 @@ type DeployApprovalRequestListOptions struct {
 	TokenID  int64
 }
 
+// ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
 func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOptions) ([]*DeployApprovalRequest, error) {
 	clauses := []string{"TRUE"}
 	args := []interface{}{}
@@ -280,7 +350,8 @@ func (d *Database) updateApprovalStatus(
 			return fmt.Errorf("approval expiration timestamp required for approved status")
 		}
 		updateSQL = `UPDATE deploy_approval_requests
-         SET status = ?, approved_by_user_id = ?, approved_at = NOW(), approval_expires_at = ?, approval_notes = ?, updated_at = NOW()
+         SET status = ?, approved_by_user_id = ?, approved_at = NOW(),
+             approval_expires_at = ?, approval_notes = ?, updated_at = NOW()
          WHERE ` + whereColumn + ` = ? AND status = ?`
 		args = []interface{}{newStatus, actorUserID, *approvalExpiresAt, trimmedNotes, whereArg, allowedStatuses[0]}
 	case DeployApprovalRequestStatusRejected:
@@ -309,6 +380,7 @@ func (d *Database) updateApprovalStatus(
 	return nil
 }
 
+// ApproveDeployApprovalRequest approves a pending deploy approval request by internal ID
 func (d *Database) ApproveDeployApprovalRequest(
 	id int64,
 	approverUserID int64,
@@ -330,6 +402,7 @@ func (d *Database) ApproveDeployApprovalRequest(
 	return d.GetDeployApprovalRequest(id)
 }
 
+// ApproveDeployApprovalRequestByPublicID approves a pending deploy approval request by public ID
 func (d *Database) ApproveDeployApprovalRequestByPublicID(
 	publicID string,
 	approverUserID int64,
@@ -351,6 +424,7 @@ func (d *Database) ApproveDeployApprovalRequestByPublicID(
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }
 
+// RejectDeployApprovalRequest rejects a pending or approved deploy approval request by internal ID
 func (d *Database) RejectDeployApprovalRequest(
 	id int64,
 	approverUserID int64,
@@ -371,6 +445,7 @@ func (d *Database) RejectDeployApprovalRequest(
 	return d.GetDeployApprovalRequest(id)
 }
 
+// RejectDeployApprovalRequestByPublicID rejects a pending or approved deploy approval request by public ID
 func (d *Database) RejectDeployApprovalRequestByPublicID(
 	publicID string,
 	approverUserID int64,
@@ -391,6 +466,7 @@ func (d *Database) RejectDeployApprovalRequestByPublicID(
 	return d.GetDeployApprovalRequestByPublicID(publicID)
 }
 
+// UpdateDeployApprovalRequestObjectURL updates the object URL for an approved deploy approval request
 func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL string) error {
 	if strings.TrimSpace(objectURL) == "" {
 		return fmt.Errorf("object url required")
@@ -416,6 +492,7 @@ func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL stri
 	return nil
 }
 
+// UpdateDeployApprovalRequestBuild updates the build and release IDs for an approved deploy approval request
 func (d *Database) UpdateDeployApprovalRequestBuild(id int64, buildID, releaseID string) error {
 	if strings.TrimSpace(buildID) == "" {
 		return fmt.Errorf("build id required")
@@ -445,6 +522,7 @@ func (d *Database) UpdateDeployApprovalRequestBuild(id int64, buildID, releaseID
 	return nil
 }
 
+// MarkDeployApprovalRequestPromoted records that a release was promoted for an approved deploy approval request
 func (d *Database) MarkDeployApprovalRequestPromoted(
 	id int64,
 	app, releaseID string,
@@ -481,6 +559,7 @@ func (d *Database) MarkDeployApprovalRequestPromoted(
 	return nil
 }
 
+// AppendProcessIDToDeployApprovalRequest adds a process ID to the list of processes for a deploy approval request
 func (d *Database) AppendProcessIDToDeployApprovalRequest(id int64, processID string) error {
 	if strings.TrimSpace(processID) == "" {
 		return fmt.Errorf("process id required")
@@ -510,6 +589,7 @@ func (d *Database) AppendProcessIDToDeployApprovalRequest(id int64, processID st
 	return nil
 }
 
+// AppendExecCommandToDeployApprovalRequest records an exec command executed as part of a deploy approval request
 func (d *Database) AppendExecCommandToDeployApprovalRequest(id int64, processID, command string) error {
 	if strings.TrimSpace(processID) == "" {
 		return fmt.Errorf("process id required")
