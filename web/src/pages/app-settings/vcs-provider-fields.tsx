@@ -44,7 +44,6 @@ export function VcsProviderFields({
             onChange={(event) => onChangeVcsProvider(event.target.value || null)}
             value={displayVcsProvider}
           >
-            <option value="">Not set</option>
             <option value="github">GitHub</option>
           </select>
           <SourceIndicator setting={settings?.vcs_provider} />
@@ -78,7 +77,6 @@ export function VcsProviderFields({
             onChange={(event) => onChangeCiProvider(event.target.value || null)}
             value={displayCiProvider}
           >
-            <option value="">Not set</option>
             <option value="circleci">CircleCI</option>
           </select>
           <SourceIndicator setting={settings?.ci_provider} />

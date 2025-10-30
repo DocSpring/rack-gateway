@@ -205,7 +205,6 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
                 value={displayCiProvider}
               >
                 <option value="circleci">CircleCI</option>
-                <option value="github">GitHub Actions</option>
               </select>
               <SourceIndicator setting={settings?.default_ci_provider} />
             </div>

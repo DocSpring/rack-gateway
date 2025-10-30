@@ -147,9 +147,13 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
   )
 
   const display = useMemo<VcsCiDisplayValues>(() => {
-    const currentVcsProvider = getSettingValue(settings?.vcs_provider, '')
+    const rawVcsProvider = getSettingValue(settings?.vcs_provider, '')
+    const currentVcsProvider =
+      rawVcsProvider || (settings?.vcs_provider?.source === 'global_default' ? 'github' : '')
     const currentVcsRepo = getSettingValue(settings?.vcs_repo, '')
-    const currentCiProvider = getSettingValue(settings?.ci_provider, '')
+    const rawCiProvider = getSettingValue(settings?.ci_provider, '')
+    const currentCiProvider =
+      rawCiProvider || (settings?.ci_provider?.source === 'global_default' ? 'circleci' : '')
     const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '')
     const currentGithubVerification = getSettingValue(settings?.github_verification, true)
     const currentAllowDeployFromDefaultBranch = getSettingValue(
