@@ -114,10 +114,9 @@ func (h *AuthHandler) auditLogin(c *gin.Context, resource, status string) {
 		IPAddress:    c.ClientIP(),
 		UserAgent:    c.GetHeader("User-Agent"),
 	}); err != nil {
-		log.Printf(
-			`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String()),"error":%q}`,
-			err,
-		)
+		action := audit.BuildAction(audit.ActionScopeLogin, rbac.ActionStart.String())
+		logFmt := `{"level":"error","event":"audit_log_failed","action":%q,"error":%q}`
+		log.Printf(logFmt, action, err)
 	}
 }
 
@@ -378,30 +377,40 @@ func (h *AuthHandler) handleMFADisablement(userID int64) {
 		return
 	}
 
-	hasConfirmed := false
-	for _, candidate := range remaining {
-		if candidate != nil && candidate.ConfirmedAt != nil {
-			hasConfirmed = true
-			break
-		}
+	if h.hasConfirmedMFAMethod(remaining) {
+		return
 	}
 
-	if !hasConfirmed {
-		if err := h.database.SetUserMFAEnrolled(userID, false); err != nil {
-			log.Printf("failed to update mfa enrollment after delete: %v", err)
-		}
+	h.disableUserMFAEnrollment(userID)
+	h.revokeAllUserTrustedDevices(userID)
+}
 
-		trustedDevices, err := h.database.ListTrustedDevices(userID)
-		if err != nil {
-			log.Printf("failed to list trusted devices: %v", err)
-			return
+func (h *AuthHandler) hasConfirmedMFAMethod(methods []*db.MFAMethod) bool {
+	for _, method := range methods {
+		if method != nil && method.ConfirmedAt != nil {
+			return true
 		}
+	}
+	return false
+}
 
-		for _, device := range trustedDevices {
-			if device != nil && device.RevokedAt == nil {
-				if err := h.database.RevokeTrustedDevice(device.ID, "mfa_disabled"); err != nil {
-					log.Printf("failed to revoke trusted device %d: %v", device.ID, err)
-				}
+func (h *AuthHandler) disableUserMFAEnrollment(userID int64) {
+	if err := h.database.SetUserMFAEnrolled(userID, false); err != nil {
+		log.Printf("failed to update mfa enrollment after delete: %v", err)
+	}
+}
+
+func (h *AuthHandler) revokeAllUserTrustedDevices(userID int64) {
+	trustedDevices, err := h.database.ListTrustedDevices(userID)
+	if err != nil {
+		log.Printf("failed to list trusted devices: %v", err)
+		return
+	}
+
+	for _, device := range trustedDevices {
+		if device != nil && device.RevokedAt == nil {
+			if err := h.database.RevokeTrustedDevice(device.ID, "mfa_disabled"); err != nil {
+				log.Printf("failed to revoke trusted device %d: %v", device.ID, err)
 			}
 		}
 	}

@@ -146,12 +146,17 @@ func (h *AuthHandler) verifyMFAAndComplete(
 	extraDebugLog func(now time.Time),
 ) {
 	// Perform the specific verification (TOTP, WebAuthn, etc.)
-	if _, err := verifyFunc(); err != nil {
+	verificationResult, err := verifyFunc()
+	if err != nil {
 		if h.securityNotifier != nil {
 			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	// Log the verification method used for audit purposes
+	if verificationResult != nil {
+		log.Printf("MFA verification successful for user %s", ctx.userRecord.Email)
 	}
 
 	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, trustDevice)

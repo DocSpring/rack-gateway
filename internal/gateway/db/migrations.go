@@ -72,7 +72,11 @@ func (d *Database) loadAppliedMigrations() (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Failed to close rows: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var v string

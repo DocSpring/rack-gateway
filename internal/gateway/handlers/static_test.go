@@ -135,7 +135,11 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 
 	tmp := t.TempDir()
 	indexPath := filepath.Join(tmp, "index.html")
-	content := `<!doctype html><meta name="rgw-sentry-dsn" content="RGW_SENTRY_DSN"><meta name="rgw-sentry-environment" content="RGW_SENTRY_ENVIRONMENT"><meta name="rgw-sentry-release" content="RGW_SENTRY_RELEASE"><meta name="rgw-sentry-traces-sample-rate" content="RGW_SENTRY_TRACES_SAMPLE_RATE">`
+	content := `<!doctype html>` +
+		`<meta name="rgw-sentry-dsn" content="RGW_SENTRY_DSN">` +
+		`<meta name="rgw-sentry-environment" content="RGW_SENTRY_ENVIRONMENT">` +
+		`<meta name="rgw-sentry-release" content="RGW_SENTRY_RELEASE">` +
+		`<meta name="rgw-sentry-traces-sample-rate" content="RGW_SENTRY_TRACES_SAMPLE_RATE">`
 	if err := os.WriteFile(indexPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write index: %v", err)
 	}

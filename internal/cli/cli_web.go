@@ -8,11 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// WebCommand returns the cobra command for opening the gateway web UI in a browser.
 func WebCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "web",
 		Short: "Open the gateway web UI in your browser",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			cfg, _, err := LoadConfig()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)

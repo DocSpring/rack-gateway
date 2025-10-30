@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TestAuthCommand returns the cobra command for testing authentication and MFA flows.
 func TestAuthCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test-auth [mfa]",
@@ -18,9 +19,7 @@ Examples:
   rack-gateway test-auth mfa                        # Test auth + preferred MFA method
   rack-gateway test-auth mfa --mfa-method webauthn  # Override preferred method`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
-			return runTestAuth(cmd, args)
-		}),
+		RunE: SilenceOnError(runTestAuth),
 	}
 
 	return cmd

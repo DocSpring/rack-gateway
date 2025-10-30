@@ -223,7 +223,7 @@ func (m *mockMFAService) VerifyWebAuthnAssertion(
 }
 
 func setupRouterWithMFAMiddleware(
-	t *testing.T,
+	_ *testing.T,
 	method string,
 	pattern string,
 	authUser *auth.User,
@@ -330,122 +330,129 @@ func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
 }
 
 func TestGlobalSettingsAllowDestructive_MFA(t *testing.T) {
+	t.Run("requires inline MFA", testGlobalSettingsAllowDestructiveRequiresMFA)
+	t.Run("succeeds with valid TOTP", testGlobalSettingsAllowDestructiveTOTPSuccess)
+	t.Run("invalid TOTP fails verification", testGlobalSettingsAllowDestructiveTOTPInvalid)
+	t.Run("succeeds with WebAuthn assertion", testGlobalSettingsAllowDestructiveWebAuthn)
+}
+
+func testGlobalSettingsAllowDestructiveRequiresMFA(t *testing.T) {
 	env := newSettingsTestEnv(t)
+	authUser, _ := env.newWebAuthUser(t)
 
-	t.Run("requires inline MFA", func(t *testing.T) {
-		authUser, _ := env.newWebAuthUser(t)
+	payload := map[string]interface{}{
+		"allow_destructive_actions": true,
+	}
+	w := env.performSettingsRequest(
+		t,
+		http.MethodPut,
+		"/api/v1/settings/allow-destructive-actions",
+		"/api/v1/settings/allow-destructive-actions",
+		env.handler.UpdateGlobalAllowDestructiveActions,
+		authUser,
+		payload,
+		nil,
+		nil,
+		nil,
+	)
 
-		payload := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		w := env.performSettingsRequest(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/allow-destructive-actions",
-			"/api/v1/settings/allow-destructive-actions",
-			env.handler.UpdateGlobalAllowDestructiveActions,
-			authUser,
-			payload,
-			nil,
-			nil,
-			nil,
-		)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
 
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Equal(t, "always", w.Header().Get("X-MFA-Required"))
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "mfa_required", resp["error"])
+}
 
-		var resp map[string]interface{}
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		require.Equal(t, "mfa_required", resp["error"])
-	})
+func testGlobalSettingsAllowDestructiveTOTPSuccess(t *testing.T) {
+	env := newSettingsTestEnv(t)
+	authUser, _ := env.newWebAuthUser(t)
+	code := env.totpCode(t)
+	authUser.MFAType = "totp"
+	authUser.MFAValue = code
 
-	t.Run("succeeds with valid TOTP", func(t *testing.T) {
-		authUser, _ := env.newWebAuthUser(t)
-		code := env.totpCode(t)
-		authUser.MFAType = "totp"
-		authUser.MFAValue = code
+	payload := map[string]interface{}{
+		"allow_destructive_actions": true,
+	}
+	w := env.performSettingsRequest(
+		t,
+		http.MethodPut,
+		"/api/v1/settings/allow-destructive-actions",
+		"/api/v1/settings/allow-destructive-actions",
+		env.handler.UpdateGlobalAllowDestructiveActions,
+		authUser,
+		payload,
+		nil,
+		nil,
+		func(req *http.Request) {
+			req.Header.Set("X-MFA-TOTP", code)
+		},
+	)
 
-		payload := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		w := env.performSettingsRequest(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/allow-destructive-actions",
-			"/api/v1/settings/allow-destructive-actions",
-			env.handler.UpdateGlobalAllowDestructiveActions,
-			authUser,
-			payload,
-			nil,
-			nil,
-			func(req *http.Request) {
-				req.Header.Set("X-MFA-TOTP", code)
-			},
-		)
+	require.Equal(t, http.StatusOK, w.Code)
+}
 
-		require.Equal(t, http.StatusOK, w.Code)
-	})
+func testGlobalSettingsAllowDestructiveTOTPInvalid(t *testing.T) {
+	env := newSettingsTestEnv(t)
+	authUser, _ := env.newWebAuthUser(t)
+	authUser.MFAType = "totp"
+	authUser.MFAValue = "000000"
 
-	t.Run("invalid TOTP fails verification", func(t *testing.T) {
-		authUser, _ := env.newWebAuthUser(t)
-		authUser.MFAType = "totp"
-		authUser.MFAValue = "000000"
+	mockVerifier := &mockMFAService{
+		verifyTOTPFunc: func(*db.User, string, string, string, *int64) (*mfa.VerificationResult, error) {
+			return nil, fmt.Errorf("invalid code")
+		},
+	}
 
-		mockVerifier := &mockMFAService{
-			verifyTOTPFunc: func(*db.User, string, string, string, *int64) (*mfa.VerificationResult, error) {
-				return nil, fmt.Errorf("invalid code")
-			},
-		}
+	w := env.performSettingsRequest(
+		t,
+		http.MethodPut,
+		"/api/v1/settings/allow-destructive-actions",
+		"/api/v1/settings/allow-destructive-actions",
+		env.handler.UpdateGlobalAllowDestructiveActions,
+		authUser,
+		map[string]interface{}{"allow_destructive_actions": true},
+		nil,
+		mockVerifier,
+		nil,
+	)
 
-		w := env.performSettingsRequest(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/allow-destructive-actions",
-			"/api/v1/settings/allow-destructive-actions",
-			env.handler.UpdateGlobalAllowDestructiveActions,
-			authUser,
-			map[string]interface{}{"allow_destructive_actions": true},
-			nil,
-			mockVerifier,
-			nil,
-		)
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "mfa_verification_failed", resp["error"])
+}
 
-		require.Equal(t, http.StatusUnauthorized, w.Code)
-		var resp map[string]interface{}
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		require.Equal(t, "mfa_verification_failed", resp["error"])
-	})
+func testGlobalSettingsAllowDestructiveWebAuthn(t *testing.T) {
+	env := newSettingsTestEnv(t)
+	authUser, _ := env.newWebAuthUser(t)
 
-	t.Run("succeeds with WebAuthn assertion", func(t *testing.T) {
-		authUser, _ := env.newWebAuthUser(t)
+	webauthnData := map[string]string{
+		"session_data":       `{"challenge":"test","rpId":"example.com"}`,
+		"assertion_response": `{"id":"test","response":{}}`,
+	}
+	raw, err := json.Marshal(webauthnData)
+	require.NoError(t, err)
+	authUser.MFAType = "webauthn"
+	authUser.MFAValue = base64.StdEncoding.EncodeToString(raw)
 
-		webauthnData := map[string]string{
-			"session_data":       `{"challenge":"test","rpId":"example.com"}`,
-			"assertion_response": `{"id":"test","response":{}}`,
-		}
-		raw, err := json.Marshal(webauthnData)
-		require.NoError(t, err)
-		authUser.MFAType = "webauthn"
-		authUser.MFAValue = base64.StdEncoding.EncodeToString(raw)
+	mockVerifier := &mockMFAService{}
+	w := env.performSettingsRequest(
+		t,
+		http.MethodPut,
+		"/api/v1/settings/allow-destructive-actions",
+		"/api/v1/settings/allow-destructive-actions",
+		env.handler.UpdateGlobalAllowDestructiveActions,
+		authUser,
+		map[string]interface{}{"allow_destructive_actions": true},
+		nil,
+		mockVerifier,
+		func(req *http.Request) {
+			req.Header.Set("X-MFA-WebAuthn", authUser.MFAValue)
+		},
+	)
 
-		mockVerifier := &mockMFAService{}
-		w := env.performSettingsRequest(
-			t,
-			http.MethodPut,
-			"/api/v1/settings/allow-destructive-actions",
-			"/api/v1/settings/allow-destructive-actions",
-			env.handler.UpdateGlobalAllowDestructiveActions,
-			authUser,
-			map[string]interface{}{"allow_destructive_actions": true},
-			nil,
-			mockVerifier,
-			func(req *http.Request) {
-				req.Header.Set("X-MFA-WebAuthn", authUser.MFAValue)
-			},
-		)
-
-		require.Equal(t, http.StatusOK, w.Code)
-	})
+	require.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestDeleteGlobalSettingsAllowDestructive_MFA(t *testing.T) {
@@ -601,118 +608,133 @@ func TestAppSettingProtectedEnvVars_MFA(t *testing.T) {
 }
 
 func TestUpdateGlobalSettings_Boolean(t *testing.T) {
-	handler, database, mgr := setupSettingsHandler(t)
+	t.Run("set single boolean to true", testUpdateSettingsSingleBoolean)
+	t.Run("set multiple settings", testUpdateSettingsMultiple)
+	t.Run("clear settings reverts to default", testUpdateSettingsClearRevertsToDefault)
+}
 
+func testUpdateSettingsSingleBoolean(t *testing.T) {
+	handler, database, mgr := setupSettingsHandler(t)
 	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
 		Name:  "Admin",
 		Roles: []string{"admin"},
 	}))
 
-	tests := []struct {
-		name           string
-		updates        map[string]interface{}
-		expectedStatus int
-		expectedValues map[string]interface{}
-		expectedSource settings.SettingSource
-	}{
-		{
-			name: "set single boolean to true",
-			updates: map[string]interface{}{
-				"allow_destructive_actions": true,
-			},
-			expectedStatus: http.StatusOK,
-			expectedValues: map[string]interface{}{
-				"allow_destructive_actions": true,
-			},
-			expectedSource: settings.SourceDB,
-		},
-		{
-			name: "set multiple settings",
-			updates: map[string]interface{}{
-				"allow_destructive_actions":   false,
-				"mfa_trusted_device_ttl_days": float64(60),
-			},
-			expectedStatus: http.StatusOK,
-			expectedValues: map[string]interface{}{
-				"allow_destructive_actions":   false,
-				"mfa_trusted_device_ttl_days": float64(60),
-			},
-			expectedSource: settings.SourceDB,
-		},
+	_ = database.DeleteSetting(nil, "allow_destructive_actions")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	updates := map[string]interface{}{
+		"allow_destructive_actions": true,
+	}
+	body, err := json.Marshal(updates)
+	require.NoError(t, err)
+
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("user_email", "admin@example.com")
+
+	handler.UpdateGlobalSettings(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var result map[string]settings.Setting
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result), "Response body: %s", w.Body.String())
+
+	setting, ok := result["allow_destructive_actions"]
+	require.True(t, ok, "Expected key allow_destructive_actions in response")
+	require.Equal(t, true, setting.Value, "Response body: %s", w.Body.String())
+	require.Equal(t, settings.SourceDB, setting.Source, "Response body: %s", w.Body.String())
+}
+
+func testUpdateSettingsMultiple(t *testing.T) {
+	handler, database, mgr := setupSettingsHandler(t)
+	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+		Name:  "Admin",
+		Roles: []string{"admin"},
+	}))
+
+	_ = database.DeleteSetting(nil, "allow_destructive_actions")
+	_ = database.DeleteSetting(nil, "mfa_trusted_device_ttl_days")
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	updates := map[string]interface{}{
+		"allow_destructive_actions":   false,
+		"mfa_trusted_device_ttl_days": float64(60),
+	}
+	body, err := json.Marshal(updates)
+	require.NoError(t, err)
+
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("user_email", "admin@example.com")
+
+	handler.UpdateGlobalSettings(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var result map[string]settings.Setting
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result), "Response body: %s", w.Body.String())
+
+	expectedValues := map[string]interface{}{
+		"allow_destructive_actions":   false,
+		"mfa_trusted_device_ttl_days": float64(60),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for key := range tt.updates {
-				_ = database.DeleteSetting(nil, key)
-			}
-
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-
-			body, err := json.Marshal(tt.updates)
-			require.NoError(t, err)
-
-			c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
-			c.Request.Header.Set("Content-Type", "application/json")
-			c.Set("user_email", "admin@example.com")
-
-			handler.UpdateGlobalSettings(c)
-
-			require.Equal(t, tt.expectedStatus, w.Code)
-
-			if tt.expectedStatus == http.StatusOK {
-				var result map[string]settings.Setting
-				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result), "Response body: %s", w.Body.String())
-
-				for key, expectedValue := range tt.expectedValues {
-					setting, ok := result[key]
-					require.True(t, ok, "Expected key %s in response", key)
-					require.Equal(t, expectedValue, setting.Value, "Response body: %s", w.Body.String())
-					require.Equal(t, tt.expectedSource, setting.Source, "Response body: %s", w.Body.String())
-				}
-			}
-		})
+	for key, expectedValue := range expectedValues {
+		setting, ok := result[key]
+		require.True(t, ok, "Expected key %s in response", key)
+		require.Equal(t, expectedValue, setting.Value, "Response body: %s", w.Body.String())
+		require.Equal(t, settings.SourceDB, setting.Source, "Response body: %s", w.Body.String())
 	}
+}
 
-	t.Run("clear settings reverts to default", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
+func testUpdateSettingsClearRevertsToDefault(t *testing.T) {
+	handler, database, mgr := setupSettingsHandler(t)
+	require.NoError(t, mgr.SaveUser("admin@example.com", &rbac.UserConfig{
+		Name:  "Admin",
+		Roles: []string{"admin"},
+	}))
 
-		updates := map[string]interface{}{
-			"allow_destructive_actions": true,
-		}
-		body, err := json.Marshal(updates)
-		require.NoError(t, err)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
 
-		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
-		c.Request.Header.Set("Content-Type", "application/json")
-		c.Set("user_email", "admin@example.com")
+	updates := map[string]interface{}{
+		"allow_destructive_actions": true,
+	}
+	body, err := json.Marshal(updates)
+	require.NoError(t, err)
 
-		handler.UpdateGlobalSettings(c)
-		require.Equal(t, http.StatusOK, w.Code)
+	c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("user_email", "admin@example.com")
 
-		valueBytes, exists, err := database.GetSetting(nil, "allow_destructive_actions")
-		require.NoError(t, err)
-		require.True(t, exists)
-		require.NotNil(t, valueBytes)
+	handler.UpdateGlobalSettings(c)
+	require.Equal(t, http.StatusOK, w.Code)
 
-		w = httptest.NewRecorder()
-		c, _ = gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/settings?key=allow_destructive_actions", nil)
-		c.Set("user_email", "admin@example.com")
+	valueBytes, exists, err := database.GetSetting(nil, "allow_destructive_actions")
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.NotNil(t, valueBytes)
 
-		handler.DeleteGlobalSettings(c)
-		require.Equal(t, http.StatusOK, w.Code)
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/settings?key=allow_destructive_actions", nil)
+	c.Set("user_email", "admin@example.com")
 
-		_, exists, err = database.GetSetting(nil, "allow_destructive_actions")
-		require.NoError(t, err)
-		require.False(t, exists)
+	handler.DeleteGlobalSettings(c)
+	require.Equal(t, http.StatusOK, w.Code)
 
-		var result map[string]settings.Setting
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
-		setting := result["allow_destructive_actions"]
-		require.Equal(t, false, setting.Value)
-		require.Equal(t, settings.SourceDefault, setting.Source)
-	})
+	_, exists, err = database.GetSetting(nil, "allow_destructive_actions")
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	var result map[string]settings.Setting
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	setting := result["allow_destructive_actions"]
+	require.Equal(t, false, setting.Value)
+	require.Equal(t, settings.SourceDefault, setting.Source)
 }

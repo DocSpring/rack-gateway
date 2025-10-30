@@ -6,12 +6,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// SwitchCommand returns the cobra command for switching between configured racks.
 func SwitchCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "switch <rack>",
 		Short: "Switch to a different rack",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			rack := args[0]
 
 			// Verify the rack exists

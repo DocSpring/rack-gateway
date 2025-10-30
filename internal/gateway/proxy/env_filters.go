@@ -12,54 +12,54 @@ import (
 
 func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
 	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
-	if !canEnvView {
-		var payload interface{}
-		if err := json.Unmarshal(body, &payload); err != nil {
-			return body
-		}
-		maskAll := func(s string) string {
-			lines := strings.Split(s, "\n")
-			for i, ln := range lines {
-				if ln == "" {
-					continue
-				}
-				parts := strings.SplitN(ln, "=", 2)
-				if len(parts) == 2 {
-					parts[1] = maskedSecret
-					lines[i] = parts[0] + "=" + parts[1]
-				}
-			}
-			return strings.Join(lines, "\n")
-		}
-		if updated, ok := transformEnvPayload(payload, maskAll); ok {
-			return updated
-		}
-		return body
-	}
 
 	var payload interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return body
 	}
-	mask := func(s string) string {
-		lines := strings.Split(s, "\n")
-		for i, ln := range lines {
-			if ln == "" {
-				continue
-			}
-			parts := strings.SplitN(ln, "=", 2)
-			key := parts[0]
-			if h.isSecretKey(key) && len(parts) > 1 {
-				parts[1] = maskedSecret
-				lines[i] = parts[0] + "=" + parts[1]
-			}
-		}
-		return strings.Join(lines, "\n")
+
+	var transform func(string) string
+	if !canEnvView {
+		transform = maskAllEnvVars
+	} else {
+		transform = h.maskSecretEnvVars
 	}
-	if updated, ok := transformEnvPayload(payload, mask); ok {
+
+	if updated, ok := transformEnvPayload(payload, transform); ok {
 		return updated
 	}
 	return body
+}
+
+// maskAllEnvVars masks all environment variable values.
+func maskAllEnvVars(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		if ln == "" {
+			continue
+		}
+		parts := strings.SplitN(ln, "=", 2)
+		if len(parts) == 2 {
+			lines[i] = parts[0] + "=" + maskedSecret
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// maskSecretEnvVars masks only secret environment variable values.
+func (h *Handler) maskSecretEnvVars(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		if ln == "" {
+			continue
+		}
+		parts := strings.SplitN(ln, "=", 2)
+		key := parts[0]
+		if h.isSecretKey(key) && len(parts) > 1 {
+			lines[i] = parts[0] + "=" + maskedSecret
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (h *Handler) isSecretKey(key string) bool {
@@ -91,31 +91,53 @@ func (h *Handler) isProtectedKeyForApp(key, app string) bool {
 func transformEnvPayload(payload interface{}, transform func(string) string) ([]byte, bool) {
 	switch v := payload.(type) {
 	case map[string]interface{}:
-		if envv, ok := v["env"].(string); ok {
-			v["env"] = transform(envv)
-			nb, err := json.Marshal(v)
-			if err == nil {
-				return nb, true
-			}
-		}
+		return transformEnvMap(v, transform)
 	case []interface{}:
-		changed := false
-		for _, it := range v {
-			if m, ok := it.(map[string]interface{}); ok {
-				if envv, ok2 := m["env"].(string); ok2 {
-					m["env"] = transform(envv)
-					changed = true
-				}
-			}
-		}
-		if changed {
-			nb, err := json.Marshal(v)
-			if err == nil {
-				return nb, true
-			}
-		}
+		return transformEnvArray(v, transform)
 	}
 	return nil, false
+}
+
+// transformEnvMap transforms environment variables in a map payload.
+func transformEnvMap(v map[string]interface{}, transform func(string) string) ([]byte, bool) {
+	envv, ok := v["env"].(string)
+	if !ok {
+		return nil, false
+	}
+
+	v["env"] = transform(envv)
+	nb, err := json.Marshal(v)
+	if err != nil {
+		return nil, false
+	}
+	return nb, true
+}
+
+// transformEnvArray transforms environment variables in an array payload.
+func transformEnvArray(v []interface{}, transform func(string) string) ([]byte, bool) {
+	changed := false
+	for _, it := range v {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		envv, ok2 := m["env"].(string)
+		if !ok2 {
+			continue
+		}
+		m["env"] = transform(envv)
+		changed = true
+	}
+
+	if !changed {
+		return nil, false
+	}
+
+	nb, err := json.Marshal(v)
+	if err != nil {
+		return nil, false
+	}
+	return nb, true
 }
 
 func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *deployApprovalTracker) {

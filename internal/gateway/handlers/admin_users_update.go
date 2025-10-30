@@ -31,7 +31,6 @@ import (
 func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	start := time.Now()
 	originalEmail := strings.TrimSpace(c.Param("email"))
-	currentEmail := originalEmail
 	currentUserEmail := strings.TrimSpace(c.GetString("user_email"))
 
 	var req UpdateUserRequest
@@ -61,147 +60,29 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	userConfig, err := h.rbac.GetUser(originalEmail)
-	if err != nil || userConfig == nil {
-		h.respondAuditError(
-			c,
-			http.StatusNotFound,
-			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-			originalEmail,
-			"user not found",
-			start,
-			nil,
-		)
-		return
-	}
-
-	dbUser, err := h.database.GetUser(originalEmail)
+	userConfig, err := h.loadUserForUpdate(c, originalEmail, start)
 	if err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-			originalEmail,
-			"failed to load user",
-			start,
-			nil,
-		)
-		return
-	}
-	if dbUser == nil {
-		h.respondAuditError(
-			c,
-			http.StatusNotFound,
-			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-			originalEmail,
-			"user not found",
-			start,
-			nil,
-		)
 		return
 	}
 
-	updatedEmail := currentEmail
-	if req.Email != nil {
-		trimmed := strings.TrimSpace(*req.Email)
-		if trimmed == "" {
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-				originalEmail,
-				"email cannot be empty",
-				start,
-				nil,
-			)
-			return
-		}
-		updatedEmail = trimmed
+	currentEmail, emailChanged, err := h.updateUserEmail(c, originalEmail, req.Email, start)
+	if err != nil {
+		return
 	}
 
-	emailChanged := !strings.EqualFold(updatedEmail, currentEmail)
-	if emailChanged {
-		if existing, err := h.database.GetUser(updatedEmail); err != nil {
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-				originalEmail,
-				"failed to check email availability",
-				start,
-				nil,
-			)
-			return
-		} else if existing != nil {
-			h.respondAuditError(c, http.StatusConflict, audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()), originalEmail, "email already in use", start, map[string]interface{}{"email": updatedEmail})
-			return
-		}
-		if err := h.database.UpdateUserEmail(originalEmail, updatedEmail); err != nil {
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-				originalEmail,
-				"failed to update email",
-				start,
-				map[string]interface{}{"email": updatedEmail},
-			)
-			return
-		}
-		currentEmail = updatedEmail
-	}
+	updatedName := h.updateUserName(userConfig.Name, req.Name)
 
-	updatedName := userConfig.Name
-	if req.Name != nil {
-		trimmed := strings.TrimSpace(*req.Name)
-		if trimmed != "" {
-			updatedName = trimmed
-		}
-	}
-
-	updatedRoles := userConfig.Roles
-	rolesProvided := req.Roles != nil
-	if rolesProvided {
-		if len(req.Roles) == 0 {
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-				originalEmail,
-				"roles cannot be empty",
-				start,
-				nil,
-			)
-			return
-		}
-		if currentEmail == currentUserEmail {
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-				originalEmail,
-				"cannot change your own roles",
-				start,
-				nil,
-			)
-			return
-		}
-		validRoles := map[string]bool{"viewer": true, "ops": true, "deployer": true, "admin": true}
-		for _, role := range req.Roles {
-			if !validRoles[role] {
-				h.respondAuditError(
-					c,
-					http.StatusBadRequest,
-					audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-					originalEmail,
-					fmt.Sprintf("invalid role: %s", role),
-					start,
-					nil,
-				)
-				return
-			}
-		}
-		updatedRoles = req.Roles
+	updatedRoles, rolesProvided, err := h.updateUserRoles(
+		c,
+		userConfig.Roles,
+		req.Roles,
+		currentEmail,
+		currentUserEmail,
+		originalEmail,
+		start,
+	)
+	if err != nil {
+		return
 	}
 
 	if err := h.rbac.SaveUser(currentEmail, &rbac.UserConfig{Name: updatedName, Roles: updatedRoles}); err != nil {
@@ -217,38 +98,14 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	payload := UserSummary{
-		Email: currentEmail,
-		Name:  updatedName,
-		Roles: append([]string(nil), updatedRoles...),
-	}
-	if snapshot, err := h.database.GetUser(currentEmail); err == nil && snapshot != nil {
-		payload.Email = snapshot.Email
-		payload.Name = snapshot.Name
-		payload.Roles = append([]string(nil), snapshot.Roles...)
-	}
-	details := map[string]interface{}{"name": updatedName}
-	if emailChanged {
-		details["email"] = currentEmail
-	}
-	if rolesProvided {
-		details["roles"] = updatedRoles
-	}
-
-	resourceIdentifier := currentEmail
-	if dbUserWithID, err := h.rbac.GetUserWithID(currentEmail); err == nil && dbUserWithID != nil &&
-		dbUserWithID.ID > 0 {
-		resourceIdentifier = fmt.Sprintf("%d", dbUserWithID.ID)
-	}
-
-	h.respondAuditSuccess(
+	h.respondUpdateUserSuccess(
 		c,
-		http.StatusOK,
-		payload,
-		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
-		resourceIdentifier,
+		currentEmail,
+		updatedName,
+		updatedRoles,
+		emailChanged,
+		rolesProvided,
 		start,
-		details,
 	)
 }
 
@@ -355,6 +212,247 @@ func (h *AdminHandler) UpdateUserName(c *gin.Context) {
 		http.StatusOK,
 		payload,
 		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdateName.String()),
+		resourceIdentifier,
+		start,
+		details,
+	)
+}
+
+// loadUserForUpdate loads user config and database user for update operations.
+func (h *AdminHandler) loadUserForUpdate(
+	c *gin.Context,
+	email string,
+	start time.Time,
+) (*rbac.UserConfig, error) {
+	userConfig, err := h.rbac.GetUser(email)
+	if err != nil || userConfig == nil {
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			email,
+			"user not found",
+			start,
+			nil,
+		)
+		return nil, fmt.Errorf("user not found")
+	}
+
+	dbUser, err := h.database.GetUser(email)
+	if err != nil {
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			email,
+			"failed to load user",
+			start,
+			nil,
+		)
+		return nil, err
+	}
+	if dbUser == nil {
+		h.respondAuditError(
+			c,
+			http.StatusNotFound,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			email,
+			"user not found",
+			start,
+			nil,
+		)
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return userConfig, nil
+}
+
+// updateUserEmail updates the user email if provided, returning the current email and whether it changed.
+func (h *AdminHandler) updateUserEmail(
+	c *gin.Context,
+	originalEmail string,
+	newEmail *string,
+	start time.Time,
+) (string, bool, error) {
+	currentEmail := originalEmail
+
+	if newEmail == nil {
+		return currentEmail, false, nil
+	}
+
+	trimmed := strings.TrimSpace(*newEmail)
+	if trimmed == "" {
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			"email cannot be empty",
+			start,
+			nil,
+		)
+		return "", false, fmt.Errorf("email cannot be empty")
+	}
+
+	updatedEmail := trimmed
+	emailChanged := !strings.EqualFold(updatedEmail, currentEmail)
+
+	if !emailChanged {
+		return currentEmail, false, nil
+	}
+
+	existing, err := h.database.GetUser(updatedEmail)
+	if err != nil {
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			"failed to check email availability",
+			start,
+			nil,
+		)
+		return "", false, err
+	}
+
+	if existing != nil {
+		h.respondAuditError(
+			c,
+			http.StatusConflict,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			"email already in use",
+			start,
+			map[string]interface{}{"email": updatedEmail},
+		)
+		return "", false, fmt.Errorf("email already in use")
+	}
+
+	if err := h.database.UpdateUserEmail(originalEmail, updatedEmail); err != nil {
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			"failed to update email",
+			start,
+			map[string]interface{}{"email": updatedEmail},
+		)
+		return "", false, err
+	}
+
+	return updatedEmail, true, nil
+}
+
+// updateUserName updates the user name if provided.
+func (h *AdminHandler) updateUserName(currentName string, newName *string) string {
+	if newName == nil {
+		return currentName
+	}
+	trimmed := strings.TrimSpace(*newName)
+	if trimmed == "" {
+		return currentName
+	}
+	return trimmed
+}
+
+// updateUserRoles updates the user roles if provided.
+func (h *AdminHandler) updateUserRoles(
+	c *gin.Context,
+	currentRoles []string,
+	newRoles []string,
+	userEmail string,
+	currentUserEmail string,
+	originalEmail string,
+	start time.Time,
+) ([]string, bool, error) {
+	if newRoles == nil {
+		return currentRoles, false, nil
+	}
+
+	if len(newRoles) == 0 {
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			"roles cannot be empty",
+			start,
+			nil,
+		)
+		return nil, false, fmt.Errorf("roles cannot be empty")
+	}
+
+	if userEmail == currentUserEmail {
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			"cannot change your own roles",
+			start,
+			nil,
+		)
+		return nil, false, fmt.Errorf("cannot change your own roles")
+	}
+
+	if err := validateUserRoles(newRoles); err != nil {
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
+			originalEmail,
+			err.Error(),
+			start,
+			nil,
+		)
+		return nil, false, err
+	}
+
+	return newRoles, true, nil
+}
+
+// respondUpdateUserSuccess sends a success response for user update.
+func (h *AdminHandler) respondUpdateUserSuccess(
+	c *gin.Context,
+	email string,
+	name string,
+	roles []string,
+	emailChanged bool,
+	rolesProvided bool,
+	start time.Time,
+) {
+	payload := UserSummary{
+		Email: email,
+		Name:  name,
+		Roles: append([]string(nil), roles...),
+	}
+
+	if snapshot, err := h.database.GetUser(email); err == nil && snapshot != nil {
+		payload.Email = snapshot.Email
+		payload.Name = snapshot.Name
+		payload.Roles = append([]string(nil), snapshot.Roles...)
+	}
+
+	details := map[string]interface{}{"name": name}
+	if emailChanged {
+		details["email"] = email
+	}
+	if rolesProvided {
+		details["roles"] = roles
+	}
+
+	resourceIdentifier := email
+	if dbUserWithID, err := h.rbac.GetUserWithID(email); err == nil && dbUserWithID != nil &&
+		dbUserWithID.ID > 0 {
+		resourceIdentifier = fmt.Sprintf("%d", dbUserWithID.ID)
+	}
+
+	h.respondAuditSuccess(
+		c,
+		http.StatusOK,
+		payload,
+		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionUpdate.String()),
 		resourceIdentifier,
 		start,
 		details,

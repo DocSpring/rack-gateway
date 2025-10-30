@@ -29,13 +29,67 @@ func (h *AdminHandler) requireJobsAccess(c *gin.Context, action rbac.Action) boo
 	return true
 }
 
+// parseJobStateFilter converts a state string to River job state.
+// Returns nil and false if the state is empty.
+// Returns nil and false with an error response if the state is invalid.
+func parseJobStateFilter(c *gin.Context, state string) (rivertype.JobState, bool) {
+	if state == "" {
+		return "", true
+	}
+
+	var riverState rivertype.JobState
+	switch state {
+	case "available":
+		riverState = rivertype.JobStateAvailable
+	case "canceled":
+		riverState = rivertype.JobStateCancelled
+	case "completed":
+		riverState = rivertype.JobStateCompleted
+	case "discarded":
+		riverState = rivertype.JobStateDiscarded
+	case "pending":
+		riverState = rivertype.JobStatePending
+	case "retryable":
+		riverState = rivertype.JobStateRetryable
+	case "running":
+		riverState = rivertype.JobStateRunning
+	case "scheduled":
+		riverState = rivertype.JobStateScheduled
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state filter"})
+		return "", false
+	}
+	return riverState, true
+}
+
+// parseJobListLimit parses and validates the limit query parameter.
+func parseJobListLimit(limitStr string) int {
+	const defaultLimit = 100
+	const maxLimit = 1000
+
+	if limitStr == "" {
+		return defaultLimit
+	}
+
+	parsed, err := strconv.Atoi(strings.TrimSpace(limitStr))
+	if err != nil || parsed <= 0 {
+		return defaultLimit
+	}
+
+	if parsed > maxLimit {
+		return maxLimit
+	}
+
+	return parsed
+}
+
 // ListJobs godoc
 // @Summary List background jobs
 // @Description Returns a list of background jobs with optional filtering
 // @Tags Jobs
 // @Produce json
 // @Param queue query string false "Filter by queue name"
-// @Param state query string false "Filter by state (available, canceled, completed, discarded, pending, retryable, running, scheduled)"
+// @Param state query string false "Filter by job state"
 // @Param kind query string false "Filter by job kind"
 // @Param limit query integer false "Maximum number of results (default: 100, max: 1000)"
 // @Success 200 {object} JobListResponse
@@ -49,53 +103,29 @@ func (h *AdminHandler) ListJobs(c *gin.Context) {
 	}
 
 	// Parse filters
-	limit := 100
-	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-			if parsed > 1000 {
-				parsed = 1000
-			}
-			limit = parsed
-		}
-	}
-
+	limit := parseJobListLimit(c.Query("limit"))
 	queue := strings.TrimSpace(c.Query("queue"))
-	state := strings.TrimSpace(c.Query("state"))
+	stateStr := strings.TrimSpace(c.Query("state"))
 	kind := strings.TrimSpace(c.Query("kind"))
 
 	// Build River query params using builder pattern
 	params := river.NewJobListParams().First(limit)
 
-	// Add filters
+	// Add queue filter
 	if queue != "" {
 		params = params.Queues(queue)
 	}
 
-	if state != "" {
-		// Convert state string to River state
-		switch state {
-		case "available":
-			params = params.States(rivertype.JobStateAvailable)
-		case "canceled":
-			params = params.States(rivertype.JobStateCancelled)
-		case "completed":
-			params = params.States(rivertype.JobStateCompleted)
-		case "discarded":
-			params = params.States(rivertype.JobStateDiscarded)
-		case "pending":
-			params = params.States(rivertype.JobStatePending)
-		case "retryable":
-			params = params.States(rivertype.JobStateRetryable)
-		case "running":
-			params = params.States(rivertype.JobStateRunning)
-		case "scheduled":
-			params = params.States(rivertype.JobStateScheduled)
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state filter"})
+	// Add state filter
+	if stateStr != "" {
+		riverState, ok := parseJobStateFilter(c, stateStr)
+		if !ok {
 			return
 		}
+		params = params.States(riverState)
 	}
 
+	// Add kind filter
 	if kind != "" {
 		params = params.Kinds(kind)
 	}
@@ -193,9 +223,9 @@ func toJobResponse(job *rivertype.JobRow) JobResponse {
 	}
 }
 
-func formatJobErrors(errors []rivertype.AttemptError) []JobErrorResponse {
-	result := make([]JobErrorResponse, 0, len(errors))
-	for _, e := range errors {
+func formatJobErrors(jobErrors []rivertype.AttemptError) []JobErrorResponse {
+	result := make([]JobErrorResponse, 0, len(jobErrors))
+	for _, e := range jobErrors {
 		result = append(result, JobErrorResponse{
 			Attempt: e.Attempt,
 			Error:   e.Error,
@@ -205,13 +235,14 @@ func formatJobErrors(errors []rivertype.AttemptError) []JobErrorResponse {
 	return result
 }
 
-// Response types
+// JobListResponse contains a list of jobs with count and pagination metadata.
 type JobListResponse struct {
 	Jobs  []JobResponse `json:"jobs"`
 	Count int           `json:"count"` // Number of jobs in this response (not total count across all pages)
 	Limit int           `json:"limit"`
 }
 
+// JobResponse represents a background job with its execution details and errors.
 type JobResponse struct {
 	ID          int64              `json:"id"`
 	State       string             `json:"state"`
@@ -228,6 +259,7 @@ type JobResponse struct {
 	LastError   string             `json:"last_error,omitempty"`
 }
 
+// JobErrorResponse represents an error that occurred during job execution.
 type JobErrorResponse struct {
 	Attempt int       `json:"attempt"`
 	Error   string    `json:"error"`

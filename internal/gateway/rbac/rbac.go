@@ -46,7 +46,8 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) && (p.act == "*" || r.act == p.act)
+m = g(r.sub, p.sub) && (p.obj == "convox:*:*" || p.obj == r.obj || keyMatch3(r.obj, p.obj)) &&` + `
+ (p.act == "*" || r.act == p.act)
 `
 
 // NewDBManager creates a new RBAC manager using the database
@@ -158,31 +159,31 @@ func matchesAnyPermission(permissions []string, requested string) bool {
 		if perm == requested {
 			return true
 		}
-		// Check for wildcard patterns
-		if strings.Contains(perm, "*") {
-			// Handle multi-level wildcards like "convox:*:*"
-			permParts := strings.Split(perm, ":")
-			reqParts := strings.Split(requested, ":")
-
-			// Must have same number of parts
-			if len(permParts) != len(reqParts) {
-				continue
-			}
-
-			// Check each part
-			match := true
-			for i := range permParts {
-				if permParts[i] != "*" && permParts[i] != reqParts[i] {
-					match = false
-					break
-				}
-			}
-			if match {
-				return true
-			}
+		if matchesWildcard(perm, requested) {
+			return true
 		}
 	}
 	return false
+}
+
+func matchesWildcard(perm, requested string) bool {
+	if !strings.Contains(perm, "*") {
+		return false
+	}
+
+	permParts := strings.Split(perm, ":")
+	reqParts := strings.Split(requested, ":")
+
+	if len(permParts) != len(reqParts) {
+		return false
+	}
+
+	for i := range permParts {
+		if permParts[i] != "*" && permParts[i] != reqParts[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // GetAllowedDomain returns the configured domain
@@ -253,21 +254,12 @@ func (m *DBManager) SaveUser(email string, user *UserConfig) error {
 	}
 
 	if existing != nil {
-		// Update existing user
-		trimmedName := strings.TrimSpace(user.Name)
-		if trimmedName != "" && trimmedName != existing.Name {
-			if err := m.db.UpdateUserName(email, trimmedName); err != nil {
-				return fmt.Errorf("failed to update user name: %w", err)
-			}
-		}
-		if err := m.db.UpdateUserRoles(email, user.Roles); err != nil {
-			return fmt.Errorf("failed to update user: %w", err)
+		if err := m.updateExistingUser(email, user, existing); err != nil {
+			return err
 		}
 	} else {
-		// Create new user
-		name := strings.TrimSpace(user.Name)
-		if _, err := m.db.CreateUser(email, name, user.Roles); err != nil {
-			return fmt.Errorf("failed to create user: %w", err)
+		if err := m.createNewUser(email, user); err != nil {
+			return err
 		}
 	}
 
@@ -276,6 +268,27 @@ func (m *DBManager) SaveUser(email string, user *UserConfig) error {
 		return fmt.Errorf("failed to sync users: %w", err)
 	}
 
+	return nil
+}
+
+func (m *DBManager) updateExistingUser(email string, user *UserConfig, existing *db.User) error {
+	trimmedName := strings.TrimSpace(user.Name)
+	if trimmedName != "" && trimmedName != existing.Name {
+		if err := m.db.UpdateUserName(email, trimmedName); err != nil {
+			return fmt.Errorf("failed to update user name: %w", err)
+		}
+	}
+	if err := m.db.UpdateUserRoles(email, user.Roles); err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+	return nil
+}
+
+func (m *DBManager) createNewUser(email string, user *UserConfig) error {
+	name := strings.TrimSpace(user.Name)
+	if _, err := m.db.CreateUser(email, name, user.Roles); err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
 	return nil
 }
 

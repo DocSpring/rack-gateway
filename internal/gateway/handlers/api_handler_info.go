@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
@@ -33,20 +34,49 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 	rolesVal, _ := c.Get("user_roles")
 	roles := normalizeStringSlice(rolesVal)
 
-	var dbUser *db.User
-	authUser, _ := auth.GetAuthUser(c.Request.Context())
-	if authUser != nil {
-		dbUser = authUser.DBUser
-	}
-	if dbUser == nil {
-		var err error
-		dbUser, err = h.database.GetUser(email)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
-			return
-		}
+	dbUser, authUser, err := h.loadUserForInfo(c, email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user profile"})
+		return
 	}
 
+	userInfo := h.buildUserInfo(email, name, roles, dbUser, authUser)
+
+	rc, ok := h.primaryRack()
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "rack not configured"})
+		return
+	}
+
+	rackInfo := h.buildRackSummary(rc)
+	integrationsInfo := h.buildIntegrationsInfo()
+
+	response := InfoResponse{
+		User:         userInfo,
+		Rack:         rackInfo,
+		Integrations: integrationsInfo,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *APIHandler) loadUserForInfo(c *gin.Context, email string) (*db.User, *auth.User, error) {
+	authUser, _ := auth.GetAuthUser(c.Request.Context())
+	if authUser != nil && authUser.DBUser != nil {
+		return authUser.DBUser, authUser, nil
+	}
+
+	dbUser, err := h.database.GetUser(email)
+	return dbUser, authUser, err
+}
+
+func (h *APIHandler) buildUserInfo(
+	email string,
+	name string,
+	roles []string,
+	dbUser *db.User,
+	authUser *auth.User,
+) UserInfo {
 	userInfo := UserInfo{
 		Email:            email,
 		Name:             name,
@@ -68,6 +98,11 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 		userInfo.MFARequired = true
 	}
 
+	h.enrichUserInfoWithSession(email, authUser, &userInfo)
+	return userInfo
+}
+
+func (h *APIHandler) enrichUserInfoWithSession(email string, authUser *auth.User, userInfo *UserInfo) {
 	gtwlog.DebugTopicf(
 		gtwlog.TopicMFAStepUp,
 		"auth_info_step_up_check user_email=%q has_auth_user=%t has_session=%t",
@@ -75,31 +110,36 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 		authUser != nil,
 		authUser != nil && authUser.Session != nil,
 	)
-	if authUser != nil && authUser.Session != nil {
-		if authUser.Session.RecentStepUpAt != nil {
-			expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
-			userInfo.RecentStepUpExpiresAt = &expires
-			gtwlog.DebugTopicf(
-				gtwlog.TopicMFAStepUp,
-				"auth_info_step_up_set user_email=%q recent_step_up_at=%q expires_at=%q",
-				email,
-				authUser.Session.RecentStepUpAt.Format(time.RFC3339),
-				expires.Format(time.RFC3339),
-			)
-		} else {
-			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "auth_info_step_up_nil user_email=%q session_id=%d", email, authUser.Session.ID)
-		}
-		if authUser.Session.TrustedDeviceID != nil && *authUser.Session.TrustedDeviceID > 0 {
-			userInfo.HasTrustedDevice = true
-		}
-	}
 
-	rc, ok := h.primaryRack()
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "rack not configured"})
+	if authUser == nil || authUser.Session == nil {
 		return
 	}
 
+	if authUser.Session.RecentStepUpAt != nil {
+		expires := authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
+		userInfo.RecentStepUpExpiresAt = &expires
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"auth_info_step_up_set user_email=%q recent_step_up_at=%q expires_at=%q",
+			email,
+			authUser.Session.RecentStepUpAt.Format(time.RFC3339),
+			expires.Format(time.RFC3339),
+		)
+	} else {
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"auth_info_step_up_nil user_email=%q session_id=%d",
+			email,
+			authUser.Session.ID,
+		)
+	}
+
+	if authUser.Session.TrustedDeviceID != nil && *authUser.Session.TrustedDeviceID > 0 {
+		userInfo.HasTrustedDevice = true
+	}
+}
+
+func (h *APIHandler) buildRackSummary(rc config.RackConfig) RackSummary {
 	alias := strings.TrimSpace(rc.Alias)
 	if alias == "" {
 		alias = strings.TrimSpace(rc.Name)
@@ -108,26 +148,20 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 		}
 	}
 
-	rackInfo := RackSummary{
+	return RackSummary{
 		Name:  rc.Name,
 		Alias: alias,
 		Host:  strings.TrimSpace(rc.URL),
 	}
+}
 
-	integrationsInfo := IntegrationsInfo{
+func (h *APIHandler) buildIntegrationsInfo() IntegrationsInfo {
+	return IntegrationsInfo{
 		Slack: h.config != nil && strings.TrimSpace(h.config.SlackClientID) != "" &&
 			strings.TrimSpace(h.config.SlackClientSecret) != "",
 		GitHub:   h.config != nil && strings.TrimSpace(h.config.GitHubToken) != "",
 		CircleCI: h.config != nil && strings.TrimSpace(h.config.CircleCIToken) != "",
 	}
-
-	response := InfoResponse{
-		User:         userInfo,
-		Rack:         rackInfo,
-		Integrations: integrationsInfo,
-	}
-
-	c.JSON(http.StatusOK, response)
 }
 
 // GetCreatedBy godoc
@@ -259,11 +293,9 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	resp, err := client.Do(req)
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
-			log.Printf(
-				`{"level":"error","event":"rack_tls_verification_failed","scope":"rack_info","expected_fingerprint":"%s","actual_fingerprint":"%s"}`,
-				fpErr.Expected,
-				fpErr.Actual,
-			)
+			logFmt := `{"level":"error","event":"rack_tls_verification_failed",` +
+				`"scope":"rack_info","expected_fingerprint":"%s","actual_fingerprint":"%s"}`
+			log.Printf(logFmt, fpErr.Expected, fpErr.Actual)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "rack certificate verification failed"})
 			return
 		}

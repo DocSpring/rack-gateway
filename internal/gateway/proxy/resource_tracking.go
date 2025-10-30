@@ -35,106 +35,173 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 		return
 	}
 
-	var payload interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return
-	}
-
-	setResource := func(resourceType, resourceID string, setAudit bool) {
-		if strings.TrimSpace(resourceID) == "" {
-			return
-		}
-		created := h.recordResourceCreator(resourceType, resourceID, email)
-		if setAudit && created {
-			r.Header.Set("X-Audit-Resource", resourceID)
-		}
-	}
-
-	obj, ok := payload.(map[string]interface{})
+	obj, ok := h.parseResponseBody(body)
 	if !ok {
 		return
 	}
 
+	h.captureAppCreation(r, path, obj, email)
+	h.captureBuildCreation(r, path, obj, email)
+	h.captureObjectUpload(r, path, obj, email)
+	h.captureBuildDetails(r, path, obj, email)
+	h.captureReleaseCreation(r, path, obj, email)
+	h.captureProcessResource(r, path, obj, email)
+}
+
+func (h *Handler) parseResponseBody(body []byte) (map[string]interface{}, bool) {
+	var payload interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, false
+	}
+	obj, ok := payload.(map[string]interface{})
+	return obj, ok
+}
+
+func (h *Handler) setResourceWithAudit(
+	r *http.Request,
+	resourceType, resourceID, email string,
+	setAudit bool,
+) {
+	if strings.TrimSpace(resourceID) == "" {
+		return
+	}
+	created := h.recordResourceCreator(resourceType, resourceID, email)
+	if setAudit && created {
+		r.Header.Set("X-Audit-Resource", resourceID)
+	}
+}
+
+func (h *Handler) captureAppCreation(
+	r *http.Request,
+	path string,
+	obj map[string]interface{},
+	email string,
+) {
 	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps") {
 		if name := extractJSONString(obj["name"]); name != "" {
-			setResource("app", name, true)
+			h.setResourceWithAudit(r, "app", name, email, true)
+		}
+	}
+}
+
+func (h *Handler) captureBuildCreation(
+	r *http.Request,
+	path string,
+	obj map[string]interface{},
+	email string,
+) {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/builds") {
+		return
+	}
+
+	buildID := extractJSONString(obj["id"])
+	releaseID := extractJSONString(obj["release"])
+
+	if buildID != "" {
+		h.setResourceWithAudit(r, "build", buildID, email, true)
+	}
+	if releaseID != "" {
+		if h.recordResourceCreator("release", releaseID, email) {
+			r.Header.Add("X-Release-Created", releaseID)
 		}
 	}
 
-	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/builds") {
-		buildID := extractJSONString(obj["id"])
-		releaseID := extractJSONString(obj["release"])
-
-		if buildID != "" {
-			setResource("build", buildID, true)
-		}
-		if releaseID != "" {
-			if h.recordResourceCreator("release", releaseID, email) {
-				r.Header.Add("X-Release-Created", releaseID)
-			}
-		}
-
-		// Update deploy approval tracking with build_id and release_id
-		if buildID != "" && releaseID != "" {
-			h.updateBuildApprovalTracking(r, buildID, releaseID)
-		}
+	if buildID != "" && releaseID != "" {
+		h.updateBuildApprovalTracking(r, buildID, releaseID)
 	}
-	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
-		// Extract filename from path for audit logging
-		segments := strings.Split(strings.TrimSpace(path), "/")
-		if len(segments) > 0 {
-			filename := segments[len(segments)-1]
-			if filename != "" {
-				r.Header.Set("X-Audit-Resource", filename)
-			}
-		}
+}
 
-		// Track object key for resource creator
-		key := extractJSONString(obj["key"])
-		if key == "" {
-			key = extractJSONString(obj["id"])
-		}
-		if key == "" && len(segments) > 0 {
-			key = segments[len(segments)-1]
-		}
-		if key != "" {
-			setResource("object", key, false)
-		}
+func (h *Handler) captureObjectUpload(
+	r *http.Request,
+	path string,
+	obj map[string]interface{},
+	email string,
+) {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/objects/tmp/{name}") {
+		return
+	}
 
-		// Track object URL for deploy approval workflow
-		if objectURL := extractJSONString(obj["url"]); objectURL != "" {
-			// This should never fail because we validated upfront
-			if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
-				// Log error but don't fail - we already validated this should work
-				gtwlog.Errorf("proxy: failed to update object URL tracking after validation passed: %v", err)
-			}
+	segments := strings.Split(strings.TrimSpace(path), "/")
+	if len(segments) > 0 {
+		filename := segments[len(segments)-1]
+		if filename != "" {
+			r.Header.Set("X-Audit-Resource", filename)
 		}
 	}
 
-	if rbac.KeyMatch3(path, "/apps/{app}/builds/{id}") {
-		if id := extractJSONString(obj["id"]); id != "" {
-			h.recordResourceCreator("build", id, email)
-		}
-		if rel := extractJSONString(obj["release"]); rel != "" {
-			if h.recordResourceCreator("release", rel, email) {
-				r.Header.Add("X-Release-Created", rel)
-			}
-		}
+	key := h.extractObjectKey(obj, segments)
+	if key != "" {
+		h.setResourceWithAudit(r, "object", key, email, false)
 	}
 
-	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/releases") {
-		if id := extractJSONString(obj["id"]); id != "" {
-			r.Header.Set("X-Audit-Resource", id)
-			if h.recordResourceCreator("release", id, email) {
-				r.Header.Add("X-Release-Created", id)
-			}
+	if objectURL := extractJSONString(obj["url"]); objectURL != "" {
+		if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
+			gtwlog.Errorf("proxy: failed to update object URL tracking after validation passed: %v", err)
 		}
 	}
+}
 
-	if r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
-		if id := extractJSONString(obj["id"]); id != "" {
-			r.Header.Set("X-Audit-Resource", id)
-			setResource("process", id, false)
+func (h *Handler) extractObjectKey(obj map[string]interface{}, segments []string) string {
+	key := extractJSONString(obj["key"])
+	if key == "" {
+		key = extractJSONString(obj["id"])
+	}
+	if key == "" && len(segments) > 0 {
+		key = segments[len(segments)-1]
+	}
+	return key
+}
+
+func (h *Handler) captureBuildDetails(
+	r *http.Request,
+	path string,
+	obj map[string]interface{},
+	email string,
+) {
+	if !rbac.KeyMatch3(path, "/apps/{app}/builds/{id}") {
+		return
+	}
+
+	if id := extractJSONString(obj["id"]); id != "" {
+		h.recordResourceCreator("build", id, email)
+	}
+	if rel := extractJSONString(obj["release"]); rel != "" {
+		if h.recordResourceCreator("release", rel, email) {
+			r.Header.Add("X-Release-Created", rel)
 		}
+	}
+}
+
+func (h *Handler) captureReleaseCreation(
+	r *http.Request,
+	path string,
+	obj map[string]interface{},
+	email string,
+) {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/releases") {
+		return
+	}
+
+	if id := extractJSONString(obj["id"]); id != "" {
+		r.Header.Set("X-Audit-Resource", id)
+		if h.recordResourceCreator("release", id, email) {
+			r.Header.Add("X-Release-Created", id)
+		}
+	}
+}
+
+func (h *Handler) captureProcessResource(
+	r *http.Request,
+	path string,
+	obj map[string]interface{},
+	email string,
+) {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(path, "/apps/{app}/services/{service}/processes") {
+		return
+	}
+
+	if id := extractJSONString(obj["id"]); id != "" {
+		r.Header.Set("X-Audit-Resource", id)
+		h.setResourceWithAudit(r, "process", id, email, false)
 	}
 }

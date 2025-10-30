@@ -16,6 +16,10 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
+// AdminHandler is defined in admin.go
+// AuditLogsResponse is defined in dto.go
+// cloneDetails and parseAuditTime are defined in admin_helpers.go
+
 var (
 	errInvalidStartTime = errors.New("invalid start time")
 	errInvalidEndTime   = errors.New("invalid end time")
@@ -124,32 +128,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	start := time.Now()
 	filters, _, _, err := h.auditFiltersFromRequest(c)
 	if err != nil {
-		switch {
-		case errors.Is(err, errInvalidStartTime):
-			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "invalid start time", start, nil)
-		case errors.Is(err, errInvalidEndTime):
-			h.respondAuditError(c, http.StatusBadRequest, "audit.export", "", "invalid end time", start, nil)
-		case errors.Is(err, errInvalidTimeRange):
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				"audit.export",
-				"",
-				"end time must be after start time",
-				start,
-				nil,
-			)
-		default:
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				"audit.export",
-				"",
-				"failed to fetch logs",
-				start,
-				nil,
-			)
-		}
+		h.handleExportFilterError(c, err, start)
 		return
 	}
 
@@ -164,18 +143,70 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 		return
 	}
 
-	// Set CSV headers
-	c.Header("Content-Type", "text/csv")
-	c.Header(
-		"Content-Disposition",
-		fmt.Sprintf("attachment; filename=\"audit-logs-%s.csv\"", time.Now().Format("2006-01-02")),
-	)
-
-	// Write CSV
+	h.setCSVResponseHeaders(c)
 	writer := csv.NewWriter(c.Writer)
 	defer writer.Flush()
 
-	// Header row - aggregated format with time range
+	if err := h.writeAuditCSVHeader(c, writer, start); err != nil {
+		return
+	}
+
+	totalEvents, err := h.writeAuditCSVRows(c, writer, logs, start)
+	if err != nil {
+		return
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to flush CSV", start, nil)
+		return
+	}
+
+	baseDetails := map[string]interface{}{
+		"count":  len(logs),
+		"events": totalEvents,
+	}
+
+	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, buildAuditDetails(filters, baseDetails), start)
+}
+
+func (h *AdminHandler) handleExportFilterError(c *gin.Context, err error, start time.Time) {
+	switch {
+	case errors.Is(err, errInvalidStartTime):
+		h.respondAuditError(
+			c, http.StatusBadRequest, "audit.export", "",
+			"invalid start time", start, nil,
+		)
+	case errors.Is(err, errInvalidEndTime):
+		h.respondAuditError(
+			c, http.StatusBadRequest, "audit.export", "",
+			"invalid end time", start, nil,
+		)
+	case errors.Is(err, errInvalidTimeRange):
+		h.respondAuditError(
+			c, http.StatusBadRequest, "audit.export", "",
+			"end time must be after start time", start, nil,
+		)
+	default:
+		h.respondAuditError(
+			c, http.StatusInternalServerError, "audit.export", "",
+			"failed to fetch logs", start, nil,
+		)
+	}
+}
+
+func (h *AdminHandler) setCSVResponseHeaders(c *gin.Context) {
+	c.Header("Content-Type", "text/csv")
+	filename := fmt.Sprintf(
+		"attachment; filename=\"audit-logs-%s.csv\"",
+		time.Now().Format("2006-01-02"),
+	)
+	c.Header("Content-Disposition", filename)
+}
+
+func (h *AdminHandler) writeAuditCSVHeader(
+	c *gin.Context, writer *csv.Writer, start time.Time,
+) error {
 	header := []string{
 		"first_seen", "last_seen", "user_email", "user_name", "action_type", "action",
 		"command", "resource", "status", "event_count",
@@ -183,18 +214,18 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 	}
 	if err := writer.Write(header); err != nil {
 		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			"audit.export",
-			"",
-			"failed to write CSV header",
-			start,
-			nil,
+			c, http.StatusInternalServerError, "audit.export", "",
+			"failed to write CSV header", start, nil,
 		)
-		return
+		return err
 	}
+	return nil
+}
 
-	// Data rows
+func (h *AdminHandler) writeAuditCSVRows(
+	c *gin.Context, writer *csv.Writer,
+	logs []*db.AuditLogAggregated, start time.Time,
+) (int, error) {
 	totalEvents := 0
 	for _, log := range logs {
 		totalEvents += log.EventCount
@@ -217,29 +248,13 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 		}
 		if err := writer.Write(row); err != nil {
 			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				"audit.export",
-				"",
-				"failed to write CSV row",
-				start,
-				nil,
+				c, http.StatusInternalServerError, "audit.export", "",
+				"failed to write CSV row", start, nil,
 			)
-			return
+			return 0, err
 		}
 	}
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		h.respondAuditError(c, http.StatusInternalServerError, "audit.export", "", "failed to flush CSV", start, nil)
-		return
-	}
-
-	baseDetails := map[string]interface{}{
-		"count":  len(logs),
-		"events": totalEvents,
-	}
-
-	h.auditAdminAction(c, "audit.export", "", "success", http.StatusOK, buildAuditDetails(filters, baseDetails), start)
+	return totalEvents, nil
 }
 
 func (h *AdminHandler) auditAdminAction(
@@ -249,25 +264,37 @@ func (h *AdminHandler) auditAdminAction(
 	details map[string]interface{},
 	start time.Time,
 ) {
-	if h == nil || h.database == nil {
+	if h == nil || h.database == nil || action == "audit.list" {
 		return
 	}
 
-	if action == "audit.list" {
-		return
+	email, name := extractAuditUserInfo(c)
+	detailsJSON := marshalAuditDetails(details)
+	actionType, resourceType := classifyAuditAction(action)
+
+	entry := &db.AuditLog{
+		UserEmail:      email,
+		UserName:       name,
+		ActionType:     actionType,
+		Action:         action,
+		Resource:       strings.TrimSpace(resource),
+		ResourceType:   resourceType,
+		Details:        detailsJSON,
+		IPAddress:      c.ClientIP(),
+		UserAgent:      c.GetHeader("User-Agent"),
+		Status:         status,
+		HTTPStatus:     httpStatus,
+		ResponseTimeMs: int(time.Since(start).Milliseconds()),
+		RBACDecision:   mapStatusToRBAC(status),
 	}
 
-	trimmedResource := strings.TrimSpace(resource)
-	detailsCopy := cloneDetails(details)
-	var detailsJSON string
-	if len(detailsCopy) > 0 {
-		if payload, err := json.Marshal(detailsCopy); err == nil {
-			detailsJSON = string(payload)
-		}
-	}
+	_ = h.auditLogger.LogDBEntry(entry)
+}
 
+func extractAuditUserInfo(c *gin.Context) (string, string) {
 	email := strings.TrimSpace(c.GetString("user_email"))
 	name := strings.TrimSpace(c.GetString("user_name"))
+
 	if au, ok := auth.GetAuthUser(c.Request.Context()); ok && au != nil {
 		if e := strings.TrimSpace(au.Email); e != "" {
 			email = e
@@ -277,49 +304,42 @@ func (h *AdminHandler) auditAdminAction(
 		}
 	}
 
-	actionType := "admin"
+	return email, name
+}
+
+func marshalAuditDetails(details map[string]interface{}) string {
+	detailsCopy := cloneDetails(details)
+	if len(detailsCopy) == 0 {
+		return ""
+	}
+
+	if payload, err := json.Marshal(detailsCopy); err == nil {
+		return string(payload)
+	}
+
+	return ""
+}
+
+func classifyAuditAction(action string) (actionType, resourceType string) {
 	switch {
 	case strings.HasPrefix(action, "api_token."):
-		actionType = "tokens"
+		return "tokens", "api_token"
 	case strings.HasPrefix(action, "user."):
-		actionType = "users"
-	case strings.HasPrefix(action, "audit."):
-		actionType = "admin"
+		return "users", "user"
+	default:
+		return "admin", "admin"
 	}
+}
 
-	resourceType := "admin"
-	switch {
-	case strings.HasPrefix(action, "api_token."):
-		resourceType = "api_token"
-	case strings.HasPrefix(action, "user."):
-		resourceType = "user"
-	case strings.HasPrefix(action, "audit."):
-		resourceType = "admin"
-	}
-
-	entry := &db.AuditLog{
-		UserEmail:      email,
-		UserName:       name,
-		ActionType:     actionType,
-		Action:         action,
-		Resource:       trimmedResource,
-		ResourceType:   resourceType,
-		Details:        detailsJSON,
-		IPAddress:      c.ClientIP(),
-		UserAgent:      c.GetHeader("User-Agent"),
-		Status:         status,
-		HTTPStatus:     httpStatus,
-		ResponseTimeMs: int(time.Since(start).Milliseconds()),
-	}
-
+func mapStatusToRBAC(status string) string {
 	switch status {
 	case "denied":
-		entry.RBACDecision = "deny"
+		return "deny"
 	case "success":
-		entry.RBACDecision = "allow"
+		return "allow"
+	default:
+		return ""
 	}
-
-	_ = h.auditLogger.LogDBEntry(entry)
 }
 
 func buildAuditDetails(filters db.AuditLogFilters, base map[string]interface{}) map[string]interface{} {
@@ -400,28 +420,10 @@ func (h *AdminHandler) respondAuditError(
 }
 
 func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilters, int, int, error) {
-	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if err != nil || page < 1 {
-		page = 1
-	}
-	limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
-	if err != nil || limit <= 0 {
-		limit = 100
-	}
-
-	userFilter := c.Query("user")
-	if userFilter == "" {
-		if userIDParam := c.Query("user_id"); userIDParam != "" {
-			if userID, convErr := strconv.ParseInt(userIDParam, 10, 64); convErr == nil {
-				user, lookupErr := h.database.GetUserByID(userID)
-				if lookupErr != nil {
-					return db.AuditLogFilters{}, 0, 0, lookupErr
-				}
-				if user != nil {
-					userFilter = user.Email
-				}
-			}
-		}
+	page, limit := parsePaginationParams(c)
+	userFilter, missingUserForID, err := h.resolveUserFilter(c)
+	if err != nil {
+		return db.AuditLogFilters{}, 0, 0, err
 	}
 
 	statusFilter := c.Query("status")
@@ -431,16 +433,67 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 	rangeFilter := strings.TrimSpace(c.DefaultQuery("range", "24h"))
 	startParam := c.Query("start")
 	endParam := c.Query("end")
-	missingUserForID := false
 
-	var (
-		since      time.Time
-		until      time.Time
-		hasStart   bool
-		hasEnd     bool
-		startError error
-		endError   error
+	since, until, hasStart, hasEnd, err := parseTimeRange(startParam, endParam)
+	if err != nil {
+		return db.AuditLogFilters{}, 0, 0, err
+	}
+
+	since, hasStart, rangeFilter = applyRangeDefault(since, hasStart, rangeFilter)
+
+	filters := buildAuditLogFilters(
+		userFilter, statusFilter, actionTypeFilter, resourceTypeFilter,
+		searchFilter, rangeFilter, page, limit,
+		since, until, hasStart, hasEnd, missingUserForID, c,
 	)
+
+	return filters, page, limit, nil
+}
+
+func parsePaginationParams(c *gin.Context) (int, int) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+	return page, limit
+}
+
+func (h *AdminHandler) resolveUserFilter(c *gin.Context) (string, bool, error) {
+	userFilter := c.Query("user")
+	if userFilter != "" {
+		return userFilter, false, nil
+	}
+
+	userIDParam := c.Query("user_id")
+	if userIDParam == "" {
+		return "", false, nil
+	}
+
+	userID, convErr := strconv.ParseInt(userIDParam, 10, 64)
+	if convErr != nil {
+		return "", false, nil
+	}
+
+	user, lookupErr := h.database.GetUserByID(userID)
+	if lookupErr != nil {
+		return "", false, lookupErr
+	}
+
+	if user != nil {
+		return user.Email, false, nil
+	}
+
+	return "", true, nil
+}
+
+func parseTimeRange(startParam, endParam string) (time.Time, time.Time, bool, bool, error) {
+	var since, until time.Time
+	var hasStart, hasEnd bool
+	var startError, endError error
 
 	if strings.TrimSpace(startParam) != "" {
 		parsed, parseErr := parseAuditTime(startParam)
@@ -451,6 +504,7 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 			hasStart = true
 		}
 	}
+
 	if strings.TrimSpace(endParam) != "" {
 		parsed, parseErr := parseAuditTime(endParam)
 		if parseErr != nil {
@@ -462,52 +516,58 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 	}
 
 	if startError != nil {
-		return db.AuditLogFilters{}, 0, 0, errInvalidStartTime
+		return time.Time{}, time.Time{}, false, false, errInvalidStartTime
 	}
 	if endError != nil {
-		return db.AuditLogFilters{}, 0, 0, errInvalidEndTime
+		return time.Time{}, time.Time{}, false, false, errInvalidEndTime
 	}
 	if hasStart && hasEnd && until.Before(since) {
-		return db.AuditLogFilters{}, 0, 0, errInvalidTimeRange
+		return time.Time{}, time.Time{}, false, false, errInvalidTimeRange
 	}
 
-	if !hasStart {
-		now := time.Now()
-		switch rangeFilter {
-		case "15m":
-			since = now.Add(-15 * time.Minute)
-			hasStart = true
-		case "1h":
-			since = now.Add(-1 * time.Hour)
-			hasStart = true
-		case "24h":
-			since = now.Add(-24 * time.Hour)
-			hasStart = true
-		case "7d":
-			since = now.Add(-7 * 24 * time.Hour)
-			hasStart = true
-		case "30d":
-			since = now.Add(-30 * 24 * time.Hour)
-			hasStart = true
-		case "all":
-			// no lower bound
-		case "custom":
-			// rely on explicit start/end parameters
-		default:
-			// fallback to 24h
-			since = now.Add(-24 * time.Hour)
-			hasStart = true
-		}
-	} else {
-		// Ensure "custom" is reflected for URL sync if explicit start is provided without range
+	return since, until, hasStart, hasEnd, nil
+}
+
+func applyRangeDefault(since time.Time, hasStart bool, rangeFilter string) (time.Time, bool, string) {
+	if hasStart {
 		if rangeFilter == "" {
 			rangeFilter = "custom"
 		}
+		return since, hasStart, rangeFilter
 	}
 
+	now := time.Now()
+	switch rangeFilter {
+	case "15m":
+		return now.Add(-15 * time.Minute), true, rangeFilter
+	case "1h":
+		return now.Add(-1 * time.Hour), true, rangeFilter
+	case "24h":
+		return now.Add(-24 * time.Hour), true, rangeFilter
+	case "7d":
+		return now.Add(-7 * 24 * time.Hour), true, rangeFilter
+	case "30d":
+		return now.Add(-30 * 24 * time.Hour), true, rangeFilter
+	case "all", "custom":
+		return since, false, rangeFilter
+	default:
+		return now.Add(-24 * time.Hour), true, rangeFilter
+	}
+}
+
+func buildAuditLogFilters(
+	userFilter, statusFilter, actionTypeFilter, resourceTypeFilter,
+	searchFilter, rangeFilter string, page, limit int,
+	since, until time.Time, hasStart, hasEnd, missingUserForID bool, c *gin.Context,
+) db.AuditLogFilters {
 	resolvedUserEmail := userFilter
-	if userFilter == "" && c.Query("user_id") != "" {
-		missingUserForID = true
+	if missingUserForID {
+		resolvedUserEmail = fmt.Sprintf("__missing_user_%s__", strings.TrimSpace(c.Query("user_id")))
+	}
+
+	offset := (page - 1) * limit
+	if offset < 0 {
+		offset = 0
 	}
 
 	filters := db.AuditLogFilters{
@@ -518,20 +578,15 @@ func (h *AdminHandler) auditFiltersFromRequest(c *gin.Context) (db.AuditLogFilte
 		Search:       searchFilter,
 		Range:        rangeFilter,
 		Limit:        limit,
-		Offset:       (page - 1) * limit,
+		Offset:       offset,
 	}
-	if filters.Offset < 0 {
-		filters.Offset = 0
-	}
+
 	if hasStart {
 		filters.Since = since
 	}
 	if hasEnd {
 		filters.Until = until
 	}
-	if missingUserForID {
-		filters.UserEmail = fmt.Sprintf("__missing_user_%s__", strings.TrimSpace(c.Query("user_id")))
-	}
 
-	return filters, page, limit, nil
+	return filters
 }

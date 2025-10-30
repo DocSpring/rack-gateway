@@ -212,42 +212,16 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return "", fmt.Errorf("failed to create directory: %w", err)
+			if err := extractTarDirectory(targetPath); err != nil {
+				return "", err
 			}
 
 		case tar.TypeReg:
-			// Check individual file size
-			if header.Size > maxFileSize {
-				return "", fmt.Errorf("file %s too large: %d bytes (max %d)", header.Name, header.Size, maxFileSize)
-			}
-
-			// Check total extracted size
-			totalSize += header.Size
-			if totalSize > maxExtractedSize {
-				return "", fmt.Errorf(
-					"total extracted size exceeds limit: %d bytes (max %d)",
-					totalSize,
-					maxExtractedSize,
-				)
-			}
-
-			// Create parent directory
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-				return "", fmt.Errorf("failed to create parent directory: %w", err)
-			}
-
-			// Extract file
-			outFile, err := os.Create(targetPath)
+			newSize, err := extractTarFile(tr, targetPath, header, totalSize)
 			if err != nil {
-				return "", fmt.Errorf("failed to create file: %w", err)
+				return "", err
 			}
-
-			if _, err := io.CopyN(outFile, tr, header.Size); err != nil {
-				outFile.Close() //nolint:errcheck // cleanup on error
-				return "", fmt.Errorf("failed to write file: %w", err)
-			}
-			outFile.Close() //nolint:errcheck // cleanup
+			totalSize = newSize
 
 		default:
 			// Skip other file types (symlinks, etc.)
@@ -256,6 +230,49 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 	}
 
 	return foundManifestPath, nil
+}
+
+func extractTarDirectory(targetPath string) error {
+	if err := os.MkdirAll(targetPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	return nil
+}
+
+func extractTarFile(tr *tar.Reader, targetPath string, header *tar.Header, currentSize int64) (int64, error) {
+	// Check individual file size
+	if header.Size > maxFileSize {
+		return 0, fmt.Errorf("file %s too large: %d bytes (max %d)", header.Name, header.Size, maxFileSize)
+	}
+
+	// Check total extracted size
+	newSize := currentSize + header.Size
+	if newSize > maxExtractedSize {
+		return 0, fmt.Errorf(
+			"total extracted size exceeds limit: %d bytes (max %d)",
+			newSize,
+			maxExtractedSize,
+		)
+	}
+
+	// Create parent directory
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return 0, fmt.Errorf("failed to create parent directory: %w", err)
+	}
+
+	// Extract file
+	outFile, err := os.Create(targetPath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	if _, err := io.CopyN(outFile, tr, header.Size); err != nil {
+		outFile.Close() //nolint:errcheck // cleanup on error
+		return 0, fmt.Errorf("failed to write file: %w", err)
+	}
+	outFile.Close() //nolint:errcheck // cleanup
+
+	return newSize, nil
 }
 
 // validateTarPath validates that a tar entry path is safe (no directory traversal)

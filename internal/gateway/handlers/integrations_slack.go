@@ -327,7 +327,8 @@ func (h *AdminHandler) UpdateSlackAlertSettingsHandler(c *gin.Context) {
 		return
 	}
 
-	if err := h.database.UpdateSlackAlertSettings(req.DeployApprovalsEnabled, req.DeployApprovalsChannelID); err != nil {
+	err := h.database.UpdateSlackAlertSettings(req.DeployApprovalsEnabled, req.DeployApprovalsChannelID)
+	if err != nil {
 		if err.Error() == "no Slack integration found to update" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "no Slack integration configured"})
 			return

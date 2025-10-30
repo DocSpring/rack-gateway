@@ -48,27 +48,17 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	validRoles := []string{"viewer", "ops", "deployer", "admin"}
-	for _, role := range req.Roles {
-		matched := false
-		for _, vr := range validRoles {
-			if role == vr {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-				strings.TrimSpace(req.Email),
-				fmt.Sprintf("invalid role: %s", role),
-				start,
-				nil,
-			)
-			return
-		}
+	if err := validateUserRoles(req.Roles); err != nil {
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+			strings.TrimSpace(req.Email),
+			err.Error(),
+			start,
+			nil,
+		)
+		return
 	}
 
 	userConfig := &rbac.UserConfig{
@@ -77,39 +67,11 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	if err := h.rbac.SaveUser(req.Email, userConfig); err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			h.respondAuditError(
-				c,
-				http.StatusConflict,
-				audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-				strings.TrimSpace(req.Email),
-				"user already exists",
-				start,
-				nil,
-			)
-			return
-		}
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-			strings.TrimSpace(req.Email),
-			"failed to create user",
-			start,
-			nil,
-		)
+		h.handleCreateUserError(c, req.Email, err, start)
 		return
 	}
 
-	if h.database != nil && h.rbac != nil {
-		if creatorEmail := strings.TrimSpace(c.GetString("user_email")); creatorEmail != "" {
-			if creator, err := h.rbac.GetUserWithID(creatorEmail); err == nil && creator != nil {
-				if newUser, err := h.database.GetUser(req.Email); err == nil && newUser != nil {
-					_, _ = h.database.CreateUserResource(creator.ID, "user", newUser.Email)
-				}
-			}
-		}
-	}
+	h.trackUserCreation(c, req.Email)
 
 	payload := UserSummary{
 		Email:          req.Email,
@@ -118,15 +80,8 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		CreatedByEmail: strings.TrimSpace(c.GetString("user_email")),
 	}
 
-	resource := strings.TrimSpace(req.Email)
-	if userWithID, err := h.rbac.GetUserWithID(req.Email); err == nil && userWithID != nil && userWithID.ID > 0 {
-		resource = fmt.Sprintf("%d", userWithID.ID)
-	}
-
-	details := map[string]interface{}{"email": req.Email, "roles": req.Roles}
-	if strings.TrimSpace(req.Name) != "" {
-		details["name"] = req.Name
-	}
+	resource := h.getUserResourceID(req.Email)
+	details := h.buildUserDetails(req.Email, req.Name, req.Roles)
 
 	h.respondAuditSuccess(
 		c,
@@ -139,6 +94,94 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	)
 
 	h.notifyUserCreated(c, req)
+}
+
+// validateUserRoles validates that all roles are valid.
+func validateUserRoles(roles []string) error {
+	validRoles := map[string]bool{
+		"viewer":   true,
+		"ops":      true,
+		"deployer": true,
+		"admin":    true,
+	}
+
+	for _, role := range roles {
+		if !validRoles[role] {
+			return fmt.Errorf("invalid role: %s", role)
+		}
+	}
+	return nil
+}
+
+// handleCreateUserError handles errors during user creation.
+func (h *AdminHandler) handleCreateUserError(
+	c *gin.Context,
+	email string,
+	err error,
+	start time.Time,
+) {
+	status := http.StatusInternalServerError
+	message := "failed to create user"
+
+	if strings.Contains(err.Error(), "already exists") {
+		status = http.StatusConflict
+		message = "user already exists"
+	}
+
+	h.respondAuditError(
+		c,
+		status,
+		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
+		strings.TrimSpace(email),
+		message,
+		start,
+		nil,
+	)
+}
+
+// trackUserCreation tracks the user creation in the database.
+func (h *AdminHandler) trackUserCreation(c *gin.Context, email string) {
+	if h.database == nil || h.rbac == nil {
+		return
+	}
+
+	creatorEmail := strings.TrimSpace(c.GetString("user_email"))
+	if creatorEmail == "" {
+		return
+	}
+
+	creator, err := h.rbac.GetUserWithID(creatorEmail)
+	if err != nil || creator == nil {
+		return
+	}
+
+	newUser, err := h.database.GetUser(email)
+	if err != nil || newUser == nil {
+		return
+	}
+
+	_, _ = h.database.CreateUserResource(creator.ID, "user", newUser.Email)
+}
+
+// getUserResourceID returns the resource ID for audit logging.
+func (h *AdminHandler) getUserResourceID(email string) string {
+	userWithID, err := h.rbac.GetUserWithID(email)
+	if err != nil || userWithID == nil || userWithID.ID <= 0 {
+		return strings.TrimSpace(email)
+	}
+	return fmt.Sprintf("%d", userWithID.ID)
+}
+
+// buildUserDetails builds the details map for audit logging.
+func (h *AdminHandler) buildUserDetails(email, name string, roles []string) map[string]interface{} {
+	details := map[string]interface{}{
+		"email": email,
+		"roles": roles,
+	}
+	if strings.TrimSpace(name) != "" {
+		details["name"] = name
+	}
+	return details
 }
 
 func (h *AdminHandler) notifyUserCreated(c *gin.Context, req CreateUserRequest) {

@@ -90,13 +90,16 @@ func (h *Handler) verifyMFAByType(r *http.Request, authUser *auth.User, userReco
 
 func (h *Handler) verifyTOTP(r *http.Request, authUser *auth.User, userRecord *db.User) error {
 	sessionIDPtr := getSessionIDPtr(authUser)
-	_, err := h.mfaService.VerifyTOTP(
+	result, err := h.mfaService.VerifyTOTP(
 		userRecord,
 		authUser.MFAValue,
 		clientIPFromRequest(r),
 		r.UserAgent(),
 		sessionIDPtr,
 	)
+	if err == nil && result != nil {
+		log.Printf("MFA verification successful: method_id=%d", result.MethodID)
+	}
 	return err
 }
 

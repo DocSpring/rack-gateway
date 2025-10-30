@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -114,9 +115,11 @@ func (d *Database) DeleteUser(email string) error {
 	}
 
 	if user != nil {
-		if _, err := d.RevokeAllUserSessions(user.ID, nil); err != nil {
+		count, err := d.RevokeAllUserSessions(user.ID, nil)
+		if err != nil {
 			return fmt.Errorf("failed to revoke sessions for user %s: %w", email, err)
 		}
+		log.Printf("Revoked %d sessions for user %s during deletion", count, email)
 	}
 
 	_, err = d.exec("DELETE FROM users WHERE email = ?", email)
@@ -173,9 +176,11 @@ func (d *Database) UpdateUserEmail(oldEmail, newEmail string) error {
 		return fmt.Errorf("user %s not found", oldEmail)
 	}
 
-	if _, err := d.RevokeAllUserSessions(user.ID, nil); err != nil {
+	count, err := d.RevokeAllUserSessions(user.ID, nil)
+	if err != nil {
 		return fmt.Errorf("failed to revoke sessions for user %s: %w", oldEmail, err)
 	}
+	log.Printf("Revoked %d sessions for user %s during email change", count, oldEmail)
 
 	_, err = d.exec("UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", newEmail, user.ID)
 	if err != nil {

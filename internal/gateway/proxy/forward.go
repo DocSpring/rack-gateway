@@ -1,16 +1,12 @@
 package proxy
 
 import (
-	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
@@ -177,7 +173,7 @@ func (h *Handler) logProxyResponse(
 	logResponse bool,
 	logResponseBody bool,
 ) {
-	if !logProxy && !logResponse && !(logResponseBody && len(logSnippet) > 0) {
+	if !logProxy && !logResponse && (!logResponseBody || len(logSnippet) == 0) {
 		return
 	}
 
@@ -235,58 +231,30 @@ func (h *Handler) forwardRequest(
 	path string,
 	authUser *auth.User,
 ) (int, error) {
-	original := path
-	base := strings.TrimRight(rack.URL, "/")
-	p := "/" + strings.TrimLeft(path, "/")
-	targetURL := base + p
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
+	targetURL := buildTargetURL(rack, path, r.URL.RawQuery)
 
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email, original)
+		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email, path)
 	}
 
-	var bodyBytes []byte
-	if r.Body != nil {
-		var err error
-		bodyBytes, err = io.ReadAll(r.Body)
-		if err != nil {
-			return 0, fmt.Errorf("failed to read request body: %w", err)
-		}
-		if err := r.Body.Close(); err != nil {
-			return 0, fmt.Errorf("failed to close request body: %w", err)
-		}
-	}
-
-	if err := h.validateBuildRequest(r, original, bodyBytes, authUser); err != nil {
-		return 0, err
-	}
-
-	if err := h.validateProcessCommand(r, original); err != nil {
-		return 0, err
-	}
-
-	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(bodyBytes))
+	bodyBytes, err := readRequestBody(r)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create proxy request: %w", err)
+		return 0, err
 	}
 
-	httputil.CopyHeaders(
-		proxyReq.Header,
-		r.Header,
-		"authorization",
-		"env",
-		"environment",
-		"release-env",
-		"x-audit-resource",
-	)
+	if err := h.validateBuildRequest(r, path, bodyBytes, authUser); err != nil {
+		return 0, err
+	}
 
-	proxyReq.Header.Set("Authorization", fmt.Sprintf("Basic %s",
-		base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", rack.Username, rack.APIKey)))))
-	proxyReq.Header.Set("X-User-Email", authUser.Email)
-	proxyReq.Header.Set("X-Request-ID", uuid.New().String())
+	if err := h.validateProcessCommand(r, path); err != nil {
+		return 0, err
+	}
+
+	proxyReq, err := prepareProxyRequest(r, targetURL, bodyBytes, rack, authUser)
+	if err != nil {
+		return 0, err
+	}
 
 	client, err := h.httpClient(r.Context(), 30*time.Second)
 	if err != nil {
@@ -303,90 +271,5 @@ func (h *Handler) forwardRequest(
 	}
 	defer resp.Body.Close() //nolint:errcheck
 
-	ct := strings.ToLower(resp.Header.Get("Content-Type"))
-	isJSON := strings.Contains(ct, "application/json")
-	pth := original
-	filterRelease := isJSON &&
-		(rbac.KeyMatch3(pth, "/apps/{app}/releases") || rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}"))
-	shouldCapture := false
-	captureProcess := false
-	if isJSON {
-		switch r.Method {
-		case http.MethodPost:
-			shouldCapture = true
-			if rbac.KeyMatch3(pth, "/apps/{app}/services/{service}/processes") {
-				captureProcess = true
-			}
-		case http.MethodGet:
-			if rbac.KeyMatch3(pth, "/apps/{app}/builds/{id}") || rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}") {
-				shouldCapture = true
-			}
-		}
-	}
-	needsBuffer := filterRelease || shouldCapture || captureProcess
-
-	logProxy := gtwlog.TopicEnabled(gtwlog.TopicProxy)
-	logResponse := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponse)
-	logResponseHeaders := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseHeaders)
-	logResponseBody := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponseBody)
-
-	var body []byte
-	var respReader io.Reader
-	var bytesWritten int64
-	var logSnippet []byte
-	if needsBuffer {
-		var err error
-		body, err = h.processBufferedResponse(
-			r,
-			resp,
-			pth,
-			authUser.Email,
-			filterRelease,
-			shouldCapture,
-			captureProcess,
-		)
-		if err != nil {
-			return 0, err
-		}
-		respReader = bytes.NewReader(body)
-	} else {
-		respReader = resp.Body
-	}
-
-	httputil.CopyHeaders(w.Header(), resp.Header, "content-length")
-	w.WriteHeader(resp.StatusCode)
-
-	contentType := resp.Header.Get("Content-Type")
-	shouldCaptureBody := logResponseBody && !httputil.IsBinaryContent(contentType)
-
-	if needsBuffer {
-		bytesWritten, logSnippet, err = h.writeBufferedResponse(w, respReader, body, shouldCaptureBody)
-	} else {
-		bytesWritten, logSnippet, err = h.writeStreamedResponse(w, respReader, shouldCaptureBody)
-	}
-	if err != nil {
-		return resp.StatusCode, err
-	}
-
-	if logResponseHeaders {
-		for key, values := range resp.Header {
-			for _, value := range values {
-				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "%s: %s", key, value)
-			}
-		}
-	}
-
-	h.logProxyResponse(
-		r,
-		resp,
-		path,
-		contentType,
-		bytesWritten,
-		logSnippet,
-		logProxy,
-		logResponse,
-		logResponseBody,
-	)
-
-	return resp.StatusCode, nil
+	return h.processProxyResponse(w, r, resp, path, authUser.Email)
 }

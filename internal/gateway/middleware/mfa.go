@@ -3,6 +3,7 @@ package middleware
 import (
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -255,13 +256,17 @@ func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 	sessionID := &session.ID
 	switch authUser.MFAType {
 	case "totp":
-		_, verifyErr = mfaService.VerifyTOTP(
+		result, err := mfaService.VerifyTOTP(
 			user,
 			authUser.MFAValue,
 			c.ClientIP(),
 			c.GetHeader("User-Agent"),
 			sessionID,
 		)
+		verifyErr = err
+		if err == nil && result != nil {
+			log.Printf("Inline MFA verification successful: method_id=%d", result.MethodID)
+		}
 	case "webauthn":
 		verifyErr = verifyInlineWebAuthn(
 			mfaService,

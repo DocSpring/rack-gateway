@@ -12,6 +12,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
@@ -201,63 +202,12 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 // @Router /api-tokens/{tokenID} [put]
 func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 	start := time.Now()
-	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
-	if tokenIDStr == "" {
-		h.respondAuditError(
-			c,
-			http.StatusBadRequest,
-			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-			tokenIDStr,
-			"invalid token ID",
-			start,
-			nil,
-		)
-		return
-	}
-
-	var req UpdateAPITokenRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusBadRequest,
-			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-			tokenIDStr,
-			err.Error(),
-			start,
-			nil,
-		)
-		return
-	}
-
-	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
-	if err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-			tokenIDStr,
-			"failed to load token",
-			start,
-			nil,
-		)
-		return
-	}
-	if existing == nil {
-		h.respondAuditError(
-			c,
-			http.StatusNotFound,
-			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-			tokenIDStr,
-			"token not found",
-			start,
-			nil,
-		)
+	tokenIDStr, req, existing, ok := h.validateUpdateAPITokenRequest(c, start)
+	if !ok {
 		return
 	}
 
 	tokenID := existing.ID
-
 	details := make(map[string]interface{})
 
 	if err := h.updateTokenNameIfChanged(c, tokenID, tokenIDStr, existing.Name, req.Name, start, details); err != nil {
@@ -660,4 +610,34 @@ func (h *AdminHandler) filterAdminsExcludingOwner(admins []string, ownerEmail st
 		}
 	}
 	return filtered
+}
+
+func (h *AdminHandler) validateUpdateAPITokenRequest(
+	c *gin.Context,
+	start time.Time,
+) (string, *UpdateAPITokenRequest, *db.APIToken, bool) {
+	action := audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String())
+	tokenIDStr := strings.TrimSpace(c.Param("tokenID"))
+	if tokenIDStr == "" {
+		h.respondAuditError(c, http.StatusBadRequest, action, tokenIDStr, "invalid token ID", start, nil)
+		return "", nil, nil, false
+	}
+
+	var req UpdateAPITokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondAuditError(c, http.StatusBadRequest, action, tokenIDStr, err.Error(), start, nil)
+		return "", nil, nil, false
+	}
+
+	existing, err := h.database.GetAPITokenByPublicID(tokenIDStr)
+	if err != nil {
+		h.respondAuditError(c, http.StatusInternalServerError, action, tokenIDStr, "failed to load token", start, nil)
+		return "", nil, nil, false
+	}
+	if existing == nil {
+		h.respondAuditError(c, http.StatusNotFound, action, tokenIDStr, "token not found", start, nil)
+		return "", nil, nil, false
+	}
+
+	return tokenIDStr, &req, existing, true
 }

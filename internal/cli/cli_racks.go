@@ -6,11 +6,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// RacksCommand returns the cobra command for listing configured racks.
 func RacksCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "racks",
 		Short: "List all configured racks",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			cfg, _, err := LoadConfig()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)

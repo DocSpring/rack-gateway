@@ -168,12 +168,12 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			"test-app-2",
 			"def456",
 			"main",
-			"",                   // prURL
-			[]byte("{}"),         // ciMetadata - must be valid JSON
-			fixture.admin.ID,     // createdByUserID
-			nil,                  // createdByAPITokenID
-			fixture.apiToken.ID,  // targetAPITokenID
-			&fixture.admin.ID,    // targetUserID
+			"",                  // prURL
+			[]byte("{}"),        // ciMetadata - must be valid JSON
+			fixture.admin.ID,    // createdByUserID
+			nil,                 // createdByAPITokenID
+			fixture.apiToken.ID, // targetAPITokenID
+			&fixture.admin.ID,   // targetUserID
 		)
 		require.NoError(t, err)
 

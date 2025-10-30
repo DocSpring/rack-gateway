@@ -31,35 +31,11 @@ func resolveDeployApprovalRequestToken(
 	req CreateDeployApprovalRequestRequest,
 	authUser *auth.User,
 ) (*db.APIToken, error) {
-	identifier := strings.TrimSpace(req.TargetAPITokenName)
-	var token *db.APIToken
-	var err error
-
-	hasExplicitTarget := false
-
-	if req.TargetAPITokenID != nil {
-		if trimmed := strings.TrimSpace(*req.TargetAPITokenID); trimmed != "" {
-			token, err = database.GetAPITokenByPublicID(trimmed)
-			hasExplicitTarget = true
-		}
-	}
-
-	if token == nil && err == nil {
-		if identifier != "" {
-			hasExplicitTarget = true
-			if id, parseErr := strconv.ParseInt(identifier, 10, 64); parseErr == nil {
-				token, err = database.GetAPITokenByID(id)
-			} else {
-				token, err = database.GetAPITokenByName(identifier)
-			}
-		} else if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil && *authUser.TokenID > 0 {
-			token, err = database.GetAPITokenByID(*authUser.TokenID)
-		}
-	}
-
+	token, hasExplicitTarget, err := lookupDeployApprovalToken(database, req, authUser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve api token: %w", err)
 	}
+
 	if token == nil {
 		if hasExplicitTarget {
 			return nil, errDeployApprovalRequestTokenNotFound
@@ -67,22 +43,84 @@ func resolveDeployApprovalRequestToken(
 		return nil, errDeployApprovalRequestTargetMissing
 	}
 
-	if token.UserID != user.ID {
-		allowedAdmin, err := rbacSvc.Enforce(
-			user.Email,
-			rbac.ScopeGateway,
-			rbac.ResourceDeployApprovalRequest,
-			rbac.ActionApprove,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check admin permission: %w", err)
-		}
-		if !allowedAdmin {
-			return nil, errDeployApprovalRequestForbidden
-		}
+	if err := validateTokenOwnership(rbacSvc, user, token); err != nil {
+		return nil, err
 	}
 
 	return token, nil
+}
+
+// lookupDeployApprovalToken looks up the API token by ID or name.
+func lookupDeployApprovalToken(
+	database *db.Database,
+	req CreateDeployApprovalRequestRequest,
+	authUser *auth.User,
+) (*db.APIToken, bool, error) {
+	// Try explicit ID first
+	if token, explicit, err := lookupByExplicitID(database, req.TargetAPITokenID); token != nil || err != nil {
+		return token, explicit, err
+	}
+
+	// Try name or fallback to auth user token
+	identifier := strings.TrimSpace(req.TargetAPITokenName)
+	if identifier != "" {
+		token, err := lookupByNameOrID(database, identifier)
+		return token, true, err
+	}
+
+	// Fallback to auth user's token
+	if authUser != nil && authUser.IsAPIToken && authUser.TokenID != nil && *authUser.TokenID > 0 {
+		token, err := database.GetAPITokenByID(*authUser.TokenID)
+		return token, false, err
+	}
+
+	return nil, false, nil
+}
+
+// lookupByExplicitID attempts to find token by explicit public ID.
+func lookupByExplicitID(database *db.Database, publicID *string) (*db.APIToken, bool, error) {
+	if publicID == nil {
+		return nil, false, nil
+	}
+
+	trimmed := strings.TrimSpace(*publicID)
+	if trimmed == "" {
+		return nil, false, nil
+	}
+
+	token, err := database.GetAPITokenByPublicID(trimmed)
+	return token, true, err
+}
+
+// lookupByNameOrID attempts to find token by name or numeric ID.
+func lookupByNameOrID(database *db.Database, identifier string) (*db.APIToken, error) {
+	if id, parseErr := strconv.ParseInt(identifier, 10, 64); parseErr == nil {
+		return database.GetAPITokenByID(id)
+	}
+	return database.GetAPITokenByName(identifier)
+}
+
+// validateTokenOwnership validates that the user owns the token or has admin permissions.
+func validateTokenOwnership(rbacSvc rbac.Manager, user *db.User, token *db.APIToken) error {
+	if token.UserID == user.ID {
+		return nil
+	}
+
+	allowedAdmin, err := rbacSvc.Enforce(
+		user.Email,
+		rbac.ScopeGateway,
+		rbac.ResourceDeployApprovalRequest,
+		rbac.ActionApprove,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to check admin permission: %w", err)
+	}
+
+	if !allowedAdmin {
+		return errDeployApprovalRequestForbidden
+	}
+
+	return nil
 }
 
 func toDeployApprovalRequestResponse(dr *db.DeployApprovalRequest) DeployApprovalRequestResponse {

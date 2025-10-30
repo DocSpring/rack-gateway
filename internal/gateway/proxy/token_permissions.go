@@ -89,7 +89,8 @@ func (h *Handler) evaluateAPITokenPermission(
 	isApprovalGatedAction := (resource == rbac.ResourceObject && action == rbac.ActionCreate) ||
 		(resource == rbac.ResourceBuild && (action == rbac.ActionCreate || action == rbac.ActionRead)) ||
 		(resource == rbac.ResourceRelease && action == rbac.ActionPromote) ||
-		(resource == rbac.ResourceProcess && (action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate)) ||
+		(resource == rbac.ResourceProcess &&
+			(action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate)) ||
 		(resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path))
 
 	if !isApprovalGatedAction {
@@ -125,115 +126,7 @@ func (h *Handler) evaluateAPITokenPermission(
 	}
 
 	// Lookup matching approval
-	var (
-		req *db.DeployApprovalRequest
-		err error
-	)
-
-	switch {
-	case resource == rbac.ResourceObject && action == rbac.ActionCreate:
-		// Object upload - check that object_url is not already set
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-			TokenID:      *authUser.TokenID,
-			App:          app,
-			StatusFilter: "approved",
-		})
-		if err == nil && req != nil && req.ObjectURL != "" {
-			return false, nil, &deployApprovalError{
-				status:  http.StatusConflict,
-				message: "an archive has already been uploaded for this deploy approval request",
-			}
-		}
-
-	case resource == rbac.ResourceBuild && action == rbac.ActionCreate:
-		// Build creation - check that build_id is not already set
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-			TokenID:      *authUser.TokenID,
-			App:          app,
-			StatusFilter: "approved",
-		})
-		if err == nil && req != nil && (req.BuildID != "" || req.ReleaseID != "") {
-			return false, nil, &deployApprovalError{
-				status:  http.StatusConflict,
-				message: "a build has already been created for this deploy approval request",
-			}
-		}
-
-	case resource == rbac.ResourceBuild && action == rbac.ActionRead,
-		resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path):
-		buildID := extractBuildIDFromPath(r.URL.Path)
-		if buildID == "" {
-			return deny()
-		}
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-			TokenID:      *authUser.TokenID,
-			App:          app,
-			BuildID:      buildID,
-			StatusFilter: "approved",
-		})
-
-	case resource == rbac.ResourceProcess && action == rbac.ActionStart:
-		// Process start requires Release header with approved release
-		releaseID := r.Header.Get("Release")
-		if releaseID == "" {
-			return deny()
-		}
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-			TokenID:      *authUser.TokenID,
-			App:          app,
-			ReleaseID:    releaseID,
-			StatusFilter: "approved",
-		})
-
-	case resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate):
-		// Process exec/terminate requires the process ID to be in an approved deployment's process_ids
-		processID := extractProcessIDFromPath(r.URL.Path)
-		log.Printf(
-			"DEBUG: process %s - checking permission for tokenID=%d app=%s processID=%s",
-			action,
-			*authUser.TokenID,
-			app,
-			processID,
-		)
-		if processID == "" {
-			log.Printf("DEBUG: process %s - denied: empty processID", action)
-			return deny()
-		}
-		lookup := db.DeployApprovalLookup{
-			TokenID:      *authUser.TokenID,
-			App:          app,
-			ProcessID:    processID,
-			StatusFilter: "approved",
-		}
-		log.Printf("DEBUG: process %s - looking up deploy approval: %+v", action, lookup)
-		req, err = h.database.FindDeployApprovalRequest(lookup)
-		log.Printf("DEBUG: process %s - lookup result: req=%v err=%v", action, req != nil, err)
-
-	case resource == rbac.ResourceRelease && action == rbac.ActionPromote:
-		releaseID := extractReleaseIDFromPath(r.URL.Path)
-		if releaseID == "" {
-			return deny()
-		}
-		req, err = h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
-			TokenID:   *authUser.TokenID,
-			App:       app,
-			ReleaseID: releaseID,
-		})
-		if err == nil && req != nil {
-			if req.Status == db.DeployApprovalRequestStatusDeployed {
-				return false, nil, &deployApprovalError{
-					status:  http.StatusConflict,
-					message: "this deploy approval request has already been deployed",
-				}
-			}
-			if req.Status != db.DeployApprovalRequestStatusApproved {
-				return deny()
-			}
-		}
-
-	default:
-		return false, nil, fmt.Errorf("unsupported deploy approval resource/action: %s:%s", resource, action)
-	}
+	req, err := h.findDeployApprovalForResource(r, deny, *authUser.TokenID, app, resource, action)
 
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
@@ -281,4 +174,170 @@ func getDeployApprovalTracker(ctx context.Context) *deployApprovalTracker {
 		return tracker
 	}
 	return nil
+}
+
+type denyFunc func() (bool, *deployApprovalTracker, error)
+
+func (h *Handler) findDeployApprovalForResource(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+	resource rbac.Resource,
+	action rbac.Action,
+) (*db.DeployApprovalRequest, error) {
+	switch {
+	case resource == rbac.ResourceObject && action == rbac.ActionCreate:
+		return h.findApprovalForObjectCreate(tokenID, app)
+	case resource == rbac.ResourceBuild && action == rbac.ActionCreate:
+		return h.findApprovalForBuildCreate(tokenID, app)
+	case resource == rbac.ResourceBuild && action == rbac.ActionRead,
+		resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path):
+		return h.findApprovalForBuildRead(r, deny, tokenID, app)
+	case resource == rbac.ResourceProcess && action == rbac.ActionStart:
+		return h.findApprovalForProcessStart(r, deny, tokenID, app)
+	case resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate):
+		return h.findApprovalForProcessAction(r, deny, tokenID, app, action)
+	case resource == rbac.ResourceRelease && action == rbac.ActionPromote:
+		return h.findApprovalForReleasePromote(r, deny, tokenID, app)
+	default:
+		return nil, fmt.Errorf("unsupported deploy approval resource/action: %s:%s", resource, action)
+	}
+}
+
+func (h *Handler) findApprovalForObjectCreate(
+	tokenID int64,
+	app string,
+) (*db.DeployApprovalRequest, error) {
+	req, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:      tokenID,
+		App:          app,
+		StatusFilter: "approved",
+	})
+	if err == nil && req != nil && req.ObjectURL != "" {
+		return nil, &deployApprovalError{
+			status:  http.StatusConflict,
+			message: "an archive has already been uploaded for this deploy approval request",
+		}
+	}
+	return req, err
+}
+
+func (h *Handler) findApprovalForBuildCreate(
+	tokenID int64,
+	app string,
+) (*db.DeployApprovalRequest, error) {
+	req, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:      tokenID,
+		App:          app,
+		StatusFilter: "approved",
+	})
+	if err == nil && req != nil && (req.BuildID != "" || req.ReleaseID != "") {
+		return nil, &deployApprovalError{
+			status:  http.StatusConflict,
+			message: "a build has already been created for this deploy approval request",
+		}
+	}
+	return req, err
+}
+
+func (h *Handler) findApprovalForBuildRead(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+) (*db.DeployApprovalRequest, error) {
+	buildID := extractBuildIDFromPath(r.URL.Path)
+	if buildID == "" {
+		_, _, err := deny()
+		return nil, err
+	}
+	return h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:      tokenID,
+		App:          app,
+		BuildID:      buildID,
+		StatusFilter: "approved",
+	})
+}
+
+func (h *Handler) findApprovalForProcessStart(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+) (*db.DeployApprovalRequest, error) {
+	releaseID := r.Header.Get("Release")
+	if releaseID == "" {
+		_, _, err := deny()
+		return nil, err
+	}
+	return h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:      tokenID,
+		App:          app,
+		ReleaseID:    releaseID,
+		StatusFilter: "approved",
+	})
+}
+
+func (h *Handler) findApprovalForProcessAction(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+	action rbac.Action,
+) (*db.DeployApprovalRequest, error) {
+	processID := extractProcessIDFromPath(r.URL.Path)
+	log.Printf(
+		"DEBUG: process %s - checking permission for tokenID=%d app=%s processID=%s",
+		action,
+		tokenID,
+		app,
+		processID,
+	)
+	if processID == "" {
+		log.Printf("DEBUG: process %s - denied: empty processID", action)
+		_, _, err := deny()
+		return nil, err
+	}
+	lookup := db.DeployApprovalLookup{
+		TokenID:      tokenID,
+		App:          app,
+		ProcessID:    processID,
+		StatusFilter: "approved",
+	}
+	log.Printf("DEBUG: process %s - looking up deploy approval: %+v", action, lookup)
+	req, err := h.database.FindDeployApprovalRequest(lookup)
+	log.Printf("DEBUG: process %s - lookup result: req=%v err=%v", action, req != nil, err)
+	return req, err
+}
+
+func (h *Handler) findApprovalForReleasePromote(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+) (*db.DeployApprovalRequest, error) {
+	releaseID := extractReleaseIDFromPath(r.URL.Path)
+	if releaseID == "" {
+		_, _, err := deny()
+		return nil, err
+	}
+	req, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:   tokenID,
+		App:       app,
+		ReleaseID: releaseID,
+	})
+	if err == nil && req != nil {
+		if req.Status == db.DeployApprovalRequestStatusDeployed {
+			return nil, &deployApprovalError{
+				status:  http.StatusConflict,
+				message: "this deploy approval request has already been deployed",
+			}
+		}
+		if req.Status != db.DeployApprovalRequestStatusApproved {
+			_, _, denyErr := deny()
+			return nil, denyErr
+		}
+	}
+	return req, err
 }

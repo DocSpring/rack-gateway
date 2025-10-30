@@ -41,97 +41,43 @@ func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 // @Failure 500 {string} string "Authentication failure"
 // @Router /auth/web/callback [get]
 func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
-	// Check for OAuth error response (user canceled or other OAuth error)
+	// Check for OAuth error response
 	if oauthError := c.Query("error"); oauthError != "" {
-		errorDesc := c.Query("error_description")
-		if errorDesc == "" {
-			errorDesc = "Authentication was canceled or failed"
-		}
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorDesc))
-		c.Redirect(http.StatusFound, errorURL)
+		h.redirectToWebLoginError(c, h.getOAuthErrorMessage(c))
 		return
 	}
 
+	// Validate code and state parameters
 	code := c.Query("code")
 	state := c.Query("state")
 	if code == "" || state == "" {
-		errorURL := fmt.Sprintf(
-			"%s?message=%s",
-			WebLoginErrorRoute,
-			url.QueryEscape("Missing authorization code or state"),
-		)
-		c.Redirect(http.StatusFound, errorURL)
+		h.redirectToWebLoginError(c, "Missing authorization code or state")
 		return
 	}
 
-	cookie, err := c.Request.Cookie(webOAuthStateCookie)
-	if err != nil || cookie == nil || cookie.Value == "" {
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Invalid OAuth state"))
-		c.Redirect(http.StatusFound, errorURL)
-		return
-	}
-	defer h.clearWebOAuthStateCookie(c)
-	if subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) != 1 {
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Invalid OAuth state"))
-		c.Redirect(http.StatusFound, errorURL)
+	// Validate OAuth state cookie
+	if !h.validateWebOAuthState(c, state) {
+		h.redirectToWebLoginError(c, "Invalid OAuth state")
 		return
 	}
 
-	// Web flow doesn't use PKCE (code_verifier is empty)
+	// Complete OAuth login
 	resp, err := h.oauth.CompleteLogin(code, state, "")
 	if err != nil {
-		// Extract user info from error if available
-		var domainErr *auth.DomainNotAllowedError
-		email := ""
-		name := ""
-		errorMsg := "Authentication failed. Please try again."
-
-		if errors.As(err, &domainErr) {
-			email = domainErr.Email
-			name = domainErr.Name
-			errorMsg = "You are not authorized to access this application. Please contact your administrator."
-		}
-
-		// Notify about failed login (with email/name if available)
-		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt(
-				email,
-				name,
-				"web",
-				"oauth_failed",
-				c.ClientIP(),
-				c.GetHeader("User-Agent"),
-				false,
-			)
-		}
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorMsg))
-		c.Redirect(http.StatusFound, errorURL)
+		h.handleWebLoginOAuthError(c, err)
 		return
 	}
 
+	// Validate session manager is available
 	if h.sessions == nil {
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape("Session manager not available"))
-		c.Redirect(http.StatusFound, errorURL)
+		h.redirectToWebLoginError(c, "Session manager not available")
 		return
 	}
 
+	// Validate user exists and is authorized
 	userRecord, err := h.database.GetUser(resp.Email)
 	if err != nil || userRecord == nil {
-		// Notify about unauthorized login attempt
-		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt(
-				resp.Email,
-				resp.Name,
-				"web",
-				"user_not_authorized",
-				c.ClientIP(),
-				c.GetHeader("User-Agent"),
-				false,
-			)
-		}
-		errorMsg := "You are not authorized to access this application. Please contact your administrator."
-		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorMsg))
-		c.Redirect(http.StatusFound, errorURL)
+		h.handleWebLoginUnauthorized(c, resp.Email, resp.Name)
 		return
 	}
 
@@ -216,4 +162,68 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusFound, "/app/login")
+}
+
+func (h *AuthHandler) getOAuthErrorMessage(c *gin.Context) string {
+	errorDesc := c.Query("error_description")
+	if errorDesc == "" {
+		return "Authentication was canceled or failed"
+	}
+	return errorDesc
+}
+
+func (h *AuthHandler) redirectToWebLoginError(c *gin.Context, message string) {
+	errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(message))
+	c.Redirect(http.StatusFound, errorURL)
+}
+
+func (h *AuthHandler) validateWebOAuthState(c *gin.Context, state string) bool {
+	cookie, err := c.Request.Cookie(webOAuthStateCookie)
+	if err != nil || cookie == nil || cookie.Value == "" {
+		return false
+	}
+	defer h.clearWebOAuthStateCookie(c)
+	return subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) == 1
+}
+
+func (h *AuthHandler) handleWebLoginOAuthError(c *gin.Context, err error) {
+	var domainErr *auth.DomainNotAllowedError
+	email := ""
+	name := ""
+	errorMsg := "Authentication failed. Please try again."
+
+	if errors.As(err, &domainErr) {
+		email = domainErr.Email
+		name = domainErr.Name
+		errorMsg = "You are not authorized to access this application. Please contact your administrator."
+	}
+
+	if h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(
+			email,
+			name,
+			"web",
+			"oauth_failed",
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			false,
+		)
+	}
+	h.redirectToWebLoginError(c, errorMsg)
+}
+
+func (h *AuthHandler) handleWebLoginUnauthorized(c *gin.Context, email, name string) {
+	if h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(
+			email,
+			name,
+			"web",
+			"user_not_authorized",
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			false,
+		)
+	}
+	errorMsg := "You are not authorized to access this application. Please contact your administrator."
+	h.redirectToWebLoginError(c, errorMsg)
 }

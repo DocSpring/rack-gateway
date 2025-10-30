@@ -16,6 +16,9 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+// AdminHandler is defined in admin.go
+// RoleDescriptor is defined in dto.go
+
 func (h *AdminHandler) rackDisplay() string {
 	if h == nil || h.config == nil {
 		return "Convox Rack"
@@ -94,6 +97,7 @@ func detectRequestScheme(req *http.Request) string {
 	return "https"
 }
 
+// TriggerSentryTest manually sends a test event to Sentry for verification purposes.
 func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
 	var payload struct {
 		Kind string `json:"kind"`
@@ -178,11 +182,11 @@ func cloneDetails(details map[string]interface{}) map[string]interface{} {
 	if len(details) == 0 {
 		return nil
 	}
-	copy := make(map[string]interface{}, len(details))
+	clone := make(map[string]interface{}, len(details))
 	for k, v := range details {
-		copy[k] = v
+		clone[k] = v
 	}
-	return copy
+	return clone
 }
 
 func prioritiseInviterFirst(admins []string, inviterEmail string) []string {
@@ -308,22 +312,22 @@ func parseAuditTime(value string) (time.Time, error) {
 	var lastErr error
 	for _, layout := range layouts {
 		if layout == "2006-01-02T15:04" || layout == "2006-01-02T15:04:05" {
-			if t, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+			t, err := time.ParseInLocation(layout, value, time.Local)
+			if err == nil {
 				return t.UTC(), nil
-			} else {
-				lastErr = err
 			}
+			lastErr = err
 			continue
 		}
-		if t, err := time.Parse(layout, value); err == nil {
+		t, err := time.Parse(layout, value)
+		if err == nil {
 			return t.UTC(), nil
-		} else {
-			lastErr = err
 		}
+		lastErr = err
 	}
 
 	if lastErr == nil {
-		lastErr = fmt.Errorf("unable to parse time %q", value)
+		return time.Time{}, fmt.Errorf("unable to parse time %q", value)
 	}
 	return time.Time{}, lastErr
 }

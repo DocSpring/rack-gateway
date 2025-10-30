@@ -13,6 +13,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // CLILoginStart godoc
@@ -74,42 +75,30 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 
 func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	state := strings.TrimSpace(c.Query("state"))
-	challengeRoute := WebRoute("auth/mfa/challenge")
-	buildURL := func(params url.Values) string {
-		return buildChallengeURL(challengeRoute, params)
-	}
-
 	if state == "" {
-		params := url.Values{}
-		params.Set("error", "missing_state")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+		cliRedirectWithError(c, "missing_state")
 		return
 	}
 	if h.database == nil {
-		params := url.Values{}
-		params.Set("error", "service_unavailable")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+		cliRedirectWithError(c, "service_unavailable")
 		return
 	}
 
 	record, err := h.database.GetCLILoginState(state)
 	if err != nil {
-		params := url.Values{}
-		params.Set("error", "load_failure")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+		cliRedirectWithError(c, "load_failure")
 		return
 	}
 	if record == nil {
-		params := url.Values{}
-		params.Set("error", "expired")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+		cliRedirectWithError(c, "expired")
 		return
 	}
 
 	if record.LoginError.Valid {
+		challengeRoute := WebRoute("auth/mfa/challenge")
 		params := url.Values{}
 		params.Set("error", strings.TrimSpace(record.LoginError.String))
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(challengeRoute, params))
 		return
 	}
 
@@ -118,108 +107,36 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		return
 	}
 
-	var loginEmail string
-	if record.LoginEmail.Valid {
-		loginEmail = strings.TrimSpace(record.LoginEmail.String)
-	}
-
-	if loginEmail == "" || !record.LoginToken.Valid || !record.LoginExpiresAt.Valid {
-		if !record.Code.Valid || !record.CodeVerifier.Valid {
-			params := url.Values{}
-			params.Set("error", "session_incomplete")
-			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
-			return
-		}
-
-		loginResp, exchangeErr := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
-		if exchangeErr != nil {
-			params := url.Values{}
-			params.Set("error", "exchange_failed")
-			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
-			return
-		}
-
-		if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
-			params := url.Values{}
-			params.Set("error", "persist_failure")
-			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
-			return
-		}
-
-		loginEmail = strings.TrimSpace(loginResp.Email)
-	}
-
+	loginEmail := h.resolveCLILoginEmail(c, record, state)
 	if loginEmail == "" {
-		errMsg := "Unable to determine account information for CLI login."
-		if err := h.database.FailCLILoginState(state, errMsg); err != nil {
-			log.Printf("cli login fail (missing email): state=%s err=%v", state, err)
-		}
-		params := url.Values{}
-		params.Set("error", "unauthorized")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
-	userRecord, err := h.database.GetUser(loginEmail)
-	if err != nil {
-		params := url.Values{}
-		params.Set("error", "load_failure")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
-		return
-	}
-	if userRecord == nil {
-		if err := h.database.FailCLILoginState(state, "User not authorized for this gateway."); err != nil {
-			log.Printf("cli login fail (unknown user): state=%s err=%v", state, err)
-		}
-		params := url.Values{}
-		params.Set("error", "unauthorized")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+	userRecord, ok := h.cliLoadAndValidateUser(c, state, loginEmail)
+	if !ok {
 		return
 	}
 
 	if !shouldEnforceMFA(h.mfaSettings, userRecord) {
-		if err := h.database.MarkCLILoginVerified(state, nil); err != nil {
-			log.Printf("cli login mark verified failed: state=%s err=%v", state, err)
-			params := url.Values{}
-			params.Set("error", "persist_failure")
-			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
-			return
-		}
-		c.Redirect(http.StatusTemporaryRedirect, WebRoute("cli/auth/success"))
+		h.cliHandleNoMFARequired(c, state)
 		return
 	}
 
-	// Create session for MFA verification (same as web login flow)
 	if _, err := h.createLoginSession(c, userRecord, "cli-mfa"); err != nil {
 		log.Printf("cli mfa session create failed: user=%s err=%v", userRecord.Email, err)
-		params := url.Values{}
-		params.Set("error", "session_failed")
-		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
+		cliRedirectWithError(c, "session_failed")
 		return
 	}
 
 	if !userRecord.MFAEnrolled {
-		if err := h.database.FailCLILoginState(state, cliEnrollmentErrorMessage); err != nil {
-			log.Printf("cli login fail (enrollment required): state=%s err=%v", state, err)
-		}
-
-		// Create web session for enrollment flow
-		h.cliHandleEnrollmentRedirect(c, state, userRecord.Email)
-
-		enrollParams := url.Values{}
-		enrollParams.Set("enrollment", "required")
-		enrollParams.Set("channel", "cli")
-		enrollParams.Set("state", state)
-		c.Redirect(
-			http.StatusTemporaryRedirect,
-			fmt.Sprintf("%s?%s", WebRoute("account/security"), enrollParams.Encode()),
-		)
+		h.cliHandleEnrollmentRequired(c, state, userRecord.Email)
 		return
 	}
 
+	challengeRoute := WebRoute("auth/mfa/challenge")
 	params := url.Values{}
 	params.Set("state", state)
-	challengeURL := buildURL(params)
+	challengeURL := buildChallengeURL(challengeRoute, params)
 	log.Printf(
 		"CLI callback: redirecting to MFA challenge: url=%s user=%s state=%s",
 		challengeURL,
@@ -227,6 +144,24 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		state,
 	)
 	c.Redirect(http.StatusTemporaryRedirect, challengeURL)
+}
+
+func (h *AuthHandler) resolveCLILoginEmail(
+	c *gin.Context,
+	record *db.CLILoginState,
+	state string,
+) string {
+	var loginEmail string
+	if record.LoginEmail.Valid {
+		loginEmail = strings.TrimSpace(record.LoginEmail.String)
+	}
+
+	if loginEmail != "" && record.LoginToken.Valid && record.LoginExpiresAt.Valid {
+		return loginEmail
+	}
+
+	email, _ := h.cliExchangeOAuthCode(c, record, state)
+	return email
 }
 
 // CLILoginMFASubmit handles both TOTP and WebAuthn verification for CLI login
@@ -251,7 +186,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 
 	method := strings.ToLower(strings.TrimSpace(req.Method))
 	if method == "" {
-		method = "totp" // Default for backwards compatibility
+		method = "totp"
 	}
 
 	state := strings.TrimSpace(req.State)
@@ -279,61 +214,18 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	if !record.LoginEmail.Valid {
-		if !record.Code.Valid || !record.CodeVerifier.Valid {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "session_incomplete"})
-			return
-		}
-		loginResp, exchangeErr := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
-		if exchangeErr != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
-			return
-		}
-		if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
-			return
-		}
-		record.LoginEmail.String = loginResp.Email
-		record.LoginEmail.Valid = true
-	}
-
-	userRecord, err := h.database.GetUser(strings.TrimSpace(record.LoginEmail.String))
-	if err != nil || userRecord == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	record, ok := h.cliExchangeIfNeeded(c, record, state)
+	if !ok {
 		return
 	}
 
-	// Verify with appropriate method
-	var verification *mfa.VerificationResult
-	ipAddress := c.ClientIP()
-	userAgent := c.GetHeader("User-Agent")
-	switch method {
-	case "totp":
-		verification, err = h.mfaService.VerifyTOTP(userRecord, strings.TrimSpace(req.Code), ipAddress, userAgent, nil)
-	case "webauthn":
-		verification, err = h.mfaService.VerifyWebAuthnAssertion(
-			userRecord,
-			[]byte(req.SessionData),
-			[]byte(req.AssertionResponse),
-			ipAddress,
-			userAgent,
-			nil,
-		)
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_method"})
+	userRecord, ok := h.cliGetUserRecord(c, record.LoginEmail.String)
+	if !ok {
 		return
 	}
 
+	verification, err := h.performMFAVerification(c, userRecord, method, req.Code, req.SessionData, req.AssertionResponse)
 	if err != nil {
-		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(
-				userRecord.Email,
-				userRecord.Name,
-				c.ClientIP(),
-				c.GetHeader("User-Agent"),
-			)
-		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_code"})
 		return
 	}
 
@@ -348,6 +240,47 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
+}
+
+func (h *AuthHandler) performMFAVerification(
+	c *gin.Context,
+	user *db.User,
+	method string,
+	code string,
+	sessionData string,
+	assertionResponse string,
+) (*mfa.VerificationResult, error) {
+	var verification *mfa.VerificationResult
+	var err error
+	ipAddress := c.ClientIP()
+	userAgent := c.GetHeader("User-Agent")
+
+	switch method {
+	case "totp":
+		verification, err = h.mfaService.VerifyTOTP(user, strings.TrimSpace(code), ipAddress, userAgent, nil)
+	case "webauthn":
+		verification, err = h.mfaService.VerifyWebAuthnAssertion(
+			user,
+			[]byte(sessionData),
+			[]byte(assertionResponse),
+			ipAddress,
+			userAgent,
+			nil,
+		)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_method"})
+		return nil, fmt.Errorf("invalid_method")
+	}
+
+	if err != nil {
+		if h.securityNotifier != nil {
+			h.securityNotifier.FailedMFAAttempt(user.Email, user.Name, ipAddress, userAgent)
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_code"})
+		return nil, err
+	}
+
+	return verification, nil
 }
 
 // CLILoginComplete godoc
@@ -368,15 +301,18 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
 	record, err := h.database.GetCLILoginState(req.State)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load login state"})
 		return
 	}
+
 	if record == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
 		return
 	}
+
 	if record.LoginError.Valid {
 		reason := strings.TrimSpace(record.LoginError.String)
 		if reason == "" {
@@ -385,6 +321,7 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": reason})
 		return
 	}
+
 	if !record.LoginEmail.Valid || !record.MFAVerifiedAt.Valid {
 		c.JSON(http.StatusAccepted, gin.H{"status": "pending"})
 		return
@@ -392,22 +329,7 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 
 	userRecord, err := h.database.GetUser(record.LoginEmail.String)
 	if err != nil || userRecord == nil {
-		// Notify about unauthorized CLI login attempt
-		userName := ""
-		if record.LoginName.Valid {
-			userName = record.LoginName.String
-		}
-		if h.securityNotifier != nil {
-			h.securityNotifier.LoginAttempt(
-				record.LoginEmail.String,
-				userName,
-				"cli",
-				"user_not_authorized",
-				c.ClientIP(),
-				c.GetHeader("User-Agent"),
-				false,
-			)
-		}
+		h.notifyUnauthorizedCLILogin(c, record)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
 		return
 	}
@@ -417,32 +339,7 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		return
 	}
 
-	deviceID := strings.TrimSpace(req.DeviceID)
-	if deviceID == "" {
-		deviceID = uuid.NewString()
-	}
-
-	deviceName := strings.TrimSpace(req.DeviceName)
-	deviceMeta := map[string]interface{}{}
-	if trimmed := strings.TrimSpace(req.DeviceOS); trimmed != "" {
-		deviceMeta["os"] = trimmed
-	}
-	if trimmed := strings.TrimSpace(req.ClientVersion); trimmed != "" {
-		deviceMeta["client_version"] = trimmed
-	}
-
-	extra := map[string]interface{}{"login_flow": "cli"}
-	sessionTTL := 90 * 24 * time.Hour
-	sessionToken, session, err := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
-		Channel:        "cli",
-		DeviceID:       deviceID,
-		DeviceName:     deviceName,
-		DeviceMetadata: deviceMeta,
-		IPAddress:      c.ClientIP(),
-		UserAgent:      c.GetHeader("User-Agent"),
-		Extra:          extra,
-		TTLOverride:    sessionTTL,
-	})
+	sessionToken, session, err := h.createCLISession(c, userRecord, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
 		return
@@ -455,31 +352,10 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 		}
 	}
 
-	enforceMFA := shouldEnforceMFA(h.mfaSettings, userRecord)
-	mfaRequired := h.isMFARequired(userRecord) && session.MFAVerifiedAt == nil
-	enrollmentRequired := enforceMFA && !userRecord.MFAEnrolled
-	name := userRecord.Name
-	if record.LoginName.Valid && strings.TrimSpace(record.LoginName.String) != "" {
-		name = record.LoginName.String
-	}
-
-	response := CLILoginResponse{
-		Token:              sessionToken,
-		Email:              record.LoginEmail.String,
-		Name:               name,
-		ExpiresAt:          session.ExpiresAt,
-		SessionID:          session.ID,
-		Channel:            session.Channel,
-		DeviceID:           session.DeviceID,
-		DeviceName:         session.DeviceName,
-		MFAVerified:        session.MFAVerifiedAt != nil,
-		MFARequired:        mfaRequired,
-		EnrollmentRequired: enrollmentRequired,
-	}
+	response := h.buildCLILoginResponse(userRecord, record, sessionToken, session)
 
 	_ = h.database.DeleteCLILoginState(req.State)
 
-	// Notify about successful CLI login
 	if h.securityNotifier != nil {
 		h.securityNotifier.LoginAttempt(
 			userRecord.Email,
@@ -493,4 +369,82 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *AuthHandler) notifyUnauthorizedCLILogin(c *gin.Context, record *db.CLILoginState) {
+	userName := ""
+	if record.LoginName.Valid {
+		userName = record.LoginName.String
+	}
+	if h.securityNotifier != nil {
+		h.securityNotifier.LoginAttempt(
+			record.LoginEmail.String,
+			userName,
+			"cli",
+			"user_not_authorized",
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			false,
+		)
+	}
+}
+
+func (h *AuthHandler) createCLISession(
+	c *gin.Context,
+	user *db.User,
+	req CLILoginCompleteRequest,
+) (string, *db.UserSession, error) {
+	deviceID := strings.TrimSpace(req.DeviceID)
+	if deviceID == "" {
+		deviceID = uuid.NewString()
+	}
+
+	deviceMeta := map[string]interface{}{}
+	if trimmed := strings.TrimSpace(req.DeviceOS); trimmed != "" {
+		deviceMeta["os"] = trimmed
+	}
+	if trimmed := strings.TrimSpace(req.ClientVersion); trimmed != "" {
+		deviceMeta["client_version"] = trimmed
+	}
+
+	return h.sessions.CreateSession(user, auth.SessionMetadata{
+		Channel:        "cli",
+		DeviceID:       deviceID,
+		DeviceName:     strings.TrimSpace(req.DeviceName),
+		DeviceMetadata: deviceMeta,
+		IPAddress:      c.ClientIP(),
+		UserAgent:      c.GetHeader("User-Agent"),
+		Extra:          map[string]interface{}{"login_flow": "cli"},
+		TTLOverride:    90 * 24 * time.Hour,
+	})
+}
+
+func (h *AuthHandler) buildCLILoginResponse(
+	user *db.User,
+	record *db.CLILoginState,
+	token string,
+	session *db.UserSession,
+) CLILoginResponse {
+	enforceMFA := shouldEnforceMFA(h.mfaSettings, user)
+	mfaRequired := h.isMFARequired(user) && session.MFAVerifiedAt == nil
+	enrollmentRequired := enforceMFA && !user.MFAEnrolled
+
+	name := user.Name
+	if record.LoginName.Valid && strings.TrimSpace(record.LoginName.String) != "" {
+		name = record.LoginName.String
+	}
+
+	return CLILoginResponse{
+		Token:              token,
+		Email:              record.LoginEmail.String,
+		Name:               name,
+		ExpiresAt:          session.ExpiresAt,
+		SessionID:          session.ID,
+		Channel:            session.Channel,
+		DeviceID:           session.DeviceID,
+		DeviceName:         session.DeviceName,
+		MFAVerified:        session.MFAVerifiedAt != nil,
+		MFARequired:        mfaRequired,
+		EnrollmentRequired: enrollmentRequired,
+	}
 }
