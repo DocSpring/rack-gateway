@@ -13,229 +13,338 @@ import (
 )
 
 func newDeployApprovalWaitCommand() *cobra.Command {
-	var (
-		racksFlag       string
-		pollIntervalStr string
-		autoApprove     bool
-		notes           string
-		loop            bool
-	)
+	var opts deployApprovalWaitOptions
 
 	cmd := &cobra.Command{
 		Use:   "wait",
 		Short: "Wait for and optionally approve pending deploy approval requests",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
-			var racks []string
-			if trimmed := strings.TrimSpace(racksFlag); trimmed != "" {
-				for _, r := range strings.Split(trimmed, ",") {
-					if r = strings.TrimSpace(r); r != "" {
-						racks = append(racks, r)
-					}
-				}
-			} else {
-				rack, err := SelectedRack()
-				if err != nil {
-					return err
-				}
-				racks = []string{rack}
-			}
-
-			if len(racks) == 0 {
-				return fmt.Errorf("no racks specified")
-			}
-
-			pollInterval, err := parseDurationFlag(pollIntervalStr, "poll-interval", false, time.Second)
+			parsed, err := parseDeployApprovalWaitOptions(cmd, opts)
 			if err != nil {
 				return err
 			}
-
-			type rackInfo struct {
-				name string
-			}
-			rackInfos := make([]rackInfo, 0, len(racks))
-			for _, rack := range racks {
-				rackInfos = append(rackInfos, rackInfo{name: rack})
-			}
-
-			rackIndex := 0
-			printWaitingMessage := func() error {
-				if len(racks) == 1 {
-					return writef(cmd.OutOrStdout(), "Waiting for pending deploy approval requests on rack: %s\n", racks[0])
-				}
-				return writef(cmd.OutOrStdout(), "Waiting for pending deploy approval requests on %d racks: %s\n", len(racks), strings.Join(racks, ", "))
-			}
-
-			if err := printWaitingMessage(); err != nil {
-				return err
-			}
-
-			for {
-				info := rackInfos[rackIndex]
-				rackIndex = (rackIndex + 1) % len(rackInfos)
-
-				var result struct {
-					Requests []deployApprovalRequest `json:"deploy_approval_requests"`
-				}
-				if err := gatewayRequest(cmd, info.name, http.MethodGet, "/deploy-approval-requests?status=pending", nil, &result); err != nil {
-					return err
-				}
-
-				if result.Requests == nil {
-					return fmt.Errorf("unexpected API response format: missing 'deploy_approval_requests' field")
-				}
-
-				if len(result.Requests) > 0 {
-					cfg, _, _ := LoadConfig()
-					soundDone := make(chan struct{})
-					go func() {
-						defer close(soundDone)
-						if err := playNotificationSound(cfg, info.name); err != nil {
-							_ = writef(cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)
-						}
-					}()
-
-					req := result.Requests[0]
-					if len(rackInfos) > 1 {
-						if err := writef(cmd.OutOrStdout(), "\n📋 Deploy Approval Request Found on rack '%s':\n", info.name); err != nil {
-							return err
-						}
-					} else {
-						if err := writeLine(cmd.OutOrStdout(), "\n📋 Deploy Approval Request Found:"); err != nil {
-							return err
-						}
-					}
-
-					if err := writef(cmd.OutOrStdout(), "  ID: %s\n", req.PublicID); err != nil {
-						return err
-					}
-					if err := writef(cmd.OutOrStdout(), "  Message: %s\n", req.Message); err != nil {
-						return err
-					}
-					if err := writef(cmd.OutOrStdout(), "  Status: %s\n", req.Status); err != nil {
-						return err
-					}
-					if err := writef(cmd.OutOrStdout(), "  Token: %s\n", req.TargetAPITokenName); err != nil {
-						return err
-					}
-					if err := writef(cmd.OutOrStdout(), "  Created: %s\n", req.CreatedAt.Format(time.RFC3339)); err != nil {
-						return err
-					}
-
-					if autoApprove {
-						approved, err := approveDeployRequest(cmd, info.name, req.PublicID, strings.TrimSpace(notes))
-						if err != nil {
-							return err
-						}
-
-						statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
-						if approved.ApprovalExpiresAt != nil {
-							statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
-						}
-						if err := writeLine(cmd.OutOrStdout(), statusLine); err != nil {
-							return err
-						}
-					} else {
-						if err := writeLine(cmd.OutOrStdout(), "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."); err != nil {
-							return err
-						}
-					}
-
-					<-soundDone
-
-					if !loop {
-						return nil
-					}
-
-					if err := printWaitingMessage(); err != nil {
-						return err
-					}
-
-					time.Sleep(pollInterval)
-				}
-
-				time.Sleep(pollInterval)
-			}
+			return runDeployApprovalWait(cmd, parsed)
 		}),
 	}
 
-	cmd.Flags().StringVar(&racksFlag, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
-	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "1s", "Polling interval")
-	cmd.Flags().BoolVar(&autoApprove, "approve", false, "Automatically approve the first pending request found")
-	cmd.Flags().StringVar(&notes, "notes", "", "Optional notes for approval (only used with --approve)")
-	cmd.Flags().BoolVar(&loop, "loop", false, "Continue polling for more requests after displaying or approving one")
+	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
+	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "1s", "Polling interval")
+	cmd.Flags().BoolVar(&opts.autoApprove, "approve", false, "Automatically approve the first pending request found")
+	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval (only used with --approve)")
+	cmd.Flags().BoolVar(&opts.loop, "loop", false, "Continue polling for more requests after displaying or approving one")
 
 	return cmd
 }
 
-func playNotificationSound(cfg *Config, rack string) error {
-	soundPref := "default"
-	if cfg != nil {
-		if cfg.NotificationSound != "" {
-			soundPref = cfg.NotificationSound
-		}
-		if rack != "" {
-			if gwCfg, ok := cfg.Gateways[rack]; ok && gwCfg.NotificationSound != "" {
-				soundPref = gwCfg.NotificationSound
-			}
-		}
+type deployApprovalWaitOptions struct {
+	racks        string
+	pollInterval string
+	autoApprove  bool
+	notes        string
+	loop         bool
+}
+
+type deployApprovalWaitConfig struct {
+	racks        []string
+	pollInterval time.Duration
+	autoApprove  bool
+	notes        string
+	loop         bool
+}
+
+func parseDeployApprovalWaitOptions(cmd *cobra.Command, opts deployApprovalWaitOptions) (deployApprovalWaitConfig, error) {
+	racks, err := resolveWaitRacks(opts.racks)
+	if err != nil {
+		return deployApprovalWaitConfig{}, err
+	}
+	if len(racks) == 0 {
+		return deployApprovalWaitConfig{}, fmt.Errorf("no racks specified")
 	}
 
-	if soundPref == "disabled" {
-		return nil
+	pollInterval, err := parseDurationFlag(opts.pollInterval, "poll-interval", false, time.Second)
+	if err != nil {
+		return deployApprovalWaitConfig{}, err
 	}
 
-	var soundFile string
-	var cleanupFile bool
+	return deployApprovalWaitConfig{
+		racks:        racks,
+		pollInterval: pollInterval,
+		autoApprove:  opts.autoApprove,
+		notes:        strings.TrimSpace(opts.notes),
+		loop:         opts.loop,
+	}, nil
+}
 
-	if soundPref == "default" || soundPref == "" {
-		tmpFile, err := os.CreateTemp("", "notification-*.mp3")
+func resolveWaitRacks(flagValue string) ([]string, error) {
+	trimmed := strings.TrimSpace(flagValue)
+	if trimmed == "" {
+		rack, err := SelectedRack()
+		if err != nil {
+			return nil, err
+		}
+		return []string{rack}, nil
+	}
+
+	parts := strings.Split(trimmed, ",")
+	racks := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			racks = append(racks, value)
+		}
+	}
+	return racks, nil
+}
+
+func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) error {
+	waiter := &deployApprovalWaiter{
+		cmd:          cmd,
+		racks:        cfg.racks,
+		pollInterval: cfg.pollInterval,
+		autoApprove:  cfg.autoApprove,
+		notes:        cfg.notes,
+		loop:         cfg.loop,
+	}
+
+	if err := waiter.printWaitingMessage(); err != nil {
+		return err
+	}
+
+	for {
+		rack := waiter.nextRack()
+		requests, err := fetchPendingDeployRequests(cmd, rack)
 		if err != nil {
 			return err
 		}
-		soundFile = tmpFile.Name()
-		cleanupFile = true
-		defer func() {
-			if cleanupFile {
-				_ = os.Remove(soundFile)
-			}
-		}()
 
-		if _, err := tmpFile.Write(notificationSound); err != nil {
-			_ = tmpFile.Close()
-			return err
+		if len(requests) > 0 {
+			if err := waiter.handleRequest(rack, requests[0]); err != nil {
+				return err
+			}
+			if !cfg.loop {
+				return nil
+			}
+			if err := waiter.printWaitingMessage(); err != nil {
+				return err
+			}
+			waiter.sleep()
+			continue
 		}
-		if err := tmpFile.Close(); err != nil {
+
+		waiter.sleep()
+	}
+}
+
+type deployApprovalWaiter struct {
+	cmd          *cobra.Command
+	racks        []string
+	pollInterval time.Duration
+	autoApprove  bool
+	notes        string
+	loop         bool
+	rackIndex    int
+}
+
+func (w *deployApprovalWaiter) nextRack() string {
+	if len(w.racks) == 0 {
+		return ""
+	}
+	rack := w.racks[w.rackIndex]
+	w.rackIndex = (w.rackIndex + 1) % len(w.racks)
+	return rack
+}
+
+func (w *deployApprovalWaiter) printWaitingMessage() error {
+	switch len(w.racks) {
+	case 0:
+		return nil
+	case 1:
+		return writef(w.cmd.OutOrStdout(), "Waiting for pending deploy approval requests on rack: %s\n", w.racks[0])
+	default:
+		return writef(w.cmd.OutOrStdout(), "Waiting for pending deploy approval requests on %d racks: %s\n", len(w.racks), strings.Join(w.racks, ", "))
+	}
+}
+
+func fetchPendingDeployRequests(cmd *cobra.Command, rack string) ([]deployApprovalRequest, error) {
+	var response struct {
+		Requests []deployApprovalRequest `json:"deploy_approval_requests"`
+	}
+	if err := gatewayRequest(cmd, rack, http.MethodGet, "/deploy-approval-requests?status=pending", nil, &response); err != nil {
+		return nil, err
+	}
+	if response.Requests == nil {
+		return nil, fmt.Errorf("unexpected API response format: missing 'deploy_approval_requests' field")
+	}
+	return response.Requests, nil
+}
+
+func (w *deployApprovalWaiter) handleRequest(rack string, request deployApprovalRequest) error {
+	cfg, _, _ := LoadConfig()
+	soundDone := w.startNotificationSound(cfg, rack)
+
+	if err := w.writeRequestSummary(rack, request); err != nil {
+		<-soundDone
+		return err
+	}
+
+	var err error
+	if w.autoApprove {
+		err = w.autoApproveRequest(rack, request)
+	} else {
+		err = writeLine(w.cmd.OutOrStdout(), "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request.")
+	}
+
+	<-soundDone
+	return err
+}
+
+func (w *deployApprovalWaiter) startNotificationSound(cfg *Config, rack string) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := playNotificationSound(cfg, rack); err != nil {
+			_ = writef(w.cmd.OutOrStdout(), "Warning: failed to play notification sound: %v\n", err)
+		}
+	}()
+	return done
+}
+
+func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployApprovalRequest) error {
+	out := w.cmd.OutOrStdout()
+	if len(w.racks) > 1 {
+		if err := writef(out, "\n📋 Deploy Approval Request Found on rack '%s':\n", rack); err != nil {
 			return err
 		}
 	} else {
-		soundFile = soundPref
-		if _, err := os.Stat(soundFile); err != nil {
-			return fmt.Errorf("notification sound file not found: %w", err)
+		if err := writeLine(out, "\n📋 Deploy Approval Request Found:"); err != nil {
+			return err
 		}
 	}
 
-	var player *exec.Cmd
+	if err := writef(out, "  ID: %s\n", request.PublicID); err != nil {
+		return err
+	}
+	if err := writef(out, "  Message: %s\n", request.Message); err != nil {
+		return err
+	}
+	if err := writef(out, "  Status: %s\n", request.Status); err != nil {
+		return err
+	}
+	if err := writef(out, "  Token: %s\n", request.TargetAPITokenName); err != nil {
+		return err
+	}
+	if err := writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *deployApprovalWaiter) autoApproveRequest(rack string, request deployApprovalRequest) error {
+	approved, err := approveDeployRequest(w.cmd, rack, request.PublicID, w.notes)
+	if err != nil {
+		return err
+	}
+
+	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
+	if approved.ApprovalExpiresAt != nil {
+		statusLine = fmt.Sprintf("%s (expires at %s)", statusLine, approved.ApprovalExpiresAt.UTC().Format(time.RFC3339))
+	}
+	return writeLine(w.cmd.OutOrStdout(), statusLine)
+}
+
+func (w *deployApprovalWaiter) sleep() {
+	time.Sleep(w.pollInterval)
+}
+
+func playNotificationSound(cfg *Config, rack string) error {
+	preference := resolveNotificationPreference(cfg, rack)
+	if preference == "disabled" {
+		return nil
+	}
+
+	soundFile, cleanup, err := ensureSoundFile(preference)
+	if err != nil {
+		return err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	player, err := selectAudioPlayer(soundFile)
+	if err != nil {
+		return err
+	}
+	return player.Run()
+}
+
+func resolveNotificationPreference(cfg *Config, rack string) string {
+	const defaultPreference = "default"
+	if cfg == nil {
+		return defaultPreference
+	}
+	preference := cfg.NotificationSound
+	if preference == "" {
+		preference = defaultPreference
+	}
+	if rack == "" || cfg.Gateways == nil {
+		return preference
+	}
+	if gwCfg, ok := cfg.Gateways[rack]; ok && gwCfg.NotificationSound != "" {
+		return gwCfg.NotificationSound
+	}
+	return preference
+}
+
+func ensureSoundFile(preference string) (string, func(), error) {
+	if preference == "" || preference == "default" {
+		return createTemporarySoundFile()
+	}
+	if _, err := os.Stat(preference); err != nil {
+		return "", nil, fmt.Errorf("notification sound file not found: %w", err)
+	}
+	return preference, nil, nil
+}
+
+func createTemporarySoundFile() (string, func(), error) {
+	tmpFile, err := os.CreateTemp("", "notification-*.mp3")
+	if err != nil {
+		return "", nil, err
+	}
+
+	if _, err := tmpFile.Write(notificationSound); err != nil {
+		_ = tmpFile.Close()
+		return "", nil, err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return "", nil, err
+	}
+
+	cleanup := func() {
+		_ = os.Remove(tmpFile.Name())
+	}
+	return tmpFile.Name(), cleanup, nil
+}
+
+func selectAudioPlayer(soundFile string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "darwin":
-		player = exec.Command("afplay", soundFile)
+		return exec.Command("afplay", soundFile), nil
 	case "linux":
-		for _, candidate := range []string{"paplay", "aplay", "ffplay", "mpg123"} {
-			if _, err := exec.LookPath(candidate); err == nil {
-				if candidate == "ffplay" {
-					player = exec.Command(candidate, "-nodisp", "-autoexit", soundFile)
-				} else {
-					player = exec.Command(candidate, soundFile)
-				}
-				break
-			}
-		}
-		if player == nil {
-			return fmt.Errorf("no audio player found (tried paplay, aplay, ffplay, mpg123)")
-		}
+		return linuxAudioPlayer(soundFile)
 	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
+}
 
-	return player.Run()
+func linuxAudioPlayer(soundFile string) (*exec.Cmd, error) {
+	for _, candidate := range []string{"paplay", "aplay", "ffplay", "mpg123"} {
+		if _, err := exec.LookPath(candidate); err == nil {
+			if candidate == "ffplay" {
+				return exec.Command(candidate, "-nodisp", "-autoexit", soundFile), nil
+			}
+			return exec.Command(candidate, soundFile), nil
+		}
+	}
+	return nil, fmt.Errorf("no audio player found (tried paplay, aplay, ffplay, mpg123)")
 }

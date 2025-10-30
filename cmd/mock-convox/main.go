@@ -51,25 +51,75 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "help", "--help", "-h":
-			printHelp()
-			return
-		}
+	if shouldPrintHelp(os.Args) {
+		printHelp()
+		return
 	}
 
-	var err error
-	objectStorageDir, err = os.MkdirTemp("", "mock-convox-objects-*")
-	if err != nil {
-		log.Fatalf("Failed to create object storage directory: %v", err)
+	if err := runServer(); err != nil {
+		log.Fatal(err)
 	}
+}
+
+func shouldPrintHelp(args []string) bool {
+	if len(args) <= 1 {
+		return false
+	}
+
+	switch args[1] {
+	case "help", "--help", "-h":
+		return true
+	default:
+		return false
+	}
+}
+
+func runServer() error {
+	dir, err := os.MkdirTemp("", "mock-convox-objects-*")
+	if err != nil {
+		return fmt.Errorf("failed to create object storage directory: %w", err)
+	}
+	objectStorageDir = dir
 	mclog.Infof("object storage directory: %s", objectStorageDir)
 
-	r := mux.NewRouter()
-	r.Use(requestLogger)
-	r.Use(authMiddleware)
+	router := newRouter()
+	port := resolvePort()
 
+	mclog.Infof("Mock Convox API server starting on port %s", port)
+	auth := base64.StdEncoding.EncodeToString([]byte(mockUsername + ":" + mockPassword))
+	mclog.DebugTopicf(mclog.TopicAuth, "expected auth: Basic %s", auth)
+
+	if err := http.ListenAndServe(":"+port, router); err != nil {
+		return fmt.Errorf("server listen failed: %w", err)
+	}
+	return nil
+}
+
+func resolvePort() string {
+	if port := os.Getenv("MOCK_CONVOX_PORT"); port != "" {
+		return port
+	}
+	return "9090"
+}
+
+func newRouter() *mux.Router {
+	router := mux.NewRouter()
+	router.Use(requestLogger)
+	router.Use(authMiddleware)
+
+	registerAppRoutes(router)
+	registerSystemRoutes(router)
+	registerMiscRoutes(router)
+
+	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mclog.Warnf("404 %s %s", r.Method, r.URL.String())
+		http.NotFound(w, r)
+	})
+
+	return router
+}
+
+func registerAppRoutes(r *mux.Router) {
 	r.HandleFunc("/apps", getApps).Methods("GET")
 	r.HandleFunc("/apps/{app}", getApp).Methods("GET")
 	r.HandleFunc("/apps", createApp).Methods("POST")
@@ -97,39 +147,32 @@ func main() {
 	r.HandleFunc("/apps/{app}/objects/tmp/{name}", uploadObject).Methods("POST")
 	r.HandleFunc("/apps/{app}/objects/{key:.*}", downloadObject).Methods("GET")
 
-	r.HandleFunc("/racks", listRacks).Methods("GET")
-
-	r.HandleFunc("/instances", getInstances).Methods("GET")
-	r.HandleFunc("/instances/{id}", getInstance).Methods("GET")
-
-	r.HandleFunc("/system", getSystem).Methods("GET")
-	r.HandleFunc("/system", putSystem).Methods("PUT")
-	r.HandleFunc("/system/processes", getSystemProcesses).Methods("GET")
-
 	r.HandleFunc("/apps/{app}/restart", restartApp).Methods("POST")
 	r.HandleFunc("/apps/{app}/services", listServices).Methods("GET")
 	r.HandleFunc("/apps/{app}/services/{service}/processes", serviceProcesses).Methods("POST", "GET")
 	r.HandleFunc("/apps/{app}/services/{service}/restart", restartService).Methods("POST")
+}
 
+func registerSystemRoutes(r *mux.Router) {
+	r.HandleFunc("/racks", listRacks).Methods("GET")
+	r.HandleFunc("/instances", getInstances).Methods("GET")
+	r.HandleFunc("/instances/{id}", getInstance).Methods("GET")
+	r.HandleFunc("/system", getSystem).Methods("GET")
+	r.HandleFunc("/system", putSystem).Methods("PUT")
+	r.HandleFunc("/system/processes", getSystemProcesses).Methods("GET")
+}
+
+func registerMiscRoutes(r *mux.Router) {
 	r.HandleFunc("/api/{path:.*}", handleAPI).Methods("GET", "POST", "PUT", "DELETE")
+	r.HandleFunc("/health", health).Methods(http.MethodGet)
+}
 
-	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{"status": "healthy", "server": "mock-convox"})
-	}).Methods("GET")
-
-	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mclog.Warnf("404 %s %s", r.Method, r.URL.String())
-		http.NotFound(w, r)
-	})
-
-	port := os.Getenv("MOCK_CONVOX_PORT")
-	if port == "" {
-		port = "9090"
+func health(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
-
-	mclog.Infof("Mock Convox API server starting on port %s", port)
-	mclog.DebugTopicf(mclog.TopicAuth, "expected auth: Basic %s", base64.StdEncoding.EncodeToString([]byte(mockUsername+":"+mockPassword)))
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	writeJSON(w, map[string]string{"status": "healthy", "server": "mock-convox"})
 }
 
 func printHelp() {

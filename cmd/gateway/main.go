@@ -30,75 +30,115 @@ import (
 // @name X-CSRF-Token
 // @description HMAC-derived CSRF token tied to the active session.
 func main() {
-	// Support maintenance subcommands
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "migrate":
-			database, err := db.NewFromEnv()
-			if err != nil {
-				log.Fatalf("Failed to open database: %v", err)
-			}
-			defer database.Close() //nolint:errcheck // maintenance cleanup
-			fmt.Println("Database migrations applied")
-			return
-		case "reset-db":
-			database, err := db.NewFromEnv()
-			if err != nil {
-				log.Fatalf("Failed to open database: %v", err)
-			}
-			defer database.Close() //nolint:errcheck // maintenance cleanup
-			if err := database.ResetDatabase(); err != nil {
-				log.Fatalf("Database reset failed: %v", err)
-			}
-			fmt.Println("Database reset complete")
-			return
-		case "help", "--help", "-h":
-			fmt.Println("rack-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (requires env guards)")
-			return
-		}
+	handled, err := handleMaintenanceCommand(os.Args)
+	if err != nil {
+		log.Fatalf("Maintenance command failed: %v", err)
+	}
+	if handled {
+		return
 	}
 
-	// Initialize and run the application
+	if err := runGatewayServer(); err != nil {
+		log.Fatalf("Gateway server error: %v", err)
+	}
+}
+
+func handleMaintenanceCommand(args []string) (bool, error) {
+	if len(args) <= 1 {
+		return false, nil
+	}
+
+	switch args[1] {
+	case "migrate":
+		return true, runMigrations()
+	case "reset-db":
+		return true, resetDatabase()
+	case "help", "--help", "-h":
+		fmt.Println("rack-gateway commands:\n  (no args)            Start the API server\n  migrate             Apply database migrations\n  reset-db            Drop and recreate the database (requires env guards)")
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func runMigrations() error {
+	database, err := db.NewFromEnv()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer closeDatabase(database)
+
+	fmt.Println("Database migrations applied")
+	return nil
+}
+
+func resetDatabase() error {
+	database, err := db.NewFromEnv()
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer closeDatabase(database)
+
+	if err := database.ResetDatabase(); err != nil {
+		return fmt.Errorf("reset database: %w", err)
+	}
+	fmt.Println("Database reset complete")
+	return nil
+}
+
+func closeDatabase(database *db.Database) {
+	if database == nil {
+		return
+	}
+	if err := database.Close(); err != nil {
+		log.Printf("Warning: failed to close database: %v", err)
+	}
+}
+
+func runGatewayServer() error {
 	application, err := app.New()
 	if err != nil {
-		log.Fatalf("Failed to initialize app: %v", err)
+		return fmt.Errorf("initialize app: %w", err)
 	}
 	defer application.Cleanup()
 
-	// Get the router
-	router := application.Router()
-
-	// Create HTTP server
 	srv := &http.Server{
 		Addr:    ":" + application.Config.Port,
-		Handler: router,
+		Handler: application.Router(),
 	}
 
-	// Start server in goroutine
+	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("Starting server on port %s", application.Config.Port)
 		log.Printf("Visit the web UI at http://localhost:%s/", application.Config.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			errCh <- fmt.Errorf("server failed: %w", err)
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
 
-	log.Println("Shutting down server...")
+	var shutdownErr error
+	select {
+	case sig := <-quit:
+		log.Printf("Shutting down server (%s)...", sig)
+	case err := <-errCh:
+		shutdownErr = err
+	}
 
-	// Graceful shutdown with timeout
+	if shutdownErr != nil {
+		return shutdownErr
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		return fmt.Errorf("graceful shutdown failed: %w", err)
 	}
 
 	sentry.Flush(5 * time.Second)
-
 	log.Println("Server exited")
+	return nil
 }
