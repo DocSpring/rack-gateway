@@ -16,6 +16,14 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
+type cliMFASubmit struct {
+	state             string
+	method            string
+	code              string
+	sessionData       string
+	assertionResponse string
+}
+
 // CLILoginStart godoc
 // @Summary Start CLI OAuth login
 // @Description Initiates the CLI OAuth flow and returns PKCE parameters.
@@ -179,50 +187,20 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		State             string `json:"state"`
-		Method            string `json:"method"`             // "totp" or "webauthn" (optional, defaults to totp)
-		Code              string `json:"code"`               // For TOTP
-		SessionData       string `json:"session_data"`       // For WebAuthn
-		AssertionResponse string `json:"assertion_response"` // For WebAuthn
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+	parsed, ok := h.parseMFASubmitRequest(c)
+	if !ok {
 		return
 	}
 
-	method := strings.ToLower(strings.TrimSpace(req.Method))
-	if method == "" {
-		method = "totp"
+	record, ok := h.loadMFALoginState(c, parsed.state)
+	if !ok {
+		return
 	}
-
-	state := strings.TrimSpace(req.State)
-	if state == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "state_required"})
+	if h.shortCircuitIfAlreadyVerified(c, record) {
 		return
 	}
 
-	if method == "totp" && strings.TrimSpace(req.Code) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code_required"})
-		return
-	}
-
-	record, err := h.database.GetCLILoginState(state)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "load_failure"})
-		return
-	}
-	if record == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "session_expired"})
-		return
-	}
-	if record.MFAVerifiedAt.Valid {
-		c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
-		return
-	}
-
-	record, ok := h.cliExchangeIfNeeded(c, record, state)
+	record, ok = h.cliExchangeIfNeeded(c, record, parsed.state)
 	if !ok {
 		return
 	}
@@ -235,26 +213,91 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	verification, err := h.performMFAVerification(
 		c,
 		userRecord,
-		method,
-		req.Code,
-		req.SessionData,
-		req.AssertionResponse,
+		parsed.method,
+		parsed.code,
+		parsed.sessionData,
+		parsed.assertionResponse,
 	)
 	if err != nil {
 		return
 	}
 
-	var methodID *int64
-	if verification != nil && verification.MethodID > 0 {
-		methodID = &verification.MethodID
-	}
-
-	if err := h.database.MarkCLILoginVerified(state, methodID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
+	if !h.markCLILoginVerified(c, parsed.state, verification) {
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
+}
+
+// parseMFASubmitRequest parses and validates the MFA submit request payload.
+func (h *AuthHandler) parseMFASubmitRequest(c *gin.Context) (cliMFASubmit, bool) {
+	var req struct {
+		State             string `json:"state"`
+		Method            string `json:"method"`
+		Code              string `json:"code"`
+		SessionData       string `json:"session_data"`
+		AssertionResponse string `json:"assertion_response"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+		return cliMFASubmit{}, false
+	}
+	method := strings.ToLower(strings.TrimSpace(req.Method))
+	if method == "" {
+		method = "totp"
+	}
+	state := strings.TrimSpace(req.State)
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state_required"})
+		return cliMFASubmit{}, false
+	}
+	if method == "totp" && strings.TrimSpace(req.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code_required"})
+		return cliMFASubmit{}, false
+	}
+	return cliMFASubmit{
+		state:             state,
+		method:            method,
+		code:              req.Code,
+		sessionData:       req.SessionData,
+		assertionResponse: req.AssertionResponse,
+	}, true
+}
+
+// loadMFALoginState loads the CLI login state or writes an error response.
+func (h *AuthHandler) loadMFALoginState(c *gin.Context, state string) (*db.CLILoginState, bool) {
+	record, err := h.database.GetCLILoginState(state)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "load_failure"})
+		return nil, false
+	}
+	if record == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session_expired"})
+		return nil, false
+	}
+	return record, true
+}
+
+// shortCircuitIfAlreadyVerified responds immediately if MFA is already verified.
+func (h *AuthHandler) shortCircuitIfAlreadyVerified(c *gin.Context, record *db.CLILoginState) bool {
+	if record.MFAVerifiedAt.Valid {
+		c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
+		return true
+	}
+	return false
+}
+
+// markCLILoginVerified persists MFA verification and handles errors.
+func (h *AuthHandler) markCLILoginVerified(c *gin.Context, state string, verification *mfa.VerificationResult) bool {
+	var methodID *int64
+	if verification != nil && verification.MethodID > 0 {
+		methodID = &verification.MethodID
+	}
+	if err := h.database.MarkCLILoginVerified(state, methodID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
+		return false
+	}
+	return true
 }
 
 func (h *AuthHandler) performMFAVerification(
@@ -310,67 +353,121 @@ func (h *AuthHandler) performMFAVerification(
 // @Failure 500 {object} ErrorResponse
 // @Router /auth/cli/complete [post]
 func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
-	var req CLILoginCompleteRequest
+	req, ok := h.bindCLILoginComplete(c)
+	if !ok {
+		return
+	}
 
+	record, ok := h.loadCLILoginState(c, req.State)
+	if !ok {
+		return
+	}
+
+	if handled := h.handleCLIRecordErrors(c, record); handled {
+		return
+	}
+
+	if h.respondIfPending(c, record) {
+		return
+	}
+
+	userRecord, ok := h.loadUserForCLI(c, record)
+	if !ok {
+		return
+	}
+
+	sessionToken, session, ok := h.createCLISessionOrRespond(c, userRecord, req)
+	if !ok {
+		return
+	}
+
+	h.applyMFATimestamps(record, session)
+
+	response := h.buildCLILoginResponse(userRecord, record, sessionToken, session)
+	_ = h.database.DeleteCLILoginState(req.State)
+	h.notifyCLILoginComplete(c, userRecord)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *AuthHandler) bindCLILoginComplete(c *gin.Context) (CLILoginCompleteRequest, bool) {
+	var req CLILoginCompleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
+		return CLILoginCompleteRequest{}, false
 	}
+	return req, true
+}
 
-	record, err := h.database.GetCLILoginState(req.State)
+func (h *AuthHandler) loadCLILoginState(c *gin.Context, state string) (*db.CLILoginState, bool) {
+	record, err := h.database.GetCLILoginState(state)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load login state"})
-		return
+		return nil, false
 	}
-
 	if record == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
-		return
+		return nil, false
 	}
+	return record, true
+}
 
+func (h *AuthHandler) handleCLIRecordErrors(c *gin.Context, record *db.CLILoginState) bool {
 	if record.LoginError.Valid {
 		reason := strings.TrimSpace(record.LoginError.String)
 		if reason == "" {
 			reason = "login_failed"
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": reason})
-		return
+		return true
 	}
+	return false
+}
 
+func (h *AuthHandler) respondIfPending(c *gin.Context, record *db.CLILoginState) bool {
 	if !record.LoginEmail.Valid || !record.MFAVerifiedAt.Valid {
 		c.JSON(http.StatusAccepted, gin.H{"status": "pending"})
-		return
+		return true
 	}
+	return false
+}
 
+func (h *AuthHandler) loadUserForCLI(c *gin.Context, record *db.CLILoginState) (*db.User, bool) {
 	userRecord, err := h.database.GetUser(record.LoginEmail.String)
 	if err != nil || userRecord == nil {
 		h.notifyUnauthorizedCLILogin(c, record)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authorized"})
-		return
+		return nil, false
 	}
-
 	if h.sessions == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "session manager not available"})
-		return
+		return nil, false
 	}
+	return userRecord, true
+}
 
+func (h *AuthHandler) createCLISessionOrRespond(
+	c *gin.Context,
+	userRecord *db.User,
+	req CLILoginCompleteRequest,
+) (string, *db.UserSession, bool) {
 	sessionToken, session, err := h.createCLISession(c, userRecord, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
-		return
+		return "", nil, false
 	}
+	return sessionToken, session, true
+}
 
+func (h *AuthHandler) applyMFATimestamps(record *db.CLILoginState, session *db.UserSession) {
 	if record.MFAVerifiedAt.Valid {
 		if mfaTime, ok := h.cliStampMFAVerification(session.ID, record.MFAVerifiedAt.Time); ok {
 			session.MFAVerifiedAt = &mfaTime
 			session.RecentStepUpAt = &mfaTime
 		}
 	}
+}
 
-	response := h.buildCLILoginResponse(userRecord, record, sessionToken, session)
-
-	_ = h.database.DeleteCLILoginState(req.State)
-
+func (h *AuthHandler) notifyCLILoginComplete(c *gin.Context, userRecord *db.User) {
 	if h.securityNotifier != nil {
 		h.securityNotifier.LoginAttempt(
 			userRecord.Email,
@@ -382,8 +479,6 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 			true,
 		)
 	}
-
-	c.JSON(http.StatusOK, response)
 }
 
 func (h *AuthHandler) notifyUnauthorizedCLILogin(c *gin.Context, record *db.CLILoginState) {

@@ -227,33 +227,56 @@ func attemptInlineMFAVerification(
 // verifyInlineMFA verifies the user provided an MFA code with this request and updates step-up timestamp.
 // This is used for both MFAAlways and MFAStepUp routes when MFA is provided inline.
 func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.User) bool {
-	if mfaService == nil || database == nil || authUser == nil {
+	if !preconditionsMet(authUser, mfaService, database) {
 		return false
 	}
 
+	user := loadUserOrAbort(c, database, authUser.Email)
+	if user == nil {
+		return false
+	}
+
+	if !verifyByType(c, mfaService, database, user, authUser) {
+		return false
+	}
+
+	return updateStepUpAfterSuccess(c, database, authUser)
+}
+
+func preconditionsMet(authUser *auth.User, mfaService MFAVerifier, database *db.Database) bool {
+	if mfaService == nil || database == nil || authUser == nil {
+		return false
+	}
 	session := authUser.Session
 	if session == nil || session.MFAVerifiedAt == nil {
 		return false
 	}
-
-	// MFA code MUST be provided with this request
 	if authUser.MFAType == "" || authUser.MFAValue == "" {
 		return false
 	}
+	return true
+}
 
-	// Get user record to verify MFA
-	user, err := database.GetUser(authUser.Email)
+func loadUserOrAbort(c *gin.Context, database *db.Database, email string) *db.User {
+	user, err := database.GetUser(email)
 	if err != nil || user == nil {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 			"error":   "user_not_found",
 			"message": "User not found",
 		})
-		return false
+		return nil
 	}
+	return user
+}
 
-	// Verify the MFA code based on type
-	var verifyErr error
-	sessionID := &session.ID
+func verifyByType(
+	c *gin.Context,
+	mfaService MFAVerifier,
+	database *db.Database,
+	user *db.User,
+	authUser *auth.User,
+) bool {
+	sessionID := &authUser.Session.ID
 	switch authUser.MFAType {
 	case "totp":
 		result, err := mfaService.VerifyTOTP(
@@ -263,12 +286,15 @@ func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 			c.GetHeader("User-Agent"),
 			sessionID,
 		)
-		verifyErr = err
-		if err == nil && result != nil {
+		if err != nil {
+			return handleVerifyError(c, authUser.MFAType)
+		}
+		if result != nil {
 			log.Printf("Inline MFA verification successful: method_id=%d", result.MethodID)
 		}
+		return true
 	case "webauthn":
-		verifyErr = verifyInlineWebAuthn(
+		if err := verifyInlineWebAuthn(
 			mfaService,
 			database,
 			user,
@@ -276,7 +302,10 @@ func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 			c.ClientIP(),
 			c.GetHeader("User-Agent"),
 			sessionID,
-		)
+		); err != nil {
+			return handleVerifyError(c, authUser.MFAType)
+		}
+		return true
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid_mfa_type",
@@ -284,30 +313,30 @@ func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databa
 		})
 		return false
 	}
+}
 
-	if verifyErr != nil {
-		message := "Verification code is incorrect or has expired. Please try again."
-		if authUser.MFAType == "webauthn" {
-			message = "Security key verification failed. Please try again."
-		}
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error":   "mfa_verification_failed",
-			"message": message,
-		})
-		return false
+func handleVerifyError(c *gin.Context, mfaType string) bool {
+	message := "Verification code is incorrect or has expired. Please try again."
+	if mfaType == "webauthn" {
+		message = "Security key verification failed. Please try again."
 	}
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"error":   "mfa_verification_failed",
+		"message": message,
+	})
+	return false
+}
 
-	// Update step-up timestamp - any successful MFA verification refreshes the step-up window
+func updateStepUpAfterSuccess(c *gin.Context, database *db.Database, authUser *auth.User) bool {
 	now := time.Now()
-	if err := database.UpdateSessionRecentStepUp(session.ID, now); err != nil {
+	if err := database.UpdateSessionRecentStepUp(authUser.Session.ID, now); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 			"error":   "mfa_step_up_record_failed",
 			"message": "Failed to record MFA verification. Please try again.",
 		})
 		return false
 	}
-	session.RecentStepUpAt = &now
-
+	authUser.Session.RecentStepUpAt = &now
 	return true
 }
 

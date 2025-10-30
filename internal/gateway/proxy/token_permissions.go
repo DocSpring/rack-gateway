@@ -75,57 +75,35 @@ func (h *Handler) evaluateAPITokenPermission(
 		}
 	}
 
-	// Must be an API token
-	if authUser == nil || authUser.TokenID == nil {
+	if !h.isValidAPIToken(authUser) {
 		return deny()
 	}
 
-	// Direct permission wins
 	if h.hasAPITokenPermission(authUser, resource, action) {
 		return true, nil, nil
 	}
 
-	// Only certain actions are approval-gated
-	isApprovalGatedAction := (resource == rbac.ResourceObject && action == rbac.ActionCreate) ||
-		(resource == rbac.ResourceBuild && (action == rbac.ActionCreate || action == rbac.ActionRead)) ||
-		(resource == rbac.ResourceRelease && action == rbac.ActionPromote) ||
-		(resource == rbac.ResourceProcess &&
-			(action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate)) ||
-		(resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path))
-
-	if !isApprovalGatedAction {
-		// Not directly allowed and not approval-gated
+	if !isApprovalGated(resource, action, r.URL.Path) {
 		return false, nil, nil
 	}
 
-	// Caller must have deploy_with_approval permission
-	if !tokenHasPermission(authUser.Permissions, rbac.Convox(rbac.ResourceDeploy, rbac.ActionDeployWithApproval)) {
+	if !callerHasDeployWithApproval(authUser) {
 		return false, nil, nil
 	}
 
-	// Check if deploy approvals are enabled (default: true)
-	if h.settingsService != nil {
-		enabled, err := h.settingsService.GetDeployApprovalsEnabled()
-		if err != nil {
-			// Log error but continue with safe default (enabled)
-			log.Printf("Failed to get deploy_approvals_enabled setting: %v", err)
-		} else if !enabled {
-			// Deploy approvals disabled globally - allow with approval permission
-			return true, nil, nil
-		}
+	if approvalsGloballyDisabled(h) {
+		return true, nil, nil
 	}
 
 	if h.database == nil {
 		return false, nil, fmt.Errorf("database unavailable for deploy approvals")
 	}
 
-	// Resolve app
-	app := extractAppFromPath(r.URL.Path)
-	if app == "" {
-		return deny()
+	app, ok := h.resolveAppOrDeny(r.URL.Path, deny)
+	if !ok {
+		return false, nil, nil
 	}
 
-	// Lookup matching approval
 	req, err := h.findDeployApprovalForResource(r, deny, *authUser.TokenID, app, resource, action)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
@@ -135,32 +113,87 @@ func (h *Handler) evaluateAPITokenPermission(
 		log.Printf("DEBUG: deploy approval lookup failed: %v", err)
 		return false, nil, err
 	}
-	if req == nil {
-		log.Printf("DEBUG: deploy approval lookup returned nil request")
-		return deny()
+	if ok := commonApprovalChecks(req, deny); !ok {
+		return false, nil, nil
 	}
-
-	log.Printf("DEBUG: deploy approval found: id=%s status=%s process_ids=%v", req.PublicID, req.Status, req.ProcessIDs)
-
-	// Common checks
-	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
-		log.Printf("DEBUG: deploy approval expired")
-		return deny()
-	}
-	if req.Status != db.DeployApprovalRequestStatusApproved {
-		log.Printf("DEBUG: deploy approval status check failed: expected=approved actual=%s", req.Status)
-		return deny()
-	}
-
-	log.Printf("DEBUG: deploy approval permission granted")
 
 	tracker := &deployApprovalTracker{
 		request:   req,
 		tokenID:   *authUser.TokenID,
 		app:       app,
-		releaseID: req.ReleaseID, // may be nil
+		releaseID: req.ReleaseID,
 	}
+	log.Printf("DEBUG: deploy approval permission granted")
 	return true, tracker, nil
+}
+
+func (h *Handler) isValidAPIToken(authUser *auth.User) bool {
+	return authUser != nil && authUser.TokenID != nil
+}
+
+func isApprovalGated(resource rbac.Resource, action rbac.Action, path string) bool {
+	if resource == rbac.ResourceObject && action == rbac.ActionCreate {
+		return true
+	}
+	if resource == rbac.ResourceBuild && (action == rbac.ActionCreate || action == rbac.ActionRead) {
+		return true
+	}
+	if resource == rbac.ResourceRelease && action == rbac.ActionPromote {
+		return true
+	}
+	if resource == rbac.ResourceProcess &&
+		(action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
+		return true
+	}
+	if resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(path) {
+		return true
+	}
+	return false
+}
+
+func callerHasDeployWithApproval(authUser *auth.User) bool {
+	return tokenHasPermission(authUser.Permissions, rbac.Convox(rbac.ResourceDeploy, rbac.ActionDeployWithApproval))
+}
+
+func approvalsGloballyDisabled(h *Handler) bool {
+	if h.settingsService == nil {
+		return false
+	}
+	enabled, err := h.settingsService.GetDeployApprovalsEnabled()
+	if err != nil {
+		log.Printf("Failed to get deploy_approvals_enabled setting: %v", err)
+		return false
+	}
+	return !enabled
+}
+
+func (h *Handler) resolveAppOrDeny(path string, deny denyFunc) (string, bool) {
+	app := extractAppFromPath(path)
+	if app == "" {
+		_, _, _ = deny()
+		return "", false
+	}
+	return app, true
+}
+
+func commonApprovalChecks(req *db.DeployApprovalRequest, deny denyFunc) bool {
+	if req == nil {
+		log.Printf("DEBUG: deploy approval lookup returned nil request")
+		_, _, _ = deny()
+		return false
+	}
+	log.Printf("DEBUG: deploy approval found: id=%s status=%s process_ids=%v", req.PublicID, req.Status, req.ProcessIDs)
+	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
+		log.Printf("DEBUG: deploy approval expired")
+		_, _, _ = deny()
+		return false
+	}
+	if req.Status != db.DeployApprovalRequestStatusApproved {
+		log.Printf("DEBUG: deploy approval status check failed: expected=approved actual=%s", req.Status)
+		_, _, _ = deny()
+		return false
+	}
+	return true
 }
 
 // getDeployApprovalTracker retrieves the deploy approval tracker from the request context
@@ -185,23 +218,79 @@ func (h *Handler) findDeployApprovalForResource(
 	resource rbac.Resource,
 	action rbac.Action,
 ) (*db.DeployApprovalRequest, error) {
-	switch {
-	case resource == rbac.ResourceObject && action == rbac.ActionCreate:
-		return h.findApprovalForObjectCreate(tokenID, app)
-	case resource == rbac.ResourceBuild && action == rbac.ActionCreate:
-		return h.findApprovalForBuildCreate(tokenID, app)
-	case resource == rbac.ResourceBuild && action == rbac.ActionRead,
-		resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(r.URL.Path):
-		return h.findApprovalForBuildRead(r, deny, tokenID, app)
-	case resource == rbac.ResourceProcess && action == rbac.ActionStart:
-		return h.findApprovalForProcessStart(r, deny, tokenID, app)
-	case resource == rbac.ResourceProcess && (action == rbac.ActionExec || action == rbac.ActionTerminate):
-		return h.findApprovalForProcessAction(r, deny, tokenID, app, action)
-	case resource == rbac.ResourceRelease && action == rbac.ActionPromote:
-		return h.findApprovalForReleasePromote(r, deny, tokenID, app)
-	default:
-		return nil, fmt.Errorf("unsupported deploy approval resource/action: %s:%s", resource, action)
+	if resolver := h.approvalResolverFor(resource, action, r.URL.Path); resolver != nil {
+		return resolver(r, deny, tokenID, app)
 	}
+	return nil, fmt.Errorf("unsupported deploy approval resource/action: %s:%s", resource, action)
+}
+
+type approvalResolver func(*http.Request, denyFunc, int64, string) (*db.DeployApprovalRequest, error)
+
+func (h *Handler) approvalResolverFor(resource rbac.Resource, action rbac.Action, path string) approvalResolver {
+	key := resource.String() + ":" + action.String()
+	table := map[string]approvalResolver{
+		rbac.ResourceObject.String() + ":" + rbac.ActionCreate.String(): func(
+			_ *http.Request,
+			_ denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForObjectCreate(tokenID, app)
+		},
+		rbac.ResourceBuild.String() + ":" + rbac.ActionCreate.String(): func(
+			_ *http.Request,
+			_ denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForBuildCreate(tokenID, app)
+		},
+		rbac.ResourceBuild.String() + ":" + rbac.ActionRead.String(): func(
+			r *http.Request,
+			deny denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForBuildRead(r, deny, tokenID, app)
+		},
+		rbac.ResourceProcess.String() + ":" + rbac.ActionStart.String(): func(
+			r *http.Request,
+			deny denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForProcessStart(r, deny, tokenID, app)
+		},
+		rbac.ResourceProcess.String() + ":" + rbac.ActionExec.String(): func(
+			r *http.Request,
+			deny denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForProcessAction(r, deny, tokenID, app, rbac.ActionExec)
+		},
+		rbac.ResourceProcess.String() + ":" + rbac.ActionTerminate.String(): func(
+			r *http.Request,
+			deny denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForProcessAction(r, deny, tokenID, app, rbac.ActionTerminate)
+		},
+		rbac.ResourceRelease.String() + ":" + rbac.ActionPromote.String(): func(
+			r *http.Request,
+			deny denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForReleasePromote(r, deny, tokenID, app)
+		},
+	}
+	// Special case: logs read only applies when path is build logs
+	if resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(path) {
+		return table[rbac.ResourceBuild.String()+":"+rbac.ActionRead.String()]
+	}
+	return table[key]
 }
 
 func (h *Handler) findApprovalForObjectCreate(

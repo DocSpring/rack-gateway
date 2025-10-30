@@ -191,46 +191,67 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 			return "", fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		// Check file count limit
-		fileCount++
-		if fileCount > maxFiles {
-			return "", fmt.Errorf("too many files in tarball (max %d)", maxFiles)
+		if err := incrementAndCheckFileCount(&fileCount); err != nil {
+			return "", err
 		}
-
-		// Validate file path to prevent directory traversal
 		if err := validateTarPath(header.Name); err != nil {
 			return "", err
 		}
 
 		targetPath := filepath.Join(destDir, header.Name)
+		foundManifestPath = updateFoundManifestPath(header.Name, manifestPath, foundManifestPath, targetPath)
 
-		// Check if this is the manifest we're looking for
-		// Match against the full path in the tarball (e.g., "testdata/convox.valid-image.yml")
-		if header.Name == manifestPath && foundManifestPath == "" {
-			foundManifestPath = targetPath
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := extractTarDirectory(targetPath); err != nil {
-				return "", err
+		if err := handleTarEntry(tr, header, targetPath, &totalSize); err != nil {
+			if err == errSkipEntry {
+				continue
 			}
-
-		case tar.TypeReg:
-			newSize, err := extractTarFile(tr, targetPath, header, totalSize)
-			if err != nil {
-				return "", err
-			}
-			totalSize = newSize
-
-		default:
-			// Skip other file types (symlinks, etc.)
-			continue
+			return "", err
 		}
 	}
 
 	return foundManifestPath, nil
 }
+
+var errSkipEntry = fmt.Errorf("skip")
+
+func incrementAndCheckFileCount(fileCount *int) error {
+	*fileCount++
+	if *fileCount > maxFiles {
+		return fmt.Errorf("too many files in tarball (max %d)", maxFiles)
+	}
+	return nil
+}
+
+func updateFoundManifestPath(name, manifestPath, current, targetPath string) string {
+	if name == manifestPath && current == "" {
+		return targetPath
+	}
+	return current
+}
+
+func handleTarEntry(
+	tr *tar.Reader,
+	header *tar.Header,
+	targetPath string,
+	totalSize *int64,
+) error {
+	switch header.Typeflag {
+	case tar.TypeDir:
+		return extractTarDirectory(targetPath)
+	case tar.TypeReg:
+		newTotal, err := extractTarFile(tr, targetPath, header, *totalSize)
+		if err != nil {
+			return err
+		}
+		*totalSize = newTotal
+		return nil
+	default:
+		return errSkipEntry
+	}
+}
+
+// handleTarHeader processes a single tar header entry with safety checks and extraction logic.
+// handleTarHeader was inlined into extractTarballSafely to avoid unnecessary complexity.
 
 func extractTarDirectory(targetPath string) error {
 	if err := os.MkdirAll(targetPath, 0o755); err != nil {

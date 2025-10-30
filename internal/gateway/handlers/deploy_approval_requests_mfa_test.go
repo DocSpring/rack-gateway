@@ -92,7 +92,6 @@ func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployAppr
 	}
 }
 
-//nolint:funlen
 func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)

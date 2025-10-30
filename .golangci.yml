@@ -71,10 +71,11 @@ linters:
       locale: US
   exclusions:
     rules:
-      - path: (.+)_test\\.go$
+      - path: '(.+)_test\.go'
         linters:
           - gocognit
           - funlen
+          - goconst
 
 formatters:
   enable:

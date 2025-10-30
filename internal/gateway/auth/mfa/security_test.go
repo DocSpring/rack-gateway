@@ -23,8 +23,10 @@ func TestVerifyTOTP_ReplayProtection(t *testing.T) {
 	code, _ := totp.GenerateCode(key.Secret(), time.Now())
 
 	// First attempt should succeed
-	if _, err := svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil); err != nil {
+	if res, err := svc.VerifyTOTP(user, code, "1.2.3.4", "test-agent", nil); err != nil {
 		t.Fatalf("expected first attempt to succeed, got: %v", err)
+	} else if res == nil {
+		t.Fatalf("expected a non-nil verification result on success")
 	}
 
 	// Second attempt with same code should be rejected (generic error)
