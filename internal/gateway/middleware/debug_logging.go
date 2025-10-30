@@ -147,7 +147,7 @@ func shouldFilterHTTPLog(path string) bool {
 		return false
 	}
 
-	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/app/@") {
+	if strings.Contains(path, "/node_modules/") || strings.Contains(path, "/app/@") || strings.HasPrefix(path, "/app/src/") {
 		return true
 	}
 
