@@ -2,7 +2,6 @@ import { Link, Navigate, Outlet, useLocation } from '@tanstack/react-router'
 import {
   Blocks,
   Boxes,
-  Briefcase,
   Cpu,
   Hammer,
   HardDrive,
@@ -14,6 +13,7 @@ import {
   type LucideIcon,
   Puzzle,
   Server,
+  ServerCog,
   Settings,
   TerminalSquare,
   Users,
@@ -98,7 +98,6 @@ export function Layout() {
     ]
 
     if (user?.roles?.includes('admin')) {
-      nav.push({ name: 'Jobs', href: '/jobs', icon: Briefcase })
       nav.push({
         name: 'Deploy Approvals',
         href: '/deploy-approval-requests',
@@ -116,6 +115,7 @@ export function Layout() {
     if (user?.roles?.includes('admin')) {
       nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
       nav.push({ name: 'Settings', href: '/settings', icon: Settings })
+      nav.push({ name: 'Background Jobs', href: '/jobs', icon: ServerCog })
     }
 
     nav.push({

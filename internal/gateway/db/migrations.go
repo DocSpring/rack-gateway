@@ -1,10 +1,15 @@
 package db
 
 import (
+	"context"
 	"embed"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
+
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 )
 
 //go:embed migrations/*.sql
@@ -79,5 +84,38 @@ func (d *Database) migrateAll() error {
 			return err
 		}
 	}
+
+	// Run River migrations after SQL migrations complete
+	if err := d.migrateRiver(context.Background()); err != nil {
+		return fmt.Errorf("failed to run River migrations: %w", err)
+	}
+
+	return nil
+}
+
+// migrateRiver runs River's database migrations using the rivermigrate package.
+// This creates the necessary tables (river_queue, river_job, etc.) for River job processing.
+func (d *Database) migrateRiver(ctx context.Context) error {
+	// Create River migrator using pgxpool connection
+	migrator, err := rivermigrate.New(riverpgxv5.New(d.pool), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create River migrator: %w", err)
+	}
+
+	// Migrate to latest version (no TargetVersion means migrate all the way up)
+	res, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, &rivermigrate.MigrateOpts{})
+	if err != nil {
+		return fmt.Errorf("failed to run River migrations: %w", err)
+	}
+
+	// Log migration results if any migrations were applied (only version numbers, not full SQL)
+	if len(res.Versions) > 0 {
+		versionNumbers := make([]int, 0, len(res.Versions))
+		for _, v := range res.Versions {
+			versionNumbers = append(versionNumbers, v.Version)
+		}
+		log.Printf("Applied %d River migration(s): %v", len(res.Versions), versionNumbers)
+	}
+
 	return nil
 }
