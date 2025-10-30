@@ -23,81 +23,79 @@ func verifyMFAMethod(cmd *cobra.Command, baseURL, bearer string, method MFAMetho
 
 	switch method.Type {
 	case "webauthn":
-		if hasMethodType(allMethods, "totp") {
-			if err := writeLine(out, "Tip: Pass `--mfa-method totp` to use your authenticator app instead."); err != nil {
-				return err
-			}
-		}
-
-		if err := writeLine(out, "Multi-factor authentication required."); err != nil {
-			return err
-		}
-
-		if err := tryWebAuthnVerification(baseURL, bearer); err != nil {
-			return fmt.Errorf("WebAuthn verification failed: %w", err)
-		}
-
-		if err := writeLine(out, "MFA verified."); err != nil {
-			return err
-		}
-		return nil
-
+		return handleWebAuthnVerification(out, baseURL, bearer, allMethods)
 	case "totp":
-		if hasMethodType(allMethods, "webauthn") {
-			if err := writeLine(out, "Tip: Pass `--mfa-method webauthn` to use your security key instead."); err != nil {
-				return err
-			}
-		}
-
-		if err := writeLine(out, "Multi-factor authentication required."); err != nil {
-			return err
-		}
-
-		for attempts := 0; attempts < 5; attempts++ {
-			code, err := promptMFACode()
-			if err != nil {
-				return err
-			}
-			if code == "" {
-				if err := writeLine(out, "MFA code cannot be empty."); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := submitMFAVerification(baseURL, bearer, code); err != nil {
-				if err := writef(out, "MFA verification failed: %v\n", err); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := writeLine(out, "MFA verified."); err != nil {
-				return err
-			}
-			return nil
-		}
-		return fmt.Errorf("failed to verify MFA after multiple attempts")
-
+		return handleTOTPVerification(out, baseURL, bearer, allMethods)
 	case "backup_code":
-		if err := writeLine(out, "Multi-factor authentication required."); err != nil {
+		return handleBackupCodeVerification(out, baseURL, bearer)
+	default:
+		return fmt.Errorf("unsupported MFA method: %s", method.Type)
+	}
+}
+
+func handleWebAuthnVerification(out io.Writer, baseURL, bearer string, methods []MFAMethodResponse) error {
+	if hasMethodType(methods, "totp") {
+		if err := writeLine(out, "Tip: Pass `--mfa-method totp` to use your authenticator app instead."); err != nil {
 			return err
 		}
+	}
+	if err := writeLine(out, "Multi-factor authentication required."); err != nil {
+		return err
+	}
+	if err := tryWebAuthnVerification(baseURL, bearer); err != nil {
+		return fmt.Errorf("WebAuthn verification failed: %w", err)
+	}
+	return writeLine(out, "MFA verified.")
+}
 
+func handleTOTPVerification(out io.Writer, baseURL, bearer string, methods []MFAMethodResponse) error {
+	if hasMethodType(methods, "webauthn") {
+		if err := writeLine(out, "Tip: Pass `--mfa-method webauthn` to use your security key instead."); err != nil {
+			return err
+		}
+	}
+	if err := writeLine(out, "Multi-factor authentication required."); err != nil {
+		return err
+	}
+	return attemptTOTPVerification(out, baseURL, bearer)
+}
+
+func attemptTOTPVerification(out io.Writer, baseURL, bearer string) error {
+	const maxAttempts = 5
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		code, err := promptMFACode()
 		if err != nil {
 			return err
 		}
+		if strings.TrimSpace(code) == "" {
+			if err := writeLine(out, "MFA code cannot be empty."); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := submitMFAVerification(baseURL, bearer, code); err != nil {
-			return fmt.Errorf("backup code verification failed: %w", err)
+			if err := writef(out, "MFA verification failed: %v\n", err); err != nil {
+				return err
+			}
+			continue
 		}
-
-		if err := writeLine(out, "MFA verified."); err != nil {
-			return err
-		}
-		return nil
-
-	default:
-		return fmt.Errorf("unsupported MFA method: %s", method.Type)
+		return writeLine(out, "MFA verified.")
 	}
+	return fmt.Errorf("failed to verify MFA after multiple attempts")
+}
+
+func handleBackupCodeVerification(out io.Writer, baseURL, bearer string) error {
+	if err := writeLine(out, "Multi-factor authentication required."); err != nil {
+		return err
+	}
+	code, err := promptMFACode()
+	if err != nil {
+		return err
+	}
+	if err := submitMFAVerification(baseURL, bearer, code); err != nil {
+		return fmt.Errorf("backup code verification failed: %w", err)
+	}
+	return writeLine(out, "MFA verified.")
 }
 
 // tryWebAuthnVerification performs WebAuthn assertion flow.

@@ -40,35 +40,43 @@ func SetupConvoxCommand(cobraCmd *cobra.Command, args []string, flagNames ...str
 // SetupConvoxCommandWithMFA sets up a convox command with optional MFA verification
 // mfaAuth should be in format "totp.123456" or "webauthn.assertion_data" or empty string for no MFA
 func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth string, flagNames ...string) (*sdk.Client, *stdcli.Context, error) {
-	rack, err := SelectedRack()
+	_, gatewayURL, auth, err := resolveRackAuth(mfaAuth)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	client, err := sdk.New(buildRackURL(gatewayURL, auth))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	engine := newStdCLIEngine(cobraCmd)
+	flags := collectStdCLIFlags(cobraCmd, flagNames)
+	ctx := newStdCLIContext(cobraCmd, args, flags)
+	injectStdCLIEngine(ctx, engine)
+
+	return client, ctx, nil
+}
+
+func resolveRackAuth(mfaAuth string) (string, string, string, error) {
+	rack, err := SelectedRack()
+	if err != nil {
+		return "", "", "", err
 	}
 
 	gatewayURL, token, err := LoadRackAuth(rack)
 	if err != nil {
-		return nil, nil, err
+		return "", "", "", err
 	}
 
-	// Build auth string: session_token or session_token.mfa_type.mfa_value (using dots to avoid URL encoding issues)
-	auth := token
-	if mfaAuth != "" {
-		auth = token + "." + mfaAuth
+	if mfaAuth == "" {
+		return rack, gatewayURL, token, nil
 	}
+	return rack, gatewayURL, token + "." + mfaAuth, nil
+}
 
-	// Build RACK_URL with auth as password
-	rackURL := buildRackURL(gatewayURL, auth)
-
-	// Use the real convox SDK
-	client, err := sdk.New(rackURL)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Create stdcli engine
+func newStdCLIEngine(cobraCmd *cobra.Command) *stdcli.Engine {
 	engine := stdcli.New("rack-gateway", Version)
-
-	// Create a new Writer with custom tags to avoid modifying the global DefaultWriter
 	stdout := cobraCmd.OutOrStdout()
 	isTerminal := false
 	if f, ok := stdout.(*os.File); ok {
@@ -91,21 +99,22 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 			"service":  stdcli.RenderColors(33),
 			"setting":  stdcli.RenderColors(246),
 			"system":   stdcli.RenderColors(15),
-
-			"error":  stdcli.DefaultWriter.Tags["error"],
-			"header": stdcli.RenderColors(242),
-			"h1":     stdcli.RenderColors(244),
-			"h2":     stdcli.RenderColors(241),
-			"id":     stdcli.RenderColors(247),
-			"info":   stdcli.RenderColors(247),
-			"ok":     stdcli.RenderColors(46),
-			"start":  stdcli.RenderColors(247),
-			"u":      stdcli.RenderUnderline(),
-			"value":  stdcli.RenderColors(251),
+			"error":    stdcli.DefaultWriter.Tags["error"],
+			"header":   stdcli.RenderColors(242),
+			"h1":       stdcli.RenderColors(244),
+			"h2":       stdcli.RenderColors(241),
+			"id":       stdcli.RenderColors(247),
+			"info":     stdcli.RenderColors(247),
+			"ok":       stdcli.RenderColors(46),
+			"start":    stdcli.RenderColors(247),
+			"u":        stdcli.RenderUnderline(),
+			"value":    stdcli.RenderColors(251),
 		},
 	}
+	return engine
+}
 
-	// Build flags - convert specified cobra flags to stdcli flags
+func collectStdCLIFlags(cobraCmd *cobra.Command, flagNames []string) []*stdcli.Flag {
 	var flags []*stdcli.Flag
 	for _, name := range flagNames {
 		cobraFlag := cobraCmd.Flags().Lookup(name)
@@ -113,53 +122,60 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 			continue
 		}
 
-		var flag *stdcli.Flag
-		var kind string
-
-		switch cobraFlag.Value.Type() {
-		case "bool":
-			if val, _ := cobraCmd.Flags().GetBool(name); val {
-				flag = &stdcli.Flag{Name: name, Value: val}
-				kind = "bool"
-			}
-		case "int":
-			if val, _ := cobraCmd.Flags().GetInt(name); val != 0 {
-				flag = &stdcli.Flag{Name: name, Value: val}
-				kind = "int"
-			}
-		case "stringSlice":
-			if val, _ := cobraCmd.Flags().GetStringSlice(name); len(val) > 0 {
-				flag = &stdcli.Flag{Name: name, Value: val}
-				kind = "stringslice"
-			}
-		default: // string
-			if val, _ := cobraCmd.Flags().GetString(name); val != "" {
-				flag = &stdcli.Flag{Name: name, Value: val}
-				kind = "string"
-			}
+		flag, kind := convertFlagValue(cobraCmd, name, cobraFlag.Value.Type())
+		if flag == nil {
+			continue
 		}
+		applyFlagKind(flag, kind)
+		flags = append(flags, flag)
+	}
+	return flags
+}
 
-		if flag != nil {
-			// Use reflection to set the private "kind" field
-			flagValue := reflect.ValueOf(flag).Elem()
-			kindField := flagValue.FieldByName("kind")
-			if kindField.IsValid() {
-				reflect.NewAt(kindField.Type(), unsafe.Pointer(kindField.UnsafeAddr())).
-					Elem().
-					SetString(kind)
-			}
-			flags = append(flags, flag)
+func convertFlagValue(cmd *cobra.Command, name, flagType string) (*stdcli.Flag, string) {
+	switch flagType {
+	case "bool":
+		if val, _ := cmd.Flags().GetBool(name); val {
+			return &stdcli.Flag{Name: name, Value: val}, "bool"
+		}
+	case "int":
+		if val, _ := cmd.Flags().GetInt(name); val != 0 {
+			return &stdcli.Flag{Name: name, Value: val}, "int"
+		}
+	case "stringSlice":
+		if val, _ := cmd.Flags().GetStringSlice(name); len(val) > 0 {
+			return &stdcli.Flag{Name: name, Value: val}, "stringslice"
+		}
+	default:
+		if val, _ := cmd.Flags().GetString(name); val != "" {
+			return &stdcli.Flag{Name: name, Value: val}, "string"
 		}
 	}
+	return nil, ""
+}
 
-	// Create stdcli context
-	ctx := &stdcli.Context{
+func applyFlagKind(flag *stdcli.Flag, kind string) {
+	if flag == nil || kind == "" {
+		return
+	}
+	flagValue := reflect.ValueOf(flag).Elem()
+	kindField := flagValue.FieldByName("kind")
+	if kindField.IsValid() {
+		reflect.NewAt(kindField.Type(), unsafe.Pointer(kindField.UnsafeAddr())).
+			Elem().
+			SetString(kind)
+	}
+}
+
+func newStdCLIContext(cobraCmd *cobra.Command, args []string, flags []*stdcli.Flag) *stdcli.Context {
+	return &stdcli.Context{
 		Context: cobraCmd.Context(),
 		Args:    args,
 		Flags:   flags,
 	}
+}
 
-	// Use unsafe to set private engine field
+func injectStdCLIEngine(ctx *stdcli.Context, engine *stdcli.Engine) {
 	ctxValue := reflect.ValueOf(ctx).Elem()
 	engineField := ctxValue.FieldByName("engine")
 	if engineField.IsValid() {
@@ -167,8 +183,6 @@ func SetupConvoxCommandWithMFA(cobraCmd *cobra.Command, args []string, mfaAuth s
 			Elem().
 			Set(reflect.ValueOf(engine))
 	}
-
-	return client, ctx, nil
 }
 
 func setupConvoxWithMFAAction(cobraCmd *cobra.Command, args []string, action string, flagNames ...string) (*sdk.Client, *stdcli.Context, error) {

@@ -48,61 +48,88 @@ func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) 
 }
 
 func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
-	if MFACodeFlag != "" {
-		code := strings.TrimSpace(MFACodeFlag)
-		if code != "" {
-			return "totp." + code, nil
-		}
+	if code, ok := inlineTotpFromFlag(); ok {
+		return code, nil
 	}
 
-	mfaStatus, err := getMFAStatus(baseURL, bearer)
+	status, err := loadMFAStatus(baseURL, bearer)
 	if err != nil {
-		return "", fmt.Errorf("failed to check MFA status: %w", err)
+		return "", err
 	}
 
-	if !mfaStatus.Enrolled {
-		return "", fmt.Errorf("MFA not enrolled - this command requires MFA")
+	method, err := selectMFAMethod(status, rack)
+	if err != nil {
+		return "", err
 	}
 
-	if len(mfaStatus.Methods) == 0 {
-		return "", fmt.Errorf("no MFA methods enrolled")
-	}
+	return collectMFAAuth(cmd, baseURL, bearer, rack, method, status.Methods)
+}
 
+func inlineTotpFromFlag() (string, bool) {
+	code := strings.TrimSpace(MFACodeFlag)
+	if code == "" {
+		return "", false
+	}
+	return "totp." + code, true
+}
+
+func loadMFAStatus(baseURL, bearer string) (*MFAStatusResponse, error) {
+	status, err := getMFAStatus(baseURL, bearer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check MFA status: %w", err)
+	}
+	if !status.Enrolled {
+		return nil, fmt.Errorf("MFA not enrolled - this command requires MFA")
+	}
+	if len(status.Methods) == 0 {
+		return nil, fmt.Errorf("no MFA methods enrolled")
+	}
+	return status, nil
+}
+
+func selectMFAMethod(status *MFAStatusResponse, rack string) (MFAMethodResponse, error) {
 	if MFAMethodFlag != "" {
-		var overrideMethod *MFAMethodResponse
-		for _, method := range mfaStatus.Methods {
-			if method.Type == MFAMethodFlag && !method.IsEnrolling {
-				overrideMethod = &method
-				break
-			}
+		method, ok := overrideMFAMethod(status.Methods)
+		if !ok {
+			return MFAMethodResponse{}, fmt.Errorf("MFA method %q not found or not enrolled", MFAMethodFlag)
 		}
-		if overrideMethod == nil {
-			return "", fmt.Errorf("MFA method %q not found or not enrolled", MFAMethodFlag)
-		}
-		return collectMFAAuth(cmd, baseURL, bearer, rack, *overrideMethod, mfaStatus.Methods)
+		return method, nil
 	}
 
-	var preferredMethod *MFAMethodResponse
-	if mfaStatus.PreferredMethod != nil && *mfaStatus.PreferredMethod != "" {
-		for _, method := range mfaStatus.Methods {
-			if method.Type == *mfaStatus.PreferredMethod && !method.IsEnrolling {
-				preferredMethod = &method
-				break
-			}
-		}
-	}
-
-	if preferredMethod != nil {
-		return collectMFAAuth(cmd, baseURL, bearer, rack, *preferredMethod, mfaStatus.Methods)
+	if method, ok := preferredMFAMethod(status); ok {
+		return method, nil
 	}
 
 	preference := resolveMFAPreference(rack)
-	methods := filterMethodsByPreference(mfaStatus.Methods, preference)
+	methods := filterMethodsByPreference(status.Methods, preference)
 	if len(methods) == 0 {
-		return "", fmt.Errorf("no MFA methods available (preference: %q)", preference)
+		return MFAMethodResponse{}, fmt.Errorf("no MFA methods available (preference: %q)", preference)
 	}
+	return methods[0], nil
+}
 
-	return collectMFAAuth(cmd, baseURL, bearer, rack, methods[0], mfaStatus.Methods)
+func overrideMFAMethod(methods []MFAMethodResponse) (MFAMethodResponse, bool) {
+	if MFAMethodFlag == "" {
+		return MFAMethodResponse{}, false
+	}
+	for _, method := range methods {
+		if method.Type == MFAMethodFlag && !method.IsEnrolling {
+			return method, true
+		}
+	}
+	return MFAMethodResponse{}, false
+}
+
+func preferredMFAMethod(status *MFAStatusResponse) (MFAMethodResponse, bool) {
+	if status.PreferredMethod == nil || *status.PreferredMethod == "" {
+		return MFAMethodResponse{}, false
+	}
+	for _, method := range status.Methods {
+		if method.Type == *status.PreferredMethod && !method.IsEnrolling {
+			return method, true
+		}
+	}
+	return MFAMethodResponse{}, false
 }
 
 func collectMFAAuth(cmd *cobra.Command, baseURL, bearer, rack string, method MFAMethodResponse, allMethods []MFAMethodResponse) (string, error) {

@@ -36,31 +36,21 @@ func getMFAStatus(baseURL, sessionToken string) (*MFAStatusResponse, error) {
 }
 
 func filterMethodsByPreference(methods []MFAMethodResponse, preference string) []MFAMethodResponse {
-	if preference == "default" {
-		var ordered []MFAMethodResponse
-		for _, m := range methods {
-			if m.Type == "webauthn" && !m.IsEnrolling {
-				ordered = append(ordered, m)
-			}
-		}
-		for _, m := range methods {
-			if m.Type == "totp" && !m.IsEnrolling {
-				ordered = append(ordered, m)
-			}
-		}
-		for _, m := range methods {
-			if m.Type == "backup_code" && !m.IsEnrolling {
-				ordered = append(ordered, m)
-			}
-		}
-		return ordered
+	priorities := []string{preference}
+	if preference == "" || preference == "default" {
+		priorities = []string{"webauthn", "totp", "backup_code"}
 	}
+	return filterMethodsByPriority(methods, priorities)
+}
 
-	var filtered []MFAMethodResponse
-	for _, m := range methods {
-		if m.Type == preference && !m.IsEnrolling {
-			filtered = append(filtered, m)
+func filterMethodsByPriority(methods []MFAMethodResponse, priorities []string) []MFAMethodResponse {
+	var ordered []MFAMethodResponse
+	for _, priority := range priorities {
+		for _, method := range methods {
+			if !method.IsEnrolling && method.Type == priority {
+				ordered = append(ordered, method)
+			}
 		}
 	}
-	return filtered
+	return ordered
 }
