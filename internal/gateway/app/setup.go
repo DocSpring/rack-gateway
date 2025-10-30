@@ -28,6 +28,10 @@ import (
 
 // initializeServices sets up all application services (matching original main.go exactly)
 func (a *App) initializeServices() error {
+	// Enforce AUDIT_HMAC_SECRET in non-dev environments
+	if strings.TrimSpace(os.Getenv("AUDIT_HMAC_SECRET")) == "" && !a.Config.DevMode {
+		return fmt.Errorf("AUDIT_HMAC_SECRET must be set in non-dev environments")
+	}
 	if err := a.Database.SeedDatabase(&db.SeedConfig{
 		AdminUsers:      a.Config.AdminUsers,
 		ViewerUsers:     a.Config.ViewerUsers,

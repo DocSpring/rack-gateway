@@ -15,10 +15,8 @@ import (
 func getAuditHMACSecret() []byte {
 	secret := os.Getenv("AUDIT_HMAC_SECRET")
 	if secret == "" {
-		// In development/test, use a default secret
-		// In production, this MUST be set to a secure random value
+		// In development/test, use a default secret. Production validation occurs during app init.
 		secret = "development-audit-hmac-secret-change-in-production"
-		fmt.Fprintf(os.Stderr, "WARNING: Using default AUDIT_HMAC_SECRET. Set this in production!\n")
 	}
 	return []byte(secret)
 }
