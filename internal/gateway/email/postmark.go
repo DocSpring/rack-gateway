@@ -126,7 +126,7 @@ type LoggerSender struct{ From string }
 func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 	if htmlBody != "" {
 		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
-		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s html=%s", textBody, htmlBody)
+		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s\n\nhtml=%s", textBody, htmlBody)
 		appendDevEmail([]string{to}, subject, textBody, htmlBody)
 		return nil
 	}
