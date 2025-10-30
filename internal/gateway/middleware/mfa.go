@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
@@ -24,52 +25,82 @@ func EnforceMFARequirements(mfaService MFAVerifier, database *db.Database, setti
 			return
 		}
 
-		method := c.Request.Method
-		permissions, ok := rbac.HTTPMFAPermissions(method, pattern)
+		permissions, ok := getMFAPermissions(c, pattern)
 		if !ok {
-			gtwlog.Errorf("mfa: missing MFA permission mapping for method=%s path=%s", method, pattern)
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"error":   "mfa_configuration_error",
-				"message": "MFA policy misconfiguration detected. Please contact an administrator.",
-			})
 			return
 		}
 
 		level := rbac.GetMFALevel(permissions)
-		switch level {
-		case rbac.MFANone:
-			c.Next()
-		case rbac.MFAStepUp:
-			if !checkStepUpMFA(c, mfaService, database, settings) {
-				return
-			}
-			c.Next()
-		case rbac.MFAAlways:
-			authUser, ok := auth.GetAuthUser(c.Request.Context())
-			if !ok || authUser == nil {
-				denyMFA(c)
-				return
-			}
-			// API tokens don't have MFA
-			if authUser.IsAPIToken {
-				c.Next()
-				return
-			}
-			if !verifyInlineMFA(c, mfaService, database, authUser) {
-				if !c.IsAborted() {
-					denyMFA(c)
-				}
-				return
-			}
-			c.Next()
-		default:
-			gtwlog.Errorf("mfa: unknown MFA level=%d for method=%s path=%s", level, method, pattern)
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"error":   "mfa_configuration_error",
-				"message": "MFA policy misconfiguration detected. Please contact an administrator.",
-			})
-		}
+		enforceMFALevel(c, level, mfaService, database, settings)
 	}
+}
+
+func getMFAPermissions(c *gin.Context, pattern string) ([]string, bool) {
+	method := c.Request.Method
+	permissions, ok := rbac.HTTPMFAPermissions(method, pattern)
+	if !ok {
+		gtwlog.Errorf("mfa: missing MFA permission mapping for method=%s path=%s", method, pattern)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"error":   "mfa_configuration_error",
+			"message": "MFA policy misconfiguration detected. Please contact an administrator.",
+		})
+	}
+	return permissions, ok
+}
+
+func enforceMFALevel(
+	c *gin.Context,
+	level rbac.MFALevel,
+	mfaService MFAVerifier,
+	database *db.Database,
+	settings *db.MFASettings,
+) {
+	switch level {
+	case rbac.MFANone:
+		c.Next()
+	case rbac.MFAStepUp:
+		enforceStepUpMFA(c, mfaService, database, settings)
+	case rbac.MFAAlways:
+		enforceAlwaysMFA(c, mfaService, database)
+	default:
+		handleUnknownMFALevel(c, level)
+	}
+}
+
+func enforceStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, settings *db.MFASettings) {
+	if checkStepUpMFA(c, mfaService, database, settings) {
+		c.Next()
+	}
+}
+
+func enforceAlwaysMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database) {
+	authUser, ok := auth.GetAuthUser(c.Request.Context())
+	if !ok || authUser == nil {
+		denyMFA(c)
+		return
+	}
+	// API tokens don't have MFA
+	if authUser.IsAPIToken {
+		c.Next()
+		return
+	}
+	if !verifyInlineMFA(c, mfaService, database, authUser) {
+		if !c.IsAborted() {
+			denyMFA(c)
+		}
+		return
+	}
+	c.Next()
+}
+
+func handleUnknownMFALevel(c *gin.Context, level rbac.MFALevel) {
+	method := c.Request.Method
+	pattern := c.FullPath()
+	gtwlog.Errorf("mfa: unknown MFA level=%d for method=%s path=%s", level, method, pattern)
+	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+		"error":   "mfa_configuration_error",
+		"message": "MFA policy misconfiguration detected. Please contact an administrator.",
+	})
 }
 
 // checkStepUpMFA verifies the user has recently completed step-up MFA.
@@ -100,33 +131,59 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 		return true
 	}
 
-	session := authUser.Session
-	if session == nil || session.MFAVerifiedAt == nil {
-		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s missing session or mfa verified timestamp", authUser.Email)
-		// Check if user has MFA enrolled to determine correct error response
-		user := auth.GetAuthUserRecord(c.Request.Context())
-		if user == nil && database != nil {
-			loadedUser, err := database.GetUser(authUser.Email)
-			if err == nil && loadedUser != nil {
-				user = loadedUser
-			}
-		}
-		// If user has MFA enrolled, they just need to verify (step-up)
-		// If not enrolled, they need to enroll first
-		if user != nil && user.MFAEnrolled {
-			gtwlog.DebugTopicf(
-				gtwlog.TopicMFAStepUp,
-				"user=%s is enrolled but not verified, sending step-up required",
-				authUser.Email,
-			)
-			denyStepUp(c)
-		} else {
-			gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s not enrolled, sending enrollment required", authUser.Email)
-			denyMFAEnrollment(c)
-		}
+	if !checkSessionMFAVerified(c, database, authUser) {
 		return false
 	}
 
+	if checkRecentStepUp(authUser, settings) {
+		return true
+	}
+
+	return attemptInlineMFAVerification(c, mfaService, database, authUser)
+}
+
+func checkSessionMFAVerified(c *gin.Context, database *db.Database, authUser *auth.User) bool {
+	session := authUser.Session
+	if session == nil || session.MFAVerifiedAt == nil {
+		gtwlog.DebugTopicf(gtwlog.TopicMFAStepUp, "user=%s missing session or mfa verified timestamp", authUser.Email)
+		handleMissingMFAVerification(c, database, authUser)
+		return false
+	}
+	return true
+}
+
+func handleMissingMFAVerification(c *gin.Context, database *db.Database, authUser *auth.User) {
+	user := getUserRecord(c, database, authUser.Email)
+	if user != nil && user.MFAEnrolled {
+		gtwlog.DebugTopicf(
+			gtwlog.TopicMFAStepUp,
+			"user=%s is enrolled but not verified, sending step-up required",
+			authUser.Email,
+		)
+		denyStepUp(c)
+		return
+	}
+	gtwlog.DebugTopicf(
+		gtwlog.TopicMFAStepUp,
+		"user=%s not enrolled, sending enrollment required",
+		authUser.Email,
+	)
+	denyMFAEnrollment(c)
+}
+
+func getUserRecord(c *gin.Context, database *db.Database, email string) *db.User {
+	user := auth.GetAuthUserRecord(c.Request.Context())
+	if user == nil && database != nil {
+		loadedUser, err := database.GetUser(email)
+		if err == nil && loadedUser != nil {
+			return loadedUser
+		}
+	}
+	return user
+}
+
+func checkRecentStepUp(authUser *auth.User, settings *db.MFASettings) bool {
+	session := authUser.Session
 	window := stepUpWindow(settings)
 	if recent := session.RecentStepUpAt; recent != nil && time.Since(*recent) <= window {
 		gtwlog.DebugTopicf(
@@ -138,7 +195,15 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 		)
 		return true
 	}
+	return false
+}
 
+func attemptInlineMFAVerification(
+	c *gin.Context,
+	mfaService MFAVerifier,
+	database *db.Database,
+	authUser *auth.User,
+) bool {
 	gtwlog.DebugTopicf(
 		gtwlog.TopicMFAStepUp,
 		"user=%s no recent step up, attempting inline verification",
@@ -161,7 +226,7 @@ func checkStepUpMFA(c *gin.Context, mfaService MFAVerifier, database *db.Databas
 
 // verifyInlineMFA verifies the user provided an MFA code with this request and updates step-up timestamp.
 // This is used for both MFAAlways and MFAStepUp routes when MFA is provided inline.
-func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.AuthUser) bool {
+func verifyInlineMFA(c *gin.Context, mfaService MFAVerifier, database *db.Database, authUser *auth.User) bool {
 	if mfaService == nil || database == nil || authUser == nil {
 		return false
 	}
@@ -278,7 +343,7 @@ func denyMFA(c *gin.Context) {
 // verifyInlineWebAuthn decodes and verifies inline WebAuthn assertion data
 func verifyInlineWebAuthn(
 	mfaService MFAVerifier,
-	database *db.Database,
+	_ *db.Database,
 	user *db.User,
 	encodedData, ipAddress, userAgent string,
 	sessionID *int64,

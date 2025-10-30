@@ -155,8 +155,11 @@ func (s *Service) checkAndLockAccount(userID int64) error {
 
 	if s.emailSender != nil && user != nil {
 		subject := "Account Locked - Multiple Failed Login Attempts"
-		textBody := "Your account has been automatically locked due to multiple failed authentication attempts.\n\nReason: 5 failed MFA attempts in 5 minutes\n\nIf this was not you, please contact your administrator immediately.\n\nFor assistance, please contact your system administrator."
-		htmlBody := `<p><strong>Your account has been automatically locked</strong> due to multiple failed authentication attempts.</p>
+		textBody := "Your account has been automatically locked due to multiple failed authentication " +
+			"attempts.\n\nReason: 5 failed MFA attempts in 5 minutes\n\nIf this was not you, please contact " +
+			"your administrator immediately.\n\nFor assistance, please contact your system administrator."
+		htmlBody := `<p><strong>Your account has been automatically locked</strong> due to multiple ` +
+			`failed authentication attempts.</p>
 <p><strong>Reason:</strong> 5 failed MFA attempts in 5 minutes</p>
 <p><strong style="color: #d9534f;">If this was not you, please contact your administrator immediately.</strong></p>
 <p>For assistance, please contact your system administrator.</p>`

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// LoginCommand returns the CLI command for logging into a rack via OAuth.
 func LoginCommand() *cobra.Command {
 	var noOpen bool
 	var authFile string
@@ -21,7 +22,7 @@ func LoginCommand() *cobra.Command {
 If no arguments are provided, re-authenticates with the current rack.
 Otherwise, provide both rack name and gateway URL to login to a new rack.`,
 		Args: cobra.RangeArgs(0, 2),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			return loginCommandWithFlags(args, noOpen, authFile)
 		},
 	}
@@ -134,13 +135,13 @@ func pollLoginCompletion(
 			return resp, nil
 		}
 
-		if errors.Is(err, ErrLoginPending) {
-			if !pendingNotified {
-				fmt.Println("Waiting for multi-factor authentication to complete in your browser...")
-				pendingNotified = true
-			}
-		} else {
+		if !errors.Is(err, ErrLoginPending) {
 			return nil, fmt.Errorf("login failed: %w", err)
+		}
+
+		if !pendingNotified {
+			fmt.Println("Waiting for multi-factor authentication to complete in your browser...")
+			pendingNotified = true
 		}
 
 		if time.Now().After(deadline) {

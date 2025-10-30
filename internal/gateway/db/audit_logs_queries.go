@@ -101,11 +101,15 @@ func (d *Database) GetAuditLogsPaged(filters AuditLogFilters) ([]*AuditLog, int,
 
 	// Get paginated results
 	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash", "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
+        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
+               "checkpoint_id", "checkpoint_hash",
+               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
+               "action_type", "action",
                COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
-               COALESCE("details", ''), COALESCE("request_id", ''), COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms", "event_count", "deploy_approval_request_id"
+               COALESCE("details", ''), COALESCE("request_id", ''),
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
+               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
+               "response_time_ms", "event_count", "deploy_approval_request_id"
         FROM "audit"."audit_event" ` + whereClause + `
         ORDER BY "timestamp" DESC
 		LIMIT ? OFFSET ?`
@@ -141,11 +145,16 @@ func (d *Database) GetAuditLogsByDeployApprovalRequestID(
 	}
 
 	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash", "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
-               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
-               COALESCE("request_id", ''), COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms",
+        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
+               "checkpoint_id", "checkpoint_hash",
+               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name",
+               "action_type", "action",
+               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''),
+               COALESCE("details", ''),
+               COALESCE("request_id", ''), COALESCE(host("ip_address"::inet), ''),
+               COALESCE("user_agent", ''),
+               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0),
+               "response_time_ms",
                "event_count", "deploy_approval_request_id"
         FROM "audit"."audit_event"
         WHERE "deploy_approval_request_id" = ?
@@ -204,7 +213,7 @@ func (d *Database) VerifyChainIntegrity(startIndex, endIndex int64) error {
 // CleanupOldAuditLogs is DISABLED for append-only audit logs
 // Audit logs are immutable and should NEVER be deleted from the database
 // For compliance, export old logs to S3 Glacier and keep database entries intact
-func (d *Database) CleanupOldAuditLogs(retentionDays int) error {
+func (d *Database) CleanupOldAuditLogs(_ int) error {
 	return fmt.Errorf("CleanupOldAuditLogs is disabled: audit logs are immutable and must not be deleted")
 }
 

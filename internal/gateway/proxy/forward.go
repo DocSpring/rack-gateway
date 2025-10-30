@@ -22,12 +22,218 @@ import (
 
 const proxyLogBodyLimit = 16384
 
+func (h *Handler) validateBuildRequest(
+	r *http.Request,
+	original string,
+	bodyBytes []byte,
+	authUser *auth.User,
+) error {
+	if r.Method != http.MethodPost || !rbac.KeyMatch3(original, "/apps/{app}/builds") {
+		return nil
+	}
+
+	if err := h.validateBuildManifestForAllUsers(r, bodyBytes); err != nil {
+		return err
+	}
+
+	if !authUser.IsAPIToken {
+		return nil
+	}
+
+	if authUser.TokenID == nil {
+		return fmt.Errorf("API token authentication missing token ID")
+	}
+
+	return h.validateBuildRequestForAPIToken(r, bodyBytes, *authUser.TokenID)
+}
+
+func (h *Handler) validateProcessCommand(
+	r *http.Request,
+	original string,
+) error {
+	if r.Method != http.MethodPost ||
+		!rbac.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
+		return nil
+	}
+
+	tracker := getDeployApprovalTracker(r.Context())
+	if tracker == nil {
+		return nil
+	}
+
+	app := extractAppFromPath(original)
+	command := strings.TrimSpace(r.Header.Get("Command"))
+	if command != "sleep 3600" && !h.isCommandApproved(app, command) {
+		return fmt.Errorf("command not approved: %s", command)
+	}
+
+	return nil
+}
+
+func (h *Handler) processBufferedResponse(
+	r *http.Request,
+	resp *http.Response,
+	pth string,
+	authUserEmail string,
+	filterRelease bool,
+	shouldCapture bool,
+	captureProcess bool,
+) ([]byte, error) {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if filterRelease {
+		body = h.filterReleaseEnvForUser(authUserEmail, body, false)
+	}
+
+	if shouldCapture {
+		h.captureResourceCreator(r, pth, body, authUserEmail)
+	}
+
+	if captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		h.handleProcessCreation(r, body)
+	}
+
+	if r.Method == http.MethodPost &&
+		rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") &&
+		resp.StatusCode >= 200 &&
+		resp.StatusCode < 300 {
+		h.markDeployApprovalDeployed(r)
+	}
+
+	return body, nil
+}
+
+func (h *Handler) handleProcessCreation(r *http.Request, body []byte) {
+	tracker := getDeployApprovalTracker(r.Context())
+	if tracker != nil {
+		h.captureProcessCreation(r, body, tracker)
+	}
+}
+
+func (h *Handler) markDeployApprovalDeployed(r *http.Request) {
+	tracker := getDeployApprovalTracker(r.Context())
+	if tracker == nil || h.database == nil {
+		return
+	}
+
+	if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
+		log.Printf("Failed to mark deploy approval as deployed: %v", err)
+	}
+}
+
+func (h *Handler) writeBufferedResponse(
+	w http.ResponseWriter,
+	respReader io.Reader,
+	body []byte,
+	shouldCaptureBody bool,
+) (int64, []byte, error) {
+	bytesWritten, err := io.Copy(w, respReader)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to write response body: %w", err)
+	}
+
+	var logSnippet []byte
+	if shouldCaptureBody {
+		logSnippet = httputil.TruncateBytes(body, proxyLogBodyLimit)
+	}
+
+	return bytesWritten, logSnippet, nil
+}
+
+func (h *Handler) writeStreamedResponse(
+	w http.ResponseWriter,
+	respReader io.Reader,
+	shouldCaptureBody bool,
+) (int64, []byte, error) {
+	if !shouldCaptureBody {
+		bytesWritten, err := io.Copy(w, respReader)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to stream response body: %w", err)
+		}
+		return bytesWritten, nil, nil
+	}
+
+	acc := newLogAccumulator(proxyLogBodyLimit)
+	reader := io.TeeReader(respReader, acc)
+	bytesWritten, err := io.Copy(w, reader)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to stream response body: %w", err)
+	}
+
+	return bytesWritten, acc.Bytes(), nil
+}
+
+func (h *Handler) logProxyResponse(
+	r *http.Request,
+	resp *http.Response,
+	path string,
+	contentType string,
+	bytesWritten int64,
+	logSnippet []byte,
+	logProxy bool,
+	logResponse bool,
+	logResponseBody bool,
+) {
+	if !logProxy && !logResponse && !(logResponseBody && len(logSnippet) > 0) {
+		return
+	}
+
+	upstreamMethod := ""
+	upstreamURL := ""
+	if resp.Request != nil {
+		upstreamMethod = resp.Request.Method
+		if resp.Request.URL != nil {
+			upstreamURL = resp.Request.URL.String()
+		}
+	}
+
+	if logProxy {
+		gtwlog.DebugTopicf(
+			gtwlog.TopicProxy,
+			"upstream response %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q",
+			r.Method,
+			path,
+			resp.StatusCode,
+			contentType,
+			bytesWritten,
+			upstreamMethod,
+			upstreamURL,
+		)
+	}
+
+	if logResponse {
+		gtwlog.DebugTopicf(
+			gtwlog.TopicHTTPResponse,
+			"upstream response %s %s -> %d ct=%q len=%d",
+			r.Method,
+			path,
+			resp.StatusCode,
+			contentType,
+			bytesWritten,
+		)
+	}
+
+	if logResponseBody && len(logSnippet) > 0 {
+		gtwlog.DebugTopicf(
+			gtwlog.TopicHTTPResponseBody,
+			"upstream response %s %s -> %d body=%s",
+			r.Method,
+			path,
+			resp.StatusCode,
+			string(logSnippet),
+		)
+	}
+}
+
 func (h *Handler) forwardRequest(
 	w http.ResponseWriter,
 	r *http.Request,
 	rack config.RackConfig,
 	path string,
-	authUser *auth.AuthUser,
+	authUser *auth.User,
 ) (int, error) {
 	original := path
 	base := strings.TrimRight(rack.URL, "/")
@@ -54,29 +260,12 @@ func (h *Handler) forwardRequest(
 		}
 	}
 
-	if r.Method == http.MethodPost && rbac.KeyMatch3(original, "/apps/{app}/builds") {
-		if err := h.validateBuildManifestForAllUsers(r, bodyBytes); err != nil {
-			return 0, err
-		}
-
-		if authUser.IsAPIToken {
-			if authUser.TokenID == nil {
-				return 0, fmt.Errorf("API token authentication missing token ID")
-			}
-			if err := h.validateBuildRequestForAPIToken(r, bodyBytes, *authUser.TokenID); err != nil {
-				return 0, err
-			}
-		}
+	if err := h.validateBuildRequest(r, original, bodyBytes, authUser); err != nil {
+		return 0, err
 	}
 
-	if r.Method == http.MethodPost && rbac.KeyMatch3(original, "/apps/{app}/services/{service}/processes") {
-		if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
-			app := extractAppFromPath(original)
-			command := strings.TrimSpace(r.Header.Get("Command"))
-			if command != "sleep 3600" && !h.isCommandApproved(app, command) {
-				return 0, fmt.Errorf("command not approved: %s", command)
-			}
-		}
+	if err := h.validateProcessCommand(r, original); err != nil {
+		return 0, err
 	}
 
 	proxyReq, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(bodyBytes))
@@ -147,31 +336,17 @@ func (h *Handler) forwardRequest(
 	var logSnippet []byte
 	if needsBuffer {
 		var err error
-		body, err = io.ReadAll(resp.Body)
+		body, err = h.processBufferedResponse(
+			r,
+			resp,
+			pth,
+			authUser.Email,
+			filterRelease,
+			shouldCapture,
+			captureProcess,
+		)
 		if err != nil {
-			return 0, fmt.Errorf("failed to read response body: %w", err)
-		}
-		if filterRelease {
-			body = h.filterReleaseEnvForUser(authUser.Email, body, false)
-		}
-		if shouldCapture {
-			h.captureResourceCreator(r, pth, body, authUser.Email)
-		}
-		if captureProcess && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
-				h.captureProcessCreation(r, body, tracker)
-			}
-		}
-		if r.Method == http.MethodPost && rbac.KeyMatch3(pth, "/apps/{app}/releases/{id}/promote") &&
-			resp.StatusCode >= 200 &&
-			resp.StatusCode < 300 {
-			if tracker := getDeployApprovalTracker(r.Context()); tracker != nil {
-				if h.database != nil {
-					if err := h.database.MarkDeployApprovalAsDeployed(tracker.request.ID); err != nil {
-						log.Printf("Failed to mark deploy approval as deployed: %v", err)
-					}
-				}
-			}
+			return 0, err
 		}
 		respReader = bytes.NewReader(body)
 	} else {
@@ -185,31 +360,12 @@ func (h *Handler) forwardRequest(
 	shouldCaptureBody := logResponseBody && !httputil.IsBinaryContent(contentType)
 
 	if needsBuffer {
-		var err error
-		bytesWritten, err = io.Copy(w, respReader)
-		if err != nil {
-			return resp.StatusCode, fmt.Errorf("failed to write response body: %w", err)
-		}
-		if shouldCaptureBody {
-			logSnippet = httputil.TruncateBytes(body, proxyLogBodyLimit)
-		}
+		bytesWritten, logSnippet, err = h.writeBufferedResponse(w, respReader, body, shouldCaptureBody)
 	} else {
-		if shouldCaptureBody {
-			acc := newLogAccumulator(proxyLogBodyLimit)
-			reader := io.TeeReader(respReader, acc)
-			var err error
-			bytesWritten, err = io.Copy(w, reader)
-			if err != nil {
-				return resp.StatusCode, fmt.Errorf("failed to stream response body: %w", err)
-			}
-			logSnippet = acc.Bytes()
-		} else {
-			var err error
-			bytesWritten, err = io.Copy(w, respReader)
-			if err != nil {
-				return resp.StatusCode, fmt.Errorf("failed to stream response body: %w", err)
-			}
-		}
+		bytesWritten, logSnippet, err = h.writeStreamedResponse(w, respReader, shouldCaptureBody)
+	}
+	if err != nil {
+		return resp.StatusCode, err
 	}
 
 	if logResponseHeaders {
@@ -220,50 +376,17 @@ func (h *Handler) forwardRequest(
 		}
 	}
 
-	if logProxy || logResponse || (logResponseBody && len(logSnippet) > 0) {
-		upstreamMethod := ""
-		upstreamURL := ""
-		if resp.Request != nil {
-			upstreamMethod = resp.Request.Method
-			if resp.Request.URL != nil {
-				upstreamURL = resp.Request.URL.String()
-			}
-		}
-		if logProxy {
-			gtwlog.DebugTopicf(
-				gtwlog.TopicProxy,
-				"upstream response %s %s -> %d ct=%q len=%d upstream_method=%s upstream_url=%q",
-				r.Method,
-				path,
-				resp.StatusCode,
-				contentType,
-				bytesWritten,
-				upstreamMethod,
-				upstreamURL,
-			)
-		}
-		if logResponse {
-			gtwlog.DebugTopicf(
-				gtwlog.TopicHTTPResponse,
-				"upstream response %s %s -> %d ct=%q len=%d",
-				r.Method,
-				path,
-				resp.StatusCode,
-				contentType,
-				bytesWritten,
-			)
-		}
-		if logResponseBody && len(logSnippet) > 0 {
-			gtwlog.DebugTopicf(
-				gtwlog.TopicHTTPResponseBody,
-				"upstream response %s %s -> %d body=%s",
-				r.Method,
-				path,
-				resp.StatusCode,
-				string(logSnippet),
-			)
-		}
-	}
+	h.logProxyResponse(
+		r,
+		resp,
+		path,
+		contentType,
+		bytesWritten,
+		logSnippet,
+		logProxy,
+		logResponse,
+		logResponseBody,
+	)
 
 	return resp.StatusCode, nil
 }

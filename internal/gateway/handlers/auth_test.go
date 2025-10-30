@@ -423,7 +423,7 @@ func TestDeleteMFAMethodClearsTrustedDevicesWhenFullyDisabled(t *testing.T) {
 	c.Request.Header.Set("Authorization", "Bearer "+sessionToken)
 
 	// Set auth user in context
-	authUser := &auth.AuthUser{
+	authUser := &auth.User{
 		Email:      user.Email,
 		Name:       user.Name,
 		Roles:      user.Roles,

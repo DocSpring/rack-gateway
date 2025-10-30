@@ -14,7 +14,7 @@ import (
 	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
-func getInstances(w http.ResponseWriter, r *http.Request) {
+func getInstances(w http.ResponseWriter, _ *http.Request) {
 	instances := []Instance{
 		{
 			ID:           "i-1234567890abcdef0",
@@ -53,7 +53,7 @@ func getInstance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, instance)
 }
 
-func getSystem(w http.ResponseWriter, r *http.Request) {
+func getSystem(w http.ResponseWriter, _ *http.Request) {
 	system := System{
 		Count:      2,
 		Domain:     "mock-rack.example.com",
@@ -375,7 +375,7 @@ func applySystemParameterUpdates(updates map[string]string) {
 	}
 }
 
-func getSystemProcesses(w http.ResponseWriter, r *http.Request) {
+func getSystemProcesses(w http.ResponseWriter, _ *http.Request) {
 	procs := []Process{
 		{
 			Id:       "api-677dbf86db-699qf",

@@ -87,7 +87,7 @@ func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 	handler := NewAuthHandler(nil, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
 
 	// Create test request with auth user in context
-	authUser := &auth.AuthUser{
+	authUser := &auth.User{
 		Email:      user.Email,
 		Name:       user.Name,
 		Roles:      user.Roles,
@@ -186,7 +186,7 @@ func TestVerifyMFAHandlesFailure(t *testing.T) {
 	handler := NewAuthHandler(nil, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
 
 	// Create test request with invalid code
-	authUser := &auth.AuthUser{
+	authUser := &auth.User{
 		Email:      user.Email,
 		Name:       user.Name,
 		Roles:      user.Roles,

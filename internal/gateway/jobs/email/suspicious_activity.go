@@ -35,7 +35,7 @@ func NewSuspiciousActivityUserWorker(emailSender email.Sender) *SuspiciousActivi
 }
 
 // Work sends the suspicious activity email to the user
-func (w *SuspiciousActivityUserWorker) Work(ctx context.Context, job *river.Job[SuspiciousActivityUserArgs]) error {
+func (w *SuspiciousActivityUserWorker) Work(_ context.Context, job *river.Job[SuspiciousActivityUserArgs]) error {
 	args := job.Args
 
 	subject := "Suspicious Activity Detected"
@@ -117,7 +117,7 @@ func NewSuspiciousActivityAdminWorker(emailSender email.Sender) *SuspiciousActiv
 }
 
 // Work sends the suspicious activity alert to admins
-func (w *SuspiciousActivityAdminWorker) Work(ctx context.Context, job *river.Job[SuspiciousActivityAdminArgs]) error {
+func (w *SuspiciousActivityAdminWorker) Work(_ context.Context, job *river.Job[SuspiciousActivityAdminArgs]) error {
 	args := job.Args
 
 	subject := fmt.Sprintf("Suspicious Activity - User %s", args.UserEmail)
@@ -176,7 +176,7 @@ func formatDetailsAsText(details map[string]string) string {
 	if len(details) == 0 {
 		return ""
 	}
-	var parts []string
+	parts := make([]string, 0, len(details))
 	for k, v := range details {
 		parts = append(parts, fmt.Sprintf("- %s: %s", k, v))
 	}
@@ -188,7 +188,7 @@ func formatDetailsAsHTML(details map[string]string) string {
 	if len(details) == 0 {
 		return ""
 	}
-	var parts []string
+	parts := make([]string, 0, len(details))
 	for k, v := range details {
 		parts = append(parts, fmt.Sprintf("<li>%s: %s</li>", k, v))
 	}

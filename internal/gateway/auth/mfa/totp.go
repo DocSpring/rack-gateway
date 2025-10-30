@@ -164,7 +164,10 @@ func (s *Service) verifyTOTPMethods(
 		if method.Type != "totp" {
 			continue
 		}
-		if result, handled, err := s.verifySingleTOTPMethod(userID, method, code, ipAddress, userAgent, sessionID); handled {
+		result, handled, err := s.verifySingleTOTPMethod(
+			userID, method, code, ipAddress, userAgent, sessionID,
+		)
+		if handled {
 			return result, err
 		}
 	}
@@ -247,7 +250,7 @@ func (s *Service) validateTOTPCodeWithTimeStep(secret, code string) (int64, erro
 	return 0, fmt.Errorf("invalid code")
 }
 
-func (s *Service) validateTOTPCode(secret, email, code string) error {
+func (s *Service) validateTOTPCode(secret, _ /* email */, code string) error {
 	_, err := s.validateTOTPCodeWithTimeStep(secret, code)
 	return err
 }

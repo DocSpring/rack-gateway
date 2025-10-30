@@ -8,9 +8,12 @@ import (
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
+// TouchUserSession updates the last seen timestamp, IP address, and user agent for an active session.
 func (d *Database) TouchUserSession(id int64, ipAddress, userAgent string, lastSeen, expiresAt time.Time) error {
 	_, err := d.exec(
-		"UPDATE user_sessions SET last_seen_at = ?, expires_at = ?, updated_at = ?, ip_address = COALESCE(?, ip_address), user_agent = COALESCE(?, user_agent) WHERE id = ?",
+		`UPDATE user_sessions SET last_seen_at = ?, expires_at = ?, updated_at = ?,
+		ip_address = COALESCE(?, ip_address), user_agent = COALESCE(?, user_agent)
+		WHERE id = ?`,
 		lastSeen,
 		expiresAt,
 		lastSeen,
@@ -24,13 +27,15 @@ func (d *Database) TouchUserSession(id int64, ipAddress, userAgent string, lastS
 	return nil
 }
 
+// RevokeUserSession revokes a single session by ID and returns true if the session was successfully revoked.
 func (d *Database) RevokeUserSession(id int64, revokedBy *int64) (bool, error) {
 	var revokedByVal interface{}
 	if revokedBy != nil {
 		revokedByVal = *revokedBy
 	}
 	res, err := d.exec(
-		"UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW() WHERE id = ? AND revoked_at IS NULL",
+		`UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW()
+		WHERE id = ? AND revoked_at IS NULL`,
 		revokedByVal,
 		id,
 	)
@@ -44,13 +49,15 @@ func (d *Database) RevokeUserSession(id int64, revokedBy *int64) (bool, error) {
 	return rows > 0, nil
 }
 
+// RevokeUserSessionByHash revokes a session by its token hash and returns true if successful.
 func (d *Database) RevokeUserSessionByHash(tokenHash string, revokedBy *int64) (bool, error) {
 	var revokedByVal interface{}
 	if revokedBy != nil {
 		revokedByVal = *revokedBy
 	}
 	res, err := d.exec(
-		"UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW() WHERE token_hash = ? AND revoked_at IS NULL",
+		`UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW()
+		WHERE token_hash = ? AND revoked_at IS NULL`,
 		revokedByVal,
 		tokenHash,
 	)
@@ -64,33 +71,37 @@ func (d *Database) RevokeUserSessionByHash(tokenHash string, revokedBy *int64) (
 	return rowCount > 0, nil
 }
 
+// RevokeAllUserSessions revokes all active sessions for a user.
 func (d *Database) RevokeAllUserSessions(userID int64, revokedBy *int64) (int64, error) {
 	var revokedByVal interface{}
 	if revokedBy != nil {
 		revokedByVal = *revokedBy
 	}
-	res, err := d.exec(
-		"UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW() WHERE user_id = ? AND revoked_at IS NULL",
+	result, err := d.exec(
+		`UPDATE user_sessions SET revoked_at = NOW(), revoked_by_user_id = ?, updated_at = NOW()
+		WHERE user_id = ? AND revoked_at IS NULL`,
 		revokedByVal,
 		userID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke user sessions: %w", err)
 	}
-	rowCount, err := res.RowsAffected()
+	count, err := result.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("failed to inspect revoke-all result: %w", err)
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	return rowCount, nil
+	return count, nil
 }
 
+// UpdateSessionMFAVerified marks a session as MFA-verified and optionally associates a trusted device.
 func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Time, trustedDeviceID *int64) error {
 	var trusted interface{}
 	if trustedDeviceID != nil {
 		trusted = *trustedDeviceID
 	}
 	_, err := d.exec(
-		"UPDATE user_sessions SET mfa_verified_at = ?, trusted_device_id = COALESCE(?, trusted_device_id), updated_at = NOW() WHERE id = ?",
+		`UPDATE user_sessions SET mfa_verified_at = ?, trusted_device_id = COALESCE(?, trusted_device_id),
+		updated_at = NOW() WHERE id = ?`,
 		verifiedAt,
 		trusted,
 		sessionID,
@@ -101,6 +112,7 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 	return nil
 }
 
+// UpdateSessionRecentStepUp records a recent step-up authentication timestamp for the session.
 func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) error {
 	gtwlog.DebugTopicf(
 		gtwlog.TopicMFAStepUp,
@@ -122,6 +134,7 @@ func (d *Database) UpdateSessionRecentStepUp(sessionID int64, when time.Time) er
 	return nil
 }
 
+// AttachTrustedDeviceToSession associates a trusted device with an existing session.
 func (d *Database) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID int64) error {
 	_, err := d.exec(
 		"UPDATE user_sessions SET trusted_device_id = ?, updated_at = NOW() WHERE id = ?",
@@ -134,6 +147,7 @@ func (d *Database) AttachTrustedDeviceToSession(sessionID int64, trustedDeviceID
 	return nil
 }
 
+// UpdateSessionMetadata merges new metadata into an existing session's metadata field.
 func (d *Database) UpdateSessionMetadata(sessionID int64, metadata map[string]interface{}) error {
 	if len(metadata) == 0 {
 		return nil

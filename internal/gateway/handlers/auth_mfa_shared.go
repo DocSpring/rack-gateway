@@ -13,7 +13,7 @@ import (
 
 // mfaContext holds common MFA request context
 type mfaContext struct {
-	authUser   *auth.AuthUser
+	authUser   *auth.User
 	userRecord *db.User
 	ipAddress  string
 	userAgent  string

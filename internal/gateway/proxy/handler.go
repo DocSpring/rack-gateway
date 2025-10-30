@@ -114,7 +114,8 @@ func logRackTLSMismatch(scope string, err *rackcert.FingerprintMismatchError) {
 		return
 	}
 	log.Printf(
-		`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s"}`,
+		`{"level":"error","event":"rack_tls_verification_failed","scope":"%s",`+
+			`"expected_fingerprint":"%s","actual_fingerprint":"%s"}`,
 		scope,
 		err.Expected,
 		err.Actual,
@@ -344,7 +345,8 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		if action == "unknown" || resource == "unknown" {
 			errorMsg := fmt.Sprintf("cannot determine action/resource for %s %s", r.Method, r.URL.Path)
 			log.Printf(
-				`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s"}`,
+				`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s",`+
+					`"action":"%s","resource":"%s"}`,
 				errorMsg,
 				r.Method,
 				r.URL.Path,
@@ -358,7 +360,8 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 		if resourceType == "unknown" {
 			errorMsg := fmt.Sprintf("cannot determine resource type for %s %s", r.Method, r.URL.Path)
 			log.Printf(
-				`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s","action":"%s","resource":"%s","resource_type":"%s"}`,
+				`{"level":"error","error":"audit_failure","message":"%s","method":"%s","path":"%s",`+
+					`"action":"%s","resource":"%s","resource_type":"%s"}`,
 				errorMsg,
 				r.Method,
 				r.URL.Path,

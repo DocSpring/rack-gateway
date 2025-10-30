@@ -16,18 +16,22 @@ type SendSingleArgs struct {
 	Html    string `json:"html"`
 }
 
+// Kind returns the job kind identifier for single email sending
 func (SendSingleArgs) Kind() string { return "email:send:single" }
 
+// SendSingleWorker is a River worker that sends single-recipient emails
 type SendSingleWorker struct {
 	river.WorkerDefaults[SendSingleArgs]
 	delivery gtwemail.Sender
 }
 
+// NewSendSingleWorker creates a new worker for sending single-recipient emails
 func NewSendSingleWorker(deliverySender gtwemail.Sender) *SendSingleWorker {
 	return &SendSingleWorker{delivery: deliverySender}
 }
 
-func (w *SendSingleWorker) Work(ctx context.Context, job *river.Job[SendSingleArgs]) error {
+// Work processes a single email job
+func (w *SendSingleWorker) Work(_ context.Context, job *river.Job[SendSingleArgs]) error {
 	args := job.Args
 	if args.To == "" {
 		return nil
@@ -43,18 +47,22 @@ type SendManyArgs struct {
 	Html    string   `json:"html"`
 }
 
+// Kind returns the job kind identifier for multi-recipient email sending
 func (SendManyArgs) Kind() string { return "email:send:many" }
 
+// SendManyWorker is a River worker that sends multi-recipient emails
 type SendManyWorker struct {
 	river.WorkerDefaults[SendManyArgs]
 	delivery gtwemail.Sender
 }
 
+// NewSendManyWorker creates a new worker for sending multi-recipient emails
 func NewSendManyWorker(deliverySender gtwemail.Sender) *SendManyWorker {
 	return &SendManyWorker{delivery: deliverySender}
 }
 
-func (w *SendManyWorker) Work(ctx context.Context, job *river.Job[SendManyArgs]) error {
+// Work processes a multi-recipient email job
+func (w *SendManyWorker) Work(_ context.Context, job *river.Job[SendManyArgs]) error {
 	args := job.Args
 	if len(args.To) == 0 {
 		return nil

@@ -13,6 +13,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
+// AdminHandler handles all administrative operations including user management,
+// API tokens, sessions, and system settings.
 type AdminHandler struct {
 	rbac            rbac.Manager
 	database        *db.Database
@@ -27,12 +29,13 @@ type AdminHandler struct {
 	jobsClient      *jobs.Client
 }
 
+// NewAdminHandler creates a new AdminHandler with all required dependencies.
 func NewAdminHandler(
-	rbac rbac.Manager,
+	rbacMgr rbac.Manager,
 	database *db.Database,
 	tokenService *token.Service,
 	emailSender email.Sender,
-	config *config.Config,
+	cfg *config.Config,
 	rackCertMgr *rackcert.Manager,
 	sessions *auth.SessionManager,
 	mfaSettings *db.MFASettings,
@@ -41,11 +44,11 @@ func NewAdminHandler(
 	jobsClient *jobs.Client,
 ) *AdminHandler {
 	return &AdminHandler{
-		rbac:            rbac,
+		rbac:            rbacMgr,
 		database:        database,
 		tokenService:    tokenService,
 		emailSender:     emailSender,
-		config:          config,
+		config:          cfg,
 		rackCertMgr:     rackCertMgr,
 		sessions:        sessions,
 		mfaSettings:     mfaSettings,

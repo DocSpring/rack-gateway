@@ -114,7 +114,8 @@ func (h *APIHandler) fetchEnvMap(
 	if err != nil {
 		if fpErr, ok := rackcert.AsFingerprintMismatch(err); ok {
 			log.Printf(
-				`{"level":"error","event":"rack_tls_verification_failed","scope":"%s","expected_fingerprint":"%s","actual_fingerprint":"%s","app":"%s"}`,
+				`{"level":"error","event":"rack_tls_verification_failed","scope":"%s",`+
+					`"expected_fingerprint":"%s","actual_fingerprint":"%s","app":"%s"}`,
 				scope,
 				fpErr.Expected,
 				fpErr.Actual,
@@ -235,37 +236,9 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		return
 	}
 
-	allowedSecrets := false
-	if wantSecrets {
-		if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead); !ok {
-			res := app
-			if key != "" {
-				res = fmt.Sprintf("%s/%s", app, key)
-			}
-			details := map[string]interface{}{"app": app, "secrets": true}
-			if key != "" {
-				details["key"] = key
-			}
-			detailsJSON, _ := json.Marshal(details)
-			_ = h.auditLogger.LogDBEntry(&db.AuditLog{
-				UserEmail:      email,
-				UserName:       name,
-				ActionType:     "convox",
-				Action:         audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionRead.String()),
-				ResourceType:   "secret",
-				Resource:       res,
-				Details:        string(detailsJSON),
-				IPAddress:      c.ClientIP(),
-				UserAgent:      c.GetHeader("User-Agent"),
-				Status:         "denied",
-				RBACDecision:   "deny",
-				HTTPStatus:     http.StatusForbidden,
-				ResponseTimeMs: int(time.Since(start).Milliseconds()),
-			})
-			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view secrets."})
-			return
-		}
-		allowedSecrets = true
+	allowedSecrets, ok := h.checkSecretPermissions(c, email, name, app, key, wantSecrets, start)
+	if !ok {
+		return
 	}
 
 	rackConfig, tlsCfg, ok := h.acquireRackContext(c)
@@ -279,19 +252,85 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 	}
 
 	extraSecrets, _ := h.secretAndProtectedKeys(app)
-	if !allowedSecrets {
-		for k := range envMap {
-			if envutil.IsSecretKey(k, extraSecrets) {
-				envMap[k] = envutil.MaskedSecret
-			}
-		}
-	}
+	h.maskSecretsIfNeeded(envMap, extraSecrets, allowedSecrets)
 
 	if key != "" {
 		v := envMap[key]
 		envMap = map[string]string{key: v}
 	}
 
+	h.logEnvRead(c, email, name, app, key, wantSecrets, allowedSecrets, start)
+
+	c.JSON(http.StatusOK, EnvValuesResponse{Env: envMap})
+}
+
+func (h *APIHandler) checkSecretPermissions(
+	c *gin.Context,
+	email, name, app, key string,
+	wantSecrets bool,
+	start time.Time,
+) (bool, bool) {
+	if !wantSecrets {
+		return false, true
+	}
+
+	if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead); ok {
+		return true, true
+	}
+
+	h.logSecretAccessDenied(c, email, name, app, key, start)
+	c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view secrets."})
+	return false, false
+}
+
+func (h *APIHandler) logSecretAccessDenied(
+	c *gin.Context,
+	email, name, app, key string,
+	start time.Time,
+) {
+	res := app
+	if key != "" {
+		res = fmt.Sprintf("%s/%s", app, key)
+	}
+	details := map[string]interface{}{"app": app, "secrets": true}
+	if key != "" {
+		details["key"] = key
+	}
+	detailsJSON, _ := json.Marshal(details)
+	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+		UserEmail:      email,
+		UserName:       name,
+		ActionType:     "convox",
+		Action:         audit.BuildAction(rbac.ResourceSecret.String(), rbac.ActionRead.String()),
+		ResourceType:   "secret",
+		Resource:       res,
+		Details:        string(detailsJSON),
+		IPAddress:      c.ClientIP(),
+		UserAgent:      c.GetHeader("User-Agent"),
+		Status:         "denied",
+		RBACDecision:   "deny",
+		HTTPStatus:     http.StatusForbidden,
+		ResponseTimeMs: int(time.Since(start).Milliseconds()),
+	})
+}
+
+func (h *APIHandler) maskSecretsIfNeeded(envMap map[string]string, secretKeys []string, allowed bool) {
+	if allowed {
+		return
+	}
+	for k := range envMap {
+		if envutil.IsSecretKey(k, secretKeys) {
+			envMap[k] = envutil.MaskedSecret
+		}
+	}
+}
+
+func (h *APIHandler) logEnvRead(
+	c *gin.Context,
+	email, name, app, key string,
+	wantSecrets, allowedSecrets bool,
+	start time.Time,
+) {
 	resource := app
 	if key != "" {
 		resource = fmt.Sprintf("%s/%s", app, key)
@@ -325,13 +364,12 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 		HTTPStatus:     http.StatusOK,
 		ResponseTimeMs: int(time.Since(start).Milliseconds()),
 	})
-
-	c.JSON(http.StatusOK, EnvValuesResponse{Env: envMap})
 }
 
 // UpdateEnvValues godoc
 // @Summary Update environment variables
-// @Description Applies environment variable changes for a Convox app by creating a new release. Secrets remain masked unless the user has secrets permissions.
+// @Description Applies environment variable changes for a Convox app by creating a new release.
+// @Description Secrets remain masked unless the user has secrets permissions.
 // @Tags Environment
 // @Accept json
 // @Produce json

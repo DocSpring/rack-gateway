@@ -85,40 +85,74 @@ func (s *Service) ConfirmWebAuthnEnrollment(
 		return 0, fmt.Errorf("WebAuthn not configured")
 	}
 
-	// Verify the placeholder method exists and belongs to this user
-	method, err := s.db.GetMFAMethodByID(methodID)
-	if err != nil || method == nil || method.UserID != user.ID {
-		return 0, fmt.Errorf("invalid method ID")
-	}
-	if method.Type != "webauthn_pending" {
-		return 0, fmt.Errorf("method is not pending confirmation")
+	if err := s.validatePendingMethod(user.ID, methodID); err != nil {
+		return 0, err
 	}
 
-	var session webauthn.SessionData
-	if err := json.Unmarshal(sessionDataJSON, &session); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal session: %w", err)
-	}
-
-	// Get methods for user interface
-	methods, err := s.db.ListMFAMethods(user.ID)
+	credential, err := s.createWebAuthnCredential(user, sessionDataJSON, credentialJSON)
 	if err != nil {
 		return 0, err
 	}
+
+	if err := s.storeParsedCredential(methodID, credential, label); err != nil {
+		return 0, err
+	}
+
+	if err := s.finalizeEnrollment(user.ID, methodID); err != nil {
+		return 0, err
+	}
+
+	return methodID, nil
+}
+
+func (s *Service) validatePendingMethod(userID, methodID int64) error {
+	method, err := s.db.GetMFAMethodByID(methodID)
+	if err != nil || method == nil || method.UserID != userID {
+		return fmt.Errorf("invalid method ID")
+	}
+	if method.Type != "webauthn_pending" {
+		return fmt.Errorf("method is not pending confirmation")
+	}
+	return nil
+}
+
+func (s *Service) createWebAuthnCredential(
+	user *db.User,
+	sessionDataJSON []byte,
+	credentialJSON []byte,
+) (*webauthn.Credential, error) {
+	var session webauthn.SessionData
+	if err := json.Unmarshal(sessionDataJSON, &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
+	}
+
+	methods, err := s.db.ListMFAMethods(user.ID)
+	if err != nil {
+		return nil, err
+	}
 	waUser := &webAuthnUser{user: user, methods: methods}
 
-	// Parse credential from client
-	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(strings.NewReader(string(credentialJSON)))
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(
+		strings.NewReader(string(credentialJSON)),
+	)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse credential: %w", err)
+		return nil, fmt.Errorf("failed to parse credential: %w", err)
 	}
 
 	credential, err := s.webAuthn.CreateCredential(waUser, session, parsedResponse)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create credential: %w", err)
+		return nil, fmt.Errorf("failed to create credential: %w", err)
 	}
 
-	// Prepare credential data
-	var transports []string
+	return credential, nil
+}
+
+func (s *Service) storeParsedCredential(
+	methodID int64,
+	credential *webauthn.Credential,
+	label string,
+) error {
+	transports := make([]string, 0, len(credential.Transport))
 	for _, t := range credential.Transport {
 		transports = append(transports, string(t))
 	}
@@ -127,26 +161,21 @@ func (s *Service) ConfirmWebAuthnEnrollment(
 		label = "Security Key"
 	}
 
-	// Store credential flags in metadata (required for assertion validation)
-	metadata := map[string]interface{}{
-		"flags": credential.Flags,
-	}
+	metadata := map[string]interface{}{"flags": credential.Flags}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal metadata: %w", err)
+		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Update the placeholder method with actual credential data
-	if err := s.db.UpdateMFAMethodCredential(methodID, "webauthn", label, credential.ID, credential.PublicKey, transports, metadataJSON); err != nil {
-		return 0, err
-	}
-
-	// Finalize enrollment
-	if err := s.finalizeEnrollment(user.ID, methodID); err != nil {
-		return 0, err
-	}
-
-	return methodID, nil
+	return s.db.UpdateMFAMethodCredential(
+		methodID,
+		"webauthn",
+		label,
+		credential.ID,
+		credential.PublicKey,
+		transports,
+		metadataJSON,
+	)
 }
 
 // StartWebAuthnAssertion begins a WebAuthn assertion (login) ceremony.
@@ -200,19 +229,8 @@ func (s *Service) VerifyWebAuthnAssertion(
 		return nil, err
 	}
 
-	rateErr := s.enforceAttemptLimit(
-		func(id int64, window int) (int, error) {
-			return s.db.CountRecentWebAuthnAttempts(id, window)
-		},
-		user.ID,
-		5,
-		func() error {
-			_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "rate_limited", ipAddress, userAgent, sessionID)
-			return nil
-		},
-	)
-	if rateErr != nil {
-		return nil, rateErr
+	if err := s.checkWebAuthnRateLimit(user.ID, ipAddress, userAgent, sessionID); err != nil {
+		return nil, err
 	}
 
 	methods, err := s.db.ListMFAMethods(user.ID)
@@ -220,17 +238,80 @@ func (s *Service) VerifyWebAuthnAssertion(
 		return nil, err
 	}
 
-	if result, handled, err := s.maybeHandleE2EWebAuthn(methods, func(method *db.MFAMethod) error {
-		_ = s.db.LogWebAuthnAttempt(user.ID, &method.ID, true, "e2e_test", ipAddress, userAgent, sessionID)
-		return nil
-	}); handled {
-		if err != nil {
-			_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "no_method_enrolled", ipAddress, userAgent, sessionID)
-			return nil, err
-		}
-		return result, nil
+	if result, handled, err := s.handleE2EAssertion(
+		user.ID,
+		methods,
+		ipAddress,
+		userAgent,
+		sessionID,
+	); handled {
+		return result, err
 	}
 
+	credential, err := s.validateAssertion(
+		user,
+		methods,
+		sessionJSON,
+		credentialJSON,
+		ipAddress,
+		userAgent,
+		sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.findAndConfirmCredential(user.ID, methods, credential, ipAddress, userAgent, sessionID)
+}
+
+func (s *Service) checkWebAuthnRateLimit(
+	userID int64,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) error {
+	return s.enforceAttemptLimit(
+		func(id int64, window int) (int, error) {
+			return s.db.CountRecentWebAuthnAttempts(id, window)
+		},
+		userID,
+		5,
+		func() error {
+			_ = s.db.LogWebAuthnAttempt(userID, nil, false, "rate_limited", ipAddress, userAgent, sessionID)
+			return nil
+		},
+	)
+}
+
+func (s *Service) handleE2EAssertion(
+	userID int64,
+	methods []*db.MFAMethod,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (*VerificationResult, bool, error) {
+	result, handled, err := s.maybeHandleE2EWebAuthn(methods, func(method *db.MFAMethod) error {
+		_ = s.db.LogWebAuthnAttempt(userID, &method.ID, true, "e2e_test", ipAddress, userAgent, sessionID)
+		return nil
+	})
+	if !handled {
+		return nil, false, nil
+	}
+	if err != nil {
+		_ = s.db.LogWebAuthnAttempt(userID, nil, false, "no_method_enrolled", ipAddress, userAgent, sessionID)
+	}
+	return result, true, err
+}
+
+func (s *Service) validateAssertion(
+	user *db.User,
+	methods []*db.MFAMethod,
+	sessionJSON []byte,
+	credentialJSON []byte,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) ([]byte, error) {
 	var session webauthn.SessionData
 	if err := json.Unmarshal(sessionJSON, &session); err != nil {
 		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "invalid_session", ipAddress, userAgent, sessionID)
@@ -239,7 +320,9 @@ func (s *Service) VerifyWebAuthnAssertion(
 
 	waUser := &webAuthnUser{user: user, methods: methods}
 
-	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(strings.NewReader(string(credentialJSON)))
+	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(
+		strings.NewReader(string(credentialJSON)),
+	)
 	if err != nil {
 		_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "invalid_credential", ipAddress, userAgent, sessionID)
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
@@ -254,18 +337,29 @@ func (s *Service) VerifyWebAuthnAssertion(
 		return nil, fmt.Errorf("failed to validate assertion: %w", err)
 	}
 
+	return credential.ID, nil
+}
+
+func (s *Service) findAndConfirmCredential(
+	userID int64,
+	methods []*db.MFAMethod,
+	credentialID []byte,
+	ipAddress string,
+	userAgent string,
+	sessionID *int64,
+) (*VerificationResult, error) {
 	for _, method := range methods {
-		if method.Type == "webauthn" && string(method.CredentialID) == string(credential.ID) {
+		if method.Type == "webauthn" && string(method.CredentialID) == string(credentialID) {
 			if err := s.touchMFAMethod(method); err != nil {
 				return nil, err
 			}
-			_ = s.db.LogWebAuthnAttempt(user.ID, &method.ID, true, "", ipAddress, userAgent, sessionID)
+			_ = s.db.LogWebAuthnAttempt(userID, &method.ID, true, "", ipAddress, userAgent, sessionID)
 			return &VerificationResult{MethodID: method.ID}, nil
 		}
 	}
 
-	_ = s.db.LogWebAuthnAttempt(user.ID, nil, false, "credential_not_found", ipAddress, userAgent, sessionID)
-	if err := s.checkAndLockAccount(user.ID); err != nil {
+	_ = s.db.LogWebAuthnAttempt(userID, nil, false, "credential_not_found", ipAddress, userAgent, sessionID)
+	if err := s.checkAndLockAccount(userID); err != nil {
 		return nil, err
 	}
 	return nil, fmt.Errorf("credential not found")
@@ -287,12 +381,22 @@ func (s *Service) VerifyWebAuthn(user *db.User, credentialJSON []byte) (*Verific
 	}
 
 	if result, handled, err := s.maybeHandleE2EWebAuthn(methods, nil); handled {
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
+		return result, err
 	}
 
+	credentialID, err := s.performLegacyWebAuthnValidation(user, methods, credentialJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.matchCredentialToMethod(methods, credentialID)
+}
+
+func (s *Service) performLegacyWebAuthnValidation(
+	user *db.User,
+	methods []*db.MFAMethod,
+	credentialJSON []byte,
+) ([]byte, error) {
 	waUser := &webAuthnUser{user: user, methods: methods}
 	options, session, err := s.webAuthn.BeginLogin(waUser)
 	if err != nil {
@@ -301,7 +405,9 @@ func (s *Service) VerifyWebAuthn(user *db.User, credentialJSON []byte) (*Verific
 
 	_ = options
 
-	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(strings.NewReader(string(credentialJSON)))
+	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(
+		strings.NewReader(string(credentialJSON)),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse assertion: %w", err)
 	}
@@ -311,15 +417,21 @@ func (s *Service) VerifyWebAuthn(user *db.User, credentialJSON []byte) (*Verific
 		return nil, fmt.Errorf("failed to validate assertion: %w", err)
 	}
 
+	return credential.ID, nil
+}
+
+func (s *Service) matchCredentialToMethod(
+	methods []*db.MFAMethod,
+	credentialID []byte,
+) (*VerificationResult, error) {
 	for _, method := range methods {
-		if method.Type == "webauthn" && string(method.CredentialID) == string(credential.ID) {
+		if method.Type == "webauthn" && string(method.CredentialID) == string(credentialID) {
 			if err := s.touchMFAMethod(method); err != nil {
 				return nil, err
 			}
 			return &VerificationResult{MethodID: method.ID}, nil
 		}
 	}
-
 	return nil, fmt.Errorf("credential not found")
 }
 
@@ -355,33 +467,44 @@ func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 			continue
 		}
 
-		// Extract flags from metadata if present
-		var flags webauthn.CredentialFlags
-		if len(method.Metadata) > 0 {
-			var metadata map[string]interface{}
-			if err := json.Unmarshal(method.Metadata, &metadata); err == nil {
-				if flagsData, ok := metadata["flags"]; ok {
-					if flagsMap, ok := flagsData.(map[string]interface{}); ok {
-						flags = webauthn.CredentialFlags{
-							UserPresent:    boolValue(flagsMap["userPresent"]),
-							UserVerified:   boolValue(flagsMap["userVerified"]),
-							BackupEligible: boolValue(flagsMap["backupEligible"]),
-							BackupState:    boolValue(flagsMap["backupState"]),
-						}
-					}
-				}
-			}
-		}
-
 		creds = append(creds, webauthn.Credential{
 			ID:              method.CredentialID,
 			PublicKey:       method.PublicKey,
 			AttestationType: "",
 			Transport:       convertTransports(method.Transports),
-			Flags:           flags,
+			Flags:           extractCredentialFlags(method.Metadata),
 		})
 	}
 	return creds
+}
+
+func extractCredentialFlags(metadata []byte) webauthn.CredentialFlags {
+	var flags webauthn.CredentialFlags
+	if len(metadata) == 0 {
+		return flags
+	}
+
+	var metadataMap map[string]interface{}
+	if err := json.Unmarshal(metadata, &metadataMap); err != nil {
+		return flags
+	}
+
+	flagsData, ok := metadataMap["flags"]
+	if !ok {
+		return flags
+	}
+
+	flagsMap, ok := flagsData.(map[string]interface{})
+	if !ok {
+		return flags
+	}
+
+	return webauthn.CredentialFlags{
+		UserPresent:    boolValue(flagsMap["userPresent"]),
+		UserVerified:   boolValue(flagsMap["userVerified"]),
+		BackupEligible: boolValue(flagsMap["backupEligible"]),
+		BackupState:    boolValue(flagsMap["backupState"]),
+	}
 }
 
 func boolValue(v interface{}) bool {

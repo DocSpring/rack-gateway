@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// Config holds all application configuration settings loaded from environment variables.
 type Config struct {
 	Port                  string
 	Domain                string
@@ -43,6 +44,7 @@ type Config struct {
 	DBConnMaxIdleTime     time.Duration
 }
 
+// RackConfig holds configuration for a single Convox rack connection.
 type RackConfig struct {
 	Name     string
 	Alias    string
@@ -72,7 +74,25 @@ func normalizeSampleRate(raw string, fallback string) string {
 	return fallback
 }
 
+// Load reads all configuration from environment variables and returns a Config instance.
 func Load() (*Config, error) {
+	cfg := loadBaseConfig()
+
+	if err := cfg.loadSessionSecret(); err != nil {
+		return nil, err
+	}
+
+	cfg.loadSessionTimeout()
+	cfg.loadUserRoles()
+	cfg.loadTrustedProxies()
+	cfg.loadRacksFromEnv()
+	cfg.loadIntegrationTokens()
+	cfg.loadDatabasePoolConfig()
+
+	return cfg, nil
+}
+
+func loadBaseConfig() *Config {
 	release := strings.TrimSpace(getEnv("SENTRY_RELEASE", ""))
 	if release == "" {
 		release = strings.TrimSpace(os.Getenv("RELEASE"))
@@ -80,7 +100,7 @@ func Load() (*Config, error) {
 
 	jsTracesRate := normalizeSampleRate(getEnv("SENTRY_JS_TRACES_SAMPLE_RATE", ""), "0")
 
-	cfg := &Config{
+	return &Config{
 		Port:                getEnv("PORT", "8080"),
 		Domain:              getEnv("DOMAIN", ""),
 		SentryDSN:           strings.TrimSpace(getEnv("SENTRY_DSN", "")),
@@ -104,114 +124,122 @@ func Load() (*Config, error) {
 		// future, operators can enable this flag to re-activate TOFU pinning.
 		RackTLSPinningEnabled: getEnv("ENABLE_RACK_TLS_PINNING", "false") == "true",
 	}
+}
+
+func (c *Config) loadSessionSecret() error {
 	sessionSecret := getEnv("APP_SECRET_KEY", "")
 	if sessionSecret == "" {
-		if cfg.DevMode {
-			var err error
-			sessionSecret, err = generateDevKey()
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate dev secret key: %w", err)
-			}
-		} else {
-			return nil, fmt.Errorf("APP_SECRET_KEY is required in production")
+		if !c.DevMode {
+			return fmt.Errorf("APP_SECRET_KEY is required in production")
+		}
+		var err error
+		sessionSecret, err = generateDevKey()
+		if err != nil {
+			return fmt.Errorf("failed to generate dev secret key: %w", err)
 		}
 	}
-	cfg.SessionSecret = sessionSecret
+	c.SessionSecret = sessionSecret
+	return nil
+}
 
-	// Session idle timeout defaults to 5 minutes to enforce rapid re-auth on inactivity.
-	cfg.SessionIdleTimeout = 5 * time.Minute
+func (c *Config) loadSessionTimeout() {
+	c.SessionIdleTimeout = 5 * time.Minute
 	if raw := strings.TrimSpace(getEnv("SESSION_IDLE_TIMEOUT", "")); raw != "" {
 		if dur, err := time.ParseDuration(raw); err == nil && dur > 0 {
-			cfg.SessionIdleTimeout = dur
+			c.SessionIdleTimeout = dur
 		}
 	}
+}
 
-	adminUsers := getEnv("ADMIN_USERS", "")
-	if adminUsers != "" {
-		cfg.AdminUsers = strings.Split(adminUsers, ",")
+func (c *Config) loadUserRoles() {
+	if adminUsers := getEnv("ADMIN_USERS", ""); adminUsers != "" {
+		c.AdminUsers = strings.Split(adminUsers, ",")
 	}
-	viewerUsers := getEnv("VIEWER_USERS", "")
-	if viewerUsers != "" {
-		cfg.ViewerUsers = strings.Split(viewerUsers, ",")
+	if viewerUsers := getEnv("VIEWER_USERS", ""); viewerUsers != "" {
+		c.ViewerUsers = strings.Split(viewerUsers, ",")
 	}
-	deployerUsers := getEnv("DEPLOYER_USERS", "")
-	if deployerUsers != "" {
-		cfg.DeployerUsers = strings.Split(deployerUsers, ",")
+	if deployerUsers := getEnv("DEPLOYER_USERS", ""); deployerUsers != "" {
+		c.DeployerUsers = strings.Split(deployerUsers, ",")
 	}
-	operationsUsers := getEnv("OPERATIONS_USERS", "")
-	if operationsUsers != "" {
-		cfg.OperationsUsers = strings.Split(operationsUsers, ",")
+	if operationsUsers := getEnv("OPERATIONS_USERS", ""); operationsUsers != "" {
+		c.OperationsUsers = strings.Split(operationsUsers, ",")
 	}
+}
 
-	if proxies := strings.TrimSpace(getEnv("TRUSTED_PROXY_CIDRS", "")); proxies != "" {
-		for _, entry := range strings.Split(proxies, ",") {
-			entry = strings.TrimSpace(entry)
-			if entry != "" {
-				cfg.TrustedProxies = append(cfg.TrustedProxies, entry)
-			}
+func (c *Config) loadTrustedProxies() {
+	proxies := strings.TrimSpace(getEnv("TRUSTED_PROXY_CIDRS", ""))
+	if proxies == "" {
+		return
+	}
+	for _, entry := range strings.Split(proxies, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry != "" {
+			c.TrustedProxies = append(c.TrustedProxies, entry)
 		}
 	}
+}
 
-	cfg.loadRacksFromEnv()
+func (c *Config) loadIntegrationTokens() {
+	c.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
+	c.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
+}
 
-	// GitHub integration token for PR verification (personal access token)
-	cfg.GitHubToken = strings.TrimSpace(getEnv("GITHUB_TOKEN", ""))
-
-	// CircleCI integration token for pipeline approval
-	cfg.CircleCIToken = strings.TrimSpace(getEnv("CIRCLECI_TOKEN", ""))
-
-	// Database connection pool configuration
-	cfg.DBMaxOpenConns = getEnvInt("DB_MAX_OPEN_CONNS", 25)
-	cfg.DBMaxIdleConns = getEnvInt("DB_MAX_IDLE_CONNS", 5)
-	cfg.DBConnMaxLifetime = getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute)
-	cfg.DBConnMaxIdleTime = getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute)
-
-	return cfg, nil
+func (c *Config) loadDatabasePoolConfig() {
+	c.DBMaxOpenConns = getEnvInt("DB_MAX_OPEN_CONNS", 25)
+	c.DBMaxIdleConns = getEnvInt("DB_MAX_IDLE_CONNS", 5)
+	c.DBConnMaxLifetime = getEnvDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute)
+	c.DBConnMaxIdleTime = getEnvDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute)
 }
 
 func (c *Config) loadRacksFromEnv() {
-	// Load the single rack this gateway is protecting
 	rackHost := os.Getenv("RACK_HOST")
 	rackToken := os.Getenv("RACK_TOKEN")
-	rackUsername := getEnv("RACK_USERNAME", "convox") // Default to "convox" for standard Convox racks
+	rackUsername := getEnv("RACK_USERNAME", "convox")
 
-	// Auto-infer RACK_HOST when running in Kubernetes and RACK is set (Convox convention)
-	if rackHost == "" {
-		if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
-			if rack := getEnv("RACK", ""); rack != "" {
-				// Convox API service DNS format: api.<rack>-system.svc.cluster.local:5443 (TLS on 5443)
-				rackHost = fmt.Sprintf("https://api.%s-system.svc.cluster.local:5443", rack)
-			}
-		}
-	}
+	rackHost = c.resolveRackHost(rackHost)
 
 	if rackHost != "" && rackToken != "" {
-		// Default to http:// if no protocol specified. Convox router endpoints are plain HTTP by default.
-		if !strings.HasPrefix(rackHost, "http://") && !strings.HasPrefix(rackHost, "https://") {
-			rackHost = "http://" + rackHost
-		}
-
-		rackName := strings.TrimSpace(os.Getenv("RACK"))
-		if rackName == "" {
-			rackName = "default"
-		}
-		rackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
-		if rackAlias == "" {
-			rackAlias = rackName
-		}
-
-		// The gateway protects a single rack
-		c.Racks["default"] = RackConfig{
-			Name:     rackName,
-			Alias:    rackAlias,
-			URL:      rackHost,
-			Username: rackUsername,
-			APIKey:   rackToken,
-			Enabled:  true,
-		}
+		c.configureRack(rackHost, rackToken, rackUsername)
 	} else if c.DevMode {
-		// In dev mode, set up a default local rack if none configured
 		c.setupDevRacks()
+	}
+}
+
+func (c *Config) resolveRackHost(rackHost string) string {
+	if rackHost != "" {
+		return rackHost
+	}
+	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
+		return ""
+	}
+	rack := getEnv("RACK", "")
+	if rack == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://api.%s-system.svc.cluster.local:5443", rack)
+}
+
+func (c *Config) configureRack(rackHost, rackToken, rackUsername string) {
+	if !strings.HasPrefix(rackHost, "http://") && !strings.HasPrefix(rackHost, "https://") {
+		rackHost = "http://" + rackHost
+	}
+
+	rackName := strings.TrimSpace(os.Getenv("RACK"))
+	if rackName == "" {
+		rackName = "default"
+	}
+	rackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
+	if rackAlias == "" {
+		rackAlias = rackName
+	}
+
+	c.Racks["default"] = RackConfig{
+		Name:     rackName,
+		Alias:    rackAlias,
+		URL:      rackHost,
+		Username: rackUsername,
+		APIKey:   rackToken,
+		Enabled:  true,
 	}
 }
 

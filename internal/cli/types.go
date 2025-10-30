@@ -7,26 +7,30 @@ import (
 
 // Config represents the CLI configuration file
 type Config struct {
-	Current           string                   `json:"current,omitempty"`
-	Gateways          map[string]GatewayConfig `json:"gateways"`
-	MachineID         string                   `json:"machine_id,omitempty"`
-	MFAPreference     string                   `json:"mfa_preference,omitempty"`     // Global default: "default", "webauthn", or "totp"
-	NotificationSound string                   `json:"notification_sound,omitempty"` // Global default: "default", "disabled", or "/path/to/file.mp3"
+	Current   string                   `json:"current,omitempty"`
+	Gateways  map[string]GatewayConfig `json:"gateways"`
+	MachineID string                   `json:"machine_id,omitempty"`
+	// Global default: "default", "webauthn", or "totp"
+	MFAPreference string `json:"mfa_preference,omitempty"`
+	// Global default: "default", "disabled", or "/path/to/file.mp3"
+	NotificationSound string `json:"notification_sound,omitempty"`
 }
 
 // GatewayConfig represents configuration for a single gateway/rack
 type GatewayConfig struct {
-	URL               string    `json:"url"`
-	Token             string    `json:"token,omitempty"`
-	Email             string    `json:"email,omitempty"`
-	ExpiresAt         time.Time `json:"expires_at,omitempty"`
-	SessionID         int64     `json:"session_id,omitempty"`
-	Channel           string    `json:"channel,omitempty"`
-	DeviceID          string    `json:"device_id,omitempty"`
-	DeviceName        string    `json:"device_name,omitempty"`
-	MFAVerified       bool      `json:"mfa_verified,omitempty"`
-	MFAPreference     string    `json:"mfa_preference,omitempty"`     // Per-rack override: "default", "webauthn", or "totp"
-	NotificationSound string    `json:"notification_sound,omitempty"` // Per-rack override: "default", "disabled", or "/path/to/file.mp3"
+	URL         string    `json:"url"`
+	Token       string    `json:"token,omitempty"`
+	Email       string    `json:"email,omitempty"`
+	ExpiresAt   time.Time `json:"expires_at,omitempty"`
+	SessionID   int64     `json:"session_id,omitempty"`
+	Channel     string    `json:"channel,omitempty"`
+	DeviceID    string    `json:"device_id,omitempty"`
+	DeviceName  string    `json:"device_name,omitempty"`
+	MFAVerified bool      `json:"mfa_verified,omitempty"`
+	// Per-rack override: "default", "webauthn", or "totp"
+	MFAPreference string `json:"mfa_preference,omitempty"`
+	// Per-rack override: "default", "disabled", or "/path/to/file.mp3"
+	NotificationSound string `json:"notification_sound,omitempty"`
 }
 
 // RackStatus contains information about the current rack

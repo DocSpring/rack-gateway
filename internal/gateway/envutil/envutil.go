@@ -17,12 +17,17 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 )
 
+// MaskedSecret is the placeholder string displayed in place of actual secret values.
 const MaskedSecret = "********************"
 
 var (
-	ErrSecretPermission         = errors.New("secrets:set permission required")
+	// ErrSecretPermission is returned when a secret update is attempted without proper permissions.
+	ErrSecretPermission = errors.New("secrets:set permission required")
+	// ErrProtectedEnvModification is returned when attempting to modify a protected environment variable.
 	ErrProtectedEnvModification = errors.New("protected env var modification denied")
-	ErrMaskedSecretWithoutBase  = errors.New("masked secret provided without existing value")
+	// ErrMaskedSecretWithoutBase is returned when a masked secret value is provided without an existing
+	// value to preserve.
+	ErrMaskedSecretWithoutBase = errors.New("masked secret provided without existing value")
 )
 
 // EnvDiff describes a change applied to an environment variable.
@@ -48,22 +53,53 @@ func MergeEnv(
 	remove []string,
 	opts MergeOptions,
 ) (map[string]string, []EnvDiff, error) {
-	merged := make(map[string]string, len(base))
+	merged := copyMap(base)
 	removedOld := make(map[string]string, len(remove))
-	for k, v := range base {
-		merged[k] = v
-	}
-
 	diffs := make([]EnvDiff, 0)
 
 	// Process removals first so that set operations can re-add if needed.
+	newDiffs, err := processRemovals(remove, merged, removedOld, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	diffs = append(diffs, newDiffs...)
+
+	if len(set) == 0 {
+		return merged, diffs, nil
+	}
+
+	// Process set operations
+	newDiffs, err = processSetOperations(set, base, merged, removedOld, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	diffs = append(diffs, newDiffs...)
+
+	return merged, diffs, nil
+}
+
+func copyMap(src map[string]string) map[string]string {
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func processRemovals(
+	remove []string,
+	merged map[string]string,
+	removedOld map[string]string,
+	opts MergeOptions,
+) ([]EnvDiff, error) {
+	diffs := make([]EnvDiff, 0)
 	for _, rawKey := range remove {
 		key := strings.TrimSpace(rawKey)
 		if key == "" {
 			continue
 		}
 		if opts.IsProtectedKey != nil && opts.IsProtectedKey(key) {
-			return nil, nil, ErrProtectedEnvModification
+			return nil, ErrProtectedEnvModification
 		}
 		oldVal, ok := merged[key]
 		if !ok {
@@ -71,22 +107,24 @@ func MergeEnv(
 		}
 		secret := opts.IsSecretKey != nil && opts.IsSecretKey(key)
 		if secret && !opts.AllowSecretUpdates {
-			return nil, nil, ErrSecretPermission
+			return nil, ErrSecretPermission
 		}
 		diffs = append(diffs, EnvDiff{Key: key, OldVal: oldVal, NewVal: "", Secret: secret})
 		removedOld[key] = oldVal
 		delete(merged, key)
 	}
+	return diffs, nil
+}
 
-	if len(set) == 0 {
-		return merged, diffs, nil
-	}
-
-	keys := make([]string, 0, len(set))
-	for k := range set {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+func processSetOperations(
+	set map[string]string,
+	base map[string]string,
+	merged map[string]string,
+	removedOld map[string]string,
+	opts MergeOptions,
+) ([]EnvDiff, error) {
+	keys := getSortedKeys(set)
+	diffs := make([]EnvDiff, 0)
 
 	for _, rawKey := range keys {
 		key := strings.TrimSpace(rawKey)
@@ -94,60 +132,101 @@ func MergeEnv(
 			continue
 		}
 
-		value := set[rawKey]
-
-		if opts.IsProtectedKey != nil && opts.IsProtectedKey(key) {
-			// Modifying protected keys is prohibited regardless of value changes.
-			if _, exists := merged[key]; exists {
-				if value != merged[key] {
-					return nil, nil, ErrProtectedEnvModification
-				}
-				continue
-			}
-			// Existing value might have been removed earlier; treat any set as modification.
-			if _, existed := removedOld[key]; existed {
-				if value != removedOld[key] {
-					return nil, nil, ErrProtectedEnvModification
-				}
-				// Setting back to original value after removal should be no-op.
-				merged[key] = value
-				continue
-			}
-			return nil, nil, ErrProtectedEnvModification
+		diff, err := processSetOperation(key, set[rawKey], base, merged, removedOld, opts)
+		if err != nil {
+			return nil, err
 		}
-
-		secret := opts.IsSecretKey != nil && opts.IsSecretKey(key)
-
-		oldVal, hadOld := base[key]
-		if !hadOld {
-			if prev, ok := removedOld[key]; ok {
-				oldVal = prev
-				hadOld = true
-			}
-		}
-
-		if secret && value == MaskedSecret {
-			if !hadOld {
-				return nil, nil, ErrMaskedSecretWithoutBase
-			}
-			// Treat masked value as a no-op (preserve underlying secret).
-			merged[key] = oldVal
-			continue
-		}
-
-		if secret && !opts.AllowSecretUpdates {
-			if !hadOld || value != oldVal {
-				return nil, nil, ErrSecretPermission
-			}
-		}
-
-		merged[key] = value
-		if !hadOld || value != oldVal {
-			diffs = append(diffs, EnvDiff{Key: key, OldVal: oldVal, NewVal: value, Secret: secret})
+		if diff != nil {
+			diffs = append(diffs, *diff)
 		}
 	}
 
-	return merged, diffs, nil
+	return diffs, nil
+}
+
+func processSetOperation(
+	key string,
+	value string,
+	base map[string]string,
+	merged map[string]string,
+	removedOld map[string]string,
+	opts MergeOptions,
+) (*EnvDiff, error) {
+	if err := validateProtectedKey(key, value, merged, removedOld, opts); err != nil {
+		return nil, err
+	}
+
+	secret := opts.IsSecretKey != nil && opts.IsSecretKey(key)
+	oldVal, hadOld := getOldValue(key, base, removedOld)
+
+	if secret && value == MaskedSecret {
+		if !hadOld {
+			return nil, ErrMaskedSecretWithoutBase
+		}
+		merged[key] = oldVal
+		return nil, nil
+	}
+
+	if secret && !opts.AllowSecretUpdates {
+		if !hadOld || value != oldVal {
+			return nil, ErrSecretPermission
+		}
+	}
+
+	merged[key] = value
+	if !hadOld || value != oldVal {
+		return &EnvDiff{Key: key, OldVal: oldVal, NewVal: value, Secret: secret}, nil
+	}
+
+	return nil, nil
+}
+
+func getSortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func validateProtectedKey(
+	key string,
+	value string,
+	merged map[string]string,
+	removedOld map[string]string,
+	opts MergeOptions,
+) error {
+	if opts.IsProtectedKey == nil || !opts.IsProtectedKey(key) {
+		return nil
+	}
+
+	if existingVal, exists := merged[key]; exists {
+		if value != existingVal {
+			return ErrProtectedEnvModification
+		}
+		return nil
+	}
+
+	if oldVal, existed := removedOld[key]; existed {
+		if value != oldVal {
+			return ErrProtectedEnvModification
+		}
+		merged[key] = value
+		return nil
+	}
+
+	return ErrProtectedEnvModification
+}
+
+func getOldValue(key string, base map[string]string, removedOld map[string]string) (string, bool) {
+	if oldVal, hadOld := base[key]; hadOld {
+		return oldVal, true
+	}
+	if prev, ok := removedOld[key]; ok {
+		return prev, true
+	}
+	return "", false
 }
 
 // BuildEnvString converts an env map into the newline-separated KEY=VALUE string expected by the rack API.

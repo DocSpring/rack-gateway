@@ -135,7 +135,7 @@ func TestAPITokenPermission_Check(t *testing.T) {
 	require.NoError(t, err)
 
 	h := &Handler{rbacManager: mgr, database: database}
-	u := &auth.AuthUser{
+	u := &auth.User{
 		Email:       "test@example.com",
 		Permissions: permissions,
 		IsAPIToken:  true,
@@ -157,7 +157,7 @@ func TestAPITokenPermission_Check(t *testing.T) {
 	_, err = database.CreateAPIToken(tokenHash2, "wildcard-token", user.ID, wildcardPerms, nil, nil)
 	require.NoError(t, err)
 
-	u2 := &auth.AuthUser{
+	u2 := &auth.User{
 		Email:       "test@example.com",
 		Permissions: wildcardPerms,
 		IsAPIToken:  true,
@@ -260,7 +260,7 @@ func TestProxyToRackLogsReleaseAuditAndUserResource(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/builds", strings.NewReader(`{"git_sha":"abc"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-Name", "Creator")
-	au := &auth.AuthUser{Email: "creator@example.com", Name: "Creator"}
+	au := &auth.User{Email: "creator@example.com", Name: "Creator"}
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
 
 	rr := httptest.NewRecorder()
@@ -356,7 +356,7 @@ func TestForwardRequestRecordsBuildCreator(t *testing.T) {
 	req.Header.Set("X-User-Name", "Creator")
 
 	rr := httptest.NewRecorder()
-	authUser := &auth.AuthUser{
+	authUser := &auth.User{
 		Email: "creator@example.com",
 		Name:  "Creator",
 		Roles: []string{"deployer"},

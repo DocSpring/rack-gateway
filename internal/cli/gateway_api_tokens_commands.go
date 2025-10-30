@@ -16,7 +16,7 @@ func newAPITokenListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List API tokens",
-		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			return runAPITokenList(cmd, outputJSON)
 		}),
 	}
@@ -45,9 +45,11 @@ func runAPITokenList(cmd *cobra.Command, outputJSON bool) error {
 }
 
 func renderTokenTable(cmd *cobra.Command, tokens []apiToken) error {
-	if err := writef(cmd.OutOrStdout(), "%-36s %-25s %-25s %-19s %-19s\n", "UUID", "NAME", "OWNER", "CREATED", "LAST USED"); err != nil {
+	headerFmt := "%-36s %-25s %-25s %-19s %-19s\n"
+	if err := writef(cmd.OutOrStdout(), headerFmt, "UUID", "NAME", "OWNER", "CREATED", "LAST USED"); err != nil {
 		return err
 	}
+	rowFmt := "%-36s %-25s %-25s %-19s %-19s\n"
 	for _, token := range tokens {
 		owner := token.CreatedByEmail
 		if owner == "" {
@@ -57,7 +59,8 @@ func renderTokenTable(cmd *cobra.Command, tokens []apiToken) error {
 		if token.LastUsedAt != nil {
 			lastUsed = token.LastUsedAt.Format(time.RFC3339)
 		}
-		if err := writef(cmd.OutOrStdout(), "%-36s %-25s %-25s %-19s %-19s\n", token.PublicID, token.Name, owner, token.CreatedAt.Format(time.RFC3339), lastUsed); err != nil {
+		created := token.CreatedAt.Format(time.RFC3339)
+		if err := writef(cmd.OutOrStdout(), rowFmt, token.PublicID, token.Name, owner, created, lastUsed); err != nil {
 			return err
 		}
 	}
@@ -147,7 +150,7 @@ func newAPITokenCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new API token",
-		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			return runAPITokenCreate(cmd, opts)
 		}),
 	}
@@ -275,10 +278,11 @@ func executeAPITokenCreate(cmd *cobra.Command, cfg createAPITokenConfig) error {
 	case "token":
 		return writeLine(cmd.OutOrStdout(), resp.Token)
 	case "", "text", "table":
-		if err := writef(cmd.OutOrStdout(), "Created token %q (id %s)\n", resp.APIToken.Name, resp.APIToken.PublicID); err != nil {
+		out := cmd.OutOrStdout()
+		if err := writef(out, "Created token %q (id %s)\n", resp.APIToken.Name, resp.APIToken.PublicID); err != nil {
 			return err
 		}
-		return writef(cmd.OutOrStdout(), "Token: %s\n", resp.Token)
+		return writef(out, "Token: %s\n", resp.Token)
 	default:
 		return fmt.Errorf("unknown --output value %q", cfg.output)
 	}

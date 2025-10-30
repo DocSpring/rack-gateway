@@ -81,22 +81,12 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 	}
 
 	if err := h.mfaService.ConfirmTOTP(ctx.userRecord, req.MethodID, strings.TrimSpace(req.Code)); err != nil {
-		if h.securityNotifier != nil {
-			h.securityNotifier.FailedMFAAttempt(ctx.userRecord.Email, ctx.userRecord.Name, ctx.ipAddress, ctx.userAgent)
-		}
+		h.notifyFailedMFAAttempt(ctx)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if h.database != nil {
-		label := strings.TrimSpace(req.Label)
-		if label == "" {
-			label = "Authenticator App"
-		}
-		if err := h.database.UpdateMFAMethodLabel(req.MethodID, label); err != nil {
-			log.Printf("failed updating MFA method label: %v", err)
-		}
-	}
+	h.updateMFAMethodLabel(req.MethodID, req.Label, "Authenticator App")
 
 	trustedDeviceID, trustedCookieSet, ok := h.handleTrustedDevice(c, ctx, req.TrustDevice)
 	if !ok {
@@ -108,33 +98,7 @@ func (h *AuthHandler) ConfirmTOTPEnrollment(c *gin.Context) {
 		return
 	}
 
-	// Audit log for MFA enrollment completion
-	if h.database != nil {
-		methodLabel := strings.TrimSpace(req.Label)
-		if methodLabel == "" {
-			methodLabel = "Authenticator App"
-		}
-		details, _ := json.Marshal(map[string]interface{}{
-			"label": methodLabel,
-		})
-		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:    ctx.userRecord.Email,
-			UserName:     ctx.userRecord.Name,
-			ActionType:   "auth",
-			Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
-			ResourceType: "mfa_method",
-			Resource:     "totp",
-			Details:      string(details),
-			Status:       "success",
-			IPAddress:    ctx.ipAddress,
-			UserAgent:    ctx.userAgent,
-		}); err != nil {
-			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
-				err,
-			)
-		}
-	}
+	h.logMFAEnrollmentCompletion(ctx, req.Label, "totp")
 
 	response := VerifyMFAResponse{
 		MFAVerifiedAt:         now,
@@ -275,37 +239,8 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	// Retrieve WebAuthn session from HTTP session metadata
-	sessionID, ok := auth.GetSessionID(c.Request.Context())
+	sessionID, sessionDataStr, ok := h.retrieveWebAuthnEnrollmentSession(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
-		return
-	}
-
-	session, err := h.database.GetSessionByID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load session"})
-		return
-	}
-
-	var sessionMeta map[string]interface{}
-	if len(session.Metadata) > 0 {
-		if err := json.Unmarshal(session.Metadata, &sessionMeta); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid session metadata"})
-			return
-		}
-	}
-
-	sessionDataStr, ok := sessionMeta["webauthn_enrollment_session"].(string)
-	if !ok || sessionDataStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session not found or expired"})
-		return
-	}
-
-	// Check expiration
-	expiresFloat, ok := sessionMeta["webauthn_enrollment_expires"].(float64)
-	if ok && time.Now().Unix() > int64(expiresFloat) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "webauthn session expired"})
 		return
 	}
 
@@ -333,41 +268,14 @@ func (h *AuthHandler) ConfirmWebAuthnEnrollment(c *gin.Context) {
 		return
 	}
 
-	// Clear WebAuthn session from metadata
-	delete(sessionMeta, "webauthn_enrollment_session")
-	delete(sessionMeta, "webauthn_enrollment_expires")
-	if err := h.database.UpdateSessionMetadata(sessionID, sessionMeta); err != nil {
-		log.Printf("failed to clear webauthn session: %v", err)
-	}
+	h.clearWebAuthnEnrollmentSession(sessionID)
 
 	_, ok = h.updateSessionAfterMFA(c, ctx, ctx.authUser.Session.TrustedDeviceID, false)
 	if !ok {
 		return
 	}
 
-	// Audit log for WebAuthn enrollment completion
-	if h.database != nil {
-		details, _ := json.Marshal(map[string]interface{}{
-			"label": label,
-		})
-		if err := h.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:    ctx.userRecord.Email,
-			UserName:     ctx.userRecord.Name,
-			ActionType:   "auth",
-			Action:       audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),
-			ResourceType: "mfa_method",
-			Resource:     "webauthn",
-			Details:      string(details),
-			Status:       "success",
-			IPAddress:    ctx.ipAddress,
-			UserAgent:    ctx.userAgent,
-		}); err != nil {
-			log.Printf(
-				`{"level":"error","event":"audit_log_failed","action":audit.BuildAction(audit.ActionScopeMFAMethod, audit.ActionVerbEnroll),"error":%q}`,
-				err,
-			)
-		}
-	}
+	h.logMFAEnrollmentCompletion(ctx, label, "webauthn")
 
 	c.JSON(http.StatusOK, gin.H{"status": "enrolled", "method_id": methodID})
 }

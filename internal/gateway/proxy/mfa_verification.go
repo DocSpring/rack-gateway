@@ -17,7 +17,7 @@ import (
 func (h *Handler) verifyMFAIfRequired(
 	r *http.Request,
 	w http.ResponseWriter,
-	authUser *auth.AuthUser,
+	authUser *auth.User,
 	resource rbac.Resource,
 	action rbac.Action,
 	rackConfig *config.RackConfig,

@@ -56,54 +56,8 @@ const defaultDistDir = "web/dist"
 // NewStaticHandler creates a new static handler
 func NewStaticHandler(cfg *config.Config, sessions *auth.SessionManager) *StaticHandler {
 	sh := &StaticHandler{distRoot: defaultDistDir, sessions: sessions, cfg: cfg}
-
-	if cfg != nil && cfg.DevMode {
-		if raw := os.Getenv("WEB_DEV_SERVER_URL"); raw != "" {
-			if target, err := url.Parse(raw); err == nil {
-				proxy := httputil.NewSingleHostReverseProxy(target)
-				// Set a header to indicate this is a proxied request from the gateway
-				// This prevents Vite from redirecting proxied requests back to the gateway
-				proxy.Director = func(req *http.Request) {
-					req.URL.Scheme = target.Scheme
-					req.URL.Host = target.Host
-					req.URL.Path = target.Path + req.URL.Path
-					req.Header.Set("X-Gateway-Proxy", "true")
-				}
-				proxy.ModifyResponse = func(resp *http.Response) error {
-					if resp == nil || resp.Request == nil {
-						return nil
-					}
-					ct := resp.Header.Get("Content-Type")
-					if !strings.Contains(ct, "text/html") {
-						return nil
-					}
-					body, err := io.ReadAll(resp.Body)
-					if err != nil {
-						return err
-					}
-					if err := resp.Body.Close(); err != nil {
-						return err
-					}
-
-					updated := sh.injectRuntimeTokens(body, resp.Request)
-					resp.Body = io.NopCloser(bytes.NewReader(updated))
-					resp.Header.Set("Cache-Control", "no-store")
-					resp.Header.Del("Content-Length")
-					resp.Header.Set("Content-Length", strconv.Itoa(len(updated)))
-					return nil
-				}
-				proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-					if err != nil {
-						http.Error(w, fmt.Sprintf("dev proxy error: %v", err), http.StatusBadGateway)
-					}
-				}
-				sh.devProxy = proxy
-			}
-		}
-	}
-
+	sh.setupDevProxyIfNeeded(cfg)
 	sh.configureAssets()
-
 	return sh
 }
 
@@ -188,68 +142,9 @@ func (h *StaticHandler) injectRuntimeTokens(content []byte, r *http.Request) []b
 		return content
 	}
 
-	result := content
-
-	// Always inject the script block - nonce support is optional
-	nonce := middleware.StyleNonceFromContext(r.Context())
-	isE2E := os.Getenv("E2E_TEST_MODE") == "true"
-	e2eScript := ""
-	if isE2E {
-		e2eScript = "window.__e2e_test_mode__=true;"
-	}
-
-	var scriptBlock string
-	if nonce != "" {
-		scriptBlock = fmt.Sprintf(
-			`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`,
-			nonce,
-			nonce,
-			nonce,
-			e2eScript,
-		)
-	} else {
-		scriptBlock = fmt.Sprintf(`<script>window.__nonce__="";window.__webpack_nonce__="";%s</script>`, e2eScript)
-	}
-	result = bytes.ReplaceAll(result, []byte("{{RGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
-
-	if h.sessions != nil {
-		if sessionCookie, err := r.Cookie("session_token"); err == nil {
-			sessionToken := strings.TrimSpace(sessionCookie.Value)
-			if sessionToken != "" {
-				if _, err := h.sessions.ValidateSession(sessionToken, middleware.ClientIPFromRequest(r), r.UserAgent()); err == nil {
-					if csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken); err == nil && csrfToken != "" {
-						result = replacePlaceholder(result, "RGW_CSRF_TOKEN", csrfToken)
-					}
-				}
-			}
-		}
-	}
-
-	var (
-		dsn     string
-		env     string
-		release string
-		sample  string
-	)
-
-	if h.cfg != nil {
-		dsn = strings.TrimSpace(h.cfg.SentryJSDsn)
-		env = strings.TrimSpace(h.cfg.SentryEnvironment)
-		if env == "" {
-			if h.cfg.DevMode {
-				env = "development"
-			} else {
-				env = "production"
-			}
-		}
-		release = strings.TrimSpace(h.cfg.SentryRelease)
-		sample = strings.TrimSpace(h.cfg.SentryJSTracesRate)
-	}
-
-	result = replacePlaceholder(result, "RGW_SENTRY_DSN", dsn)
-	result = replacePlaceholder(result, "RGW_SENTRY_ENVIRONMENT", env)
-	result = replacePlaceholder(result, "RGW_SENTRY_RELEASE", release)
-	result = replacePlaceholder(result, "RGW_SENTRY_TRACES_SAMPLE_RATE", sample)
+	result := h.injectScriptBlock(content, r)
+	result = h.injectCSRFToken(result, r)
+	result = h.injectSentryConfig(result)
 
 	return result
 }
@@ -278,4 +173,188 @@ func shouldRedirectToDefault(r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func (h *StaticHandler) setupDevProxyIfNeeded(cfg *config.Config) {
+	if cfg == nil || !cfg.DevMode {
+		return
+	}
+
+	raw := os.Getenv("WEB_DEV_SERVER_URL")
+	if raw == "" {
+		return
+	}
+
+	target, err := url.Parse(raw)
+	if err != nil {
+		return
+	}
+
+	h.devProxy = h.createDevProxy(target)
+}
+
+func (h *StaticHandler) createDevProxy(target *url.URL) http.Handler {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.Director = createProxyDirector(target)
+	proxy.ModifyResponse = h.createProxyResponseModifier()
+	proxy.ErrorHandler = createProxyErrorHandler()
+	return proxy
+}
+
+func createProxyDirector(target *url.URL) func(*http.Request) {
+	return func(req *http.Request) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.URL.Path = target.Path + req.URL.Path
+		req.Header.Set("X-Gateway-Proxy", "true")
+	}
+}
+
+func (h *StaticHandler) createProxyResponseModifier() func(*http.Response) error {
+	return func(resp *http.Response) error {
+		if resp == nil || resp.Request == nil {
+			return nil
+		}
+
+		if !isHTMLResponse(resp) {
+			return nil
+		}
+
+		return h.modifyHTMLResponse(resp)
+	}
+}
+
+func isHTMLResponse(resp *http.Response) bool {
+	ct := resp.Header.Get("Content-Type")
+	return strings.Contains(ct, "text/html")
+}
+
+func (h *StaticHandler) modifyHTMLResponse(resp *http.Response) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if err := resp.Body.Close(); err != nil {
+		return err
+	}
+
+	updated := h.injectRuntimeTokens(body, resp.Request)
+	resp.Body = io.NopCloser(bytes.NewReader(updated))
+	resp.Header.Set("Cache-Control", "no-store")
+	resp.Header.Del("Content-Length")
+	resp.Header.Set("Content-Length", strconv.Itoa(len(updated)))
+	return nil
+}
+
+func createProxyErrorHandler() func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, _ *http.Request, err error) {
+		if err != nil {
+			http.Error(w, fmt.Sprintf("dev proxy error: %v", err), http.StatusBadGateway)
+		}
+	}
+}
+
+func (h *StaticHandler) injectScriptBlock(content []byte, r *http.Request) []byte {
+	nonce := middleware.StyleNonceFromContext(r.Context())
+	e2eScript := getE2EScript()
+	scriptBlock := buildScriptBlock(nonce, e2eScript)
+	return bytes.ReplaceAll(content, []byte("{{RGW_SCRIPT_PLACEHOLDER}}"), []byte(scriptBlock))
+}
+
+func getE2EScript() string {
+	if os.Getenv("E2E_TEST_MODE") == "true" {
+		return "window.__e2e_test_mode__=true;"
+	}
+	return ""
+}
+
+func buildScriptBlock(nonce string, e2eScript string) string {
+	if nonce != "" {
+		return fmt.Sprintf(
+			`<script nonce="%s">window.__nonce__="%s";window.__webpack_nonce__="%s";%s</script>`,
+			nonce,
+			nonce,
+			nonce,
+			e2eScript,
+		)
+	}
+	return fmt.Sprintf(
+		`<script>window.__nonce__="";window.__webpack_nonce__="";%s</script>`,
+		e2eScript,
+	)
+}
+
+func (h *StaticHandler) injectCSRFToken(content []byte, r *http.Request) []byte {
+	if h.sessions == nil {
+		return content
+	}
+
+	csrfToken := h.extractCSRFToken(r)
+	if csrfToken == "" {
+		return content
+	}
+
+	return replacePlaceholder(content, "RGW_CSRF_TOKEN", csrfToken)
+}
+
+func (h *StaticHandler) extractCSRFToken(r *http.Request) string {
+	sessionCookie, err := r.Cookie("session_token")
+	if err != nil {
+		return ""
+	}
+
+	sessionToken := strings.TrimSpace(sessionCookie.Value)
+	if sessionToken == "" {
+		return ""
+	}
+
+	clientIP := middleware.ClientIPFromRequest(r)
+	_, err = h.sessions.ValidateSession(sessionToken, clientIP, r.UserAgent())
+	if err != nil {
+		return ""
+	}
+
+	csrfToken, err := h.sessions.DeriveCSRFToken(sessionToken)
+	if err != nil || csrfToken == "" {
+		return ""
+	}
+
+	return csrfToken
+}
+
+func (h *StaticHandler) injectSentryConfig(content []byte) []byte {
+	dsn, env, release, sample := h.getSentryConfig()
+
+	result := replacePlaceholder(content, "RGW_SENTRY_DSN", dsn)
+	result = replacePlaceholder(result, "RGW_SENTRY_ENVIRONMENT", env)
+	result = replacePlaceholder(result, "RGW_SENTRY_RELEASE", release)
+	result = replacePlaceholder(result, "RGW_SENTRY_TRACES_SAMPLE_RATE", sample)
+
+	return result
+}
+
+func (h *StaticHandler) getSentryConfig() (string, string, string, string) {
+	if h.cfg == nil {
+		return "", "", "", ""
+	}
+
+	dsn := strings.TrimSpace(h.cfg.SentryJSDsn)
+	env := h.getSentryEnvironment()
+	release := strings.TrimSpace(h.cfg.SentryRelease)
+	sample := strings.TrimSpace(h.cfg.SentryJSTracesRate)
+
+	return dsn, env, release, sample
+}
+
+func (h *StaticHandler) getSentryEnvironment() string {
+	env := strings.TrimSpace(h.cfg.SentryEnvironment)
+	if env != "" {
+		return env
+	}
+
+	if h.cfg.DevMode {
+		return "development"
+	}
+	return "production"
 }

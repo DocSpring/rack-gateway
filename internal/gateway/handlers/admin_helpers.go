@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -22,11 +23,8 @@ func (h *AdminHandler) rackDisplay() string {
 	preferred := []string{"default", "local"}
 	for _, key := range preferred {
 		if rc, ok := h.config.Racks[key]; ok && rc.Enabled {
-			if alias := strings.TrimSpace(rc.Alias); alias != "" {
-				return alias
-			}
-			if name := strings.TrimSpace(rc.Name); name != "" {
-				return name
+			if display := rackDisplayName(rc); display != "" {
+				return display
 			}
 		}
 	}
@@ -34,41 +32,66 @@ func (h *AdminHandler) rackDisplay() string {
 		if !rc.Enabled {
 			continue
 		}
-		if alias := strings.TrimSpace(rc.Alias); alias != "" {
-			return alias
-		}
-		if name := strings.TrimSpace(rc.Name); name != "" {
-			return name
+		if display := rackDisplayName(rc); display != "" {
+			return display
 		}
 	}
 	return "Convox Rack"
 }
 
+func rackDisplayName(rc config.RackConfig) string {
+	if alias := strings.TrimSpace(rc.Alias); alias != "" {
+		return alias
+	}
+	if name := strings.TrimSpace(rc.Name); name != "" {
+		return name
+	}
+	return ""
+}
+
 func (h *AdminHandler) publicBaseURL(c *gin.Context) string {
 	if h != nil && h.config != nil {
-		if raw := strings.TrimSpace(h.config.Domain); raw != "" {
-			if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
-				return raw
-			}
-			if strings.Contains(raw, "localhost") || strings.Contains(raw, ":") {
-				return "http://" + raw
-			}
-			return "https://" + raw
+		if url := normalizeConfigDomain(h.config.Domain); url != "" {
+			return url
 		}
 	}
 	if c != nil && c.Request != nil {
-		scheme := "https"
-		if proto := strings.TrimSpace(c.Request.Header.Get("X-Forwarded-Proto")); proto != "" {
-			scheme = proto
-		} else if c.Request.TLS == nil {
-			scheme = "http"
-		}
-		host := strings.TrimSpace(c.Request.Host)
-		if host != "" {
-			return fmt.Sprintf("%s://%s", scheme, host)
-		}
+		return buildURLFromRequest(c.Request)
 	}
 	return ""
+}
+
+func normalizeConfigDomain(domain string) string {
+	raw := strings.TrimSpace(domain)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw
+	}
+	if strings.Contains(raw, "localhost") || strings.Contains(raw, ":") {
+		return "http://" + raw
+	}
+	return "https://" + raw
+}
+
+func buildURLFromRequest(req *http.Request) string {
+	scheme := detectRequestScheme(req)
+	host := strings.TrimSpace(req.Host)
+	if host == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s://%s", scheme, host)
+}
+
+func detectRequestScheme(req *http.Request) string {
+	if proto := strings.TrimSpace(req.Header.Get("X-Forwarded-Proto")); proto != "" {
+		return proto
+	}
+	if req.TLS == nil {
+		return "http"
+	}
+	return "https"
 }
 
 func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
@@ -108,7 +131,7 @@ func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
 	}
 }
 
-func (h *AdminHandler) currentAuthUser(c *gin.Context) *auth.AuthUser {
+func (h *AdminHandler) currentAuthUser(c *gin.Context) *auth.User {
 	if c == nil || c.Request == nil {
 		return nil
 	}
@@ -120,7 +143,7 @@ func (h *AdminHandler) currentAuthUser(c *gin.Context) *auth.AuthUser {
 	if email == "" {
 		return nil
 	}
-	return &auth.AuthUser{Email: email, Name: name}
+	return &auth.User{Email: email, Name: name}
 }
 
 func (h *AdminHandler) getAdminEmails() []string {

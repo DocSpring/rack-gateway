@@ -53,7 +53,7 @@ func TestEnforceMFARequirements_AllowsInlineTOTP(t *testing.T) {
 
 	newRouter := func(session *db.UserSession) *gin.Engine {
 		middleware := EnforceMFARequirements(mfaService, database, mfaSettings)
-		return buildStepUpRouter(endpoint, session, user, middleware, func(authUser *auth.AuthUser, c *gin.Context) {
+		return buildStepUpRouter(endpoint, session, user, middleware, func(authUser *auth.User, c *gin.Context) {
 			if code := strings.TrimSpace(c.GetHeader("X-MFA-TOTP")); code != "" {
 				authUser.MFAType = "totp"
 				authUser.MFAValue = code
@@ -161,11 +161,11 @@ func buildStepUpRouter(
 	session *db.UserSession,
 	user *db.User,
 	middleware gin.HandlerFunc,
-	configure func(*auth.AuthUser, *gin.Context),
+	configure func(*auth.User, *gin.Context),
 ) *gin.Engine {
 	router := gin.New()
 	router.POST(endpoint, func(c *gin.Context) {
-		authUser := &auth.AuthUser{
+		authUser := &auth.User{
 			Email:      user.Email,
 			Name:       user.Name,
 			Roles:      user.Roles,

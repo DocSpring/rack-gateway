@@ -10,6 +10,7 @@ import (
 
 const readmeURL = "https://github.com/DocSpring/rack-gateway/blob/main/README.md"
 
+// WebURL returns the web UI URL by appending /app/ to the base URL.
 func WebURL(base string) string {
 	b := strings.TrimRight(base, "/")
 	return b + "/app/"
@@ -40,17 +41,21 @@ var welcomeHTML = template.Must(template.New("welcome_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
 		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
 		"<p>Hi {{.Invitee}},</p>" +
-		"<p>You’ve been granted access to the Rack Gateway for the <strong>{{.Rack}}</strong> rack.</p>" +
+		"<p>You've been granted access to the Rack Gateway for the <strong>{{.Rack}}</strong> rack.</p>" +
 		"<h3 style=\"margin:20px 0 8px;\">Access the Web UI</h3>" +
 		"<p><a href=\"{{.WebURL}}\" style=\"color:#0b5fff;text-decoration:none;\">{{.WebURL}}</a></p>" +
 		"<h3 style=\"margin:20px 0 8px;\">Configure Rack Gateway CLI</h3>" +
 		"<p>Clone the repository and install the CLI:</p>" +
-		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">git clone git@github.com:DocSpring/rack-gateway.git\ncd rack-gateway\n./scripts/install.sh</pre>" +
+		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">" +
+		"git clone git@github.com:DocSpring/rack-gateway.git\ncd rack-gateway\n./scripts/install.sh</pre>" +
 		"<p>Authenticate the CLI against this gateway:</p>" +
-		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">$ rack-gateway login {{.Rack}} {{.CLIBase}}</pre>" +
-		"<p>After logging in, you can run Convox commands via the gateway using <code>rack-gateway convox …</code></p>" +
+		"<pre style=\"background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto;\">" +
+		"$ rack-gateway login {{.Rack}} {{.CLIBase}}</pre>" +
+		"<p>After logging in, you can run Convox commands via the gateway using " +
+		"<code>rack-gateway convox …</code></p>" +
 		fmt.Sprintf(
-			"<p>See the README for more information:<br/><a href=\"%s\" style=\"color:#0b5fff;text-decoration:none;\">%s</a></p>",
+			"<p>See the README for more information:<br/>"+
+				"<a href=\"%s\" style=\"color:#0b5fff;text-decoration:none;\">%s</a></p>",
 			readmeURL,
 			readmeURL,
 		) +
@@ -59,6 +64,8 @@ var welcomeHTML = template.Must(template.New("welcome_html").Parse(
 		"</body></html>",
 ))
 
+// RenderWelcome renders the welcome email templates for new users.
+// It returns both plain text and HTML versions of the welcome email.
 func RenderWelcome(rack, invitee, inviter, webBase, cliBase string) (text string, html string, err error) {
 	data := map[string]string{
 		"Rack":    rack,
@@ -93,6 +100,8 @@ var settingsHTML = template.Must(template.New("settings_html").Parse(
 		"</body></html>",
 ))
 
+// RenderSettingsChanged renders the settings changed email templates.
+// It returns both plain text and HTML versions of the notification email.
 func RenderSettingsChanged(rack, actor, key, value string) (string, string, error) {
 	data := map[string]string{"Rack": rack, "Actor": actor, "Key": key, "Value": value}
 	var tb, hb bytes.Buffer
@@ -120,6 +129,8 @@ var rackParamsHTML = template.Must(template.New("rack_params_html").Parse(
 		"</body></html>",
 ))
 
+// RenderRackParamsChanged renders the rack parameters changed email templates.
+// It returns both plain text and HTML versions of the notification email.
 func RenderRackParamsChanged(rack, actor, changes string) (string, string, error) {
 	data := map[string]string{"Rack": rack, "Actor": actor, "Changes": changes}
 	var tb, hb bytes.Buffer
@@ -149,6 +160,8 @@ var tokenOwnerHTML = template.Must(template.New("token_owner_html").Parse(
 		"</body></html>",
 ))
 
+// RenderTokenCreatedOwner renders the API token created email templates for the token owner.
+// It returns both plain text and HTML versions of the notification email.
 func RenderTokenCreatedOwner(rack, name, creator string) (string, string, error) {
 	data := map[string]string{"Rack": rack, "Name": name, "Creator": creator}
 	var tb, hb bytes.Buffer
@@ -175,6 +188,8 @@ var tokenAdminHTML = template.Must(template.New("token_admin_html").Parse(
 		"</body></html>",
 ))
 
+// RenderTokenCreatedAdmin renders the API token created email templates for admins.
+// It returns both plain text and HTML versions of the notification email.
 func RenderTokenCreatedAdmin(rack, name, owner, creator string) (string, string, error) {
 	data := map[string]string{"Rack": rack, "Name": name, "Owner": owner, "Creator": creator}
 	var tb, hb bytes.Buffer
@@ -200,6 +215,8 @@ var userAddedAdminHTML = template.Must(template.New("user_added_admin_html").Par
 		"</body></html>",
 ))
 
+// RenderUserAddedAdmin renders the user added email templates for admins.
+// It returns both plain text and HTML versions of the notification email.
 func RenderUserAddedAdmin(rack, actor, email, name string, roles []string) (string, string, error) {
 	data := map[string]string{
 		"Rack":  rack,

@@ -8,7 +8,7 @@ import (
 // CLIOnlyMiddleware wraps the standard auth middleware but rejects cookie-based auth.
 // This ensures that proxy routes can only be accessed by the CLI (with Authorization header),
 // not by browsers (with cookies), preventing CSRF attacks on the Convox API.
-func (a *AuthService) CLIOnlyMiddleware(next http.Handler) http.Handler {
+func (a *Service) CLIOnlyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
 			a.writeUnauthorized(w, r, "browser session cookies are not permitted for CLI routes")

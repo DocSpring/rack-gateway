@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// CreateTrustedDevice creates a new trusted device record for a user.
 func (d *Database) CreateTrustedDevice(
 	userID int64,
 	deviceID string,
@@ -28,11 +29,23 @@ func (d *Database) CreateTrustedDevice(
 		meta = string(b)
 	}
 	query := `
-        INSERT INTO trusted_devices (user_id, device_id, token_hash, expires_at, ip_first, ip_last, user_agent_hash, metadata)
+        INSERT INTO trusted_devices (
+            user_id, device_id, token_hash, expires_at, ip_first, ip_last, user_agent_hash, metadata
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id, created_at, updated_at
     `
-	if err := d.queryRow(query, userID, deviceID, tokenHash, expiresAt, nullableIP(ip), nullableIP(ip), nullableString(uaHash, 128), meta).Scan(&id, &createdAt, &updatedAt); err != nil {
+	if err := d.queryRow(
+		query,
+		userID,
+		deviceID,
+		tokenHash,
+		expiresAt,
+		nullableIP(ip),
+		nullableIP(ip),
+		nullableString(uaHash, 128),
+		meta,
+	).Scan(&id, &createdAt, &updatedAt); err != nil {
 		return nil, fmt.Errorf("failed to create trusted device: %w", err)
 	}
 	return &TrustedDevice{
@@ -50,9 +63,12 @@ func (d *Database) CreateTrustedDevice(
 	}, nil
 }
 
+// TouchTrustedDevice updates the last used timestamp and IP for a trusted device.
 func (d *Database) TouchTrustedDevice(id int64, ip string) error {
 	_, err := d.exec(
-		"UPDATE trusted_devices SET last_used_at = NOW(), ip_last = COALESCE(?, ip_last), updated_at = NOW() WHERE id = ?",
+		`UPDATE trusted_devices
+         SET last_used_at = NOW(), ip_last = COALESCE(?, ip_last), updated_at = NOW()
+         WHERE id = ?`,
 		nullableIP(ip),
 		id,
 	)
@@ -62,9 +78,12 @@ func (d *Database) TouchTrustedDevice(id int64, ip string) error {
 	return nil
 }
 
+// GetTrustedDeviceByHash retrieves a trusted device by its token hash.
 func (d *Database) GetTrustedDeviceByHash(hash string) (*TrustedDevice, error) {
 	query := `
-        SELECT id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at, ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata
+        SELECT
+            id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at,
+            ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata
         FROM trusted_devices WHERE token_hash = ?
     `
 	device, err := scanTrustedDevice(d.queryRow(query, hash))
@@ -77,9 +96,12 @@ func (d *Database) GetTrustedDeviceByHash(hash string) (*TrustedDevice, error) {
 	return device, nil
 }
 
+// GetTrustedDeviceByID retrieves a trusted device by its ID.
 func (d *Database) GetTrustedDeviceByID(id int64) (*TrustedDevice, error) {
 	query := `
-        SELECT id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at, ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata
+        SELECT
+            id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at,
+            ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata
         FROM trusted_devices WHERE id = ?
     `
 	device, err := scanTrustedDevice(d.queryRow(query, id))
@@ -92,9 +114,12 @@ func (d *Database) GetTrustedDeviceByID(id int64) (*TrustedDevice, error) {
 	return device, nil
 }
 
+// RevokeTrustedDevice revokes a trusted device with an optional reason.
 func (d *Database) RevokeTrustedDevice(id int64, reason string) error {
 	_, err := d.exec(
-		"UPDATE trusted_devices SET revoked_at = NOW(), revoked_reason = ?, updated_at = NOW() WHERE id = ? AND revoked_at IS NULL",
+		`UPDATE trusted_devices
+         SET revoked_at = NOW(), revoked_reason = ?, updated_at = NOW()
+         WHERE id = ? AND revoked_at IS NULL`,
 		nullableString(reason, 255),
 		id,
 	)
@@ -104,9 +129,13 @@ func (d *Database) RevokeTrustedDevice(id int64, reason string) error {
 	return nil
 }
 
+// ListTrustedDevices lists all trusted devices for a user, ordered by creation date.
 func (d *Database) ListTrustedDevices(userID int64) ([]*TrustedDevice, error) {
 	rows, err := d.query(
-		`SELECT id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at, ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata FROM trusted_devices WHERE user_id = ? ORDER BY created_at DESC`,
+		`SELECT
+            id, user_id, device_id, token_hash, created_at, updated_at, expires_at, last_used_at,
+            ip_first, ip_last, user_agent_hash, revoked_at, revoked_reason, metadata
+         FROM trusted_devices WHERE user_id = ? ORDER BY created_at DESC`,
 		userID,
 	)
 	if err != nil {

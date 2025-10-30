@@ -31,10 +31,7 @@ func (s *Service) finalizeEnrollment(userID, methodID int64) error {
 	if err := s.db.ConfirmMFAMethod(methodID, now); err != nil {
 		return err
 	}
-	if err := s.db.SetUserMFAEnrolled(userID, true); err != nil {
-		return err
-	}
-	return nil
+	return s.db.SetUserMFAEnrolled(userID, true)
 }
 
 // prepareEnrollment deletes unconfirmed methods to prevent clutter

@@ -73,7 +73,7 @@ func TestEnforceMFARequirements_AllowsInlineWebAuthn(t *testing.T) {
 		session,
 		user,
 		middleware,
-		func(authUser *auth.AuthUser, c *gin.Context) {
+		func(authUser *auth.User, c *gin.Context) {
 			authUser.MFAType = "webauthn"
 			authUser.MFAValue = inlineHeader
 			c.Request.Header.Set("X-MFA-WebAuthn", inlineHeader)

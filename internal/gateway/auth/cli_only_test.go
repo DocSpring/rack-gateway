@@ -75,7 +75,7 @@ type cliTestCase struct {
 	expectedBody   string
 }
 
-func setupCLITestEnvironment(t *testing.T) (*db.Database, *AuthService, string) {
+func setupCLITestEnvironment(t *testing.T) (*db.Database, *Service, string) {
 	t.Helper()
 	database := setupTestDatabase(t)
 

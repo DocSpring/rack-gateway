@@ -114,18 +114,22 @@ func (h *SettingsHandler) UpdateGlobalSettings(c *gin.Context) {
 	h.updateGlobalSettings(c, nil)
 }
 
+// UpdateGlobalMFAConfiguration updates MFA configuration settings.
 func (h *SettingsHandler) UpdateGlobalMFAConfiguration(c *gin.Context) {
 	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration))
 }
 
+// UpdateGlobalAllowDestructiveActions updates allow destructive actions settings.
 func (h *SettingsHandler) UpdateGlobalAllowDestructiveActions(c *gin.Context) {
 	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive))
 }
 
+// UpdateGlobalVCSAndCIDefaults updates VCS and CI default settings.
 func (h *SettingsHandler) UpdateGlobalVCSAndCIDefaults(c *gin.Context) {
 	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults))
 }
 
+// UpdateGlobalDeployApprovals updates deploy approval settings.
 func (h *SettingsHandler) UpdateGlobalDeployApprovals(c *gin.Context) {
 	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
 }
@@ -151,18 +155,22 @@ func (h *SettingsHandler) DeleteGlobalSettings(c *gin.Context) {
 	h.deleteGlobalSettings(c, nil)
 }
 
+// DeleteGlobalMFAConfiguration deletes MFA configuration settings.
 func (h *SettingsHandler) DeleteGlobalMFAConfiguration(c *gin.Context) {
 	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration))
 }
 
+// DeleteGlobalAllowDestructiveActions deletes allow destructive actions settings.
 func (h *SettingsHandler) DeleteGlobalAllowDestructiveActions(c *gin.Context) {
 	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive))
 }
 
+// DeleteGlobalVCSAndCIDefaults deletes VCS and CI default settings.
 func (h *SettingsHandler) DeleteGlobalVCSAndCIDefaults(c *gin.Context) {
 	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults))
 }
 
+// DeleteGlobalDeployApprovals deletes deploy approval settings.
 func (h *SettingsHandler) DeleteGlobalDeployApprovals(c *gin.Context) {
 	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
 }
@@ -216,6 +224,7 @@ func (h *SettingsHandler) UpdateAppSettings(c *gin.Context) {
 	h.updateAppSettings(c, nil)
 }
 
+// UpdateAppVCSCIDeploySettings updates VCS/CI deployment settings for an app.
 func (h *SettingsHandler) UpdateAppVCSCIDeploySettings(c *gin.Context) {
 	h.updateAppSettings(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
 }
@@ -247,6 +256,7 @@ func (h *SettingsHandler) DeleteAppSettings(c *gin.Context) {
 	h.deleteAppSettings(c, nil)
 }
 
+// DeleteAppVCSCIDeploySettings deletes VCS/CI deployment settings for an app.
 func (h *SettingsHandler) DeleteAppVCSCIDeploySettings(c *gin.Context) {
 	h.deleteAppSettings(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
 }

@@ -110,7 +110,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/integrations/slack/oauth/authorize", nil)
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
 		Name:  user.Name,
 	}))
@@ -177,7 +177,7 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/slack", nil)
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
 		Name:  user.Name,
 	}))
@@ -261,7 +261,7 @@ func TestUpdateSlackChannels(t *testing.T) {
 		strings.NewReader(string(payload)),
 	)
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
 		Name:  user.Name,
 	}))
@@ -327,7 +327,7 @@ func TestDeleteSlackIntegration(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/integrations/slack", nil)
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
 		Name:  user.Name,
 	}))
@@ -377,7 +377,7 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 		strings.NewReader(string(payload)),
 	)
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
 		Name:  user.Name,
 	}))
@@ -439,7 +439,7 @@ func TestEnforceIntegrationPermission_Forbidden(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/slack", nil)
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: user.Email,
 		Name:  user.Name,
 	}))
@@ -567,7 +567,7 @@ func setupSlackTestEnv(t *testing.T) *slackTestEnv {
 
 func (e *slackTestEnv) callGetSlackIntegration() *http.Response {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/slack", nil)
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email: e.user.Email,
 		Name:  e.user.Name,
 	}))

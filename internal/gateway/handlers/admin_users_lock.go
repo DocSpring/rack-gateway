@@ -9,15 +9,32 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+// LockUserRequest contains the reason for locking a user account.
 type LockUserRequest struct {
 	Reason string `json:"reason" binding:"required"`
 }
 
 // LockUser godoc
 // @Summary Lock a user account
+// AdminHandler is the handler for admin operations.
+type AdminHandler struct {
+	_           rbac.Manager
+	database    *db.Database
+	_           *token.Service
+	emailSender email.Sender
+	_           *config.Config
+	_           *rackcert.Manager
+	sessions    *auth.SessionManager
+	_           *db.MFASettings
+	_           *audit.Logger
+	_           *settings.Service
+	_           *jobs.Client
+}
+
 // @Description Locks a user account to prevent login
 // @Tags admin
 // @Accept json
@@ -33,13 +50,13 @@ type LockUserRequest struct {
 // @Router /users/{email}/lock [post]
 func (h *AdminHandler) LockUser(c *gin.Context) {
 	start := time.Now()
-	email := strings.TrimSpace(c.Param("email"))
-	if email == "" {
+	userEmail := strings.TrimSpace(c.Param("email"))
+	if userEmail == "" {
 		h.respondAuditError(
 			c,
 			http.StatusBadRequest,
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
+			userEmail,
 			"email is required",
 			start,
 			nil,
@@ -53,7 +70,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 			c,
 			http.StatusBadRequest,
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
+			userEmail,
 			"invalid request",
 			start,
 			nil,
@@ -61,56 +78,8 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.database.GetUser(email)
-	if err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
-			"failed to load user",
-			start,
-			nil,
-		)
-		return
-	}
-	if user == nil {
-		h.respondAuditError(
-			c,
-			http.StatusNotFound,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
-			"user not found",
-			start,
-			nil,
-		)
-		return
-	}
-
-	authUser := h.currentAuthUser(c)
-	if authUser == nil {
-		h.respondAuditError(
-			c,
-			http.StatusUnauthorized,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
-			"unauthorized",
-			start,
-			nil,
-		)
-		return
-	}
-	adminUser, err := h.database.GetUser(authUser.Email)
-	if err != nil || adminUser == nil {
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
-			"failed to load admin user",
-			start,
-			nil,
-		)
+	user, adminUser, ok := h.validateLockUnlockUsers(c, userEmail, start, audit.ActionVerbLock)
+	if !ok {
 		return
 	}
 
@@ -119,7 +88,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 			c,
 			http.StatusInternalServerError,
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-			email,
+			userEmail,
 			"failed to lock user",
 			start,
 			nil,
@@ -131,18 +100,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		_, _ = h.sessions.RevokeAllForUser(user.ID, &adminUser.ID)
 	}
 
-	if h.emailSender != nil {
-		subject := "Account Locked"
-		textBody := fmt.Sprintf(
-			"Your account has been locked by an administrator.\n\nReason: %s\n\nPlease contact your administrator for assistance.",
-			req.Reason,
-		)
-		htmlBody := fmt.Sprintf(
-			"<p>Your account has been locked by an administrator.</p><p><strong>Reason:</strong> %s</p><p>Please contact your administrator for assistance.</p>",
-			req.Reason,
-		)
-		_ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
-	}
+	h.sendLockEmail(user.Email, req.Reason)
 
 	details := map[string]interface{}{
 		"reason":      req.Reason,
@@ -154,7 +112,7 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 		http.StatusOK,
 		gin.H{"message": "user locked successfully"},
 		audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbLock),
-		email,
+		userEmail,
 		start,
 		details,
 	)
@@ -176,13 +134,13 @@ func (h *AdminHandler) LockUser(c *gin.Context) {
 // @Router /users/{email}/unlock [post]
 func (h *AdminHandler) UnlockUser(c *gin.Context) {
 	start := time.Now()
-	email := strings.TrimSpace(c.Param("email"))
-	if email == "" {
+	userEmail := strings.TrimSpace(c.Param("email"))
+	if userEmail == "" {
 		h.respondAuditError(
 			c,
 			http.StatusBadRequest,
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-			email,
+			userEmail,
 			"email is required",
 			start,
 			nil,
@@ -190,56 +148,8 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.database.GetUser(email)
-	if err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-			email,
-			"failed to load user",
-			start,
-			nil,
-		)
-		return
-	}
-	if user == nil {
-		h.respondAuditError(
-			c,
-			http.StatusNotFound,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-			email,
-			"user not found",
-			start,
-			nil,
-		)
-		return
-	}
-
-	authUser := h.currentAuthUser(c)
-	if authUser == nil {
-		h.respondAuditError(
-			c,
-			http.StatusUnauthorized,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-			email,
-			"unauthorized",
-			start,
-			nil,
-		)
-		return
-	}
-	adminUser, err := h.database.GetUser(authUser.Email)
-	if err != nil || adminUser == nil {
-		h.respondAuditError(
-			c,
-			http.StatusInternalServerError,
-			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-			email,
-			"failed to load admin user",
-			start,
-			nil,
-		)
+	user, adminUser, ok := h.validateLockUnlockUsers(c, userEmail, start, audit.ActionVerbUnlock)
+	if !ok {
 		return
 	}
 
@@ -248,7 +158,7 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 			c,
 			http.StatusInternalServerError,
 			audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-			email,
+			userEmail,
 			"failed to unlock user",
 			start,
 			nil,
@@ -256,12 +166,7 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 		return
 	}
 
-	if h.emailSender != nil {
-		subject := "Account Unlocked"
-		textBody := "Your account has been unlocked by an administrator.\n\nYou can now log in again."
-		htmlBody := "<p>Your account has been unlocked by an administrator.</p><p>You can now log in again.</p>"
-		_ = h.emailSender.Send(user.Email, subject, textBody, htmlBody)
-	}
+	h.sendUnlockEmail(user.Email)
 
 	details := map[string]interface{}{
 		"unlocked_by": adminUser.Email,
@@ -272,8 +177,76 @@ func (h *AdminHandler) UnlockUser(c *gin.Context) {
 		http.StatusOK,
 		gin.H{"message": "user unlocked successfully"},
 		audit.BuildAction(rbac.ResourceUser.String(), audit.ActionVerbUnlock),
-		email,
+		userEmail,
 		start,
 		details,
 	)
+}
+
+func (h *AdminHandler) validateLockUnlockUsers(
+	c *gin.Context,
+	userEmail string,
+	start time.Time,
+	actionVerb string,
+) (*db.User, *db.User, bool) {
+	action := audit.BuildAction(rbac.ResourceUser.String(), actionVerb)
+
+	user, err := h.database.GetUser(userEmail)
+	if err != nil {
+		h.respondAuditError(
+			c, http.StatusInternalServerError, action, userEmail, "failed to load user", start, nil,
+		)
+		return nil, nil, false
+	}
+	if user == nil {
+		h.respondAuditError(c, http.StatusNotFound, action, userEmail, "user not found", start, nil)
+		return nil, nil, false
+	}
+
+	authUser := h.currentAuthUser(c)
+	if authUser == nil {
+		h.respondAuditError(c, http.StatusUnauthorized, action, userEmail, "unauthorized", start, nil)
+		return nil, nil, false
+	}
+
+	adminUser, err := h.database.GetUser(authUser.Email)
+	if err != nil || adminUser == nil {
+		h.respondAuditError(
+			c, http.StatusInternalServerError, action, userEmail, "failed to load admin user", start, nil,
+		)
+		return nil, nil, false
+	}
+
+	return user, adminUser, true
+}
+
+func (h *AdminHandler) sendLockEmail(userEmail, reason string) {
+	if h.emailSender == nil {
+		return
+	}
+	subject := "Account Locked"
+	textBody := fmt.Sprintf(
+		"Your account has been locked by an administrator.\n\n"+
+			"Reason: %s\n\n"+
+			"Please contact your administrator for assistance.",
+		reason,
+	)
+	htmlBody := fmt.Sprintf(
+		"<p>Your account has been locked by an administrator.</p>"+
+			"<p><strong>Reason:</strong> %s</p>"+
+			"<p>Please contact your administrator for assistance.</p>",
+		reason,
+	)
+	_ = h.emailSender.Send(userEmail, subject, textBody, htmlBody)
+}
+
+func (h *AdminHandler) sendUnlockEmail(userEmail string) {
+	if h.emailSender == nil {
+		return
+	}
+	subject := "Account Unlocked"
+	textBody := "Your account has been unlocked by an administrator.\n\nYou can now log in again."
+	htmlBody := "<p>Your account has been unlocked by an administrator.</p>" +
+		"<p>You can now log in again.</p>"
+	_ = h.emailSender.Send(userEmail, subject, textBody, htmlBody)
 }

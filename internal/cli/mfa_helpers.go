@@ -134,9 +134,9 @@ func preferredMFAMethod(status *MFAStatusResponse) (MFAMethodResponse, bool) {
 
 func collectMFAAuth(
 	cmd *cobra.Command,
-	baseURL, bearer, rack string,
+	baseURL, bearer, _ string,
 	method MFAMethodResponse,
-	allMethods []MFAMethodResponse,
+	_ []MFAMethodResponse,
 ) (string, error) {
 	out := cmd.ErrOrStderr()
 
@@ -207,7 +207,7 @@ func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 		return "", err
 	}
 
-	var allowedCreds []string
+	allowedCreds := make([]string, 0, len(startResp.Options.PublicKey.AllowCredentials))
 	for _, cred := range startResp.Options.PublicKey.AllowCredentials {
 		allowedCreds = append(allowedCreds, cred.ID)
 	}

@@ -20,6 +20,7 @@ import (
 
 type ctxKey string
 
+// StyleNonceContextKey is the context key used to store and retrieve the CSP nonce for inline styles.
 const StyleNonceContextKey ctxKey = "rgw-style-nonce"
 
 var defaultStyleHashes = []string{}
@@ -126,6 +127,7 @@ func SecurityHeaders(cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
+// StyleNonceFromContext retrieves the CSP nonce from the given context, or returns an empty string if not found.
 func StyleNonceFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""

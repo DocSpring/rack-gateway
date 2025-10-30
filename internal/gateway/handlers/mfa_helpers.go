@@ -26,7 +26,7 @@ func isMFAChallengeRequired(settings *db.MFASettings, user *db.User) bool {
 
 // mfaUserContext holds the authenticated user and user record for MFA operations
 type mfaUserContext struct {
-	authUser   *auth.AuthUser
+	authUser   *auth.User
 	userRecord *db.User
 }
 

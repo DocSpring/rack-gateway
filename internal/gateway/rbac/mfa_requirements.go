@@ -112,13 +112,13 @@ var MFARequirements = map[string]MFALevel{
 	// ========================================================================
 
 	// Global Settings - Security-critical configurations
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive): MFAAlways, // Enabling destructive operations
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals):  MFAAlways, // Disabling approval workflow or extending approval window
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration): MFAAlways, // Disabling MFA globally or extending trust windows
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults): MFAStepUp, // Impacts repo/CI defaults
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive): MFAAlways, // Destructive ops
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals):  MFAAlways, // Approval workflow
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration): MFAAlways, // MFA config
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults): MFAStepUp, // Repo/CI defaults
 
 	// App Settings - Security controls
-	GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy):         MFAAlways, // Covers GitHub verification and PR requirements
+	GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy):         MFAAlways, // GitHub verify/PR reqs
 	GatewayAppSetting(settings.AppSettingAllowDeployFromDefaultBranch):  MFAStepUp, // Allowing more deploys
 	GatewayAppSetting(settings.AppSettingApprovedDeployCommands):        MFAStepUp, // Defining allowed commands
 	GatewayAppSetting(settings.AppSettingCIOrgSlug):                     MFANone,   // Just configuration
@@ -149,7 +149,7 @@ func GetMFALevel(permissions []string) MFALevel {
 			if !isReadOnlyAction(perm) {
 				panic(
 					fmt.Sprintf(
-						"CRITICAL: Permission %q not found in MFARequirements - all write/mutating operations must be explicitly listed",
+						"CRITICAL: Permission %q not in MFARequirements - write ops must be listed",
 						perm,
 					),
 				)

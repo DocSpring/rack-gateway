@@ -13,7 +13,7 @@ import (
 
 // loadUserForEnrollmentCheck retrieves the user record from the database if not already loaded.
 // It populates authUser.DBUser and returns the user record. Returns nil for API tokens.
-func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, authUser *auth.AuthUser) (*db.User, error) {
+func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, authUser *auth.User) (*db.User, error) {
 	if authUser == nil || authUser.IsAPIToken {
 		return nil, nil
 	}
@@ -37,8 +37,8 @@ func loadUserForEnrollmentCheck(ctx context.Context, database *db.Database, auth
 
 func requireMFAEnrollment(
 	database *db.Database,
-	settings *db.MFASettings,
-	handler func(*gin.Context, *auth.AuthUser, *db.User) bool,
+	_ *db.MFASettings,
+	handler func(*gin.Context, *auth.User, *db.User) bool,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authUser, ok := auth.GetAuthUser(c.Request.Context())
@@ -76,7 +76,7 @@ func requireMFAEnrollment(
 // user has not yet completed enrollment. It returns a clear error so the CLI can
 // instruct the user to finish setup.
 func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
-	return requireMFAEnrollment(database, settings, func(c *gin.Context, authUser *auth.AuthUser, user *db.User) bool {
+	return requireMFAEnrollment(database, settings, func(c *gin.Context, authUser *auth.User, user *db.User) bool {
 		session := authUser.Session
 		if session == nil || !strings.EqualFold(session.Channel, "cli") {
 			return false
@@ -84,7 +84,8 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 		if !db.ShouldEnforceMFA(settings, user) || user.MFAEnrolled {
 			return false
 		}
-		message := "You must set up multi-factor authentication before you can continue using the CLI. Please run rack-gateway login and finish MFA enrollment."
+		message := "You must set up multi-factor authentication before you can continue using the CLI. " +
+			"Please run rack-gateway login and finish MFA enrollment."
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "mfa_enrollment_required",
 			"message": message,
@@ -98,7 +99,7 @@ func RequireMFAEnrollment(database *db.Database, settings *db.MFASettings) gin.H
 // enforced but incomplete. This keeps every channel other than the dedicated CLI proxy locked
 // down to the Account Security flows until enrollment succeeds.
 func RequireMFAEnrollmentWeb(database *db.Database, settings *db.MFASettings) gin.HandlerFunc {
-	return requireMFAEnrollment(database, settings, func(c *gin.Context, authUser *auth.AuthUser, user *db.User) bool {
+	return requireMFAEnrollment(database, settings, func(c *gin.Context, _ *auth.User, user *db.User) bool {
 		if c.Request.Method == http.MethodOptions {
 			return false
 		}

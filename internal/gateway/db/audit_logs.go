@@ -86,97 +86,137 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 	if log == nil {
 		return fmt.Errorf("audit log cannot be nil")
 	}
-	if log.EventCount <= 0 {
-		log.EventCount = 1
-	}
-	if log.Timestamp.IsZero() {
-		log.Timestamp = time.Now().UTC()
-	}
+	normalizeAuditLog(log)
+	extractRequestIDFromDetails(log)
 
-	// Extract request_id from details JSON if not already set
-	if log.RequestID == "" && log.Details != "" {
-		var detailsMap map[string]interface{}
-		if err := json.Unmarshal([]byte(log.Details), &detailsMap); err == nil {
-			if requestID, ok := detailsMap["request_id"].(string); ok {
-				log.RequestID = requestID
-				// Remove request_id from details to enable proper aggregation
-				delete(detailsMap, "request_id")
-				// Re-marshal details without request_id
-				if updatedDetails, err := json.Marshal(detailsMap); err == nil {
-					log.Details = string(updatedDetails)
-				}
-			}
-		}
-	}
-
-	// SERIALIZE: perform read->compute->insert inside a tx with advisory lock
 	tx, err := d.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin audit log tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Acquire a transaction-scoped advisory lock to serialize appends.
-	// Use a constant chosen for the audit chain. Must match across processes.
-	if _, err := d.execTx(tx, "SELECT pg_advisory_xact_lock(?)", AdvisoryLockAuditChain); err != nil { // different from migration lock
-		return fmt.Errorf("failed to acquire audit chain lock: %w", err)
+	if err := d.acquireAuditChainLock(tx); err != nil {
+		return err
 	}
 
-	// Read latest event under the lock
+	latest, err := d.getLatestEvent(tx)
+	if err != nil {
+		return err
+	}
+
+	params := computeChainParams(latest)
+	eventHash := computeEventHash(getAuditHMACSecret(), params.chainIndex, params.previousHash, log)
+
+	newID, err := d.appendAuditEvent(tx, log, params, eventHash)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit audit log tx: %w", err)
+	}
+
+	populateAuditLogResults(log, newID, params, eventHash)
+	return nil
+}
+
+func normalizeAuditLog(log *AuditLog) {
+	if log.EventCount <= 0 {
+		log.EventCount = 1
+	}
+	if log.Timestamp.IsZero() {
+		log.Timestamp = time.Now().UTC()
+	}
+}
+
+func extractRequestIDFromDetails(log *AuditLog) {
+	if log.RequestID != "" || log.Details == "" {
+		return
+	}
+	var detailsMap map[string]interface{}
+	if err := json.Unmarshal([]byte(log.Details), &detailsMap); err != nil {
+		return
+	}
+	requestID, ok := detailsMap["request_id"].(string)
+	if !ok {
+		return
+	}
+	log.RequestID = requestID
+	delete(detailsMap, "request_id")
+	if updatedDetails, err := json.Marshal(detailsMap); err == nil {
+		log.Details = string(updatedDetails)
+	}
+}
+
+func (d *Database) acquireAuditChainLock(tx *sql.Tx) error {
+	query := "SELECT pg_advisory_xact_lock(?)"
+	if _, err := d.execTx(tx, query, AdvisoryLockAuditChain); err != nil {
+		return fmt.Errorf("failed to acquire audit chain lock: %w", err)
+	}
+	return nil
+}
+
+func (d *Database) getLatestEvent(tx *sql.Tx) (latestEvent, error) {
 	var latest latestEvent
-	// Use a direct SELECT to ensure it runs in this tx context
 	row := tx.QueryRow(d.rebind(`
         SELECT chain_index, event_hash, checkpoint_id, checkpoint_hash
         FROM audit.audit_event
         ORDER BY chain_index DESC
         LIMIT 1
     `))
-	switch err := row.Scan(&latest.ChainIndex, &latest.EventHash, &latest.CheckpointID, &latest.CheckpointHash); err {
+	err := row.Scan(&latest.ChainIndex, &latest.EventHash, &latest.CheckpointID, &latest.CheckpointHash)
+	switch err {
 	case sql.ErrNoRows:
-		// no-op; treat as nil latest
-		latest = latestEvent{}
-		latest.ChainIndex = -1 // sentinel to indicate genesis next
+		latest.ChainIndex = -1
+		return latest, nil
 	case nil:
-		// ok
+		return latest, nil
 	default:
-		return fmt.Errorf("failed to get latest event (tx): %w", err)
+		return latest, fmt.Errorf("failed to get latest event (tx): %w", err)
 	}
+}
 
-	// Compute chain parameters now that we hold the lock
-	var chainIndex int64
-	var previousHash []byte
-	var checkpointID string
-	var checkpointHash []byte
+type chainParams struct {
+	chainIndex     int64
+	previousHash   []byte
+	checkpointID   string
+	checkpointHash []byte
+}
 
+func computeChainParams(latest latestEvent) chainParams {
 	if latest.ChainIndex < 0 {
-		chainIndex = 0
-		previousHash = nil
-	} else {
-		chainIndex = latest.ChainIndex + 1
-		previousHash = latest.EventHash
-		if latest.CheckpointID.Valid {
-			checkpointID = latest.CheckpointID.String
-		}
-		checkpointHash = latest.CheckpointHash
+		return chainParams{chainIndex: 0}
 	}
+	params := chainParams{
+		chainIndex:     latest.ChainIndex + 1,
+		previousHash:   latest.EventHash,
+		checkpointHash: latest.CheckpointHash,
+	}
+	if latest.CheckpointID.Valid {
+		params.checkpointID = latest.CheckpointID.String
+	}
+	return params
+}
 
-	// Compute event hash under the same lock
-	secret := getAuditHMACSecret()
-	eventHash := computeEventHash(secret, chainIndex, previousHash, log)
-
-	// Append the event via function within this tx
+func (d *Database) appendAuditEvent(
+	tx *sql.Tx,
+	log *AuditLog,
+	params chainParams,
+	eventHash []byte,
+) (int64, error) {
 	var newID int64
 	q := `
         SELECT audit.append_audit_event(
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+            $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
         )
     `
-	if err := tx.QueryRow(d.rebind(q),
+	err := tx.QueryRow(d.rebind(q),
 		log.Timestamp,
-		previousHash,
+		params.previousHash,
 		eventHash,
-		nullableString(checkpointID, 255),
-		checkpointHash,
+		nullableString(params.checkpointID, 255),
+		params.checkpointHash,
 		log.UserEmail,
 		log.UserName,
 		nullableInt64(log.APITokenID),
@@ -196,32 +236,38 @@ func (d *Database) CreateAuditLog(log *AuditLog) error {
 		log.ResponseTimeMs,
 		log.EventCount,
 		nullableInt64(log.DeployApprovalRequestID),
-	).Scan(&newID); err != nil {
-		return fmt.Errorf("failed to append audit log: %w", err)
+	).Scan(&newID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to append audit log: %w", err)
 	}
+	return newID, nil
+}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit audit log tx: %w", err)
-	}
-
+func populateAuditLogResults(log *AuditLog, newID int64, params chainParams, eventHash []byte) {
 	log.ID = newID
-	log.ChainIndex = chainIndex
-	log.PreviousHash = previousHash
+	log.ChainIndex = params.chainIndex
+	log.PreviousHash = params.previousHash
 	log.EventHash = eventHash
-	log.CheckpointID = checkpointID
-	log.CheckpointHash = checkpointHash
-
-	return nil
+	log.CheckpointID = params.checkpointID
+	log.CheckpointHash = params.checkpointHash
 }
 
 // GetAuditLogs retrieves audit logs with optional filters
-func (d *Database) GetAuditLogs(userEmail string, since time.Time, limit int) ([]*AuditLog, error) {
+func (d *Database) GetAuditLogs(
+	userEmail string,
+	since time.Time,
+	limit int,
+) ([]*AuditLog, error) {
 	query := `
-        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash", "checkpoint_id", "checkpoint_hash",
-               "user_email", COALESCE("user_name", ''), "api_token_id", "api_token_name", "action_type", "action",
-               COALESCE("command", ''), COALESCE("resource", ''), COALESCE("resource_type", ''), COALESCE("details", ''),
-               COALESCE("request_id", ''), COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
-               "status", COALESCE("rbac_decision", ''), COALESCE("http_status", 0), "response_time_ms",
+        SELECT "id", "timestamp", "chain_index", "previous_hash", "event_hash",
+               "checkpoint_id", "checkpoint_hash", "user_email",
+               COALESCE("user_name", ''), "api_token_id", "api_token_name",
+               "action_type", "action", COALESCE("command", ''),
+               COALESCE("resource", ''), COALESCE("resource_type", ''),
+               COALESCE("details", ''), COALESCE("request_id", ''),
+               COALESCE(host("ip_address"::inet), ''), COALESCE("user_agent", ''),
+               "status", COALESCE("rbac_decision", ''),
+               COALESCE("http_status", 0), "response_time_ms",
                "event_count", "deploy_approval_request_id"
         FROM "audit"."audit_event"
         WHERE 1=1

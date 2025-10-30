@@ -58,7 +58,7 @@ func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) 
 
 	req := httptest.NewRequest(http.MethodPost, "/deploy-approval-requests", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.AuthUser{
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.User{
 		Email:      user.Email,
 		Name:       user.Name,
 		IsAPIToken: true,

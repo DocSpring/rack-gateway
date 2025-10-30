@@ -57,7 +57,7 @@ func TestDeployerCannotDeleteApp(t *testing.T) {
 	// Create request: DELETE /apps/myapp
 	req := httptest.NewRequest(http.MethodDelete, "/apps/myapp", nil)
 	// Inject authenticated session user into context
-	au := &auth.AuthUser{Email: "deployer@test.com", Name: "Deployer", IsAPIToken: false}
+	au := &auth.User{Email: "deployer@test.com", Name: "Deployer", IsAPIToken: false}
 	ctx := context.WithValue(req.Context(), auth.UserContextKey, au)
 	req = req.WithContext(ctx)
 

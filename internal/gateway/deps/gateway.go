@@ -27,7 +27,7 @@ type Gateway struct {
 	RBACManager      rbac.Manager
 	SessionManager   *auth.SessionManager
 	OAuthHandler     *auth.OAuthHandler
-	AuthService      *auth.AuthService
+	AuthService      *auth.Service
 	TokenService     *token.Service
 	MFAService       *mfa.Service
 	MFASettings      *db.MFASettings

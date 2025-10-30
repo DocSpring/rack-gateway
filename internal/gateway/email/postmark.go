@@ -21,8 +21,11 @@ type Sender interface {
 // NoopSender implements Sender but does nothing (used when not configured).
 type NoopSender struct{}
 
-func (NoopSender) Send(to, subject, textBody, htmlBody string) error              { return nil }
-func (NoopSender) SendMany(to []string, subject, textBody, htmlBody string) error { return nil }
+// Send implements Sender.Send but does nothing.
+func (NoopSender) Send(_, _, _, _ string) error { return nil }
+
+// SendMany implements Sender.SendMany but does nothing.
+func (NoopSender) SendMany(_ []string, _, _, _ string) error { return nil }
 
 // PostmarkSender sends emails using Postmark's API.
 type PostmarkSender struct {
@@ -96,10 +99,12 @@ func (p *PostmarkSender) sendEmail(to, bcc, subject, textBody, htmlBody string) 
 	return nil
 }
 
+// Send sends an email to a single recipient via Postmark.
 func (p *PostmarkSender) Send(to, subject, textBody, htmlBody string) error {
 	return p.sendEmail(to, "", subject, textBody, htmlBody)
 }
 
+// SendMany sends an email to multiple recipients via Postmark using BCC.
 func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody string) error {
 	if len(to) == 0 {
 		return nil
@@ -123,6 +128,7 @@ func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody strin
 // LoggerSender writes emails to stdout (useful in development)
 type LoggerSender struct{ From string }
 
+// Send logs an email to stdout instead of sending it.
 func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 	if htmlBody != "" {
 		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
@@ -135,6 +141,7 @@ func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 	return nil
 }
 
+// SendMany logs an email to multiple recipients to stdout instead of sending it.
 func (l *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string) error {
 	primary := ""
 	if len(to) > 0 {
@@ -163,7 +170,7 @@ func getEnv(key, def string) string {
 	return def
 }
 
-// Dev email outbox (in-memory) for E2E tests and local development
+// DevEmail represents an in-memory email for E2E tests and local development.
 type DevEmail struct {
 	To      []string  `json:"to"`
 	Subject string    `json:"subject"`

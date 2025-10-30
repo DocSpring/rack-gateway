@@ -16,7 +16,7 @@ func EnvCommand() *cobra.Command {
 		Use:   "env",
 		Short: "manage environment variables",
 		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cobraCmd *cobra.Command, _ []string) error {
 			// This is a custom gateway command to handle secret masking
 			return envListGateway(cobraCmd)
 		}),
@@ -64,10 +64,8 @@ func envGetCommand() *cobra.Command {
 		Use:   "get <name>",
 		Short: "get an environment variable",
 		Args:  cobra.ExactArgs(1),
-		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			// This is a custom gateway command to handle --unmask flag
-			return envGetGateway(cobraCmd, args)
-		}),
+		// This is a custom gateway command to handle --unmask flag
+		RunE: SilenceOnError(envGetGateway),
 	}
 
 	cmd.Flags().StringP("app", "a", "", "app name")
@@ -161,12 +159,11 @@ func envGetGateway(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print value
-	if val, ok := envMap[key]; ok {
-		fmt.Println(val)
-	} else {
+	val, ok := envMap[key]
+	if !ok {
 		return fmt.Errorf("key %s not found", key)
 	}
-
+	fmt.Println(val)
 	return nil
 }
 
@@ -197,7 +194,7 @@ func envListGateway(cmd *cobra.Command) error {
 	return nil
 }
 
-func fetchAppEnv(cmd *cobra.Command, app string, query url.Values) (map[string]string, error) {
+func fetchAppEnv(_ *cobra.Command, app string, query url.Values) (map[string]string, error) {
 	rack, err := SelectedRack()
 	if err != nil {
 		return nil, err

@@ -29,7 +29,7 @@ func resolveDeployApprovalRequestToken(
 	rbacSvc rbac.Manager,
 	user *db.User,
 	req CreateDeployApprovalRequestRequest,
-	authUser *auth.AuthUser,
+	authUser *auth.User,
 ) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPITokenName)
 	var token *db.APIToken

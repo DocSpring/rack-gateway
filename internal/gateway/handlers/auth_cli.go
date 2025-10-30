@@ -75,25 +75,20 @@ func (h *AuthHandler) CLILoginCallback(c *gin.Context) {
 func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	state := strings.TrimSpace(c.Query("state"))
 	challengeRoute := WebRoute("auth/mfa/challenge")
-	buildChallengeURL := func(params url.Values) string {
-		if params == nil {
-			params = url.Values{}
-		}
-		params.Set("channel", "cli")
-		url := fmt.Sprintf("%s?%s", challengeRoute, params.Encode())
-		return url
+	buildURL := func(params url.Values) string {
+		return buildChallengeURL(challengeRoute, params)
 	}
 
 	if state == "" {
 		params := url.Values{}
 		params.Set("error", "missing_state")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 	if h.database == nil {
 		params := url.Values{}
 		params.Set("error", "service_unavailable")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
@@ -101,20 +96,20 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	if err != nil {
 		params := url.Values{}
 		params.Set("error", "load_failure")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 	if record == nil {
 		params := url.Values{}
 		params.Set("error", "expired")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
 	if record.LoginError.Valid {
 		params := url.Values{}
 		params.Set("error", strings.TrimSpace(record.LoginError.String))
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
@@ -132,7 +127,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		if !record.Code.Valid || !record.CodeVerifier.Valid {
 			params := url.Values{}
 			params.Set("error", "session_incomplete")
-			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 			return
 		}
 
@@ -140,14 +135,14 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		if exchangeErr != nil {
 			params := url.Values{}
 			params.Set("error", "exchange_failed")
-			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 			return
 		}
 
 		if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
 			params := url.Values{}
 			params.Set("error", "persist_failure")
-			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 			return
 		}
 
@@ -155,12 +150,13 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	}
 
 	if loginEmail == "" {
-		if err := h.database.FailCLILoginState(state, "Unable to determine account information for CLI login."); err != nil {
+		errMsg := "Unable to determine account information for CLI login."
+		if err := h.database.FailCLILoginState(state, errMsg); err != nil {
 			log.Printf("cli login fail (missing email): state=%s err=%v", state, err)
 		}
 		params := url.Values{}
 		params.Set("error", "unauthorized")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
@@ -168,7 +164,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 	if err != nil {
 		params := url.Values{}
 		params.Set("error", "load_failure")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 	if userRecord == nil {
@@ -177,7 +173,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		}
 		params := url.Values{}
 		params.Set("error", "unauthorized")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
@@ -186,7 +182,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 			log.Printf("cli login mark verified failed: state=%s err=%v", state, err)
 			params := url.Values{}
 			params.Set("error", "persist_failure")
-			c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+			c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 			return
 		}
 		c.Redirect(http.StatusTemporaryRedirect, WebRoute("cli/auth/success"))
@@ -198,7 +194,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 		log.Printf("cli mfa session create failed: user=%s err=%v", userRecord.Email, err)
 		params := url.Values{}
 		params.Set("error", "session_failed")
-		c.Redirect(http.StatusTemporaryRedirect, buildChallengeURL(params))
+		c.Redirect(http.StatusTemporaryRedirect, buildURL(params))
 		return
 	}
 
@@ -207,22 +203,8 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 			log.Printf("cli login fail (enrollment required): state=%s err=%v", state, err)
 		}
 
-		if h.sessions != nil {
-			sessionToken, _, createErr := h.sessions.CreateSession(userRecord, auth.SessionMetadata{
-				Channel:   "web",
-				IPAddress: c.ClientIP(),
-				UserAgent: c.GetHeader("User-Agent"),
-				Extra: map[string]interface{}{
-					"login_flow": "cli-enrollment",
-				},
-			})
-			if createErr == nil {
-				h.setSessionCookie(c, sessionToken)
-				// Leave MFAVerifiedAt unset; the UI will gate access until enrollment completes.
-			} else {
-				log.Printf("cli enrollment session create failed: user=%s err=%v", userRecord.Email, createErr)
-			}
-		}
+		// Create web session for enrollment flow
+		h.cliHandleEnrollmentRedirect(c, state, userRecord.Email)
 
 		enrollParams := url.Values{}
 		enrollParams.Set("enrollment", "required")
@@ -237,7 +219,7 @@ func (h *AuthHandler) CLILoginMFAForm(c *gin.Context) {
 
 	params := url.Values{}
 	params.Set("state", state)
-	challengeURL := buildChallengeURL(params)
+	challengeURL := buildURL(params)
 	log.Printf(
 		"CLI callback: redirecting to MFA challenge: url=%s user=%s state=%s",
 		challengeURL,
@@ -298,22 +280,21 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 	}
 
 	if !record.LoginEmail.Valid {
-		if record.Code.Valid && record.CodeVerifier.Valid {
-			loginResp, exchangeErr := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
-			if exchangeErr != nil {
-				c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
-				return
-			}
-			if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
-				return
-			}
-			record.LoginEmail.String = loginResp.Email
-			record.LoginEmail.Valid = true
-		} else {
+		if !record.Code.Valid || !record.CodeVerifier.Valid {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "session_incomplete"})
 			return
 		}
+		loginResp, exchangeErr := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
+		if exchangeErr != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "exchange_failed"})
+			return
+		}
+		if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
+			return
+		}
+		record.LoginEmail.String = loginResp.Email
+		record.LoginEmail.Valid = true
 	}
 
 	userRecord, err := h.database.GetUser(strings.TrimSpace(record.LoginEmail.String))
@@ -468,15 +449,9 @@ func (h *AuthHandler) CLILoginComplete(c *gin.Context) {
 	}
 
 	if record.MFAVerifiedAt.Valid {
-		if err := h.sessions.UpdateSessionMFAVerified(session.ID, record.MFAVerifiedAt.Time, nil); err != nil {
-			log.Printf("failed to stamp session MFA verification: %v", err)
-		} else {
-			session.MFAVerifiedAt = &record.MFAVerifiedAt.Time
-			if err := h.sessions.UpdateSessionRecentStepUp(session.ID, record.MFAVerifiedAt.Time); err != nil {
-				log.Printf("failed updating session step-up timestamp: %v", err)
-			} else {
-				session.RecentStepUpAt = &record.MFAVerifiedAt.Time
-			}
+		if mfaTime, ok := h.cliStampMFAVerification(session.ID, record.MFAVerifiedAt.Time); ok {
+			session.MFAVerifiedAt = &mfaTime
+			session.RecentStepUpAt = &mfaTime
 		}
 	}
 

@@ -153,7 +153,7 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	form.Set("env", "SECRET_KEY=abc\nPORT=3000")
 	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	au := &auth.AuthUser{Email: "deployer@test.com", Name: "Deployer"}
+	au := &auth.User{Email: "deployer@test.com", Name: "Deployer"}
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
 
 	rr := httptest.NewRecorder()
@@ -175,7 +175,7 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	form.Set("env", "DATABASE_URL=abc\nPORT=3000")
 	req := httptest.NewRequest(http.MethodPost, "/apps/app/releases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	au := &auth.AuthUser{Email: "admin@test.com", Name: "Admin"}
+	au := &auth.User{Email: "admin@test.com", Name: "Admin"}
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, au))
 	rr := httptest.NewRecorder()
 	h.ProxyToRack(rr, req)

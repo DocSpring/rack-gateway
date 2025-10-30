@@ -51,14 +51,8 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 	req.Role = strings.TrimSpace(strings.ToLower(req.Role))
 
 	// Convert role to permissions if provided
-	if req.Role != "" && len(req.Permissions) == 0 {
-		rolePerms := rbac.DefaultRolePermissions()
-		if perms, found := rolePerms[req.Role]; found {
-			req.Permissions = perms
-		} else {
-			h.respondAuditError(c, http.StatusBadRequest, audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()), strings.TrimSpace(req.UserEmail), fmt.Sprintf("invalid role: %s (valid roles: viewer, ops, deployer, cicd, admin)", req.Role), start, map[string]interface{}{"name": req.Name, "role": req.Role})
-			return
-		}
+	if err := h.convertRoleToPermissions(&req, c, start); err != nil {
+		return
 	}
 
 	// Validate that permissions are provided
@@ -111,42 +105,8 @@ func (h *AdminHandler) CreateAPIToken(c *gin.Context) {
 
 	resp, err := h.tokenService.GenerateAPIToken(tokenReq)
 	if err != nil {
-		details := map[string]interface{}{"name": tokenReq.Name}
-		switch {
-		case errors.Is(err, token.ErrAPITokenNameExists):
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
-				targetEmail,
-				"token name already exists",
-				start,
-				details,
-			)
-			return
-		case errors.Is(err, token.ErrAPITokenNameRequired):
-			h.respondAuditError(
-				c,
-				http.StatusBadRequest,
-				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
-				targetEmail,
-				"token name is required",
-				start,
-				details,
-			)
-			return
-		default:
-			h.respondAuditError(
-				c,
-				http.StatusInternalServerError,
-				audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
-				targetEmail,
-				"failed to create token",
-				start,
-				details,
-			)
-			return
-		}
+		h.handleTokenGenerationError(c, err, tokenReq.Name, targetEmail, start)
+		return
 	}
 
 	h.notifyAPITokenCreated(c, targetEmail, req.Name)
@@ -215,13 +175,13 @@ func (h *AdminHandler) GetAPIToken(c *gin.Context) {
 		return
 	}
 
-	token, err := h.database.GetAPITokenByPublicID(tokenID)
+	apiToken, err := h.database.GetAPITokenByPublicID(tokenID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, token)
+	c.JSON(http.StatusOK, apiToken)
 }
 
 // UpdateAPIToken godoc
@@ -300,45 +260,8 @@ func (h *AdminHandler) UpdateAPIToken(c *gin.Context) {
 
 	details := make(map[string]interface{})
 
-	if name := strings.TrimSpace(req.Name); name != "" && name != existing.Name {
-		if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
-			switch {
-			case errors.Is(err, token.ErrAPITokenNameExists):
-				h.respondAuditError(
-					c,
-					http.StatusBadRequest,
-					audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-					tokenIDStr,
-					"token name already exists",
-					start,
-					map[string]interface{}{"name": name},
-				)
-				return
-			case errors.Is(err, token.ErrAPITokenNameRequired):
-				h.respondAuditError(
-					c,
-					http.StatusBadRequest,
-					audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-					tokenIDStr,
-					"token name is required",
-					start,
-					nil,
-				)
-				return
-			default:
-				h.respondAuditError(
-					c,
-					http.StatusInternalServerError,
-					audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String()),
-					tokenIDStr,
-					"failed to update token name",
-					start,
-					map[string]interface{}{"name": name},
-				)
-				return
-			}
-		}
-		details["name"] = name
+	if err := h.updateTokenNameIfChanged(c, tokenID, tokenIDStr, existing.Name, req.Name, start, details); err != nil {
+		return
 	}
 
 	if req.Permissions != nil {
@@ -527,46 +450,214 @@ func (h *AdminHandler) notifyAPITokenCreated(c *gin.Context, ownerEmail, tokenNa
 	if ownerEmail == "" {
 		return
 	}
-	inviter := h.currentAuthUser(c)
-	creatorEmail := ""
-	if inviter != nil {
-		creatorEmail = strings.TrimSpace(inviter.Email)
-	}
-	if creatorEmail == "" {
-		creatorEmail = strings.TrimSpace(c.GetString("user_email"))
-	}
-	rack := h.rackDisplay()
-	creatorLabel := creatorEmail
-	if creatorLabel == "" {
-		creatorLabel = "an administrator"
-	}
-	subjectOwner := fmt.Sprintf("Rack Gateway (%s): New API token created", rack)
-	textOwner, htmlOwner, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
-	if err != nil || (textOwner == "" && htmlOwner == "") {
-		textOwner = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
-	}
-	_ = h.emailSender.Send(ownerEmail, subjectOwner, textOwner, htmlOwner)
 
+	creatorEmail := h.getCreatorEmail(c)
+	rack := h.rackDisplay()
+	creatorLabel := getCreatorLabel(creatorEmail)
+
+	h.sendTokenCreatedOwnerEmail(ownerEmail, tokenName, rack, creatorLabel)
+	h.sendTokenCreatedAdminEmails(ownerEmail, tokenName, rack, creatorLabel, creatorEmail)
+}
+
+func (h *AdminHandler) convertRoleToPermissions(
+	req *CreateAPITokenRequest,
+	c *gin.Context,
+	start time.Time,
+) error {
+	if req.Role == "" || len(req.Permissions) > 0 {
+		return nil
+	}
+
+	rolePerms := rbac.DefaultRolePermissions()
+	perms, found := rolePerms[req.Role]
+	if !found {
+		errorMsg := fmt.Sprintf(
+			"invalid role: %s (valid roles: viewer, ops, deployer, cicd, admin)",
+			req.Role,
+		)
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String()),
+			strings.TrimSpace(req.UserEmail),
+			errorMsg,
+			start,
+			map[string]interface{}{"name": req.Name, "role": req.Role},
+		)
+		return fmt.Errorf("invalid role")
+	}
+
+	req.Permissions = perms
+	return nil
+}
+
+func (h *AdminHandler) handleTokenGenerationError(
+	c *gin.Context,
+	err error,
+	tokenName string,
+	targetEmail string,
+	start time.Time,
+) {
+	details := map[string]interface{}{"name": tokenName}
+	action := audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionCreate.String())
+
+	switch {
+	case errors.Is(err, token.ErrAPITokenNameExists):
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			action,
+			targetEmail,
+			"token name already exists",
+			start,
+			details,
+		)
+	case errors.Is(err, token.ErrAPITokenNameRequired):
+		h.respondAuditError(
+			c,
+			http.StatusBadRequest,
+			action,
+			targetEmail,
+			"token name is required",
+			start,
+			details,
+		)
+	default:
+		h.respondAuditError(
+			c,
+			http.StatusInternalServerError,
+			action,
+			targetEmail,
+			"failed to create token",
+			start,
+			details,
+		)
+	}
+}
+
+func (h *AdminHandler) updateTokenNameIfChanged(
+	c *gin.Context,
+	tokenID int64,
+	tokenIDStr string,
+	existingName string,
+	newName string,
+	start time.Time,
+	details map[string]interface{},
+) error {
+	name := strings.TrimSpace(newName)
+	if name == "" || name == existingName {
+		return nil
+	}
+
+	if err := h.tokenService.UpdateTokenName(tokenID, name); err != nil {
+		action := audit.BuildAction(rbac.ResourceAPIToken.String(), rbac.ActionUpdate.String())
+
+		switch {
+		case errors.Is(err, token.ErrAPITokenNameExists):
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				action,
+				tokenIDStr,
+				"token name already exists",
+				start,
+				map[string]interface{}{"name": name},
+			)
+			return err
+		case errors.Is(err, token.ErrAPITokenNameRequired):
+			h.respondAuditError(
+				c,
+				http.StatusBadRequest,
+				action,
+				tokenIDStr,
+				"token name is required",
+				start,
+				nil,
+			)
+			return err
+		default:
+			h.respondAuditError(
+				c,
+				http.StatusInternalServerError,
+				action,
+				tokenIDStr,
+				"failed to update token name",
+				start,
+				map[string]interface{}{"name": name},
+			)
+			return err
+		}
+	}
+
+	details["name"] = name
+	return nil
+}
+
+func (h *AdminHandler) getCreatorEmail(c *gin.Context) string {
+	inviter := h.currentAuthUser(c)
+	if inviter != nil {
+		if email := strings.TrimSpace(inviter.Email); email != "" {
+			return email
+		}
+	}
+	return strings.TrimSpace(c.GetString("user_email"))
+}
+
+func getCreatorLabel(creatorEmail string) string {
+	if creatorEmail != "" {
+		return creatorEmail
+	}
+	return "an administrator"
+}
+
+func (h *AdminHandler) sendTokenCreatedOwnerEmail(
+	ownerEmail string,
+	tokenName string,
+	rack string,
+	creatorLabel string,
+) {
+	subject := fmt.Sprintf("Rack Gateway (%s): New API token created", rack)
+	text, html, err := emailtemplates.RenderTokenCreatedOwner(rack, tokenName, creatorLabel)
+	if err != nil || (text == "" && html == "") {
+		text = fmt.Sprintf("A new API token '%s' was created for your account by %s.", tokenName, creatorLabel)
+	}
+	_ = h.emailSender.Send(ownerEmail, subject, text, html)
+}
+
+func (h *AdminHandler) sendTokenCreatedAdminEmails(
+	ownerEmail string,
+	tokenName string,
+	rack string,
+	creatorLabel string,
+	creatorEmail string,
+) {
 	admins := h.getAdminEmails()
 	if len(admins) == 0 {
 		return
 	}
-	filtered := make([]string, 0, len(admins))
-	for _, addr := range admins {
-		if strings.EqualFold(addr, ownerEmail) {
-			continue
-		}
-		filtered = append(filtered, addr)
-	}
+
+	filtered := h.filterAdminsExcludingOwner(admins, ownerEmail)
 	if len(filtered) == 0 {
 		return
 	}
+
 	sort.Strings(filtered)
 	recipients := prioritiseInviterFirst(filtered, creatorEmail)
-	subjectAdmin := fmt.Sprintf("Rack Gateway (%s): API token created for %s", rack, ownerEmail)
-	textAdmin, htmlAdmin, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
-	if err != nil || (textAdmin == "" && htmlAdmin == "") {
-		textAdmin = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)
+
+	subject := fmt.Sprintf("Rack Gateway (%s): API token created for %s", rack, ownerEmail)
+	text, html, err := emailtemplates.RenderTokenCreatedAdmin(rack, tokenName, ownerEmail, creatorLabel)
+	if err != nil || (text == "" && html == "") {
+		text = fmt.Sprintf("An API token '%s' was created for %s by %s.", tokenName, ownerEmail, creatorLabel)
 	}
-	_ = h.emailSender.SendMany(recipients, subjectAdmin, textAdmin, htmlAdmin)
+	_ = h.emailSender.SendMany(recipients, subject, text, html)
+}
+
+func (h *AdminHandler) filterAdminsExcludingOwner(admins []string, ownerEmail string) []string {
+	filtered := make([]string, 0, len(admins))
+	for _, addr := range admins {
+		if !strings.EqualFold(addr, ownerEmail) {
+			filtered = append(filtered, addr)
+		}
+	}
+	return filtered
 }

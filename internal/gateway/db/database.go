@@ -12,10 +12,26 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	// Blank import required to register pgx driver with database/sql
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
+
+// Database wraps the SQL database connection
+type Database struct {
+	db     *sql.DB
+	pool   *pgxpool.Pool // For River and other pgx-native operations
+	driver string        // always "pgx"
+}
+
+// PoolConfig holds database connection pool configuration
+type PoolConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+}
 
 // New creates a new database connection
 func New(dsn string) (*Database, error) {
@@ -316,12 +332,22 @@ func logSQLTrace() {
 		return
 	}
 
+	lines := collectTraceLines()
+	if len(lines) == 0 {
+		return
+	}
+
+	gtwlog.DebugTopicf(gtwlog.TopicSQLTrace, "%s", strings.Join(lines, "\n"))
+}
+
+func collectTraceLines() []string {
 	const traceDepth = 10
 	pcs := make([]uintptr, 32)
 	n := runtime.Callers(4, pcs)
 	frames := runtime.CallersFrames(pcs[:n])
 	lines := make([]string, 0, traceDepth)
 	depth := 0
+
 	for {
 		frame, more := frames.Next()
 		if frame.Function == "" {
@@ -331,23 +357,14 @@ func logSQLTrace() {
 			continue
 		}
 
-		file := frame.File
-		// Skip internal database frames so trace points to caller sites
-		if strings.Contains(file, "/internal/gateway/db/") || strings.Contains(file, "\\internal\\gateway\\db\\") {
-			if !more {
-				break
-			}
-			continue
-		}
-		// Skip Go runtime frames
-		if strings.Contains(file, "/src/runtime/") {
+		if shouldSkipFrame(frame.File) {
 			if !more {
 				break
 			}
 			continue
 		}
 
-		rel := relativePath(file)
+		rel := relativePath(frame.File)
 		lines = append(lines, fmt.Sprintf("#%d %s (%s:%d)", depth, frame.Function, rel, frame.Line))
 		depth++
 		if depth >= traceDepth || !more {
@@ -355,65 +372,38 @@ func logSQLTrace() {
 		}
 	}
 
-	if len(lines) == 0 {
-		return
-	}
+	return lines
+}
 
-	gtwlog.DebugTopicf(gtwlog.TopicSQLTrace, "%s", strings.Join(lines, "\n"))
+func shouldSkipFrame(file string) bool {
+	// Skip internal database frames so trace points to caller sites
+	if strings.Contains(file, "/internal/gateway/db/") || strings.Contains(file, "\\internal\\gateway\\db\\") {
+		return true
+	}
+	// Skip Go runtime frames
+	if strings.Contains(file, "/src/runtime/") {
+		return true
+	}
+	return false
 }
 
 // ResetDatabase drops all gateway tables and re-applies migrations. It reads
 // environment guards from process environment variables so callers do not need
 // to pass context explicitly.
 func (d *Database) ResetDatabase() error {
-	if os.Getenv("RESET_RACK_GATEWAY_DATABASE") != "DELETE_ALL_DATA" {
-		return fmt.Errorf("refusing to reset database: set RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA to proceed")
+	if err := validateResetPermission(); err != nil {
+		return err
 	}
+
 	devMode := os.Getenv("DEV_MODE") == "true"
 	disableEnvCheck := strings.TrimSpace(os.Getenv("DISABLE_DATABASE_ENVIRONMENT_CHECK")) != ""
 
-	currentEnv, err := d.CurrentEnvironment()
-	if err != nil {
-		return fmt.Errorf("failed to determine database environment: %w", err)
+	if err := d.validateEnvironmentForReset(devMode, disableEnvCheck); err != nil {
+		return err
 	}
 
-	switch currentEnv {
-	case "":
-		if !devMode && !disableEnvCheck {
-			return fmt.Errorf(
-				"refusing to reset database with unknown environment (set DEV_MODE=true for development or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)",
-			)
-		}
-	case "development":
-		// always allowed
-	default:
-		if !disableEnvCheck {
-			return fmt.Errorf("refusing to reset %s database without DISABLE_DATABASE_ENVIRONMENT_CHECK", currentEnv)
-		}
-	}
-
-	// Drop audit schema (includes audit_event and audit_event_aggregated tables)
-	if _, err := d.exec("DROP SCHEMA IF EXISTS audit CASCADE"); err != nil {
-		return fmt.Errorf("failed to drop audit schema: %w", err)
-	}
-
-	// Drop dependent tables first to satisfy foreign keys.
-	for _, table := range []string{
-		"user_resources",
-		"deploy_approval_requests",
-		"api_tokens",
-		"cli_login_states",
-		"mfa_backup_codes",
-		"mfa_methods",
-		"trusted_devices",
-		"user_sessions",
-		"settings",
-		"users",
-		"rgw_internal_metadata",
-	} {
-		if _, err := d.exec("DROP TABLE IF EXISTS " + table + " CASCADE"); err != nil {
-			return fmt.Errorf("failed to drop %s: %w", table, err)
-		}
+	if err := d.dropAllTables(); err != nil {
+		return err
 	}
 
 	if _, err := d.exec("DELETE FROM schema_migrations"); err != nil {
@@ -430,6 +420,73 @@ func (d *Database) ResetDatabase() error {
 
 	if err := d.SeedDatabase(nil); err != nil {
 		return fmt.Errorf("failed to seed database: %w", err)
+	}
+
+	return nil
+}
+
+func validateResetPermission() error {
+	if os.Getenv("RESET_RACK_GATEWAY_DATABASE") != "DELETE_ALL_DATA" {
+		return fmt.Errorf(
+			"refusing to reset database: set RESET_RACK_GATEWAY_DATABASE=DELETE_ALL_DATA to proceed",
+		)
+	}
+	return nil
+}
+
+func (d *Database) validateEnvironmentForReset(devMode, disableEnvCheck bool) error {
+	currentEnv, err := d.CurrentEnvironment()
+	if err != nil {
+		return fmt.Errorf("failed to determine database environment: %w", err)
+	}
+
+	switch currentEnv {
+	case "":
+		if !devMode && !disableEnvCheck {
+			return fmt.Errorf(
+				"refusing to reset database with unknown environment " +
+					"(set DEV_MODE=true for development or DISABLE_DATABASE_ENVIRONMENT_CHECK=1 to override)",
+			)
+		}
+	case "development":
+		// always allowed
+	default:
+		if !disableEnvCheck {
+			return fmt.Errorf(
+				"refusing to reset %s database without DISABLE_DATABASE_ENVIRONMENT_CHECK",
+				currentEnv,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (d *Database) dropAllTables() error {
+	// Drop audit schema (includes audit_event and audit_event_aggregated tables)
+	if _, err := d.exec("DROP SCHEMA IF EXISTS audit CASCADE"); err != nil {
+		return fmt.Errorf("failed to drop audit schema: %w", err)
+	}
+
+	// Drop dependent tables first to satisfy foreign keys.
+	tables := []string{
+		"user_resources",
+		"deploy_approval_requests",
+		"api_tokens",
+		"cli_login_states",
+		"mfa_backup_codes",
+		"mfa_methods",
+		"trusted_devices",
+		"user_sessions",
+		"settings",
+		"users",
+		"rgw_internal_metadata",
+	}
+
+	for _, table := range tables {
+		if _, err := d.exec("DROP TABLE IF EXISTS " + table + " CASCADE"); err != nil {
+			return fmt.Errorf("failed to drop %s: %w", table, err)
+		}
 	}
 
 	return nil

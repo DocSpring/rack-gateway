@@ -17,7 +17,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "request",
 		Short: "Request manual approval for CI/CD deploy",
-		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			cfg, err := parseDeployApprovalRequestOptions(cmd, opts)
 			if err != nil {
 				return err
@@ -31,12 +31,20 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.rackFlag, "rack", "", "Rack name")
 	cmd.Flags().BoolVar(&opts.wait, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "5s", "Polling interval when --wait is set")
-	cmd.Flags().
-		StringVar(&opts.timeout, "timeout", "20m", "Maximum time to wait before giving up (set to 0 to wait indefinitely)")
+	cmd.Flags().StringVar(
+		&opts.timeout,
+		"timeout",
+		"20m",
+		"Maximum time to wait before giving up (set to 0 to wait indefinitely)",
+	)
 	cmd.Flags().StringVar(&opts.gitCommitHash, "git-commit", "", "Git commit SHA (required)")
 	cmd.Flags().StringVar(&opts.gitBranch, "branch", "", "Git branch name")
-	cmd.Flags().
-		StringVar(&opts.ciMetadata, "ci-metadata", "", "CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')")
+	cmd.Flags().StringVar(
+		&opts.ciMetadata,
+		"ci-metadata",
+		"",
+		"CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')",
+	)
 	cmd.Flags().StringVar(&opts.message, "message", "", "Deploy approval message (required)")
 
 	_ = cmd.MarkFlagRequired("git-commit")
@@ -70,7 +78,7 @@ type deployApprovalRequestConfig struct {
 }
 
 func parseDeployApprovalRequestOptions(
-	cmd *cobra.Command,
+	_ *cobra.Command,
 	opts deployApprovalRequestOptions,
 ) (deployApprovalRequestConfig, error) {
 	commit := strings.TrimSpace(opts.gitCommitHash)
@@ -163,7 +171,13 @@ func executeDeployApprovalRequest(cmd *cobra.Command, cfg deployApprovalRequestC
 		return fmt.Errorf("failed to create deploy approval request")
 	}
 
-	if err := writef(cmd.OutOrStdout(), "Deploy approval request %s created (status: %s)\n", created.PublicID, created.Status); err != nil {
+	err = writef(
+		cmd.OutOrStdout(),
+		"Deploy approval request %s created (status: %s)\n",
+		created.PublicID,
+		created.Status,
+	)
+	if err != nil {
 		return err
 	}
 
@@ -241,7 +255,8 @@ func waitForDeployApproval(
 	var lastStatus string
 	for {
 		var result deployApprovalRequest
-		if err := gatewayRequest(cmd, rack, http.MethodGet, fmt.Sprintf("/deploy-approval-requests/%s", publicID), nil, &result); err != nil {
+		endpoint := fmt.Sprintf("/deploy-approval-requests/%s", publicID)
+		if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
 			return nil, err
 		}
 

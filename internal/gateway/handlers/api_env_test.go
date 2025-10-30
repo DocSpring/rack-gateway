@@ -66,7 +66,7 @@ func newJSONContext(body []byte) (*gin.Context, *httptest.ResponseRecorder) {
 func attachUser(c *gin.Context, email, name string) {
 	c.Set("user_email", email)
 	c.Set("user_name", name)
-	ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, &auth.AuthUser{Email: email, Name: name})
+	ctx := context.WithValue(c.Request.Context(), auth.UserContextKey, &auth.User{Email: email, Name: name})
 	c.Request = c.Request.WithContext(ctx)
 }
 
@@ -316,19 +316,7 @@ func TestUpdateEnvValuesProtectedKeyDenied(t *testing.T) {
 }
 
 func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/apps/myapp/releases":
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`[{"id":"R1"}]`))
-		case r.Method == http.MethodGet && r.URL.Path == "/apps/myapp/releases/R1":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"env":"FOO=bar"}`))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
+	server := httptest.NewServer(http.HandlerFunc(mockEnvTestServer))
 	defer server.Close()
 
 	database := dbtest.NewDatabase(t)
@@ -338,6 +326,32 @@ func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
 		t.Fatalf("failed to seed user: %v", err)
 	}
 
+	resp := executeUpdateEnvNoChange(t, handler)
+
+	// No release should be created when there are no changes
+	if resp.ReleaseID != "" {
+		t.Fatalf("expected no release ID when there are no changes, got %s", resp.ReleaseID)
+	}
+
+	verifyEnvUpdateAuditLog(t, database)
+}
+
+func mockEnvTestServer(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/apps/myapp/releases":
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[{"id":"R1"}]`))
+	case r.Method == http.MethodGet && r.URL.Path == "/apps/myapp/releases/R1":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"env":"FOO=bar"}`))
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+func executeUpdateEnvNoChange(t *testing.T, handler *handlers.APIHandler) handlers.UpdateEnvValuesResponse {
+	t.Helper()
 	// Set FOO to "bar" - the same value it already has
 	payload := map[string]interface{}{
 		"set": map[string]string{"FOO": "bar"},
@@ -357,13 +371,11 @@ func TestUpdateEnvValuesLogsAuditEvenWhenNoChanges(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
+	return resp
+}
 
-	// No release should be created when there are no changes
-	if resp.ReleaseID != "" {
-		t.Fatalf("expected no release ID when there are no changes, got %s", resp.ReleaseID)
-	}
-
-	// Verify audit log was created even though no changes were made
+func verifyEnvUpdateAuditLog(t *testing.T, database *db.Database) {
+	t.Helper()
 	logs, err := database.GetAuditLogs("", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("failed to fetch audit logs: %v", err)

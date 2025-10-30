@@ -24,36 +24,23 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
+// CreateDeployApprovalRequest handles the creation of a new deploy approval request.
+// It validates the request, performs GitHub verification if enabled, and creates the approval record.
 func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+	if !h.checkDeployApprovalDependencies(c) {
 		return
 	}
 
-	// Check if deploy approvals are enabled (default: true)
-	if h.settingsService != nil {
-		enabled, err := h.settingsService.GetDeployApprovalsEnabled()
-		if err != nil {
-			gtwlog.Warnf("deploy approvals: failed to get deploy_approvals_enabled setting: %v", err)
-		} else if !enabled {
-			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approvals feature is disabled"})
-			return
-		}
-	}
-
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+	if !h.checkDeployApprovalsEnabled(c) {
 		return
 	}
 
-	allowed, err := h.rbac.Enforce(userEmail, rbac.ScopeGateway, rbac.ResourceDeployApprovalRequest, rbac.ActionCreate)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+	userEmail, dbUser, ok := h.authenticateUser(c)
+	if !ok {
 		return
 	}
-	if !allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you do not have permission to request a deploy approval"})
+
+	if !h.authorizeCreateRequest(c, userEmail) {
 		return
 	}
 
@@ -63,37 +50,189 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	message := strings.TrimSpace(req.Message)
-	if message == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
+	message, gitCommitHash, app, ok := h.validateRequestFields(c, req)
+	if !ok {
 		return
 	}
 
-	gitCommitHash := strings.TrimSpace(req.GitCommitHash)
-	if gitCommitHash == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash is required"})
+	authUser, _ := auth.GetAuthUser(c.Request.Context())
+
+	token, ok := h.resolveToken(c, dbUser, req, authUser)
+	if !ok {
 		return
 	}
 
-	app := strings.TrimSpace(req.App)
-	if app == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+	targetUserID, createdByAPITokenID := h.deriveTokenIDs(token, authUser)
+
+	ciMetadata, ok := h.marshalCIMetadata(c, req)
+	if !ok {
 		return
+	}
+
+	prURL, ok := h.performGitHubVerification(c, app, req, gitCommitHash)
+	if !ok {
+		return
+	}
+
+	record, ok := h.createApprovalRecord(
+		c,
+		message,
+		app,
+		gitCommitHash,
+		req.GitBranch,
+		prURL,
+		ciMetadata,
+		dbUser.ID,
+		createdByAPITokenID,
+		token.ID,
+		targetUserID,
+	)
+	if !ok {
+		return
+	}
+
+	h.logApprovalCreation(userEmail, dbUser.Name, token.PublicID, gitCommitHash, req.GitBranch, message, record.ID)
+	h.sendSlackNotification(c, record.ID)
+
+	if !h.shouldPostPRComment(prURL) {
+		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+		return
+	}
+
+	h.postPRCommentAsync(c, app, prURL, record.PublicID)
+	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+}
+
+// GetDeployApprovalRequest retrieves a deploy approval request by its public ID.
+// It verifies the user has permission to view the request (either owns it, owns the token, or is an admin).
+func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
+	if !h.checkDeployApprovalDependencies(c) {
+		return
+	}
+
+	publicID, ok := h.validatePublicIDParam(c)
+	if !ok {
+		return
+	}
+
+	userEmail, dbUser, ok := h.authenticateUser(c)
+	if !ok {
+		return
+	}
+
+	record, ok := h.loadApprovalRequest(c, publicID)
+	if !ok {
+		return
+	}
+
+	if !h.authorizeViewRequest(c, userEmail, dbUser, record) {
+		return
+	}
+
+	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+}
+
+// Helper functions for CreateDeployApprovalRequest
+
+func (h *APIHandler) checkDeployApprovalDependencies(c *gin.Context) bool {
+	if h == nil || h.database == nil || h.rbac == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+		return false
+	}
+	return true
+}
+
+func (h *APIHandler) checkDeployApprovalsEnabled(c *gin.Context) bool {
+	if h.settingsService == nil {
+		return true
+	}
+
+	enabled, err := h.settingsService.GetDeployApprovalsEnabled()
+	if err != nil {
+		gtwlog.Warnf("deploy approvals: failed to get deploy_approvals_enabled setting: %v", err)
+		return true
+	}
+
+	if !enabled {
+		c.JSON(http.StatusNotFound, gin.H{"error": "deploy approvals feature is disabled"})
+		return false
+	}
+
+	return true
+}
+
+func (h *APIHandler) authenticateUser(c *gin.Context) (string, *db.User, bool) {
+	userEmail := strings.TrimSpace(c.GetString("user_email"))
+	if userEmail == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return "", nil, false
 	}
 
 	dbUser, err := h.database.GetUser(userEmail)
 	if err != nil {
 		gtwlog.Errorf("deploy approvals: failed to load user email=%s: %v", userEmail, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
-		return
+		return "", nil, false
 	}
 	if dbUser == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
-		return
+		return "", nil, false
 	}
 
-	authUser, _ := auth.GetAuthUser(c.Request.Context())
+	return userEmail, dbUser, true
+}
 
+func (h *APIHandler) authorizeCreateRequest(c *gin.Context, userEmail string) bool {
+	allowed, err := h.rbac.Enforce(
+		userEmail,
+		rbac.ScopeGateway,
+		rbac.ResourceDeployApprovalRequest,
+		rbac.ActionCreate,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return false
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "you do not have permission to request a deploy approval",
+		})
+		return false
+	}
+	return true
+}
+
+func (h *APIHandler) validateRequestFields(
+	c *gin.Context,
+	req CreateDeployApprovalRequestRequest,
+) (string, string, string, bool) {
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
+		return "", "", "", false
+	}
+
+	gitCommitHash := strings.TrimSpace(req.GitCommitHash)
+	if gitCommitHash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash is required"})
+		return "", "", "", false
+	}
+
+	app := strings.TrimSpace(req.App)
+	if app == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+		return "", "", "", false
+	}
+
+	return message, gitCommitHash, app, true
+}
+
+func (h *APIHandler) resolveToken(
+	c *gin.Context,
+	dbUser *db.User,
+	req CreateDeployApprovalRequestRequest,
+	authUser *auth.User,
+) (*db.APIToken, bool) {
 	token, err := resolveDeployApprovalRequestToken(h.database, h.rbac, dbUser, req, authUser)
 	if err != nil {
 		switch {
@@ -107,13 +246,16 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 			gtwlog.Errorf("deploy approvals: failed to resolve API token for user_id=%d: %v", dbUser.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
 		}
-		return
+		return nil, false
 	}
 	if token == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve api token"})
-		return
+		return nil, false
 	}
+	return token, true
+}
 
+func (h *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*int64, *int64) {
 	var targetUserID *int64
 	if token != nil && token.UserID > 0 {
 		id := token.UserID
@@ -125,219 +267,297 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		createdByAPITokenID = authUser.TokenID
 	}
 
-	// Marshal CI metadata to JSON bytes
+	return targetUserID, createdByAPITokenID
+}
+
+func (h *APIHandler) marshalCIMetadata(c *gin.Context, req CreateDeployApprovalRequestRequest) ([]byte, bool) {
 	var ciMetadata []byte
 	if len(req.CIMetadata) > 0 {
 		var err error
 		ciMetadata, err = json.Marshal(req.CIMetadata)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ci_metadata"})
-			return
+			return nil, false
 		}
 	}
+	return ciMetadata, true
+}
 
-	// GitHub verification based on app settings
-	var prURL string
-	if h.settingsService != nil {
-		if githubVerificationEnabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true); err != nil {
-			gtwlog.Warnf("deploy approvals: failed to get github_verification setting app=%s: %v", app, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-			return
-		} else if githubVerificationEnabled && h.config != nil && h.config.GitHubToken != "" {
-			if githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, ""); err != nil {
-				gtwlog.Warnf("deploy approvals: failed to get vcs_repo setting app=%s: %v", app, err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-				return
-			} else if githubRepo != "" {
-				gitBranch := strings.TrimSpace(req.GitBranch)
-				if gitBranch == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
-					return
-				}
-
-				owner, repo := github.SplitRepo(githubRepo)
-				if owner == "" || repo == "" {
-					gtwlog.Warnf("deploy approvals: invalid vcs_repo format app=%s value=%s", app, githubRepo)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
-					return
-				}
-
-				// Check if deploying from default branch is allowed
-				allowDefaultBranch, err := getAppSettingBool(h.settingsService, app, settings.KeyAllowDeployFromDefaultBranch, false)
-				if err != nil {
-					gtwlog.Warnf("deploy approvals: failed to get allow_deploy_from_default_branch setting app=%s: %v", app, err)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-					return
-				}
-
-				defaultBranch, err := getAppSettingString(h.settingsService, app, settings.KeyDefaultBranch, "main")
-				if err != nil {
-					gtwlog.Warnf("deploy approvals: failed to get default_branch setting app=%s: %v", app, err)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-					return
-				}
-
-				if !allowDefaultBranch && gitBranch == defaultBranch {
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("deploying from default branch '%s' is not allowed", defaultBranch)})
-					return
-				}
-
-				// Get verification mode and PR requirement
-				requirePR, err := getAppSettingBool(h.settingsService, app, settings.KeyRequirePRForBranch, true)
-				if err != nil {
-					gtwlog.Warnf("deploy approvals: failed to get require_pr_for_branch setting app=%s: %v", app, err)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-					return
-				}
-
-				verifyMode, err := getAppSettingString(h.settingsService, app, settings.KeyVerifyGitCommitMode, settings.VerifyGitCommitModeLatest)
-				if err != nil {
-					gtwlog.Warnf("deploy approvals: failed to get verify_git_commit_mode setting app=%s: %v", app, err)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-					return
-				}
-
-				client := github.NewClient(h.config.GitHubToken)
-				opts := github.VerifyCommitOptions{
-					RequirePR: requirePR,
-					Mode:      verifyMode,
-				}
-
-				prURL, err = client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
-				if err != nil {
-					gtwlog.Warnf("deploy approvals: GitHub verification failed app=%s repo=%s/%s branch=%s commit=%s: %v", app, owner, repo, gitBranch, gitCommitHash, err)
-					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
-					return
-				}
-			}
-		}
+func (h *APIHandler) performGitHubVerification(
+	c *gin.Context,
+	app string,
+	req CreateDeployApprovalRequestRequest,
+	gitCommitHash string,
+) (string, bool) {
+	if h.settingsService == nil {
+		return "", true
 	}
 
+	enabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true)
+	if err != nil {
+		gtwlog.Warnf("deploy approvals: failed to get github_verification setting app=%s: %v", app, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+		return "", false
+	}
+
+	if !enabled || h.config == nil || h.config.GitHubToken == "" {
+		return "", true
+	}
+
+	githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, "")
+	if err != nil {
+		gtwlog.Warnf("deploy approvals: failed to get vcs_repo setting app=%s: %v", app, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+		return "", false
+	}
+
+	if githubRepo == "" {
+		return "", true
+	}
+
+	return h.verifyGitHubCommit(c, app, githubRepo, req, gitCommitHash)
+}
+
+func (h *APIHandler) verifyGitHubCommit(
+	c *gin.Context,
+	app string,
+	githubRepo string,
+	req CreateDeployApprovalRequestRequest,
+	gitCommitHash string,
+) (string, bool) {
+	gitBranch := strings.TrimSpace(req.GitBranch)
+	if gitBranch == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
+		return "", false
+	}
+
+	owner, repo := github.SplitRepo(githubRepo)
+	if owner == "" || repo == "" {
+		gtwlog.Warnf("deploy approvals: invalid vcs_repo format app=%s value=%s", app, githubRepo)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
+		return "", false
+	}
+
+	if ok := h.checkDefaultBranchRestriction(c, app, gitBranch); !ok {
+		return "", false
+	}
+
+	requirePR, verifyMode, ok := h.getVerificationSettings(c, app)
+	if !ok {
+		return "", false
+	}
+
+	client := github.NewClient(h.config.GitHubToken)
+	opts := github.VerifyCommitOptions{
+		RequirePR: requirePR,
+		Mode:      verifyMode,
+	}
+
+	prURL, err := client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
+	if err != nil {
+		gtwlog.Warnf(
+			"deploy approvals: GitHub verification failed app=%s repo=%s/%s branch=%s commit=%s: %v",
+			app,
+			owner,
+			repo,
+			gitBranch,
+			gitCommitHash,
+			err,
+		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
+		return "", false
+	}
+
+	return prURL, true
+}
+
+func (h *APIHandler) checkDefaultBranchRestriction(c *gin.Context, app, gitBranch string) bool {
+	allowDefault, err := getAppSettingBool(
+		h.settingsService,
+		app,
+		settings.KeyAllowDeployFromDefaultBranch,
+		false,
+	)
+	if err != nil {
+		gtwlog.Warnf(
+			"deploy approvals: failed to get allow_deploy_from_default_branch setting app=%s: %v",
+			app,
+			err,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+		return false
+	}
+
+	defaultBranch, err := getAppSettingString(h.settingsService, app, settings.KeyDefaultBranch, "main")
+	if err != nil {
+		gtwlog.Warnf("deploy approvals: failed to get default_branch setting app=%s: %v", app, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+		return false
+	}
+
+	if !allowDefault && gitBranch == defaultBranch {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("deploying from default branch '%s' is not allowed", defaultBranch),
+		})
+		return false
+	}
+
+	return true
+}
+
+func (h *APIHandler) getVerificationSettings(c *gin.Context, app string) (bool, string, bool) {
+	requirePR, err := getAppSettingBool(h.settingsService, app, settings.KeyRequirePRForBranch, true)
+	if err != nil {
+		gtwlog.Warnf("deploy approvals: failed to get require_pr_for_branch setting app=%s: %v", app, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+		return false, "", false
+	}
+
+	verifyMode, err := getAppSettingString(
+		h.settingsService,
+		app,
+		settings.KeyVerifyGitCommitMode,
+		settings.VerifyGitCommitModeLatest,
+	)
+	if err != nil {
+		gtwlog.Warnf("deploy approvals: failed to get verify_git_commit_mode setting app=%s: %v", app, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
+		return false, "", false
+	}
+
+	return requirePR, verifyMode, true
+}
+
+func (h *APIHandler) createApprovalRecord(
+	c *gin.Context,
+	message, app, gitCommitHash, gitBranch, prURL string,
+	ciMetadata []byte,
+	userID int64,
+	createdByAPITokenID *int64,
+	tokenID int64,
+	targetUserID *int64,
+) (*db.DeployApprovalRequest, bool) {
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
 		app,
 		gitCommitHash,
-		req.GitBranch,
+		gitBranch,
 		prURL,
 		ciMetadata,
-		dbUser.ID,
+		userID,
 		createdByAPITokenID,
-		token.ID,
+		tokenID,
 		targetUserID,
 	)
 	if err != nil {
-		switch {
-		case errors.Is(err, db.ErrDeployApprovalRequestActive):
-			var conflict *db.DeployApprovalRequestConflictError
-			if errors.As(err, &conflict) && conflict.Request != nil {
-				c.JSON(http.StatusConflict, toDeployApprovalRequestResponse(conflict.Request))
-				return
-			}
-			c.JSON(
-				http.StatusConflict,
-				gin.H{"error": "an approval request is already pending or approved for this token and git commit"},
-			)
-		default:
-			gtwlog.Errorf(
-				"deploy approvals: failed to create approval request for token_id=%d git_commit=%s: %v",
-				token.ID,
-				gitCommitHash,
-				err,
-			)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
-		}
-		return
+		h.handleCreateError(c, err, tokenID, gitCommitHash)
+		return nil, false
 	}
+	return record, true
+}
 
+func (h *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64, gitCommitHash string) {
+	switch {
+	case errors.Is(err, db.ErrDeployApprovalRequestActive):
+		var conflict *db.DeployApprovalRequestConflictError
+		if errors.As(err, &conflict) && conflict.Request != nil {
+			c.JSON(http.StatusConflict, toDeployApprovalRequestResponse(conflict.Request))
+			return
+		}
+		c.JSON(
+			http.StatusConflict,
+			gin.H{"error": "an approval request is already pending or approved for this token and git commit"},
+		)
+	default:
+		gtwlog.Errorf(
+			"deploy approvals: failed to create approval request for token_id=%d git_commit=%s: %v",
+			tokenID,
+			gitCommitHash,
+			err,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create deploy approval request"})
+	}
+}
+
+func (h *APIHandler) logApprovalCreation(
+	userEmail, userName, tokenUUID, gitCommitHash, gitBranch, message string,
+	recordID int64,
+) {
 	details := auditDetails(map[string]string{
-		"token_uuid":      token.PublicID,
+		"token_uuid":      tokenUUID,
 		"git_commit_hash": gitCommitHash,
-		"git_branch":      req.GitBranch,
+		"git_branch":      gitBranch,
 		"message":         message,
 	})
 
-	if err := h.auditLogger.LogDBEntry(&db.AuditLog{
+	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
 		UserEmail:    userEmail,
-		UserName:     dbUser.Name,
+		UserName:     userName,
 		ActionType:   audit.ActionTypeGateway,
 		Action:       audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionCreate.String()),
 		ResourceType: rbac.ResourceDeployApprovalRequest.String(),
-		Resource:     fmt.Sprintf("%d", record.ID),
+		Resource:     fmt.Sprintf("%d", recordID),
 		Details:      details,
 		Status:       audit.StatusSuccess,
 		RBACDecision: "allow",
 		HTTPStatus:   http.StatusCreated,
-	}); err != nil {
-		// best-effort logging; ignore error
-		_ = err
-	}
+	})
+}
 
-	// Send Slack deploy approval alert (separate from audit notification)
-	if h.jobsClient != nil && h.config != nil && h.config.Domain != "" {
-		_, err := h.jobsClient.Insert(c.Request.Context(), jobslack.DeployApprovalArgs{
-			DeployApprovalRequestID: record.ID,
-			GatewayDomain:           h.config.Domain,
-		}, &river.InsertOpts{
-			Queue:       jobs.QueueNotifications,
-			MaxAttempts: jobs.MaxAttemptsNotification,
-		})
-		if err != nil {
-			gtwlog.Errorf("deploy approvals: failed to enqueue Slack notification: %v", err)
-			sentry.CaptureException(err)
-		}
-	}
-
-	// Post PR comment if GitHub integration is enabled and PR was found
-	if h.settingsService == nil || prURL == "" || h.config == nil || h.config.GitHubToken == "" {
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+func (h *APIHandler) sendSlackNotification(c *gin.Context, recordID int64) {
+	if h.jobsClient == nil || h.config == nil || h.config.Domain == "" {
 		return
 	}
 
+	_, err := h.jobsClient.Insert(c.Request.Context(), jobslack.DeployApprovalArgs{
+		DeployApprovalRequestID: recordID,
+		GatewayDomain:           h.config.Domain,
+	}, &river.InsertOpts{
+		Queue:       jobs.QueueNotifications,
+		MaxAttempts: jobs.MaxAttemptsNotification,
+	})
+	if err != nil {
+		gtwlog.Errorf("deploy approvals: failed to enqueue Slack notification: %v", err)
+		sentry.CaptureException(err)
+	}
+}
+
+func (h *APIHandler) shouldPostPRComment(prURL string) bool {
+	return h.settingsService != nil && prURL != "" && h.config != nil && h.config.GitHubToken != ""
+}
+
+func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID string) {
 	postComment, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubPostPRComment, true)
 	if err != nil {
 		log.Printf("WARN: Failed to get github_post_pr_comment setting: %v", err)
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
 	if !postComment {
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
 	githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, "")
 	if err != nil {
 		log.Printf("WARN: Failed to get vcs_repo setting: %v", err)
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
 	if githubRepo == "" {
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
-	// Build the deploy approval request URL
-	gatewayURL := h.config.Domain
-	if gatewayURL == "" || gatewayURL == "localhost" {
-		gatewayURL = fmt.Sprintf("http://localhost:%s", h.config.Port)
-	} else {
-		gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
-	}
-	approvalURL := fmt.Sprintf("%s/app/deploy_approval_requests/%s", gatewayURL, record.PublicID)
+	approvalURL := h.buildApprovalURL(publicID)
 
-	// Extract PR number from URL
 	prNumber, err := github.ExtractPRNumber(prURL)
 	if err != nil {
 		log.Printf("WARN: Failed to extract PR number from URL %s: %v", prURL, err)
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
 	owner, repo := github.SplitRepo(githubRepo)
 	if owner == "" || repo == "" {
 		log.Printf("WARN: Invalid vcs_repo format: %s", githubRepo)
-		c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
 		return
 	}
 
@@ -346,64 +566,69 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		approvalURL,
 	)
 
-	// Post comment via background job
-	if h.jobsClient != nil {
-		_, err := h.jobsClient.Insert(c.Request.Context(), jobgithub.PostPRCommentArgs{
-			GitHubToken: h.config.GitHubToken,
-			Owner:       owner,
-			Repo:        repo,
-			PRNumber:    prNumber,
-			Comment:     comment,
-		}, &river.InsertOpts{
-			Queue:       jobs.QueueIntegrations,
-			MaxAttempts: jobs.MaxAttemptsNotification,
-		})
-		if err != nil {
-			log.Printf("ERROR: Failed to enqueue GitHub PR comment job: %v", err)
-		}
-	}
-
-	c.JSON(http.StatusCreated, toDeployApprovalRequestResponse(record))
+	h.enqueueGitHubComment(c, owner, repo, prNumber, comment)
 }
 
-func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
-	if h == nil || h.database == nil || h.rbac == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy approvals unavailable"})
+func (h *APIHandler) buildApprovalURL(publicID string) string {
+	gatewayURL := h.config.Domain
+	if gatewayURL == "" || gatewayURL == "localhost" {
+		gatewayURL = fmt.Sprintf("http://localhost:%s", h.config.Port)
+	} else {
+		gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
+	}
+	return fmt.Sprintf("%s/app/deploy_approval_requests/%s", gatewayURL, publicID)
+}
+
+func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, prNumber int, comment string) {
+	if h.jobsClient == nil {
 		return
 	}
 
+	_, err := h.jobsClient.Insert(c.Request.Context(), jobgithub.PostPRCommentArgs{
+		GitHubToken: h.config.GitHubToken,
+		Owner:       owner,
+		Repo:        repo,
+		PRNumber:    prNumber,
+		Comment:     comment,
+	}, &river.InsertOpts{
+		Queue:       jobs.QueueIntegrations,
+		MaxAttempts: jobs.MaxAttemptsNotification,
+	})
+	if err != nil {
+		log.Printf("ERROR: Failed to enqueue GitHub PR comment job: %v", err)
+	}
+}
+
+// Helper functions for GetDeployApprovalRequest
+
+func (h *APIHandler) validatePublicIDParam(c *gin.Context) (string, bool) {
 	publicID := strings.TrimSpace(c.Param("id"))
 	if publicID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
-		return
+		return "", false
 	}
+	return publicID, true
+}
 
-	userEmail := strings.TrimSpace(c.GetString("user_email"))
-	if userEmail == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return
-	}
-
-	dbUser, err := h.database.GetUser(userEmail)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
-		return
-	}
-	if dbUser == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
-		return
-	}
-
+func (h *APIHandler) loadApprovalRequest(c *gin.Context, publicID string) (*db.DeployApprovalRequest, bool) {
 	record, err := h.database.GetDeployApprovalRequestByPublicID(publicID)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
-			return
+			return nil, false
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy approval request"})
-		return
+		return nil, false
 	}
+	return record, true
+}
 
+func (h *APIHandler) authorizeViewRequest(
+	c *gin.Context,
+	userEmail string,
+	dbUser *db.User,
+	record *db.DeployApprovalRequest,
+) bool {
 	allowedAdmin, err := h.rbac.Enforce(
 		userEmail,
 		rbac.ScopeGateway,
@@ -412,7 +637,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
-		return
+		return false
 	}
 
 	ownsRequest := record.CreatedByUserID != nil && *record.CreatedByUserID == dbUser.ID
@@ -420,8 +645,8 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 
 	if !allowedAdmin && !ownsRequest && !ownsToken {
 		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
-		return
+		return false
 	}
 
-	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+	return true
 }

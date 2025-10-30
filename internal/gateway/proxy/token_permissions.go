@@ -34,7 +34,7 @@ const deployApprovalContextKey deployApprovalContextKeyType = "deployApproval"
 type deployApprovalContextKeyType string
 
 // hasAPITokenPermission checks if an API token has the required permission
-func (h *Handler) hasAPITokenPermission(authUser *auth.AuthUser, resource rbac.Resource, action rbac.Action) bool {
+func (h *Handler) hasAPITokenPermission(authUser *auth.User, resource rbac.Resource, action rbac.Action) bool {
 	// API tokens must have a TokenID
 	if authUser.TokenID == nil {
 		return false
@@ -64,7 +64,7 @@ func tokenHasPermission(perms []string, target string) bool {
 // the approval tracker in the context for downstream validation.
 func (h *Handler) evaluateAPITokenPermission(
 	r *http.Request,
-	authUser *auth.AuthUser,
+	authUser *auth.User,
 	resource rbac.Resource,
 	action rbac.Action,
 ) (bool, *deployApprovalTracker, error) {

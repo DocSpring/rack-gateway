@@ -18,19 +18,20 @@ import (
 type contextKey string
 
 const (
+	// UserContextKey is the context key used to store authenticated user information
 	UserContextKey contextKey = "user"
 	userRecordKey  contextKey = "user_record"
 )
 
-// AuthService handles session and API token authentication
-type AuthService struct {
+// Service handles session and API token authentication
+type Service struct {
 	tokenService *token.Service
 	database     *db.Database
 	sessions     *SessionManager
 }
 
-// AuthUser represents an authenticated user from either session or API token
-type AuthUser struct {
+// User represents an authenticated user from either session or API token
+type User struct {
 	Email              string          `json:"email"`
 	Name               string          `json:"name"`
 	Roles              []string        `json:"roles,omitempty"`       // For session users
@@ -53,8 +54,8 @@ type AuthUser struct {
 }
 
 // NewAuthService creates a new authentication service
-func NewAuthService(tokenService *token.Service, database *db.Database, sessions *SessionManager) *AuthService {
-	return &AuthService{
+func NewAuthService(tokenService *token.Service, database *db.Database, sessions *SessionManager) *Service {
+	return &Service{
 		tokenService: tokenService,
 		database:     database,
 		sessions:     sessions,
@@ -62,7 +63,7 @@ func NewAuthService(tokenService *token.Service, database *db.Database, sessions
 }
 
 // Middleware handles session token and API token authentication
-func (a *AuthService) Middleware(next http.Handler) http.Handler {
+func (a *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, source, err := a.AuthenticateHTTPRequest(r)
 		if err != nil {
@@ -77,7 +78,7 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func (a *AuthService) withUserContext(r *http.Request, user *AuthUser) *http.Request {
+func (a *Service) withUserContext(r *http.Request, user *User) *http.Request {
 	ctx := context.WithValue(r.Context(), UserContextKey, user)
 	if user != nil && user.DBUser != nil {
 		ctx = context.WithValue(ctx, userRecordKey, user.DBUser)
@@ -85,7 +86,7 @@ func (a *AuthService) withUserContext(r *http.Request, user *AuthUser) *http.Req
 	return r.WithContext(ctx)
 }
 
-func (a *AuthService) setAuthHeaders(r *http.Request, user *AuthUser, source string) {
+func (a *Service) setAuthHeaders(r *http.Request, user *User, source string) {
 	r.Header.Set("X-User-Name", user.Name)
 	r.Header.Set("X-User-Email", user.Email)
 	r.Header.Set("X-Auth-Source", source)
@@ -111,7 +112,7 @@ func (a *AuthService) setAuthHeaders(r *http.Request, user *AuthUser, source str
 }
 
 // writeUnauthorized centralizes 401 responses and optional debug logging.
-func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, reason string) {
+func (a *Service) writeUnauthorized(w http.ResponseWriter, r *http.Request, reason string) {
 	// Non-intrusive hint header + body for diagnostics
 	w.Header().Set("X-Error-Reason", reason)
 	// Structured debug at log level
@@ -126,7 +127,7 @@ func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, 
 }
 
 // AuthenticateHTTPRequest attempts to authenticate the provided request, returning the user and auth source label.
-func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, string, error) {
+func (a *Service) AuthenticateHTTPRequest(r *http.Request) (*User, string, error) {
 	if user, source, err := a.authenticateFromHeader(r); user != nil || err != nil {
 		if err != nil {
 			return nil, source, err
@@ -146,7 +147,7 @@ func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, strin
 	return nil, "none", fmt.Errorf("missing authorization")
 }
 
-func (a *AuthService) authenticateFromHeader(r *http.Request) (*AuthUser, string, error) {
+func (a *Service) authenticateFromHeader(r *http.Request) (*User, string, error) {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authHeader == "" {
 		return nil, "", nil
@@ -178,7 +179,7 @@ func (a *AuthService) authenticateFromHeader(r *http.Request) (*AuthUser, string
 	}
 }
 
-func (a *AuthService) authenticateBearer(credentials string, r *http.Request) (*AuthUser, error) {
+func (a *Service) authenticateBearer(credentials string, r *http.Request) (*User, error) {
 	if strings.HasPrefix(credentials, "rgw_") {
 		return a.validateAPIToken(credentials)
 	}
@@ -195,7 +196,7 @@ func (a *AuthService) authenticateBearer(credentials string, r *http.Request) (*
 	return user, nil
 }
 
-func (a *AuthService) authenticateFromCookie(r *http.Request) (*AuthUser, string, error) {
+func (a *Service) authenticateFromCookie(r *http.Request) (*User, string, error) {
 	cookie, err := r.Cookie("session_token")
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return nil, "", nil
@@ -214,7 +215,7 @@ func (a *AuthService) authenticateFromCookie(r *http.Request) (*AuthUser, string
 	return user, "cookie", nil
 }
 
-func (a *AuthService) applyHeaderMFA(r *http.Request, user *AuthUser) {
+func (a *Service) applyHeaderMFA(r *http.Request, user *User) {
 	if totpCode := strings.TrimSpace(r.Header.Get("X-Mfa-Totp")); totpCode != "" {
 		user.MFAType = "totp"
 		user.MFAValue = totpCode
@@ -226,7 +227,7 @@ func (a *AuthService) applyHeaderMFA(r *http.Request, user *AuthUser) {
 	}
 }
 
-func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
+func (a *Service) validateAPIToken(tokenString string) (*User, error) {
 	apiToken, err := a.tokenService.ValidateAPIToken(tokenString)
 	if err != nil {
 		// Audit failed token validation (do not log raw token)
@@ -260,7 +261,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 		return nil, fmt.Errorf("token owner is suspended")
 	}
 
-	userResp := &AuthUser{
+	userResp := &User{
 		Email:              user.Email,
 		Name:               user.Name,
 		Permissions:        append([]string(nil), apiToken.Permissions...),
@@ -281,7 +282,7 @@ func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {
 	return userResp, nil
 }
 
-func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*AuthUser, error) {
+func (a *Service) validateBasicAuth(credentials string, r *http.Request) (*User, error) {
 	// For Basic auth, try to decode and check both username:password formats
 	decoded, err := decodeBasicAuth(credentials)
 	if err != nil {
@@ -293,28 +294,18 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 		return nil, fmt.Errorf("invalid basic auth format")
 	}
 
-	username := parts[0]
 	password := parts[1]
 
 	// Parse password field for optional inline MFA data
 	authToken, mfaType, mfaValue := parseInlineMFA(password)
 
-	var user *AuthUser
+	var user *User
 
-	// If username is "convox", authToken may be a session token or API token
-	if username == "convox" {
-		if strings.HasPrefix(authToken, "rgw_") {
-			user, err = a.validateAPIToken(authToken)
-		} else {
-			user, err = a.validateSessionToken(authToken, r)
-		}
+	// authToken may be a session token or API token
+	if strings.HasPrefix(authToken, "rgw_") {
+		user, err = a.validateAPIToken(authToken)
 	} else {
-		// Otherwise, authToken could be an API token or session token
-		if strings.HasPrefix(authToken, "rgw_") {
-			user, err = a.validateAPIToken(authToken)
-		} else {
-			user, err = a.validateSessionToken(authToken, r)
-		}
+		user, err = a.validateSessionToken(authToken, r)
 	}
 
 	if err != nil {
@@ -331,14 +322,14 @@ func (a *AuthService) validateBasicAuth(credentials string, r *http.Request) (*A
 }
 
 // GetAuthUser extracts the authenticated user from the request context
-func GetAuthUser(ctx context.Context) (*AuthUser, bool) {
-	user, ok := ctx.Value(UserContextKey).(*AuthUser)
+func GetAuthUser(ctx context.Context) (*User, bool) {
+	user, ok := ctx.Value(UserContextKey).(*User)
 	return user, ok
 }
 
 // GetAuthUserRecord retrieves the loaded db.User from context when available.
 func GetAuthUserRecord(ctx context.Context) *db.User {
-	if user, ok := ctx.Value(UserContextKey).(*AuthUser); ok && user != nil && user.DBUser != nil {
+	if user, ok := ctx.Value(UserContextKey).(*User); ok && user != nil && user.DBUser != nil {
 		return user.DBUser
 	}
 	if v := ctx.Value(userRecordKey); v != nil {
@@ -351,7 +342,7 @@ func GetAuthUserRecord(ctx context.Context) *db.User {
 
 // GetSessionID extracts the session ID from the request context
 func GetSessionID(ctx context.Context) (int64, bool) {
-	authUser, ok := ctx.Value(UserContextKey).(*AuthUser)
+	authUser, ok := ctx.Value(UserContextKey).(*User)
 	if !ok || authUser.IsAPIToken || authUser.Session == nil {
 		return 0, false
 	}
@@ -380,11 +371,11 @@ func parseInlineMFA(tokenString string) (string, string, string) {
 	return tokenString, "", ""
 }
 
-func newAuthUserFromSessionResult(result *SessionValidationResult) *AuthUser {
+func newAuthUserFromSessionResult(result *SessionValidationResult) *User {
 	if result == nil || result.User == nil {
 		return nil
 	}
-	authUser := &AuthUser{
+	authUser := &User{
 		Email:              result.User.Email,
 		Name:               result.User.Name,
 		Roles:              append([]string(nil), result.User.Roles...),
@@ -406,8 +397,8 @@ func newAuthUserFromSessionResult(result *SessionValidationResult) *AuthUser {
 	return authUser
 }
 
-func (a *AuthService) validateSessionToken(token string, r *http.Request) (*AuthUser, error) {
-	trimmed := strings.TrimSpace(token)
+func (a *Service) validateSessionToken(sessionToken string, r *http.Request) (*User, error) {
+	trimmed := strings.TrimSpace(sessionToken)
 	if trimmed == "" {
 		return nil, fmt.Errorf("empty session token")
 	}

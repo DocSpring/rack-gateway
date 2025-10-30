@@ -31,15 +31,15 @@ func (o *globalSettingsOps) getDefault(key string) (interface{}, error) {
 	return settings.GetGlobalSettingDefault(key)
 }
 
-func (o *globalSettingsOps) getSetting(appName, key string, defaultValue interface{}) (*settings.Setting, error) {
+func (o *globalSettingsOps) getSetting(_ string, key string, defaultValue interface{}) (*settings.Setting, error) {
 	return o.service.GetGlobalSetting(key, defaultValue)
 }
 
-func (o *globalSettingsOps) setSetting(appName, key string, value interface{}, uid *int64) error {
+func (o *globalSettingsOps) setSetting(_ string, key string, value interface{}, uid *int64) error {
 	return o.service.SetGlobalSetting(key, value, uid)
 }
 
-func (o *globalSettingsOps) deleteSetting(appName, key string) error {
+func (o *globalSettingsOps) deleteSetting(_ string, key string) error {
 	return o.service.DeleteGlobalSetting(key)
 }
 

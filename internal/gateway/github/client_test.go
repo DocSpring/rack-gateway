@@ -76,7 +76,7 @@ func TestDoRequestWithBody(t *testing.T) {
 
 // TestDoRequestNotFoundWithCustomError tests 404 handling with custom error message
 func TestDoRequestNotFoundWithCustomError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"message": "Not Found"}`))
 	}))
@@ -97,7 +97,7 @@ func TestDoRequestNotFoundWithCustomError(t *testing.T) {
 
 // TestDoRequestNotFoundWithoutCustomError tests 404 handling without custom error
 func TestDoRequestNotFoundWithoutCustomError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"message": "Not Found"}`))
 	}))
@@ -119,7 +119,7 @@ func TestDoRequestNotFoundWithoutCustomError(t *testing.T) {
 
 // TestDoRequestUnexpectedStatus tests handling of unexpected status codes
 func TestDoRequestUnexpectedStatus(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"message": "Bad Request", "errors": ["invalid field"]}`))
 	}))
@@ -143,7 +143,7 @@ func TestDoRequestUnexpectedStatus(t *testing.T) {
 
 // TestDoRequestJSONDecodeError tests handling of JSON decode errors
 func TestDoRequestJSONDecodeError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`invalid json`))
 	}))
@@ -181,7 +181,7 @@ func TestDoRequestNetworkError(t *testing.T) {
 // TestDoRequestNoTargetDecoding tests that response is not decoded when target is nil
 func TestDoRequestNoTargetDecoding(t *testing.T) {
 	responseSent := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		// Send any response - it shouldn't be decoded
 		_, _ = w.Write([]byte(`{"some": "data"}`))
@@ -219,7 +219,7 @@ func TestDoRequestInvalidURL(t *testing.T) {
 
 // TestDoRequestServerError tests handling of 500 errors
 func TestDoRequestServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"message": "Internal Server Error"}`))
 	}))
@@ -263,7 +263,7 @@ func TestVerifyCommitOnBranchIntegration(t *testing.T) {
 
 // TestGetBranchIntegration tests getBranch using doRequest
 func TestGetBranchIntegration(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
 			"name": "main",

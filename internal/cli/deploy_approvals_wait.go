@@ -19,7 +19,7 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 		Use:   "wait",
 		Short: "Wait for and optionally approve pending deploy approval requests",
 		Args:  cobra.NoArgs,
-		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
+		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			parsed, err := parseDeployApprovalWaitOptions(cmd, opts)
 			if err != nil {
 				return err
@@ -56,7 +56,7 @@ type deployApprovalWaitConfig struct {
 }
 
 func parseDeployApprovalWaitOptions(
-	cmd *cobra.Command,
+	_ *cobra.Command,
 	opts deployApprovalWaitOptions,
 ) (deployApprovalWaitConfig, error) {
 	racks, err := resolveWaitRacks(opts.racks)
@@ -180,7 +180,8 @@ func fetchPendingDeployRequests(cmd *cobra.Command, rack string) ([]deployApprov
 	var response struct {
 		Requests []deployApprovalRequest `json:"deploy_approval_requests"`
 	}
-	if err := gatewayRequest(cmd, rack, http.MethodGet, "/deploy-approval-requests?status=pending", nil, &response); err != nil {
+	endpoint := "/deploy-approval-requests?status=pending"
+	if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &response); err != nil {
 		return nil, err
 	}
 	if response.Requests == nil {
@@ -202,7 +203,8 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 	if w.autoApprove {
 		err = w.autoApproveRequest(rack, request)
 	} else {
-		err = writeLine(w.cmd.OutOrStdout(), "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request.")
+		msg := "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."
+		err = writeLine(w.cmd.OutOrStdout(), msg)
 	}
 
 	<-soundDone
@@ -244,10 +246,7 @@ func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployAp
 	if err := writef(out, "  Token: %s\n", request.TargetAPITokenName); err != nil {
 		return err
 	}
-	if err := writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339)); err != nil {
-		return err
-	}
-	return nil
+	return writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339))
 }
 
 func (w *deployApprovalWaiter) autoApproveRequest(rack string, request deployApprovalRequest) error {

@@ -102,7 +102,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
-			authUser := &auth.AuthUser{
+			authUser := &auth.User{
 				Email:      admin.Email,
 				Name:       admin.Name,
 				Roles:      admin.Roles,
@@ -167,7 +167,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
-			authUser := &auth.AuthUser{
+			authUser := &auth.User{
 				Email:      admin.Email,
 				Name:       admin.Name,
 				Roles:      admin.Roles,
@@ -214,7 +214,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
-			authUser := &auth.AuthUser{
+			authUser := &auth.User{
 				Email:      admin.Email,
 				Name:       admin.Name,
 				Roles:      admin.Roles,
@@ -252,7 +252,7 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	t.Run("allows API tokens with proper permissions", func(t *testing.T) {
 		router := gin.New()
 		router.POST("/api/v1/deploy-approval-requests/:id/approve", func(c *gin.Context) {
-			authUser := &auth.AuthUser{
+			authUser := &auth.User{
 				Email:       admin.Email,
 				Name:        admin.Name,
 				Permissions: []string{"convox:apps:*"},
@@ -348,7 +348,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/api/v1/api-tokens", func(c *gin.Context) {
-			authUser := &auth.AuthUser{
+			authUser := &auth.User{
 				Email:      admin.Email,
 				Name:       admin.Name,
 				Roles:      admin.Roles,
@@ -394,7 +394,7 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 
 		router := gin.New()
 		router.POST("/api/v1/api-tokens", func(c *gin.Context) {
-			authUser := &auth.AuthUser{
+			authUser := &auth.User{
 				Email:      admin.Email,
 				Name:       admin.Name,
 				Roles:      admin.Roles,

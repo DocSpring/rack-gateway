@@ -21,10 +21,12 @@ type Sender struct {
 	jobs Inserter
 }
 
+// NewSender creates a new async email sender that enqueues jobs via the provided inserter.
 func NewSender(j Inserter) email.Sender {
 	return &Sender{jobs: j}
 }
 
+// Send enqueues a single email job to be sent asynchronously.
 func (s *Sender) Send(to, subject, textBody, htmlBody string) error {
 	if s == nil || s.jobs == nil || to == "" {
 		return nil
@@ -38,6 +40,7 @@ func (s *Sender) Send(to, subject, textBody, htmlBody string) error {
 	return nil
 }
 
+// SendMany enqueues a batch email job to send to multiple recipients asynchronously.
 func (s *Sender) SendMany(to []string, subject, textBody, htmlBody string) error {
 	if s == nil || s.jobs == nil || len(to) == 0 {
 		return nil

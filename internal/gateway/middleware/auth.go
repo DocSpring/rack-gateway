@@ -16,7 +16,7 @@ import (
 )
 
 // Authenticated enforces authentication for browser/admin API requests, supporting both session tokens and cookies.
-func Authenticated(authService *auth.AuthService, rbacManager rbac.Manager) gin.HandlerFunc {
+func Authenticated(authService *auth.Service, rbacManager rbac.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if authService == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "authentication unavailable"})
@@ -36,68 +36,95 @@ func Authenticated(authService *auth.AuthService, rbacManager rbac.Manager) gin.
 			return
 		}
 
-		if !authUser.IsAPIToken {
-			dbUser := authUser.DBUser
-			if dbUser == nil {
-				c.JSON(http.StatusForbidden, gin.H{"error": "user not authorized"})
-				c.Abort()
-				return
-			}
-			authUser.Roles = append([]string(nil), dbUser.Roles...)
-			c.Set("user_roles", dbUser.Roles)
-			c.Set("user_name", dbUser.Name)
-		} else {
-			c.Set("user_roles", []string{})
-			c.Set("user_name", authUser.Name)
+		if err := setUserRolesAndName(c, authUser); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			c.Abort()
+			return
 		}
 		c.Set("user_email", authUser.Email)
 
-		if hub := sentrygin.GetHubFromContext(c); hub != nil {
-			user := sentry.User{
-				Email:    authUser.Email,
-				Username: authUser.Name,
-			}
-			if authUser.IsAPIToken && authUser.TokenID != nil {
-				user.ID = fmt.Sprintf("token:%d", *authUser.TokenID)
-			}
-			hub.Scope().SetUser(user)
-			hub.Scope().SetTag("auth_source", source)
-			hub.Scope().SetTag("auth_is_api_token", strconv.FormatBool(authUser.IsAPIToken))
-			if len(authUser.Roles) > 0 {
-				hub.Scope().SetTag("auth_roles", strings.Join(authUser.Roles, ","))
-			}
-		}
-
-		reqWithUser := c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
-		c.Request = reqWithUser
-		c.Request.Header.Set("X-User-Email", authUser.Email)
-		c.Request.Header.Set("X-User-Name", authUser.Name)
-		if source != "" {
-			c.Request.Header.Set("X-Auth-Source", source)
-		}
-		if authUser.IsAPIToken {
-			if authUser.TokenID != nil {
-				c.Request.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", *authUser.TokenID))
-			} else {
-				c.Request.Header.Del("X-API-Token-ID")
-			}
-			tokenName := strings.TrimSpace(authUser.TokenName)
-			if tokenName != "" {
-				c.Request.Header.Set("X-API-Token-Name", tokenName)
-			} else {
-				c.Request.Header.Del("X-API-Token-Name")
-			}
-		} else {
-			c.Request.Header.Del("X-API-Token-ID")
-			c.Request.Header.Del("X-API-Token-Name")
-		}
+		configureSentry(c, authUser, source)
+		updateRequestContext(c, authUser, source)
 
 		c.Next()
 	}
 }
 
+// setUserRolesAndName sets user roles and name in the Gin context
+func setUserRolesAndName(c *gin.Context, authUser *auth.User) error {
+	if !authUser.IsAPIToken {
+		dbUser := authUser.DBUser
+		if dbUser == nil {
+			return fmt.Errorf("user not authorized")
+		}
+		authUser.Roles = append([]string(nil), dbUser.Roles...)
+		c.Set("user_roles", dbUser.Roles)
+		c.Set("user_name", dbUser.Name)
+	} else {
+		c.Set("user_roles", []string{})
+		c.Set("user_name", authUser.Name)
+	}
+	return nil
+}
+
+// configureSentry sets up Sentry user context and tags
+func configureSentry(c *gin.Context, authUser *auth.User, source string) {
+	hub := sentrygin.GetHubFromContext(c)
+	if hub == nil {
+		return
+	}
+
+	user := sentry.User{
+		Email:    authUser.Email,
+		Username: authUser.Name,
+	}
+	if authUser.IsAPIToken && authUser.TokenID != nil {
+		user.ID = fmt.Sprintf("token:%d", *authUser.TokenID)
+	}
+	hub.Scope().SetUser(user)
+	hub.Scope().SetTag("auth_source", source)
+	hub.Scope().SetTag("auth_is_api_token", strconv.FormatBool(authUser.IsAPIToken))
+	if len(authUser.Roles) > 0 {
+		hub.Scope().SetTag("auth_roles", strings.Join(authUser.Roles, ","))
+	}
+}
+
+// updateRequestContext updates the request context and headers with auth information
+func updateRequestContext(c *gin.Context, authUser *auth.User, source string) {
+	reqWithUser := c.Request.WithContext(context.WithValue(c.Request.Context(), auth.UserContextKey, authUser))
+	c.Request = reqWithUser
+	c.Request.Header.Set("X-User-Email", authUser.Email)
+	c.Request.Header.Set("X-User-Name", authUser.Name)
+	if source != "" {
+		c.Request.Header.Set("X-Auth-Source", source)
+	}
+	setAPITokenHeaders(c.Request, authUser)
+}
+
+// setAPITokenHeaders sets or removes API token headers based on auth user type
+func setAPITokenHeaders(r *http.Request, authUser *auth.User) {
+	if !authUser.IsAPIToken {
+		r.Header.Del("X-API-Token-ID")
+		r.Header.Del("X-API-Token-Name")
+		return
+	}
+
+	if authUser.TokenID != nil {
+		r.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", *authUser.TokenID))
+	} else {
+		r.Header.Del("X-API-Token-ID")
+	}
+
+	tokenName := strings.TrimSpace(authUser.TokenName)
+	if tokenName != "" {
+		r.Header.Set("X-API-Token-Name", tokenName)
+	} else {
+		r.Header.Del("X-API-Token-Name")
+	}
+}
+
 // CLIOnly creates middleware that only allows CLI authentication (no cookies)
-func CLIOnly(authService *auth.AuthService) gin.HandlerFunc {
+func CLIOnly(authService *auth.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var nextCalled bool
 
@@ -109,7 +136,7 @@ func CLIOnly(authService *auth.AuthService) gin.HandlerFunc {
 		isWebSocket := strings.Contains(strings.ToLower(c.Request.Header.Get("Connection")), "upgrade") &&
 			strings.ToLower(c.Request.Header.Get("Upgrade")) == "websocket"
 
-		authService.CLIOnlyMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authService.CLIOnlyMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 			nextCalled = true
 			// Replace gin request with the authenticated request (carries context + headers)
 			c.Request = r
@@ -144,21 +171,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 
 		userRoleList := userRoles.([]string)
 
-		// Check if user has any of the required roles
-		hasRole := false
-		for _, required := range roles {
-			for _, userRole := range userRoleList {
-				if userRole == required {
-					hasRole = true
-					break
-				}
-			}
-			if hasRole {
-				break
-			}
-		}
-
-		if !hasRole {
+		if !hasRequiredRole(userRoleList, roles) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 			c.Abort()
 			return
@@ -166,4 +179,16 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// hasRequiredRole checks if the user has any of the required roles
+func hasRequiredRole(userRoles, requiredRoles []string) bool {
+	for _, required := range requiredRoles {
+		for _, userRole := range userRoles {
+			if userRole == required {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -75,7 +75,7 @@ func newSettingsTestEnv(t *testing.T) *settingsTestEnv {
 	}
 }
 
-func (e *settingsTestEnv) newWebAuthUser(t *testing.T) (*auth.AuthUser, *db.UserSession) {
+func (e *settingsTestEnv) newWebAuthUser(t *testing.T) (*auth.User, *db.UserSession) {
 	t.Helper()
 	_, session, err := e.sessionManager.CreateSession(e.admin, auth.SessionMetadata{Channel: "web"})
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func (e *settingsTestEnv) newWebAuthUser(t *testing.T) (*auth.AuthUser, *db.User
 	now := time.Now()
 	session.MFAVerifiedAt = &now
 
-	authUser := &auth.AuthUser{
+	authUser := &auth.User{
 		Email:      e.admin.Email,
 		Name:       e.admin.Name,
 		Roles:      e.admin.Roles,
@@ -112,7 +112,7 @@ func (e *settingsTestEnv) performSettingsRequest(
 	pattern string,
 	requestPath string,
 	handler gin.HandlerFunc,
-	authUser *auth.AuthUser,
+	authUser *auth.User,
 	payload interface{},
 	params gin.Params,
 	verifier middleware.MFAVerifier,
@@ -226,7 +226,7 @@ func setupRouterWithMFAMiddleware(
 	t *testing.T,
 	method string,
 	pattern string,
-	authUser *auth.AuthUser,
+	authUser *auth.User,
 	mfaService middleware.MFAVerifier,
 	database *db.Database,
 	mfaSettings *db.MFASettings,
