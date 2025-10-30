@@ -340,14 +340,41 @@ func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 		if method.Type != "webauthn" {
 			continue
 		}
+
+		// Extract flags from metadata if present
+		var flags webauthn.CredentialFlags
+		if len(method.Metadata) > 0 {
+			var metadata map[string]interface{}
+			if err := json.Unmarshal(method.Metadata, &metadata); err == nil {
+				if flagsData, ok := metadata["flags"]; ok {
+					if flagsMap, ok := flagsData.(map[string]interface{}); ok {
+						flags = webauthn.CredentialFlags{
+							UserPresent:    boolValue(flagsMap["userPresent"]),
+							UserVerified:   boolValue(flagsMap["userVerified"]),
+							BackupEligible: boolValue(flagsMap["backupEligible"]),
+							BackupState:    boolValue(flagsMap["backupState"]),
+						}
+					}
+				}
+			}
+		}
+
 		creds = append(creds, webauthn.Credential{
 			ID:              method.CredentialID,
 			PublicKey:       method.PublicKey,
 			AttestationType: "",
 			Transport:       convertTransports(method.Transports),
+			Flags:           flags,
 		})
 	}
 	return creds
+}
+
+func boolValue(v interface{}) bool {
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return false
 }
 
 func (s *Service) maybeHandleE2EWebAuthn(methods []*db.MFAMethod, onSuccess func(*db.MFAMethod) error) (*VerificationResult, bool, error) {
