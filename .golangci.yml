@@ -10,6 +10,81 @@ linters:
     - govet
     - staticcheck
     - ineffassign
+    - errcheck
+    - gosimple
+    - stylecheck
+    - unparam
+    - revive
+    - gocyclo
+    - gocognit
+    - funlen
+    - lll
+    - gocritic
+    - misspell
+    - prealloc
+    - exportloopref
+    - forbidigo
+    - durationcheck
+    - errname
+    - wastedassign
+    - nakedret
+    - nestif
+    - copyloopvar
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+          severity: error
+        - name: exported
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: early-return
+        - name: error-return
+        - name: errorf
+        - name: indent-error-flow
+        - name: if-return
+        - name: import-shadowing
+        - name: receiver-naming
+        - name: time-naming
+        - name: deep-exit
+        - name: redefines-builtin-id
+        - name: unexported-return
+    unparam:
+      check-exported: true
+    gocognit:
+      min-complexity: 15
+    gocyclo:
+      min-complexity: 15
+    funlen:
+      lines: 100
+      statements: 50
+    lll:
+      line-length: 120
+      tab-width: 4
+    forbidigo:
+      forbid:
+        - pattern: 'panic\('
+          msg: "panic is forbidden; return errors instead"
+        - pattern: 'fmt\.Print(f|ln)?\('
+          msg: "use structured logging instead of fmt.Print*"
+        - pattern: 'time\.Sleep\('
+          msg: "avoid time.Sleep; use context with timeout"
+    misspell:
+      locale: US
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/DocSpring/rack-gateway
+    gofumpt: {}
 
 issues:
   max-same-issues: 0

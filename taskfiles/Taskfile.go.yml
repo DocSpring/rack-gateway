@@ -18,6 +18,7 @@ tasks:
       - go install gotest.tools/gotestsum@latest
       - go install github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest
       - go install golang.org/x/tools/cmd/goimports@latest
+      - go install mvdan.cc/gofumpt@latest
 
   install:
     aliases: [":install"]
