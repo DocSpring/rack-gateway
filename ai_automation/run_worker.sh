@@ -63,10 +63,25 @@ mkdir -p "$LOG_DIR" "$TEMP_DIR"
 SHARED_PROJECT="${RGW_SHARED_DB_PROJECT:-$(basename "$ROOT_DIR")}"
 export RGW_SHARED_DB_PROJECT="$SHARED_PROJECT"
 
-# Launch Claude in the background within the worktree
+# Launch Claude in the background within the worktree (detached session)
 cd "$WORKTREE"
-nohup claude --print --dangerously-skip-permissions < "$PROMPT_FILE" > "$LOG_FILE" 2>&1 &
+
+SETSID_CMD=""
+if command -v setsid >/dev/null 2>&1; then
+  SETSID_CMD="setsid"
+fi
+
+if [ -n "$SETSID_CMD" ]; then
+  nohup "$SETSID_CMD" claude --print --dangerously-skip-permissions < "$PROMPT_FILE" > "$LOG_FILE" 2>&1 &
+else
+  nohup claude --print --dangerously-skip-permissions < "$PROMPT_FILE" > "$LOG_FILE" 2>&1 &
+fi
 PID=$!
+
+# Give the worker a moment to spin up so PID files are valid
+sleep 1
+START_FILE="$ROOT_DIR/ai_automation/agents/pids/${TASK_ID}.start"
+date +%s > "$START_FILE"
 
 cd "$ROOT_DIR"
 
