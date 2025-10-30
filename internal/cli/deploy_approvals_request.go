@@ -12,129 +12,188 @@ import (
 )
 
 func newDeployApprovalRequestCommand() *cobra.Command {
-	var (
-		rackFlag        string
-		appFlag         string
-		waitFlag        bool
-		pollIntervalStr string
-		timeoutStr      string
-		gitCommitHash   string
-		gitBranch       string
-		ciMetadata      string
-		message         string
-	)
+	var opts deployApprovalRequestOptions
 
 	cmd := &cobra.Command{
 		Use:   "request",
 		Short: "Request manual approval for CI/CD deploy",
 		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
-			gitCommitHash = strings.TrimSpace(gitCommitHash)
-			if gitCommitHash == "" {
-				return fmt.Errorf("--git-commit is required")
-			}
-
-			message = strings.TrimSpace(message)
-			if message == "" {
-				return fmt.Errorf("--message is required")
-			}
-
-			app, err := ResolveApp(appFlag)
+			cfg, err := parseDeployApprovalRequestOptions(cmd, opts)
 			if err != nil {
 				return err
 			}
-
-			rack, err := SelectedRack()
-			if err != nil {
-				return err
-			}
-			if trimmedRack := strings.TrimSpace(rackFlag); trimmedRack != "" {
-				rack = trimmedRack
-			}
-
-			pollInterval, err := parseDurationFlag(pollIntervalStr, "poll-interval", false, 5*time.Second)
-			if err != nil {
-				return err
-			}
-
-			timeout, err := parseDurationFlag(timeoutStr, "timeout", true, 0)
-			if err != nil {
-				return err
-			}
-
-			var ciMetadataMap map[string]interface{}
-			if trimmed := strings.TrimSpace(ciMetadata); trimmed != "" {
-				if err := json.Unmarshal([]byte(trimmed), &ciMetadataMap); err != nil {
-					return fmt.Errorf("invalid --ci-metadata JSON: %w", err)
-				}
-			}
-
-			created, err := createDeployApproval(
-				cmd,
-				rack,
-				app,
-				gitCommitHash,
-				gitBranch,
-				ciMetadataMap,
-				message,
-				"",
-			)
-			if err != nil {
-				var conflict *deployApprovalRequestConflictError
-				if errors.As(err, &conflict) {
-					if err := writeLine(cmd.OutOrStdout(), "Deploy approval request already exists for this commit"); err != nil {
-						return err
-					}
-					return nil
-				}
-				return err
-			}
-
-			if created == nil {
-				return fmt.Errorf("failed to create deploy approval request")
-			}
-
-			if err := writef(cmd.OutOrStdout(), "Deploy approval request %s created (status: %s)\n", created.PublicID, created.Status); err != nil {
-				return err
-			}
-
-			if !waitFlag {
-				return nil
-			}
-
-			final, err := waitForDeployApproval(cmd, rack, created.PublicID, pollInterval, timeout)
-			if err != nil {
-				return err
-			}
-
-			switch strings.ToLower(final.Status) {
-			case "approved", "expired":
-				return writef(cmd.OutOrStdout(), "Deploy approval request %s approved.\n", final.PublicID)
-			case "rejected":
-				note := strings.TrimSpace(final.ApprovalNotes)
-				if note != "" {
-					return fmt.Errorf("deploy approval request %s rejected: %s", final.PublicID, note)
-				}
-				return fmt.Errorf("deploy approval request %s rejected", final.PublicID)
-			default:
-				return fmt.Errorf("deploy approval request %s finished with status: %s", final.PublicID, final.Status)
-			}
+			return executeDeployApprovalRequest(cmd, cfg)
 		}),
 	}
 
-	cmd.Flags().StringVarP(&appFlag, "app", "a", "", "App name (auto-detected from .convox/app or current directory)")
-	cmd.Flags().StringVar(&rackFlag, "rack", "", "Rack name")
-	cmd.Flags().BoolVar(&waitFlag, "wait", false, "Block until approval is decided")
-	cmd.Flags().StringVar(&pollIntervalStr, "poll-interval", "5s", "Polling interval when --wait is set")
-	cmd.Flags().StringVar(&timeoutStr, "timeout", "20m", "Maximum time to wait before giving up (set to 0 to wait indefinitely)")
-	cmd.Flags().StringVar(&gitCommitHash, "git-commit", "", "Git commit SHA (required)")
-	cmd.Flags().StringVar(&gitBranch, "branch", "", "Git branch name")
-	cmd.Flags().StringVar(&ciMetadata, "ci-metadata", "", "CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')")
-	cmd.Flags().StringVar(&message, "message", "", "Deploy approval message (required)")
+	cmd.Flags().StringVarP(&opts.appFlag, "app", "a", "", "App name (auto-detected from .convox/app or current directory)")
+	cmd.Flags().StringVar(&opts.rackFlag, "rack", "", "Rack name")
+	cmd.Flags().BoolVar(&opts.wait, "wait", false, "Block until approval is decided")
+	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "5s", "Polling interval when --wait is set")
+	cmd.Flags().StringVar(&opts.timeout, "timeout", "20m", "Maximum time to wait before giving up (set to 0 to wait indefinitely)")
+	cmd.Flags().StringVar(&opts.gitCommitHash, "git-commit", "", "Git commit SHA (required)")
+	cmd.Flags().StringVar(&opts.gitBranch, "branch", "", "Git branch name")
+	cmd.Flags().StringVar(&opts.ciMetadata, "ci-metadata", "", "CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')")
+	cmd.Flags().StringVar(&opts.message, "message", "", "Deploy approval message (required)")
 
 	_ = cmd.MarkFlagRequired("git-commit")
 	_ = cmd.MarkFlagRequired("message")
 
 	return cmd
+}
+
+type deployApprovalRequestOptions struct {
+	rackFlag      string
+	appFlag       string
+	wait          bool
+	pollInterval  string
+	timeout       string
+	gitCommitHash string
+	gitBranch     string
+	ciMetadata    string
+	message       string
+}
+
+type deployApprovalRequestConfig struct {
+	rack          string
+	app           string
+	wait          bool
+	pollInterval  time.Duration
+	timeout       time.Duration
+	gitCommitHash string
+	gitBranch     string
+	ciMetadata    map[string]interface{}
+	message       string
+}
+
+func parseDeployApprovalRequestOptions(cmd *cobra.Command, opts deployApprovalRequestOptions) (deployApprovalRequestConfig, error) {
+	commit := strings.TrimSpace(opts.gitCommitHash)
+	if commit == "" {
+		return deployApprovalRequestConfig{}, fmt.Errorf("--git-commit is required")
+	}
+
+	message := strings.TrimSpace(opts.message)
+	if message == "" {
+		return deployApprovalRequestConfig{}, fmt.Errorf("--message is required")
+	}
+
+	app, err := ResolveApp(opts.appFlag)
+	if err != nil {
+		return deployApprovalRequestConfig{}, err
+	}
+
+	rack, err := resolveRackFlag(opts.rackFlag)
+	if err != nil {
+		return deployApprovalRequestConfig{}, err
+	}
+
+	pollInterval, err := parseDurationFlag(opts.pollInterval, "poll-interval", false, 5*time.Second)
+	if err != nil {
+		return deployApprovalRequestConfig{}, err
+	}
+
+	timeout, err := parseDurationFlag(opts.timeout, "timeout", true, 0)
+	if err != nil {
+		return deployApprovalRequestConfig{}, err
+	}
+
+	metadata, err := parseCIMetadata(opts.ciMetadata)
+	if err != nil {
+		return deployApprovalRequestConfig{}, err
+	}
+
+	return deployApprovalRequestConfig{
+		rack:          rack,
+		app:           app,
+		wait:          opts.wait,
+		pollInterval:  pollInterval,
+		timeout:       timeout,
+		gitCommitHash: commit,
+		gitBranch:     strings.TrimSpace(opts.gitBranch),
+		ciMetadata:    metadata,
+		message:       message,
+	}, nil
+}
+
+func resolveRackFlag(flagValue string) (string, error) {
+	rack, err := SelectedRack()
+	if err != nil {
+		return "", err
+	}
+	trimmed := strings.TrimSpace(flagValue)
+	if trimmed != "" {
+		return trimmed, nil
+	}
+	return rack, nil
+}
+
+func parseCIMetadata(raw string) (map[string]interface{}, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	var metadata map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &metadata); err != nil {
+		return nil, fmt.Errorf("invalid --ci-metadata JSON: %w", err)
+	}
+	return metadata, nil
+}
+
+func executeDeployApprovalRequest(cmd *cobra.Command, cfg deployApprovalRequestConfig) error {
+	created, err := createDeployApproval(
+		cmd,
+		cfg.rack,
+		cfg.app,
+		cfg.gitCommitHash,
+		cfg.gitBranch,
+		cfg.ciMetadata,
+		cfg.message,
+		"",
+	)
+	if err != nil {
+		return handleDeployApprovalCreationError(cmd, err)
+	}
+	if created == nil {
+		return fmt.Errorf("failed to create deploy approval request")
+	}
+
+	if err := writef(cmd.OutOrStdout(), "Deploy approval request %s created (status: %s)\n", created.PublicID, created.Status); err != nil {
+		return err
+	}
+
+	if !cfg.wait {
+		return nil
+	}
+
+	final, err := waitForDeployApproval(cmd, cfg.rack, created.PublicID, cfg.pollInterval, cfg.timeout)
+	if err != nil {
+		return err
+	}
+
+	return reportFinalApprovalStatus(cmd, final)
+}
+
+func handleDeployApprovalCreationError(cmd *cobra.Command, err error) error {
+	var conflict *deployApprovalRequestConflictError
+	if errors.As(err, &conflict) {
+		return writeLine(cmd.OutOrStdout(), "Deploy approval request already exists for this commit")
+	}
+	return err
+}
+
+func reportFinalApprovalStatus(cmd *cobra.Command, final *deployApprovalRequest) error {
+	switch strings.ToLower(final.Status) {
+	case "approved", "expired":
+		return writef(cmd.OutOrStdout(), "Deploy approval request %s approved.\n", final.PublicID)
+	case "rejected":
+		note := strings.TrimSpace(final.ApprovalNotes)
+		if note != "" {
+			return fmt.Errorf("deploy approval request %s rejected: %s", final.PublicID, note)
+		}
+		return fmt.Errorf("deploy approval request %s rejected", final.PublicID)
+	default:
+		return fmt.Errorf("deploy approval request %s finished with status: %s", final.PublicID, final.Status)
+	}
 }
 
 func createDeployApproval(

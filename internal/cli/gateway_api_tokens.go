@@ -180,40 +180,16 @@ func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interfac
 		return err
 	}
 
-	// Attach inline MFA to bearer token if needed
-	requestBearer := bearer
-	if mfaCtx.mfaAuth != "" {
-		// Format: session_token.mfa_type.mfa_value (e.g., "session123.totp.123456")
-		requestBearer = bearer + "." + mfaCtx.mfaAuth
-	}
+	requestBearer := applyInlineMFA(bearer, mfaCtx)
 
-	// Try the request
 	statusCode, responseBody, err := doGatewayRequest(gatewayURL, requestBearer, method, path, body)
 	if err != nil {
 		return err
 	}
 
-	// Smart retry: if server unexpectedly requires MFA, adapt and retry once
-	if statusCode == http.StatusUnauthorized {
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(responseBody, &errResp) == nil && errResp.Error == "mfa_required" {
-			// Server requires MFA but we didn't provide it - this can happen when:
-			// 1. CLI thinks step-up is still valid but server disagrees (clock skew/latency)
-			// 2. Server upgraded endpoint to require MFA (version mismatch)
-			// Solution: Prompt for MFA and retry with inline auth
-
-			mfaAuth, err := promptMFAForCommand(cmd, gatewayURL, bearer, rack)
-			if err != nil {
-				return fmt.Errorf("MFA required by server: %w", err)
-			}
-			// Retry with inline MFA
-			statusCode, responseBody, err = doGatewayRequest(gatewayURL, bearer+"."+mfaAuth, method, path, body)
-			if err != nil {
-				return err
-			}
-		}
+	statusCode, responseBody, err = maybeRetryWithMFA(cmd, statusCode, responseBody, gatewayURL, bearer, rack, method, path, body)
+	if err != nil {
+		return err
 	}
 
 	// Check for errors after potential retry
@@ -229,6 +205,33 @@ func gatewayRequest(cmd *cobra.Command, rack, method, path string, body interfac
 	}
 
 	return nil
+}
+
+func applyInlineMFA(bearer string, ctx *gatewayMFAContext) string {
+	if ctx == nil || ctx.mfaAuth == "" {
+		return bearer
+	}
+	return bearer + "." + ctx.mfaAuth
+}
+
+func maybeRetryWithMFA(cmd *cobra.Command, statusCode int, responseBody []byte, gatewayURL, bearer, rack, method, path string, body interface{}) (int, []byte, error) {
+	if statusCode != http.StatusUnauthorized {
+		return statusCode, responseBody, nil
+	}
+
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(responseBody, &errResp) != nil || errResp.Error != "mfa_required" {
+		return statusCode, responseBody, nil
+	}
+
+	mfaAuth, err := promptMFAForCommand(cmd, gatewayURL, bearer, rack)
+	if err != nil {
+		return 0, nil, fmt.Errorf("MFA required by server: %w", err)
+	}
+
+	return doGatewayRequest(gatewayURL, bearer+"."+mfaAuth, method, path, body)
 }
 
 // doGatewayRequest performs the actual HTTP request and returns status, body, and error

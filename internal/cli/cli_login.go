@@ -33,29 +33,9 @@ Otherwise, provide both rack name and gateway URL to login to a new rack.`,
 }
 
 func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
-	var rack, gatewayURL string
-	var err error
-
-	switch len(args) {
-	case 0:
-		// Re-authenticate with current rack
-		rack, err = SelectedRack()
-		if err != nil {
-			return fmt.Errorf("no current rack selected: %w. Run: rack-gateway login <rack> <gateway-url>", err)
-		}
-		gatewayURL, _, err = LoadRackAuth(rack)
-		if err != nil {
-			return fmt.Errorf("rack %s not configured: %w. Run: rack-gateway login <rack> <gateway-url>", rack, err)
-		}
-	case 1:
-		return fmt.Errorf("both rack name and gateway URL are required")
-	case 2:
-		rack = args[0]
-		gatewayURL = args[1]
-		// Save gateway URL for this rack
-		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
-			return fmt.Errorf("failed to save gateway config: %w", err)
-		}
+	rack, gatewayURL, err := resolveLoginTarget(args)
+	if err != nil {
+		return err
 	}
 
 	fmt.Printf("Starting login for rack: %s via gateway: %s\n", rack, gatewayURL)
@@ -65,57 +45,104 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 		return fmt.Errorf("failed to start login: %w", err)
 	}
 
-	// Always print the auth URL for users and automation
 	fmt.Printf("Auth URL: %s\n", startResp.AuthURL)
-	if authFile != "" {
-		// Write shell-friendly lines
-		content := fmt.Sprintf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
-		_ = os.WriteFile(authFile, []byte(content), 0o600)
+	if err := writeAuthFile(authFile, startResp); err != nil {
+		return err
 	}
 
-	// Optionally open browser
-	if !noOpen {
-		fmt.Printf("Opening browser for authentication...\n")
-		if err := OpenBrowser(startResp.AuthURL); err != nil {
-			fmt.Printf("Please open this URL in your browser:\n%s\n", startResp.AuthURL)
-		}
-	}
+	notifyBrowser(startResp.AuthURL, noOpen)
 
 	deviceInfo := DetermineDeviceInfo()
-	// Poll the server for completion
-	var loginResp *LoginResponse
+	loginResp, err := pollLoginCompletion(gatewayURL, startResp, deviceInfo)
+	if err != nil {
+		return err
+	}
+
+	if err := finalizeLogin(rack, loginResp); err != nil {
+		return err
+	}
+
+	fmt.Printf("✓ Successfully logged in to %s as %s\n", rack, loginResp.Email)
+	return nil
+}
+
+func resolveLoginTarget(args []string) (string, string, error) {
+	switch len(args) {
+	case 0:
+		rack, err := SelectedRack()
+		if err != nil {
+			return "", "", fmt.Errorf("no current rack selected: %w. Run: rack-gateway login <rack> <gateway-url>", err)
+		}
+		gatewayURL, _, err := LoadRackAuth(rack)
+		if err != nil {
+			return "", "", fmt.Errorf("rack %s not configured: %w. Run: rack-gateway login <rack> <gateway-url>", rack, err)
+		}
+		return rack, gatewayURL, nil
+	case 1:
+		return "", "", fmt.Errorf("both rack name and gateway URL are required")
+	case 2:
+		rack, gatewayURL := args[0], args[1]
+		if err := SaveGatewayConfig(rack, gatewayURL); err != nil {
+			return "", "", fmt.Errorf("failed to save gateway config: %w", err)
+		}
+		return rack, gatewayURL, nil
+	default:
+		return "", "", fmt.Errorf("unexpected number of arguments")
+	}
+}
+
+func writeAuthFile(path string, startResp *LoginStartResponse) error {
+	if path == "" {
+		return nil
+	}
+	content := fmt.Sprintf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		return fmt.Errorf("failed to write auth file: %w", err)
+	}
+	return nil
+}
+
+func notifyBrowser(authURL string, noOpen bool) {
+	if noOpen {
+		return
+	}
+	fmt.Printf("Opening browser for authentication...\n")
+	if err := OpenBrowser(authURL); err != nil {
+		fmt.Printf("Please open this URL in your browser:\n%s\n", authURL)
+	}
+}
+
+func pollLoginCompletion(gatewayURL string, startResp *LoginStartResponse, deviceInfo DeviceInfo) (*LoginResponse, error) {
 	deadline := time.Now().Add(2 * time.Minute)
 	pendingNotified := false
 	for {
 		resp, err := CompleteLogin(gatewayURL, startResp.State, startResp.CodeVerifier, deviceInfo)
 		if err == nil {
-			loginResp = resp
-			break
+			return resp, nil
 		}
+
 		if errors.Is(err, ErrLoginPending) {
 			if !pendingNotified {
 				fmt.Println("Waiting for multi-factor authentication to complete in your browser...")
 				pendingNotified = true
 			}
 		} else {
-			return fmt.Errorf("login failed: %w", err)
+			return nil, fmt.Errorf("login failed: %w", err)
 		}
+
 		if time.Now().After(deadline) {
-			return fmt.Errorf("login timed out waiting for browser authentication")
+			return nil, fmt.Errorf("login timed out waiting for browser authentication")
 		}
 		time.Sleep(1 * time.Second)
 	}
+}
 
-	// Save token
+func finalizeLogin(rack string, loginResp *LoginResponse) error {
 	if err := SaveToken(rack, loginResp); err != nil {
 		return fmt.Errorf("failed to save token: %w", err)
 	}
-
-	// Set as current rack
 	if err := SetCurrentRack(rack); err != nil {
 		return fmt.Errorf("failed to set current rack: %w", err)
 	}
-
-	fmt.Printf("✓ Successfully logged in to %s as %s\n", rack, loginResp.Email)
 	return nil
 }
