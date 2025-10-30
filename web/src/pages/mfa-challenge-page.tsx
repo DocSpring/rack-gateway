@@ -145,6 +145,7 @@ export function MFAChallengePage() {
     unknown,
     { code: string; trust_device: boolean }
   >({
+    showToastError: false, // Errors are displayed in the Alert above, no need for toast
     mutationFn: async ({ code, trust_device }) => {
       if (mode === 'cli') {
         if (!state) {

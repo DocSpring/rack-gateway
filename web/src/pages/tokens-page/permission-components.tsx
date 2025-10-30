@@ -40,6 +40,7 @@ function RoleShortcutButtons({
                 key={role.name}
                 onClick={() => onRoleSelect(role)}
                 size="sm"
+                type="button"
                 variant={isRoleActive ? 'default' : 'outline'}
               >
                 {role.label}

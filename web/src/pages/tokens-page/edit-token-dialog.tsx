@@ -111,26 +111,19 @@ export function EditTokenDialog({
     }
   }, [isOpen, token, form])
 
-  const permissions = form.getFieldValue('permissions')
-  const permissionsSet = useMemo(() => new Set(permissions), [permissions])
-  const activeRole = useMemo(
-    () => findMatchingRole(permissions, roleShortcuts),
-    [permissions, roleShortcuts]
-  )
-
-  const handleRoleSelect = (role: TokenRoleInfo) => {
+  const handleRoleSelect = (role: TokenRoleInfo, fieldApi: any) => {
     const normalized = normalizePermissions(role.permissions)
     if (!normalized.every(canAssignPermission)) {
       return
     }
-    form.setFieldValue('permissions', normalized)
+    fieldApi.setValue(normalized)
   }
 
-  const handlePermissionToggle = (permission: string) => {
+  const handlePermissionToggle = (permission: string, fieldApi: any) => {
     if (!canAssignPermission(permission)) {
       return
     }
-    const current = form.getFieldValue('permissions')
+    const current = fieldApi.state.value
     const nextSet = new Set(current)
     if (nextSet.has(permission)) {
       nextSet.delete(permission)
@@ -138,7 +131,7 @@ export function EditTokenDialog({
       nextSet.add(permission)
     }
     const next = Array.from(nextSet).sort()
-    form.setFieldValue('permissions', next)
+    fieldApi.setValue(next)
   }
 
   return (
@@ -189,24 +182,32 @@ export function EditTokenDialog({
               </form.Field>
 
               <form.Field name="permissions">
-                {(field) => (
-                  <TokenPermissionsEditor
-                    activeRole={activeRole}
-                    availablePermissions={availablePermissions}
-                    canAssignPermission={canAssignPermission}
-                    error={
-                      field.state.meta.errors.length > 0
-                        ? String(field.state.meta.errors[0])
-                        : undefined
-                    }
-                    isPermissionLoading={isPermissionLoading}
-                    onPermissionToggle={handlePermissionToggle}
-                    onRoleSelect={handleRoleSelect}
-                    roleShortcuts={roleShortcuts}
-                    selectedPermissions={permissions}
-                    selectedPermissionsSet={permissionsSet}
-                  />
-                )}
+                {(field) => {
+                  const permissions = field.state.value
+                  const permissionsSet = useMemo(() => new Set(permissions), [permissions])
+                  const activeRole = useMemo(
+                    () => findMatchingRole(permissions, roleShortcuts),
+                    [permissions, roleShortcuts]
+                  )
+                  return (
+                    <TokenPermissionsEditor
+                      activeRole={activeRole}
+                      availablePermissions={availablePermissions}
+                      canAssignPermission={canAssignPermission}
+                      error={
+                        field.state.meta.errors.length > 0
+                          ? String(field.state.meta.errors[0])
+                          : undefined
+                      }
+                      isPermissionLoading={isPermissionLoading}
+                      onPermissionToggle={(permission) => handlePermissionToggle(permission, field)}
+                      onRoleSelect={(role) => handleRoleSelect(role, field)}
+                      roleShortcuts={roleShortcuts}
+                      selectedPermissions={permissions}
+                      selectedPermissionsSet={permissionsSet}
+                    />
+                  )
+                }}
               </form.Field>
             </div>
             <DialogFooter>

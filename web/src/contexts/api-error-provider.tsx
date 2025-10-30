@@ -13,7 +13,21 @@ type InterceptorError = AxiosError & { suppressToast?: boolean }
 const shouldSuppressError = (error: InterceptorError): boolean => {
   const suppressGlobal = (error?.config as { __suppressGlobalError?: boolean } | undefined)
     ?.__suppressGlobalError
-  return Boolean(suppressGlobal || error.suppressToast)
+  if (Boolean(suppressGlobal || error.suppressToast)) {
+    return true
+  }
+
+  // Suppress errors from MFA verification endpoints - they're handled locally with inline errors
+  const url = error.config?.url ?? ''
+  if (
+    url.includes('/auth/mfa/') ||
+    url.includes('/auth/mfa/webauthn/assertion/verify') ||
+    url.includes('/auth/mfa/verify')
+  ) {
+    return true
+  }
+
+  return false
 }
 
 const handleUnauthorized = (error: InterceptorError): boolean => {
