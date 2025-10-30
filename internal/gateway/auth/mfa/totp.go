@@ -94,80 +94,20 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 		return nil, err
 	}
 
-	rateErr := s.enforceAttemptLimit(
-		func(id int64, window int) (int, error) {
-			return s.db.CountRecentTOTPAttempts(id, window)
-		},
-		user.ID,
-		5,
-		func() error {
-			_ = s.db.LogTOTPAttempt(user.ID, nil, false, "rate_limited", ipAddress, userAgent, sessionID)
-			return nil
-		},
-	)
-	if rateErr != nil {
-		return nil, rateErr
-	}
-
-	// Check if it's a Yubico OTP (44 characters)
-	if len(sanitized) == 44 && s.yubiAuth != nil {
-		result, err := s.VerifyYubiOTP(user, sanitized)
-		if err == nil {
-			return result, nil
-		}
-		// Fall through to try TOTP/backup codes
-	}
-
-	// Try TOTP verification
-	methods, err := s.db.ListMFAMethods(user.ID)
-	if err != nil {
+	if err := s.enforceTOTPAttemptLimit(user.ID, ipAddress, userAgent, sessionID); err != nil {
 		return nil, err
 	}
-	for _, method := range methods {
-		if method.Type != "totp" {
-			continue
-		}
 
-		// Validate code and get the time-step it's valid for
-		timeStep, err := s.validateTOTPCodeWithTimeStep(method.Secret, sanitized)
-		if err != nil {
-			continue // Try next method
-		}
-
-		// Atomically consume the time-step (replay protection)
-		consumed, err := s.db.ConsumeTOTPTimeStep(user.ID, timeStep, &method.ID, ipAddress, userAgent, sessionID)
-		if err != nil {
-			_ = s.db.LogTOTPAttempt(user.ID, &method.ID, false, "database_error", ipAddress, userAgent, sessionID)
-			return nil, fmt.Errorf("verification failed")
-		}
-		if !consumed {
-			// Time-step was already used (replay attack)
-			_ = s.db.LogTOTPAttempt(user.ID, &method.ID, false, "replay_detected", ipAddress, userAgent, sessionID)
-			if err := s.checkAndLockAccount(user.ID); err != nil {
-				return nil, err
-			}
-			return nil, fmt.Errorf("verification failed")
-		}
-
-		// Success - log and update method
-		_ = s.db.LogTOTPAttempt(user.ID, &method.ID, true, "", ipAddress, userAgent, sessionID)
-
-		if err := s.touchMFAMethod(method); err != nil {
-			return nil, err
-		}
-		return &VerificationResult{MethodID: method.ID}, nil
+	if result, handled := s.tryYubiOTP(user, sanitized); handled {
+		return result, nil
 	}
 
-	// Fallback to backup codes
-	hash := s.hashBackupCode(sanitized)
-	used, err := s.db.MarkBackupCodeUsed(user.ID, hash)
-	if err != nil {
-		return nil, err
+	if result, err := s.verifyTOTPMethods(user.ID, sanitized, ipAddress, userAgent, sessionID); err != nil || result != nil {
+		return result, err
 	}
-	if used {
-		// Log successful backup code usage
-		_ = s.db.LogTOTPAttempt(user.ID, nil, true, "backup_code", ipAddress, userAgent, sessionID)
-		return &VerificationResult{MethodID: 0}, nil
+
+	if result, err := s.verifyBackupCodes(user.ID, sanitized, ipAddress, userAgent, sessionID); err != nil || result != nil {
+		return result, err
 	}
 
 	// Log failed attempt (generic error, don't leak why it failed)
@@ -179,6 +119,82 @@ func (s *Service) VerifyTOTP(user *db.User, code string, ipAddress string, userA
 	}
 
 	return nil, fmt.Errorf("verification failed")
+}
+
+func (s *Service) enforceTOTPAttemptLimit(userID int64, ipAddress, userAgent string, sessionID *int64) error {
+	return s.enforceAttemptLimit(
+		func(id int64, window int) (int, error) {
+			return s.db.CountRecentTOTPAttempts(id, window)
+		},
+		userID,
+		5,
+		func() error {
+			return s.db.LogTOTPAttempt(userID, nil, false, "rate_limited", ipAddress, userAgent, sessionID)
+		},
+	)
+}
+
+func (s *Service) tryYubiOTP(user *db.User, code string) (*VerificationResult, bool) {
+	if len(code) == 44 && s.yubiAuth != nil {
+		if result, err := s.VerifyYubiOTP(user, code); err == nil {
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+func (s *Service) verifyTOTPMethods(userID int64, code, ipAddress, userAgent string, sessionID *int64) (*VerificationResult, error) {
+	methods, err := s.db.ListMFAMethods(userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, method := range methods {
+		if method.Type != "totp" {
+			continue
+		}
+		if result, handled, err := s.verifySingleTOTPMethod(userID, method, code, ipAddress, userAgent, sessionID); handled {
+			return result, err
+		}
+	}
+	return nil, nil
+}
+
+func (s *Service) verifySingleTOTPMethod(userID int64, method *db.MFAMethod, code, ipAddress, userAgent string, sessionID *int64) (*VerificationResult, bool, error) {
+	timeStep, err := s.validateTOTPCodeWithTimeStep(method.Secret, code)
+	if err != nil {
+		return nil, false, nil
+	}
+
+	consumed, err := s.db.ConsumeTOTPTimeStep(userID, timeStep, &method.ID, ipAddress, userAgent, sessionID)
+	if err != nil {
+		_ = s.db.LogTOTPAttempt(userID, &method.ID, false, "database_error", ipAddress, userAgent, sessionID)
+		return nil, true, fmt.Errorf("verification failed")
+	}
+	if !consumed {
+		_ = s.db.LogTOTPAttempt(userID, &method.ID, false, "replay_detected", ipAddress, userAgent, sessionID)
+		if err := s.checkAndLockAccount(userID); err != nil {
+			return nil, true, err
+		}
+		return nil, true, fmt.Errorf("verification failed")
+	}
+
+	_ = s.db.LogTOTPAttempt(userID, &method.ID, true, "", ipAddress, userAgent, sessionID)
+	if err := s.touchMFAMethod(method); err != nil {
+		return nil, true, err
+	}
+	return &VerificationResult{MethodID: method.ID}, true, nil
+}
+
+func (s *Service) verifyBackupCodes(userID int64, code, ipAddress, userAgent string, sessionID *int64) (*VerificationResult, error) {
+	used, err := s.db.MarkBackupCodeUsed(userID, s.hashBackupCode(code))
+	if err != nil {
+		return nil, err
+	}
+	if used {
+		_ = s.db.LogTOTPAttempt(userID, nil, true, "backup_code", ipAddress, userAgent, sessionID)
+		return &VerificationResult{MethodID: 0}, nil
+	}
+	return nil, nil
 }
 
 // validateTOTPCodeWithTimeStep validates a TOTP code and returns the time-step it was valid for.

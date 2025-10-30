@@ -75,35 +75,49 @@ func IsInteractive() bool {
 // 3) contents of .convox/app in current or parent directories
 // 4) fallback to current directory name
 func ResolveApp(flagVal string) (string, error) {
-	if strings.TrimSpace(flagVal) != "" {
-		return flagVal, nil
+	if val := strings.TrimSpace(flagVal); val != "" {
+		return val, nil
 	}
-	if v := os.Getenv("CONVOX_APP"); strings.TrimSpace(v) != "" {
-		return v, nil
+	if val := strings.TrimSpace(os.Getenv("CONVOX_APP")); val != "" {
+		return val, nil
 	}
-	// search upwards for .convox/app
+	return resolveAppFromWorkingDir()
+}
+
+func resolveAppFromWorkingDir() (string, error) {
 	wd, err := os.Getwd()
-	if err == nil {
-		dir := wd
-		for {
-			p := filepath.Join(dir, ".convox", "app")
-			if data, err := os.ReadFile(p); err == nil {
-				name := strings.TrimSpace(string(data))
-				if name != "" {
-					return name, nil
-				}
+	if err != nil {
+		return "", fmt.Errorf("missing app: use -a <app> or set CONVOX_APP or add .convox/app")
+	}
+
+	if name := searchConvoxApp(wd); name != "" {
+		return name, nil
+	}
+
+	return fallbackDirName(wd)
+}
+
+func searchConvoxApp(start string) string {
+	dir := start
+	for {
+		candidate := filepath.Join(dir, ".convox", "app")
+		if data, err := os.ReadFile(candidate); err == nil {
+			if name := strings.TrimSpace(string(data)); name != "" {
+				return name
 			}
-			parent := filepath.Dir(dir)
-			if parent == dir { // reached root
-				break
-			}
-			dir = parent
 		}
-		// fallback to basename of working directory
-		base := filepath.Base(wd)
-		if base != "" && base != "." && base != "/" {
-			return base, nil
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
 		}
+		dir = parent
+	}
+}
+
+func fallbackDirName(path string) (string, error) {
+	base := strings.TrimSpace(filepath.Base(path))
+	if base != "" && base != "." && base != "/" {
+		return base, nil
 	}
 	return "", fmt.Errorf("missing app: use -a <app> or set CONVOX_APP or add .convox/app")
 }

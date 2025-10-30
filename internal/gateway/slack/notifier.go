@@ -279,114 +279,171 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 
 // formatDeployApprovalAlert formats a deploy approval request into a rich Slack message
 func (n *Notifier) formatDeployApprovalAlert(req *db.DeployApprovalRequest, gatewayDomain string) (string, []map[string]interface{}) {
-	// Build text (fallback for notifications)
-	branchText := req.GitBranch
-	if branchText == "" {
-		branchText = "unknown branch"
-	}
-	text := fmt.Sprintf("🚀 Deploy approval needed for %s - %s", branchText, req.Message)
+	branchText := deployApprovalBranch(req)
+	text := deployApprovalFallbackText(branchText, req.Message)
 
-	// Build rich blocks
 	blocks := []map[string]interface{}{
-		{
-			"type": "section",
-			"text": map[string]interface{}{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*🚀 Deploy approval needed for `%s`*", branchText),
-			},
+		deployApprovalHeaderBlock(branchText),
+		deployApprovalDetailsBlock(req),
+	}
+
+	if messageBlock := deployApprovalMessageBlock(req); messageBlock != nil {
+		blocks = append(blocks, messageBlock)
+	}
+
+	blocks = append(blocks, deployApprovalLinksBlock(req, gatewayDomain))
+
+	if contextBlock := deployApprovalContextBlock(req); contextBlock != nil {
+		blocks = append(blocks, contextBlock)
+	}
+
+	blocks = append(blocks, slackDividerBlock())
+
+	return text, blocks
+}
+
+func deployApprovalBranch(req *db.DeployApprovalRequest) string {
+	if req.GitBranch == "" {
+		return "unknown branch"
+	}
+
+	return req.GitBranch
+}
+
+func deployApprovalFallbackText(branch, message string) string {
+	return fmt.Sprintf("🚀 Deploy approval needed for %s - %s", branch, message)
+}
+
+func deployApprovalHeaderBlock(branch string) map[string]interface{} {
+	return map[string]interface{}{
+		"type": "section",
+		"text": map[string]interface{}{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("*🚀 Deploy approval needed for `%s`*", branch),
 		},
-		{
-			"type": "section",
-			"fields": []map[string]interface{}{
-				{
-					"type": "mrkdwn",
-					"text": fmt.Sprintf("*App:*\n%s", req.App),
-				},
-				{
-					"type": "mrkdwn",
-					"text": fmt.Sprintf("*Commit:*\n`%s`", req.GitCommitHash[:7]),
-				},
+	}
+}
+
+func deployApprovalDetailsBlock(req *db.DeployApprovalRequest) map[string]interface{} {
+	return map[string]interface{}{
+		"type": "section",
+		"fields": []map[string]interface{}{
+			{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*App:*\n%s", req.App),
+			},
+			{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("*Commit:*\n`%s`", shortCommitHash(req.GitCommitHash)),
 			},
 		},
 	}
+}
 
-	// Add message if present
-	if req.Message != "" {
-		blocks = append(blocks, map[string]interface{}{
-			"type": "section",
-			"text": map[string]interface{}{
-				"type": "mrkdwn",
-				"text": fmt.Sprintf("*Message:*\n%s", req.Message),
-			},
-		})
+func deployApprovalMessageBlock(req *db.DeployApprovalRequest) map[string]interface{} {
+	if req.Message == "" {
+		return nil
 	}
 
-	// Build links section
-	linksElements := []map[string]interface{}{
+	return map[string]interface{}{
+		"type": "section",
+		"text": map[string]interface{}{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("*Message:*\n%s", req.Message),
+		},
+	}
+}
+
+func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayDomain string) map[string]interface{} {
+	elements := []map[string]interface{}{
 		{
 			"type": "mrkdwn",
 			"text": fmt.Sprintf("🔗 <https://%s/app/deploy-approvals/%s|View Approval Request>", gatewayDomain, req.PublicID),
 		},
 	}
 
-	// Add PR link if available
 	if req.PrURL != "" {
-		linksElements = append(linksElements, map[string]interface{}{
+		elements = append(elements, map[string]interface{}{
 			"type": "mrkdwn",
 			"text": fmt.Sprintf("🔗 <%s|GitHub PR>", req.PrURL),
 		})
 	}
 
-	// Extract CI pipeline URL from ci_metadata if available
-	if len(req.CIMetadata) > 0 {
-		var ciMeta map[string]interface{}
-		if err := json.Unmarshal(req.CIMetadata, &ciMeta); err == nil {
-			// Try to extract CircleCI URL
-			if buildURL, ok := ciMeta["build_url"].(string); ok && buildURL != "" {
-				linksElements = append(linksElements, map[string]interface{}{
-					"type": "mrkdwn",
-					"text": fmt.Sprintf("🔗 <%s|CI Pipeline>", buildURL),
-				})
-			}
-		}
+	if ciElement := deployApprovalCIElement(req.CIMetadata); ciElement != nil {
+		elements = append(elements, ciElement)
 	}
 
-	blocks = append(blocks, map[string]interface{}{
+	return map[string]interface{}{
 		"type":   "section",
-		"fields": linksElements,
-	})
+		"fields": elements,
+	}
+}
 
-	// Add creator context
-	creatorText := ""
-	if req.CreatedByEmail != "" {
-		creatorText = fmt.Sprintf("Created by %s", req.CreatedByEmail)
-		if req.CreatedByName != "" {
-			creatorText = fmt.Sprintf("Created by %s (%s)", req.CreatedByName, req.CreatedByEmail)
-		}
-	} else if req.CreatedByAPITokenName != "" {
-		creatorText = fmt.Sprintf("Created by API token: %s", req.CreatedByAPITokenName)
+func deployApprovalCIElement(metadata json.RawMessage) map[string]interface{} {
+	if len(metadata) == 0 {
+		return nil
 	}
 
-	if creatorText != "" {
-		blocks = append(blocks, map[string]interface{}{
-			"type": "context",
-			"elements": []map[string]interface{}{
-				{
-					"type": "mrkdwn",
-					"text": creatorText,
-				},
-				{
-					"type": "mrkdwn",
-					"text": fmt.Sprintf("<!date^%d^{date_short_pretty} at {time}|%s>", req.CreatedAt.Unix(), req.CreatedAt.Format(time.RFC3339)),
-				},
+	var ciMeta map[string]interface{}
+	if err := json.Unmarshal(metadata, &ciMeta); err != nil {
+		return nil
+	}
+
+	buildURL, ok := ciMeta["build_url"].(string)
+	if !ok || buildURL == "" {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"type": "mrkdwn",
+		"text": fmt.Sprintf("🔗 <%s|CI Pipeline>", buildURL),
+	}
+}
+
+func deployApprovalContextBlock(req *db.DeployApprovalRequest) map[string]interface{} {
+	contextText := deployApprovalCreatorText(req)
+	if contextText == "" {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"type": "context",
+		"elements": []map[string]interface{}{
+			{
+				"type": "mrkdwn",
+				"text": contextText,
 			},
-		})
+			{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("<!date^%d^{date_short_pretty} at {time}|%s>", req.CreatedAt.Unix(), req.CreatedAt.Format(time.RFC3339)),
+			},
+		},
+	}
+}
+
+func deployApprovalCreatorText(req *db.DeployApprovalRequest) string {
+	switch {
+	case req.CreatedByEmail != "" && req.CreatedByName != "":
+		return fmt.Sprintf("Created by %s (%s)", req.CreatedByName, req.CreatedByEmail)
+	case req.CreatedByEmail != "":
+		return fmt.Sprintf("Created by %s", req.CreatedByEmail)
+	case req.CreatedByAPITokenName != "":
+		return fmt.Sprintf("Created by API token: %s", req.CreatedByAPITokenName)
+	default:
+		return ""
+	}
+}
+
+func slackDividerBlock() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "divider",
+	}
+}
+
+func shortCommitHash(commit string) string {
+	if len(commit) > 7 {
+		return commit[:7]
 	}
 
-	// Add divider
-	blocks = append(blocks, map[string]interface{}{
-		"type": "divider",
-	})
-
-	return text, blocks
+	return commit
 }

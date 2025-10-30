@@ -100,8 +100,134 @@ func handleBackupCodeVerification(out io.Writer, baseURL, bearer string) error {
 
 // tryWebAuthnVerification performs WebAuthn assertion flow.
 func tryWebAuthnVerification(baseURL, sessionToken string) error {
+	start, err := startWebAuthnAssertion(baseURL, sessionToken)
+	if err != nil {
+		return err
+	}
+
+	allowedCreds := extractAllowedCredentialIDs(start)
+	printAllowedCredentials(allowedCreds)
+	if len(allowedCreds) == 0 {
+		return fmt.Errorf("no WebAuthn credentials found - please enroll a security key first")
+	}
+
+	options, err := buildAssertionOptions(baseURL, allowedCreds, start)
+	if err != nil {
+		return err
+	}
+
+	assertion, err := webauthn.GetAssertion(options)
+	if err != nil {
+		return fmt.Errorf("WebAuthn assertion failed: %w", err)
+	}
+
+	assertionJSON, err := marshalWebAuthnResponse(assertion)
+	if err != nil {
+		return fmt.Errorf("failed to marshal assertion: %w", err)
+	}
+
+	return submitWebAuthnAssertion(baseURL, sessionToken, start.SessionData, assertionJSON)
+}
+
+type webAuthnStartResponse struct {
+	Options struct {
+		PublicKey struct {
+			Challenge        string `json:"challenge"`
+			Timeout          int    `json:"timeout"`
+			RPID             string `json:"rpId"`
+			AllowCredentials []struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+			} `json:"allowCredentials"`
+			UserVerification string `json:"userVerification"`
+		} `json:"publicKey"`
+	} `json:"options"`
+	SessionData string `json:"session_data"`
+}
+
+func startWebAuthnAssertion(baseURL, sessionToken string) (*webAuthnStartResponse, error) {
 	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", strings.TrimSuffix(baseURL, "/"))
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+sessionToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to start assertion: %s", RenderGatewayError(bodyBytes))
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var start webAuthnStartResponse
+	if err := json.Unmarshal(bodyBytes, &start); err != nil {
+		return nil, fmt.Errorf("failed to decode assertion start response: %w", err)
+	}
+
+	return &start, nil
+}
+
+func extractAllowedCredentialIDs(start *webAuthnStartResponse) []string {
+	ids := make([]string, 0, len(start.Options.PublicKey.AllowCredentials))
+	for _, cred := range start.Options.PublicKey.AllowCredentials {
+		ids = append(ids, cred.ID)
+	}
+	return ids
+}
+
+func printAllowedCredentials(creds []string) {
+	for i, cred := range creds {
+		if len(cred) > 40 {
+			fmt.Fprintf(os.Stderr, "    [%d] %s...\n", i+1, cred[:40])
+		} else {
+			fmt.Fprintf(os.Stderr, "    [%d] %s\n", i+1, cred)
+		}
+	}
+}
+
+func buildAssertionOptions(baseURL string, allowedCreds []string, start *webAuthnStartResponse) (webauthn.AssertionOptions, error) {
+	parsedURL, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return webauthn.AssertionOptions{}, fmt.Errorf("failed to parse gateway URL: %w", err)
+	}
+
+	origin := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+	rpID := parsedURL.Hostname()
+
+	return webauthn.AssertionOptions{
+		Challenge:        start.Options.PublicKey.Challenge,
+		RPID:             rpID,
+		AllowCredentials: allowedCreds,
+		Timeout:          start.Options.PublicKey.Timeout,
+		UserVerification: start.Options.PublicKey.UserVerification,
+		Origin:           origin,
+	}, nil
+}
+
+func submitWebAuthnAssertion(baseURL, sessionToken, sessionData, assertionJSON string) error {
+	verifyEndpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
+	payload := map[string]any{
+		"session_data":       sessionData,
+		"assertion_response": assertionJSON,
+		"trust_device":       false,
+	}
+	verifyBody, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal verify payload: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, verifyEndpoint, bytes.NewReader(verifyBody))
 	if err != nil {
 		return err
 	}
@@ -116,104 +242,6 @@ func tryWebAuthnVerification(baseURL, sessionToken string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to start assertion: %s", RenderGatewayError(bodyBytes))
-	}
-
-	var startResp struct {
-		Options struct {
-			PublicKey struct {
-				Challenge        string `json:"challenge"`
-				Timeout          int    `json:"timeout"`
-				RPID             string `json:"rpId"`
-				AllowCredentials []struct {
-					ID   string `json:"id"`
-					Type string `json:"type"`
-				} `json:"allowCredentials"`
-				UserVerification string `json:"userVerification"`
-			} `json:"publicKey"`
-		} `json:"options"`
-		SessionData string `json:"session_data"`
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if err := json.Unmarshal(bodyBytes, &startResp); err != nil {
-		return fmt.Errorf("failed to decode assertion start response: %w", err)
-	}
-
-	var allowedCreds []string
-	for _, cred := range startResp.Options.PublicKey.AllowCredentials {
-		allowedCreds = append(allowedCreds, cred.ID)
-	}
-
-	parsedURL, err := url.Parse(baseURL)
-	if err != nil {
-		return fmt.Errorf("failed to parse gateway URL: %w", err)
-	}
-	origin := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
-	rpID := parsedURL.Hostname()
-
-	for i, cred := range allowedCreds {
-		if len(cred) > 40 {
-			fmt.Fprintf(os.Stderr, "    [%d] %s...\n", i+1, cred[:40])
-		} else {
-			fmt.Fprintf(os.Stderr, "    [%d] %s\n", i+1, cred)
-		}
-	}
-
-	if len(allowedCreds) == 0 {
-		return fmt.Errorf("no WebAuthn credentials found - please enroll a security key first")
-	}
-
-	assertionOpts := webauthn.AssertionOptions{
-		Challenge:        startResp.Options.PublicKey.Challenge,
-		RPID:             rpID,
-		AllowCredentials: allowedCreds,
-		Timeout:          startResp.Options.PublicKey.Timeout,
-		UserVerification: startResp.Options.PublicKey.UserVerification,
-		Origin:           origin,
-	}
-
-	assertion, err := webauthn.GetAssertion(assertionOpts)
-	if err != nil {
-		return fmt.Errorf("WebAuthn assertion failed: %w", err)
-	}
-
-	assertionJSON, err := marshalWebAuthnResponse(assertion)
-	if err != nil {
-		return fmt.Errorf("failed to marshal assertion: %w", err)
-	}
-
-	verifyEndpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/verify", strings.TrimSuffix(baseURL, "/"))
-	verifyPayload := map[string]any{
-		"session_data":       startResp.SessionData,
-		"assertion_response": assertionJSON,
-		"trust_device":       false,
-	}
-
-	verifyBody, err := json.Marshal(verifyPayload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal verify payload: %w", err)
-	}
-
-	verifyReq, err := http.NewRequest(http.MethodPost, verifyEndpoint, bytes.NewReader(verifyBody))
-	if err != nil {
-		return err
-	}
-	verifyReq.Header.Set("Authorization", "Bearer "+sessionToken)
-	verifyReq.Header.Set("Content-Type", "application/json")
-
-	verifyResp, err := HTTPClient.Do(verifyReq)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = verifyResp.Body.Close() }()
-
-	if verifyResp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(verifyResp.Body)
 		return fmt.Errorf("assertion verification failed: %s", RenderGatewayError(bodyBytes))
 	}
 

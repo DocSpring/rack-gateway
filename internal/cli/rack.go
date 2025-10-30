@@ -46,43 +46,51 @@ func NormalizeGatewayURL(raw string) (string, error) {
 
 // ResolveRackStatus returns detailed status information about the current rack
 func ResolveRackStatus(now time.Time) (*RackStatus, error) {
+	if status, err := resolveStatusFromConfig(now); status != nil || err != nil {
+		return status, err
+	}
+	return resolveStatusFromEnv()
+}
+
+func resolveStatusFromConfig(now time.Time) (*RackStatus, error) {
 	cfg, exists, err := LoadConfig()
-	if err != nil {
+	if err != nil || !exists {
 		return nil, err
 	}
-	if exists {
-		rack := strings.TrimSpace(cfg.Current)
-		if rack != "" {
-			gateway, ok := cfg.Gateways[rack]
-			if !ok {
-				return nil, fmt.Errorf("rack %s not configured", rack)
-			}
 
-			status := &RackStatus{
-				Rack:       rack,
-				GatewayURL: gateway.URL,
-			}
-
-			if gateway.Token == "" {
-				status.StatusLines = append(status.StatusLines, "Status: Not logged in")
-				return status, nil
-			}
-			if now.After(gateway.ExpiresAt) {
-				status.StatusLines = append(status.StatusLines, "Status: Token expired")
-				return status, nil
-			}
-
-			status.StatusLines = append(status.StatusLines,
-				fmt.Sprintf("Status: Logged in as %s", gateway.Email))
-			status.StatusLines = append(status.StatusLines,
-				fmt.Sprintf("Token expires: %s", gateway.ExpiresAt.Format(time.RFC3339)))
-			if !gateway.MFAVerified {
-				status.StatusLines = append(status.StatusLines, "MFA: verification required (run an interactive login)")
-			}
-			return status, nil
-		}
+	rack := strings.TrimSpace(cfg.Current)
+	if rack == "" {
+		return nil, nil
 	}
 
+	gateway, ok := cfg.Gateways[rack]
+	if !ok {
+		return nil, fmt.Errorf("rack %s not configured", rack)
+	}
+
+	status := &RackStatus{Rack: rack, GatewayURL: gateway.URL}
+	return populateStatusLines(status, gateway, now), nil
+}
+
+func populateStatusLines(status *RackStatus, gateway GatewayConfig, now time.Time) *RackStatus {
+	switch {
+	case gateway.Token == "":
+		status.StatusLines = append(status.StatusLines, "Status: Not logged in")
+	case now.After(gateway.ExpiresAt):
+		status.StatusLines = append(status.StatusLines, "Status: Token expired")
+	default:
+		status.StatusLines = append(status.StatusLines,
+			fmt.Sprintf("Status: Logged in as %s", gateway.Email))
+		status.StatusLines = append(status.StatusLines,
+			fmt.Sprintf("Token expires: %s", gateway.ExpiresAt.Format(time.RFC3339)))
+		if !gateway.MFAVerified {
+			status.StatusLines = append(status.StatusLines, "MFA: verification required (run an interactive login)")
+		}
+	}
+	return status
+}
+
+func resolveStatusFromEnv() (*RackStatus, error) {
 	envURL := strings.TrimSpace(os.Getenv("RACK_GATEWAY_URL"))
 	if envURL == "" {
 		return nil, fmt.Errorf("no rack selected. Run: rack-gateway login <rack> <gateway-url>")
@@ -97,11 +105,7 @@ func ResolveRackStatus(now time.Time) (*RackStatus, error) {
 		label = "Using RACK_GATEWAY_API_TOKEN from environment"
 	}
 
-	status := &RackStatus{
-		Rack:       label,
-		GatewayURL: envURL,
-	}
-
+	status := &RackStatus{Rack: label, GatewayURL: envURL}
 	if tokenEnv == "" {
 		status.StatusLines = append(status.StatusLines, "Status: RACK_GATEWAY_API_TOKEN not set in environment")
 	}

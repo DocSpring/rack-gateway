@@ -330,114 +330,150 @@ func (h *APIHandler) GetEnvValues(c *gin.Context) {
 // @Security CSRFToken
 // @Router /apps/{app}/env [put]
 func (h *APIHandler) UpdateEnvValues(c *gin.Context) {
-	start := time.Now()
-
-	app := strings.TrimSpace(c.Param("app"))
-	if app == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
-		return
-	}
-
-	var req UpdateEnvValuesRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
-		return
-	}
-
-	if req.Set == nil {
-		req.Set = map[string]string{}
-	}
-	if req.Remove == nil {
-		req.Remove = []string{}
-	}
-
-	email := c.GetString("user_email")
-	name := c.GetString("user_name")
-
-	if ok, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet); !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify environment variables."})
-		return
-	}
-
-	rackConfig, tlsCfg, ok := h.acquireRackContext(c)
+	ctx, ok := h.prepareEnvUpdateContext(c)
 	if !ok {
 		return
 	}
 
-	baseEnv, ok := h.fetchEnvMap(c, "env_update", app, rackConfig, tlsCfg)
-	if !ok {
-		return
-	}
-
-	extraSecrets, protectedSet := h.secretAndProtectedKeys(app)
-	allowSecrets, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
-	canViewSecrets, _ := h.rbac.Enforce(email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead)
-
-	merged, diffs, mergeErr := envutil.MergeEnv(
-		baseEnv,
-		req.Set,
-		req.Remove,
-		envutil.MergeOptions{
-			AllowSecretUpdates: allowSecrets,
-			IsSecretKey: func(key string) bool {
-				return envutil.IsSecretKey(key, extraSecrets)
-			},
-			IsProtectedKey: func(key string) bool {
-				_, ok := protectedSet[strings.ToUpper(strings.TrimSpace(key))]
-				return ok
-			},
-		},
-	)
-	if mergeErr != nil {
-		switch {
-		case errors.Is(mergeErr, envutil.ErrSecretPermission):
-			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify secrets."})
-		case errors.Is(mergeErr, envutil.ErrProtectedEnvModification):
-			c.JSON(http.StatusForbidden, gin.H{"error": "This environment variable is protected and cannot be changed."})
-		case errors.Is(mergeErr, envutil.ErrMaskedSecretWithoutBase):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Masked secret value submitted without an existing secret."})
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to apply changes"})
-		}
+	merged, diffs, err := h.mergeEnvChanges(ctx)
+	if err != nil {
+		h.respondMergeError(c, err)
 		return
 	}
 
 	if len(diffs) == 0 {
-		ms := int(time.Since(start).Milliseconds())
-		ip := c.ClientIP()
-		ua := c.GetHeader("User-Agent")
-		_ = h.auditLogger.LogDBEntry(&db.AuditLog{
-			UserEmail:      email,
-			UserName:       name,
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionUpdate.String()),
-			ResourceType:   "env",
-			Resource:       app,
-			Details:        `{"changes":"none"}`,
-			IPAddress:      ip,
-			UserAgent:      ua,
-			Status:         "success",
-			RBACDecision:   "allow",
-			HTTPStatus:     http.StatusOK,
-			ResponseTimeMs: ms,
-		})
-
-		c.JSON(http.StatusOK, UpdateEnvValuesResponse{Env: maskEnvForResponse(merged, extraSecrets, canViewSecrets)})
+		h.respondNoEnvChanges(c, ctx, merged)
 		return
 	}
 
-	envStr := envutil.BuildEnvString(merged)
-	releaseID, err := envutil.CreateReleaseWithEnv(c.Request.Context(), rackConfig, tlsCfg, app, envStr)
+	releaseID, err := envutil.CreateReleaseWithEnv(c.Request.Context(), ctx.rackConfig, ctx.tlsCfg, ctx.app, envutil.BuildEnvString(merged))
 	if err != nil {
-		log.Printf(`{"level":"error","event":"env_update_release_failed","app":%q,"error":%q}`, app, err.Error())
+		log.Printf(`{"level":"error","event":"env_update_release_failed","app":%q,"error":%q}`, ctx.app, err.Error())
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to create release"})
 		return
 	}
 
-	h.logEnvUpdateDiffs(c, app, email, name, diffs, time.Since(start))
+	h.logEnvUpdateDiffs(c, ctx.app, ctx.email, ctx.name, diffs, time.Since(ctx.start))
 
 	c.JSON(http.StatusOK, UpdateEnvValuesResponse{
-		Env:       maskEnvForResponse(merged, extraSecrets, canViewSecrets),
+		Env:       maskEnvForResponse(merged, ctx.extraSecrets, ctx.canViewSecrets),
 		ReleaseID: releaseID,
 	})
+}
+
+type envUpdateContext struct {
+	app            string
+	request        UpdateEnvValuesRequest
+	email          string
+	name           string
+	allowSecrets   bool
+	canViewSecrets bool
+	extraSecrets   []string
+	protectedKeys  map[string]struct{}
+	baseEnv        map[string]string
+	rackConfig     config.RackConfig
+	tlsCfg         *tls.Config
+	start          time.Time
+}
+
+func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext, bool) {
+	ctx := &envUpdateContext{start: time.Now()}
+	ctx.app = strings.TrimSpace(c.Param("app"))
+	if ctx.app == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
+		return nil, false
+	}
+
+	if err := c.ShouldBindJSON(&ctx.request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return nil, false
+	}
+	if ctx.request.Set == nil {
+		ctx.request.Set = map[string]string{}
+	}
+	if ctx.request.Remove == nil {
+		ctx.request.Remove = []string{}
+	}
+
+	ctx.email = c.GetString("user_email")
+	ctx.name = c.GetString("user_name")
+
+	if ok, _ := h.rbac.Enforce(ctx.email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionSet); !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify environment variables."})
+		return nil, false
+	}
+
+	rackConfig, tlsCfg, ok := h.acquireRackContext(c)
+	if !ok {
+		return nil, false
+	}
+	ctx.rackConfig = rackConfig
+	ctx.tlsCfg = tlsCfg
+
+	baseEnv, ok := h.fetchEnvMap(c, "env_update", ctx.app, rackConfig, tlsCfg)
+	if !ok {
+		return nil, false
+	}
+	ctx.baseEnv = baseEnv
+
+	ctx.extraSecrets, ctx.protectedKeys = h.secretAndProtectedKeys(ctx.app)
+	ctx.allowSecrets, _ = h.rbac.Enforce(ctx.email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionSet)
+	ctx.canViewSecrets, _ = h.rbac.Enforce(ctx.email, rbac.ScopeConvox, rbac.ResourceSecret, rbac.ActionRead)
+
+	return ctx, true
+}
+
+func (h *APIHandler) mergeEnvChanges(ctx *envUpdateContext) (map[string]string, []envutil.EnvDiff, error) {
+	return envutil.MergeEnv(
+		ctx.baseEnv,
+		ctx.request.Set,
+		ctx.request.Remove,
+		envutil.MergeOptions{
+			AllowSecretUpdates: ctx.allowSecrets,
+			IsSecretKey: func(key string) bool {
+				return envutil.IsSecretKey(key, ctx.extraSecrets)
+			},
+			IsProtectedKey: func(key string) bool {
+				_, ok := ctx.protectedKeys[strings.ToUpper(strings.TrimSpace(key))]
+				return ok
+			},
+		},
+	)
+}
+
+func (h *APIHandler) respondMergeError(c *gin.Context, mergeErr error) {
+	switch {
+	case errors.Is(mergeErr, envutil.ErrSecretPermission):
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify secrets."})
+	case errors.Is(mergeErr, envutil.ErrProtectedEnvModification):
+		c.JSON(http.StatusForbidden, gin.H{"error": "This environment variable is protected and cannot be changed."})
+	case errors.Is(mergeErr, envutil.ErrMaskedSecretWithoutBase):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Masked secret value submitted without an existing secret."})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to apply changes"})
+	}
+}
+
+func (h *APIHandler) respondNoEnvChanges(c *gin.Context, ctx *envUpdateContext, merged map[string]string) {
+	ms := int(time.Since(ctx.start).Milliseconds())
+	ip := c.ClientIP()
+	ua := c.GetHeader("User-Agent")
+
+	_ = h.auditLogger.LogDBEntry(&db.AuditLog{
+		UserEmail:      ctx.email,
+		UserName:       ctx.name,
+		ActionType:     "convox",
+		Action:         audit.BuildAction(rbac.ResourceEnv.String(), rbac.ActionUpdate.String()),
+		ResourceType:   "env",
+		Resource:       ctx.app,
+		Details:        `{"changes":"none"}`,
+		IPAddress:      ip,
+		UserAgent:      ua,
+		Status:         "success",
+		RBACDecision:   "allow",
+		HTTPStatus:     http.StatusOK,
+		ResponseTimeMs: ms,
+	})
+
+	c.JSON(http.StatusOK, UpdateEnvValuesResponse{Env: maskEnvForResponse(merged, ctx.extraSecrets, ctx.canViewSecrets)})
 }

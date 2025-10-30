@@ -70,38 +70,44 @@ func (a *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Add user to request context and headers for audit logging
-		ctx := context.WithValue(r.Context(), UserContextKey, user)
-		if user != nil && user.DBUser != nil {
-			ctx = context.WithValue(ctx, userRecordKey, user.DBUser)
-		}
-		r = r.WithContext(ctx)
-
-		// Set headers for audit logging
-		r.Header.Set("X-User-Name", user.Name)
-		r.Header.Set("X-User-Email", user.Email)
-		r.Header.Set("X-Auth-Source", source)
-		if user.IsAPIToken {
-			if user.TokenID != nil {
-				r.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", *user.TokenID))
-			} else {
-				r.Header.Del("X-API-Token-ID")
-			}
-			tokenName := strings.TrimSpace(user.TokenName)
-			if tokenName != "" {
-				r.Header.Set("X-API-Token-Name", tokenName)
-			} else {
-				r.Header.Del("X-API-Token-Name")
-			}
-		} else {
-			r.Header.Del("X-API-Token-ID")
-			r.Header.Del("X-API-Token-Name")
-		}
-
-		// Note: admin API accepts cookie auth in this environment; endpoints are internal and behind VPN.
+		r = a.withUserContext(r, user)
+		a.setAuthHeaders(r, user, source)
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *AuthService) withUserContext(r *http.Request, user *AuthUser) *http.Request {
+	ctx := context.WithValue(r.Context(), UserContextKey, user)
+	if user != nil && user.DBUser != nil {
+		ctx = context.WithValue(ctx, userRecordKey, user.DBUser)
+	}
+	return r.WithContext(ctx)
+}
+
+func (a *AuthService) setAuthHeaders(r *http.Request, user *AuthUser, source string) {
+	r.Header.Set("X-User-Name", user.Name)
+	r.Header.Set("X-User-Email", user.Email)
+	r.Header.Set("X-Auth-Source", source)
+
+	if !user.IsAPIToken {
+		r.Header.Del("X-API-Token-ID")
+		r.Header.Del("X-API-Token-Name")
+		return
+	}
+
+	if user.TokenID != nil {
+		r.Header.Set("X-API-Token-ID", fmt.Sprintf("%d", *user.TokenID))
+	} else {
+		r.Header.Del("X-API-Token-ID")
+	}
+
+	tokenName := strings.TrimSpace(user.TokenName)
+	if tokenName != "" {
+		r.Header.Set("X-API-Token-Name", tokenName)
+	} else {
+		r.Header.Del("X-API-Token-Name")
+	}
 }
 
 // writeUnauthorized centralizes 401 responses and optional debug logging.
@@ -121,66 +127,103 @@ func (a *AuthService) writeUnauthorized(w http.ResponseWriter, r *http.Request, 
 
 // AuthenticateHTTPRequest attempts to authenticate the provided request, returning the user and auth source label.
 func (a *AuthService) AuthenticateHTTPRequest(r *http.Request) (*AuthUser, string, error) {
-	var user *AuthUser
-	var source string
-	var err error
+	if user, source, err := a.authenticateFromHeader(r); user != nil || err != nil {
+		if err != nil {
+			return nil, source, err
+		}
+		a.applyHeaderMFA(r, user)
+		return user, source, nil
+	}
 
+	if user, source, err := a.authenticateFromCookie(r); user != nil || err != nil {
+		if err != nil {
+			return nil, source, err
+		}
+		a.applyHeaderMFA(r, user)
+		return user, source, nil
+	}
+
+	return nil, "none", fmt.Errorf("missing authorization")
+}
+
+func (a *AuthService) authenticateFromHeader(r *http.Request) (*AuthUser, string, error) {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if authHeader != "" {
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 {
-			return nil, "header", fmt.Errorf("invalid authorization header format")
-		}
-		authType := parts[0]
-		credentials := parts[1]
-		switch authType {
-		case "Bearer":
-			if strings.HasPrefix(credentials, "rgw_") {
-				user, err = a.validateAPIToken(credentials)
-			} else {
-				// Parse Bearer token for optional inline MFA
-				sessionToken, mfaType, mfaValue := parseInlineMFA(credentials)
-				user, err = a.validateSessionToken(sessionToken, r)
-				if err == nil && mfaType != "" && mfaValue != "" {
-					// Attach inline MFA to the user
-					user.MFAType = mfaType
-					user.MFAValue = mfaValue
-				}
-			}
-		case "Basic":
-			user, err = a.validateBasicAuth(credentials, r)
-		default:
-			return nil, "header", fmt.Errorf("unsupported authorization type")
-		}
+	if authHeader == "" {
+		return nil, "", nil
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 {
+		return nil, "header", fmt.Errorf("invalid authorization header format")
+	}
+
+	authType := parts[0]
+	credentials := parts[1]
+
+	switch authType {
+	case "Bearer":
+		user, err := a.authenticateBearer(credentials, r)
 		if err != nil {
 			return nil, "header", fmt.Errorf("authentication failed: %v", err)
 		}
-		source = "header"
-	} else if cookie, err := r.Cookie("session_token"); err == nil && strings.TrimSpace(cookie.Value) != "" {
-		result, err := a.sessions.ValidateSession(cookie.Value, netutil.ClientIPFromRequest(r), r.UserAgent())
+		return user, "header", nil
+	case "Basic":
+		user, err := a.validateBasicAuth(credentials, r)
 		if err != nil {
-			return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
+			return nil, "header", fmt.Errorf("authentication failed: %v", err)
 		}
-		user = newAuthUserFromSessionResult(result)
-		if user == nil {
-			return nil, "cookie", fmt.Errorf("authentication failed: invalid session")
-		}
-		source = "cookie"
-	} else {
-		return nil, "none", fmt.Errorf("missing authorization")
+		return user, "header", nil
+	default:
+		return nil, "header", fmt.Errorf("unsupported authorization type")
+	}
+}
+
+func (a *AuthService) authenticateBearer(credentials string, r *http.Request) (*AuthUser, error) {
+	if strings.HasPrefix(credentials, "rgw_") {
+		return a.validateAPIToken(credentials)
 	}
 
-	// Extract MFA code from headers (web flow)
-	// This is in addition to inline MFA in password (CLI flow)
+	sessionToken, mfaType, mfaValue := parseInlineMFA(credentials)
+	user, err := a.validateSessionToken(sessionToken, r)
+	if err != nil {
+		return nil, err
+	}
+	if mfaType != "" && mfaValue != "" {
+		user.MFAType = mfaType
+		user.MFAValue = mfaValue
+	}
+	return user, nil
+}
+
+func (a *AuthService) authenticateFromCookie(r *http.Request) (*AuthUser, string, error) {
+	cookie, err := r.Cookie("session_token")
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return nil, "", nil
+	}
+
+	result, err := a.sessions.ValidateSession(cookie.Value, netutil.ClientIPFromRequest(r), r.UserAgent())
+	if err != nil {
+		return nil, "cookie", fmt.Errorf("authentication failed: %v", err)
+	}
+
+	user := newAuthUserFromSessionResult(result)
+	if user == nil {
+		return nil, "cookie", fmt.Errorf("authentication failed: invalid session")
+	}
+
+	return user, "cookie", nil
+}
+
+func (a *AuthService) applyHeaderMFA(r *http.Request, user *AuthUser) {
 	if totpCode := strings.TrimSpace(r.Header.Get("X-Mfa-Totp")); totpCode != "" {
 		user.MFAType = "totp"
 		user.MFAValue = totpCode
-	} else if webauthnData := strings.TrimSpace(r.Header.Get("X-MFA-WebAuthn")); webauthnData != "" {
+		return
+	}
+	if webauthnData := strings.TrimSpace(r.Header.Get("X-MFA-WebAuthn")); webauthnData != "" {
 		user.MFAType = "webauthn"
 		user.MFAValue = webauthnData
 	}
-
-	return user, source, nil
 }
 
 func (a *AuthService) validateAPIToken(tokenString string) (*AuthUser, error) {

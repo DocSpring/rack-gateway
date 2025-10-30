@@ -359,44 +359,49 @@ func (l *Logger) ParseConvoxAction(path, method, resourceIDOverride string) (act
 }
 
 func resourceInstance(path, resource, action string) string {
-	// For collection list actions, return "all" to indicate all resources
-	// Check this FIRST before checking for specific resource instances
 	if action == "list" {
 		return "all"
 	}
 
-	p := strings.TrimPrefix(path, "/")
-	parts := strings.Split(p, "/")
+	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
 
-	// Processes with ID
-	if resource == "process" {
-		for i, seg := range parts {
-			if seg == "processes" && i+1 < len(parts) {
-				return parts[i+1]
-			}
-		}
+	if candidate := extractSpecificResource(resource, parts); candidate != "" {
+		return candidate
 	}
-	if resource == "release" {
-		for i, seg := range parts {
-			if seg == "releases" && i+1 < len(parts) {
-				return parts[i+1]
-			}
-		}
+
+	if app := extractAppName(parts); app != "" {
+		return app
 	}
-	if resource == "instance" {
-		for i, seg := range parts {
-			if seg == "instances" && i+1 < len(parts) {
-				return parts[i+1]
-			}
-		}
-	}
-	// App-scoped routes: return app name if present
-	if len(parts) >= 2 && parts[0] == "apps" {
-		if parts[1] != "" {
-			return parts[1]
-		}
-	}
+
 	return resource
+}
+
+func extractSpecificResource(resource string, parts []string) string {
+	lookups := map[string]string{
+		"process":  "processes",
+		"release":  "releases",
+		"instance": "instances",
+	}
+
+	segment, ok := lookups[resource]
+	if !ok {
+		return ""
+	}
+
+	for i, part := range parts {
+		if part == segment && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+
+	return ""
+}
+
+func extractAppName(parts []string) string {
+	if len(parts) >= 2 && parts[0] == "apps" {
+		return parts[1]
+	}
+	return ""
 }
 
 // BuildDetailsJSON creates a JSON string with request details
