@@ -27,120 +27,200 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
+type mfaRuntimeConfig struct {
+	issuer           string
+	trustedDeviceTTL time.Duration
+	stepUpWindow     time.Duration
+	yubiClientID     string
+	yubiSecretKey    string
+	webAuthnRPID     string
+	webAuthnOrigin   string
+}
+
 // initializeServices sets up all application services (matching original main.go exactly)
 func (a *App) initializeServices() error {
-	// Enforce AUDIT_HMAC_SECRET in non-dev environments
+	if err := a.ensureAuditSecret(); err != nil {
+		return err
+	}
+	if err := a.seedInitialUsers(); err != nil {
+		return err
+	}
+
+	a.initSessionManager()
+
+	mfaCfg, err := a.initSettingsAndMFAConfig()
+	if err != nil {
+		return err
+	}
+
+	if err := a.initRBACManager(); err != nil {
+		return err
+	}
+
+	a.initTokenAndAuthServices()
+
+	redirectInput, issuerURL, allowedDomain, err := a.resolveOAuthParameters()
+	if err != nil {
+		return err
+	}
+	if err := a.initOAuthHandler(redirectInput, issuerURL, allowedDomain); err != nil {
+		return err
+	}
+
+	auditLogger := a.initAuditLogger()
+	slackNotifier := a.initSlackNotifier(auditLogger)
+
+	a.initRackCertManager()
+
+	deliverySender := a.newEmailSender()
+	if err := a.initJobsClient(deliverySender, slackNotifier); err != nil {
+		return err
+	}
+
+	if err := a.initMFAService(mfaCfg); err != nil {
+		return err
+	}
+
+	adminEmails := a.collectAdminEmails()
+	a.configureAuditEnqueuer(auditLogger)
+	a.startJobsWorker()
+	a.initSecurityNotifier(auditLogger, adminEmails)
+
+	rackName, rackAlias := a.deriveRackIdentity()
+	a.initProxyHandler(auditLogger, rackName, rackAlias)
+
+	return nil
+}
+
+func (a *App) ensureAuditSecret() error {
 	if strings.TrimSpace(os.Getenv("AUDIT_HMAC_SECRET")) == "" && !a.Config.DevMode {
 		return fmt.Errorf("AUDIT_HMAC_SECRET must be set in non-dev environments")
 	}
-	if err := a.Database.SeedDatabase(&db.SeedConfig{
+	return nil
+}
+
+func (a *App) seedInitialUsers() error {
+	return a.Database.SeedDatabase(&db.SeedConfig{
 		AdminUsers:      a.Config.AdminUsers,
 		ViewerUsers:     a.Config.ViewerUsers,
 		DeployerUsers:   a.Config.DeployerUsers,
 		OperationsUsers: a.Config.OperationsUsers,
-	}); err != nil {
-		return fmt.Errorf("failed to seed database: %w", err)
-	}
+	})
+}
 
-	// Session manager enforces short-lived idle sessions for the web UI
+func (a *App) initSessionManager() {
 	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.SessionSecret, a.Config.SessionIdleTimeout)
+}
 
-	// Initialize settings service early (before RBAC, token service, etc.)
+func (a *App) initSettingsAndMFAConfig() (*mfaRuntimeConfig, error) {
 	a.SettingsService = settings.NewService(a.Database)
 
-	// Load MFA settings from settings service
 	mfaSettings, err := a.SettingsService.GetMFASettings()
 	if err != nil {
-		return fmt.Errorf("failed to load MFA settings: %w", err)
+		return nil, fmt.Errorf("failed to load MFA settings: %w", err)
 	}
-	// Environment variable MFA_REQUIRE_ALL_USERS can override database setting
-	// This is handled automatically by the settings service (env > db > default)
 	a.MFASettings = mfaSettings
 
-	issuer := "Rack Gateway"
-	enforcedRackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
-	if enforcedRackAlias == "" {
-		enforcedRackAlias = strings.TrimSpace(os.Getenv("RACK"))
-	}
-	if enforcedRackAlias != "" {
-		issuer = fmt.Sprintf("Rack Gateway (%s)", enforcedRackAlias)
-	}
-	trustedDeviceTTL := time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour
-	stepUpWindow := time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute
-
-	// Optional Yubico OTP configuration
-	yubiClientID := strings.TrimSpace(os.Getenv("YUBICO_CLIENT_ID"))
-	yubiSecretKey := strings.TrimSpace(os.Getenv("YUBICO_SECRET_KEY"))
-
-	// Optional WebAuthn configuration
-	webAuthnRPID := strings.TrimSpace(os.Getenv("WEBAUTHN_RP_ID"))
-	webAuthnOrigin := strings.TrimSpace(os.Getenv("WEBAUTHN_ORIGIN"))
-	if webAuthnRPID == "" && a.Config.Domain != "" {
-		// Auto-derive RP ID from domain (never include port)
-		webAuthnRPID = a.Config.Domain
-	}
-	if webAuthnOrigin == "" {
-		// In dev mode with localhost, include the port in the origin
-		if a.Config.DevMode && (a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:")) {
-			webAuthnOrigin = fmt.Sprintf("http://localhost:%s", a.Config.Port)
-		} else if a.Config.Domain != "" {
-			// Auto-derive origin from domain (use http for localhost, https otherwise)
-			scheme := "https"
-			if a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:") {
-				scheme = "http"
-			}
-			webAuthnOrigin = fmt.Sprintf("%s://%s", scheme, a.Config.Domain)
-		}
+	cfg := &mfaRuntimeConfig{
+		issuer:           deriveMFAIssuer(),
+		trustedDeviceTTL: time.Duration(mfaSettings.TrustedDeviceTTLDays) * 24 * time.Hour,
+		stepUpWindow:     time.Duration(mfaSettings.StepUpWindowMinutes) * time.Minute,
+		yubiClientID:     strings.TrimSpace(os.Getenv("YUBICO_CLIENT_ID")),
+		yubiSecretKey:    strings.TrimSpace(os.Getenv("YUBICO_SECRET_KEY")),
 	}
 
-	// Log WebAuthn configuration for debugging
-	if webAuthnRPID != "" && webAuthnOrigin != "" {
-		log.Printf("WebAuthn enabled: rpid=%s origin=%s", webAuthnRPID, webAuthnOrigin)
-	} else {
-		log.Printf("WebAuthn disabled (no RP ID or origin configured)")
+	cfg.webAuthnRPID, cfg.webAuthnOrigin = a.resolveWebAuthnConfig()
+	logWebAuthnStatus(cfg)
+
+	return cfg, nil
+}
+
+func deriveMFAIssuer() string {
+	if enforced := strings.TrimSpace(os.Getenv("RACK_ALIAS")); enforced != "" {
+		return fmt.Sprintf("Rack Gateway (%s)", enforced)
+	}
+	if enforced := strings.TrimSpace(os.Getenv("RACK")); enforced != "" {
+		return fmt.Sprintf("Rack Gateway (%s)", enforced)
+	}
+	return "Rack Gateway"
+}
+
+func (a *App) resolveWebAuthnConfig() (string, string) {
+	rpid := strings.TrimSpace(os.Getenv("WEBAUTHN_RP_ID"))
+	origin := strings.TrimSpace(os.Getenv("WEBAUTHN_ORIGIN"))
+
+	if rpid == "" && a.Config.Domain != "" {
+		rpid = a.Config.Domain
 	}
 
-	// Initialize RBAC manager
-	allowedDomain := a.Config.GoogleAllowedDomain
-	rbacManager, err := rbac.NewDBManager(a.Database, allowedDomain)
+	if origin != "" {
+		return rpid, origin
+	}
+
+	if a.Config.DevMode && (a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:")) {
+		return rpid, fmt.Sprintf("http://localhost:%s", a.Config.Port)
+	}
+	if a.Config.Domain == "" {
+		return rpid, origin
+	}
+
+	scheme := "https"
+	if a.Config.Domain == "localhost" || strings.HasPrefix(a.Config.Domain, "localhost:") {
+		scheme = "http"
+	}
+	return rpid, fmt.Sprintf("%s://%s", scheme, a.Config.Domain)
+}
+
+func logWebAuthnStatus(cfg *mfaRuntimeConfig) {
+	if cfg.webAuthnRPID != "" && cfg.webAuthnOrigin != "" {
+		log.Printf("WebAuthn enabled: rpid=%s origin=%s", cfg.webAuthnRPID, cfg.webAuthnOrigin)
+		return
+	}
+	log.Printf("WebAuthn disabled (no RP ID or origin configured)")
+}
+
+func (a *App) initRBACManager() error {
+	manager, err := rbac.NewDBManager(a.Database, a.Config.GoogleAllowedDomain)
 	if err != nil {
 		return fmt.Errorf("failed to initialize RBAC: %w", err)
 	}
-	a.RBACManager = rbacManager
+	a.RBACManager = manager
+	return nil
+}
 
-	// Initialize token service
+func (a *App) initTokenAndAuthServices() {
 	a.TokenService = token.NewService(a.Database)
-
-	// Create combined auth service
 	a.AuthService = auth.NewAuthService(a.TokenService, a.Database, a.SessionManager)
 
-	// Debug: Log OAuth configuration (matching original)
 	log.Printf("Environment PORT=%s, Config Port=%s", os.Getenv("PORT"), a.Config.Port)
 	log.Printf("OAuth config - ClientID: %s, BaseURL: %s", a.Config.GoogleClientID, a.Config.GoogleOAuthBaseURL)
+}
 
-	// For OIDC, we need the issuer URL which is the base OAuth URL
+func (a *App) resolveOAuthParameters() (string, string, string, error) {
 	issuerURL := a.Config.GoogleOAuthBaseURL
 	if issuerURL == "" {
 		issuerURL = "https://accounts.google.com"
 	}
 
-	// Derive redirect base from DOMAIN (production) or localhost in dev
 	redirectInput := ""
-	if a.Config.Domain != "" {
-		if strings.EqualFold(a.Config.Domain, "localhost") {
-			redirectInput = "http://localhost:" + a.Config.Port
-		} else {
-			redirectInput = "https://" + a.Config.Domain
-		}
-	} else if a.Config.DevMode {
+	switch {
+	case a.Config.Domain != "" && strings.EqualFold(a.Config.Domain, "localhost"):
+		redirectInput = "http://localhost:" + a.Config.Port
+	case a.Config.Domain != "":
+		redirectInput = "https://" + a.Config.Domain
+	case a.Config.DevMode:
 		redirectInput = "http://localhost:" + a.Config.Port
 	}
+
 	if redirectInput == "" {
-		return fmt.Errorf("DOMAIN must be set (or use DEV_MODE with PORT) to derive OAuth redirect URLs")
+		return "", "", "", fmt.Errorf("DOMAIN must be set (or use DEV_MODE with PORT) to derive OAuth redirect URLs")
 	}
 
-	// Initialize OAuth handler
-	oauthHandler, err := auth.NewOAuthHandler(
+	return redirectInput, issuerURL, a.Config.GoogleAllowedDomain, nil
+}
+
+func (a *App) initOAuthHandler(redirectInput, issuerURL, allowedDomain string) error {
+	handler, err := auth.NewOAuthHandler(
 		a.Config.GoogleClientID,
 		a.Config.GoogleClientSecret,
 		redirectInput,
@@ -150,26 +230,34 @@ func (a *App) initializeServices() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize OAuth handler: %w", err)
 	}
-	a.OAuthHandler = oauthHandler
+	a.OAuthHandler = handler
+	return nil
+}
 
-	// Initialize audit logger
-	auditLogger := audit.NewLogger(a.Database)
-	a.AuditLogger = auditLogger
+func (a *App) initAuditLogger() *audit.Logger {
+	logger := audit.NewLogger(a.Database)
+	a.AuditLogger = logger
+	return logger
+}
 
-	// Initialize Slack notifier (optional, won't fail if not configured)
-	slackNotifier := slackpkg.NewNotifier(a.Database)
-	auditLogger.SetSlackNotifier(slackNotifier)
-	a.SlackNotifier = slackNotifier
+func (a *App) initSlackNotifier(logger *audit.Logger) *slackpkg.Notifier {
+	notifier := slackpkg.NewNotifier(a.Database)
+	logger.SetSlackNotifier(notifier)
+	a.SlackNotifier = notifier
+	return notifier
+}
 
-	// Rack TLS certificate manager
-	if a.Config.RackTLSPinningEnabled {
-		a.RackCertManager = rackcert.NewManager(a.Config, a.Database)
-		if _, err := a.RackCertManager.TLSConfig(context.Background()); err != nil {
-			log.Printf("Warning: failed to initialize rack TLS certificate: %v", err)
-		}
+func (a *App) initRackCertManager() {
+	if !a.Config.RackTLSPinningEnabled {
+		return
 	}
+	a.RackCertManager = rackcert.NewManager(a.Config, a.Database)
+	if _, err := a.RackCertManager.TLSConfig(context.Background()); err != nil {
+		log.Printf("Warning: failed to initialize rack TLS certificate: %v", err)
+	}
+}
 
-	// Email delivery sender (Postmark/Logger)
+func (a *App) newEmailSender() email.Sender {
 	pmToken := os.Getenv("POSTMARK_API_TOKEN")
 	from := os.Getenv("POSTMARK_FROM")
 	if from == "" {
@@ -180,87 +268,108 @@ func (a *App) initializeServices() error {
 		from = "no-reply@" + domain
 	}
 	pmStream := os.Getenv("POSTMARK_STREAM")
-	deliverySender := email.NewSender(pmToken, from, pmStream)
+	return email.NewSender(pmToken, from, pmStream)
+}
 
-	// Initialize River jobs client for background job processing (before SecurityNotifier)
-	jobsClient, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
+func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier) error {
+	client, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
 		Database:      a.Database,
-		EmailSender:   deliverySender, // workers deliver using real sender
-		SlackNotifier: a.SlackNotifier,
+		EmailSender:   sender,
+		SlackNotifier: notifier,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize jobs client: %w", err)
 	}
-	a.JobsClient = jobsClient
+	a.JobsClient = client
+	a.EmailSender = asyncmail.NewSender(client)
+	return nil
+}
 
-	// Wrap jobs client with async email sender for all app usage
-	a.EmailSender = asyncmail.NewSender(a.JobsClient)
-
-	// Initialize MFA service (after jobs client so it can enqueue emails)
-	mfaService, err := mfa.NewService(a.Database, issuer, trustedDeviceTTL, stepUpWindow, []byte(a.Config.SessionSecret), yubiClientID, yubiSecretKey, webAuthnRPID, webAuthnOrigin, a.EmailSender)
+func (a *App) initMFAService(cfg *mfaRuntimeConfig) error {
+	service, err := mfa.NewService(
+		a.Database,
+		cfg.issuer,
+		cfg.trustedDeviceTTL,
+		cfg.stepUpWindow,
+		[]byte(a.Config.SessionSecret),
+		cfg.yubiClientID,
+		cfg.yubiSecretKey,
+		cfg.webAuthnRPID,
+		cfg.webAuthnOrigin,
+		a.EmailSender,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize MFA service: %w", err)
 	}
-	a.MFAService = mfaService
+	a.MFAService = service
+	return nil
+}
 
-	// Collect admin emails for security notifications
-	adminEmails := []string{}
-	if allUsers, err := a.Database.ListUsers(); err == nil {
-		for _, user := range allUsers {
-			// Check if user has admin role
-			hasAdminRole := false
-			for _, role := range user.Roles {
-				if role == "admin" {
-					hasAdminRole = true
-					break
-				}
-			}
-			if hasAdminRole && strings.TrimSpace(user.Email) != "" {
-				adminEmails = append(adminEmails, user.Email)
+func (a *App) collectAdminEmails() []string {
+	users, err := a.Database.ListUsers()
+	if err != nil {
+		return nil
+	}
+	var emails []string
+	for _, user := range users {
+		if strings.TrimSpace(user.Email) == "" {
+			continue
+		}
+		for _, role := range user.Roles {
+			if role == "admin" {
+				emails = append(emails, user.Email)
+				break
 			}
 		}
 	}
+	return emails
+}
 
-	// Set audit event enqueuer on audit logger for Slack notification jobs
-	auditEventEnqueuer := jobs.NewAuditEventEnqueuer(a.JobsClient)
-	auditLogger.SetAuditEventEnqueuer(auditEventEnqueuer)
+func (a *App) configureAuditEnqueuer(logger *audit.Logger) {
+	logger.SetAuditEventEnqueuer(jobs.NewAuditEventEnqueuer(a.JobsClient))
+}
 
-	// Start the job worker with proper lifecycle management
+func (a *App) startJobsWorker() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.WorkerCtx = ctx
 	a.WorkerCancel = cancel
 	a.WorkerWg.Add(1)
 	go func() {
 		defer a.WorkerWg.Done()
-		if startErr := jobsClient.Start(ctx); startErr != nil {
-			log.Printf("ERROR: Failed to start jobs worker: %v", startErr)
+		if err := a.JobsClient.Start(ctx); err != nil {
+			log.Printf("ERROR: Failed to start jobs worker: %v", err)
 		}
 	}()
+}
 
-	// Initialize security notifier (needs jobsClient)
-	a.SecurityNotifier = security.NewNotifier(a.EmailSender, auditLogger, a.Database, adminEmails, a.JobsClient)
+func (a *App) initSecurityNotifier(logger *audit.Logger, adminEmails []string) {
+	a.SecurityNotifier = security.NewNotifier(a.EmailSender, logger, a.Database, adminEmails, a.JobsClient)
+}
 
-	// Determine rack name for notifications
+func (a *App) deriveRackIdentity() (string, string) {
 	rackName := strings.TrimSpace(os.Getenv("RACK"))
 	if rackName == "" {
-		rackName = "default"
-		if rc, ok := a.Config.Racks["default"]; ok {
-			if strings.TrimSpace(rc.Name) != "" {
-				rackName = rc.Name
-			}
-		} else if rc, ok := a.Config.Racks["local"]; ok {
-			if strings.TrimSpace(rc.Name) != "" {
-				rackName = rc.Name
-			}
-		}
+		rackName = a.rackNameFromConfig()
 	}
 
 	rackAlias := strings.TrimSpace(os.Getenv("RACK_ALIAS"))
 	if rackAlias == "" {
 		rackAlias = rackName
 	}
+	return rackName, rackAlias
+}
 
-	// Initialize proxy handler
+func (a *App) rackNameFromConfig() string {
+	if rc, ok := a.Config.Racks["default"]; ok && strings.TrimSpace(rc.Name) != "" {
+		return strings.TrimSpace(rc.Name)
+	}
+	if rc, ok := a.Config.Racks["local"]; ok && strings.TrimSpace(rc.Name) != "" {
+		return strings.TrimSpace(rc.Name)
+	}
+	return "default"
+}
+
+func (a *App) initProxyHandler(auditLogger *audit.Logger, rackName, rackAlias string) {
 	pinnedMgr := a.RackCertManager
 	if !a.Config.RackTLSPinningEnabled {
 		pinnedMgr = nil
@@ -268,8 +377,6 @@ func (a *App) initializeServices() error {
 
 	a.ProxyHandler = proxy.NewHandler(a.Config, a.RBACManager, auditLogger, a.Database, a.SettingsService, a.EmailSender, rackName, rackAlias, pinnedMgr, a.MFAService, a.SessionManager)
 	a.DefaultRack = rackAlias
-
-	return nil
 }
 
 // setupRouter configures the Gin router with all routes and middleware
