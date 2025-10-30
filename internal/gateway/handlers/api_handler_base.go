@@ -22,7 +22,7 @@ import (
 )
 
 type APIHandler struct {
-	rbac            rbac.RBACManager
+	rbac            rbac.Manager
 	database        *db.Database
 	config          *config.Config
 	rackCertManager *rackcert.Manager
@@ -44,7 +44,7 @@ var (
 )
 
 func NewAPIHandler(
-	rbac rbac.RBACManager,
+	rbac rbac.Manager,
 	database *db.Database,
 	config *config.Config,
 	rackCertManager *rackcert.Manager,

@@ -24,7 +24,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handlers.APIHandler, rbac.RBACManager) {
+func newAPIHandler(t *testing.T, database *db.Database, rackURL string) (*handlers.APIHandler, rbac.Manager) {
 	t.Helper()
 
 	rbacManager, err := rbac.NewDBManager(database, "example.com")

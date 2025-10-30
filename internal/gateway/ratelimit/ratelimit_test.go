@@ -16,7 +16,7 @@ func TestRateLimiter(t *testing.T) {
 	rl := NewRateLimiter(5, 10)
 
 	// Create a test handler
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK")) //nolint:errcheck
 	})
@@ -138,7 +138,7 @@ func TestAuthEndpointsOnly(t *testing.T) {
 	rl := NewRateLimiter(100, 2) // High rate limit but small burst for faster testing
 
 	// Create a test handler
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK")) //nolint:errcheck
 	})
@@ -194,7 +194,7 @@ func TestAuthEndpointsOnly(t *testing.T) {
 func TestConcurrentRequests(t *testing.T) {
 	rl := NewRateLimiter(10, 20)
 
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -245,7 +245,7 @@ func TestConcurrentRequests(t *testing.T) {
 func TestRateLimiterHeaders(t *testing.T) {
 	rl := NewRateLimiter(5, 1) // 5 per second, burst of 1 for immediate limiting
 
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -305,7 +305,7 @@ func TestVisitorCleanup(t *testing.T) {
 	// Start cleanup goroutine
 	go rl.cleanupVisitors()
 
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 

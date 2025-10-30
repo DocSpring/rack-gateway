@@ -24,7 +24,7 @@ var (
 	errDeployApprovalRequestTargetMissing = errors.New("target_api_token_id or target_api_token is required")
 )
 
-func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.RBACManager, user *db.User, req CreateDeployApprovalRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
+func resolveDeployApprovalRequestToken(database *db.Database, rbacSvc rbac.Manager, user *db.User, req CreateDeployApprovalRequestRequest, authUser *auth.AuthUser) (*db.APIToken, error) {
 	identifier := strings.TrimSpace(req.TargetAPITokenName)
 	var token *db.APIToken
 	var err error
@@ -183,7 +183,7 @@ func getAppSettingString(svc *settings.Service, appName, key string, defaultValu
 
 // checkDeployApprovalAuth validates authentication and RBAC permissions for deploy approval operations.
 // Returns the authenticated email and true on success, otherwise writes an error response and returns false.
-func checkDeployApprovalAuth(c *gin.Context, rbacSvc rbac.RBACManager, action rbac.Action) (string, bool) {
+func checkDeployApprovalAuth(c *gin.Context, rbacSvc rbac.Manager, action rbac.Action) (string, bool) {
 	return requireAuth(c, rbacSvc, rbac.ResourceDeployApprovalRequest, action)
 }
 

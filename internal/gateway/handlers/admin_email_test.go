@@ -22,7 +22,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
 )
 
-func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandler, *db.Database, rbac.RBACManager) {
+func newAdminHandler(t *testing.T, sender emailpkg.Sender) (*handlers.AdminHandler, *db.Database, rbac.Manager) {
 	t.Helper()
 
 	database := dbtest.NewDatabase(t)

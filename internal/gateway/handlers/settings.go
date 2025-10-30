@@ -13,11 +13,11 @@ import (
 // SettingsHandler handles generic settings API endpoints.
 type SettingsHandler struct {
 	settingsService *settings.Service
-	rbac            rbac.RBACManager
+	rbac            rbac.Manager
 }
 
 // NewSettingsHandler creates a new settings handler.
-func NewSettingsHandler(settingsService *settings.Service, rbacMgr rbac.RBACManager) *SettingsHandler {
+func NewSettingsHandler(settingsService *settings.Service, rbacMgr rbac.Manager) *SettingsHandler {
 	return &SettingsHandler{
 		settingsService: settingsService,
 		rbac:            rbacMgr,

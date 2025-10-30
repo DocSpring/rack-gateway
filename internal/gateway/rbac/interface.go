@@ -9,8 +9,8 @@ type UserWithID struct {
 	Roles []string `json:"roles"`
 }
 
-// RBACManager defines the interface for RBAC operations
-type RBACManager interface {
+// Manager defines the interface for RBAC operations.
+type Manager interface {
 	// Enforce checks if a user has permission to perform an action
 	Enforce(userEmail string, scope Scope, resource Resource, action Action) (bool, error)
 

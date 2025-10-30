@@ -240,7 +240,7 @@ func buildRoleOptions(rolePerms map[string][]string) []RoleDescriptor {
 	return roles
 }
 
-func flattenUserRoles(manager rbac.RBACManager, email string, rolePerms map[string][]string) ([]string, []string) {
+func flattenUserRoles(manager rbac.Manager, email string, rolePerms map[string][]string) ([]string, []string) {
 	if manager == nil || email == "" {
 		return nil, nil
 	}

@@ -336,7 +336,7 @@ type memoryAdapter struct {
 	policies [][]string
 }
 
-func (a *memoryAdapter) LoadPolicy(model model.Model) error {
+func (a *memoryAdapter) LoadPolicy(mdl model.Model) error {
 	for _, p := range a.policies {
 		if len(p) < 2 {
 			continue
@@ -348,7 +348,7 @@ func (a *memoryAdapter) LoadPolicy(model model.Model) error {
 
 		switch sec {
 		case "p", "g":
-			if err := model.AddPolicy(sec, ptype, p[1:]); err != nil {
+			if err := mdl.AddPolicy(sec, ptype, p[1:]); err != nil {
 				return fmt.Errorf("failed to add policy %v: %w", p, err)
 			}
 		}
@@ -356,18 +356,18 @@ func (a *memoryAdapter) LoadPolicy(model model.Model) error {
 	return nil
 }
 
-func (a *memoryAdapter) SavePolicy(model model.Model) error {
+func (a *memoryAdapter) SavePolicy(model.Model) error {
 	return nil // We don't save policies, they're embedded
 }
 
-func (a *memoryAdapter) AddPolicy(sec string, ptype string, rule []string) error {
+func (a *memoryAdapter) AddPolicy(string, string, []string) error {
 	return nil
 }
 
-func (a *memoryAdapter) RemovePolicy(sec string, ptype string, rule []string) error {
+func (a *memoryAdapter) RemovePolicy(string, string, []string) error {
 	return nil
 }
 
-func (a *memoryAdapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
+func (a *memoryAdapter) RemoveFilteredPolicy(string, string, int, ...string) error {
 	return nil
 }

@@ -23,7 +23,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
+func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.Manager) {
 	database := dbtest.NewDatabase(t)
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACMana
 	return h, database, mgr
 }
 
-func newProxyWithRackServer(t *testing.T, rackHandler http.HandlerFunc) (*Handler, *db.Database, rbac.RBACManager, func()) {
+func newProxyWithRackServer(t *testing.T, rackHandler http.HandlerFunc) (*Handler, *db.Database, rbac.Manager, func()) {
 	t.Helper()
 
 	database := dbtest.NewDatabase(t)
@@ -318,10 +318,10 @@ func assertResourceCreator(t *testing.T, database *db.Database, resourceType, re
 	require.Equal(t, expectedEmail, info.Email)
 }
 
-func assertAuditLogEntry(t *testing.T, database *db.Database, email, action, resource, resourceType, status string) {
+func assertAuditLogEntry(t *testing.T, database *db.Database, userEmail, action, resource, resourceType, status string) {
 	t.Helper()
 
-	logs, err := database.GetAuditLogs(email, time.Time{}, 20)
+	logs, err := database.GetAuditLogs(userEmail, time.Time{}, 20)
 	require.NoError(t, err)
 	for _, log := range logs {
 		if log.Action == action && log.Resource == resource {

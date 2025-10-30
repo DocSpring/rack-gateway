@@ -13,8 +13,8 @@ import (
 func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
 	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
 	if !canEnvView {
-		var any interface{}
-		if err := json.Unmarshal(body, &any); err != nil {
+		var payload interface{}
+		if err := json.Unmarshal(body, &payload); err != nil {
 			return body
 		}
 		maskAll := func(s string) string {
@@ -31,14 +31,14 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 			}
 			return strings.Join(lines, "\n")
 		}
-		if updated, ok := transformEnvPayload(any, maskAll); ok {
+		if updated, ok := transformEnvPayload(payload, maskAll); ok {
 			return updated
 		}
 		return body
 	}
 
-	var any interface{}
-	if err := json.Unmarshal(body, &any); err != nil {
+	var payload interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return body
 	}
 	mask := func(s string) string {
@@ -56,7 +56,7 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 		}
 		return strings.Join(lines, "\n")
 	}
-	if updated, ok := transformEnvPayload(any, mask); ok {
+	if updated, ok := transformEnvPayload(payload, mask); ok {
 		return updated
 	}
 	return body
@@ -88,8 +88,8 @@ func (h *Handler) isProtectedKeyForApp(key, app string) bool {
 	return ok
 }
 
-func transformEnvPayload(any interface{}, transform func(string) string) ([]byte, bool) {
-	switch v := any.(type) {
+func transformEnvPayload(payload interface{}, transform func(string) string) ([]byte, bool) {
+	switch v := payload.(type) {
 	case map[string]interface{}:
 		if envv, ok := v["env"].(string); ok {
 			v["env"] = transform(envv)
@@ -118,7 +118,7 @@ func transformEnvPayload(any interface{}, transform func(string) string) ([]byte
 	return nil, false
 }
 
-func (h *Handler) captureProcessCreation(r *http.Request, body []byte, tracker *deployApprovalTracker) {
+func (h *Handler) captureProcessCreation(_ *http.Request, body []byte, tracker *deployApprovalTracker) {
 	if h.database == nil || tracker == nil {
 		return
 	}

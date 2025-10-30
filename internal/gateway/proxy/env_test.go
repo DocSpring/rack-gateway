@@ -22,7 +22,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
-func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
+func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.Manager) {
 	database := dbtest.NewDatabase(t)
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)

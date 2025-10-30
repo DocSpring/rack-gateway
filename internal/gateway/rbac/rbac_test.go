@@ -135,6 +135,7 @@ func newTestDBManager(perms []string) *DBManager {
 type mockDatabase struct {
 	apiToken          *db.APIToken
 	hasActiveApproval bool
+	approvalErr       error
 	user              *db.User
 	users             []*db.User
 }
@@ -144,11 +145,11 @@ func (m *mockDatabase) GetAPITokenByID(_ int64) (*db.APIToken, error) {
 }
 
 func (m *mockDatabase) HasActiveDeployApproval(_ int64) (bool, error) {
-	return m.hasActiveApproval, nil
+	return m.hasActiveApproval, m.approvalErr
 }
 
 func (m *mockDatabase) HasActiveDeployApprovalForApp(_ int64, _ string) (bool, error) {
-	return m.hasActiveApproval, nil
+	return m.hasActiveApproval, m.approvalErr
 }
 
 func (m *mockDatabase) GetUser(_ string) (*db.User, error) {

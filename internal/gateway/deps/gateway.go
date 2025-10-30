@@ -24,7 +24,7 @@ import (
 type Gateway struct {
 	Config           *config.Config
 	Database         *db.Database
-	RBACManager      rbac.RBACManager
+	RBACManager      rbac.Manager
 	SessionManager   *auth.SessionManager
 	OAuthHandler     *auth.OAuthHandler
 	AuthService      *auth.AuthService

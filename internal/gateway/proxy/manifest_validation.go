@@ -69,11 +69,7 @@ func (h *Handler) validateBuildManifest(ctx context.Context, app, objectURL, man
 	}
 
 	// Validate all service images match their patterns
-	if err := validateServiceImages(manifest, patterns); err != nil {
-		return err
-	}
-
-	return nil
+	return validateServiceImages(manifest, patterns)
 }
 
 // fetchObject fetches an object from the Convox API

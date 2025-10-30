@@ -30,7 +30,7 @@ type settingsTestEnv struct {
 	t              *testing.T
 	handler        *SettingsHandler
 	database       *db.Database
-	rbac           rbac.RBACManager
+	rbac           rbac.Manager
 	sessionManager *auth.SessionManager
 	mfaService     *mfa.Service
 	mfaSettings    *db.MFASettings
@@ -173,7 +173,7 @@ func setupSettingsServices(t *testing.T) (*db.Database, *settings.Service, *auth
 	return database, settingsService, sessionManager, mfaService, mfaSettings
 }
 
-func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.RBACManager) {
+func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.Manager) {
 	t.Helper()
 	database := dbtest.NewDatabase(t)
 	t.Cleanup(func() { dbtest.Reset(t, database) })

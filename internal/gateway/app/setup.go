@@ -53,7 +53,7 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
-	if err := a.initRBACManager(); err != nil {
+    if err := a.initRBACManager(); err != nil {
 		return err
 	}
 

@@ -29,9 +29,11 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
+// Handler proxies requests through the gateway while enforcing RBAC, MFA, and
+// audit logging requirements.
 type Handler struct {
 	config           *config.Config
-	rbacManager      rbac.RBACManager
+	rbacManager      rbac.Manager
 	auditLogger      *audit.Logger
 	secretNames      map[string]struct{}
 	database         *db.Database
@@ -50,7 +52,8 @@ type Handler struct {
 
 const maskedSecret = envutil.MaskedSecret
 
-func NewHandler(cfg *config.Config, rbacManager rbac.RBACManager, auditLogger *audit.Logger, database *db.Database, settingsService *settings.Service, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {
+// NewHandler constructs a proxy handler with all required dependencies.
+func NewHandler(cfg *config.Config, rbacManager rbac.Manager, auditLogger *audit.Logger, database *db.Database, settingsService *settings.Service, mailer email.Sender, rackName, rackAlias string, rackCertManager *rackcert.Manager, mfaService *mfa.Service, sessionManager *auth.SessionManager) *Handler {
 	h := &Handler{
 		config:           cfg,
 		rbacManager:      rbacManager,
@@ -109,8 +112,11 @@ func (h *Handler) rackDisplay() string {
 	return h.rackName
 }
 
+// SetAllowDestructive toggles whether destructive Convox operations are allowed.
 func (h *Handler) SetAllowDestructive(v bool) { h.allowDestructive = v }
 
+// ReplaceProtectedEnv replaces the set of environment keys treated as
+// protected (masked in responses unless explicitly allowed).
 func (h *Handler) ReplaceProtectedEnv(keys []string) {
 	m := make(map[string]struct{}, len(keys))
 	for _, k := range keys {
@@ -434,12 +440,12 @@ func (h *Handler) captureSentryError(r *http.Request, err error, userEmail strin
 		return
 	}
 
-	email := userEmail
-	if email == "anonymous" {
-		email = ""
+	emailForScope := userEmail
+	if emailForScope == "anonymous" {
+		emailForScope = ""
 	}
 
-	sentryutil.WithHTTPRequestScope(r, email, map[string]string{
+	sentryutil.WithHTTPRequestScope(r, emailForScope, map[string]string{
 		"component": "proxy",
 		"rack":      h.rackName,
 	}, func() {

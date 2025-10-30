@@ -54,12 +54,12 @@ func NewManager(cfg *config.Config, database *db.Database) *Manager {
 }
 
 // CurrentCertificate returns the currently stored certificate if available.
-func (m *Manager) CurrentCertificate(ctx context.Context) (*db.RackTLSCert, bool, error) {
+func (m *Manager) CurrentCertificate(context.Context) (*db.RackTLSCert, bool, error) {
 	m.mu.RLock()
 	if m.cert != nil {
-		copy := *m.cert
+		certCopy := *m.cert
 		m.mu.RUnlock()
-		return &copy, true, nil
+		return &certCopy, true, nil
 	}
 	m.mu.RUnlock()
 
@@ -72,8 +72,8 @@ func (m *Manager) CurrentCertificate(ctx context.Context) (*db.RackTLSCert, bool
 	if m.cert == nil {
 		return nil, false, nil
 	}
-	copy := *m.cert
-	return &copy, true, nil
+	certCopy := *m.cert
+	return &certCopy, true, nil
 }
 
 // TLSConfig returns a TLS configuration that validates the pinned certificate, fetching it if necessary.
@@ -132,8 +132,8 @@ func (m *Manager) Refresh(ctx context.Context, updatedBy *int64) (*db.RackTLSCer
 	if m.cert == nil {
 		return nil, fmt.Errorf("rack TLS manager: certificate not cached after refresh")
 	}
-	copy := *m.cert
-	return &copy, nil
+	certCopy := *m.cert
+	return &certCopy, nil
 }
 
 func (m *Manager) loadFromDB() error {

@@ -87,7 +87,7 @@ func diffParams(before, after map[string]string) []paramChange {
 	return changes
 }
 
-func (h *Handler) notifyRackParamsChanged(r *http.Request, actor string, changes []paramChange) {
+func (h *Handler) notifyRackParamsChanged(_ *http.Request, actor string, changes []paramChange) {
 	if h.rbacManager == nil || len(changes) == 0 {
 		return
 	}
