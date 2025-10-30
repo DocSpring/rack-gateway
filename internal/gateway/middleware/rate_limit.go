@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/ratelimit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
-	"github.com/gin-gonic/gin"
 )
 
 func RateLimit(cfg *config.Config, securityNotifier *security.Notifier) gin.HandlerFunc {

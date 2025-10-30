@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/riverqueue/river"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 )
 
 // WelcomeArgs contains parameters for welcome email to new users

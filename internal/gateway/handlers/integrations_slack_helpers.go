@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
-	"github.com/gin-gonic/gin"
 )
 
 // enforceIntegrationPermission checks if the user has the required permission for integrations.

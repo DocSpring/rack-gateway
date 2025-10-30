@@ -65,10 +65,10 @@ func RenderWelcome(rack, invitee, inviter, webBase, cliBase string) (text string
 	}
 	var tb, hb bytes.Buffer
 	if err = welcomeText.Execute(&tb, data); err != nil {
-		return
+		return text, html, err
 	}
 	if err = welcomeHTML.Execute(&hb, data); err != nil {
-		return
+		return text, html, err
 	}
 	return tb.String(), hb.String(), nil
 }
@@ -135,6 +135,7 @@ var tokenOwnerText = texttmpl.Must(texttmpl.New("token_owner_text").Parse(
 		"Created by: {{.Creator}}\n\n" +
 		"If this wasn't expected, please contact an admin.\n",
 ))
+
 var tokenOwnerHTML = template.Must(template.New("token_owner_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
 		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
@@ -161,6 +162,7 @@ var tokenAdminText = texttmpl.Must(texttmpl.New("token_admin_text").Parse(
 		"An API token '{{.Name}}' was created for {{.Owner}}.\n" +
 		"Created by: {{.Creator}}\n",
 ))
+
 var tokenAdminHTML = template.Must(template.New("token_admin_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
 		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +
@@ -186,6 +188,7 @@ var userAddedAdminText = texttmpl.Must(texttmpl.New("user_added_admin_text").Par
 	"Rack Gateway ({{.Rack}})\n\n" +
 		"{{.Actor}} added new user {{.Email}} ({{.Name}}) with roles: {{.Roles}}.\n",
 ))
+
 var userAddedAdminHTML = template.Must(template.New("user_added_admin_html").Parse(
 	"<!DOCTYPE html><html><body style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
 		"<h2 style=\"margin:0 0 12px 0;\">Rack Gateway ({{.Rack}})</h2>" +

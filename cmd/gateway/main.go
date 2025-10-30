@@ -10,9 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/app"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/getsentry/sentry-go"
 )
 
 // @title Rack Gateway API

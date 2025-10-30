@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/riverqueue/river"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
@@ -17,8 +20,6 @@ import (
 	jobcircleci "github.com/DocSpring/rack-gateway/internal/gateway/jobs/circleci"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
-	"github.com/gin-gonic/gin"
-	"github.com/riverqueue/river"
 )
 
 // ListDeployApprovalRequests godoc

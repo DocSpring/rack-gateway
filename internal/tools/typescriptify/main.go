@@ -5,10 +5,11 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/tkrajina/typescriptify-golang-structs/typescriptify"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
-	"github.com/tkrajina/typescriptify-golang-structs/typescriptify"
 )
 
 func main() {

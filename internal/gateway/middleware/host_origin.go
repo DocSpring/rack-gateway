@@ -4,8 +4,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
 func HostValidator(cfg *config.Config) gin.HandlerFunc {

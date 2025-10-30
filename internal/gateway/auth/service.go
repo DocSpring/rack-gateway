@@ -17,8 +17,10 @@ import (
 
 type contextKey string
 
-const UserContextKey contextKey = "user"
-const userRecordKey contextKey = "user_record"
+const (
+	UserContextKey contextKey = "user"
+	userRecordKey  contextKey = "user_record"
+)
 
 // AuthService handles session and API token authentication
 type AuthService struct {

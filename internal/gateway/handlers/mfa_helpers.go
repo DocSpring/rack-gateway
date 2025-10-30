@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/gin-gonic/gin"
 )
 
 // shouldEnforceMFA is a local wrapper for db.ShouldEnforceMFA to maintain backward compatibility

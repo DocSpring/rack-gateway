@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/GeertJohan/yubigo"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 // mockYubiAuth implements a test double for Yubico OTP verification

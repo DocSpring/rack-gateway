@@ -19,10 +19,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
-var (
-	// ErrFingerprintMismatch is returned when the rack presents a certificate with an unexpected fingerprint.
-	ErrFingerprintMismatch = fmt.Errorf("rack TLS certificate fingerprint mismatch")
-)
+// ErrFingerprintMismatch is returned when the rack presents a certificate with an unexpected fingerprint.
+var ErrFingerprintMismatch = fmt.Errorf("rack TLS certificate fingerprint mismatch")
 
 // FingerprintMismatchError provides details about a certificate mismatch.
 type FingerprintMismatchError struct {

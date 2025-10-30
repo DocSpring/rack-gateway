@@ -96,7 +96,6 @@ func (d *Database) CreateSlackIntegration(workspaceID, workspaceName, botTokenEn
 		botUserID,
 		scope,
 	).Scan(&si.ID, &si.CreatedAt, &si.UpdatedAt)
-
 	if err != nil {
 		return nil, err
 	}

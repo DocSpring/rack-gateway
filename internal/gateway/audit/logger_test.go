@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 func TestAuditLogger(t *testing.T) {
@@ -134,5 +135,4 @@ func TestAuditLogger(t *testing.T) {
 		resourceType = logger.InferResourceType("", "")
 		assert.Equal(t, "unknown", resourceType)
 	})
-
 }

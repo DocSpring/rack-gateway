@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 	"github.com/gorilla/mux"
+
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
 func getInstances(w http.ResponseWriter, r *http.Request) {

@@ -4,10 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 func TestVerifyTOTP_ReplayProtection(t *testing.T) {

@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/gin-gonic/gin"
 )
 
 // loadUserForEnrollmentCheck retrieves the user record from the database if not already loaded.

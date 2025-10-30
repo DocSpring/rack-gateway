@@ -275,6 +275,7 @@ func hashSessionToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
+
 func (m *SessionManager) sessionTTLFor(session *db.UserSession) time.Duration {
 	ttl := m.ttl
 	if session == nil {

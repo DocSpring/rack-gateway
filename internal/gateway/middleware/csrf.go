@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 )
 
 // CSRF validates CSRF tokens for state-changing requests.

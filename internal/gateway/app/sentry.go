@@ -5,8 +5,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/getsentry/sentry-go"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
 // buildSentryOptions derives the Sentry client options from configuration.

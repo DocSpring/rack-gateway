@@ -5,14 +5,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
-	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
-	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
-	"github.com/DocSpring/rack-gateway/internal/gateway/openapi"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
+	"github.com/DocSpring/rack-gateway/internal/gateway/handlers"
+	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
+	"github.com/DocSpring/rack-gateway/internal/gateway/openapi"
 )
 
 // Config holds dependencies needed for route setup

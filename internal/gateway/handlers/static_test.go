@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
 func init() {

@@ -13,15 +13,18 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/gin-gonic/gin"
 )
 
-const webOAuthStateCookie = "rgw_oauth_state"
-const webOAuthStateTTL = 5 * time.Minute
-const trustedDeviceCookie = "rgw_trusted_device"
-const cliEnrollmentErrorMessage = "You must set up multi-factor authentication before you can continue using the CLI."
+const (
+	webOAuthStateCookie       = "rgw_oauth_state"
+	webOAuthStateTTL          = 5 * time.Minute
+	trustedDeviceCookie       = "rgw_trusted_device"
+	cliEnrollmentErrorMessage = "You must set up multi-factor authentication before you can continue using the CLI."
+)
 
 func extractSessionToken(c *gin.Context) string {
 	if c == nil {

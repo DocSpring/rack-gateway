@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/riverqueue/river"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/gin-gonic/gin"
-	"github.com/riverqueue/river"
 )
 
 // CreateUser godoc

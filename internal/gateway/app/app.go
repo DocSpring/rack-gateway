@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/deps"
-	"github.com/gin-gonic/gin"
 )
 
 // App holds all application dependencies

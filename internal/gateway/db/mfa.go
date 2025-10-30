@@ -319,7 +319,6 @@ func (d *Database) ConsumeTOTPTimeStep(userID int64, timeStep int64, methodID *i
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (user_id, time_step) DO NOTHING
     `, userID, timeStep, methodID, nullableString(ipAddress, 45), nullableString(userAgent, 512), sessionID)
-
 	if err != nil {
 		return false, fmt.Errorf("failed to consume TOTP time-step: %w", err)
 	}

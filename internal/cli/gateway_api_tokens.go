@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/spf13/cobra"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 type apiToken struct {

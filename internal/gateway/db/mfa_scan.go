@@ -10,7 +10,8 @@ import (
 // It handles nullable fields and JSON unmarshalling consistently.
 func scanMFAMethod(scanner interface {
 	Scan(dest ...interface{}) error
-}) (*MFAMethod, error) {
+},
+) (*MFAMethod, error) {
 	var method MFAMethod
 	var label sql.NullString
 	var secret sql.NullString
@@ -61,7 +62,8 @@ func scanMFAMethod(scanner interface {
 // It handles nullable fields and JSON unmarshalling consistently.
 func scanTrustedDevice(scanner interface {
 	Scan(dest ...interface{}) error
-}) (*TrustedDevice, error) {
+},
+) (*TrustedDevice, error) {
 	var device TrustedDevice
 	var ipFirst sql.NullString
 	var ipLast sql.NullString

@@ -9,14 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/pquerna/otp"
-	"github.com/pquerna/otp/totp"
 )
 
 // TestVerifyMFAUsesSharedHelper validates that VerifyMFA uses the shared verification flow

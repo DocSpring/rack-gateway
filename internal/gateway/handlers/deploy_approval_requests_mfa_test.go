@@ -9,6 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
+	"github.com/stretchr/testify/require"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
@@ -17,10 +22,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
-	"github.com/gin-gonic/gin"
-	"github.com/pquerna/otp"
-	"github.com/pquerna/otp/totp"
-	"github.com/stretchr/testify/require"
 )
 
 func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {

@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/gin-gonic/gin"
 )
 
 // UpdateUser godoc

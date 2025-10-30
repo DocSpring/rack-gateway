@@ -3,8 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // ListRoles godoc

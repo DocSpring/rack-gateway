@@ -5,9 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 func TestEnforceMFARequirementsMissingMappingFailsClosed(t *testing.T) {

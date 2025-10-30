@@ -3,9 +3,8 @@ package proxy
 import (
 	"encoding/json"
 	"log"
-	"strings"
-
 	"net/http"
+	"strings"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"

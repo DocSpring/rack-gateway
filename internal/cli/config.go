@@ -54,7 +54,7 @@ func LoadConfig() (*Config, bool, error) {
 
 // SaveConfig saves the CLI configuration to disk
 func SaveConfig(cfg *Config) error {
-	if err := os.MkdirAll(ConfigPath, 0700); err != nil {
+	if err := os.MkdirAll(ConfigPath, 0o700); err != nil {
 		return err
 	}
 	if cfg.Gateways == nil {
@@ -64,7 +64,7 @@ func SaveConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(configFile(), data, 0600); err != nil {
+	if err := os.WriteFile(configFile(), data, 0o600); err != nil {
 		return err
 	}
 	// Remove standalone current file if it exists so config.json remains the source of truth.

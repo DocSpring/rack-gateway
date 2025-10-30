@@ -3,10 +3,11 @@ package proxy
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/stretchr/testify/require"
 )
 
 // Test a matrix of sensitive routes mapped to RBAC permissions for deployer vs admin.

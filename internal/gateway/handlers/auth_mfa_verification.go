@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
-	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/gin-gonic/gin"
+
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // VerifyMFA godoc

@@ -45,8 +45,9 @@ import (
 	"net/http"
 	"os"
 
-	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 	"github.com/gorilla/mux"
+
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
 func main() {

@@ -9,13 +9,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/riverqueue/river"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/riverqueue/river"
 )
 
 // Notifier handles security event notifications via audit logs and email

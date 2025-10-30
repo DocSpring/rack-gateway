@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func getEnvironment(w http.ResponseWriter, r *http.Request) {
+func getEnvironment(w http.ResponseWriter, _ *http.Request) {
 	env := defaultEnvMap()
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, env)

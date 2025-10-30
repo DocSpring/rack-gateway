@@ -5,6 +5,12 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	jobcircleci "github.com/DocSpring/rack-gateway/internal/gateway/jobs/circleci"
@@ -12,11 +18,6 @@ import (
 	jobgithub "github.com/DocSpring/rack-gateway/internal/gateway/jobs/github"
 	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/riverqueue/river/rivertype"
 )
 
 // Client wraps the River client for background job processing

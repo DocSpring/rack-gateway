@@ -3,8 +3,9 @@ package handlers
 import (
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/proxy"
 )
 
 // ProxyHandler handles proxying requests to Convox

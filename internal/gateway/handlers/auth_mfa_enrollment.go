@@ -10,9 +10,10 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/gin-gonic/gin"
 )
 
 // StartTOTPEnrollment godoc

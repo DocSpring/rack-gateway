@@ -3,8 +3,9 @@ package jobs
 import (
 	"context"
 
-	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 	"github.com/riverqueue/river"
+
+	jobslack "github.com/DocSpring/rack-gateway/internal/gateway/jobs/slack"
 )
 
 // AuditEventEnqueuer implements audit.AuditEventEnqueuer interface

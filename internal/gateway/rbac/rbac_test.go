@@ -4,9 +4,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/stretchr/testify/require"
 )
 
 // TestEnforceDeployerPermissions verifies deployer can update but not create/delete apps.
@@ -112,7 +113,6 @@ func TestAPITokenPermissions(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			mgr := newTestDBManager(tc.perms)
 			ok, err := mgr.EnforceForAPIToken(1, ScopeConvox, tc.resource, tc.action)

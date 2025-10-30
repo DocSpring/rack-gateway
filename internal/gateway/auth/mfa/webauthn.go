@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // StartWebAuthnEnrollment begins WebAuthn credential registration.

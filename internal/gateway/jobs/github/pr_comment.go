@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 	"github.com/riverqueue/river"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 )
 
 // PostPRCommentArgs contains parameters for posting GitHub PR comments

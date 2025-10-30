@@ -267,10 +267,10 @@ func deriveRedirects(input string) (base string, web string, cli string, err err
 		// Treat input as full web callback URL
 		web = u.String()
 		cli = base + "/api/v1/auth/cli/callback"
-		return
+		return base, web, cli, err
 	}
 	// Treat input as base URL
 	web = base + "/api/v1/auth/web/callback"
 	cli = base + "/api/v1/auth/cli/callback"
-	return
+	return base, web, cli, err
 }

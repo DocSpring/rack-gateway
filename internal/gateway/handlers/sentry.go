@@ -3,10 +3,11 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/sentryutil"
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/sentryutil"
 )
 
 // CaptureError captures an error to Sentry with gin context.

@@ -4,9 +4,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/gin-gonic/gin"
 )
 
 func RequestLogger(logger *audit.Logger, defaultRack string, devMode bool) gin.HandlerFunc {

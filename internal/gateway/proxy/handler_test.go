@@ -11,6 +11,8 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
@@ -19,7 +21,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/envutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/stretchr/testify/require"
 )
 
 func newProxyForCreatorTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {

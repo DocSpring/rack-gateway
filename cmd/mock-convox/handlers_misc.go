@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 	"github.com/gorilla/mux"
+
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
 func handleAPI(w http.ResponseWriter, r *http.Request) {

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // settingsOperations defines operations for global or app settings.

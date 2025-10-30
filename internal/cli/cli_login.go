@@ -70,7 +70,7 @@ func loginCommandWithFlags(args []string, noOpen bool, authFile string) error {
 	if authFile != "" {
 		// Write shell-friendly lines
 		content := fmt.Sprintf("AUTH_URL=%s\nSTATE=%s\nCODE_VERIFIER=%s\n", startResp.AuthURL, startResp.State, startResp.CodeVerifier)
-		_ = os.WriteFile(authFile, []byte(content), 0600)
+		_ = os.WriteFile(authFile, []byte(content), 0o600)
 	}
 
 	// Optionally open browser

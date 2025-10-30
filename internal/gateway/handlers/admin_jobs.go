@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/gin-gonic/gin"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // requireJobsAccess checks authentication, authorization, and jobs client availability
@@ -35,7 +36,7 @@ func (h *AdminHandler) requireJobsAccess(c *gin.Context, action rbac.Action) (st
 // @Tags Jobs
 // @Produce json
 // @Param queue query string false "Filter by queue name"
-// @Param state query string false "Filter by state (available, cancelled, completed, discarded, pending, retryable, running, scheduled)"
+// @Param state query string false "Filter by state (available, canceled, completed, discarded, pending, retryable, running, scheduled)"
 // @Param kind query string false "Filter by job kind"
 // @Param limit query integer false "Maximum number of results (default: 100, max: 1000)"
 // @Success 200 {object} JobListResponse
@@ -76,7 +77,7 @@ func (h *AdminHandler) ListJobs(c *gin.Context) {
 		switch state {
 		case "available":
 			params = params.States(rivertype.JobStateAvailable)
-		case "cancelled":
+		case "canceled":
 			params = params.States(rivertype.JobStateCancelled)
 		case "completed":
 			params = params.States(rivertype.JobStateCompleted)

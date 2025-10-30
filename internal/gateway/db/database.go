@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // New creates a new database connection
@@ -450,6 +451,7 @@ func (d *Database) DB() *sql.DB {
 func (d *Database) Pool() *pgxpool.Pool {
 	return d.pool
 }
+
 func relativePath(file string) string {
 	wd, err := os.Getwd()
 	if err != nil {

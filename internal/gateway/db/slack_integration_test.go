@@ -4,8 +4,9 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 func TestSlackIntegrationCRUD(t *testing.T) {

@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
 // Authenticated enforces authentication for browser/admin API requests, supporting both session tokens and cookies.

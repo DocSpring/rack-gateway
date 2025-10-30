@@ -3,11 +3,12 @@ package asyncmail
 import (
 	"context"
 
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
 	jobemail "github.com/DocSpring/rack-gateway/internal/gateway/jobs/email"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/rivertype"
 )
 
 // Inserter is the minimal jobs client interface we rely on

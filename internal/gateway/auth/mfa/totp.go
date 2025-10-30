@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // StartTOTPEnrollment provisions a TOTP secret and backup codes for the user.

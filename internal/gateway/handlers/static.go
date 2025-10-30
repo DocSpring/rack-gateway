@@ -14,11 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/rickb777/servefiles/v3/gin_adapter"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/middleware"
-	"github.com/gin-gonic/gin"
-	"github.com/rickb777/servefiles/v3/gin_adapter"
 )
 
 // RootRedirect handles the root path redirect

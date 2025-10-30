@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/asyncmail"
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
@@ -23,7 +25,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	slackpkg "github.com/DocSpring/rack-gateway/internal/gateway/slack"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
-	"github.com/gin-gonic/gin"
 )
 
 // initializeServices sets up all application services (matching original main.go exactly)

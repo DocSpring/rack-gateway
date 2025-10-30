@@ -12,9 +12,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	securemw "github.com/gin-contrib/secure"
 	"github.com/gin-gonic/gin"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 )
 
 type ctxKey string

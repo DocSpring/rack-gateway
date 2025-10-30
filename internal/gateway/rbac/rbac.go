@@ -6,9 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // RBACDatabase defines the database operations needed by the RBAC manager

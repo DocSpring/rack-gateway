@@ -259,7 +259,6 @@ func (d *Database) HasActiveDeployApprovalForApp(tokenID int64, app string) (boo
 		  AND status = 'approved'
 		  AND approval_expires_at > NOW()
 	`, tokenID, app).Scan(&count)
-
 	if err != nil {
 		return false, fmt.Errorf("failed to check active approval: %w", err)
 	}

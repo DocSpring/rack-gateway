@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
@@ -25,7 +27,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/sentryutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
-	"github.com/getsentry/sentry-go"
 )
 
 type Handler struct {

@@ -8,13 +8,14 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/stretchr/testify/require"
 )
 
 // Test that a deployer cannot delete an app via the proxy (403 expected).

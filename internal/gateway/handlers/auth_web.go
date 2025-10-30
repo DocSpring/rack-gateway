@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/gin-gonic/gin"
 )
 
 // WebLoginStart godoc
@@ -40,11 +41,11 @@ func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 // @Failure 500 {string} string "Authentication failure"
 // @Router /auth/web/callback [get]
 func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
-	// Check for OAuth error response (user cancelled or other OAuth error)
+	// Check for OAuth error response (user canceled or other OAuth error)
 	if oauthError := c.Query("error"); oauthError != "" {
 		errorDesc := c.Query("error_description")
 		if errorDesc == "" {
-			errorDesc = "Authentication was cancelled or failed"
+			errorDesc = "Authentication was canceled or failed"
 		}
 		errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(errorDesc))
 		c.Redirect(http.StatusFound, errorURL)

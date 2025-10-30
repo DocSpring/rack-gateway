@@ -11,9 +11,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+
+	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 )
 
 // verifyMFAMethod handles verification for a single MFA method.

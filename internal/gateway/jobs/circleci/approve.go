@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 	"github.com/riverqueue/river"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/circleci"
 )
 
 // ApproveJobArgs contains parameters for CircleCI job approval

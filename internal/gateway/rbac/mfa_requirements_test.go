@@ -248,7 +248,7 @@ type singlePermissionCase struct {
 
 func runSinglePermissionCases(t *testing.T, cases []singlePermissionCase) {
 	for _, tc := range cases {
-		tc := tc
+
 		caseName := tc.permission
 		if caseName == "" {
 			caseName = "empty-permission"
@@ -270,7 +270,6 @@ type namedPermissionCase struct {
 
 func runNamedPermissionCases(t *testing.T, cases []namedPermissionCase) {
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			got := GetMFALevel([]string{tc.permission})
 			if got != tc.want {

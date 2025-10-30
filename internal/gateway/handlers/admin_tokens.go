@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/token"
-	"github.com/gin-gonic/gin"
 )
 
 // CreateAPIToken godoc

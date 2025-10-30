@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/google/uuid"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 )
 
 // TrustedDeviceCookiePayload holds the token and identifier for clients.

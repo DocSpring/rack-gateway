@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/riverqueue/river"
+
 	gtwemail "github.com/DocSpring/rack-gateway/internal/gateway/email"
 	emailtemplates "github.com/DocSpring/rack-gateway/internal/gateway/email/templates"
-	"github.com/riverqueue/river"
 )
 
 // RackParamsChangedArgs parameters for rack params change admin emails

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/riverqueue/river"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/email"
 )
 
 // FailedMFAArgs contains parameters for failed MFA attempt email notification

@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/webauthntest"
 )
 
 func TestMockCredentialGeneratesValidAssertion(t *testing.T) {

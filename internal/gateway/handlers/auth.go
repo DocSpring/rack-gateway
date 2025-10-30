@@ -9,7 +9,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/security"
 )
 
-// OAuthProvider captures the behaviour needed from the OAuth handler.
+// OAuthProvider captures the behavior needed from the OAuth handler.
 type OAuthProvider interface {
 	StartLogin() (*auth.LoginStartResponse, error)
 	StartWebLogin() (authURL string, state string)

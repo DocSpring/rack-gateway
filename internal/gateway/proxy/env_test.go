@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
@@ -18,7 +20,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
-	"github.com/stretchr/testify/require"
 )
 
 func newProxyForEnvTest(t *testing.T) (*Handler, *db.Database, rbac.RBACManager) {
@@ -131,7 +132,6 @@ func TestEnvSetPermissions(t *testing.T) {
 	req2.Header.Set("Env", "PORT=3000\nNODE_ENV=production")
 	ok = h.checkEnvSetPermissions(req2, "deployer@test.com")
 	require.True(t, ok)
-
 }
 
 func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {

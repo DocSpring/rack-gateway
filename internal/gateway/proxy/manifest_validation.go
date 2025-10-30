@@ -211,7 +211,7 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0755); err != nil {
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
 				return "", fmt.Errorf("failed to create directory: %w", err)
 			}
 
@@ -228,7 +228,7 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 			}
 
 			// Create parent directory
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory: %w", err)
 			}
 

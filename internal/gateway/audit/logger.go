@@ -9,16 +9,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/google/uuid"
 )
 
 type contextKey string
 
-const requestLoggedKey contextKey = "rgw-request-logged"
-const auditLogCreatedKey contextKey = "rgw-audit-log-created"
+const (
+	requestLoggedKey   contextKey = "rgw-request-logged"
+	auditLogCreatedKey contextKey = "rgw-audit-log-created"
+)
 
 type Logger struct {
 	redactPatterns     []*regexp.Regexp
@@ -27,12 +30,10 @@ type Logger struct {
 	auditEventEnqueuer AuditEventEnqueuer
 }
 
-// SlackNotifier interface for sending audit events to Slack
 type SlackNotifier interface {
 	NotifyAuditEvent(auditLog *db.AuditLog) error
 }
 
-// AuditEventEnqueuer enqueues audit event notifications
 type AuditEventEnqueuer interface {
 	EnqueueAuditEvent(auditLogID int64) error
 }
@@ -71,7 +72,6 @@ func NewLogger(database *db.Database) *Logger {
 	}
 }
 
-// SetSlackNotifier sets the Slack notifier for this logger
 func (l *Logger) SetSlackNotifier(notifier SlackNotifier) {
 	l.slackNotifier = notifier
 }

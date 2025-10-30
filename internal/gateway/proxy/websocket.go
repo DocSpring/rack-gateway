@@ -11,13 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
 func (h *Handler) proxyWebSocket(w http.ResponseWriter, r *http.Request, rack config.RackConfig, target string, userEmail string, originalPath string) (int, error) {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/riverqueue/river"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/slack"
-	"github.com/riverqueue/river"
 )
 
 // AuditEventArgs contains parameters for Slack audit event notification

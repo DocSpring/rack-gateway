@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth/mfa"
 )
 
 // CLILoginStart godoc

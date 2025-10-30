@@ -28,7 +28,6 @@ func TestMergeEnvMaskedSecretWithExistingValueNoop(t *testing.T) {
 			return key == "SECRET_KEY"
 		},
 	})
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -52,7 +51,6 @@ func TestMergeEnvMaskedSecretByViewerNoSecretPermission(t *testing.T) {
 			return key == "SECRET_KEY"
 		},
 	})
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

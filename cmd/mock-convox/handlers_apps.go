@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 	"github.com/gorilla/mux"
+
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
-func getApps(w http.ResponseWriter, r *http.Request) {
+func getApps(w http.ResponseWriter, _ *http.Request) {
 	apps := []App{
 		{
 			Name:       "rack-gateway",
@@ -81,7 +82,7 @@ func createApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, app)
 }
 
-func deleteApp(w http.ResponseWriter, r *http.Request) {
+func deleteApp(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -119,7 +120,7 @@ func restartApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "restarting"})
 }
 
-func listRacks(w http.ResponseWriter, r *http.Request) {
+func listRacks(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("[]")); err != nil {

@@ -81,7 +81,7 @@ func TestSwitchCommand(t *testing.T) {
 	configFile := filepath.Join(tmpDir, "config.json")
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	require.NoError(t, os.WriteFile(configFile, configData, 0o600))
 
 	// Test switching to a valid rack
 	err = SetCurrentRack("staging")
@@ -168,7 +168,7 @@ func TestLoginSetsCurrentRack(t *testing.T) {
 	configFile := filepath.Join(tmpDir, "config.json")
 	configData, err := json.MarshalIndent(config, "", "  ")
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(configFile, configData, 0600))
+	require.NoError(t, os.WriteFile(configFile, configData, 0o600))
 
 	// Login should set current rack
 	err = SetCurrentRack(rack)

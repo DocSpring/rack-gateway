@@ -8,10 +8,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/DocSpring/rack-gateway/internal/cli/webauthn"
 	"github.com/DocSpring/rack-gateway/internal/convox"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/spf13/cobra"
 )
 
 func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) {

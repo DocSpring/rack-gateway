@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
-	"github.com/gin-gonic/gin"
 )
 
 var staticAssetExtensions = map[string]struct{}{
@@ -114,7 +115,6 @@ func DebugLogging(_ *config.Config) gin.HandlerFunc {
 				gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseBody, "status=%d len=%d body=%s", c.Writer.Status(), len(responseBody), httputil.TruncateString(responseBody, httputil.BodyTruncationLimit))
 			}
 		}
-
 	}
 }
 

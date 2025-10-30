@@ -3,8 +3,9 @@ package email
 import (
 	"context"
 
-	gtwemail "github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/riverqueue/river"
+
+	gtwemail "github.com/DocSpring/rack-gateway/internal/gateway/email"
 )
 
 // UserLockedArgs parameters for account locked notification

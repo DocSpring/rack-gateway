@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
-	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+
+	mclog "github.com/DocSpring/rack-gateway/cmd/mock-convox/logging"
 )
 
 func getProcesses(w http.ResponseWriter, r *http.Request) {

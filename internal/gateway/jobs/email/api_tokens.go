@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	gtwemail "github.com/DocSpring/rack-gateway/internal/gateway/email"
 	"github.com/riverqueue/river"
+
+	gtwemail "github.com/DocSpring/rack-gateway/internal/gateway/email"
 )
 
 // TokenCreatedOwnerArgs contains parameters for notifying the token owner

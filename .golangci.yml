@@ -11,8 +11,6 @@ linters:
     - staticcheck
     - ineffassign
     - errcheck
-    - gosimple
-    - stylecheck
     - unparam
     - revive
     - gocyclo
@@ -22,7 +20,6 @@ linters:
     - gocritic
     - misspell
     - prealloc
-    - exportloopref
     - forbidigo
     - durationcheck
     - errname
