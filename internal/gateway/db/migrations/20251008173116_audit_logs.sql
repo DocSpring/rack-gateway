@@ -18,37 +18,8 @@
 -- STEP 1: CREATE ROLES
 -- ============================================================================
 
--- Check if roles exist before creating them
-DO $$
-BEGIN
-    -- Create roles idempotently so concurrent migrations do not fail.
-    BEGIN
-        CREATE ROLE audit_owner NOINHERIT;
-    EXCEPTION
-        WHEN duplicate_object THEN
-            -- Role already exists; ensure migration continues without error.
-            NULL;
-    END;
-
-    BEGIN
-        CREATE ROLE audit_writer NOINHERIT;
-    EXCEPTION
-        WHEN duplicate_object THEN
-            NULL;
-    END;
-
-    BEGIN
-        CREATE ROLE audit_reader NOINHERIT;
-    EXCEPTION
-        WHEN duplicate_object THEN
-            NULL;
-    END;
-END
-$$;
-
--- Grant audit_writer and audit_reader to postgres (so our app can use them)
-GRANT audit_writer TO postgres;
-GRANT audit_reader TO postgres;
+-- Note: All audit roles (audit_owner, audit_writer, audit_reader) are created by Terraform
+-- This migration expects them to already exist
 
 -- ============================================================================
 -- STEP 2: CREATE SCHEMA

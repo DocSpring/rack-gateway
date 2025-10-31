@@ -66,7 +66,19 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 }
 
 func runMigrations() error {
-	database, err := db.NewFromEnv()
+	// Always run migrations when explicitly invoked via "migrate" command
+	// regardless of DEV_MODE (for production deployments)
+	var dsn string
+	if dsn = os.Getenv("RGW_DATABASE_URL"); dsn == "" {
+		if dsn = os.Getenv("GATEWAY_DATABASE_URL"); dsn == "" {
+			dsn = os.Getenv("DATABASE_URL")
+		}
+	}
+	if dsn == "" {
+		return fmt.Errorf("RGW_DATABASE_URL, GATEWAY_DATABASE_URL, or DATABASE_URL is required")
+	}
+
+	database, err := db.NewWithPoolConfigAndMigration(dsn, nil, true)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

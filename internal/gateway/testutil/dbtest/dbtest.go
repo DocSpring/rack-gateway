@@ -127,7 +127,8 @@ func waitForDatabaseReady(t *testing.T, dsn string) {
 
 func connectAppDatabase(t *testing.T, dsn string) *db.Database {
 	t.Helper()
-	app, err := db.New(dsn)
+	// Always run migrations for test databases
+	app, err := db.NewWithPoolConfigAndMigration(dsn, nil, true)
 	if err != nil {
 		t.Fatalf("open app db: %v", err)
 	}

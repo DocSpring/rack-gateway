@@ -39,7 +39,15 @@ func New(dsn string) (*Database, error) {
 }
 
 // NewWithPoolConfig creates a new database connection with custom pool configuration
+// If autoMigrate is true, migrations will be run automatically on startup.
+// In production, set autoMigrate to false and run migrations manually using the "migrate" command.
 func NewWithPoolConfig(dsn string, poolConfig *PoolConfig) (*Database, error) {
+	return NewWithPoolConfigAndMigration(dsn, poolConfig, false)
+}
+
+// NewWithPoolConfigAndMigration creates a new database connection with custom pool configuration
+// and optionally runs migrations automatically. Set autoMigrate to true only in dev/test environments.
+func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigrate bool) (*Database, error) {
 	// Use provided DSN if it looks like Postgres, else use env var
 	source := strings.TrimSpace(dsn)
 	lower := strings.ToLower(source)
@@ -85,10 +93,12 @@ func NewWithPoolConfig(dsn string, poolConfig *PoolConfig) (*Database, error) {
 	}
 
 	d := &Database{db: db, pool: pool, driver: "pgx"}
-	if err := d.migrateAll(); err != nil {
-		pool.Close()
-		db.Close() //nolint:errcheck // cleanup on init failure
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	if autoMigrate {
+		if err := d.migrateAll(); err != nil {
+			pool.Close()
+			db.Close() //nolint:errcheck // cleanup on init failure
+			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+		}
 	}
 	return d, nil
 }
@@ -118,16 +128,20 @@ func poolConfigFromEnv() *PoolConfig {
 }
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
+// Automatically runs migrations only if DEV_MODE=true (for dev/test environments).
+// In production, run migrations manually using the "migrate" command.
 func NewFromEnv() (*Database, error) {
+	autoMigrate := os.Getenv("DEV_MODE") == "true"
+
 	// A few variations supported to support different Convox resource names
 	if dsn := os.Getenv("RGW_DATABASE_URL"); dsn != "" {
-		return New(dsn)
+		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
 	}
 	if dsn := os.Getenv("GATEWAY_DATABASE_URL"); dsn != "" {
-		return New(dsn)
+		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
 	}
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		return New(dsn)
+		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
 	}
 	// Build from libpq-like env if present
 	host := os.Getenv("PGHOST")
@@ -152,10 +166,10 @@ func NewFromEnv() (*Database, error) {
 	// Respect PGSSLMODE if present; otherwise omit sslmode from DSN
 	if ssl := strings.TrimSpace(os.Getenv("PGSSLMODE")); ssl != "" {
 		dsn := fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=%s", user, host, port, dbname, ssl)
-		return New(dsn)
+		return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
 	}
 	dsn := fmt.Sprintf("postgres://%s@%s:%s/%s", user, host, port, dbname)
-	return New(dsn)
+	return NewWithPoolConfigAndMigration(dsn, nil, autoMigrate)
 }
 
 // ensureSSLMode appends an sslmode if missing. In non-dev (DEV_MODE != true) default to require.

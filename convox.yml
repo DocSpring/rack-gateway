@@ -3,6 +3,7 @@ appSettings:
     cwRetention: ${LOG_RETENTION_DAYS}
     disableRetention: false
 
+# Vars shared by all services
 environment:
   - DOMAIN # required (tailscale domain)
   - APP_SECRET_KEY # required
@@ -25,20 +26,6 @@ environment:
   # - AUDIT_ANCHOR_CHAIN_ID # Chain identifier (typically rack alias, e.g., staging, eu, us)
   # - AUDIT_ANCHOR_RETENTION_DAYS # Object Lock retention in days (default: 400)
 
-resources:
-  rgw-database:
-    type: rds-postgres
-    options:
-      class: db.t3.micro
-      storage: 20
-      version: 17
-      deletionProtection: true
-      durable: false
-      encrypted: true
-      backupRetentionPeriod: 35
-      preferredBackupWindow: 02:00-03:00
-      preferredMaintenanceWindow: sun:05:00-sun:06:00
-
 services:
   gateway:
     build:
@@ -48,11 +35,10 @@ services:
     environment:
       - PORT=8080
       - PGSSLMODE=require
+      - DATABASE_URL # Set via Terraform (app user connection)
     health: /api/v1/health
     internal: true
     port: 8080
-    resources:
-      - rgw-database
     scale:
       count: 1
       cpu: 256
@@ -63,6 +49,21 @@ services:
       - tailscale.com/expose: "true"
       - tailscale.com/hostname: rack-gateway-${RACK}
       - tailscale.com/tags: "tag:rack-gateway"
-      - eks.amazonaws.com/role-arn: ${IAM_ROLE_ARN}
+      - eks.amazonaws.com/role-arn: "$IAM_ROLE_ARN"
+
+  admin:
+    build:
+      path: .
+      manifest: Dockerfile
+    command: echo "Use this service to run migrations, database admin tasks, etc."
+    environment:
+      - PORT=8080
+      - PGSSLMODE=require
+      - ADMIN_DATABASE_URL
+      - DATABASE_URL=$ADMIN_DATABASE_URL # Use admin user for migrations
+    scale:
+      memory: 512
+      cpu: 250
+      count: 0
 
 timers: {}
