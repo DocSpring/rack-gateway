@@ -133,6 +133,121 @@ This is used to build pipeline URLs like:
 https://app.circleci.com/pipelines/github/DocSpring/docspring/6279
 ```
 
+## Tailscale Setup for CI/CD
+
+When deploying to production, the rack-gateway is typically accessible only via Tailscale (internal networking). CircleCI jobs need to connect to Tailscale to reach the gateway API.
+
+### Docker Image Configuration
+
+Tailscale is installed in the CircleCI Docker image (`docspringcom/ci:deploy`). The image includes:
+- Tailscale client installed at build time
+- `rack-gateway` CLI for making deploy approval requests and running Convox commands
+
+### CircleCI Context Configuration
+
+Configure CircleCI contexts (`convox-staging`, `convox-eu`, `convox-us`) with the following environment variables:
+
+| Variable                | Description                                              | Example                                   |
+| ----------------------- | -------------------------------------------------------- | ----------------------------------------- |
+| `TAILSCALE_AUTHKEY`     | Ephemeral auth key for connecting CircleCI to Tailscale | `tskey-auth-...`                          |
+| `RACK_GATEWAY_URL`      | Tailscale hostname of the rack-gateway                   | `https://rack-gateway-staging.tail5a6e7.ts.net` |
+| `RACK_GATEWAY_API_TOKEN` | API token for authenticating with rack-gateway          | Token from rack-gateway API token management |
+
+**Creating Tailscale Auth Keys:**
+
+1. Visit https://login.tailscale.com/admin/settings/keys
+2. Click "Generate auth key"
+3. Set expiration (recommended: 90 days for CI/CD)
+4. Set tags (e.g., `tag:circleci`, `tag:ci`) if using ACLs
+5. Copy the key and add to CircleCI context
+
+**Setting RACK_GATEWAY_URL:**
+
+The Tailscale hostname is provided by the Terraform module output:
+- Check Terraform outputs for `tailscale_hostname`
+- Format: `https://{hostname}` (e.g., `https://rack-gateway-staging.tail5a6e7.ts.net`)
+
+**Getting RACK_GATEWAY_API_TOKEN:**
+
+Create an API token in the rack-gateway admin UI:
+1. Navigate to Settings → API Tokens
+2. Click "Create Token"
+3. Assign `cicd` role
+4. Copy the token and add to CircleCI context
+
+### Automatic Tailscale Connection
+
+The `setup_tailscale` command is automatically called by all Convox commands:
+
+- `convox_create_release` - Creates release and starts build
+- `convox_pre_release` - Runs migrations and pre-release steps
+- `convox_promote` - Promotes release to production
+
+**What it does:**
+
+1. Starts Tailscale daemon
+2. Connects using `TAILSCALE_AUTHKEY` from context
+3. Verifies connectivity by checking gateway health endpoint (`/api/v1/health`)
+
+**Example CircleCI job:**
+
+```yaml
+jobs:
+  convox_create_release_staging:
+    docker:
+      - image: docspringcom/ci:deploy-2025.09-amd64
+    context:
+      - deploy-app
+      - convox-staging  # Contains TAILSCALE_AUTHKEY, RACK_GATEWAY_URL, RACK_GATEWAY_API_TOKEN
+    steps:
+      - setup_tailscale  # Automatically called by convox_create_release command
+      - convox_create_release:
+          convox_app: docspring
+```
+
+### Tailscale ACL Configuration
+
+Configure Tailscale ACLs to allow CircleCI access to rack-gateway:
+
+```json
+{
+  "groups": {
+    "group:circleci": ["circleci@example.com"],
+    "group:rack-gateway": ["gateway@example.com"]
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["group:circleci"],
+      "dst": ["group:rack-gateway:8080"]
+    }
+  ]
+}
+```
+
+This allows CircleCI to connect to rack-gateway on port 8080 (the internal service port).
+
+### Troubleshooting Tailscale Connection
+
+**Connection fails:**
+
+1. Verify `TAILSCALE_AUTHKEY` is valid and not expired
+2. Check Tailscale ACLs allow CircleCI tag to reach rack-gateway
+3. Verify `RACK_GATEWAY_URL` matches the Tailscale hostname from Terraform
+4. Check gateway logs for connection attempts
+
+**Health check fails:**
+
+1. Verify gateway is running: `curl https://${RACK_GATEWAY_URL}/api/v1/health`
+2. Check Tailscale status: `tailscale status` (in CircleCI logs)
+3. Verify gateway is accessible from your Tailscale network
+
+**API token authentication fails:**
+
+1. Verify `RACK_GATEWAY_API_TOKEN` is set in CircleCI context
+2. Check token hasn't expired or been revoked
+3. Verify token has `cicd` role permissions
+
 ## CircleCI Workflow Configuration
 
 Add an approval job to your `.circleci/config.yml`:

@@ -272,11 +272,17 @@ func (a *App) newEmailSender() email.Sender {
 }
 
 func (a *App) initJobsClient(sender email.Sender, notifier *slackpkg.Notifier) error {
+	// Load WORM config if environment variables are set
+	auditAnchorConfig, err := jobs.NewAuditAnchorConfigFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load audit anchor config: %w", err)
+	}
+
 	client, err := jobs.NewClient(a.Database.Pool(), &jobs.Dependencies{
 		Database:      a.Database,
 		EmailSender:   sender,
 		SlackNotifier: notifier,
-	})
+	}, auditAnchorConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize jobs client: %w", err)
 	}

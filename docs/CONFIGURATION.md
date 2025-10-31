@@ -99,6 +99,19 @@ All development and test ports are defined in `mise.toml`.
 
 Postgres is required; set `DATABASE_URL` (or `PG*` variables like `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
 
+### WORM S3 Anchor Storage (Optional)
+
+For tamper-evident audit log anchoring, configure S3 Object Lock (WORM) storage:
+
+- `AUDIT_ANCHOR_BUCKET` (optional)
+  - S3 bucket name for WORM audit anchors. When set, enables hourly anchor writing.
+- `AUDIT_ANCHOR_CHAIN_ID` (required if `AUDIT_ANCHOR_BUCKET` is set)
+  - Chain identifier for anchor storage path (typically the rack alias, e.g., `staging`, `eu`, `us`).
+- `AUDIT_ANCHOR_RETENTION_DAYS` (default: `400`)
+  - Object Lock retention period in days for COMPLIANCE mode anchors.
+
+See [S3_WORM_STORE.md](S3_WORM_STORE.md) for detailed documentation on the WORM anchor system, including setup procedures and cost analysis.
+
 - Local development uses two logical databases:
   - `gateway_dev` for the dev/preview stacks.
   - `gateway_test` for the isolated test stack. Task automation ensures both exist when the Docker stack starts.

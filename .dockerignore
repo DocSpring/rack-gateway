@@ -11,9 +11,10 @@ data
 tmp
 .task
 .renamify
+ai_automation/
 
 # other repos checked out for reference
-reference
+reference/
 
 # Web app artifacts
 web/node_modules/
