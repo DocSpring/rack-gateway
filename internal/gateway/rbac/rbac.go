@@ -32,6 +32,7 @@ type DBManager struct {
 	domain   string
 }
 
+//nolint:lll
 const modelConf = `
 [request_definition]
 r = sub, obj, act

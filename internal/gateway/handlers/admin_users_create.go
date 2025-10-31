@@ -36,28 +36,12 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusBadRequest,
-			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-			strings.TrimSpace(req.Email),
-			err.Error(),
-			start,
-			nil,
-		)
+		h.respondUserBadRequest(c, rbac.ActionCreate, req.Email, start, err.Error())
 		return
 	}
 
 	if err := validateUserRoles(req.Roles); err != nil {
-		h.respondAuditError(
-			c,
-			http.StatusBadRequest,
-			audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-			strings.TrimSpace(req.Email),
-			err.Error(),
-			start,
-			nil,
-		)
+		h.respondUserBadRequest(c, rbac.ActionCreate, req.Email, start, err.Error())
 		return
 	}
 
@@ -80,15 +64,14 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		CreatedByEmail: strings.TrimSpace(c.GetString("user_email")),
 	}
 
-	resource := h.getUserResourceID(req.Email)
 	details := h.buildUserDetails(req.Email, req.Name, req.Roles)
 
-	h.respondAuditSuccess(
+	h.respondUserSuccess(
 		c,
 		http.StatusCreated,
 		payload,
-		audit.BuildAction(rbac.ResourceUser.String(), rbac.ActionCreate.String()),
-		resource,
+		rbac.ActionCreate,
+		req.Email,
 		start,
 		details,
 	)

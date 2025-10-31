@@ -108,9 +108,10 @@ func (d *Database) GetAPITokenByHash(tokenHash string) (*APIToken, error) {
 	return &token, nil
 }
 
-// GetAPITokenByID retrieves an API token by ID
-func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
-	var token APIToken
+func scanAPIToken(
+	scanner interface{ Scan(...interface{}) error },
+	token *APIToken,
+) error {
 	var permissionsJSON string
 	var expiresAtNull sql.NullTime
 	var lastUsedAtNull sql.NullTime
@@ -118,13 +119,7 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 	var createdByEmail sql.NullString
 	var createdByName sql.NullString
 
-	query := `SELECT t.id, t.public_id, t.token_hash, t.name, t.user_id, t.permissions,
-		t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name
-		FROM api_tokens t
-		LEFT JOIN users cu ON cu.id = t.created_by_user_id
-		WHERE t.id = ?`
-	row := d.queryRow(query, id)
-	err := row.Scan(
+	if err := scanner.Scan(
 		&token.ID,
 		&token.PublicID,
 		&token.TokenHash,
@@ -137,16 +132,12 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 		&createdByNull,
 		&createdByEmail,
 		&createdByName,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get API token: %w", err)
+	); err != nil {
+		return err
 	}
 
-	err = applyAPITokenMetadata(
-		&token,
+	return applyAPITokenMetadata(
+		token,
 		permissionsJSON,
 		expiresAtNull,
 		lastUsedAtNull,
@@ -154,8 +145,23 @@ func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
 		createdByEmail,
 		createdByName,
 	)
+}
+
+// GetAPITokenByID retrieves an API token by ID
+func (d *Database) GetAPITokenByID(id int64) (*APIToken, error) {
+	query := `SELECT t.id, t.public_id, t.token_hash, t.name, t.user_id, t.permissions,
+		t.created_at, t.expires_at, t.last_used_at, t.created_by_user_id, cu.email, cu.name
+		FROM api_tokens t
+		LEFT JOIN users cu ON cu.id = t.created_by_user_id
+		WHERE t.id = ?`
+	row := d.queryRow(query, id)
+	var token APIToken
+	err := scanAPIToken(row, &token)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get API token: %w", err)
 	}
 
 	return &token, nil
@@ -252,42 +258,8 @@ func (d *Database) listAPITokens(query string, args ...interface{}) ([]*APIToken
 	var tokens []*APIToken
 	for rows.Next() {
 		var token APIToken
-		var permissionsJSON string
-		var expiresAtNull sql.NullTime
-		var lastUsedAtNull sql.NullTime
-		var createdByNull sql.NullInt64
-		var createdByEmail sql.NullString
-		var createdByName sql.NullString
-
-		err = rows.Scan(
-			&token.ID,
-			&token.PublicID,
-			&token.TokenHash,
-			&token.Name,
-			&token.UserID,
-			&permissionsJSON,
-			&token.CreatedAt,
-			&expiresAtNull,
-			&lastUsedAtNull,
-			&createdByNull,
-			&createdByEmail,
-			&createdByName,
-		)
-		if err != nil {
+		if err := scanAPIToken(rows, &token); err != nil {
 			return nil, fmt.Errorf("failed to scan API token: %w", err)
-		}
-
-		err = applyAPITokenMetadata(
-			&token,
-			permissionsJSON,
-			expiresAtNull,
-			lastUsedAtNull,
-			createdByNull,
-			createdByEmail,
-			createdByName,
-		)
-		if err != nil {
-			return nil, err
 		}
 
 		tokens = append(tokens, &token)

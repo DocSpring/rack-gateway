@@ -315,27 +315,27 @@ func (d *Database) queryAggregatedAuditLogs(query string, args []interface{}) ([
 // scanAuditLogAggregated scans a single aggregated audit log row
 func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*AuditLogAggregated, error) {
 	log := new(AuditLogAggregated)
-	var tokenID sql.NullInt64
-	var tokenName sql.NullString
+	tokenState := newAuditTokenScanState()
 	var deployApprovalRequestID sql.NullInt64
 
-	err := scanner.Scan(
+	prefix := []interface{}{
 		&log.ID, &log.FirstEventID, &log.LastEventID, &log.FirstSeen, &log.LastSeen,
 		&log.FirstHash, &log.LastHash, &log.EventCount,
 		&log.MinResponseTimeMs, &log.MaxResponseTimeMs, &log.AvgResponseTimeMs,
-		&log.UserEmail, &log.UserName, &tokenID, &tokenName,
+		&log.UserEmail, &log.UserName,
+	}
+	args := tokenState.appendArgs(
+		prefix,
 		&log.ActionType, &log.Action, &log.Command, &log.Resource,
 		&log.ResourceType, &log.Details,
 		&log.IPAddress, &log.UserAgent,
 		&log.Status, &log.RBACDecision, &log.HTTPStatus,
 		&deployApprovalRequestID,
 	)
-	if err != nil {
+
+	if err := scanAuditRow(scanner, args, tokenState, log, &deployApprovalRequestID); err != nil {
 		return nil, err
 	}
-
-	fields := extractAuditTokenFields(tokenID, tokenName, deployApprovalRequestID)
-	applyAuditTokenFieldsToTarget(log, fields)
 
 	return log, nil
 }

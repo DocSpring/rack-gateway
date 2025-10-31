@@ -110,7 +110,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	publicID, ok := h.validatePublicIDParam(c)
+	publicID, ok := validatePublicID(c)
 	if !ok {
 		return
 	}
@@ -120,7 +120,7 @@ func (h *APIHandler) GetDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	record, ok := h.loadApprovalRequest(c, publicID)
+	record, ok := loadDeployApprovalRequest(c, h.database, publicID)
 	if !ok {
 		return
 	}
@@ -597,30 +597,6 @@ func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, pr
 	if err != nil {
 		log.Printf("ERROR: Failed to enqueue GitHub PR comment job: %v", err)
 	}
-}
-
-// Helper functions for GetDeployApprovalRequest
-
-func (h *APIHandler) validatePublicIDParam(c *gin.Context) (string, bool) {
-	publicID := strings.TrimSpace(c.Param("id"))
-	if publicID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request id"})
-		return "", false
-	}
-	return publicID, true
-}
-
-func (h *APIHandler) loadApprovalRequest(c *gin.Context, publicID string) (*db.DeployApprovalRequest, bool) {
-	record, err := h.database.GetDeployApprovalRequestByPublicID(publicID)
-	if err != nil {
-		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "deploy approval request not found"})
-			return nil, false
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load deploy approval request"})
-		return nil, false
-	}
-	return record, true
 }
 
 func (h *APIHandler) authorizeViewRequest(

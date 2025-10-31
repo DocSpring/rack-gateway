@@ -152,14 +152,7 @@ type webAuthnStartResponse struct {
 
 func startWebAuthnAssertion(baseURL, sessionToken string) (*webAuthnStartResponse, error) {
 	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", strings.TrimSuffix(baseURL, "/"))
-	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+sessionToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := HTTPClient.Do(req)
+	resp, err := authorizedGatewayRequest(http.MethodPost, endpoint, sessionToken, nil, "application/json")
 	if err != nil {
 		return nil, err
 	}

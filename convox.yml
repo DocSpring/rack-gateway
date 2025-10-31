@@ -40,12 +40,11 @@ services:
       path: .
       manifest: Dockerfile
     command: ./rack-gateway-api
-    domain: ${DOMAIN}
     environment:
       - PORT=8080
       - PGSSLMODE=require
     health: /api/v1/health
-    internal: false
+    internal: true
     port: 8080
     resources:
       - rgw-database

@@ -10,13 +10,7 @@ import (
 
 func getMFAStatus(baseURL, sessionToken string) (*MFAStatusResponse, error) {
 	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/status", strings.TrimSuffix(baseURL, "/"))
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+sessionToken)
-
-	resp, err := HTTPClient.Do(req)
+	resp, err := authorizedGatewayRequest(http.MethodGet, endpoint, sessionToken, nil, "")
 	if err != nil {
 		return nil, err
 	}

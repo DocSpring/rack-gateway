@@ -67,10 +67,10 @@ func TestDatabaseUserCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"admin"}, updated.Roles)
 
-    // List users - after reset, only the created user should exist
-    users, err := db.ListUsers()
-    require.NoError(t, err)
-    assert.Len(t, users, 1)
+	// List users - after reset, only the created user should exist
+	users, err := db.ListUsers()
+	require.NoError(t, err)
+	assert.Len(t, users, 1)
 
 	// Delete user
 	err = db.DeleteUser("test@example.com")

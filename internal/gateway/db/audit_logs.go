@@ -300,17 +300,57 @@ func (d *Database) GetAuditLogs(
 	return scanAuditLogs(rows)
 }
 
+type auditTokenScanState struct {
+	tokenID   sql.NullInt64
+	tokenName sql.NullString
+}
+
+func newAuditTokenScanState() *auditTokenScanState {
+	return &auditTokenScanState{}
+}
+
+func (s *auditTokenScanState) destinations() []interface{} {
+	return []interface{}{&s.tokenID, &s.tokenName}
+}
+
+func (s *auditTokenScanState) apply(target interface{}, deployID sql.NullInt64) {
+	fields := extractAuditTokenFields(s.tokenID, s.tokenName, deployID)
+	applyAuditTokenFieldsToTarget(target, fields)
+}
+
+func (s *auditTokenScanState) appendArgs(prefix []interface{}, suffix ...interface{}) []interface{} {
+	capacity := len(prefix) + len(s.destinations()) + len(suffix)
+	args := make([]interface{}, 0, capacity)
+	args = append(args, prefix...)
+	args = append(args, s.destinations()...)
+	return append(args, suffix...)
+}
+
+func scanAuditRow(
+	scanner interface{ Scan(...interface{}) error },
+	args []interface{},
+	tokenState *auditTokenScanState,
+	target interface{},
+	deployID *sql.NullInt64,
+) error {
+	if err := scanner.Scan(args...); err != nil {
+		return err
+	}
+
+	tokenState.apply(target, *deployID)
+	return nil
+}
+
 // scanAuditLog scans a single audit log row
 func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, error) {
 	log := new(AuditLog)
-	var tokenID sql.NullInt64
-	var tokenName sql.NullString
+	tokenState := newAuditTokenScanState()
 	var deployApprovalRequestID sql.NullInt64
 	var checkpointID sql.NullString
 	var previousHash []byte
 	var checkpointHash []byte
 
-	err := scanner.Scan(
+	prefix := []interface{}{
 		&log.ID,
 		&log.Timestamp,
 		&log.ChainIndex,
@@ -320,8 +360,9 @@ func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, e
 		&checkpointHash,
 		&log.UserEmail,
 		&log.UserName,
-		&tokenID,
-		&tokenName,
+	}
+	args := tokenState.appendArgs(
+		prefix,
 		&log.ActionType,
 		&log.Action,
 		&log.Command,
@@ -338,12 +379,11 @@ func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, e
 		&log.EventCount,
 		&deployApprovalRequestID,
 	)
-	if err != nil {
+
+	if err := scanAuditRow(scanner, args, tokenState, log, &deployApprovalRequestID); err != nil {
 		return nil, err
 	}
 
-	fields := extractAuditTokenFields(tokenID, tokenName, deployApprovalRequestID)
-	applyAuditTokenFieldsToTarget(log, fields)
 	if checkpointID.Valid {
 		log.CheckpointID = checkpointID.String
 	}
