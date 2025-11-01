@@ -32,14 +32,14 @@ func (AnchorWriterArgs) Kind() string { return "audit:anchor_writer" }
 type AnchorWriterWorker struct {
 	river.WorkerDefaults[AnchorWriterArgs]
 	db            *db.Database
-	s3Client      *s3.Client
+	s3Client      S3Client
 	bucket        string
 	chainID       string
 	retentionDays int
 }
 
 // NewAnchorWriterWorker creates a new anchor writer worker
-func NewAnchorWriterWorker(database *db.Database, s3Client *s3.Client, bucket, chainID string, retentionDays int) *AnchorWriterWorker {
+func NewAnchorWriterWorker(database *db.Database, s3Client S3Client, bucket, chainID string, retentionDays int) *AnchorWriterWorker {
 	return &AnchorWriterWorker{
 		db:            database,
 		s3Client:      s3Client,
@@ -61,6 +61,43 @@ type AnchorPayload struct {
 
 // Work writes an audit anchor to S3
 func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWriterArgs]) error {
+	// Use job creation time as anchor timestamp - this ensures deterministic filenames on retries
+	// All retries of the same job will use the same timestamp and try to write the same file
+	timestamp := job.CreatedAt.UTC()
+
+	// Generate S3 key using hour-based timestamp (deterministic for retries within same hour)
+	key := fmt.Sprintf("%s/%s/anchor-%s.json",
+		w.chainID,
+		timestamp.Format("2006/01/02/15"),
+		timestamp.Format("20060102T15")) // Hour precision only - no minutes/seconds
+	sha256Key := key + ".sha256"
+
+	// Check if BOTH anchor files already exist for this hour - skip if both written
+	// We need to check both because one might have succeeded while the other failed
+	jsonExists := false
+	sha256Exists := false
+
+	_, err := w.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String(key),
+	})
+	if err == nil {
+		jsonExists = true
+	}
+
+	_, err = w.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String(sha256Key),
+	})
+	if err == nil {
+		sha256Exists = true
+	}
+
+	if jsonExists && sha256Exists {
+		// Both files exist - job already completed successfully
+		return nil
+	}
+
 	// Get latest event from database
 	latest, err := w.getLatestEvent(ctx, nil)
 	if err != nil {
@@ -75,7 +112,6 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 	}
 
 	// Create anchor payload
-	timestamp := time.Now().UTC()
 	lastSeq := latest.ChainIndex
 	if lastSeq < 0 {
 		lastSeq = 0 // Empty chain starts at 0
@@ -104,45 +140,41 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 	hashHex := hex.EncodeToString(hash[:])
 	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
 
-	// Generate S3 key with timestamp
-	key := fmt.Sprintf("%s/%s/anchor-%s.json",
-		w.chainID,
-		timestamp.Format("2006/01/02/15"),
-		timestamp.Format("20060102T150405Z"))
-
 	// Calculate retention date
 	retainUntil := timestamp.Add(time.Duration(w.retentionDays) * 24 * time.Hour)
 
-	// Write JSON to S3 with Object Lock
-	putInput := &s3.PutObjectInput{
-		Bucket:                    aws.String(w.bucket),
-		Key:                       aws.String(key),
-		Body:                      bytes.NewReader(canonicalJSON),
-		ServerSideEncryption:      types.ServerSideEncryptionAwsKms,
-		ObjectLockMode:            types.ObjectLockModeCompliance,
-		ObjectLockRetainUntilDate: aws.Time(retainUntil),
-		ChecksumSHA256:            aws.String(hashBase64),
-		IfNoneMatch:               aws.String("*"), // Prevent accidental overwrite
-	}
-	_, err = w.s3Client.PutObject(ctx, putInput)
-	if err != nil {
-		return fmt.Errorf("failed to write anchor JSON: %w", err)
+	// Write JSON to S3 with Object Lock (skip if already exists)
+	// Note: IfNoneMatch is not supported with Object Lock - retention policy prevents overwrites
+	if !jsonExists {
+		putInput := &s3.PutObjectInput{
+			Bucket:                    aws.String(w.bucket),
+			Key:                       aws.String(key),
+			Body:                      bytes.NewReader(canonicalJSON),
+			ServerSideEncryption:      types.ServerSideEncryptionAwsKms,
+			ObjectLockMode:            types.ObjectLockModeCompliance,
+			ObjectLockRetainUntilDate: aws.Time(retainUntil),
+			ChecksumSHA256:            aws.String(hashBase64),
+		}
+		_, err = w.s3Client.PutObject(ctx, putInput)
+		if err != nil {
+			return fmt.Errorf("failed to write anchor JSON: %w", err)
+		}
 	}
 
-	// Write .sha256 file
-	sha256Key := key + ".sha256"
-	sha256PutInput := &s3.PutObjectInput{
-		Bucket:                    aws.String(w.bucket),
-		Key:                       aws.String(sha256Key),
-		Body:                      bytes.NewReader([]byte(hashHex)),
-		ServerSideEncryption:      types.ServerSideEncryptionAwsKms,
-		ObjectLockMode:            types.ObjectLockModeCompliance,
-		ObjectLockRetainUntilDate: aws.Time(retainUntil),
-		IfNoneMatch:               aws.String("*"),
-	}
-	_, err = w.s3Client.PutObject(ctx, sha256PutInput)
-	if err != nil {
-		return fmt.Errorf("failed to write anchor SHA256: %w", err)
+	// Write .sha256 file (skip if already exists)
+	if !sha256Exists {
+		sha256PutInput := &s3.PutObjectInput{
+			Bucket:                    aws.String(w.bucket),
+			Key:                       aws.String(sha256Key),
+			Body:                      bytes.NewReader([]byte(hashHex)),
+			ServerSideEncryption:      types.ServerSideEncryptionAwsKms,
+			ObjectLockMode:            types.ObjectLockModeCompliance,
+			ObjectLockRetainUntilDate: aws.Time(retainUntil),
+		}
+		_, err = w.s3Client.PutObject(ctx, sha256PutInput)
+		if err != nil {
+			return fmt.Errorf("failed to write anchor SHA256: %w", err)
+		}
 	}
 
 	return nil
