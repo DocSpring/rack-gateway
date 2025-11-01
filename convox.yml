@@ -46,9 +46,6 @@ services:
     sticky: true
     volumes: []
     annotations:
-      - tailscale.com/expose: "true"
-      - tailscale.com/hostname: rack-gateway-${RACK_ALIAS}
-      - tailscale.com/tags: "tag:rack-gateway"
       - eks.amazonaws.com/role-arn: "${IAM_ROLE_ARN}"
 
   admin:

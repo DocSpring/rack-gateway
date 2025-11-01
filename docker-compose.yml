@@ -44,7 +44,7 @@ x-gateway-test-service: &gateway_test_service
   profiles: [test]
   build:
     context: .
-    dockerfile: Dockerfile.gateway-web
+    dockerfile: Dockerfile
   image: ${GATEWAY_TEST_IMAGE:-rack-gateway-api:test}
   volumes: []
   depends_on:
@@ -131,7 +131,7 @@ services:
     profiles: [preview]
     build:
       context: .
-      dockerfile: Dockerfile.gateway-web
+      dockerfile: Dockerfile
     image: ${GATEWAY_IMAGE:-rack-gateway-api:local}
     environment:
       <<: *gateway_common_env
