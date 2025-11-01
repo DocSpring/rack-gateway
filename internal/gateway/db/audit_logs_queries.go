@@ -324,13 +324,10 @@ func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*A
 		&log.MinResponseTimeMs, &log.MaxResponseTimeMs, &log.AvgResponseTimeMs,
 		&log.UserEmail, &log.UserName,
 	}
-	args := tokenState.appendArgs(
-		prefix,
-		&log.ActionType, &log.Action, &log.Command, &log.Resource,
-		&log.ResourceType, &log.Details,
-		&log.IPAddress, &log.UserAgent,
-		&log.Status, &log.RBACDecision, &log.HTTPStatus,
-		&deployApprovalRequestID,
+	args := tokenState.appendArgs(prefix, buildAuditCommonFields(log)...)
+	args = append(args,
+		&log.IPAddress, &log.UserAgent, &log.Status,
+		&log.RBACDecision, &log.HTTPStatus, &deployApprovalRequestID,
 	)
 
 	if err := scanAuditRow(scanner, args, tokenState, log, &deployApprovalRequestID); err != nil {

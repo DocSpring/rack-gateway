@@ -83,11 +83,12 @@ tasks:
     desc: Build web + gateway + cli + mock binaries
     deps: [web:build, go:build, mock-oauth:build]
 
-  # Local development (Procfile-based, only Postgres in Docker)
+  # Local development (Procfile-based, only Postgres and MinIO in Docker)
   dev:
-    desc: Start Postgres in Docker, then run all services locally via overmind
+    desc: Start Postgres and MinIO in Docker, then run all services locally via overmind
     deps: [db:migrate]
     cmds:
+      - docker compose up -d minio minio-setup
       - overmind start -f Procfile.dev
 
   # Docker-based development stack (everything in containers)

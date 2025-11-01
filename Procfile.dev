@@ -2,6 +2,9 @@
 mock-oauth: PORT=$MOCK_OAUTH_PORT cd mock-oauth && bun run dev
 mock-convox: PORT=$MOCK_CONVOX_PORT air -c .air-mock-convox.toml
 
+# MinIO for local S3 development (runs in Docker via docker-compose)
+# The service is started automatically by the dev script
+
 # Gateway API (with hot reload)
 gateway: PORT=$GATEWAY_PORT LOG_LEVEL=debug DEBUG_TOPICS=http.request.info,sql,email air -c .air-gateway.toml
 

@@ -27,6 +27,17 @@ linters:
     - nakedret
     - nestif
     - copyloopvar
+  exclusions:
+    paths:
+      - reference
+      - tmp
+      - bin
+    rules:
+      - path: '(.+)_test\.go'
+        linters:
+          - gocognit
+          - funlen
+          - goconst
   settings:
     revive:
       rules:
@@ -69,19 +80,17 @@ linters:
           msg: "avoid time.Sleep; use context with timeout"
     misspell:
       locale: US
-  exclusions:
-    rules:
-      - path: '(.+)_test\.go'
-        linters:
-          - gocognit
-          - funlen
-          - goconst
 
 formatters:
   enable:
     - gofmt
     - goimports
     - gofumpt
+  exclusions:
+    paths:
+      - reference
+      - tmp
+      - bin
   settings:
     gofmt:
       simplify: true

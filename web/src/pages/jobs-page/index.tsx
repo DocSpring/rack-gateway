@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
-import { Eye } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Eye, RotateCw, X } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import type { components } from '../../api/types.generated'
 import { TablePane } from '../../components/table-pane'
 import { Badge } from '../../components/ui/badge'
@@ -35,6 +36,7 @@ function JobsPageInner() {
   const [stateFilter, setStateFilter] = useState<string>('')
   const [queueFilter, setQueueFilter] = useState<string>('')
   const [selectedJob, setSelectedJob] = useState<JobResponse | null>(null)
+  const queryClient = useQueryClient()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['jobs', stateFilter, queueFilter, page],
@@ -53,6 +55,32 @@ function JobsPageInner() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      await api.delete(`/api/v1/jobs/${jobId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success('Job deleted successfully')
+    },
+    onError: () => {
+      toast.error('Failed to delete job')
+    },
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      await api.post(`/api/v1/jobs/${jobId}/retry`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      toast.success('Job queued for retry')
+    },
+    onError: () => {
+      toast.error('Failed to retry job')
+    },
+  })
+
   const jobs = data?.jobs || []
   const count = data?.count || 0
   const limit = data?.limit || DEFAULT_PER_PAGE
@@ -66,6 +94,17 @@ function JobsPageInner() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-'
     return new Date(dateString).toLocaleString()
+  }
+
+  const canDeleteJob = (state?: string): boolean => {
+    // Only allow deletion for failed/retrying jobs
+    // Completed, running, cancelled, and discarded jobs should not be deleted
+    return state === 'retryable' || state === 'scheduled' || state === 'available'
+  }
+
+  const canRetryJob = (state?: string): boolean => {
+    // Allow retry for failed, cancelled, and discarded jobs
+    return state === 'retryable' || state === 'cancelled' || state === 'discarded'
   }
 
   return (
@@ -159,9 +198,37 @@ function JobsPageInner() {
                     event.stopPropagation()
                   }}
                 >
-                  <Button size="sm" variant="ghost">
-                    <Eye className="h-4 w-4" />
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost">
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      disabled={!(job.id && canRetryJob(job.state))}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (job.id && canRetryJob(job.state)) {
+                          retryMutation.mutate(job.id)
+                        }
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <RotateCw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      disabled={!(job.id && canDeleteJob(job.state))}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (job.id && canDeleteJob(job.state)) {
+                          deleteMutation.mutate(job.id)
+                        }
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

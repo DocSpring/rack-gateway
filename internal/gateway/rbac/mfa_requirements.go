@@ -89,6 +89,10 @@ var MFARequirements = map[string]MFALevel{
 	Gateway(ResourceIntegration, ActionCreate): MFAStepUp,
 	Gateway(ResourceIntegration, ActionDelete): MFAStepUp,
 
+	// Background Jobs - Administrative job management
+	Gateway(ResourceJob, ActionDelete): MFAStepUp,
+	Gateway(ResourceJob, ActionUpdate): MFAStepUp,
+
 	// ========================================================================
 	// AUTH RESOURCES - Authentication and MFA management
 	// ========================================================================

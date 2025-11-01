@@ -240,6 +240,42 @@ services:
     networks:
       - gateway-net
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gateway-net
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      if ! mc stat myminio/audit-anchors >/dev/null 2>&1; then
+        mc mb --with-lock myminio/audit-anchors;
+        mc retention set --default COMPLIANCE 400d myminio/audit-anchors;
+      fi;
+      echo 'MinIO bucket setup complete';
+      "
+    networks:
+      - gateway-net
+
   web-dev:
     profiles: [dev]
     build:
@@ -279,6 +315,15 @@ services:
       WEB_PORT: 5224
       RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
       RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
+      # MinIO S3 configuration for WORM audit anchors
+      AWS_ENDPOINT_URL_S3: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      AUDIT_ANCHOR_BUCKET: audit-anchors
+      AUDIT_ANCHOR_CHAIN_ID: dev
+      AUDIT_ANCHOR_RETENTION_DAYS: "400"
+      AUDIT_ANCHOR_INTERVAL_MINUTES: "1"  # Every minute for dev testing
     ports:
       - "8448:8448"
     depends_on:
@@ -287,6 +332,8 @@ services:
       mock-convox:
         condition: service_started
       mock-oauth:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     restart: unless-stopped
     healthcheck: *gateway_healthcheck
@@ -299,3 +346,4 @@ networks:
 
 volumes:
   postgres-data:
+  minio-data:

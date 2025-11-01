@@ -86,7 +86,6 @@ var rackRouteSpecs = []RouteSpec{
 	newRackRoute("SOCKET", "/apps/{app}/processes/{pid}/exec", ResourceProcess, ActionExec),
 	newRackRoute("GET", "/apps/{app}/processes/{pid}/exec", ResourceProcess, ActionExec),
 	newRackRoute("POST", "/apps/{app}/services/{service}/processes", ResourceProcess, ActionStart),
-
 	// Logs (app/system/build)
 	newRackRoute("SOCKET", "/apps/{app}/processes/{pid}/logs", ResourceLog, ActionRead),
 	newRackRoute("SOCKET", "/apps/{app}/builds/{id}/logs", ResourceLog, ActionRead),
@@ -96,7 +95,6 @@ var rackRouteSpecs = []RouteSpec{
 	newRackRoute("GET", "/apps/{app}/builds/{id}/logs", ResourceLog, ActionRead),
 	newRackRoute("GET", "/apps/{app}/logs", ResourceLog, ActionRead),
 	newRackRoute("GET", "/system/logs", ResourceLog, ActionRead),
-
 	// Builds
 	newRackRoute("GET", "/apps/{app}/builds", ResourceBuild, ActionList),
 	newRackRoute("GET", "/apps/{app}/builds/{id}", ResourceBuild, ActionRead),
@@ -104,7 +102,6 @@ var rackRouteSpecs = []RouteSpec{
 	newRackRoute("POST", "/apps/{app}/builds", ResourceBuild, ActionCreate),
 	newRackRoute("POST", "/apps/{app}/builds/import", ResourceBuild, ActionCreate),
 	newRackRoute("PUT", "/apps/{app}/builds/{id}", ResourceBuild, ActionUpdate),
-
 	// Releases
 	newRackRoute("GET", "/apps/{app}/releases", ResourceRelease, ActionList),
 	newRackRoute("GET", "/apps/{app}/releases/{id}", ResourceRelease, ActionRead),
@@ -283,6 +280,8 @@ var httpRouteSpecs = []RouteSpec{
 	// Background jobs
 	newHTTPRoute("GET", "/api/v1/jobs", Gateway(ResourceJob, ActionList)),
 	newHTTPRoute("GET", "/api/v1/jobs/:id", Gateway(ResourceJob, ActionRead)),
+	newHTTPRoute("DELETE", "/api/v1/jobs/:id", Gateway(ResourceJob, ActionDelete)),
+	newHTTPRoute("POST", "/api/v1/jobs/:id/retry", Gateway(ResourceJob, ActionUpdate)),
 
 	// Integrations
 	newHTTPRoute("GET", "/api/v1/integrations/slack", Gateway(ResourceIntegration, ActionRead)),

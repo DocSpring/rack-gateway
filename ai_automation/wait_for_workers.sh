@@ -43,7 +43,7 @@ load_tasks() {
 
 load_tasks
 if [ ${#pids[@]} -eq 0 ]; then
-  if [ $TARGET_ACTIVE -eq 0 ]; then
+  if [ "$TARGET_ACTIVE" -eq 0 ]; then
     echo "No registered Claude Code workers found in $PID_DIR." >&2
     exit 1
   fi
@@ -63,8 +63,8 @@ while [ ${#pids[@]} -gt 0 ]; do
 
   load_tasks
 
-  if [ ${#pids[@]} -le $TARGET_ACTIVE ]; then
-    if [ $TARGET_ACTIVE -eq 0 ]; then
+  if [ ${#pids[@]} -le "$TARGET_ACTIVE" ]; then
+    if [ "$TARGET_ACTIVE" -eq 0 ]; then
       echo "All Claude Code processes finished."
     else
       echo "Active workers (${#pids[@]}) now at or below target $TARGET_ACTIVE."

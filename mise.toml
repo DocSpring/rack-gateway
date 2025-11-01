@@ -55,5 +55,17 @@ OPERATIONS_USERS = "ops@example.com"
 DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_dev?sslmode=disable"
 TEST_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable"
 
+# MinIO (S3-compatible local storage for dev)
+AWS_ENDPOINT_URL_S3 = "http://localhost:9000"
+AWS_ACCESS_KEY_ID = "minioadmin"
+AWS_SECRET_ACCESS_KEY = "minioadmin"
+AWS_REGION = "us-east-1"
+
+# WORM Audit Anchors (writes to MinIO in dev)
+AUDIT_ANCHOR_BUCKET = "audit-anchors"
+AUDIT_ANCHOR_CHAIN_ID = "dev"
+AUDIT_ANCHOR_RETENTION_DAYS = "400"
+AUDIT_ANCHOR_INTERVAL_MINUTES = "1"  # Every minute for dev testing (default: 60 = 1 hour)
+
 # Config directory for CLI (stores config.json with tokens and rack settings)
 # GATEWAY_CLI_CONFIG_DIR = "./config/cli"

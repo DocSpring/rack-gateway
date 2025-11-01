@@ -341,6 +341,18 @@ func scanAuditRow(
 	return nil
 }
 
+// buildAuditCommonFields creates the common field pointers used by both scanAuditLog and scanAuditLogAggregated
+func buildAuditCommonFields(log interface{}) []interface{} {
+	switch v := log.(type) {
+	case *AuditLog:
+		return []interface{}{&v.ActionType, &v.Action, &v.Command, &v.Resource, &v.ResourceType, &v.Details}
+	case *AuditLogAggregated:
+		return []interface{}{&v.ActionType, &v.Action, &v.Command, &v.Resource, &v.ResourceType, &v.Details}
+	default:
+		return nil
+	}
+}
+
 // scanAuditLog scans a single audit log row
 func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, error) {
 	log := new(AuditLog)
@@ -361,23 +373,11 @@ func scanAuditLog(scanner interface{ Scan(...interface{}) error }) (*AuditLog, e
 		&log.UserEmail,
 		&log.UserName,
 	}
-	args := tokenState.appendArgs(
-		prefix,
-		&log.ActionType,
-		&log.Action,
-		&log.Command,
-		&log.Resource,
-		&log.ResourceType,
-		&log.Details,
-		&log.RequestID,
-		&log.IPAddress,
-		&log.UserAgent,
-		&log.Status,
-		&log.RBACDecision,
-		&log.HTTPStatus,
-		&log.ResponseTimeMs,
-		&log.EventCount,
-		&deployApprovalRequestID,
+	args := tokenState.appendArgs(prefix, buildAuditCommonFields(log)...)
+	args = append(args,
+		&log.RequestID, &log.IPAddress, &log.UserAgent,
+		&log.Status, &log.RBACDecision, &log.HTTPStatus,
+		&log.ResponseTimeMs, &log.EventCount, &deployApprovalRequestID,
 	)
 
 	if err := scanAuditRow(scanner, args, tokenState, log, &deployApprovalRequestID); err != nil {

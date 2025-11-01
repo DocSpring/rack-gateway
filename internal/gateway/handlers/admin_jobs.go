@@ -29,6 +29,24 @@ func (h *AdminHandler) requireJobsAccess(c *gin.Context, action rbac.Action) boo
 	return true
 }
 
+// parseJobID extracts and validates the job ID from the request path parameter.
+// Returns the job ID and true if valid, or responds with an error and returns false.
+func parseJobID(c *gin.Context) (int64, bool) {
+	idStr := strings.TrimSpace(c.Param("id"))
+	if idStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "job id is required"})
+		return 0, false
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid job id"})
+		return 0, false
+	}
+
+	return id, true
+}
+
 // parseJobStateFilter converts a state string to River job state.
 // Returns nil and false if the state is empty.
 // Returns nil and false with an error response if the state is invalid.
@@ -166,15 +184,8 @@ func (h *AdminHandler) GetJob(c *gin.Context) {
 		return
 	}
 
-	idStr := strings.TrimSpace(c.Param("id"))
-	if idStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "job id is required"})
-		return
-	}
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid job id"})
+	id, ok := parseJobID(c)
+	if !ok {
 		return
 	}
 
@@ -184,6 +195,76 @@ func (h *AdminHandler) GetJob(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch job"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, toJobResponse(job))
+}
+
+// DeleteJob godoc
+// @Summary Delete a background job
+// @Description Cancels a background job by ID
+// @Tags Jobs
+// @Produce json
+// @Param id path integer true "Job ID"
+// @Success 204
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /jobs/{id} [delete]
+func (h *AdminHandler) DeleteJob(c *gin.Context) {
+	if !h.requireJobsAccess(c, rbac.ActionDelete) {
+		return
+	}
+
+	id, ok := parseJobID(c)
+	if !ok {
+		return
+	}
+
+	_, err := h.jobsClient.JobCancel(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, rivertype.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete job"})
+		}
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// RetryJob godoc
+// @Summary Retry a background job
+// @Description Immediately retries a background job by ID
+// @Tags Jobs
+// @Produce json
+// @Param id path integer true "Job ID"
+// @Success 200 {object} JobResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security SessionCookie
+// @Router /jobs/{id}/retry [post]
+func (h *AdminHandler) RetryJob(c *gin.Context) {
+	if !h.requireJobsAccess(c, rbac.ActionUpdate) {
+		return
+	}
+
+	id, ok := parseJobID(c)
+	if !ok {
+		return
+	}
+
+	job, err := h.jobsClient.JobRetry(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, rivertype.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retry job"})
 		}
 		return
 	}

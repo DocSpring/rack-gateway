@@ -10,10 +10,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/getsentry/sentry-go"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/app"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/jobs"
+	jobaudit "github.com/DocSpring/rack-gateway/internal/gateway/jobs/audit"
 )
 
 // @title Rack Gateway API
@@ -53,11 +58,14 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 		return true, runMigrations()
 	case "reset-db":
 		return true, resetDatabase()
+	case "write-anchor":
+		return true, writeAuditAnchor()
 	case "help", "--help", "-h":
 		helpText := "rack-gateway commands:\n" +
 			"  (no args)            Start the API server\n" +
 			"  migrate             Apply database migrations\n" +
-			"  reset-db            Drop and recreate the database (requires env guards)"
+			"  reset-db            Drop and recreate the database (requires env guards)\n" +
+			"  write-anchor        Manually trigger an audit anchor write to S3"
 		fmt.Println(helpText)
 		return true, nil
 	default:
@@ -109,6 +117,54 @@ func closeDatabase(database *db.Database) {
 	if err := database.Close(); err != nil {
 		log.Printf("Warning: failed to close database: %v", err)
 	}
+}
+
+func writeAuditAnchor() error {
+	// Load audit anchor configuration from environment
+	anchorConfig, err := jobs.NewAuditAnchorConfigFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load audit anchor config: %w", err)
+	}
+	if anchorConfig == nil {
+		return fmt.Errorf("audit anchor not configured - set AUDIT_ANCHOR_BUCKET and AUDIT_ANCHOR_CHAIN_ID")
+	}
+
+	// Connect to database
+	database, err := db.NewFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer closeDatabase(database)
+
+	// Create anchor writer worker directly
+	s3Client, ok := anchorConfig.S3Client.(*s3.Client)
+	if !ok {
+		return fmt.Errorf("invalid S3 client type")
+	}
+
+	worker := jobaudit.NewAnchorWriterWorker(
+		database,
+		s3Client,
+		anchorConfig.Bucket,
+		anchorConfig.ChainID,
+		anchorConfig.RetentionDays,
+	)
+
+	// Execute the work directly (synchronously)
+	ctx := context.Background()
+	mockJob := &river.Job[jobaudit.AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: time.Now(),
+		},
+	}
+
+	fmt.Println("Writing audit anchor to S3...")
+	if err := worker.Work(ctx, mockJob); err != nil {
+		return fmt.Errorf("failed to write anchor: %w", err)
+	}
+
+	fmt.Println("✓ Audit anchor written to S3 successfully")
+	return nil
 }
 
 func runGatewayServer() error {

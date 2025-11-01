@@ -26,5 +26,15 @@
   },
   "[go]": {
     "editor.defaultFormatter": "golang.go"
+  },
+  "gopls": {
+    "formatting.gofumpt": true,
+    "directoryFilters": [
+      "-reference",
+      "-tmp",
+      "-bin",
+      "-web/node_modules",
+      "-mock-oauth/node_modules"
+    ]
   }
 }

@@ -19,7 +19,6 @@ tasks:
       - go install github.com/tkrajina/typescriptify-golang-structs/tscriptify@latest
       - go install golang.org/x/tools/cmd/goimports@latest
       - go install mvdan.cc/gofumpt@latest
-      - go install github.com/segmentio/golines@latest
 
   install:
     aliases: [":install"]
@@ -148,7 +147,6 @@ tasks:
 
   format:
     desc: Format Go code with gofmt
-    deps: [golines]
     cmds:
       - go fmt ./...
 
@@ -160,7 +158,7 @@ tasks:
       - cmd/**/*.go
       - internal/**/*.go
     cmds:
-      - goimports -w .
+      - goimports -w ./cmd ./internal ./tools
 
   lint:
     desc: Run Go linters (check mode)
@@ -170,8 +168,9 @@ tasks:
       - go.*
       - cmd/**/*.go
       - internal/**/*.go
+      - tools/**/*.go
     cmds:
-      - golangci-lint run ./...
+      - golangci-lint run ./cmd/... ./internal/... ./tools/...
 
   lint:fix:
     desc: Auto-fix Go formatting and lint issues
@@ -181,8 +180,9 @@ tasks:
       - go.*
       - cmd/**/*.go
       - internal/**/*.go
+      - tools/**/*.go
     cmds:
-      - golangci-lint run --fix ./...
+      - golangci-lint run --fix ./cmd/... ./internal/... ./tools/...
 
   lint:config:
     desc: Verify golangci-lint configuration
@@ -201,11 +201,6 @@ tasks:
     cmds:
       - scripts/coverage_report.sh coverage.out
 
-  golines:
-    desc: Wrap Go code to enforce 120 character lines
-    cmds:
-      - cmd: "$(go env GOPATH)/bin/golines --max-len=120 -w ./"
-        ignore_error: true
 
   sec:vuln:
     desc: Check for known vulnerabilities

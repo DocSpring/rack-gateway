@@ -68,6 +68,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "DELETE",
+    pattern: "/api/v1/jobs/:id",
+    permissions: ["gateway:job:delete"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "DELETE",
     pattern: "/api/v1/settings/allow-destructive-actions",
     permissions: ["gateway:setting_group:allow_destructive_actions"],
     mfaLevel: "always",
@@ -364,6 +370,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
     method: "POST",
     pattern: "/api/v1/integrations/slack/test",
     permissions: ["gateway:integration:update"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "POST",
+    pattern: "/api/v1/jobs/:id/retry",
+    permissions: ["gateway:job:update"],
     mfaLevel: "step_up",
   },
   {

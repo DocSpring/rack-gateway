@@ -92,7 +92,7 @@ func NewClient(dbPool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *Audi
 	// Setup periodic jobs
 	var periodicJobs []*river.PeriodicJob
 
-	// WORM anchor writer periodic job (hourly)
+	// WORM anchor writer periodic job (hourly in prod, configurable for dev)
 	if auditAnchorConfig != nil && auditAnchorConfig.S3Client != nil {
 		s3Client, ok := auditAnchorConfig.S3Client.(*s3.Client)
 		if !ok {
@@ -107,8 +107,16 @@ func NewClient(dbPool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *Audi
 		)
 		river.AddWorker(workers, anchorWorker)
 
+		// Get interval from env (default 60 minutes = 1 hour)
+		intervalMinutes := 60
+		if intervalStr := os.Getenv("AUDIT_ANCHOR_INTERVAL_MINUTES"); intervalStr != "" {
+			if parsed, err := strconv.Atoi(intervalStr); err == nil && parsed > 0 {
+				intervalMinutes = parsed
+			}
+		}
+
 		periodicJobs = append(periodicJobs, river.NewPeriodicJob(
-			river.PeriodicInterval(1*time.Hour),
+			river.PeriodicInterval(time.Duration(intervalMinutes)*time.Minute),
 			func() (river.JobArgs, *river.InsertOpts) {
 				return jobaudit.AnchorWriterArgs{}, nil
 			},
@@ -161,7 +169,12 @@ func NewAuditAnchorConfigFromEnv() (*AuditAnchorConfig, error) {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	s3Client := s3.NewFromConfig(cfg)
+	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		// MinIO requires path-style addressing
+		if os.Getenv("AWS_ENDPOINT_URL_S3") != "" {
+			o.UsePathStyle = true
+		}
+	})
 
 	return &AuditAnchorConfig{
 		S3Client:      s3Client,
@@ -216,4 +229,14 @@ func (c *Client) JobList(ctx context.Context, params *river.JobListParams) (*riv
 // JobGet retrieves a job by ID
 func (c *Client) JobGet(ctx context.Context, id int64) (*rivertype.JobRow, error) {
 	return c.river.JobGet(ctx, id)
+}
+
+// JobCancel cancels a job by ID
+func (c *Client) JobCancel(ctx context.Context, id int64) (*rivertype.JobRow, error) {
+	return c.river.JobCancel(ctx, id)
+}
+
+// JobRetry retries a job by ID immediately
+func (c *Client) JobRetry(ctx context.Context, id int64) (*rivertype.JobRow, error) {
+	return c.river.JobRetry(ctx, id)
 }

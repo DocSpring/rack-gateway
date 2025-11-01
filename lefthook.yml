@@ -8,11 +8,6 @@ pre-commit:
       run: scripts/fix_whitespace.sh {staged_files}
       stage_fixed: true
 
-    go-golines:
-      glob: "**/*.go"
-      run: golines --max-len=120 -w {staged_files}
-      stage_fixed: true
-
     go-format:
       glob: "**/*.go"
       run: go fmt {staged_files}

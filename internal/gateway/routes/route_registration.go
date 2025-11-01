@@ -176,6 +176,8 @@ func registerUserManagementRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	}
 	jobs.GET("", h.admin.ListJobs)
 	jobs.GET("/:id", h.admin.GetJob)
+	jobs.DELETE("/:id", h.admin.DeleteJob)
+	jobs.POST("/:id/retry", h.admin.RetryJob)
 }
 
 func registerIntegrationRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSet) {

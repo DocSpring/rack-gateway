@@ -27,3 +27,8 @@ GOOGLE_ALLOWED_DOMAIN = "yourdomain.com"
 # RACK_TOKEN = "your-rack-token"
 # DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_dev?sslmode=disable"
 # TEST_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:55432/gateway_test?sslmode=disable"
+
+# MinIO S3 configuration (already configured in mise.toml for dev)
+# MinIO Console UI: http://localhost:9001 (user: minioadmin / pass: minioadmin)
+# AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+# AUDIT_ANCHOR_BUCKET, AUDIT_ANCHOR_CHAIN_ID, AUDIT_ANCHOR_RETENTION_DAYS

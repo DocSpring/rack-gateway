@@ -1,0 +1,9 @@
+# gopls (Go language server) configuration
+# Prevents gopls from scanning reference codebases which causes goimports to hang
+
+directoryFilters:
+  - "-reference"
+  - "-tmp"
+  - "-bin"
+  - "-web/node_modules"
+  - "-mock-oauth/node_modules"

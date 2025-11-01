@@ -19,40 +19,71 @@ import (
 
 // mockS3Client implements S3Client interface for testing
 type mockS3Client struct {
-	headObjectFunc    func(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
-	putObjectFunc     func(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
-	getObjectFunc     func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
-	listObjectsV2Func func(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	headObjectFunc func(
+		ctx context.Context,
+		params *s3.HeadObjectInput,
+		optFns ...func(*s3.Options),
+	) (*s3.HeadObjectOutput, error)
+	putObjectFunc func(
+		ctx context.Context,
+		params *s3.PutObjectInput,
+		optFns ...func(*s3.Options),
+	) (*s3.PutObjectOutput, error)
+	getObjectFunc func(
+		ctx context.Context,
+		params *s3.GetObjectInput,
+		optFns ...func(*s3.Options),
+	) (*s3.GetObjectOutput, error)
+	listObjectsV2Func func(
+		ctx context.Context,
+		params *s3.ListObjectsV2Input,
+		optFns ...func(*s3.Options),
+	) (*s3.ListObjectsV2Output, error)
 }
 
-func (m *mockS3Client) HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+func (m *mockS3Client) HeadObject(
+	ctx context.Context,
+	params *s3.HeadObjectInput,
+	optFns ...func(*s3.Options),
+) (*s3.HeadObjectOutput, error) {
 	if m.headObjectFunc != nil {
 		return m.headObjectFunc(ctx, params, optFns...)
 	}
 	return nil, &types.NotFound{}
 }
 
-func (m *mockS3Client) PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+func (m *mockS3Client) PutObject(
+	ctx context.Context,
+	params *s3.PutObjectInput,
+	optFns ...func(*s3.Options),
+) (*s3.PutObjectOutput, error) {
 	if m.putObjectFunc != nil {
 		return m.putObjectFunc(ctx, params, optFns...)
 	}
 	return &s3.PutObjectOutput{}, nil
 }
 
-func (m *mockS3Client) GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+func (m *mockS3Client) GetObject(
+	ctx context.Context,
+	params *s3.GetObjectInput,
+	optFns ...func(*s3.Options),
+) (*s3.GetObjectOutput, error) {
 	if m.getObjectFunc != nil {
 		return m.getObjectFunc(ctx, params, optFns...)
 	}
 	return &s3.GetObjectOutput{}, nil
 }
 
-func (m *mockS3Client) ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+func (m *mockS3Client) ListObjectsV2(
+	ctx context.Context,
+	params *s3.ListObjectsV2Input,
+	optFns ...func(*s3.Options),
+) (*s3.ListObjectsV2Output, error) {
 	if m.listObjectsV2Func != nil {
 		return m.listObjectsV2Func(ctx, params, optFns...)
 	}
 	return &s3.ListObjectsV2Output{}, nil
 }
-
 
 func TestAnchorWriterArgs_Kind(t *testing.T) {
 	args := AnchorWriterArgs{}
@@ -76,7 +107,11 @@ func TestNewAnchorWriterWorker(t *testing.T) {
 func TestAnchorWriterWorker_Work_BothFilesExist(t *testing.T) {
 	// Setup: Both JSON and SHA256 files already exist
 	s3Client := &mockS3Client{
-		headObjectFunc: func(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+		headObjectFunc: func(
+			_ context.Context,
+			_ *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
 			// Both files exist
 			return &s3.HeadObjectOutput{}, nil
 		},
@@ -210,7 +245,11 @@ func TestAnchorPayload_PrevAnchorHashOmittedWhenEmpty(t *testing.T) {
 
 func TestAnchorWriterWorker_getLatestAnchor_NoObjects(t *testing.T) {
 	s3Client := &mockS3Client{
-		listObjectsV2Func: func(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
 			return &s3.ListObjectsV2Output{
 				Contents: []types.Object{},
 			}, nil
@@ -236,7 +275,11 @@ func TestAnchorWriterWorker_getLatestAnchor_WithObjects(t *testing.T) {
 	time3 := time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC)
 
 	s3Client := &mockS3Client{
-		listObjectsV2Func: func(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
 			key1 := "staging/2025/11/01/10/anchor-20251101T10.json"
 			key2 := "staging/2025/11/01/11/anchor-20251101T11.json"
 			key3 := "staging/2025/11/01/12/anchor-20251101T12.json"
@@ -251,7 +294,11 @@ func TestAnchorWriterWorker_getLatestAnchor_WithObjects(t *testing.T) {
 				},
 			}, nil
 		},
-		getObjectFunc: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+		getObjectFunc: func(
+			_ context.Context,
+			params *s3.GetObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.GetObjectOutput, error) {
 			// Should fetch the latest JSON file (key3)
 			assert.Equal(t, "staging/2025/11/01/12/anchor-20251101T12.json", *params.Key)
 			return &s3.GetObjectOutput{
@@ -273,7 +320,11 @@ func TestAnchorWriterWorker_getLatestAnchor_WithObjects(t *testing.T) {
 
 func TestAnchorWriterWorker_getLatestAnchor_ListError(t *testing.T) {
 	s3Client := &mockS3Client{
-		listObjectsV2Func: func(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
 			return nil, fmt.Errorf("S3 list error: access denied")
 		},
 	}
@@ -295,14 +346,22 @@ func TestAnchorWriterWorker_getLatestAnchor_GetObjectError(t *testing.T) {
 	key1 := "staging/2025/11/01/12/anchor-20251101T12.json"
 
 	s3Client := &mockS3Client{
-		listObjectsV2Func: func(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
 			return &s3.ListObjectsV2Output{
 				Contents: []types.Object{
 					{Key: &key1, LastModified: &time1},
 				},
 			}, nil
 		},
-		getObjectFunc: func(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+		getObjectFunc: func(
+			_ context.Context,
+			_ *s3.GetObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.GetObjectOutput, error) {
 			return nil, fmt.Errorf("S3 get error: object not found")
 		},
 	}
@@ -398,4 +457,3 @@ func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 	// Verify that IfNoneMatch is NOT used (incompatible with Object Lock)
 	t.Skip("Requires full integration test to verify IfNoneMatch is not set")
 }
-

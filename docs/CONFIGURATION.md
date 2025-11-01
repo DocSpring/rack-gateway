@@ -105,10 +105,27 @@ For tamper-evident audit log anchoring, configure S3 Object Lock (WORM) storage:
 
 - `AUDIT_ANCHOR_BUCKET` (optional)
   - S3 bucket name for WORM audit anchors. When set, enables hourly anchor writing.
+  - In dev: Uses MinIO at `http://localhost:9000` (bucket `audit-anchors`)
 - `AUDIT_ANCHOR_CHAIN_ID` (required if `AUDIT_ANCHOR_BUCKET` is set)
   - Chain identifier for anchor storage path (typically the rack alias, e.g., `staging`, `eu`, `us`).
+  - In dev: Set to `dev`
 - `AUDIT_ANCHOR_RETENTION_DAYS` (default: `400`)
   - Object Lock retention period in days for COMPLIANCE mode anchors.
+- `AWS_ENDPOINT_URL_S3` (optional)
+  - Custom S3 endpoint URL (for MinIO or other S3-compatible services)
+  - In dev: Set to `http://localhost:9000` to use MinIO
+- `AWS_ACCESS_KEY_ID` (required if `AUDIT_ANCHOR_BUCKET` is set)
+  - AWS access key for S3
+  - In dev: Set to `minioadmin`
+- `AWS_SECRET_ACCESS_KEY` (required if `AUDIT_ANCHOR_BUCKET` is set)
+  - AWS secret key for S3
+  - In dev: Set to `minioadmin`
+- `AWS_REGION` (default: `us-east-1`)
+  - AWS region for S3
+  - In dev: Set to `us-east-1`
+- `AUDIT_ANCHOR_INTERVAL_MINUTES` (default: `60`)
+  - How often to write audit anchors to S3, in minutes
+  - In dev: Set to `1` for faster testing (every minute)
 
 See [S3_WORM_STORE.md](S3_WORM_STORE.md) for detailed documentation on the WORM anchor system, including setup procedures and cost analysis.
 
