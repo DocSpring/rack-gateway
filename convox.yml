@@ -21,10 +21,10 @@ environment:
   # - DEV_MODE=false
   # - RACK_USERNAME=convox # optional; defaults to convox
   # WORM S3 anchor storage (set via Terraform)
-  # - AUDIT_HMAC_SECRET # Secret key used for HMAC-SHA256 cryptographic chain of audit logs
-  # - AUDIT_ANCHOR_BUCKET # S3 bucket name for WORM audit anchors
-  # - AUDIT_ANCHOR_CHAIN_ID # Chain identifier (typically rack alias, e.g., staging, eu, us)
-  # - AUDIT_ANCHOR_RETENTION_DAYS # Object Lock retention in days (default: 400)
+  - AUDIT_HMAC_SECRET # Secret key used for HMAC-SHA256 cryptographic chain of audit logs
+  - AUDIT_ANCHOR_BUCKET # S3 bucket name for WORM audit anchors
+  - AUDIT_ANCHOR_CHAIN_ID # Chain identifier (typically rack alias, e.g., staging, eu, us)
+  - AUDIT_ANCHOR_RETENTION_DAYS # Object Lock retention in days (default: 400)
 
 services:
   gateway:
@@ -49,7 +49,7 @@ services:
       - tailscale.com/expose: "true"
       - tailscale.com/hostname: rack-gateway-${RACK}
       - tailscale.com/tags: "tag:rack-gateway"
-      - eks.amazonaws.com/role-arn: "$IAM_ROLE_ARN"
+      - eks.amazonaws.com/role-arn: "${IAM_ROLE_ARN}"
 
   admin:
     build:
@@ -59,8 +59,7 @@ services:
     environment:
       - PORT=8080
       - PGSSLMODE=require
-      - ADMIN_DATABASE_URL
-      - DATABASE_URL=$ADMIN_DATABASE_URL # Use admin user for migrations
+      - DATABASE_URL=${ADMIN_DATABASE_URL} # Use admin user for migrations
     scale:
       memory: 512
       cpu: 250
