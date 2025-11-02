@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 	"github.com/riverqueue/river/rivertype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	"github.com/DocSpring/rack-gateway/internal/gateway/testutil/dbtest"
 )
 
 // mockS3Client implements S3Client interface for testing
@@ -136,23 +140,285 @@ func TestAnchorWriterWorker_Work_BothFilesExist(t *testing.T) {
 }
 
 func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
-	// This test requires proper database mocking
-	t.Skip("Requires database mocking - will be tested in integration tests")
+	// Setup: JSON file exists but SHA256 is missing - should write SHA256 only
+	database := dbtest.NewDatabase(t)
+	dbtest.Reset(t, database)
+
+	// Create an audit event so we have data to anchor
+	auditLog := &db.AuditLog{
+		UserEmail:      "test@example.com",
+		UserName:       "Test User",
+		ActionType:     "test",
+		Action:         "test:read",
+		Resource:       "test-resource",
+		Status:         "success",
+		ResponseTimeMs: 100,
+	}
+	err := database.CreateAuditLog(auditLog)
+	require.NoError(t, err)
+
+	key := "staging/2025/11/01/12/anchor-20251101T12.json"
+	sha256Key := key + ".sha256"
+
+	s3Client := &mockS3Client{
+		headObjectFunc: func(
+			_ context.Context,
+			params *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
+			// JSON exists, SHA256 doesn't
+			if *params.Key == key {
+				return &s3.HeadObjectOutput{}, nil
+			}
+			return nil, &types.NotFound{}
+		},
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
+			// No previous anchors
+			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
+		},
+		putObjectFunc: func(
+			_ context.Context,
+			params *s3.PutObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.PutObjectOutput, error) {
+			// Should only write SHA256 file
+			assert.Equal(t, sha256Key, *params.Key, "Should only write SHA256 file")
+			return &s3.PutObjectOutput{}, nil
+		},
+	}
+
+	worker := &AnchorWriterWorker{
+		db:            database,
+		s3Client:      s3Client,
+		bucket:        "test-bucket",
+		chainID:       "staging",
+		retentionDays: 7,
+	}
+
+	job := &river.Job[AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	err = worker.Work(context.Background(), job)
+	assert.NoError(t, err, "Should succeed when writing only SHA256 file")
 }
 
 func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
-	// This test requires proper database mocking
-	t.Skip("Requires database mocking - will be tested in integration tests")
+	// Setup: Both files missing, empty chain (no audit events)
+	database := dbtest.NewDatabase(t)
+	dbtest.Reset(t, database)
+
+	key := "staging/2025/11/01/12/anchor-20251101T12.json"
+	sha256Key := key + ".sha256"
+
+	var jsonWritten, sha256Written bool
+
+	s3Client := &mockS3Client{
+		headObjectFunc: func(
+			_ context.Context,
+			_ *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
+			// Neither file exists
+			return nil, &types.NotFound{}
+		},
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
+			// No previous anchors
+			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
+		},
+		putObjectFunc: func(
+			_ context.Context,
+			params *s3.PutObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.PutObjectOutput, error) {
+			if *params.Key == key {
+				jsonWritten = true
+				// Verify empty chain payload
+				var buf bytes.Buffer
+				_, _ = buf.ReadFrom(params.Body)
+				var anchor AnchorPayload
+				err := json.Unmarshal(buf.Bytes(), &anchor)
+				require.NoError(t, err)
+				assert.Equal(t, "staging", anchor.ChainID)
+				assert.Equal(t, int64(0), anchor.LastSeq, "Empty chain should have seq 0")
+				assert.Equal(t, "", anchor.LastHash, "Empty chain should have empty hash")
+				assert.Equal(t, "", anchor.PrevAnchorHash, "First anchor should have no prev hash")
+			} else if *params.Key == sha256Key {
+				sha256Written = true
+			}
+			return &s3.PutObjectOutput{}, nil
+		},
+	}
+
+	worker := &AnchorWriterWorker{
+		db:            database,
+		s3Client:      s3Client,
+		bucket:        "test-bucket",
+		chainID:       "staging",
+		retentionDays: 7,
+	}
+
+	job := &river.Job[AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	err := worker.Work(context.Background(), job)
+	assert.NoError(t, err, "Should succeed with empty chain")
+	assert.True(t, jsonWritten, "Should write JSON file")
+	assert.True(t, sha256Written, "Should write SHA256 file")
 }
 
 func TestAnchorWriterWorker_Work_PutJSONFails(t *testing.T) {
-	// This test requires proper database mocking
-	t.Skip("Requires database mocking - will be tested in integration tests")
+	// Setup: Both files missing, but PutObject fails for JSON
+	database := dbtest.NewDatabase(t)
+	dbtest.Reset(t, database)
+
+	// Create an audit event so we have data to anchor
+	auditLog := &db.AuditLog{
+		UserEmail:      "test@example.com",
+		UserName:       "Test User",
+		ActionType:     "test",
+		Action:         "test:read",
+		Resource:       "test-resource",
+		Status:         "success",
+		ResponseTimeMs: 100,
+	}
+	err := database.CreateAuditLog(auditLog)
+	require.NoError(t, err)
+
+	key := "staging/2025/11/01/12/anchor-20251101T12.json"
+
+	s3Client := &mockS3Client{
+		headObjectFunc: func(
+			_ context.Context,
+			_ *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
+			// Neither file exists
+			return nil, &types.NotFound{}
+		},
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
+			// No previous anchors
+			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
+		},
+		putObjectFunc: func(
+			_ context.Context,
+			params *s3.PutObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.PutObjectOutput, error) {
+			// Fail when writing JSON
+			if *params.Key == key {
+				return nil, fmt.Errorf("S3 put error: access denied")
+			}
+			return &s3.PutObjectOutput{}, nil
+		},
+	}
+
+	worker := &AnchorWriterWorker{
+		db:            database,
+		s3Client:      s3Client,
+		bucket:        "test-bucket",
+		chainID:       "staging",
+		retentionDays: 7,
+	}
+
+	job := &river.Job[AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	err = worker.Work(context.Background(), job)
+	assert.Error(t, err, "Should fail when PutObject fails for JSON")
+	assert.Contains(t, err.Error(), "failed to write anchor JSON")
 }
 
 func TestAnchorWriterWorker_Work_PutSHA256Fails(t *testing.T) {
 	// Setup: Neither file exists, JSON succeeds but SHA256 fails
-	t.Skip("Requires database mocking - will be tested in integration tests")
+	database := dbtest.NewDatabase(t)
+	dbtest.Reset(t, database)
+
+	// Create an audit event so we have data to anchor
+	auditLog := &db.AuditLog{
+		UserEmail:      "test@example.com",
+		UserName:       "Test User",
+		ActionType:     "test",
+		Action:         "test:read",
+		Resource:       "test-resource",
+		Status:         "success",
+		ResponseTimeMs: 100,
+	}
+	err := database.CreateAuditLog(auditLog)
+	require.NoError(t, err)
+
+	key := "staging/2025/11/01/12/anchor-20251101T12.json"
+	sha256Key := key + ".sha256"
+
+	s3Client := &mockS3Client{
+		headObjectFunc: func(
+			_ context.Context,
+			_ *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
+			// Neither file exists
+			return nil, &types.NotFound{}
+		},
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
+			// No previous anchors
+			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
+		},
+		putObjectFunc: func(
+			_ context.Context,
+			params *s3.PutObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.PutObjectOutput, error) {
+			// JSON succeeds, SHA256 fails
+			if *params.Key == key {
+				return &s3.PutObjectOutput{}, nil
+			} else if *params.Key == sha256Key {
+				return nil, fmt.Errorf("S3 put error: access denied")
+			}
+			return &s3.PutObjectOutput{}, nil
+		},
+	}
+
+	worker := &AnchorWriterWorker{
+		db:            database,
+		s3Client:      s3Client,
+		bucket:        "test-bucket",
+		chainID:       "staging",
+		retentionDays: 7,
+	}
+
+	job := &river.Job[AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	err = worker.Work(context.Background(), job)
+	assert.Error(t, err, "Should fail when PutObject fails for SHA256")
+	assert.Contains(t, err.Error(), "failed to write anchor SHA256")
 }
 
 func TestAnchorWriterWorker_FilenameGeneration(t *testing.T) {
@@ -450,10 +716,171 @@ func TestAnchorWriterWorker_S3KeyPrefix(t *testing.T) {
 
 func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 	// Verify that Object Lock parameters are set correctly in PutObject
-	t.Skip("Requires database mocking - Object Lock parameters will be validated in integration tests")
+	database := dbtest.NewDatabase(t)
+	dbtest.Reset(t, database)
+
+	// Create an audit event so we have data to anchor
+	auditLog := &db.AuditLog{
+		UserEmail:      "test@example.com",
+		UserName:       "Test User",
+		ActionType:     "test",
+		Action:         "test:read",
+		Resource:       "test-resource",
+		Status:         "success",
+		ResponseTimeMs: 100,
+	}
+	err := database.CreateAuditLog(auditLog)
+	require.NoError(t, err)
+
+	key := "staging/2025/11/01/12/anchor-20251101T12.json"
+	timestamp := time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC)
+	expectedRetainUntil := timestamp.Add(7 * 24 * time.Hour)
+
+	// Test with AWS S3 (should set Object Lock) - unset endpoint to simulate production AWS
+	originalEndpoint := os.Getenv("AWS_ENDPOINT_URL_S3")
+	os.Unsetenv("AWS_ENDPOINT_URL_S3")
+	defer func() {
+		if originalEndpoint != "" {
+			os.Setenv("AWS_ENDPOINT_URL_S3", originalEndpoint)
+		}
+	}()
+
+	var jsonParams, sha256Params *s3.PutObjectInput
+
+	s3Client := &mockS3Client{
+		headObjectFunc: func(
+			_ context.Context,
+			_ *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
+			return nil, &types.NotFound{}
+		},
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
+			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
+		},
+		putObjectFunc: func(
+			_ context.Context,
+			params *s3.PutObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.PutObjectOutput, error) {
+			if *params.Key == key {
+				jsonParams = params
+			} else if *params.Key == key+".sha256" {
+				sha256Params = params
+			}
+			return &s3.PutObjectOutput{}, nil
+		},
+	}
+
+	worker := &AnchorWriterWorker{
+		db:            database,
+		s3Client:      s3Client,
+		bucket:        "test-bucket",
+		chainID:       "staging",
+		retentionDays: 7,
+	}
+
+	job := &river.Job[AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: timestamp,
+		},
+	}
+
+	err = worker.Work(context.Background(), job)
+	require.NoError(t, err)
+
+	// Verify Object Lock parameters are set for AWS S3
+	require.NotNil(t, jsonParams, "JSON PutObject should be called")
+	assert.Equal(t, types.ObjectLockModeCompliance, jsonParams.ObjectLockMode, "Should set Compliance mode")
+	assert.NotNil(t, jsonParams.ObjectLockRetainUntilDate, "Should set retention date")
+	assert.WithinDuration(t, expectedRetainUntil, *jsonParams.ObjectLockRetainUntilDate, time.Second, "Retention date should match")
+	assert.Equal(t, types.ServerSideEncryptionAwsKms, jsonParams.ServerSideEncryption, "Should set KMS encryption")
+	assert.NotNil(t, jsonParams.ChecksumSHA256, "Should set SHA256 checksum")
+
+	require.NotNil(t, sha256Params, "SHA256 PutObject should be called")
+	assert.Equal(t, types.ObjectLockModeCompliance, sha256Params.ObjectLockMode, "Should set Compliance mode for SHA256")
+	assert.NotNil(t, sha256Params.ObjectLockRetainUntilDate, "Should set retention date for SHA256")
+	assert.WithinDuration(t, expectedRetainUntil, *sha256Params.ObjectLockRetainUntilDate, time.Second, "Retention date should match for SHA256")
+	assert.Equal(t, types.ServerSideEncryptionAwsKms, sha256Params.ServerSideEncryption, "Should set KMS encryption for SHA256")
+	// SHA256 file doesn't need checksum (it IS the checksum)
 }
 
 func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 	// Verify that IfNoneMatch is NOT used (incompatible with Object Lock)
-	t.Skip("Requires full integration test to verify IfNoneMatch is not set")
+	database := dbtest.NewDatabase(t)
+	dbtest.Reset(t, database)
+
+	// Create an audit event so we have data to anchor
+	auditLog := &db.AuditLog{
+		UserEmail:      "test@example.com",
+		UserName:       "Test User",
+		ActionType:     "test",
+		Action:         "test:read",
+		Resource:       "test-resource",
+		Status:         "success",
+		ResponseTimeMs: 100,
+	}
+	err := database.CreateAuditLog(auditLog)
+	require.NoError(t, err)
+
+	key := "staging/2025/11/01/12/anchor-20251101T12.json"
+
+	var jsonParams, sha256Params *s3.PutObjectInput
+
+	s3Client := &mockS3Client{
+		headObjectFunc: func(
+			_ context.Context,
+			_ *s3.HeadObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.HeadObjectOutput, error) {
+			return nil, &types.NotFound{}
+		},
+		listObjectsV2Func: func(
+			_ context.Context,
+			_ *s3.ListObjectsV2Input,
+			_ ...func(*s3.Options),
+		) (*s3.ListObjectsV2Output, error) {
+			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
+		},
+		putObjectFunc: func(
+			_ context.Context,
+			params *s3.PutObjectInput,
+			_ ...func(*s3.Options),
+		) (*s3.PutObjectOutput, error) {
+			if *params.Key == key {
+				jsonParams = params
+			} else if *params.Key == key+".sha256" {
+				sha256Params = params
+			}
+			return &s3.PutObjectOutput{}, nil
+		},
+	}
+
+	worker := &AnchorWriterWorker{
+		db:            database,
+		s3Client:      s3Client,
+		bucket:        "test-bucket",
+		chainID:       "staging",
+		retentionDays: 7,
+	}
+
+	job := &river.Job[AnchorWriterArgs]{
+		JobRow: &rivertype.JobRow{
+			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	err = worker.Work(context.Background(), job)
+	require.NoError(t, err)
+
+	// Verify IfNoneMatch is NOT set (incompatible with Object Lock)
+	require.NotNil(t, jsonParams, "JSON PutObject should be called")
+	assert.Nil(t, jsonParams.IfNoneMatch, "IfNoneMatch should NOT be set (incompatible with Object Lock)")
+
+	require.NotNil(t, sha256Params, "SHA256 PutObject should be called")
+	assert.Nil(t, sha256Params.IfNoneMatch, "IfNoneMatch should NOT be set for SHA256")
 }
