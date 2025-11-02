@@ -158,15 +158,15 @@ func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
 	require.NoError(t, err)
 
 	key := "staging/2025/11/01/12/anchor-20251101T12.json"
-	sha256Key := key + ".sha256"
 
+	putCalled := false
 	s3Client := &mockS3Client{
 		headObjectFunc: func(
 			_ context.Context,
 			params *s3.HeadObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.HeadObjectOutput, error) {
-			// JSON exists, SHA256 doesn't
+			// JSON file already exists
 			if *params.Key == key {
 				return &s3.HeadObjectOutput{}, nil
 			}
@@ -185,8 +185,9 @@ func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			// Should only write SHA256 file
-			assert.Equal(t, sha256Key, *params.Key, "Should only write SHA256 file")
+			// Should NOT be called - file already exists
+			putCalled = true
+			t.Errorf("PutObject should not be called when file already exists (key=%s)", *params.Key)
 			return &s3.PutObjectOutput{}, nil
 		},
 	}
@@ -206,7 +207,8 @@ func TestAnchorWriterWorker_Work_JSONExistsSHA256Missing(t *testing.T) {
 	}
 
 	err = worker.Work(context.Background(), job)
-	assert.NoError(t, err, "Should succeed when writing only SHA256 file")
+	assert.NoError(t, err, "Should succeed when file already exists")
+	assert.False(t, putCalled, "PutObject should not be called when file already exists")
 }
 
 func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
@@ -215,9 +217,8 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 	dbtest.Reset(t, database)
 
 	key := "staging/2025/11/01/12/anchor-20251101T12.json"
-	sha256Key := key + ".sha256"
 
-	var jsonWritten, sha256Written bool
+	var jsonWritten bool
 
 	s3Client := &mockS3Client{
 		headObjectFunc: func(
@@ -225,7 +226,7 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 			_ *s3.HeadObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.HeadObjectOutput, error) {
-			// Neither file exists
+			// File doesn't exist
 			return nil, &types.NotFound{}
 		},
 		listObjectsV2Func: func(
@@ -241,8 +242,7 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			switch *params.Key {
-			case key:
+			if *params.Key == key {
 				jsonWritten = true
 				// Verify empty chain payload
 				var buf bytes.Buffer
@@ -254,8 +254,6 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 				assert.Equal(t, int64(0), anchor.LastSeq, "Empty chain should have seq 0")
 				assert.Equal(t, "", anchor.LastHash, "Empty chain should have empty hash")
 				assert.Equal(t, "", anchor.PrevAnchorHash, "First anchor should have no prev hash")
-			case sha256Key:
-				sha256Written = true
 			}
 			return &s3.PutObjectOutput{}, nil
 		},
@@ -277,8 +275,7 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 
 	err := worker.Work(context.Background(), job)
 	assert.NoError(t, err, "Should succeed with empty chain")
-	assert.True(t, jsonWritten, "Should write JSON file")
-	assert.True(t, sha256Written, "Should write SHA256 file")
+	assert.True(t, jsonWritten, "Should write JSON file with checksum in metadata")
 }
 
 func TestAnchorWriterWorker_Work_PutJSONFails(t *testing.T) {
@@ -350,86 +347,12 @@ func TestAnchorWriterWorker_Work_PutJSONFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to write anchor JSON")
 }
 
-func TestAnchorWriterWorker_Work_PutSHA256Fails(t *testing.T) {
-	// Setup: Neither file exists, JSON succeeds but SHA256 fails
-	database := dbtest.NewDatabase(t)
-	dbtest.Reset(t, database)
-
-	// Create an audit event so we have data to anchor
-	auditLog := &db.AuditLog{
-		UserEmail:      "test@example.com",
-		UserName:       "Test User",
-		ActionType:     "test",
-		Action:         "test:read",
-		Resource:       "test-resource",
-		Status:         "success",
-		ResponseTimeMs: 100,
-	}
-	err := database.CreateAuditLog(auditLog)
-	require.NoError(t, err)
-
-	key := "staging/2025/11/01/12/anchor-20251101T12.json"
-	sha256Key := key + ".sha256"
-
-	s3Client := &mockS3Client{
-		headObjectFunc: func(
-			_ context.Context,
-			_ *s3.HeadObjectInput,
-			_ ...func(*s3.Options),
-		) (*s3.HeadObjectOutput, error) {
-			// Neither file exists
-			return nil, &types.NotFound{}
-		},
-		listObjectsV2Func: func(
-			_ context.Context,
-			_ *s3.ListObjectsV2Input,
-			_ ...func(*s3.Options),
-		) (*s3.ListObjectsV2Output, error) {
-			// No previous anchors
-			return &s3.ListObjectsV2Output{Contents: []types.Object{}}, nil
-		},
-		putObjectFunc: func(
-			_ context.Context,
-			params *s3.PutObjectInput,
-			_ ...func(*s3.Options),
-		) (*s3.PutObjectOutput, error) {
-			// JSON succeeds, SHA256 fails
-			switch *params.Key {
-			case key:
-				return &s3.PutObjectOutput{}, nil
-			case sha256Key:
-				return nil, fmt.Errorf("S3 put error: access denied")
-			}
-			return &s3.PutObjectOutput{}, nil
-		},
-	}
-
-	worker := &AnchorWriterWorker{
-		db:            database,
-		s3Client:      s3Client,
-		bucket:        "test-bucket",
-		chainID:       "staging",
-		retentionDays: 7,
-	}
-
-	job := &river.Job[AnchorWriterArgs]{
-		JobRow: &rivertype.JobRow{
-			CreatedAt: time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC),
-		},
-	}
-
-	err = worker.Work(context.Background(), job)
-	assert.Error(t, err, "Should fail when PutObject fails for SHA256")
-	assert.Contains(t, err.Error(), "failed to write anchor SHA256")
-}
-
 func TestAnchorWriterWorker_FilenameGeneration(t *testing.T) {
 	// Test that filename generation is deterministic and hour-based
 	testTime := time.Date(2025, 11, 1, 12, 34, 56, 0, time.UTC)
 
 	// Expected values
 	expectedKey := "staging/2025/11/01/12/anchor-20251101T12.json"
-	expectedSHA256Key := "staging/2025/11/01/12/anchor-20251101T12.json.sha256"
 
 	// Verify format
 	key := fmt.Sprintf("%s/%s/anchor-%s.json",
@@ -437,10 +360,7 @@ func TestAnchorWriterWorker_FilenameGeneration(t *testing.T) {
 		testTime.Format("2006/01/02/15"),
 		testTime.Format("20060102T15"))
 
-	sha256Key := key + ".sha256"
-
-	assert.Equal(t, expectedKey, key)
-	assert.Equal(t, expectedSHA256Key, sha256Key)
+	assert.Equal(t, expectedKey, key, "Filename should be hour-based with no minutes/seconds")
 }
 
 func TestAnchorWriterWorker_TimestampDeterminism(t *testing.T) {
@@ -551,14 +471,12 @@ func TestAnchorWriterWorker_getLatestAnchor_WithObjects(t *testing.T) {
 			key1 := "staging/2025/11/01/10/anchor-20251101T10.json"
 			key2 := "staging/2025/11/01/11/anchor-20251101T11.json"
 			key3 := "staging/2025/11/01/12/anchor-20251101T12.json"
-			key4 := "staging/2025/11/01/12/anchor-20251101T12.json.sha256" // Not JSON
 
 			return &s3.ListObjectsV2Output{
 				Contents: []types.Object{
 					{Key: &key1, LastModified: &time1},
 					{Key: &key2, LastModified: &time2},
 					{Key: &key3, LastModified: &time3},
-					{Key: &key4, LastModified: &time3}, // SHA256 file, should be ignored
 				},
 			}, nil
 		},
@@ -736,9 +654,9 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 
 	key := "staging/2025/11/01/12/anchor-20251101T12.json"
 	timestamp := time.Date(2025, 11, 1, 12, 0, 0, 0, time.UTC)
-	expectedRetainUntil := timestamp.Add(7 * 24 * time.Hour)
 
-	// Test with AWS S3 (should set Object Lock) - unset endpoint to simulate production AWS
+	// Test with AWS S3 (should NOT set per-object Object Lock because bucket has default retention)
+	// Unset endpoint to simulate production AWS S3
 	originalEndpoint := os.Getenv("AWS_ENDPOINT_URL_S3")
 	_ = os.Unsetenv("AWS_ENDPOINT_URL_S3")
 	defer func() {
@@ -796,27 +714,21 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 	err = worker.Work(context.Background(), job)
 	require.NoError(t, err)
 
-	// Verify Object Lock parameters are set for AWS S3
+	// Verify Object Lock parameters are NOT set for AWS S3
+	// When bucket has default Object Lock retention configured, per-object retention
+	// should NOT be set in PutObject. The default retention is applied automatically.
 	require.NotNil(t, jsonParams, "JSON PutObject should be called")
-	assert.Equal(t, types.ObjectLockModeCompliance, jsonParams.ObjectLockMode, "Should set Compliance mode")
-	assert.NotNil(t, jsonParams.ObjectLockRetainUntilDate, "Should set retention date")
-	assert.WithinDuration(
-		t, expectedRetainUntil, *jsonParams.ObjectLockRetainUntilDate, time.Second,
-		"Retention date should match",
-	)
+	assert.Empty(t, jsonParams.ObjectLockMode, "Should NOT set ObjectLockMode (bucket has default retention)")
+	assert.Nil(t, jsonParams.ObjectLockRetainUntilDate, "Should NOT set retention date (bucket has default retention)")
 	assert.Equal(t, types.ServerSideEncryptionAwsKms, jsonParams.ServerSideEncryption, "Should set KMS encryption")
 	assert.NotNil(t, jsonParams.ChecksumSHA256, "Should set SHA256 checksum")
 
 	require.NotNil(t, sha256Params, "SHA256 PutObject should be called")
-	assert.Equal(
-		t, types.ObjectLockModeCompliance, sha256Params.ObjectLockMode,
-		"Should set Compliance mode for SHA256",
+	assert.Empty(
+		t, sha256Params.ObjectLockMode,
+		"Should NOT set ObjectLockMode for SHA256 (bucket has default retention)",
 	)
-	assert.NotNil(t, sha256Params.ObjectLockRetainUntilDate, "Should set retention date for SHA256")
-	assert.WithinDuration(
-		t, expectedRetainUntil, *sha256Params.ObjectLockRetainUntilDate, time.Second,
-		"Retention date should match for SHA256",
-	)
+	assert.Nil(t, sha256Params.ObjectLockRetainUntilDate, "Should NOT set retention date for SHA256 (bucket has default retention)")
 	assert.Equal(
 		t, types.ServerSideEncryptionAwsKms, sha256Params.ServerSideEncryption,
 		"Should set KMS encryption for SHA256",

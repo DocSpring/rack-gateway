@@ -85,15 +85,10 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 		w.chainID,
 		timestamp.Format("2006/01/02/15"),
 		timestamp.Format("20060102T15")) // Hour precision only - no minutes/seconds
-	sha256Key := key + ".sha256"
 
-	// Check if BOTH anchor files already exist for this hour - skip if both written
-	// We need to check both because one might have succeeded while the other failed
-	jsonExists := w.checkS3FileExists(ctx, key)
-	sha256Exists := w.checkS3FileExists(ctx, sha256Key)
-
-	if jsonExists && sha256Exists {
-		// Both files exist - job already completed successfully
+	// Check if anchor file already exists - skip if already written
+	if w.checkS3FileExists(ctx, key) {
+		// File exists - job already completed successfully
 		return nil
 	}
 
@@ -134,26 +129,17 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 		return fmt.Errorf("failed to marshal anchor: %w", err)
 	}
 
-	// Compute SHA-256 hash
+	// Compute SHA-256 hash of the JSON
 	hash := sha256.Sum256(canonicalJSON)
-	hashHex := hex.EncodeToString(hash[:])
 	hashBase64 := base64.StdEncoding.EncodeToString(hash[:])
 
 	// Calculate retention date
 	retainUntil := timestamp.Add(time.Duration(w.retentionDays) * 24 * time.Hour)
 
-	// Write JSON to S3 with Object Lock (skip if already exists)
-	if !jsonExists {
-		if err := w.putObjectWithRetention(ctx, key, canonicalJSON, retainUntil, &hashBase64); err != nil {
-			return fmt.Errorf("failed to write anchor JSON: %w", err)
-		}
-	}
-
-	// Write .sha256 file (skip if already exists)
-	if !sha256Exists {
-		if err := w.putObjectWithRetention(ctx, sha256Key, []byte(hashHex), retainUntil, nil); err != nil {
-			return fmt.Errorf("failed to write anchor SHA256: %w", err)
-		}
+	// Write JSON to S3 with Object Lock and checksum
+	// The SHA256 checksum is stored in S3 metadata, so no separate .sha256 file is needed
+	if err := w.putObjectWithRetention(ctx, key, canonicalJSON, retainUntil, &hashBase64); err != nil {
+		return fmt.Errorf("failed to write anchor JSON: %w", err)
 	}
 
 	return nil

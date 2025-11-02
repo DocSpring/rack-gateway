@@ -55,23 +55,22 @@ Each anchor is a lightweight JSON blob containing the chain head state:
 
 ### S3 Object Structure
 
-Each anchor creates two objects:
+Each anchor creates one object with SHA256 checksum stored in S3 metadata:
 
 ```
 s3://audit-anchors/prod/global/2025/10/17/14/anchor-20251017T140000Z.json
-s3://audit-anchors/prod/global/2025/10/17/14/anchor-20251017T140000Z.json.sha256
 ```
 
 **Path structure:**
 ```
 s3://<bucket>/<env>/<region>/<year>/<month>/<day>/<hour>/anchor-<timestamp>.json
-s3://<bucket>/<env>/<region>/<year>/<month>/<day>/<hour>/anchor-<timestamp>.json.sha256
 ```
 
-**Why two files?**
+**Checksum verification:**
 
-- `.json` - The canonical anchor payload
-- `.json.sha256` - SHA-256 hash of the JSON file (for quick verification without downloading full payload)
+- The SHA-256 hash is stored in S3 object metadata (`ChecksumSHA256`)
+- No separate `.sha256` file needed - the checksum is retrievable via S3 API
+- Use `HeadObject` or `GetObject` to verify integrity without separate file
 
 ## Cost Analysis
 
@@ -79,15 +78,15 @@ For DocSpring's low-volume deployment with hourly anchors and 400-day retention:
 
 | Item | Calculation | Annual Cost |
 |------|-------------|-------------|
-| Storage (steady state) | 24 anchors/day × 400 days × 2 files × 2 KB = 19.2 MB | ~$0.01 |
-| PUT requests | 24 anchors/day × 365 days × 2 files = 17,520 PUTs @ $0.005/1k | ~$0.09 |
-| KMS encryption (if enabled) | 17,520 encrypt requests @ $0.03/10k | ~$0.05 |
+| Storage (steady state) | 24 anchors/day × 400 days × 2 KB = 9.6 MB | ~$0.01 |
+| PUT requests | 24 anchors/day × 365 days = 8,760 PUTs @ $0.005/1k | ~$0.04 |
+| KMS encryption (if enabled) | 8,760 encrypt requests @ $0.03/10k | ~$0.03 |
 | GET requests (hourly verification) | 24 × 365 = 8,760 GETs @ $0.0004/1k | ~$0.00 |
-| **Total** | | **~$0.15/year** |
+| **Total** | | **~$0.08/year** |
 
-**With replication to a second region:** ~$0.30/year
+**With replication to a second region:** ~$0.16/year
 
-**Conclusion**: Essentially free for full tamper-evident audit chain anchoring. Over 400 days, total cost is under $0.20.
+**Conclusion**: Essentially free for full tamper-evident audit chain anchoring. Over 400 days, total cost is under $0.10.
 
 ## AWS Setup
 
@@ -383,8 +382,11 @@ func WriteAnchor(db *Database, s3Client *s3.Client) error {
         timestamp.Format("2006/01/02/15"),
         timestamp.Format("20060102T150405Z"))
 
-    // 6. Write JSON to S3 with Object Lock
-    retainUntil := timestamp.Add(400 * 24 * time.Hour) // 400 days
+    // 6. Write JSON to S3 with Object Lock and checksum in metadata
+    // Note: When bucket has default Object Lock retention configured, DO NOT set
+    // ObjectLockMode or ObjectLockRetainUntilDate in PutObject. The default retention
+    // is applied automatically. Setting per-object retention on such buckets returns 400 error.
+    // The SHA256 checksum is stored in S3 metadata, so no separate .sha256 file is needed.
 
     _, err = s3Client.PutObject(&s3.PutObjectInput{
         Bucket:                  aws.String("audit-anchors"),
@@ -392,28 +394,13 @@ func WriteAnchor(db *Database, s3Client *s3.Client) error {
         Body:                    bytes.NewReader(canonicalJSON),
         ServerSideEncryption:    aws.String("aws:kms"),
         SSEKMSKeyId:             aws.String("arn:aws:kms:..."),
-        ObjectLockMode:          aws.String("COMPLIANCE"),
-        ObjectLockRetainUntilDate: aws.Time(retainUntil),
         ChecksumSHA256:          aws.String(base64.StdEncoding.EncodeToString(sha256Hash)),
-        IfNoneMatch:             aws.String("*"), // Prevent accidental overwrite
     })
     if err != nil {
         return fmt.Errorf("failed to write anchor: %w", err)
     }
 
-    // 7. Write .sha256 file
-    _, err = s3Client.PutObject(&s3.PutObjectInput{
-        Bucket:                  aws.String("audit-anchors"),
-        Key:                     aws.String(key + ".sha256"),
-        Body:                    bytes.NewReader([]byte(hex.EncodeToString(sha256Hash))),
-        ServerSideEncryption:    aws.String("aws:kms"),
-        SSEKMSKeyId:             aws.String("arn:aws:kms:..."),
-        ObjectLockMode:          aws.String("COMPLIANCE"),
-        ObjectLockRetainUntilDate: aws.Time(retainUntil),
-        IfNoneMatch:             aws.String("*"),
-    })
-
-    return err
+    return nil
 }
 ```
 
@@ -458,31 +445,23 @@ EOF
 
 # 4. Compute SHA256
 SHA256=$(sha256sum /tmp/anchor.json | awk '{print $1}')
-echo "$SHA256" > /tmp/anchor.json.sha256
 
-# 5. Upload JSON with Object Lock
+# 5. Upload JSON with Object Lock and checksum in metadata
+# Note: When bucket has default Object Lock retention, DO NOT specify
+# --object-lock-mode or --object-lock-retain-until-date. The default retention
+# is applied automatically. Specifying per-object retention returns 400 error.
+# The SHA256 checksum is stored in S3 metadata, so no separate .sha256 file is needed.
 aws s3api put-object \
   --bucket "$BUCKET" \
   --key "$KEY" \
   --body /tmp/anchor.json \
   --server-side-encryption aws:kms \
   --ssekms-key-id "$KMS_KEY" \
-  --object-lock-mode COMPLIANCE \
-  --object-lock-retain-until-date "$RETAIN_UNTIL" \
   --checksum-sha256 "$(openssl dgst -sha256 -binary /tmp/anchor.json | base64)"
-
-# 6. Upload .sha256 file
-aws s3api put-object \
-  --bucket "$BUCKET" \
-  --key "$KEY.sha256" \
-  --body /tmp/anchor.json.sha256 \
-  --server-side-encryption aws:kms \
-  --ssekms-key-id "$KMS_KEY" \
-  --object-lock-mode COMPLIANCE \
-  --object-lock-retain-until-date "$RETAIN_UNTIL"
 
 echo "Anchor written: s3://$BUCKET/$KEY"
 echo "Chain head: seq=$LAST_SEQ hash=$LAST_HASH"
+echo "SHA256: $SHA256 (stored in S3 metadata)"
 ```
 
 ## Verification Flow
@@ -497,10 +476,11 @@ func VerifyChain(db *Database, s3Client *s3.Client) error {
         return fmt.Errorf("failed to fetch anchor: %w", err)
     }
 
-    // 2. Verify anchor JSON matches .sha256
+    // 2. Verify anchor JSON matches S3 metadata checksum
+    // S3 automatically validates the checksum on GetObject if ChecksumMode is enabled
     anchorHash := computeSHA256(anchor.Payload)
-    storedHash, _ := s3Client.GetObject(anchor.Key + ".sha256")
-    if !bytes.Equal(anchorHash, storedHash) {
+    storedHash := anchor.ChecksumSHA256 // From S3 metadata
+    if anchorHash != storedHash {
         return fmt.Errorf("ANCHOR TAMPERED: hash mismatch")
     }
 
@@ -554,20 +534,26 @@ LATEST_KEY=$(aws s3api list-objects-v2 \
 
 echo "Latest anchor: s3://$BUCKET/$LATEST_KEY"
 
-# 2. Download anchor
-aws s3 cp "s3://$BUCKET/$LATEST_KEY" /tmp/anchor.json
-aws s3 cp "s3://$BUCKET/$LATEST_KEY.sha256" /tmp/anchor.json.sha256
+# 2. Download anchor and get checksum from metadata
+aws s3api get-object \
+  --bucket "$BUCKET" \
+  --key "$LATEST_KEY" \
+  --checksum-mode ENABLED \
+  /tmp/anchor.json > /tmp/anchor_metadata.json
 
-# 3. Verify anchor integrity
+# 3. Verify anchor integrity using S3 metadata checksum
 COMPUTED_HASH=$(sha256sum /tmp/anchor.json | awk '{print $1}')
-STORED_HASH=$(cat /tmp/anchor.json.sha256)
+STORED_HASH_BASE64=$(jq -r '.ChecksumSHA256' /tmp/anchor_metadata.json)
+STORED_HASH=$(echo "$STORED_HASH_BASE64" | base64 -d | xxd -p -c 256)
 
 if [ "$COMPUTED_HASH" != "$STORED_HASH" ]; then
     echo "❌ ANCHOR TAMPERED: hash mismatch"
+    echo "  Computed: $COMPUTED_HASH"
+    echo "  Stored:   $STORED_HASH"
     exit 1
 fi
 
-echo "✅ Anchor integrity verified"
+echo "✅ Anchor integrity verified (checksum matches S3 metadata)"
 
 # 4. Extract chain head from anchor
 LAST_SEQ=$(jq -r '.last_seq' /tmp/anchor.json)
