@@ -176,7 +176,8 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 	}
 
 	// AWS S3 specific features (not supported by MinIO)
-	if os.Getenv("AWS_ENDPOINT_URL_S3") == "" {
+	useAWS := os.Getenv("AWS_ENDPOINT_URL_S3") == ""
+	if useAWS {
 		putInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
 		putInput.ObjectLockMode = types.ObjectLockModeCompliance
 		putInput.ObjectLockRetainUntilDate = aws.Time(retainUntil)
@@ -186,7 +187,14 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 	}
 
 	_, err := w.s3Client.PutObject(ctx, putInput)
-	return err
+	if err != nil {
+		// Log detailed error information for debugging 400 errors
+		return fmt.Errorf(
+			"S3 PutObject failed (bucket=%s, key=%s, size=%d, useAWS=%t, hasChecksum=%t, retainUntil=%s): %w",
+			w.bucket, key, len(data), useAWS, checksumSHA256 != nil, retainUntil.Format(time.RFC3339), err,
+		)
+	}
+	return nil
 }
 
 // latestEvent represents the latest event in the chain
