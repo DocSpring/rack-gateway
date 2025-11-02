@@ -3,17 +3,13 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/getsentry/sentry-go"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
@@ -25,7 +21,6 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/sentryutil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
@@ -199,55 +194,6 @@ func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	r.Header.Del("X-Release-Created")
 }
 
-func (h *Handler) handleError(
-	w http.ResponseWriter,
-	r *http.Request,
-	message string,
-	status int,
-	rack string,
-	start time.Time,
-) {
-	userEmail := "anonymous"
-	if authUser, ok := auth.GetAuthUser(r.Context()); ok {
-		userEmail = authUser.Email
-	}
-
-	// Capture 500-level errors to Sentry
-	if status >= 500 && status < 600 {
-		h.captureSentryError(r, fmt.Errorf("%s", message), userEmail)
-	}
-
-	if !audit.RequestAlreadyLogged(r) {
-		h.auditLogger.LogRequest(r, userEmail, rack, "error", status, time.Since(start), fmt.Errorf("%s", message))
-	}
-
-	errorResponse := map[string]string{"error": message}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
-		log.Printf("proxy: failed to encode error response: %v", err)
-	}
-}
-
-// captureSentryError captures an error to Sentry with request context and user information.
-func (h *Handler) captureSentryError(r *http.Request, err error, userEmail string) {
-	if err == nil {
-		return
-	}
-
-	emailForScope := userEmail
-	if emailForScope == "anonymous" {
-		emailForScope = ""
-	}
-
-	sentryutil.WithHTTPRequestScope(r, emailForScope, map[string]string{
-		"component": "proxy",
-		"rack":      h.rackName,
-	}, func() {
-		sentry.CaptureException(err)
-	})
-}
-
 func (h *Handler) getRackConfig() (config.RackConfig, error) {
 	rackConfig, exists := h.config.Racks["default"]
 	if !exists {
@@ -398,6 +344,21 @@ func (h *Handler) checkPermissions(
 	return allowed, approvalTracker, nil
 }
 
+func (h *Handler) checkUserPermissions(
+	authUser *auth.User,
+	resource rbac.Resource,
+	action rbac.Action,
+) (bool, error) {
+	if authUser != nil && authUser.DBUser != nil {
+		return h.rbacManager.EnforceUser(authUser.DBUser, rbac.ScopeConvox, resource, action)
+	}
+	allowed, err := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
+	if err != nil {
+		return false, err
+	}
+	return allowed, nil
+}
+
 func (h *Handler) handlePermissionError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -428,21 +389,6 @@ func (h *Handler) handlePermissionError(
 		start,
 	)
 	return false, nil, err
-}
-
-func (h *Handler) checkUserPermissions(
-	authUser *auth.User,
-	resource rbac.Resource,
-	action rbac.Action,
-) (bool, error) {
-	if authUser != nil && authUser.DBUser != nil {
-		return h.rbacManager.EnforceUser(authUser.DBUser, rbac.ScopeConvox, resource, action)
-	}
-	allowed, err := h.rbacManager.Enforce(authUser.Email, rbac.ScopeConvox, resource, action)
-	if err != nil {
-		return false, err
-	}
-	return allowed, nil
 }
 
 func (h *Handler) prepareReleaseIfNeeded(
@@ -511,55 +457,6 @@ func (h *Handler) enforceDestructivePolicy(
 	return nil
 }
 
-func (h *Handler) validateAuditRequirements(
-	r *http.Request,
-	w http.ResponseWriter,
-	path, rackName string,
-	start time.Time,
-) error {
-	if audit.HasAuditLogBeenCreated(r.Context()) {
-		return nil
-	}
-
-	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
-	if action == "unknown" || resource == "unknown" {
-		return h.handleAuditValidationError(
-			r, w, "cannot determine action/resource", action, resource, "", rackName, start,
-		)
-	}
-
-	resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
-	if resourceType == "unknown" {
-		return h.handleAuditValidationError(
-			r, w, "cannot determine resource type", action, resource, resourceType, rackName, start,
-		)
-	}
-
-	return nil
-}
-
-func (h *Handler) handleAuditValidationError(
-	r *http.Request,
-	w http.ResponseWriter,
-	message, action, resource, resourceType, rackName string,
-	start time.Time,
-) error {
-	errorMsg := fmt.Sprintf("%s for %s %s", message, r.Method, r.URL.Path)
-	logMsg := fmt.Sprintf(
-		`{"level":"error","error":"audit_failure","message":"%s","method":"%s",`+
-			`"path":"%s","action":"%s","resource":"%s"`,
-		errorMsg, r.Method, r.URL.Path, action, resource,
-	)
-	if resourceType != "" {
-		logMsg += fmt.Sprintf(`,"resource_type":"%s"`, resourceType)
-	}
-	logMsg += "}"
-	log.Printf("%s", logMsg)
-
-	h.handleError(w, r, errorMsg, http.StatusInternalServerError, rackName, start)
-	return errors.New(errorMsg)
-}
-
 func (h *Handler) captureRackParamsIfNeeded(
 	r *http.Request,
 	rackPath string,
@@ -575,145 +472,4 @@ func (h *Handler) captureRackParamsIfNeeded(
 		return nil
 	}
 	return params
-}
-
-func (h *Handler) createAuditLogIfNeeded(
-	r *http.Request,
-	authUser *auth.User,
-	path string,
-	status int,
-	start time.Time,
-) {
-	if audit.HasAuditLogBeenCreated(r.Context()) {
-		return
-	}
-
-	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
-	resourceType := h.auditLogger.InferResourceType(r.URL.Path, action)
-
-	var tokenIDPtr *int64
-	if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
-		if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
-			tokenIDPtr = &parsed
-		}
-	}
-
-	auditLog := &db.AuditLog{
-		UserEmail:      authUser.Email,
-		UserName:       r.Header.Get("X-User-Name"),
-		APITokenID:     tokenIDPtr,
-		APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
-		ActionType:     "convox",
-		Action:         action,
-		Resource:       resource,
-		ResourceType:   resourceType,
-		Details:        h.auditLogger.BuildDetailsJSON(r),
-		IPAddress:      h.auditLogger.GetClientIP(r),
-		UserAgent:      r.UserAgent(),
-		Status:         h.auditLogger.MapHttpStatusToStatus(status),
-		RBACDecision:   "allow",
-		HTTPStatus:     status,
-		ResponseTimeMs: int(time.Since(start).Milliseconds()),
-		EventCount:     1,
-	}
-	if dbErr := h.logAudit(r, auditLog); dbErr != nil {
-		log.Printf("Failed to store audit log in database: %v", dbErr)
-	}
-}
-
-func (h *Handler) logRequestToCloudWatch(
-	r *http.Request,
-	userEmail, rackName string,
-	status int,
-	start time.Time,
-) {
-	if !audit.RequestAlreadyLogged(r) {
-		h.auditLogger.LogRequest(r, userEmail, rackName, "allow", status, time.Since(start), nil)
-	}
-}
-
-func (h *Handler) handleSuccessAuditing(
-	r *http.Request,
-	_ http.ResponseWriter,
-	authUser *auth.User,
-	path string,
-	status int,
-	rackPath string,
-	envDiffs []envutil.EnvDiff,
-	beforeParams map[string]string,
-	rackConfig config.RackConfig,
-	start time.Time,
-) {
-	if status < 200 || status >= 300 {
-		return
-	}
-
-	h.auditReleaseCreations(r, authUser, path, status, start)
-	h.logEnvDiffs(r, authUser.Email, rackConfig.Name, envDiffs)
-	h.auditRackParamsIfChanged(r, authUser.Email, rackPath, beforeParams, rackConfig)
-}
-
-func (h *Handler) auditReleaseCreations(
-	r *http.Request,
-	authUser *auth.User,
-	path string,
-	status int,
-	start time.Time,
-) {
-	skipManualReleaseLog := r.Method == http.MethodPost && rbac.KeyMatch3(path, "/apps/{app}/releases")
-	releaseIDs := r.Header.Values("X-Release-Created")
-
-	for _, rel := range releaseIDs {
-		rel = strings.TrimSpace(rel)
-		if rel == "" || skipManualReleaseLog {
-			continue
-		}
-
-		var tokenIDPtr *int64
-		if tokenIDHeader := strings.TrimSpace(r.Header.Get("X-API-Token-ID")); tokenIDHeader != "" {
-			if parsed, parseErr := strconv.ParseInt(tokenIDHeader, 10, 64); parseErr == nil {
-				tokenIDPtr = &parsed
-			}
-		}
-
-		_ = h.logAudit(r, &db.AuditLog{
-			UserEmail:      authUser.Email,
-			UserName:       r.Header.Get("X-User-Name"),
-			APITokenID:     tokenIDPtr,
-			APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
-			ActionType:     "convox",
-			Action:         audit.BuildAction(rbac.ResourceRelease.String(), rbac.ActionCreate.String()),
-			ResourceType:   "release",
-			Resource:       rel,
-			Status:         "success",
-			RBACDecision:   "allow",
-			HTTPStatus:     status,
-			ResponseTimeMs: int(time.Since(start).Milliseconds()),
-			IPAddress:      clientIPFromRequest(r),
-			UserAgent:      r.UserAgent(),
-		})
-	}
-}
-
-func (h *Handler) auditRackParamsIfChanged(
-	r *http.Request,
-	userEmail, rackPath string,
-	beforeParams map[string]string,
-	rackConfig config.RackConfig,
-) {
-	isRackParamsUpdate := (r.Method == http.MethodPut && rbac.KeyMatch3(rackPath, "/system"))
-	if !isRackParamsUpdate || beforeParams == nil {
-		return
-	}
-
-	afterParams, err := h.fetchSystemParams(r.Context(), rackConfig)
-	if err != nil {
-		return
-	}
-
-	changes := diffParams(beforeParams, afterParams)
-	if len(changes) > 0 {
-		h.notifyRackParamsChanged(r, userEmail, changes)
-		h.auditRackParamsChanged(r, userEmail, changes)
-	}
 }

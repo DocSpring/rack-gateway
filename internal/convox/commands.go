@@ -80,7 +80,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Set app parameters",
 	},
-
 	// Builds
 	{
 		Command: "build",
@@ -121,7 +120,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"file"},
 		Description:  "Import a build",
 	},
-
 	// Deploy (combines build + promote)
 	{
 		Command: "deploy",
@@ -135,7 +133,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"description", "file", "manifest", "no-cache", "replace", "wait"},
 		Description:  "Create and promote a build",
 	},
-
 	// Releases
 	{
 		Command:      "releases",
@@ -170,7 +167,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Copy an old release forward and promote it",
 	},
-
 	// Processes
 	{
 		Command:      "ps",
@@ -202,7 +198,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"detach", "entrypoint", "privileged", "release", "service"},
 		Description:  "Execute a command in a new process",
 	},
-
 	// Environment
 	{
 		Command:      "env",
@@ -243,7 +238,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"promote"},
 		Description:  "Edit env interactively",
 	},
-
 	// Logs
 	{
 		Command:      "logs",
@@ -251,7 +245,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"filter", "follow", "since"},
 		Description:  "Get logs for an app",
 	},
-
 	// Restart
 	{
 		Command:      "restart",
@@ -259,7 +252,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Restart an app",
 	},
-
 	// Scale
 	{
 		Command:      "scale",
@@ -267,7 +259,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"count", "cpu", "memory"},
 		Description:  "Scale a service",
 	},
-
 	// Services
 	{
 		Command:      "services",
@@ -281,7 +272,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Restart a service",
 	},
-
 	// Instances
 	{
 		Command:      "instances",
@@ -307,7 +297,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Roll SSH key on instances",
 	},
-
 	// Rack
 	{
 		Command:      "rack",
@@ -345,7 +334,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"version"},
 		Description:  "Update the rack",
 	},
-
 	// Resources
 	{
 		Command:      "resources",
@@ -365,7 +353,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Get URL for a resource",
 	},
-
 	// Balancers
 	{
 		Command:      "balancers",
@@ -373,7 +360,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "List balancers for an app",
 	},
-
 	// SSL
 	{
 		Command:      "ssl",
@@ -387,7 +373,6 @@ var Commands = []Command{
 		AllowedFlags: []string{},
 		Description:  "Update certificate for an app",
 	},
-
 	// Certs
 	{
 		Command:      "certs",
@@ -413,7 +398,6 @@ var Commands = []Command{
 		AllowedFlags: []string{"chain", "public", "private"},
 		Description:  "Import a certificate",
 	},
-
 	// Registries
 	{
 		Command:      "registries",

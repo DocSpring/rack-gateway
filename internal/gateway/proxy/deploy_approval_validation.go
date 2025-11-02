@@ -143,7 +143,7 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 		return
 	}
 
-	err := h.database.UpdateDeployApprovalRequestBuild(ctx.approvalID, buildID, releaseID)
+	err := h.database.MarkDeployApprovalRequestBuildStarted(ctx.approvalID, buildID, releaseID)
 	if err != nil {
 		// Log error but don't fail the request - build already succeeded
 		gtwlog.Warnf(

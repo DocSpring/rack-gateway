@@ -33,6 +33,7 @@ export function JobsPage() {
 function JobsPageInner() {
   const [stateFilter, setStateFilter] = useState<string>('')
   const [queueFilter, setQueueFilter] = useState<string>('')
+  const [kindFilter, setKindFilter] = useState<string>('')
   const [selectedJob, setSelectedJob] = useState<JobResponse | null>(null)
   const queryClient = useQueryClient()
 
@@ -41,7 +42,7 @@ function JobsPageInner() {
   const currentCursor = cursors.at(-1)
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', stateFilter, queueFilter, currentCursor],
+    queryKey: ['jobs', stateFilter, queueFilter, kindFilter, currentCursor],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (stateFilter) {
@@ -49,6 +50,9 @@ function JobsPageInner() {
       }
       if (queueFilter) {
         params.append('queue', queueFilter)
+      }
+      if (kindFilter) {
+        params.append('kind', kindFilter)
       }
       if (currentCursor) {
         params.append('after', currentCursor)
@@ -116,7 +120,7 @@ function JobsPageInner() {
         <p className="mt-2 text-muted-foreground">View and monitor background job processing</p>
       </div>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <select
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
           onChange={(e) => {
@@ -130,7 +134,6 @@ function JobsPageInner() {
           <option value="cancelled">Cancelled</option>
           <option value="completed">Completed</option>
           <option value="discarded">Discarded</option>
-          <option value="pending">Pending</option>
           <option value="retryable">Retryable</option>
           <option value="running">Running</option>
           <option value="scheduled">Scheduled</option>
@@ -145,10 +148,48 @@ function JobsPageInner() {
           value={queueFilter}
         >
           <option value="">All Queues</option>
+          <option value="default">Default</option>
           <option value="security">Security</option>
           <option value="notifications">Notifications</option>
           <option value="integrations">Integrations</option>
         </select>
+
+        <select
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+          onChange={(e) => {
+            setKindFilter(e.target.value)
+            setCursors([])
+          }}
+          value={kindFilter}
+        >
+          <option value="">All Job Types</option>
+          <option value="audit:anchor_writer">Audit Anchor</option>
+          <option value="deploy:approval_notify">Deploy Approval</option>
+          <option value="email:failed_login">Failed Login</option>
+          <option value="email:failed_mfa">Failed MFA</option>
+          <option value="email:mfa_auto_lock">MFA Auto Lock</option>
+          <option value="email:send_single">Send Email</option>
+          <option value="email:welcome">Welcome Email</option>
+          <option value="slack:audit_event">Slack Audit</option>
+          <option value="slack:deploy_approval">Slack Deploy</option>
+          <option value="github:post_pr_comment">GitHub Comment</option>
+          <option value="circleci:approve_job">CircleCI Approval</option>
+        </select>
+
+        {(stateFilter || queueFilter || kindFilter) && (
+          <Button
+            onClick={() => {
+              setStateFilter('')
+              setQueueFilter('')
+              setKindFilter('')
+              setCursors([])
+            }}
+            size="sm"
+            variant="outline"
+          >
+            Clear Filters
+          </Button>
+        )}
       </div>
 
       <TablePane
