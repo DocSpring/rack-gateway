@@ -115,6 +115,7 @@ export * from './handlersVerifyMFAResponse';
 export * from './handlersVerifyWebAuthnAssertionRequest';
 export * from './handlersWebAuthnAssertionStartResponse';
 export * from './handlersWebAuthnEnrollmentResponse';
+export * from './paginationPageInfo';
 export * from './putAppsAppSettings200';
 export * from './putAppsAppSettingsApprovedDeployCommands200';
 export * from './putAppsAppSettingsProtectedEnvVars200';

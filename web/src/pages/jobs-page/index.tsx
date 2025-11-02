@@ -22,7 +22,6 @@ import {
   TableRow,
 } from '../../components/ui/table'
 import { api } from '../../lib/api'
-import { DEFAULT_PER_PAGE } from '../../lib/constants'
 
 type JobListResponse = components['schemas']['handlers.JobListResponse']
 type JobResponse = components['schemas']['handlers.JobResponse']
@@ -32,14 +31,17 @@ export function JobsPage() {
 }
 
 function JobsPageInner() {
-  const [page, setPage] = useState(1)
   const [stateFilter, setStateFilter] = useState<string>('')
   const [queueFilter, setQueueFilter] = useState<string>('')
   const [selectedJob, setSelectedJob] = useState<JobResponse | null>(null)
   const queryClient = useQueryClient()
 
+  // Track cursor stack for back navigation
+  const [cursors, setCursors] = useState<string[]>([])
+  const currentCursor = cursors.at(-1)
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', stateFilter, queueFilter, page],
+    queryKey: ['jobs', stateFilter, queueFilter, currentCursor],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (stateFilter) {
@@ -47,6 +49,9 @@ function JobsPageInner() {
       }
       if (queueFilter) {
         params.append('queue', queueFilter)
+      }
+      if (currentCursor) {
+        params.append('after', currentCursor)
       }
       const queryString = params.toString()
       const url = `/api/v1/jobs${queryString ? `?${queryString}` : ''}`
@@ -82,14 +87,11 @@ function JobsPageInner() {
   })
 
   const jobs = data?.jobs || []
-  const count = data?.count || 0
-  const limit = data?.limit || DEFAULT_PER_PAGE
+  const pageInfo = data?.page_info
 
-  const perPage = limit
-  const total = count
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
-  const start = (page - 1) * perPage
-  const end = Math.min(start + perPage, total)
+  // Cursor-only pagination (no count for River jobs)
+  const hasNextPage = pageInfo?.has_next_page ?? false
+  const hasPrevPage = pageInfo?.has_previous_page ?? false
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-'
@@ -119,7 +121,7 @@ function JobsPageInner() {
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
           onChange={(e) => {
             setStateFilter(e.target.value)
-            setPage(1)
+            setCursors([])
           }}
           value={stateFilter}
         >
@@ -138,7 +140,7 @@ function JobsPageInner() {
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
           onChange={(e) => {
             setQueueFilter(e.target.value)
-            setPage(1)
+            setCursors([])
           }}
           value={queueFilter}
         >
@@ -235,22 +237,30 @@ function JobsPageInner() {
           </TableBody>
         </Table>
 
-        {total > 0 && (
+        {jobs.length > 0 && (
           <div className="mt-4 flex items-center justify-between">
-            <div className="text-muted-foreground text-sm">
-              Showing {start + 1}–{end} of {total} jobs
-            </div>
+            <div className="text-muted-foreground text-sm">Showing {jobs.length} jobs</div>
             <div className="flex gap-2">
               <Button
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={!hasPrevPage}
+                onClick={() => {
+                  if (cursors.length > 0) {
+                    setCursors((prev) => prev.slice(0, -1))
+                  }
+                }}
+                size="sm"
                 variant="outline"
               >
                 Previous
               </Button>
               <Button
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={!hasNextPage}
+                onClick={() => {
+                  if (pageInfo?.end_cursor) {
+                    setCursors((prev) => [...prev, pageInfo.end_cursor || ''])
+                  }
+                }}
+                size="sm"
                 variant="outline"
               >
                 Next

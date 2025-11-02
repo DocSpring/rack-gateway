@@ -30,6 +30,7 @@ import (
 // Client wraps the River client for background job processing
 type Client struct {
 	river *river.Client[pgx.Tx]
+	pool  *pgxpool.Pool
 }
 
 // Dependencies holds all dependencies needed to create job workers
@@ -48,7 +49,7 @@ type AuditAnchorConfig struct {
 }
 
 // NewClient creates a new River job client with all workers registered
-func NewClient(dbPool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditAnchorConfig) (*Client, error) {
+func NewClient(pool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *AuditAnchorConfig) (*Client, error) {
 	workers := river.NewWorkers()
 
 	// Email workers - security notifications
@@ -124,7 +125,7 @@ func NewClient(dbPool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *Audi
 		))
 	}
 
-	riverClient, err := river.NewClient(riverpgxv5.New(dbPool), &river.Config{
+	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: 10},
 			QueueSecurity:      {MaxWorkers: 5},  // High priority security notifications
@@ -138,7 +139,10 @@ func NewClient(dbPool *pgxpool.Pool, deps *Dependencies, auditAnchorConfig *Audi
 		return nil, fmt.Errorf("failed to create river client: %w", err)
 	}
 
-	return &Client{river: riverClient}, nil
+	return &Client{
+		river: riverClient,
+		pool:  pool,
+	}, nil
 }
 
 // NewAuditAnchorConfigFromEnv creates audit anchor config from environment variables if set
@@ -239,4 +243,78 @@ func (c *Client) JobCancel(ctx context.Context, id int64) (*rivertype.JobRow, er
 // JobRetry retries a job by ID immediately
 func (c *Client) JobRetry(ctx context.Context, id int64) (*rivertype.JobRow, error) {
 	return c.river.JobRetry(ctx, id)
+}
+
+// JobListWithCursor lists jobs with cursor-based pagination using custom SQL
+func (c *Client) JobListWithCursor(
+	ctx context.Context,
+	afterID *int64,
+	limit int,
+	state *rivertype.JobState,
+	kind string,
+	queue string,
+) ([]*rivertype.JobRow, error) {
+	query := `
+		SELECT id, encoded_args, attempt, attempted_at, attempted_by, created_at,
+		       errors, finalized_at, kind, max_attempts, metadata, priority,
+		       queue, state, scheduled_at, tags, unique_key
+		FROM river_job
+		WHERE 1=1`
+
+	args := []interface{}{}
+	argPos := 1
+
+	// Cursor filter: ID < afterID (for DESC order)
+	if afterID != nil {
+		query += fmt.Sprintf(" AND id < $%d", argPos)
+		args = append(args, *afterID)
+		argPos++
+	}
+
+	// State filter
+	if state != nil {
+		query += fmt.Sprintf(" AND state = $%d", argPos)
+		args = append(args, string(*state))
+		argPos++
+	}
+
+	// Kind filter
+	if kind != "" {
+		query += fmt.Sprintf(" AND kind = $%d", argPos)
+		args = append(args, kind)
+		argPos++
+	}
+
+	// Queue filter
+	if queue != "" {
+		query += fmt.Sprintf(" AND queue = $%d", argPos)
+		args = append(args, queue)
+		argPos++
+	}
+
+	query += fmt.Sprintf(" ORDER BY id DESC LIMIT $%d", argPos)
+	args = append(args, limit)
+
+	rows, err := c.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*rivertype.JobRow
+	for rows.Next() {
+		job := &rivertype.JobRow{}
+		err := rows.Scan(
+			&job.ID, &job.EncodedArgs, &job.Attempt, &job.AttemptedAt, &job.AttemptedBy,
+			&job.CreatedAt, &job.Errors, &job.FinalizedAt, &job.Kind, &job.MaxAttempts,
+			&job.Metadata, &job.Priority, &job.Queue, &job.State, &job.ScheduledAt,
+			&job.Tags, &job.UniqueKey,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan job: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+
+	return jobs, rows.Err()
 }

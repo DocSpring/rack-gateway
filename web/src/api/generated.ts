@@ -1013,6 +1013,34 @@ Secrets remain masked unless the user has secrets permissions.
   };
 
   /**
+   * Cancels a background job by ID
+   * @summary Delete a background job
+   */
+  const deleteJobsId = (
+    id: number,
+    options?: SecondParameter<typeof createGatewayClient<void>>,
+  ) => {
+    return createGatewayClient<void>(
+      { url: `/jobs/${id}`, method: 'DELETE' },
+      options,
+    );
+  };
+
+  /**
+   * Immediately retries a background job by ID
+   * @summary Retry a background job
+   */
+  const postJobsIdRetry = (
+    id: number,
+    options?: SecondParameter<typeof createGatewayClient<HandlersJobResponse>>,
+  ) => {
+    return createGatewayClient<HandlersJobResponse>(
+      { url: `/jobs/${id}/retry`, method: 'POST' },
+      options,
+    );
+  };
+
+  /**
    * Proxies the rack /system endpoint returning the rack's metadata.
    * @summary Get rack system information
    */
@@ -1352,6 +1380,8 @@ Secrets remain masked unless the user has secrets permissions.
     getIntegrationsSlack,
     getJobs,
     getJobsId,
+    deleteJobsId,
+    postJobsIdRetry,
     getRack,
     getRoles,
     getSettings,
@@ -1670,6 +1700,12 @@ export type GetJobsResult = NonNullable<
 >;
 export type GetJobsIdResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getJobsId']>>
+>;
+export type DeleteJobsIdResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['deleteJobsId']>>
+>;
+export type PostJobsIdRetryResult = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['postJobsIdRetry']>>
 >;
 export type GetRackResult = NonNullable<
   Awaited<ReturnType<ReturnType<typeof getRackGatewayAPI>['getRack']>>

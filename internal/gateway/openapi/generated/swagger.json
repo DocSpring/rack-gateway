@@ -4637,18 +4637,14 @@
         "handlers.JobListResponse": {
             "type": "object",
             "properties": {
-                "count": {
-                    "description": "Number of jobs in this response (not total count across all pages)",
-                    "type": "integer"
-                },
                 "jobs": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/handlers.JobResponse"
                     }
                 },
-                "limit": {
-                    "type": "integer"
+                "page_info": {
+                    "$ref": "#/definitions/pagination.PageInfo"
                 }
             }
         },
@@ -5348,6 +5344,27 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "pagination.PageInfo": {
+            "type": "object",
+            "properties": {
+                "end_cursor": {
+                    "type": "string"
+                },
+                "has_next_page": {
+                    "type": "boolean"
+                },
+                "has_previous_page": {
+                    "type": "boolean"
+                },
+                "start_cursor": {
+                    "type": "string"
+                },
+                "total_count": {
+                    "description": "Optional - omit for expensive counts (River)",
+                    "type": "integer"
                 }
             }
         },

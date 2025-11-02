@@ -3409,6 +3409,131 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Cancels a background job by ID",
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Delete a background job",
+                "parameters": [
+                    {
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/retry": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Immediately retries a background job by ID",
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Retry a background job",
+                "parameters": [
+                    {
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.JobResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/rack": {
@@ -5403,18 +5528,14 @@
             "handlers.JobListResponse": {
                 "type": "object",
                 "properties": {
-                    "count": {
-                        "description": "Number of jobs in this response (not total count across all pages)",
-                        "type": "integer"
-                    },
                     "jobs": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/handlers.JobResponse"
                         }
                     },
-                    "limit": {
-                        "type": "integer"
+                    "page_info": {
+                        "$ref": "#/components/schemas/pagination.PageInfo"
                     }
                 }
             },
@@ -6114,6 +6235,27 @@
                     },
                     "status": {
                         "type": "string"
+                    }
+                }
+            },
+            "pagination.PageInfo": {
+                "type": "object",
+                "properties": {
+                    "end_cursor": {
+                        "type": "string"
+                    },
+                    "has_next_page": {
+                        "type": "boolean"
+                    },
+                    "has_previous_page": {
+                        "type": "boolean"
+                    },
+                    "start_cursor": {
+                        "type": "string"
+                    },
+                    "total_count": {
+                        "description": "Optional - omit for expensive counts (River)",
+                        "type": "integer"
                     }
                 }
             },

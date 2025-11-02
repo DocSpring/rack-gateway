@@ -3239,6 +3239,126 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        /**
+         * Delete a background job
+         * @description Cancels a background job by ID
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Job ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a background job
+         * @description Immediately retries a background job by ID
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Job ID */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.JobResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4589,10 +4709,8 @@ export interface components {
             error?: string;
         };
         "handlers.JobListResponse": {
-            /** @description Number of jobs in this response (not total count across all pages) */
-            count?: number;
             jobs?: components["schemas"]["handlers.JobResponse"][];
-            limit?: number;
+            page_info?: components["schemas"]["pagination.PageInfo"];
         };
         "handlers.JobResponse": {
             args?: number[];
@@ -4782,6 +4900,14 @@ export interface components {
         "handlers.WebAuthnEnrollmentResponse": {
             method_id: number;
             status: string;
+        };
+        "pagination.PageInfo": {
+            end_cursor?: string;
+            has_next_page?: boolean;
+            has_previous_page?: boolean;
+            start_cursor?: string;
+            /** @description Optional - omit for expensive counts (River) */
+            total_count?: number;
         };
         "settings.Setting": {
             /** @description e.g., "RGW_SETTING_REQUIRE_MFA_ALL_USERS" */

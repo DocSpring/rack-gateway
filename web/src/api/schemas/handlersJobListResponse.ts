@@ -6,10 +6,9 @@
  * OpenAPI spec version: 1.0
  */
 import type { HandlersJobResponse } from './handlersJobResponse';
+import type { PaginationPageInfo } from './paginationPageInfo';
 
 export interface HandlersJobListResponse {
-  /** Number of jobs in this response (not total count across all pages) */
-  count?: number;
   jobs?: HandlersJobResponse[];
-  limit?: number;
+  page_info?: PaginationPageInfo;
 }

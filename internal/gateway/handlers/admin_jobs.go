@@ -12,6 +12,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/pagination"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -120,52 +121,113 @@ func (h *AdminHandler) ListJobs(c *gin.Context) {
 		return
 	}
 
-	// Parse filters
+	// Parse filters and cursor
 	limit := parseJobListLimit(c.Query("limit"))
 	queue := strings.TrimSpace(c.Query("queue"))
 	stateStr := strings.TrimSpace(c.Query("state"))
 	kind := strings.TrimSpace(c.Query("kind"))
+	afterCursor := strings.TrimSpace(c.Query("after"))
 
-	// Build River query params using builder pattern
-	params := river.NewJobListParams().First(limit)
-
-	// Add queue filter
-	if queue != "" {
-		params = params.Queues(queue)
+	// Parse cursor
+	cursorID, err := parseJobCursor(c, afterCursor)
+	if err != nil {
+		return
 	}
 
-	// Add state filter
+	// Parse state filter
+	var riverState *rivertype.JobState
 	if stateStr != "" {
-		riverState, ok := parseJobStateFilter(c, stateStr)
+		parsed, ok := parseJobStateFilter(c, stateStr)
 		if !ok {
 			return
 		}
-		params = params.States(riverState)
+		riverState = &parsed
 	}
 
-	// Add kind filter
+	// Fetch jobs
+	jobs, err := h.fetchJobsWithFilters(c, cursorID, limit+1, riverState, kind, queue)
+	if err != nil {
+		return
+	}
+
+	// Build response
+	h.respondJobList(c, jobs, limit, afterCursor != "")
+}
+
+func (h *AdminHandler) fetchJobsWithFilters(
+	c *gin.Context,
+	cursorID *int64,
+	limit int,
+	state *rivertype.JobState,
+	kind, queue string,
+) ([]*rivertype.JobRow, error) {
+	if cursorID != nil {
+		// Use custom SQL for cursor-based filtering
+		return h.jobsClient.JobListWithCursor(c.Request.Context(), cursorID, limit, state, kind, queue)
+	}
+
+	// No cursor - use River's native API
+	params := river.NewJobListParams().
+		First(limit).
+		OrderBy(river.JobListOrderByID, river.SortOrderDesc)
+
+	if queue != "" {
+		params = params.Queues(queue)
+	}
+	if state != nil {
+		params = params.States(*state)
+	}
 	if kind != "" {
 		params = params.Kinds(kind)
 	}
 
-	// Fetch jobs from River
 	result, err := h.jobsClient.JobList(c.Request.Context(), params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list jobs"})
-		return
+		return nil, err
+	}
+
+	return result.Jobs, nil
+}
+
+func (h *AdminHandler) respondJobList(c *gin.Context, jobs []*rivertype.JobRow, limit int, hasBefore bool) {
+	// Detect if there are more pages and trim to limit
+	hasMore := len(jobs) > limit
+	if hasMore {
+		jobs = jobs[:limit]
 	}
 
 	// Convert to response format
-	responses := make([]JobResponse, 0, len(result.Jobs))
-	for _, job := range result.Jobs {
+	responses := make([]JobResponse, 0, len(jobs))
+	for _, job := range jobs {
 		responses = append(responses, toJobResponse(job))
 	}
 
+	// Build page info (no count for River - expensive)
+	pageInfo := pagination.GetRiverPageInfo(jobs, limit, hasBefore)
+
 	c.JSON(http.StatusOK, JobListResponse{
-		Jobs:  responses,
-		Count: len(responses),
-		Limit: limit,
+		Jobs:     responses,
+		PageInfo: pageInfo,
 	})
+}
+
+func parseJobCursor(c *gin.Context, afterCursor string) (*int64, error) {
+	if afterCursor == "" {
+		return nil, nil
+	}
+
+	cursor, err := pagination.ParseCursor(afterCursor)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+		return nil, err
+	}
+
+	if cursor == nil {
+		return nil, nil
+	}
+
+	return &cursor.ID, nil
 }
 
 // GetJob godoc
@@ -316,11 +378,10 @@ func formatJobErrors(jobErrors []rivertype.AttemptError) []JobErrorResponse {
 	return result
 }
 
-// JobListResponse contains a list of jobs with count and pagination metadata.
+// JobListResponse contains a list of jobs with cursor pagination (no count for River)
 type JobListResponse struct {
-	Jobs  []JobResponse `json:"jobs"`
-	Count int           `json:"count"` // Number of jobs in this response (not total count across all pages)
-	Limit int           `json:"limit"`
+	Jobs     []JobResponse       `json:"jobs"`
+	PageInfo pagination.PageInfo `json:"page_info"`
 }
 
 // JobResponse represents a background job with its execution details and errors.
