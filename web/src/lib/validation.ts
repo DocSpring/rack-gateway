@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from './zod'
 import { AVAILABLE_ROLES } from './api'
 
 type RoleName = keyof typeof AVAILABLE_ROLES
