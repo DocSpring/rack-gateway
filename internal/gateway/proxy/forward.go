@@ -28,6 +28,14 @@ func (h *Handler) validateBuildRequest(
 		return nil
 	}
 
+	// For API tokens, check for duplicate object_url BEFORE manifest validation
+	// This ensures we catch duplicate uploads even if manifest validation would fail
+	if authUser.IsAPIToken && authUser.TokenID != nil {
+		if err := h.validateBuildRequestForAPIToken(r, bodyBytes, *authUser.TokenID); err != nil {
+			return err
+		}
+	}
+
 	if err := h.validateBuildManifestForAllUsers(r, bodyBytes); err != nil {
 		return err
 	}
@@ -36,11 +44,7 @@ func (h *Handler) validateBuildRequest(
 		return nil
 	}
 
-	if authUser.TokenID == nil {
-		return fmt.Errorf("API token authentication missing token ID")
-	}
-
-	return h.validateBuildRequestForAPIToken(r, bodyBytes, *authUser.TokenID)
+	return nil
 }
 
 func (h *Handler) validateProcessCommand(

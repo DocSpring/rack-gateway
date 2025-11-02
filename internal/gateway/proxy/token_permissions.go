@@ -302,6 +302,8 @@ func (h *Handler) findApprovalForObjectCreate(
 		App:          app,
 		StatusFilter: "approved",
 	})
+	// Fail if object_url is already set - this means an object was already uploaded for this approval.
+	// Object uploads should only happen once per approval (unlike builds, which can fail and retry).
 	if err == nil && req != nil && req.ObjectURL != "" {
 		return nil, &deployApprovalError{
 			status:  http.StatusConflict,
@@ -320,10 +322,20 @@ func (h *Handler) findApprovalForBuildCreate(
 		App:          app,
 		StatusFilter: "approved",
 	})
-	if err == nil && req != nil && (req.BuildID != "" || req.ReleaseID != "") {
-		return nil, &deployApprovalError{
-			status:  http.StatusConflict,
-			message: "a build has already been created for this deploy approval request",
+	if err == nil && req != nil {
+		if req.BuildID != "" || req.ReleaseID != "" {
+			return nil, &deployApprovalError{
+				status:  http.StatusConflict,
+				message: "a build has already been created for this deploy approval request",
+			}
+		}
+		// Check if object_url is already set AND build exists - if so, this is a duplicate upload attempt.
+		// If object_url is set but build hasn't been created yet, that's OK - it's the normal flow.
+		if req.ObjectURL != "" && (req.BuildID != "" || req.ReleaseID != "") {
+			return nil, &deployApprovalError{
+				status:  http.StatusConflict,
+				message: "an archive has already been uploaded for this deploy approval request",
+			}
 		}
 	}
 	return req, err

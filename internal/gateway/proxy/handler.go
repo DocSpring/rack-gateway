@@ -145,7 +145,7 @@ func (h *Handler) ReplaceProtectedEnv(keys []string) {
 func (h *Handler) ProxyToRack(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
-	rackConfig, authUser, allowed, _, envDiffs, err := h.prepareProxyRequest(w, r, start)
+	r, rackConfig, authUser, allowed, _, envDiffs, err := h.prepareProxyRequest(w, r, start)
 	if err != nil {
 		return
 	}
@@ -209,22 +209,22 @@ func (h *Handler) prepareProxyRequest(
 	w http.ResponseWriter,
 	r *http.Request,
 	start time.Time,
-) (config.RackConfig, *auth.User, bool, *deployApprovalTracker, []envutil.EnvDiff, error) {
+) (*http.Request, config.RackConfig, *auth.User, bool, *deployApprovalTracker, []envutil.EnvDiff, error) {
 	rackConfig, err := h.getRackConfig()
 	if err != nil {
 		h.handleError(w, r, err.Error(), http.StatusInternalServerError, "default", start)
-		return config.RackConfig{}, nil, false, nil, nil, err
+		return r, config.RackConfig{}, nil, false, nil, nil, err
 	}
 
 	if !rackConfig.Enabled {
 		h.handleError(w, r, "rack disabled", http.StatusForbidden, rackConfig.Name, start)
-		return config.RackConfig{}, nil, false, nil, nil, errors.New("rack disabled")
+		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("rack disabled")
 	}
 
 	authUser, ok := auth.GetAuthUser(r.Context())
 	if !ok {
 		h.handleError(w, r, "unauthorized", http.StatusUnauthorized, rackConfig.Name, start)
-		return config.RackConfig{}, nil, false, nil, nil, errors.New("unauthorized")
+		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("unauthorized")
 	}
 
 	path := r.URL.Path
@@ -232,7 +232,7 @@ func (h *Handler) prepareProxyRequest(
 
 	if !h.isAllowedConvoxRoute(r, rackPath) {
 		http.NotFound(w, r)
-		return config.RackConfig{}, nil, false, nil, nil, errors.New("not found")
+		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("not found")
 	}
 
 	methodForRBAC := h.determineMethod(r)
@@ -248,12 +248,12 @@ func (h *Handler) prepareProxyRequest(
 			fmt.Errorf("unknown route: %s %s", methodForRBAC, path),
 		)
 		http.NotFound(w, r)
-		return config.RackConfig{}, nil, false, nil, nil, errors.New("unknown route")
+		return r, config.RackConfig{}, nil, false, nil, nil, errors.New("unknown route")
 	}
 
 	allowed, approvalTracker, err := h.checkPermissions(w, r, authUser, resource, action, rackConfig.Name, start)
 	if err != nil {
-		return config.RackConfig{}, nil, false, nil, nil, err
+		return r, config.RackConfig{}, nil, false, nil, nil, err
 	}
 
 	if approvalTracker != nil {
@@ -264,7 +264,7 @@ func (h *Handler) prepareProxyRequest(
 	if !authUser.IsAPIToken {
 		mfaErr := h.verifyMFAIfRequired(r, w, authUser, resource, action, &rackConfig, start)
 		if mfaErr != nil {
-			return config.RackConfig{}, nil, false, nil, nil, mfaErr
+			return r, config.RackConfig{}, nil, false, nil, nil, mfaErr
 		}
 	}
 
@@ -272,20 +272,24 @@ func (h *Handler) prepareProxyRequest(
 		r, w, allowed, rackPath, rackConfig, authUser.Email, resource, action, start,
 	)
 	if err != nil {
-		return config.RackConfig{}, nil, false, nil, nil, err
+		return r, config.RackConfig{}, nil, false, nil, nil, err
 	}
 
-	if err := h.enforceDestructivePolicy(
-		r, w, methodForRBAC, resource, action, authUser.Email, rackConfig.Name, start,
-	); err != nil {
-		return config.RackConfig{}, nil, false, nil, nil, err
+	// Only enforce destructive policy if permissions were granted
+	// This ensures permission-denied errors take precedence over policy errors
+	if allowed {
+		if err := h.enforceDestructivePolicy(
+			r, w, methodForRBAC, resource, action, authUser.Email, rackConfig.Name, start,
+		); err != nil {
+			return r, config.RackConfig{}, nil, false, nil, nil, err
+		}
 	}
 
 	if err := h.validateAuditRequirements(r, w, path, rackConfig.Name, start); err != nil {
-		return config.RackConfig{}, nil, false, nil, nil, err
+		return r, config.RackConfig{}, nil, false, nil, nil, err
 	}
 
-	return rackConfig, authUser, allowed, approvalTracker, envDiffs, nil
+	return r, rackConfig, authUser, allowed, approvalTracker, envDiffs, nil
 }
 
 func (h *Handler) handleForwardError(

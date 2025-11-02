@@ -97,6 +97,14 @@ func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []b
 		return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
 	}
 
+	// Check for duplicate: only fail if object_url is set AND build already exists.
+	// The normal flow is: object upload (sets object_url) → build creation (uses same approval).
+	// If object_url is set but build hasn't been created yet, that's OK - it's the normal flow.
+	// This must happen BEFORE manifest validation to catch true duplicates even if manifest is invalid.
+	if approval.ObjectURL != "" && (approval.BuildID != "" || approval.ReleaseID != "") {
+		return fmt.Errorf("an archive has already been uploaded for this deploy approval request")
+	}
+
 	// Get app name from path
 	app := extractAppFromPath(r.URL.Path)
 
