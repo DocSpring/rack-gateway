@@ -173,7 +173,7 @@ func (h *AuthHandler) resolveCLILoginEmail(
 		return loginEmail
 	}
 
-	email, _ := h.cliExchangeOAuthCode(c, record, state)
+	email, _ := h.cliExchangeOAuthCode(c, record, state, false)
 	return email
 }
 
@@ -197,7 +197,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 		return
 	}
 
-	record, ok = h.cliExchangeIfNeeded(c, record, parsed.state)
+	record, ok = h.cliExchangeIfNeeded(c, record, parsed.state, true)
 	if !ok {
 		return
 	}

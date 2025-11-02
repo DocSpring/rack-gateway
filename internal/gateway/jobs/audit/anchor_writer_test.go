@@ -241,7 +241,8 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			if *params.Key == key {
+			switch *params.Key {
+			case key:
 				jsonWritten = true
 				// Verify empty chain payload
 				var buf bytes.Buffer
@@ -253,7 +254,7 @@ func TestAnchorWriterWorker_Work_BothFilesMissing_EmptyChain(t *testing.T) {
 				assert.Equal(t, int64(0), anchor.LastSeq, "Empty chain should have seq 0")
 				assert.Equal(t, "", anchor.LastHash, "Empty chain should have empty hash")
 				assert.Equal(t, "", anchor.PrevAnchorHash, "First anchor should have no prev hash")
-			} else if *params.Key == sha256Key {
+			case sha256Key:
 				sha256Written = true
 			}
 			return &s3.PutObjectOutput{}, nil
@@ -393,9 +394,10 @@ func TestAnchorWriterWorker_Work_PutSHA256Fails(t *testing.T) {
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
 			// JSON succeeds, SHA256 fails
-			if *params.Key == key {
+			switch *params.Key {
+			case key:
 				return &s3.PutObjectOutput{}, nil
-			} else if *params.Key == sha256Key {
+			case sha256Key:
 				return nil, fmt.Errorf("S3 put error: access denied")
 			}
 			return &s3.PutObjectOutput{}, nil
@@ -738,10 +740,10 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 
 	// Test with AWS S3 (should set Object Lock) - unset endpoint to simulate production AWS
 	originalEndpoint := os.Getenv("AWS_ENDPOINT_URL_S3")
-	os.Unsetenv("AWS_ENDPOINT_URL_S3")
+	_ = os.Unsetenv("AWS_ENDPOINT_URL_S3")
 	defer func() {
 		if originalEndpoint != "" {
-			os.Setenv("AWS_ENDPOINT_URL_S3", originalEndpoint)
+			_ = os.Setenv("AWS_ENDPOINT_URL_S3", originalEndpoint)
 		}
 	}()
 
@@ -767,9 +769,10 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			if *params.Key == key {
+			switch *params.Key {
+			case key:
 				jsonParams = params
-			} else if *params.Key == key+".sha256" {
+			case key + ".sha256":
 				sha256Params = params
 			}
 			return &s3.PutObjectOutput{}, nil
@@ -797,15 +800,27 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 	require.NotNil(t, jsonParams, "JSON PutObject should be called")
 	assert.Equal(t, types.ObjectLockModeCompliance, jsonParams.ObjectLockMode, "Should set Compliance mode")
 	assert.NotNil(t, jsonParams.ObjectLockRetainUntilDate, "Should set retention date")
-	assert.WithinDuration(t, expectedRetainUntil, *jsonParams.ObjectLockRetainUntilDate, time.Second, "Retention date should match")
+	assert.WithinDuration(
+		t, expectedRetainUntil, *jsonParams.ObjectLockRetainUntilDate, time.Second,
+		"Retention date should match",
+	)
 	assert.Equal(t, types.ServerSideEncryptionAwsKms, jsonParams.ServerSideEncryption, "Should set KMS encryption")
 	assert.NotNil(t, jsonParams.ChecksumSHA256, "Should set SHA256 checksum")
 
 	require.NotNil(t, sha256Params, "SHA256 PutObject should be called")
-	assert.Equal(t, types.ObjectLockModeCompliance, sha256Params.ObjectLockMode, "Should set Compliance mode for SHA256")
+	assert.Equal(
+		t, types.ObjectLockModeCompliance, sha256Params.ObjectLockMode,
+		"Should set Compliance mode for SHA256",
+	)
 	assert.NotNil(t, sha256Params.ObjectLockRetainUntilDate, "Should set retention date for SHA256")
-	assert.WithinDuration(t, expectedRetainUntil, *sha256Params.ObjectLockRetainUntilDate, time.Second, "Retention date should match for SHA256")
-	assert.Equal(t, types.ServerSideEncryptionAwsKms, sha256Params.ServerSideEncryption, "Should set KMS encryption for SHA256")
+	assert.WithinDuration(
+		t, expectedRetainUntil, *sha256Params.ObjectLockRetainUntilDate, time.Second,
+		"Retention date should match for SHA256",
+	)
+	assert.Equal(
+		t, types.ServerSideEncryptionAwsKms, sha256Params.ServerSideEncryption,
+		"Should set KMS encryption for SHA256",
+	)
 	// SHA256 file doesn't need checksum (it IS the checksum)
 }
 
@@ -851,9 +866,10 @@ func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			if *params.Key == key {
+			switch *params.Key {
+			case key:
 				jsonParams = params
-			} else if *params.Key == key+".sha256" {
+			case key + ".sha256":
 				sha256Params = params
 			}
 			return &s3.PutObjectOutput{}, nil

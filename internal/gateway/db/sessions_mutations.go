@@ -100,8 +100,9 @@ func (d *Database) UpdateSessionMFAVerified(sessionID int64, verifiedAt time.Tim
 		trusted = *trustedDeviceID
 	}
 	_, err := d.exec(
-		`UPDATE user_sessions SET mfa_verified_at = ?, trusted_device_id = COALESCE(?, trusted_device_id),
-		updated_at = NOW() WHERE id = ?`,
+		`UPDATE user_sessions SET mfa_verified_at = ?, recent_step_up_at = ?,
+		trusted_device_id = COALESCE(?, trusted_device_id), updated_at = NOW() WHERE id = ?`,
+		verifiedAt,
 		verifiedAt,
 		trusted,
 		sessionID,

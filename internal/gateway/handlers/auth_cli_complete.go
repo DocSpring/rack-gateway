@@ -70,20 +70,33 @@ func (h *AuthHandler) cliExchangeOAuthCode(
 	c *gin.Context,
 	record *db.CLILoginState,
 	state string,
+	useJSON bool,
 ) (string, bool) {
 	if !record.Code.Valid || !record.CodeVerifier.Valid {
-		cliRedirectWithError(c, "session_incomplete")
+		if useJSON {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "session_incomplete"})
+		} else {
+			cliRedirectWithError(c, "session_incomplete")
+		}
 		return "", false
 	}
 
 	loginResp, err := h.oauth.CompleteLogin(record.Code.String, state, record.CodeVerifier.String)
 	if err != nil {
-		cliRedirectWithError(c, "exchange_failed")
+		if useJSON {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "exchange_failed"})
+		} else {
+			cliRedirectWithError(c, "exchange_failed")
+		}
 		return "", false
 	}
 
 	if err := h.database.SetCLILoginProfile(state, loginResp.Email, loginResp.Name); err != nil {
-		cliRedirectWithError(c, "persist_failure")
+		if useJSON {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "persist_failure"})
+		} else {
+			cliRedirectWithError(c, "persist_failure")
+		}
 		return "", false
 	}
 
@@ -94,12 +107,15 @@ func (h *AuthHandler) cliExchangeIfNeeded(
 	c *gin.Context,
 	record *db.CLILoginState,
 	state string,
+	useJSON bool,
 ) (*db.CLILoginState, bool) {
-	if record.LoginEmail.Valid && record.LoginToken.Valid && record.LoginExpiresAt.Valid {
+	// If login email is already set, OAuth exchange has completed
+	// LoginToken and LoginExpiresAt are only set for non-MFA flows
+	if record.LoginEmail.Valid {
 		return record, true
 	}
 
-	_, ok := h.cliExchangeOAuthCode(c, record, state)
+	_, ok := h.cliExchangeOAuthCode(c, record, state, useJSON)
 	if !ok {
 		return nil, false
 	}
