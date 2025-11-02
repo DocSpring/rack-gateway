@@ -689,6 +689,34 @@ docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\d+ d
 - We never maintain backwards-compatibility shims or legacy fallbacks.
 - ALWAYS run `task ci` before claiming that any work is complete!
 
+## Terraform Infrastructure Reference
+
+**Location**: `reference/convox_racks_terraform/`
+
+This directory contains the actual Terraform configuration used to deploy the rack-gateway to production infrastructure. It's checked into this repository as a reference for understanding the deployment environment.
+
+**Key files for debugging production issues:**
+
+- `racks/staging/.envrc` - AWS credentials for staging rack (source this for AWS CLI commands)
+- `racks/staging/rack_gateway.tf` - Staging rack-gateway Terraform config
+- `modules/rack_gateway/main.tf` - Rack-gateway module (S3 WORM bucket, KMS, IAM, etc.)
+
+**Using AWS CLI for debugging:**
+
+```bash
+# Check S3 bucket configuration (from rack-gateway repo root)
+source reference/convox_racks_terraform/racks/staging/.envrc && \
+  aws s3api get-object-lock-configuration --bucket rack-gateway-audit-anchor-staging-3-17
+
+# List audit anchor buckets
+source reference/convox_racks_terraform/racks/staging/.envrc && \
+  aws s3api list-buckets --query "Buckets[?contains(Name, 'audit-anchor')].Name"
+
+# Check KMS key configuration
+source reference/convox_racks_terraform/racks/staging/.envrc && \
+  aws kms list-aliases --query "Aliases[?contains(AliasName, 'audit-anchor')]"
+```
+
 ## Directory Structure
 
 ```
@@ -728,6 +756,11 @@ docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "\d+ d
 │   ├── integration/              # Integration tests
 │   └── tools/                    # Code generation tools
 ├── mock-oauth/                   # Mock OAuth server (see CLAUDE.md)
+├── reference/                    # Reference materials
+│   └── convox_racks_terraform/   # Terraform configs for production deployment
+│       ├── racks/staging/        # Staging rack configuration (.envrc has AWS creds)
+│       ├── modules/rack_gateway/ # Rack-gateway Terraform module
+│       └── (see directory for full structure)
 ├── scripts/                      # Utility scripts
 ├── taskfiles/                    # Task runner configs
 ├── web/                          # React SPA frontend (see CLAUDE.md)

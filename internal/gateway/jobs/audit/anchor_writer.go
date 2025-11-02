@@ -160,7 +160,7 @@ func (w *AnchorWriterWorker) Work(ctx context.Context, job *river.Job[AnchorWrit
 }
 
 // putObjectWithRetention writes an object to S3 with appropriate retention and encryption settings.
-// For AWS S3: uses KMS encryption and per-object retention.
+// For AWS S3: uses KMS encryption. Object Lock retention is applied via bucket default retention.
 // For MinIO: relies on bucket-level default retention.
 func (w *AnchorWriterWorker) putObjectWithRetention(
 	ctx context.Context,
@@ -176,11 +176,12 @@ func (w *AnchorWriterWorker) putObjectWithRetention(
 	}
 
 	// AWS S3 specific features (not supported by MinIO)
+	// Note: We do NOT set ObjectLockMode or ObjectLockRetainUntilDate here because the bucket
+	// has default Object Lock retention configured via Terraform. AWS S3 returns a 400 error
+	// if you try to set per-object retention on a bucket with default retention.
 	useAWS := os.Getenv("AWS_ENDPOINT_URL_S3") == ""
 	if useAWS {
 		putInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
-		putInput.ObjectLockMode = types.ObjectLockModeCompliance
-		putInput.ObjectLockRetainUntilDate = aws.Time(retainUntil)
 		if checksumSHA256 != nil {
 			putInput.ChecksumSHA256 = checksumSHA256
 		}
