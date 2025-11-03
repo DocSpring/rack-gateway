@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, RotateCw, X } from 'lucide-react'
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from '@/components/ui/use-toast'
 import type { components } from '../../api/types.generated'
 import { TablePane } from '../../components/table-pane'
 import { Badge } from '../../components/ui/badge'
@@ -242,7 +242,14 @@ function JobsPageInner() {
                   }}
                 >
                   <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost">
+                    <Button
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setSelectedJob(job)
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button

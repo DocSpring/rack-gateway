@@ -1,6 +1,6 @@
 import { Copy } from 'lucide-react'
 import { Button } from './ui/button'
-import { toast } from './ui/use-toast'
+import { toast } from '@/components/ui/use-toast'
 
 type UuidCellProps = {
   uuid: string

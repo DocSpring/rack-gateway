@@ -159,6 +159,20 @@ This project has strict CSP requirements. All inline styles must use nonces:
 - Use native HTML form elements to avoid CSP violations
 - react-hot-toast is configured with CSS variables to avoid inline styles
 
+## Toast Notifications
+
+**CRITICAL: Always use the custom toast wrapper, never import directly from react-hot-toast**
+
+```typescript
+// ✅ CORRECT - Always use this
+import { toast } from '@/components/ui/use-toast'
+
+// ❌ WRONG - Never use this
+import { toast } from 'react-hot-toast'
+```
+
+**Why:** Our custom toast wrapper at `@/components/ui/use-toast` provides explicit icon overrides using Lucide icons (Check, CircleAlert, etc.) that are CSP-compliant and render correctly in production. Direct imports from `react-hot-toast` fall back to the library's default icon rendering which causes issues with our CSP policy and fork modifications.
+
 ## Important Instructions
 
 - Go handlers must never render HTML or plain text responses to browsers. All web views are rendered via the SPA; the gateway should serve static assets only.

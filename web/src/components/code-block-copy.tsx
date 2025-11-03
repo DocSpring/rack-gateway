@@ -1,7 +1,7 @@
 import { Copy } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from './ui/button'
-import { toast } from './ui/use-toast'
+import { toast } from '@/components/ui/use-toast'
 
 type CodeBlockCopyProps = {
   children: ReactNode
