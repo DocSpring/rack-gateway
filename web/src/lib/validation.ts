@@ -1,5 +1,9 @@
-import { z } from './zod'
+// Fix CSP eval issue with Zod: https://github.com/colinhacks/zod/issues/4461
+import { z } from 'zod'
 import { AVAILABLE_ROLES } from './api'
+
+// Configure Zod to avoid CSP violations
+z.config({ jitless: true })
 
 type RoleName = keyof typeof AVAILABLE_ROLES
 

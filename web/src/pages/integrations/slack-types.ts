@@ -12,7 +12,3 @@ export type ChannelConfig = {
   name: string
   actions: string[]
 }
-
-export type SlackConfig = {
-  configured: boolean
-}

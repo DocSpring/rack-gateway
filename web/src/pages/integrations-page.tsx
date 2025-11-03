@@ -12,7 +12,6 @@ import { SlackCard } from '@/pages/integrations/slack-card'
 import type {
   ChannelConfig,
   SlackChannel,
-  SlackConfig,
   SlackIntegration,
 } from '@/pages/integrations/slack-types'
 import { getErrorMessage, hasStatus } from '@/pages/integrations/utils'
@@ -21,21 +20,6 @@ export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const queryClient = useQueryClient()
   const { user } = useAuth()
-
-  const { data: slackConfig } = useQuery<SlackConfig>({
-    queryKey: ['slack-config'],
-    queryFn: async () => {
-      try {
-        await api.post('/api/v1/integrations/slack/oauth/authorize')
-        return { configured: true }
-      } catch (error: unknown) {
-        if (hasStatus(error, 503)) {
-          return { configured: false }
-        }
-        return { configured: true }
-      }
-    },
-  })
 
   const { data: integration, isLoading } = useQuery<SlackIntegration | null>({
     queryKey: QUERY_KEYS.SLACK_INTEGRATION,
@@ -246,7 +230,7 @@ export function IntegrationsPage() {
     )
   }
 
-  const slackConfigured = slackConfig?.configured !== false
+  const slackConfigured = user?.integrations?.slack ?? false
 
   return (
     <div className="container mx-auto p-6">

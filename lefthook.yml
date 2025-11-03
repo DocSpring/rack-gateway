@@ -20,7 +20,7 @@ pre-commit:
 
     go-lint:
       glob: "**/*.go"
-      run: golangci-lint run --fix {staged_files}
+      run: golangci-lint run --fix ./cmd/... ./internal/... ./tools/...
       stage_fixed: true
 
     go-test:

@@ -665,7 +665,7 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 		}
 	}()
 
-	var jsonParams, sha256Params *s3.PutObjectInput
+	var jsonParams *s3.PutObjectInput
 
 	s3Client := &mockS3Client{
 		headObjectFunc: func(
@@ -687,11 +687,8 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			switch *params.Key {
-			case key:
+			if *params.Key == key {
 				jsonParams = params
-			case key + ".sha256":
-				sha256Params = params
 			}
 			return &s3.PutObjectOutput{}, nil
 		},
@@ -717,23 +714,12 @@ func TestAnchorWriterWorker_ObjectLockParameters(t *testing.T) {
 	// Verify Object Lock parameters are NOT set for AWS S3
 	// When bucket has default Object Lock retention configured, per-object retention
 	// should NOT be set in PutObject. The default retention is applied automatically.
+	// Only the JSON file is written with SHA256 checksum embedded in metadata.
 	require.NotNil(t, jsonParams, "JSON PutObject should be called")
 	assert.Empty(t, jsonParams.ObjectLockMode, "Should NOT set ObjectLockMode (bucket has default retention)")
 	assert.Nil(t, jsonParams.ObjectLockRetainUntilDate, "Should NOT set retention date (bucket has default retention)")
 	assert.Equal(t, types.ServerSideEncryptionAwsKms, jsonParams.ServerSideEncryption, "Should set KMS encryption")
-	assert.NotNil(t, jsonParams.ChecksumSHA256, "Should set SHA256 checksum")
-
-	require.NotNil(t, sha256Params, "SHA256 PutObject should be called")
-	assert.Empty(
-		t, sha256Params.ObjectLockMode,
-		"Should NOT set ObjectLockMode for SHA256 (bucket has default retention)",
-	)
-	assert.Nil(t, sha256Params.ObjectLockRetainUntilDate, "Should NOT set retention date for SHA256 (bucket has default retention)")
-	assert.Equal(
-		t, types.ServerSideEncryptionAwsKms, sha256Params.ServerSideEncryption,
-		"Should set KMS encryption for SHA256",
-	)
-	// SHA256 file doesn't need checksum (it IS the checksum)
+	assert.NotNil(t, jsonParams.ChecksumSHA256, "Should set SHA256 checksum in JSON metadata")
 }
 
 func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
@@ -756,7 +742,7 @@ func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 
 	key := "staging/2025/11/01/12/anchor-20251101T12.json"
 
-	var jsonParams, sha256Params *s3.PutObjectInput
+	var jsonParams *s3.PutObjectInput
 
 	s3Client := &mockS3Client{
 		headObjectFunc: func(
@@ -778,11 +764,8 @@ func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 			params *s3.PutObjectInput,
 			_ ...func(*s3.Options),
 		) (*s3.PutObjectOutput, error) {
-			switch *params.Key {
-			case key:
+			if *params.Key == key {
 				jsonParams = params
-			case key + ".sha256":
-				sha256Params = params
 			}
 			return &s3.PutObjectOutput{}, nil
 		},
@@ -806,9 +789,7 @@ func TestAnchorWriterWorker_NoIfNoneMatch(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify IfNoneMatch is NOT set (incompatible with Object Lock)
+	// Only the JSON file is written with SHA256 checksum embedded in metadata.
 	require.NotNil(t, jsonParams, "JSON PutObject should be called")
 	assert.Nil(t, jsonParams.IfNoneMatch, "IfNoneMatch should NOT be set (incompatible with Object Lock)")
-
-	require.NotNil(t, sha256Params, "SHA256 PutObject should be called")
-	assert.Nil(t, sha256Params.IfNoneMatch, "IfNoneMatch should NOT be set for SHA256")
 }
