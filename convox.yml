@@ -56,7 +56,7 @@ services:
     environment:
       - PORT=8080
       - PGSSLMODE=require
-      - DATABASE_URL=${ADMIN_DATABASE_URL} # Use admin user for migrations
+      - RGW_DATABASE_URL=${ADMIN_DATABASE_URL}
     scale:
       memory: 512
       cpu: 250
