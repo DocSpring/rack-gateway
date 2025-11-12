@@ -16,6 +16,194 @@ import type { MFAMethod, MFAVerificationFormProps } from './mfa-verification-for
 const DIGITS_ONLY_REGEX = /^\d+$/
 const SIX_DIGITS_REGEX = /^\d{6}$/
 
+type RenderProps = {
+  showTrustDevice: boolean
+  trustDevice: boolean
+  setTrustDevice: (value: boolean) => void
+  isVerifying: boolean
+  handleVerifyWebAuthn: () => void
+  allowMethodSwitch: boolean
+  hasTOTP: boolean
+  hasWebAuthn: boolean
+  setUseWebAuthn: (value: boolean) => void
+  renderCancelButton?: () => React.ReactNode
+  autoFocus: boolean
+  inputVersion: number
+  code: string
+  setError: (error: string | null) => void
+  setCode: (code: string) => void
+  pendingCodeRef: React.MutableRefObject<string | null>
+  trySubmitCode: () => void
+}
+
+function renderLoadingState(props: Pick<RenderProps, 'showTrustDevice'>) {
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-center py-[20px]">
+        <LoadingSpinner className="size-9" />
+      </div>
+      {props.showTrustDevice && (
+        <div className="flex justify-center">
+          <label className="invisible flex items-center gap-2 text-muted-foreground text-sm">
+            <input disabled type="checkbox" />
+            Trust this device for 30 days
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function renderWebAuthnForm(
+  props: Pick<
+    RenderProps,
+    | 'isVerifying'
+    | 'handleVerifyWebAuthn'
+    | 'showTrustDevice'
+    | 'trustDevice'
+    | 'setTrustDevice'
+    | 'allowMethodSwitch'
+    | 'hasTOTP'
+    | 'hasWebAuthn'
+    | 'setUseWebAuthn'
+    | 'renderCancelButton'
+  >
+) {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-6">
+        <div className="py-[10px]">
+          <Button
+            className="w-full"
+            disabled={props.isVerifying}
+            onClick={() => {
+              props.handleVerifyWebAuthn()
+            }}
+          >
+            {props.isVerifying ? (
+              <LoadingSpinner className="size-4" variant="white" />
+            ) : (
+              'Authenticate with Security Key'
+            )}
+          </Button>
+        </div>
+        {props.showTrustDevice && (
+          <div className="flex justify-center">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={props.trustDevice}
+                onChange={(event) => props.setTrustDevice(event.target.checked)}
+                type="checkbox"
+              />
+              Trust this device for 30 days
+            </label>
+          </div>
+        )}
+      </div>
+      {props.allowMethodSwitch && props.hasTOTP && props.hasWebAuthn && (
+        <div className="space-y-6">
+          <div className="border-t" />
+          <Button
+            className="w-full"
+            onClick={() => props.setUseWebAuthn(false)}
+            type="button"
+            variant="outline"
+          >
+            Use authenticator app instead
+          </Button>
+        </div>
+      )}
+      {props.renderCancelButton && (
+        <div className="flex justify-end">{props.renderCancelButton()}</div>
+      )}
+    </div>
+  )
+}
+
+function renderTOTPForm(props: RenderProps) {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-6">
+        <div className="flex flex-col items-center">
+          <MFAInput
+            autoFocus={props.autoFocus}
+            disabled={props.isVerifying}
+            key={props.inputVersion}
+            maxLength={6}
+            onChange={(event) => {
+              if (props.isVerifying) {
+                return
+              }
+              const normalized = event.target.value.trim()
+              ;(globalThis as { __lastOnChange?: string }).__lastOnChange = normalized
+              props.setError(null)
+              props.setCode(normalized)
+              if (normalized.length === 6 && DIGITS_ONLY_REGEX.test(normalized)) {
+                props.pendingCodeRef.current = normalized
+                props.trySubmitCode()
+              } else {
+                props.pendingCodeRef.current = null
+              }
+            }}
+            onComplete={(completedCode) => {
+              if (props.isVerifying) {
+                return
+              }
+              props.setCode(completedCode)
+              if (SIX_DIGITS_REGEX.test(completedCode)) {
+                props.pendingCodeRef.current = completedCode
+                props.trySubmitCode()
+              }
+            }}
+            value={props.code}
+          />
+        </div>
+        {props.showTrustDevice && (
+          <div className="flex justify-center">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={props.trustDevice}
+                onChange={(event) => props.setTrustDevice(event.target.checked)}
+                type="checkbox"
+              />
+              Trust this device for 30 days
+            </label>
+          </div>
+        )}
+      </div>
+      {props.allowMethodSwitch && props.hasTOTP && props.hasWebAuthn && (
+        <div className="space-y-6">
+          <div className="border-t" />
+          <Button
+            className="w-full"
+            disabled={props.isVerifying}
+            onClick={() => {
+              props.handleVerifyWebAuthn()
+            }}
+            type="button"
+            variant="outline"
+          >
+            {props.isVerifying ? <LoadingSpinner className="size-4" /> : 'Use security key instead'}
+          </Button>
+        </div>
+      )}
+      {props.renderCancelButton && (
+        <div className="flex justify-end">{props.renderCancelButton()}</div>
+      )}
+    </div>
+  )
+}
+
+function renderFormContent(isMFAStatusLoading: boolean, useWebAuthn: boolean, props: RenderProps) {
+  if (isMFAStatusLoading) {
+    return renderLoadingState(props)
+  }
+  if (useWebAuthn) {
+    return renderWebAuthnForm(props)
+  }
+  return renderTOTPForm(props)
+}
+
 /**
  * Reusable MFA verification form component that wraps the common
  * TOTP and WebAuthn flows. It exposes callbacks for verification,
@@ -50,7 +238,7 @@ export function MFAVerificationForm({
   }, [code])
 
   // Fetch MFA status to determine available methods
-  const { data: mfaStatus } = useQuery({
+  const { data: mfaStatus, isLoading: isMFAStatusLoading } = useQuery({
     queryKey: ['mfa-status'],
     queryFn: getMFAStatus,
     retry: false,
@@ -249,128 +437,38 @@ export function MFAVerificationForm({
     return 'Enter the 6-digit code from your authenticator app to finish signing in.'
   }
 
+  const renderProps: RenderProps = {
+    showTrustDevice,
+    trustDevice,
+    setTrustDevice,
+    isVerifying,
+    handleVerifyWebAuthn: () => {
+      handleVerifyWebAuthn().catch(() => {
+        /* errors handled by onError */
+      })
+    },
+    allowMethodSwitch,
+    hasTOTP,
+    hasWebAuthn,
+    setUseWebAuthn,
+    renderCancelButton,
+    autoFocus,
+    inputVersion,
+    code,
+    setError,
+    setCode,
+    pendingCodeRef,
+    trySubmitCode,
+  }
+
   return (
     <div className="space-y-6">
-      <p className="text-center text-muted-foreground text-sm">{getDescription()}</p>
-      {useWebAuthn ? (
-        <div className="space-y-6">
-          <div className="space-y-6">
-            <div className="py-[10px]">
-              <Button
-                className="w-full"
-                disabled={isVerifying}
-                onClick={() => {
-                  handleVerifyWebAuthn().catch(() => {
-                    /* errors handled by onError */
-                  })
-                }}
-              >
-                {isVerifying ? (
-                  <LoadingSpinner className="size-4" variant="white" />
-                ) : (
-                  'Authenticate with Security Key'
-                )}
-              </Button>
-            </div>
-            {showTrustDevice && (
-              <div className="flex justify-center">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    checked={trustDevice}
-                    onChange={(event) => setTrustDevice(event.target.checked)}
-                    type="checkbox"
-                  />
-                  Trust this device for 30 days
-                </label>
-              </div>
-            )}
-          </div>
-          {allowMethodSwitch && hasTOTP && hasWebAuthn && (
-            <div className="space-y-6">
-              <div className="border-t" />
-              <Button
-                className="w-full"
-                onClick={() => setUseWebAuthn(false)}
-                type="button"
-                variant="outline"
-              >
-                Use authenticator app instead
-              </Button>
-            </div>
-          )}
-          {renderCancelButton && <div className="flex justify-end">{renderCancelButton()}</div>}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="space-y-6">
-            <div className="flex flex-col items-center">
-              <MFAInput
-                autoFocus={autoFocus}
-                disabled={isVerifying}
-                key={inputVersion}
-                maxLength={6}
-                onChange={(event) => {
-                  if (isVerifying) {
-                    return
-                  }
-                  const normalized = event.target.value.trim()
-                  ;(globalThis as { __lastOnChange?: string }).__lastOnChange = normalized
-                  setError(null)
-                  setCode(normalized)
-                  if (normalized.length === 6 && DIGITS_ONLY_REGEX.test(normalized)) {
-                    pendingCodeRef.current = normalized
-                    trySubmitCode()
-                  } else {
-                    pendingCodeRef.current = null
-                  }
-                }}
-                onComplete={(completedCode) => {
-                  if (isVerifying) {
-                    return
-                  }
-                  setCode(completedCode)
-                  if (SIX_DIGITS_REGEX.test(completedCode)) {
-                    pendingCodeRef.current = completedCode
-                    trySubmitCode()
-                  }
-                }}
-                value={code}
-              />
-            </div>
-            {showTrustDevice && (
-              <div className="flex justify-center">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    checked={trustDevice}
-                    onChange={(event) => setTrustDevice(event.target.checked)}
-                    type="checkbox"
-                  />
-                  Trust this device for 30 days
-                </label>
-              </div>
-            )}
-          </div>
-          {allowMethodSwitch && hasTOTP && hasWebAuthn && (
-            <div className="space-y-6">
-              <div className="border-t" />
-              <Button
-                className="w-full"
-                disabled={isVerifying}
-                onClick={() => {
-                  handleVerifyWebAuthn().catch(() => {
-                    /* errors handled by onError */
-                  })
-                }}
-                type="button"
-                variant="outline"
-              >
-                {isVerifying ? <LoadingSpinner className="size-4" /> : 'Use security key instead'}
-              </Button>
-            </div>
-          )}
-          {renderCancelButton && <div className="flex justify-end">{renderCancelButton()}</div>}
-        </div>
-      )}
+      <p
+        className={`text-center text-muted-foreground text-sm ${isMFAStatusLoading ? 'invisible' : ''}`}
+      >
+        {getDescription()}
+      </p>
+      {renderFormContent(isMFAStatusLoading, useWebAuthn, renderProps)}
     </div>
   )
 }

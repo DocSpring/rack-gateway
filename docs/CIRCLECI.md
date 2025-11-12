@@ -145,21 +145,25 @@ Tailscale is installed in the CircleCI Docker image (`docspringcom/ci:deploy`). 
 
 ### CircleCI Context Configuration
 
-Configure CircleCI contexts (`convox-staging`, `convox-eu`, `convox-us`) with the following environment variables:
+The shared `deploy-app` context contains `TAILSCALE_OAUTH_SECRET`. Additional environment-specific contexts (`convox-staging`, `convox-eu`, `convox-us`) provide rack-specific configuration:
 
-| Variable                | Description                                              | Example                                   |
-| ----------------------- | -------------------------------------------------------- | ----------------------------------------- |
-| `TAILSCALE_AUTHKEY`     | Ephemeral auth key for connecting CircleCI to Tailscale | `tskey-auth-...`                          |
-| `RACK_GATEWAY_URL`      | Tailscale hostname of the rack-gateway                   | `https://rack-gateway-staging.tail5a6e7.ts.net` |
-| `RACK_GATEWAY_API_TOKEN` | API token for authenticating with rack-gateway          | Token from rack-gateway API token management |
+| Variable                | Context         | Description                                              | Example                                   |
+| ----------------------- | --------------- | -------------------------------------------------------- | ----------------------------------------- |
+| `TAILSCALE_OAUTH_SECRET` | `deploy-app`   | OAuth client secret for connecting CircleCI to Tailscale | `tskey-client-...`                        |
+| `RACK_GATEWAY_URL`      | `convox-*`      | Tailscale hostname of the rack-gateway                   | `https://rack-gateway-staging.tail5a6e7.ts.net` |
+| `RACK_GATEWAY_API_TOKEN` | `convox-*`     | API token for authenticating with rack-gateway          | Token from rack-gateway API token management |
 
-**Creating Tailscale Auth Keys:**
+**Creating Tailscale OAuth Client:**
 
-1. Visit https://login.tailscale.com/admin/settings/keys
-2. Click "Generate auth key"
-3. Set expiration (recommended: 90 days for CI/CD)
-4. Set tags (e.g., `tag:circleci`, `tag:ci`) if using ACLs
-5. Copy the key and add to CircleCI context
+The OAuth client is created via Terraform in `tailscale/main.tf` and never expires (unlike auth keys with 90-day maximum):
+
+1. OAuth client is provisioned with `auth_keys` scope and `tag:circleci` tag
+2. Retrieve the secret after Terraform apply:
+   ```bash
+   cd tailscale
+   terraform output -raw tailscale_circleci_oauth_secret
+   ```
+3. Add to CircleCI `deploy-app` context as `TAILSCALE_OAUTH_SECRET`
 
 **Setting RACK_GATEWAY_URL:**
 
@@ -186,7 +190,7 @@ The `setup_tailscale` command is automatically called by all Convox commands:
 **What it does:**
 
 1. Starts Tailscale daemon
-2. Connects using `TAILSCALE_AUTHKEY` from context
+2. Connects using `TAILSCALE_OAUTH_SECRET` from `deploy-app` context as an ephemeral, preauthorized node
 3. Verifies connectivity by checking gateway health endpoint (`/api/v1/health`)
 
 **Example CircleCI job:**
@@ -198,7 +202,7 @@ jobs:
       - image: docspringcom/ci:deploy-2025.09-amd64
     context:
       - deploy-app
-      - convox-staging  # Contains TAILSCALE_AUTHKEY, RACK_GATEWAY_URL, RACK_GATEWAY_API_TOKEN
+      - convox-staging  # Contains RACK_GATEWAY_URL, RACK_GATEWAY_API_TOKEN
     steps:
       - setup_tailscale  # Automatically called by convox_create_release command
       - convox_create_release:
@@ -231,8 +235,8 @@ This allows CircleCI to connect to rack-gateway on port 8080 (the internal servi
 
 **Connection fails:**
 
-1. Verify `TAILSCALE_AUTHKEY` is valid and not expired
-2. Check Tailscale ACLs allow CircleCI tag to reach rack-gateway
+1. Verify `TAILSCALE_OAUTH_SECRET` is set in `deploy-app` context and valid
+2. Check Tailscale ACLs allow `tag:circleci` to reach rack-gateway (configured in `tailscale/acl.json`)
 3. Verify `RACK_GATEWAY_URL` matches the Tailscale hostname from Terraform
 4. Check gateway logs for connection attempts
 
