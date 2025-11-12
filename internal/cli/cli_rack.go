@@ -77,7 +77,7 @@ func rackLogsCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "filter", "follow", "since")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -128,7 +128,7 @@ func rackParamsSetCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "wait")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -152,7 +152,7 @@ func rackPsCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "all")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -198,7 +198,7 @@ func rackScaleCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "count", "type")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -223,7 +223,7 @@ func rackUpdateCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "version", "wait")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}

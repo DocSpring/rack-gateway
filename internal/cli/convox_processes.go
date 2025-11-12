@@ -17,7 +17,7 @@ func PsCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "release", "service", "all")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func ExecCommand() *cobra.Command {
 		Short: "execute a command in a running process",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "exec", "entrypoint")
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "exec")
 			if err != nil {
 				return err
 			}
@@ -113,15 +113,7 @@ func RunCommand() *cobra.Command {
 		Short: "run a one-off process",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(
-				cobraCmd,
-				args,
-				"run",
-				"detach",
-				"entrypoint",
-				"release",
-				"env",
-			)
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "run")
 			if err != nil {
 				return err
 			}
@@ -175,7 +167,7 @@ func ScaleCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "count", "cpu", "memory")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}

@@ -17,7 +17,7 @@ func LogsCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "filter", "follow", "since")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -71,7 +71,7 @@ func instancesKeyrollCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "wait")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}

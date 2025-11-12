@@ -44,7 +44,7 @@ func envEditCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "promote", "replace")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -85,7 +85,7 @@ func envSetCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "id", "promote", "replace")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -112,7 +112,7 @@ func envUnsetCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "id", "promote")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}

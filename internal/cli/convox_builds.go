@@ -30,7 +30,7 @@ func BuildsCommand() *cobra.Command {
 		Short: "list builds",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "builds", "limit")
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "builds")
 			if err != nil {
 				return err
 			}
@@ -85,7 +85,7 @@ func buildsExportCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "file")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -124,16 +124,7 @@ func buildsImportCommand() *cobra.Command {
 }
 
 func runBuildCommand(cobraCmd *cobra.Command, args []string) error {
-	client, ctx, err := setupConvoxWithMFAAction(
-		cobraCmd,
-		args,
-		"build",
-		"app",
-		"description",
-		"file",
-		"manifest",
-		"no-cache",
-	)
+	client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "build")
 	if err != nil {
 		return err
 	}

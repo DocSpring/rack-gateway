@@ -30,6 +30,7 @@ require (
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.26.0
 	github.com/riverqueue/river/rivertype v0.26.0
 	github.com/spf13/cobra v1.10.1
+	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.2
 	github.com/tkrajina/typescriptify-golang-structs v0.2.0
@@ -193,7 +194,6 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

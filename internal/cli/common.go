@@ -10,6 +10,7 @@ import (
 	"github.com/convox/convox/sdk"
 	"github.com/convox/stdcli"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Helper functions for convox commands
@@ -31,23 +32,32 @@ func buildRackURL(gatewayURL, auth string) string {
 	return fmt.Sprintf("https://convox:%s@%s", auth, strings.TrimPrefix(base, "https://"))
 }
 
+// Global flags that should NEVER be forwarded to the Convox SDK
+var globalFlagsToExclude = map[string]bool{
+	"config":     true, // Config directory path
+	"rack":       true, // Rack selection
+	"api-token":  true, // API token for CLI requests
+	"mfa-code":   true, // MFA code for step-up auth
+	"mfa-method": true, // MFA method selection
+	"help":       true, // Help flag
+}
+
 // SetupConvoxCommand sets up a convox command with the standard boilerplate
-// Pass flagNames to convert specific cobra flags to stdcli flags
+// Automatically forwards ALL non-global flags to the Convox SDK
 func SetupConvoxCommand(
 	cobraCmd *cobra.Command,
 	args []string,
-	flagNames ...string,
 ) (*sdk.Client, *stdcli.Context, error) {
-	return SetupConvoxCommandWithMFA(cobraCmd, args, "", flagNames...)
+	return SetupConvoxCommandWithMFA(cobraCmd, args, "")
 }
 
 // SetupConvoxCommandWithMFA sets up a convox command with optional MFA verification
 // mfaAuth should be in format "totp.123456" or "webauthn.assertion_data" or empty string for no MFA
+// Automatically forwards ALL non-global flags to the Convox SDK
 func SetupConvoxCommandWithMFA(
 	cobraCmd *cobra.Command,
 	args []string,
 	mfaAuth string,
-	flagNames ...string,
 ) (*sdk.Client, *stdcli.Context, error) {
 	_, gatewayURL, auth, err := resolveRackAuth(mfaAuth)
 	if err != nil {
@@ -60,7 +70,7 @@ func SetupConvoxCommandWithMFA(
 	}
 
 	engine := newStdCLIEngine(cobraCmd)
-	flags := collectStdCLIFlags(cobraCmd, flagNames)
+	flags := collectAllNonGlobalFlags(cobraCmd)
 	ctx := newStdCLIContext(cobraCmd, args, flags)
 	injectStdCLIEngine(ctx, engine)
 
@@ -123,21 +133,31 @@ func newStdCLIEngine(cobraCmd *cobra.Command) *stdcli.Engine {
 	return engine
 }
 
-func collectStdCLIFlags(cobraCmd *cobra.Command, flagNames []string) []*stdcli.Flag {
-	flags := make([]*stdcli.Flag, 0, len(flagNames))
-	for _, name := range flagNames {
-		cobraFlag := cobraCmd.Flags().Lookup(name)
-		if cobraFlag == nil {
-			continue
+// collectAllNonGlobalFlags automatically collects all flags except global ones
+// This ensures that any flag defined on a command is automatically forwarded to the Convox SDK
+func collectAllNonGlobalFlags(cobraCmd *cobra.Command) []*stdcli.Flag {
+	flags := make([]*stdcli.Flag, 0)
+
+	cobraCmd.Flags().VisitAll(func(cobraFlag *pflag.Flag) {
+		// Skip global flags
+		if globalFlagsToExclude[cobraFlag.Name] {
+			return
 		}
 
-		flag, kind := convertFlagValue(cobraCmd, name, cobraFlag.Value.Type())
+		// Skip if flag wasn't changed from default (no value provided)
+		if !cobraFlag.Changed {
+			return
+		}
+
+		// Convert and collect the flag
+		flag, kind := convertFlagValue(cobraCmd, cobraFlag.Name, cobraFlag.Value.Type())
 		if flag == nil {
-			continue
+			return
 		}
 		applyFlagKind(flag, kind)
 		flags = append(flags, flag)
-	}
+	})
+
 	return flags
 }
 
@@ -198,13 +218,12 @@ func setupConvoxWithMFAAction(
 	cobraCmd *cobra.Command,
 	args []string,
 	action string,
-	flagNames ...string,
 ) (*sdk.Client, *stdcli.Context, error) {
 	mfaAuth, err := checkMFAAndGetAuth(cobraCmd, action)
 	if err != nil {
 		return nil, nil, err
 	}
-	return SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, flagNames...)
+	return SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 }
 
 func normalizeConvoxExit(err error) error {

@@ -12,18 +12,7 @@ func DeployCommand() *cobra.Command {
 		Short: "deploy an app",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(
-				cobraCmd,
-				args,
-				"deploy",
-				"app",
-				"description",
-				"file",
-				"manifest",
-				"no-cache",
-				"replace",
-				"wait",
-			)
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "deploy")
 			if err != nil {
 				return err
 			}
@@ -49,7 +38,7 @@ func ReleasesCommand() *cobra.Command {
 		Short: "list releases",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
-			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "releases", "limit")
+			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "releases")
 			if err != nil {
 				return err
 			}
@@ -103,7 +92,7 @@ func releasesPromoteCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "wait", "force")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
@@ -129,7 +118,7 @@ func releasesRollbackCommand() *cobra.Command {
 				return err
 			}
 
-			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth, "wait")
+			client, ctx, err := SetupConvoxCommandWithMFA(cobraCmd, args, mfaAuth)
 			if err != nil {
 				return err
 			}
