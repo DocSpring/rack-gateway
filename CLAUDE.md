@@ -150,12 +150,12 @@ This file contains high-level architecture and task commands. Component-specific
 **Taskfile Structure:**
 
 - `Taskfile.yml` - Root taskfile that includes all others
-- `Taskfile.go.yml` - Go-specific tasks (build, test, lint, e2e)
-- `Taskfile.web.yml` - Web frontend tasks (build, test, lint, e2e)
-- `Taskfile.db.yml` - Database tasks (migrate, reset)
-- `Taskfile.docker.yml` - Docker orchestration tasks
-- `mock-oauth/Taskfile.yml` - Mock OAuth server tasks
+- `taskfiles/Taskfile.go.yml` - Go-specific tasks (build, test, lint, e2e)
+- `taskfiles/Taskfile.web.yml` - Web frontend tasks (build, test, lint, e2e)
+- `taskfiles/Taskfile.db.yml` - Database tasks (migrate, reset)
+- `taskfiles/Taskfile.docker.yml` - Docker orchestration tasks
 - `taskfiles/docker-stack.yml` - Shared Docker stack helpers
+- `mock-oauth/Taskfile.yml` - Mock OAuth server tasks
 
 **Key Workflows:**
 
@@ -554,13 +554,14 @@ When in doubt, choose the straightforward, well‑named, maintainable structure 
 
 ### 🔧 Go Development
 
-| Command           | Description                                  |
-| ----------------- | -------------------------------------------- |
-| `task go:build`   | Build all Go binaries                        |
-| `task go:lint`    | Run Go linters (vet/fmt/staticcheck)         |
-| `task go:test`    | Run Go unit/integration tests (uses test DB) |
-| `task go:e2e`     | Run CLI E2E tests                            |
-| `task go:imports` | Fix all Go imports with goimports            |
+| Command                     | Description                                           |
+| --------------------------- | ----------------------------------------------------- |
+| `task go:build`             | Build all Go binaries                                 |
+| `task go:build:cli:nofido`  | Build CLI without libfido2 support (for CI)           |
+| `task go:lint`              | Run Go linters (vet/fmt/staticcheck)                  |
+| `task go:test`              | Run Go unit/integration tests (uses test DB)          |
+| `task go:e2e`               | Run CLI E2E tests                                     |
+| `task go:imports`           | Fix all Go imports with goimports                     |
 
 ### 🌐 Web Development
 

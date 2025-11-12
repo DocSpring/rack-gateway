@@ -112,6 +112,21 @@ tasks:
     cmds:
       - go build -buildvcs=false -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway ./cmd/rack-gateway/
 
+  build:cli:nofido:
+    desc: Build gateway CLI without libfido2 support (for CI) -> bin/rack-gateway-nofido
+    deps: [deps]
+    env:
+      CGO_ENABLED: "0"
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - cmd/rack-gateway/**/*.go
+      - internal/**/*.go
+    generates:
+      - bin/rack-gateway-nofido
+    cmds:
+      - go build -tags nofido -buildvcs=false -ldflags "-X main.Version=1.0.0 -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" -o bin/rack-gateway-nofido ./cmd/rack-gateway/
+
   build:mock:
     desc: Build mock Convox server -> bin/mock-convox
     deps: [deps]

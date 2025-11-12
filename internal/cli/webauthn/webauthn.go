@@ -1,3 +1,5 @@
+//go:build !nofido
+
 package webauthn
 
 import (
