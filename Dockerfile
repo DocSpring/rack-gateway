@@ -41,6 +41,8 @@ WORKDIR /app
 
 COPY --from=builder /out/rack-gateway-api ./
 COPY --from=webbuild /app/web/dist ./web/dist
+COPY scripts/start-gateway.sh ./scripts/start-gateway.sh
+RUN chmod +x ./scripts/start-gateway.sh
 
 EXPOSE 8080
 

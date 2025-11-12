@@ -31,7 +31,7 @@ services:
     build:
       path: .
       manifest: Dockerfile
-    command: ./rack-gateway-api
+    command: ./scripts/start-gateway.sh
     environment:
       - PORT=8080
       - PGSSLMODE=require

@@ -73,17 +73,27 @@ func handleMaintenanceCommand(args []string) (bool, error) {
 	}
 }
 
-func runMigrations() error {
-	// Always run migrations when explicitly invoked via "migrate" command
-	// regardless of DEV_MODE (for production deployments)
+// getAdminDatabaseURL returns the database URL for admin operations (migrations, resets).
+// Prefers ADMIN_DATABASE_URL if available, falls back to other connection strings.
+func getAdminDatabaseURL() (string, error) {
 	var dsn string
-	if dsn = os.Getenv("RGW_DATABASE_URL"); dsn == "" {
-		if dsn = os.Getenv("GATEWAY_DATABASE_URL"); dsn == "" {
-			dsn = os.Getenv("DATABASE_URL")
+	if dsn = os.Getenv("ADMIN_DATABASE_URL"); dsn == "" {
+		if dsn = os.Getenv("RGW_DATABASE_URL"); dsn == "" {
+			if dsn = os.Getenv("GATEWAY_DATABASE_URL"); dsn == "" {
+				dsn = os.Getenv("DATABASE_URL")
+			}
 		}
 	}
 	if dsn == "" {
-		return fmt.Errorf("RGW_DATABASE_URL, GATEWAY_DATABASE_URL, or DATABASE_URL is required")
+		return "", fmt.Errorf("ADMIN_DATABASE_URL, RGW_DATABASE_URL, GATEWAY_DATABASE_URL, or DATABASE_URL is required")
+	}
+	return dsn, nil
+}
+
+func runMigrations() error {
+	dsn, err := getAdminDatabaseURL()
+	if err != nil {
+		return err
 	}
 
 	database, err := db.NewWithPoolConfigAndMigration(dsn, nil, true)
@@ -97,7 +107,12 @@ func runMigrations() error {
 }
 
 func resetDatabase() error {
-	database, err := db.NewFromEnv()
+	dsn, err := getAdminDatabaseURL()
+	if err != nil {
+		return err
+	}
+
+	database, err := db.NewWithPoolConfigAndMigration(dsn, nil, false)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
