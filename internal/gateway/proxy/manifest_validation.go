@@ -333,6 +333,18 @@ func validateServiceImages(manifest *convoxManifest, servicePatterns map[string]
 	for serviceName, service := range manifest.Services {
 		// Check if this service has a pattern configured
 		pattern, hasPattern := compiledPatterns[serviceName]
+		var patternString string
+
+		if hasPattern {
+			// Use service-specific pattern
+			patternString = servicePatterns[serviceName]
+		} else if wildcardPattern, hasWildcard := compiledPatterns["*"]; hasWildcard {
+			// Use wildcard pattern as fallback (lowest precedence)
+			pattern = wildcardPattern
+			hasPattern = true
+			patternString = servicePatterns["*"]
+		}
+
 		if !hasPattern {
 			// No pattern for this service - skip validation
 			continue
@@ -352,7 +364,7 @@ func validateServiceImages(manifest *convoxManifest, servicePatterns map[string]
 				"service %s image %q does not match required pattern %q",
 				serviceName,
 				service.Image,
-				servicePatterns[serviceName],
+				patternString,
 			)
 		}
 	}
