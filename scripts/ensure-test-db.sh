@@ -28,10 +28,12 @@ compose_cmd exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHE
 
 # Setup audit roles in gateway_test
 echo "Setting up audit roles..."
-DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable" ./scripts/setup-audit-roles.sh
+# Use TEST_DATABASE_URL if set, otherwise fall back to default local port
+TEST_DB_URL="${TEST_DATABASE_URL:-postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable}"
+DATABASE_URL="$TEST_DB_URL" ./scripts/setup-audit-roles.sh
 
 # Run migrations
 if [ -f ./bin/rack-gateway-api ]; then
   echo "Running migrations on gateway_test..."
-  DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable" ./bin/rack-gateway-api migrate
+  DATABASE_URL="$TEST_DB_URL" ./bin/rack-gateway-api migrate
 fi
