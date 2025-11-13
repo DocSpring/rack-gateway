@@ -138,6 +138,17 @@ func waitForDatabaseReady(t *testing.T, dsn string) {
 
 func connectAppDatabase(t *testing.T, dsn string) *db.Database {
 	t.Helper()
+
+	// Create audit roles before running migrations
+	// These roles are required by migration 20251008173116_audit_logs.sql
+	testDB, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open db for audit roles: %v", err)
+	}
+	defer testDB.Close() //nolint:errcheck // test cleanup
+
+	createAuditRoles(t, testDB)
+
 	// Always run migrations for test databases
 	app, err := db.NewWithPoolConfigAndMigration(dsn, nil, true)
 	if err != nil {
@@ -146,6 +157,34 @@ func connectAppDatabase(t *testing.T, dsn string) *db.Database {
 	// Set TEST_DATABASE_URL for subprocesses
 	os.Setenv("TEST_DATABASE_URL", dsn) //nolint:errcheck // ignore error
 	return app
+}
+
+func createAuditRoles(t *testing.T, sqlDB *sql.DB) {
+	t.Helper()
+
+	// Create the three audit roles (IF NOT EXISTS for idempotency)
+	// These match the roles created by setup-audit-roles.sh
+	_, err := sqlDB.Exec(`
+		DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_owner') THEN
+				CREATE ROLE audit_owner NOLOGIN;
+			END IF;
+			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_writer') THEN
+				CREATE ROLE audit_writer NOLOGIN;
+			END IF;
+			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'audit_reader') THEN
+				CREATE ROLE audit_reader NOLOGIN;
+			END IF;
+		END
+		$$;
+
+		-- Grant audit_owner to postgres user (equivalent to rack_gateway_admin in production)
+		GRANT audit_owner TO postgres;
+	`)
+	if err != nil {
+		t.Fatalf("create audit roles: %v", err)
+	}
 }
 
 func registerCleanup(t *testing.T, app *db.Database, admin *sql.DB, adminCleanup func(), dbName string) {

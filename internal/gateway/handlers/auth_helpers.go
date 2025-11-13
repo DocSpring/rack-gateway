@@ -263,10 +263,11 @@ func makeMFAMethodResponse(method *db.MFAMethod) MFAMethodResponse {
 		label = strings.ToUpper(strings.TrimSpace(method.Type))
 	}
 	resp := MFAMethodResponse{
-		ID:        method.ID,
-		Type:      method.Type,
-		Label:     truncateLabel(label, 120),
-		CreatedAt: method.CreatedAt,
+		ID:         method.ID,
+		Type:       method.Type,
+		Label:      truncateLabel(label, 120),
+		CLICapable: method.CLICapable,
+		CreatedAt:  method.CreatedAt,
 	}
 	if method.ConfirmedAt != nil {
 		confirmed := *method.ConfirmedAt

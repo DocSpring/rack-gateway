@@ -207,7 +207,7 @@ func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
 func (d *Database) listMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
-               created_at, confirmed_at, last_used_at
+               cli_capable, created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE user_id = ?`
 	if !includeUnconfirmed {
 		query += " AND confirmed_at IS NOT NULL"
@@ -239,6 +239,16 @@ func (d *Database) UpdateMFAMethodLabel(methodID int64, label string) error {
 	_, err := d.exec("UPDATE mfa_methods SET label = ? WHERE id = ?", nullableString(label, 150), methodID)
 	if err != nil {
 		return fmt.Errorf("failed to update mfa method label: %w", err)
+	}
+	return nil
+}
+
+// UpdateMFAMethodCLICapable updates whether an MFA method can be used for CLI authentication.
+// This is only relevant for WebAuthn methods (browser-only vs hardware keys).
+func (d *Database) UpdateMFAMethodCLICapable(methodID int64, cliCapable bool) error {
+	_, err := d.exec("UPDATE mfa_methods SET cli_capable = ? WHERE id = ?", cliCapable, methodID)
+	if err != nil {
+		return fmt.Errorf("failed to update mfa method cli_capable: %w", err)
 	}
 	return nil
 }
@@ -278,7 +288,7 @@ func (d *Database) UpdateMFAMethodCredential(
 func (d *Database) GetMFAMethodByID(id int64) (*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
-               created_at, confirmed_at, last_used_at
+               cli_capable, created_at, confirmed_at, last_used_at
         FROM mfa_methods WHERE id = ?
     `
 	method, err := scanMFAMethod(d.queryRow(query, id))

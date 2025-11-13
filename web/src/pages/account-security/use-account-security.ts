@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import QRCode from 'qrcode'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   type EnrollmentState,
@@ -16,6 +15,8 @@ import { normalizeRedirectPath } from '@/lib/navigation'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { resolveWebRedirect } from '@/lib/routes'
 import { useAccountSecurityMutations } from '@/pages/account-security/use-account-security-mutations'
+import { useMFAEnrollment } from '@/pages/account-security/use-mfa-enrollment'
+import { useMFAMethodEdit } from '@/pages/account-security/use-mfa-method-edit'
 
 type MFAMethodRecord = NonNullable<MFAStatusResponse['methods']>[number]
 type TrustedDeviceRecord = NonNullable<MFAStatusResponse['trusted_devices']>[number]
@@ -51,9 +52,11 @@ type UseAccountSecurityPageResult = {
   setTrustEnrollmentDevice: (value: boolean) => void
   openDropdownId: number | null
   setOpenDropdownId: (id: number | null) => void
-  editingMethod: { id: number; label: string } | null
+  editingMethod: { id: number; label: string; type: string; cliCapable: boolean } | null
   editLabel: string
   setEditLabel: (label: string) => void
+  editCliCapable: boolean
+  setEditCliCapable: (value: boolean) => void
   handlePreferredMethodChange: (value: string) => void
   handleDisableAllMfa: () => void
   handleRegenerateCodes: () => void
@@ -80,35 +83,14 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
   const location = useLocation()
   const { refresh: refreshUser, user } = useAuth()
   const { openStepUp, handleStepUpError, isVerifying: isGlobalStepUpVerifying } = useStepUp()
-  const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
-  const [enrollmentStep, setEnrollmentStep] = useState<'method-selection' | 'totp-setup'>(
-    'method-selection'
-  )
-  const [enrollment, setEnrollment] = useState<EnrollmentState | null>(null)
-  const [verificationCode, setVerificationCode] = useState('')
-  const [trustEnrollmentDevice, setTrustEnrollmentDevice] = useState(true)
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [recentBackupCodes, setRecentBackupCodes] = useState<string[] | null>(null)
   const [disableDialogOpen, setDisableDialogOpen] = useState(false)
   const [disableAllPending, setDisableAllPending] = useState(false)
   const [autoPrompted, setAutoPrompted] = useState(false)
-  const [editingMethod, setEditingMethod] = useState<{ id: number; label: string } | null>(null)
-  const [pendingEditMethod, setPendingEditMethod] = useState<{
-    id: number
-    type: MFAMethodType
-  } | null>(null)
-  const [editLabel, setEditLabel] = useState('')
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null)
 
-  const closeEnrollmentModal = useCallback(() => {
-    setEnrollmentModalOpen(false)
-    setEnrollmentStep('method-selection')
-    setEnrollment(null)
-    setQrDataUrl(null)
-    setVerificationCode('')
-    setTrustEnrollmentDevice(true)
-    setPendingEditMethod(null)
-  }, [])
+  const enrollment = useMFAEnrollment()
+  const methodEdit = useMFAMethodEdit()
 
   const searchParams = useMemo(() => new URLSearchParams(location.search ?? ''), [location.search])
   const promptMfa = searchParams.get('mfa') === 'verify'
@@ -127,33 +109,6 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     refetchOnWindowFocus: true,
     staleTime: 30_000,
   })
-
-  useEffect(() => {
-    if (
-      !enrollment ||
-      enrollment.enrollmentType !== 'totp' ||
-      !('uri' in enrollment) ||
-      !enrollment.uri
-    ) {
-      setQrDataUrl(null)
-      return
-    }
-    let cancelled = false
-    QRCode.toDataURL(enrollment.uri, { margin: 1, scale: 5 })
-      .then((data) => {
-        if (!cancelled) {
-          setQrDataUrl(data)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setQrDataUrl(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [enrollment])
 
   const needsStepUp = useMemo(() => {
     if (!status?.recent_step_up_expires_at) {
@@ -179,18 +134,18 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     trustDeviceMutation,
     updatePreferredMethodMutation,
   } = useAccountSecurityMutations({
-    closeEnrollmentModal,
+    closeEnrollmentModal: enrollment.closeEnrollmentModal,
     invalidateStatus,
     refreshUser,
-    pendingEditMethod,
-    setPendingEditMethod,
-    setEnrollment,
-    setEnrollmentStep,
-    setVerificationCode,
-    setTrustEnrollmentDevice,
+    pendingEditMethod: enrollment.pendingEditMethod,
+    setPendingEditMethod: enrollment.setPendingEditMethod,
+    setEnrollment: enrollment.setEnrollment,
+    setEnrollmentStep: enrollment.setEnrollmentStep,
+    setVerificationCode: enrollment.setVerificationCode,
+    setTrustEnrollmentDevice: enrollment.setTrustEnrollmentDevice,
     setRecentBackupCodes,
-    setEditingMethod,
-    setEditLabel,
+    setEditingMethod: methodEdit.setEditingMethod,
+    setEditLabel: methodEdit.setEditLabel,
     setOpenDropdownId,
   })
 
@@ -208,17 +163,17 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
   }
 
   const handleConfirmEnrollment = () => {
-    if (!enrollment?.method_id) {
+    if (!enrollment.enrollment?.method_id) {
       toast.error('Enrollment session expired. Start again.')
       return
     }
     const methodType: MFAMethodType = 'totp'
-    setPendingEditMethod({ id: enrollment.method_id, type: methodType })
+    enrollment.setPendingEditMethod({ id: enrollment.enrollment.method_id, type: methodType })
     const normalizedLabel = getDefaultLabelForType(methodType)
     confirmEnrollmentMutation.mutate({
-      method_id: enrollment.method_id,
-      code: verificationCode,
-      trust_device: trustEnrollmentDevice,
+      method_id: enrollment.enrollment.method_id,
+      code: enrollment.verificationCode,
+      trust_device: enrollment.trustEnrollmentDevice,
       label: normalizedLabel,
     })
   }
@@ -258,21 +213,6 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
       await regenerateCodesMutation.mutateAsync()
     })
 
-  const openMethodEnrollment = () => {
-    setEnrollmentModalOpen(true)
-    setEnrollmentStep('method-selection')
-  }
-
-  const handleMethodEdit = (method: MFAMethodRecord) => {
-    if (!method.id) {
-      toast.error('Unable to determine method identifier')
-      return
-    }
-    const label = method.label ?? getDefaultLabelForType(method.type)
-    setEditingMethod({ id: method.id as number, label })
-    setEditLabel(label)
-  }
-
   const handleMethodRemove = (method: MFAMethodRecord) => {
     if (!method.id) {
       toast.error('Unable to determine method identifier')
@@ -282,7 +222,6 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
       await deleteMethodMutation.mutateAsync(method.id as number)
     })
   }
-
   const handleRevokeDevice = (device: TrustedDeviceRecord) => {
     if (!device.id) {
       toast.error('Unable to determine device identifier')
@@ -292,30 +231,10 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
       await revokeDeviceMutation.mutateAsync(device.id as number)
     })
   }
-
   const handleTrustDevice = () =>
     runWithStepUp(async () => {
       await trustDeviceMutation.mutateAsync()
     })
-
-  const handleEnrollmentOpenChange = (open: boolean) => {
-    if (open) {
-      setEnrollmentModalOpen(true)
-      return
-    }
-    closeEnrollmentModal()
-  }
-
-  const handleEnrollmentCancel = () => {
-    closeEnrollmentModal()
-  }
-
-  const handleEnrollmentBack = () => {
-    setEnrollmentStep('method-selection')
-    setEnrollment(null)
-    setQrDataUrl(null)
-    setVerificationCode('')
-  }
 
   const handleStartEnrollment = (type: MFAMethodType) => {
     if (type === 'webauthn') {
@@ -412,19 +331,18 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     startWebAuthnMutation.isPending ||
     confirmEnrollmentMutation.isPending
 
-  const handleEditDialogCancel = () => {
-    setEditingMethod(null)
-    setEditLabel('')
-  }
-
   const handleEditDialogSubmit = () => {
+    const { editingMethod } = methodEdit
     if (!editingMethod) {
       return
     }
     runWithStepUp(async () => {
       await updateMethodMutation.mutateAsync({
         methodId: editingMethod.id,
-        label: editLabel.trim(),
+        label: methodEdit.editLabel.trim(),
+        ...(editingMethod.type === 'webauthn' && {
+          cliCapable: methodEdit.editCliCapable,
+        }),
       })
     })
   }
@@ -449,37 +367,39 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     confirmEnrollmentPending: confirmEnrollmentMutation.isPending,
     regenerateCodesPending: regenerateCodesMutation.isPending,
     trustDevicePending: trustDeviceMutation.isPending,
-    enrollmentModalOpen,
-    enrollmentStep,
-    enrollment,
+    enrollmentModalOpen: enrollment.enrollmentModalOpen,
+    enrollmentStep: enrollment.enrollmentStep,
+    enrollment: enrollment.enrollment,
     recentBackupCodes,
-    qrDataUrl,
-    verificationCode,
-    setVerificationCode,
-    trustEnrollmentDevice,
-    setTrustEnrollmentDevice,
+    qrDataUrl: enrollment.qrDataUrl,
+    verificationCode: enrollment.verificationCode,
+    setVerificationCode: enrollment.setVerificationCode,
+    trustEnrollmentDevice: enrollment.trustEnrollmentDevice,
+    setTrustEnrollmentDevice: enrollment.setTrustEnrollmentDevice,
     openDropdownId,
     setOpenDropdownId,
-    editingMethod,
-    editLabel,
-    setEditLabel,
+    editingMethod: methodEdit.editingMethod,
+    editLabel: methodEdit.editLabel,
+    setEditLabel: methodEdit.setEditLabel,
+    editCliCapable: methodEdit.editCliCapable,
+    setEditCliCapable: methodEdit.setEditCliCapable,
     handlePreferredMethodChange,
     handleDisableAllMfa,
     handleRegenerateCodes,
     handleDownloadCodes,
     handleCopy,
     handleCopyCodes,
-    handleMethodEdit,
+    handleMethodEdit: methodEdit.handleMethodEdit,
     handleMethodRemove,
     handleRevokeDevice,
     handleTrustDevice,
-    handleEnrollmentOpenChange,
-    handleEnrollmentCancel,
-    handleEnrollmentBack,
+    handleEnrollmentOpenChange: enrollment.handleEnrollmentOpenChange,
+    handleEnrollmentCancel: enrollment.handleEnrollmentCancel,
+    handleEnrollmentBack: enrollment.handleEnrollmentBack,
     handleConfirmEnrollment,
     handleStartEnrollment,
-    openMethodEnrollment,
-    handleEditDialogCancel,
+    openMethodEnrollment: enrollment.openMethodEnrollment,
+    handleEditDialogCancel: methodEdit.handleEditDialogCancel,
     handleEditDialogSubmit,
     isBusy,
   }

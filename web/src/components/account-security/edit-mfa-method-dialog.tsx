@@ -14,7 +14,10 @@ import { Label } from '@/components/ui/label'
 type EditMfaMethodDialogProps = {
   open: boolean
   label: string
+  methodType: string
+  cliCapable: boolean
   onLabelChange: (value: string) => void
+  onCliCapableChange: (value: boolean) => void
   onCancel: () => void
   onSubmit: () => void
   isSubmitting: boolean
@@ -23,7 +26,10 @@ type EditMfaMethodDialogProps = {
 export function EditMfaMethodDialog({
   open,
   label,
+  methodType,
+  cliCapable,
   onLabelChange,
+  onCliCapableChange,
   onCancel,
   onSubmit,
   isSubmitting,
@@ -54,6 +60,26 @@ export function EditMfaMethodDialog({
                 value={label}
               />
             </div>
+            {methodType === 'webauthn' && (
+              <div className="rounded-md border border-border p-4">
+                <label className="flex items-start gap-3">
+                  <input
+                    checked={cliCapable}
+                    className="mt-1"
+                    id="cli-capable"
+                    onChange={(event) => onCliCapableChange(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <span className="font-medium text-sm">CLI Compatible</span>
+                    <p className="text-muted-foreground text-sm">
+                      Enable this for hardware security keys (YubiKey, etc). Disable for
+                      browser-only authenticators like 1Password.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
           <DialogFooter className="mt-4">
             <Button onClick={onCancel} type="button" variant="outline">

@@ -80,9 +80,10 @@ type VerifyWebAuthnAssertionRequest struct {
 	TrustDevice       bool   `json:"trust_device"`
 }
 
-// UpdateMFAMethodRequest contains the new label for an MFA method.
+// UpdateMFAMethodRequest contains the fields that can be updated for an MFA method.
 type UpdateMFAMethodRequest struct {
-	Label string `json:"label" binding:"required,max=150"`
+	Label      string `json:"label"       binding:"required,max=150"`
+	CLICapable *bool  `json:"cli_capable"` // Optional: only for WebAuthn methods
 }
 
 // BackupCodesResponse contains MFA backup codes.
@@ -95,6 +96,7 @@ type MFAMethodResponse struct {
 	ID          int64      `json:"id"                     validate:"required"`
 	Type        string     `json:"type"                   validate:"required"`
 	Label       string     `json:"label,omitempty"`
+	CLICapable  bool       `json:"cli_capable"            validate:"required"`
 	CreatedAt   time.Time  `json:"created_at"             validate:"required"`
 	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`

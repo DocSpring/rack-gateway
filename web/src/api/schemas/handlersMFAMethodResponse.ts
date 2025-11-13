@@ -7,6 +7,7 @@
  */
 
 export interface HandlersMFAMethodResponse {
+  cli_capable: boolean;
   confirmed_at?: string;
   created_at: string;
   id: number;

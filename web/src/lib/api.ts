@@ -271,7 +271,7 @@ export const deleteMFAMethod = (methodId: number): Promise<StatusResponse> =>
 
 export const updateMFAMethod = (
   methodId: number,
-  data: { label: string }
+  data: { label: string; cli_capable?: boolean }
 ): Promise<StatusResponse> => unwrap(gateway.putAuthMfaMethodsMethodID(methodId, data))
 
 export const revokeTrustedDevice = (deviceId: number): Promise<StatusResponse> =>

@@ -44,6 +44,8 @@ export function AccountSecurityPage() {
     editingMethod,
     editLabel,
     setEditLabel,
+    editCliCapable,
+    setEditCliCapable,
     handlePreferredMethodChange,
     handleDisableAllMfa,
     handleRegenerateCodes,
@@ -171,9 +173,12 @@ export function AccountSecurityPage() {
       />
 
       <EditMfaMethodDialog
+        cliCapable={editCliCapable}
         isSubmitting={updateMethodPending}
         label={editLabel}
+        methodType={editingMethod?.type ?? 'totp'}
         onCancel={handleEditDialogCancel}
+        onCliCapableChange={setEditCliCapable}
         onLabelChange={setEditLabel}
         onSubmit={handleEditDialogSubmit}
         open={Boolean(editingMethod)}

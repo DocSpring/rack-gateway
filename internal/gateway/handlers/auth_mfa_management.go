@@ -68,29 +68,13 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list backup codes"})
 		return
 	}
-	methodResp := make([]MFAMethodResponse, 0, len(methods))
-	for _, method := range methods {
-		if method == nil {
-			continue
-		}
-		methodResp = append(methodResp, makeMFAMethodResponse(method))
-	}
-	trustedResp := make([]TrustedDeviceResponse, 0, len(trustedDevices))
-	for _, device := range trustedDevices {
-		if device == nil {
-			continue
-		}
-		if device.RevokedAt != nil {
-			continue
-		}
-		trustedResp = append(trustedResp, makeTrustedDeviceResponse(device))
-	}
+
+	isCLIRequest := c.GetHeader("Authorization") != ""
+	methodResp := filterMFAMethods(methods, isCLIRequest)
+	trustedResp := filterTrustedDevices(trustedDevices)
 	summary := summarizeBackupCodes(backupCodes)
-	var recentExpires *time.Time
-	if ctx.authUser.Session != nil && ctx.authUser.Session.RecentStepUpAt != nil {
-		expires := ctx.authUser.Session.RecentStepUpAt.Add(h.stepUpWindow())
-		recentExpires = &expires
-	}
+	recentExpires := calculateStepUpExpiration(ctx.authUser.Session, h.stepUpWindow())
+
 	response := MFAStatusResponse{
 		Enrolled:              ctx.userRecord.MFAEnrolled,
 		Required:              shouldEnforceMFA(h.mfaSettings, ctx.userRecord),
@@ -102,6 +86,40 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 		WebAuthnAvailable:     h.mfaService.IsWebAuthnConfigured(),
 	}
 	c.JSON(http.StatusOK, response)
+}
+
+func filterMFAMethods(methods []*db.MFAMethod, isCLIRequest bool) []MFAMethodResponse {
+	methodResp := make([]MFAMethodResponse, 0, len(methods))
+	for _, method := range methods {
+		if method == nil {
+			continue
+		}
+		// For CLI requests, filter out WebAuthn methods that aren't CLI-capable
+		if isCLIRequest && method.Type == "webauthn" && !method.CLICapable {
+			continue
+		}
+		methodResp = append(methodResp, makeMFAMethodResponse(method))
+	}
+	return methodResp
+}
+
+func filterTrustedDevices(devices []*db.TrustedDevice) []TrustedDeviceResponse {
+	trustedResp := make([]TrustedDeviceResponse, 0, len(devices))
+	for _, device := range devices {
+		if device == nil || device.RevokedAt != nil {
+			continue
+		}
+		trustedResp = append(trustedResp, makeTrustedDeviceResponse(device))
+	}
+	return trustedResp
+}
+
+func calculateStepUpExpiration(session *db.UserSession, window time.Duration) *time.Time {
+	if session == nil || session.RecentStepUpAt == nil {
+		return nil
+	}
+	expires := session.RecentStepUpAt.Add(window)
+	return &expires
 }
 
 // DeleteMFAMethod godoc
@@ -169,6 +187,14 @@ func (h *AuthHandler) UpdateMFAMethod(c *gin.Context) {
 	if err := h.database.UpdateMFAMethodLabel(method.ID, req.Label); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update mfa method"})
 		return
+	}
+
+	// Update CLI capability if provided (WebAuthn only)
+	if req.CLICapable != nil && method.Type == "webauthn" {
+		if err := h.database.UpdateMFAMethodCLICapable(method.ID, *req.CLICapable); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update mfa method cli capability"})
+			return
+		}
 	}
 
 	h.auditMFAUpdate(c, userCtx.userRecord, method.ID, req.Label)

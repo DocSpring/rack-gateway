@@ -4733,11 +4733,15 @@
         "handlers.MFAMethodResponse": {
             "type": "object",
             "required": [
+                "cli_capable",
                 "created_at",
                 "id",
                 "type"
             ],
             "properties": {
+                "cli_capable": {
+                    "type": "boolean"
+                },
                 "confirmed_at": {
                     "type": "string"
                 },
@@ -5123,6 +5127,10 @@
                 "label"
             ],
             "properties": {
+                "cli_capable": {
+                    "description": "Optional: only for WebAuthn methods",
+                    "type": "boolean"
+                },
                 "label": {
                     "type": "string",
                     "maxLength": 150

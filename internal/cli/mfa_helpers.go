@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -44,7 +45,64 @@ func checkMFAAndGetAuth(cmd *cobra.Command, commandName string) (string, error) 
 		return promptMFAForCommand(cmd, gatewayURL, bearer, rack)
 	}
 
+	// MFAStepUp: Check if step-up window is fresh
+	if mfaLevel == rbac.MFAStepUp {
+		return promptMFAIfStepUpExpired(cmd, gatewayURL, bearer, rack)
+	}
+
 	return "", nil
+}
+
+func promptMFAIfStepUpExpired(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
+	// Allow override via --mfa-code flag
+	if code, ok := inlineTotpFromFlag(); ok {
+		return code, nil
+	}
+
+	// Check current MFA status including step-up expiration
+	status, err := getMFAStatus(baseURL, bearer)
+	if err != nil {
+		return "", fmt.Errorf("failed to check MFA status: %w", err)
+	}
+
+	// Check if step-up is fresh
+	if isStepUpFresh(status.RecentStepUpExpiresAt, time.Now()) {
+		return "", nil // Step-up is fresh, no need to prompt
+	}
+
+	// Step-up expired or never set - prompt for MFA
+	if !status.Enrolled {
+		return "", fmt.Errorf("MFA not enrolled - this command requires MFA")
+	}
+	if len(status.Methods) == 0 {
+		if status.Enrolled {
+			return "", fmt.Errorf(
+				"no CLI-compatible MFA methods found. " +
+					"Edit your WebAuthn methods in the web UI and enable 'CLI Compatible'",
+			)
+		}
+		return "", fmt.Errorf("no MFA methods enrolled")
+	}
+
+	method, err := selectMFAMethod(status, rack)
+	if err != nil {
+		return "", err
+	}
+
+	return collectMFAAuth(cmd, baseURL, bearer, rack, method, status.Methods)
+}
+
+// isStepUpFresh checks if the step-up window is still valid with a safety buffer.
+// Returns true if the expiration time is at least 10 seconds in the future.
+func isStepUpFresh(expiresAt *time.Time, now time.Time) bool {
+	const stepUpSafetyBuffer = 10 * time.Second
+
+	if expiresAt == nil {
+		return false
+	}
+
+	expiresIn := expiresAt.Sub(now)
+	return expiresIn > stepUpSafetyBuffer
 }
 
 func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
@@ -82,6 +140,12 @@ func loadMFAStatus(baseURL, bearer string) (*MFAStatusResponse, error) {
 		return nil, fmt.Errorf("MFA not enrolled - this command requires MFA")
 	}
 	if len(status.Methods) == 0 {
+		if status.Enrolled {
+			return nil, fmt.Errorf(
+				"no CLI-compatible MFA methods found. " +
+					"Edit your WebAuthn methods in the web UI and enable 'CLI Compatible'",
+			)
+		}
 		return nil, fmt.Errorf("no MFA methods enrolled")
 	}
 	return status, nil

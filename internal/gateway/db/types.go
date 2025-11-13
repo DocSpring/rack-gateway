@@ -175,6 +175,7 @@ type MFAMethod struct {
 	PublicKey    []byte     `json:"public_key,omitempty"`
 	Transports   []string   `json:"transports,omitempty"`
 	Metadata     []byte     `json:"metadata,omitempty"`
+	CLICapable   bool       `json:"cli_capable"`
 	CreatedAt    time.Time  `json:"created_at"`
 	ConfirmedAt  *time.Time `json:"confirmed_at,omitempty"`
 	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`

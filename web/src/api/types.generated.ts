@@ -4737,6 +4737,7 @@ export interface components {
             unused: number;
         };
         "handlers.MFAMethodResponse": {
+            cli_capable: boolean;
             confirmed_at?: string;
             created_at: string;
             id: number;
@@ -4837,6 +4838,8 @@ export interface components {
             release_id?: string;
         };
         "handlers.UpdateMFAMethodRequest": {
+            /** @description Optional: only for WebAuthn methods */
+            cli_capable?: boolean;
             label: string;
         };
         "handlers.UpdatePreferredMFAMethodRequest": {

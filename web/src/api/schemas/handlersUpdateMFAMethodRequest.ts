@@ -7,6 +7,8 @@
  */
 
 export interface HandlersUpdateMFAMethodRequest {
+  /** Optional: only for WebAuthn methods */
+  cli_capable?: boolean;
   /** @maxLength 150 */
   label: string;
 }

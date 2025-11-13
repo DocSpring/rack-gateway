@@ -37,7 +37,9 @@ type AccountSecurityMutationsDeps = {
   setVerificationCode: (value: string) => void
   setTrustEnrollmentDevice: (value: boolean) => void
   setRecentBackupCodes: (codes: string[] | null) => void
-  setEditingMethod: (value: { id: number; label: string } | null) => void
+  setEditingMethod: (
+    value: { id: number; label: string; type: string; cliCapable: boolean } | null
+  ) => void
   setEditLabel: (value: string) => void
   setOpenDropdownId: (value: number | null) => void
 }
@@ -96,7 +98,12 @@ export function useAccountSecurityMutations({
         setRecentBackupCodes(data.backup_codes ?? null)
         toast.success('WebAuthn enrollment completed')
         if (methodId) {
-          setEditingMethod({ id: methodId, label: DEFAULT_WEBAUTHN_LABEL })
+          setEditingMethod({
+            id: methodId,
+            label: DEFAULT_WEBAUTHN_LABEL,
+            type: 'webauthn',
+            cliCapable: false,
+          })
           setEditLabel(DEFAULT_WEBAUTHN_LABEL)
         }
         setPendingEditMethod(null)
@@ -127,7 +134,12 @@ export function useAccountSecurityMutations({
       toast.success('Multi-factor authentication enabled')
       if (pendingEditMethod) {
         const defaultLabel = getDefaultLabelForType(pendingEditMethod.type)
-        setEditingMethod({ id: pendingEditMethod.id, label: defaultLabel })
+        setEditingMethod({
+          id: pendingEditMethod.id,
+          label: defaultLabel,
+          type: pendingEditMethod.type,
+          cliCapable: false,
+        })
         setEditLabel(defaultLabel)
         setPendingEditMethod(null)
       }
@@ -143,8 +155,15 @@ export function useAccountSecurityMutations({
   })
 
   const updateMethodMutation = useMutation({
-    mutationFn: ({ methodId, label }: { methodId: number; label: string }) =>
-      updateMFAMethod(methodId, { label }),
+    mutationFn: ({
+      methodId,
+      label,
+      cliCapable,
+    }: {
+      methodId: number
+      label: string
+      cliCapable?: boolean
+    }) => updateMFAMethod(methodId, { label, cli_capable: cliCapable }),
     onSuccess: () => {
       toast.success('MFA method updated')
       invalidateStatus()

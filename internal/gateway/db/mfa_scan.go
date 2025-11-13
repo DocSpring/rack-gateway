@@ -23,7 +23,7 @@ func scanMFAMethod(scanner interface {
 	err := scanner.Scan(
 		&method.ID, &method.UserID, &method.Type, &label, &secret,
 		&method.CredentialID, &method.PublicKey, &transports, &metadata,
-		&method.CreatedAt, &confirmed, &lastUsed,
+		&method.CLICapable, &method.CreatedAt, &confirmed, &lastUsed,
 	)
 	if err != nil {
 		return nil, err
