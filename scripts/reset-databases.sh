@@ -49,6 +49,12 @@ done
 
 echo "Database(s) reset."
 
+# Setup audit roles before migrations
+echo "Setting up audit roles..."
+for dbname in "${DATABASES[@]}"; do
+  DATABASE_URL="postgres://postgres:postgres@localhost:55432/${dbname}?sslmode=disable" ./scripts/setup-audit-roles.sh
+done
+
 # Run migrations using local binary
 echo "Running migrations..."
 for dbname in "${DATABASES[@]}"; do

@@ -93,6 +93,9 @@ jobs:
       - name: Ensure database exists
         run: task db:ensure
 
+      - name: Setup audit roles
+        run: DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_test?sslmode=disable" ./scripts/setup-audit-roles.sh
+
       - name: Start stack (gateway serves UI)
         run: task docker:test:up
 
@@ -175,6 +178,9 @@ jobs:
 
       - name: Ensure database exists
         run: task db:ensure
+
+      - name: Setup audit roles
+        run: ./scripts/setup-audit-roles.sh
 
       - name: Start stack (gateway serves UI)
         run: task docker:test:up

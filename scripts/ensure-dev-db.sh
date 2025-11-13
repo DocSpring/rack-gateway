@@ -25,3 +25,7 @@ done
 # Create gateway_dev database if it doesn't exist
 compose_cmd exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'gateway_dev'" | grep -q 1 || \
   compose_cmd exec -T postgres psql -U postgres -c "CREATE DATABASE gateway_dev;"
+
+# Setup audit roles in gateway_dev
+echo "Setting up audit roles..."
+DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable" ./scripts/setup-audit-roles.sh

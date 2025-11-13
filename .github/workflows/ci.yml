@@ -65,6 +65,9 @@ jobs:
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE gateway_test;"
 
+      - name: Setup audit roles
+        run: ./scripts/setup-audit-roles.sh
+
       - name: Pre-build binaries for integration tests
         run: task go:build
 
