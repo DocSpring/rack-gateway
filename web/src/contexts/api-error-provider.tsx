@@ -18,11 +18,12 @@ const shouldSuppressError = (error: InterceptorError): boolean => {
   }
 
   // Suppress errors from MFA verification endpoints - they're handled locally with inline errors
+  // But DON'T suppress /auth/mfa/status - we want 401s from that to trigger logout
   const url = error.config?.url ?? ''
   if (
-    url.includes('/auth/mfa/') ||
     url.includes('/auth/mfa/webauthn/assertion/verify') ||
-    url.includes('/auth/mfa/verify')
+    url.includes('/auth/mfa/verify') ||
+    (url.includes('/auth/mfa/') && url.includes('/start'))
   ) {
     return true
   }
