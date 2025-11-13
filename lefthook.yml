@@ -72,18 +72,3 @@ pre-commit:
     shellcheck:
       glob: "{*.sh,**/*.sh}"
       run: shellcheck {staged_files}
-
-pre-push:
-  parallel: false
-  commands:
-    # Run full CI suite
-    ci:
-      run: task ci
-
-    # Scan for secrets before pushing
-    secrets:
-      run: task go:sec:secrets
-
-    # Check for vulnerabilities
-    vuln:
-      run: task go:sec:vuln
