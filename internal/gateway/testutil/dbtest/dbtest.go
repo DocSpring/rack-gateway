@@ -96,7 +96,7 @@ func setupAdminConnection(t *testing.T, baseDSN string) (*sql.DB, func()) {
 }
 
 func generateTestDBName() string {
-	return fmt.Sprintf("cg_test_%d", time.Now().UnixNano())
+	return fmt.Sprintf("rgw_test_%d", time.Now().UnixNano())
 }
 
 func createDatabase(t *testing.T, admin *sql.DB, name string) {
@@ -154,6 +154,20 @@ func registerCleanup(t *testing.T, app *db.Database, admin *sql.DB, adminCleanup
 		if err := app.Close(); err != nil {
 			t.Fatalf("close app database: %v", err)
 		}
+
+		// Terminate all connections to the database before dropping
+		// This prevents DROP DATABASE from hanging on active connections
+		terminateSQL := fmt.Sprintf(`
+			SELECT pg_terminate_backend(pg_stat_activity.pid)
+			FROM pg_stat_activity
+			WHERE pg_stat_activity.datname = %s
+			AND pid <> pg_backend_pid()`,
+			pqQuoteLiteral(dbName))
+		if _, err := admin.Exec(terminateSQL); err != nil {
+			// Don't fail on this - database might not exist or have no connections
+			t.Logf("Warning: failed to terminate connections: %v", err)
+		}
+
 		if _, err := admin.Exec("DROP DATABASE IF EXISTS " + pqQuoteIdent(dbName)); err != nil {
 			t.Fatalf("drop database %s: %v", dbName, err)
 		}
@@ -171,6 +185,9 @@ func getenv(k, def string) string {
 
 // simple identifier quoting
 func pqQuoteIdent(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+
+// simple string literal quoting
+func pqQuoteLiteral(s string) string { return `'` + strings.ReplaceAll(s, `'`, `''`) + `'` }
 
 // split out for testability; replace with time.Now().UnixNano()
 // no-op

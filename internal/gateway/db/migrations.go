@@ -18,11 +18,16 @@ var migrationsFS embed.FS
 
 // migrateAll applies embedded migrations in lexical order using a simple schema_migrations table.
 func (d *Database) migrateAll() error {
-	// Acquire a cluster-wide advisory lock to serialize migration runs.
-	if err := d.acquireMigrationLock(); err != nil {
-		return err
+	// Only acquire lock for non-test databases
+	// Test databases have unique names (rgw_test_<timestamp>) so no concurrent migration risk
+	needsLock := !strings.HasPrefix(d.dbName, "rgw_test_")
+
+	if needsLock {
+		if err := d.acquireMigrationLock(); err != nil {
+			return err
+		}
+		defer d.releaseMigrationLock()
 	}
-	defer d.releaseMigrationLock()
 
 	if err := d.createMigrationsTable(); err != nil {
 		return err

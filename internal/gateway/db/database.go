@@ -21,6 +21,7 @@ type Database struct {
 	db     *sql.DB
 	pool   *pgxpool.Pool // For River and other pgx-native operations
 	driver string        // always "pgx"
+	dbName string        // database name for lock uniqueness
 }
 
 // PoolConfig holds database connection pool configuration
@@ -90,7 +91,10 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 		return nil, fmt.Errorf("failed to ping pgxpool: %w", err)
 	}
 
-	d := &Database{db: db, pool: pool, driver: "pgx"}
+	// Extract database name from DSN for unique migration locks
+	dbName := extractDatabaseName(source)
+
+	d := &Database{db: db, pool: pool, driver: "pgx", dbName: dbName}
 	if autoMigrate {
 		if err := d.migrateAll(); err != nil {
 			pool.Close()
@@ -372,6 +376,16 @@ func (d *Database) dropAllTables() error {
 	}
 
 	return nil
+}
+
+// extractDatabaseName extracts the database name from a postgres:// DSN
+func extractDatabaseName(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return ""
+	}
+	// Path is /dbname, so trim the leading slash
+	return strings.TrimPrefix(u.Path, "/")
 }
 
 // Close closes the database connection

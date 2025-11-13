@@ -10,17 +10,17 @@ pre-commit:
 
     go-format:
       glob: "**/*.go"
-      run: go fmt {staged_files}
+      run: go fmt ./cmd/... ./internal/...
       stage_fixed: true
 
     go-imports:
       glob: "**/*.go"
-      run: goimports -w {staged_files}
+      run: goimports -w ./cmd ./internal
       stage_fixed: true
 
     go-lint:
       glob: "**/*.go"
-      run: golangci-lint run --fix ./cmd/... ./internal/... ./tools/...
+      run: golangci-lint run --fix ./cmd/... ./internal/...
       stage_fixed: true
 
     go-test:

@@ -16,7 +16,7 @@ import (
 // setupTestDatabase creates a temporary test database for isolation
 func setupTestDatabase(t *testing.T) *db.Database {
 	t.Helper()
-	// This creates a unique database like cg_test_<timestamp>
+	// This creates a unique database like rgw_test_<timestamp>
 	// and automatically drops it when the test completes
 	return dbtest.NewDatabase(t)
 }

@@ -6,5 +6,6 @@ package db
 // AdvisoryLockAuditChain serializes audit chain appends.
 const AdvisoryLockAuditChain int64 = 728443219
 
-// AdvisoryLockMigration protects the audit migration from concurrent execution.
+// AdvisoryLockMigration protects migrations from concurrent execution.
+// Note: Test databases (rgw_test_*) skip this lock entirely since they're unique per test.
 const AdvisoryLockMigration int64 = 728443218
