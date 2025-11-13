@@ -28,4 +28,11 @@ compose_cmd exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHE
 
 # Setup audit roles in gateway_dev
 echo "Setting up audit roles..."
-DATABASE_URL="postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable" ./scripts/setup-audit-roles.sh
+DEV_DB_URL="postgres://postgres:postgres@localhost:55432/gateway_dev?sslmode=disable"
+DATABASE_URL="$DEV_DB_URL" ./scripts/setup-audit-roles.sh
+
+# Run migrations
+if [ -f ./bin/rack-gateway-api ]; then
+  echo "Running migrations on gateway_dev..."
+  DATABASE_URL="$DEV_DB_URL" ./bin/rack-gateway-api migrate
+fi

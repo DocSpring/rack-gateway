@@ -3,6 +3,7 @@ version: "3"
 tasks:
   ensure:
     desc: Ensure the gateway_dev database exists
+    deps: [":go:build:gateway"]
     cmds:
       - ./scripts/ensure-dev-db.sh
     sources:
@@ -21,6 +22,7 @@ tasks:
   ensure:test:
     desc: Ensure the gateway_test database exists and is migrated
     run: once
+    deps: [":go:build:gateway"]
     cmds:
       - ./scripts/ensure-test-db.sh
     sources:
