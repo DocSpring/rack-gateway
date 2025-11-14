@@ -95,7 +95,6 @@ func setupDeployApprovalMFATest(t *testing.T, database *db.Database) *deployAppr
 func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	fixture := setupDeployApprovalMFATest(t, database)
 
@@ -337,7 +336,6 @@ func TestCreateAPIToken_AlwaysRequiresMFACode(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	fixture := setupDeployApprovalMFATest(t, database)
 	// Add token service to handler

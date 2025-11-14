@@ -9,6 +9,7 @@ import (
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
 // RegenerateBackupCodes godoc
@@ -55,16 +56,22 @@ func (h *AuthHandler) GetMFAStatus(c *gin.Context) {
 
 	methods, err := h.database.ListMFAMethods(ctx.userRecord.ID)
 	if err != nil {
+		gtwlog.Errorf("Failed to list MFA methods for user %d (%s): %v",
+			ctx.userRecord.ID, ctx.userRecord.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list mfa methods"})
 		return
 	}
 	trustedDevices, err := h.database.ListTrustedDevices(ctx.userRecord.ID)
 	if err != nil {
+		gtwlog.Errorf("Failed to list trusted devices for user %d (%s): %v",
+			ctx.userRecord.ID, ctx.userRecord.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list trusted devices"})
 		return
 	}
 	backupCodes, err := h.database.ListBackupCodes(ctx.userRecord.ID)
 	if err != nil {
+		gtwlog.Errorf("Failed to list backup codes for user %d (%s): %v",
+			ctx.userRecord.ID, ctx.userRecord.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list backup codes"})
 		return
 	}

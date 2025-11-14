@@ -23,7 +23,6 @@ import (
 // TestVerifyMFAUsesSharedHelper validates that VerifyMFA uses the shared verification flow
 func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("user@example.com", "User", []string{"viewer"})
 	if err != nil {
@@ -128,7 +127,6 @@ func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 // TestVerifyMFAHandlesFailure validates that the shared helper handles verification failures
 func TestVerifyMFAHandlesFailure(t *testing.T) {
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("user@example.com", "User", []string{"viewer"})
 	if err != nil {

@@ -162,7 +162,6 @@ func setupSettingsServices(
 	t.Helper()
 
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	settingsService := settings.NewService(database)
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
@@ -178,7 +177,6 @@ func setupSettingsServices(
 func setupSettingsHandler(t *testing.T) (*SettingsHandler, *db.Database, rbac.Manager) {
 	t.Helper()
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	mgr, err := rbac.NewDBManager(database, "example.com")
 	require.NoError(t, err)

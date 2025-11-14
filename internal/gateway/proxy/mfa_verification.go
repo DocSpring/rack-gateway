@@ -114,12 +114,11 @@ func (h *Handler) verifyWebAuthn(r *http.Request, authUser *auth.User, userRecor
 		return err
 	}
 
-	assertionResponse, _ := json.Marshal(assertionData.Assertion)
 	sessionIDPtr := getSessionIDPtr(authUser)
 	_, err = h.mfaService.VerifyWebAuthnAssertion(
 		userRecord,
 		[]byte(assertionData.SessionData),
-		assertionResponse,
+		[]byte(assertionData.AssertionResponse),
 		clientIPFromRequest(r),
 		r.UserAgent(),
 		sessionIDPtr,
@@ -132,18 +131,18 @@ func parseWebAuthnAssertion(assertionJSON []byte) (*webAuthnAssertionData, error
 	if err := json.Unmarshal(assertionJSON, &data); err != nil {
 		return nil, fmt.Errorf("invalid webauthn assertion JSON: %w", err)
 	}
+	if data.SessionData == "" {
+		return nil, fmt.Errorf("invalid webauthn assertion JSON: missing session_data")
+	}
+	if data.AssertionResponse == "" {
+		return nil, fmt.Errorf("invalid webauthn assertion JSON: missing assertion_response")
+	}
 	return &data, nil
 }
 
 type webAuthnAssertionData struct {
-	SessionData string `json:"session_data"`
-	Assertion   struct {
-		CredentialID      string `json:"credential_id"`
-		AuthenticatorData string `json:"authenticator_data"`
-		ClientDataJSON    string `json:"client_data_json"`
-		Signature         string `json:"signature"`
-		UserHandle        string `json:"user_handle"`
-	} `json:"assertion"`
+	SessionData       string `json:"session_data"`
+	AssertionResponse string `json:"assertion_response"`
 }
 
 func getSessionIDPtr(authUser *auth.User) *int64 {

@@ -20,7 +20,6 @@ import (
 func TestCreateDeployApprovalRequestResolvesTargetTokenByPublicID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("deployer@example.com", "Deploy User", []string{"deployer"})
 	require.NoError(t, err)

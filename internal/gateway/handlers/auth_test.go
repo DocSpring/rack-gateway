@@ -76,7 +76,6 @@ func findCookie(res *http.Response, name string) *http.Cookie {
 func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 	oauth := &fakeOAuth{}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("user@example.com", "User", []string{"viewer"})
 	if err != nil {
@@ -147,7 +146,6 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 	oauth := &fakeOAuth{resp: &auth.LoginResponse{Email: "dev@example.com", Name: "Dev"}}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	if _, err := database.CreateUser("dev@example.com", "Dev", []string{"viewer"}); err != nil {
 		t.Fatalf("failed to create test user: %v", err)
 	}
@@ -194,7 +192,6 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 	oauth := &fakeOAuth{resp: &auth.LoginResponse{Email: "prod@example.com", Name: "Prod"}}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	if _, err := database.CreateUser("prod@example.com", "Prod", []string{"viewer"}); err != nil {
 		t.Fatalf("failed to create test user: %v", err)
 	}
@@ -231,7 +228,6 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 func TestWebLogoutClearsCookie(t *testing.T) {
 	oauth := &fakeOAuth{}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
@@ -267,7 +263,6 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 func TestWebLoginStartSetsStateCookie(t *testing.T) {
 	oauth := &fakeOAuth{startURL: "http://idp.example.com/login", startState: "abc123"}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
@@ -306,7 +301,6 @@ func TestWebLoginStartSetsStateCookie(t *testing.T) {
 func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	oauth := &fakeOAuth{}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
@@ -340,7 +334,6 @@ func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 func TestDeleteMFAMethodClearsTrustedDevicesWhenFullyDisabled(t *testing.T) {
 	oauth := &fakeOAuth{}
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, mfaMethod := setupMFATestUser(t, database)
 	setupTrustedDevicesForTest(t, database, user.ID)

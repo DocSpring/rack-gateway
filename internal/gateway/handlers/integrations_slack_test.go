@@ -92,7 +92,6 @@ func (d *denyAllRBAC) GetRolePermissions(_ string) ([]string, error) {
 func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -145,7 +144,6 @@ func TestGetSlackIntegration_NotFound(t *testing.T) {
 func TestGetSlackIntegration_Found(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -205,7 +203,6 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 func TestUpdateSlackChannels(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -295,7 +292,6 @@ func TestUpdateSlackChannels(t *testing.T) {
 func TestDeleteSlackIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -353,7 +349,6 @@ func TestDeleteSlackIntegration(t *testing.T) {
 func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -398,7 +393,6 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 func TestEnforceIntegrationPermission_Unauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	handler := &AdminHandler{
 		database: database,
@@ -427,7 +421,6 @@ func TestEnforceIntegrationPermission_Unauthorized(t *testing.T) {
 func TestEnforceIntegrationPermission_Forbidden(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("user@example.com", "Regular User", []string{"developer"})
 	require.NoError(t, err)
@@ -466,7 +459,6 @@ func TestEnforceIntegrationPermission_Forbidden(t *testing.T) {
 func TestLoadSlackIntegration_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	handler := &AdminHandler{
 		database: database,
@@ -495,7 +487,6 @@ func TestLoadSlackIntegration_NotFound(t *testing.T) {
 func TestCreateSlackClient_InvalidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
@@ -546,7 +537,6 @@ type slackTestEnv struct {
 func setupSlackTestEnv(t *testing.T) *slackTestEnv {
 	gin.SetMode(gin.TestMode)
 	database := dbtest.NewDatabase(t)
-	t.Cleanup(func() { dbtest.Reset(t, database) })
 
 	user, err := database.CreateUser("admin@example.com", "Admin User", []string{"admin"})
 	require.NoError(t, err)
