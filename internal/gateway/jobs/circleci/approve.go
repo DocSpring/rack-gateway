@@ -12,6 +12,7 @@ import (
 // ApproveJobArgs contains parameters for CircleCI job approval
 type ApproveJobArgs struct {
 	WorkflowID              string `json:"workflow_id"`
+	PipelineNumber          string `json:"pipeline_number"`
 	ApprovalJobName         string `json:"approval_job_name"`
 	CircleCIToken           string `json:"circleci_token"`
 	DeployApprovalRequestID int64  `json:"deploy_approval_request_id"`
@@ -37,7 +38,7 @@ func (w *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs
 	// Create client with token from job args
 	client := circleci.NewClient(args.CircleCIToken)
 
-	if err := client.ApproveJob(args.WorkflowID, args.ApprovalJobName); err != nil {
+	if err := client.ApproveJob(args.WorkflowID, args.PipelineNumber, args.ApprovalJobName); err != nil {
 		return fmt.Errorf("failed to approve CircleCI job: %w", err)
 	}
 

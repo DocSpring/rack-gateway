@@ -11,6 +11,7 @@ import (
 func TestApproveJobArgs_Kind(t *testing.T) {
 	args := ApproveJobArgs{
 		WorkflowID:              "abc123-workflow-id",
+		PipelineNumber:          "6445",
 		ApprovalJobName:         "hold-for-approval",
 		CircleCIToken:           "circle-token-secret",
 		DeployApprovalRequestID: 789,

@@ -287,6 +287,7 @@ func (h *AdminHandler) enqueueCircleCIApprovalJob(c *gin.Context, record *db.Dep
 		_, err := h.jobsClient.Insert(c.Request.Context(), jobcircleci.ApproveJobArgs{
 			CircleCIToken:   h.config.CircleCIToken,
 			WorkflowID:      circleciMetadata.WorkflowID,
+			PipelineNumber:  circleciMetadata.PipelineNumber,
 			ApprovalJobName: circleciMetadata.ApprovalJobName,
 		}, &river.InsertOpts{
 			Queue:       jobs.QueueIntegrations,
