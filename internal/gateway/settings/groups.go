@@ -73,6 +73,8 @@ var appSettingGroupKeys = map[AppSettingGroup][]AppSettingKey{
 		AppSettingVCSProvider,
 		AppSettingVCSRepo,
 		AppSettingCIProvider,
+		AppSettingCircleCIApprovalJobName,
+		AppSettingCircleCIAutoApproveOnApproval,
 		AppSettingGitHubVerification,
 		AppSettingAllowDeployFromDefaultBranch,
 		AppSettingRequirePRForBranch,
