@@ -1,5 +1,5 @@
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const DEFAULT_MAX_ATTEMPTS = 60;
+const DEFAULT_MAX_ATTEMPTS = 120;
 const DEFAULT_INTERVAL_MS = 10_000;
 const MILLISECONDS_IN_SECOND = 1000;
 
