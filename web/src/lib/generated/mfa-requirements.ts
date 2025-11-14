@@ -470,6 +470,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "PUT",
+    pattern: "/api/v1/integrations/slack/alerts",
+    permissions: ["gateway:integration:update"],
+    mfaLevel: "step_up",
+  },
+  {
+    method: "PUT",
     pattern: "/api/v1/integrations/slack/channels",
     permissions: ["gateway:integration:update"],
     mfaLevel: "step_up",

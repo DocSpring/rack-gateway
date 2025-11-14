@@ -287,6 +287,7 @@ var httpRouteSpecs = []RouteSpec{
 	newHTTPRoute("POST", "/api/v1/integrations/slack/oauth/authorize", Gateway(ResourceIntegration, ActionCreate)),
 	newHTTPRoute("GET", "/api/v1/integrations/slack/oauth/callback", Gateway(ResourceIntegration, ActionCreate)),
 	newHTTPRoute("PUT", "/api/v1/integrations/slack/channels", Gateway(ResourceIntegration, ActionUpdate)),
+	newHTTPRoute("PUT", "/api/v1/integrations/slack/alerts", Gateway(ResourceIntegration, ActionUpdate)),
 	newHTTPRoute("DELETE", "/api/v1/integrations/slack", Gateway(ResourceIntegration, ActionDelete)),
 	newHTTPRoute("GET", "/api/v1/integrations/slack/channels/list", Gateway(ResourceIntegration, ActionRead)),
 	newHTTPRoute("POST", "/api/v1/integrations/slack/test", Gateway(ResourceIntegration, ActionUpdate)),
