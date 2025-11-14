@@ -1,0 +1,126 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  checks: read
+
+jobs:
+  release_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const script = require('./.github/wait-for-checks.js');
+            await script({ github, context, core });
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+      - name: Build binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          set -e
+          go build \
+            -tags nofido \
+            -buildvcs=false \
+            -ldflags "-s -w" \
+            -o rack-gateway-linux-amd64 \
+            ./cmd/rack-gateway/
+      - name: Create archive
+        run: |
+          set -e
+          tar czf rack-gateway-linux-amd64.tar.gz rack-gateway-linux-amd64
+          echo "ASSET_PATH=rack-gateway-linux-amd64.tar.gz" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          path: ${{ env.ASSET_PATH }}
+          name: rack-gateway-linux-amd64
+
+  release_create:
+    runs-on: ubuntu-latest
+    needs:
+      - release_build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              echo "Error: Invalid tag format $TAG (expected v*.*.* semver)" >&2
+              exit 1
+            fi
+            echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+            VERSION="${TAG#v}"
+            echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          else
+            # For workflow_dispatch, use latest tag
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$TAG" ]; then
+              echo "Error: No tags found. Cannot create release without a tag." >&2
+              exit 1
+            fi
+            echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+            VERSION="${TAG#v}"
+            echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          fi
+      - name: Generate checksums
+        run: |
+          set -e
+          cd artifacts
+          for dir in */; do
+            cd "$dir"
+            for file in *; do
+              case "$file" in
+                *.tar.gz|*.zip)
+                  if [ -f "$file" ]; then
+                    sha256sum "$file" > "${file}.sha256" || shasum -a 256 "$file" | awk '{print $1}' > "${file}.sha256"
+                  fi
+                  ;;
+              esac
+            done
+            cd ..
+          done
+          cd ..
+      - name: Generate changelog
+        run: |
+          cat > changelog.md <<EOF
+          ## Installation
+
+          ### Linux (x86_64)
+              curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/rack-gateway-linux-amd64.tar.gz | tar xz
+              sudo mv rack-gateway-linux-amd64 /usr/local/bin/rack-gateway
+              sudo chmod +x /usr/local/bin/rack-gateway
+              rack-gateway version
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.sha256
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
+          body_path: changelog.md
+          name: rack-gateway v${{ env.RELEASE_VERSION }}
+          draft: false
+          tag_name: ${{ env.RELEASE_TAG }}
