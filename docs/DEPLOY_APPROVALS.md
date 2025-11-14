@@ -116,7 +116,8 @@ The gateway supports automated CI job approval after admin approval. This is con
 2. **Admin approves** in gateway UI
 3. **Gateway reads app settings** to determine:
    - Which CI provider to use (`ci_provider`)
-   - Provider-specific configuration (`ci_org_slug`, approval job names, etc.)
+   - Which VCS provider (`vcs_provider`) and repository (`vcs_repo`) for URL building
+   - Provider-specific configuration (approval job names, etc.)
    - Whether auto-approval is enabled (`circleci_auto_approve_on_approval`)
 4. **Gateway calls CI API** to approve the waiting job
 5. **CI job unblocks** and deployment proceeds
@@ -128,9 +129,6 @@ The gateway supports automated CI job approval after admin approval. This is con
 ```bash
 # CircleCI API token (required for CircleCI integration)
 CIRCLECI_TOKEN=your-circleci-api-token
-
-# Default org slug (can be overridden per-app)
-RGW_SETTING_DEFAULT_CI_ORG_SLUG=gh/DocSpring/docspring
 ```
 
 **2. App Settings (Per-App via UI or API)**
@@ -139,8 +137,9 @@ Each app can configure:
 
 | Setting                             | Description                                                 | Example                     |
 | ----------------------------------- | ----------------------------------------------------------- | --------------------------- |
+| `vcs_provider`                      | Version control provider                                    | `github`                    |
+| `vcs_repo`                          | Repository in org/repo format for building pipeline URLs    | `DocSpring/docspring`       |
 | `ci_provider`                       | CI system to use                                            | `circleci`                  |
-| `ci_org_slug`                       | Organization/repo slug for building pipeline URLs           | `gh/DocSpring/docspring`    |
 | `circleci_approval_job_name`        | Name of approval job in CircleCI workflow                   | `approve_deploy_production` |
 | `circleci_auto_approve_on_approval` | Enable automatic CircleCI job approval after admin approval | `true`                      |
 
@@ -148,6 +147,8 @@ Settings can also be configured via environment variables:
 
 ```bash
 # Per-app settings via environment
+RGW_APP_MYAPP_SETTING_VCS_PROVIDER=github
+RGW_APP_MYAPP_SETTING_VCS_REPO=DocSpring/docspring
 RGW_APP_MYAPP_SETTING_CI_PROVIDER=circleci
 RGW_APP_MYAPP_SETTING_CIRCLECI_APPROVAL_JOB_NAME=approve_deploy_production
 RGW_APP_MYAPP_SETTING_CIRCLECI_AUTO_APPROVE_ON_APPROVAL=true
@@ -176,9 +177,9 @@ See [CIRCLECI.md](./CIRCLECI.md) for complete CircleCI integration documentation
 
 **Pipeline URL Building:**
 
-- Gateway uses `ci_org_slug` + `pipeline_number` from metadata
-- Builds URL: `https://app.circleci.com/pipelines/{ci_org_slug}/{pipeline_number}`
-- Example: `https://app.circleci.com/pipelines/github/DocSpring/docspring/6279`
+- Gateway uses `vcs_provider` + `vcs_repo` + `pipeline_number` from metadata
+- Builds URL: `https://app.circleci.com/pipelines/{vcs_short}/{vcs_repo}/{pipeline_number}`
+- Example: `https://app.circleci.com/pipelines/gh/DocSpring/docspring/6279`
 
 ## CLI Commands
 

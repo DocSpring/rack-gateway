@@ -11,26 +11,21 @@ type VcsProviderFieldsProps = {
   displayVcsProvider: string
   displayVcsRepo: string
   displayCiProvider: string
-  displayCiOrgSlug: string
   onChangeVcsProvider: (value: string | null) => void
   onChangeVcsRepo: (value: string) => void
   onChangeCiProvider: (value: string | null) => void
-  onChangeCiOrgSlug: (value: string | null) => void
 }
 
 export function VcsProviderFields({
   disabled,
   githubAvailable,
-  circleciAvailable,
   settings,
   displayVcsProvider,
   displayVcsRepo,
   displayCiProvider,
-  displayCiOrgSlug,
   onChangeVcsProvider,
   onChangeVcsRepo,
   onChangeCiProvider,
-  onChangeCiOrgSlug,
 }: VcsProviderFieldsProps) {
   return (
     <div className="space-y-4">
@@ -81,23 +76,6 @@ export function VcsProviderFields({
           </select>
           <SourceIndicator setting={settings?.ci_provider} />
         </div>
-      </div>
-
-      <div className={disabled || !circleciAvailable ? 'opacity-50' : ''}>
-        <Label htmlFor="ci-org-slug">CircleCI Org Slug</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            disabled={disabled || !circleciAvailable}
-            id="ci-org-slug"
-            onChange={(event) => onChangeCiOrgSlug(event.target.value)}
-            placeholder="gh/org-name"
-            value={displayCiOrgSlug}
-          />
-          <SourceIndicator setting={settings?.ci_org_slug} />
-        </div>
-        <p className="mt-1 text-muted-foreground text-xs">
-          Required for CircleCI integration. Format: <code>gh/org-name</code>
-        </p>
       </div>
     </div>
   )

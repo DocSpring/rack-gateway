@@ -8,9 +8,7 @@ type GlobalSettingKey uint8
 // Global setting keys enumerate supported global-level configuration options.
 const (
 	GlobalSettingAllowDestructiveActions GlobalSettingKey = iota
-	GlobalSettingDefaultCIOrgSlug
 	GlobalSettingDefaultCIProvider
-	GlobalSettingDefaultVCSOrgName
 	GlobalSettingDefaultVCSProvider
 	GlobalSettingDeployApprovalsEnabled
 	GlobalSettingDeployApprovalWindowMinutes
@@ -22,9 +20,7 @@ const (
 // Global setting key strings
 const (
 	KeyAllowDestructiveActions     = "allow_destructive_actions"
-	KeyDefaultCIOrgSlug            = "default_ci_org_slug"
 	KeyDefaultCIProvider           = "default_ci_provider"
-	KeyDefaultVCSOrgName           = "default_vcs_org_name"
 	KeyDefaultVCSProvider          = "default_vcs_provider"
 	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
 	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
@@ -35,9 +31,7 @@ const (
 
 var globalSettingKeyToString = [...]string{
 	KeyAllowDestructiveActions,
-	KeyDefaultCIOrgSlug,
 	KeyDefaultCIProvider,
-	KeyDefaultVCSOrgName,
 	KeyDefaultVCSProvider,
 	KeyDeployApprovalsEnabled,
 	KeyDeployApprovalWindowMinutes,
@@ -73,7 +67,6 @@ type AppSettingKey uint8
 const (
 	AppSettingAllowDeployFromDefaultBranch AppSettingKey = iota
 	AppSettingApprovedDeployCommands
-	AppSettingCIOrgSlug
 	AppSettingCIProvider
 	AppSettingCircleCIApprovalJobName
 	AppSettingCircleCIAutoApproveOnApproval
@@ -93,7 +86,6 @@ const (
 const (
 	KeyAllowDeployFromDefaultBranch  = "allow_deploy_from_default_branch"
 	KeyApprovedDeployCommands        = "approved_deploy_commands"
-	KeyCIOrgSlug                     = "ci_org_slug"
 	KeyCIProvider                    = "ci_provider"
 	KeyCircleCIApprovalJobName       = "circleci_approval_job_name"
 	KeyCircleCIAutoApproveOnApproval = "circleci_auto_approve_on_approval"
@@ -112,7 +104,6 @@ const (
 var appSettingKeyToString = [...]string{
 	KeyAllowDeployFromDefaultBranch,
 	KeyApprovedDeployCommands,
-	KeyCIOrgSlug,
 	KeyCIProvider,
 	KeyCircleCIApprovalJobName,
 	KeyCircleCIAutoApproveOnApproval,
@@ -157,9 +148,7 @@ const (
 // DefaultGlobalSettings defines all valid global settings with their default values.
 var DefaultGlobalSettings = map[string]interface{}{
 	KeyAllowDestructiveActions:     false,
-	KeyDefaultCIOrgSlug:            "",
 	KeyDefaultCIProvider:           "circleci",
-	KeyDefaultVCSOrgName:           "",
 	KeyDefaultVCSProvider:          "github",
 	KeyDeployApprovalsEnabled:      true,
 	KeyDeployApprovalWindowMinutes: 15,
@@ -172,7 +161,6 @@ var DefaultGlobalSettings = map[string]interface{}{
 var DefaultAppSettings = map[string]interface{}{
 	KeyAllowDeployFromDefaultBranch:  false,
 	KeyApprovedDeployCommands:        []string(nil),
-	KeyCIOrgSlug:                     nil, // nil means use global default
 	KeyCIProvider:                    nil, // nil means use global default
 	KeyCircleCIApprovalJobName:       "",
 	KeyCircleCIAutoApproveOnApproval: false,

@@ -24,9 +24,7 @@ var globalSettingGroupKeys = map[GlobalSettingGroup][]GlobalSettingKey{
 	},
 	GlobalSettingGroupVCSAndCIDefaults: {
 		GlobalSettingDefaultCIProvider,
-		GlobalSettingDefaultCIOrgSlug,
 		GlobalSettingDefaultVCSProvider,
-		GlobalSettingDefaultVCSOrgName,
 	},
 	GlobalSettingGroupDeployApprovals: {
 		GlobalSettingDeployApprovalsEnabled,
@@ -75,7 +73,6 @@ var appSettingGroupKeys = map[AppSettingGroup][]AppSettingKey{
 		AppSettingVCSProvider,
 		AppSettingVCSRepo,
 		AppSettingCIProvider,
-		AppSettingCIOrgSlug,
 		AppSettingGitHubVerification,
 		AppSettingAllowDeployFromDefaultBranch,
 		AppSettingRequirePRForBranch,

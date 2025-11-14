@@ -64,9 +64,6 @@ Configure the following environment variables on the gateway:
 ```bash
 # CircleCI API token with workflow approval permissions (required)
 CIRCLECI_TOKEN=your-circleci-api-token-here
-
-# Default CI org slug (optional, can be overridden per-app)
-RGW_SETTING_DEFAULT_CI_ORG_SLUG=gh/DocSpring/docspring
 ```
 
 **Generate CircleCI API Token:**
@@ -82,7 +79,6 @@ For Convox deployments, add to your `convox.yml`:
 environment:
   # ... other env vars ...
   - CIRCLECI_TOKEN
-  - RGW_SETTING_DEFAULT_CI_ORG_SLUG=gh/DocSpring/docspring
 ```
 
 Then set the secret:
@@ -97,8 +93,9 @@ Each app that uses CircleCI integration must configure these settings (via UI or
 
 | Setting                             | Required | Description                                                           | Example                     |
 | ----------------------------------- | -------- | --------------------------------------------------------------------- | --------------------------- |
+| `vcs_provider`                      | Yes      | Version control provider                                              | `github`                    |
+| `vcs_repo`                          | Yes      | Repository in org/repo format for building pipeline URLs              | `DocSpring/docspring`       |
 | `ci_provider`                       | Yes      | Must be set to `circleci`                                             | `circleci`                  |
-| `ci_org_slug`                       | Yes      | Organization and repo slug for building pipeline URLs                 | `gh/DocSpring/docspring`    |
 | `circleci_approval_job_name`        | Yes      | Name of the CircleCI approval job in your workflow                    | `approve_deploy_production` |
 | `circleci_auto_approve_on_approval` | Yes      | Enable automatic CircleCI job approval when admin approves in gateway | `true`                      |
 
@@ -106,8 +103,9 @@ Each app that uses CircleCI integration must configure these settings (via UI or
 
 ```bash
 # Per-app configuration via environment variables
+RGW_APP_MYAPP_SETTING_VCS_PROVIDER=github
+RGW_APP_MYAPP_SETTING_VCS_REPO=DocSpring/docspring
 RGW_APP_MYAPP_SETTING_CI_PROVIDER=circleci
-RGW_APP_MYAPP_SETTING_CI_ORG_SLUG=gh/DocSpring/docspring
 RGW_APP_MYAPP_SETTING_CIRCLECI_APPROVAL_JOB_NAME=approve_deploy_production
 RGW_APP_MYAPP_SETTING_CIRCLECI_AUTO_APPROVE_ON_APPROVAL=true
 ```
@@ -116,21 +114,21 @@ RGW_APP_MYAPP_SETTING_CIRCLECI_AUTO_APPROVE_ON_APPROVAL=true
 
 Navigate to the app settings page in the gateway UI and configure the CircleCI integration settings.
 
-### CI Org Slug Format
+### Repository Format
 
-The `ci_org_slug` setting specifies the VCS provider, organization, and repository:
+The `vcs_repo` setting specifies the repository in `org/repo` format:
 
-**Format:** `{vcs}/{org}/{repo}`
+**Format:** `{org}/{repo}`
 
 **Examples:**
 
-- GitHub: `gh/DocSpring/docspring`
-- Bitbucket: `bb/mycompany/myrepo`
+- GitHub: `DocSpring/docspring`
+- Bitbucket: `mycompany/myrepo`
 
-This is used to build pipeline URLs like:
+The gateway combines `vcs_provider` (e.g., `github`) with `vcs_repo` to build pipeline URLs like:
 
 ```
-https://app.circleci.com/pipelines/github/DocSpring/docspring/6279
+https://app.circleci.com/pipelines/gh/DocSpring/docspring/6279
 ```
 
 ## Tailscale Setup for CI/CD
@@ -393,19 +391,24 @@ To auto-approve a CircleCI job, the gateway needs:
 
 The gateway builds pipeline URLs for display in the web UI using:
 
-- `ci_org_slug` setting (e.g., `gh/DocSpring/docspring`)
+- `vcs_provider` setting (e.g., `github`)
+- `vcs_repo` setting (e.g., `DocSpring/docspring`)
 - `pipeline_number` from CI metadata
 
 **Built URL:**
 
 ```
-https://app.circleci.com/pipelines/{ci_org_slug}/{pipeline_number}
+https://app.circleci.com/pipelines/{vcs_short}/{vcs_repo}/{pipeline_number}
 ```
+
+Where `vcs_short` is derived from `vcs_provider`:
+- `github` → `gh`
+- `bitbucket` → `bb`
 
 **Example:**
 
 ```
-https://app.circleci.com/pipelines/github/DocSpring/docspring/6279
+https://app.circleci.com/pipelines/gh/DocSpring/docspring/6279
 ```
 
 This provides a direct link to the CircleCI pipeline in the deploy approval request detail page.
@@ -500,6 +503,8 @@ curl -H "Circle-Token: YOUR_TOKEN" https://circleci.com/api/v2/me
 
 1. **App settings configured:**
 
+   - `vcs_provider` is set (e.g., `github`)
+   - `vcs_repo` is set in org/repo format
    - `ci_provider` is set to `circleci`
    - `circleci_auto_approve_on_approval` is set to `true`
    - `circleci_approval_job_name` matches job name in workflow
@@ -552,9 +557,9 @@ If the pipeline URL shown in the UI is incorrect:
 
 **Check:**
 
-- `ci_org_slug` setting is correct format: `{vcs}/{org}/{repo}`
+- `vcs_provider` setting is correct (e.g., `github`)
+- `vcs_repo` setting is correct format: `{org}/{repo}`
 - `pipeline_number` was included in CI metadata
-- VCS prefix matches your VCS (`gh` for GitHub, `bb` for Bitbucket)
 
 ## Security Considerations
 

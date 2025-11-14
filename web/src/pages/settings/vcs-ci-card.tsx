@@ -4,7 +4,6 @@ import type { SettingsSetting } from '@/api/schemas'
 import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useStepUp } from '@/contexts/step-up-context'
@@ -22,22 +21,15 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
   const qc = useQueryClient()
   const { handleStepUpError } = useStepUp()
   const [vcsProvider, setVcsProvider] = useState<string | null>(null)
-  const [vcsOrgName, setVcsOrgName] = useState<string | null>(null)
   const [ciProvider, setCiProvider] = useState<string | null>(null)
-  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null)
 
   const currentVcsProvider = getSettingValue(settings?.default_vcs_provider, 'github')
-  const currentVcsOrgName = getSettingValue(settings?.default_vcs_org_name, '')
   const currentCiProvider = getSettingValue(settings?.default_ci_provider, 'circleci')
-  const currentCiOrgSlug = getSettingValue(settings?.default_ci_org_slug, '')
 
   const displayVcsProvider = vcsProvider ?? currentVcsProvider
-  const displayVcsOrgName = vcsOrgName ?? currentVcsOrgName
   const displayCiProvider = ciProvider ?? currentCiProvider
-  const displayCiOrgSlug = ciOrgSlug ?? currentCiOrgSlug
 
-  const hasChanges =
-    vcsProvider !== null || vcsOrgName !== null || ciProvider !== null || ciOrgSlug !== null
+  const hasChanges = vcsProvider !== null || ciProvider !== null
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -45,14 +37,8 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
       if (vcsProvider !== null) {
         updates.default_vcs_provider = vcsProvider
       }
-      if (vcsOrgName !== null) {
-        updates.default_vcs_org_name = vcsOrgName
-      }
       if (ciProvider !== null) {
         updates.default_ci_provider = ciProvider
-      }
-      if (ciOrgSlug !== null) {
-        updates.default_ci_org_slug = ciOrgSlug
       }
       return await api.put<Record<string, SettingsSetting>>(
         '/api/v1/settings/vcs-and-ci-defaults',
@@ -65,9 +51,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
         ...updatedSettings,
       }))
       setVcsProvider(null)
-      setVcsOrgName(null)
       setCiProvider(null)
-      setCiOrgSlug(null)
       toast.success('Provider settings updated')
     },
     onError: (error: unknown) => {
@@ -81,14 +65,8 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
       if (settings?.default_vcs_provider?.source === 'db') {
         keys.push('default_vcs_provider')
       }
-      if (settings?.default_vcs_org_name?.source === 'db') {
-        keys.push('default_vcs_org_name')
-      }
       if (settings?.default_ci_provider?.source === 'db') {
         keys.push('default_ci_provider')
-      }
-      if (settings?.default_ci_org_slug?.source === 'db') {
-        keys.push('default_ci_org_slug')
       }
       if (keys.length > 0) {
         const params = keys.map((key) => `key=${key}`).join('&')
@@ -105,9 +83,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
         }))
       }
       setVcsProvider(null)
-      setVcsOrgName(null)
       setCiProvider(null)
-      setCiOrgSlug(null)
       toast.success('Provider settings cleared')
     },
     onError: (error: unknown) => {
@@ -117,9 +93,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
 
   const handleCancel = () => {
     setVcsProvider(null)
-    setVcsOrgName(null)
     setCiProvider(null)
-    setCiOrgSlug(null)
   }
 
   const handleSave = async () => {
@@ -144,9 +118,7 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
 
   const hasDbSettings =
     settings?.default_vcs_provider?.source === 'db' ||
-    settings?.default_vcs_org_name?.source === 'db' ||
-    settings?.default_ci_provider?.source === 'db' ||
-    settings?.default_ci_org_slug?.source === 'db'
+    settings?.default_ci_provider?.source === 'db'
 
   return (
     <Card>
@@ -177,24 +149,6 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
           </div>
 
           <div>
-            <Label htmlFor="vcs-org-name">VCS Organization Name</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                disabled={disabled}
-                id="vcs-org-name"
-                onChange={(event) => setVcsOrgName(event.target.value)}
-                placeholder="github-org"
-                type="text"
-                value={displayVcsOrgName}
-              />
-              <SourceIndicator setting={settings?.default_vcs_org_name} />
-            </div>
-            <p className="mt-1 text-muted-foreground text-xs">
-              Default GitHub organization for repositories.
-            </p>
-          </div>
-
-          <div>
             <Label htmlFor="ci-provider">CI Provider</Label>
             <div className="flex items-center gap-2">
               <select
@@ -208,24 +162,6 @@ export function VcsCiCard({ settings, disabled }: VcsCiCardProps) {
               </select>
               <SourceIndicator setting={settings?.default_ci_provider} />
             </div>
-          </div>
-
-          <div>
-            <Label htmlFor="ci-org-slug">CI Organization Slug</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                disabled={disabled}
-                id="ci-org-slug"
-                onChange={(event) => setCiOrgSlug(event.target.value)}
-                placeholder="gh/YourOrg"
-                type="text"
-                value={displayCiOrgSlug}
-              />
-              <SourceIndicator setting={settings?.default_ci_org_slug} />
-            </div>
-            <p className="mt-1 text-muted-foreground text-xs">
-              For CircleCI use gh/YourOrg (GitHub) or bb/YourOrg (Bitbucket).
-            </p>
           </div>
         </div>
 

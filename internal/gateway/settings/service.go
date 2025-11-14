@@ -98,10 +98,21 @@ func parseEnvValue(envValue string, targetType interface{}) (interface{}, error)
 // getSetting retrieves a setting with environment fallback.
 // targetType is used to determine how to parse the value (e.g., bool, string, []string).
 func (s *Service) getSetting(appName *string, key string, defaultValue interface{}) (*Setting, error) {
+	return s.resolveSetting(appName, key, defaultValue, nil)
+}
+
+// resolveSetting retrieves a setting using either a preloaded map of DB values or
+// by querying the database directly, then falling back to env/default values.
+func (s *Service) resolveSetting(
+	appName *string,
+	key string,
+	defaultValue interface{},
+	preloaded map[string][]byte,
+) (*Setting, error) {
 	envVarName := getEnvVarName(appName, key)
 
-	// 1. Check database first
-	raw, found, err := s.db.GetSetting(appName, key)
+	// 1. Check database (preloaded map avoids multiple round-trips)
+	raw, found, err := s.loadSettingValue(appName, key, preloaded)
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +121,7 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 		if err := json.Unmarshal(raw, &value); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal setting %s: %w", key, err)
 		}
-		return &Setting{
-			Value:  value,
-			Source: SourceDB,
-			EnvVar: envVarName,
-		}, nil
+		return &Setting{Value: value, Source: SourceDB, EnvVar: envVarName}, nil
 	}
 
 	// 2. Check environment variable
@@ -132,11 +139,26 @@ func (s *Service) getSetting(appName *string, key string, defaultValue interface
 	}
 
 	// 3. Return default
-	return &Setting{
-		Value:  defaultValue,
-		Source: SourceDefault,
-		EnvVar: envVarName,
-	}, nil
+	return &Setting{Value: defaultValue, Source: SourceDefault, EnvVar: envVarName}, nil
+}
+
+// loadSettingValue returns the raw DB value for a setting, preferring a preloaded
+// map when provided to avoid repeated queries.
+func (s *Service) loadSettingValue(
+	appName *string,
+	key string,
+	preloaded map[string][]byte,
+) ([]byte, bool, error) {
+	if preloaded != nil {
+		raw, ok := preloaded[key]
+		return raw, ok, nil
+	}
+
+	raw, found, err := s.db.GetSetting(appName, key)
+	if err != nil {
+		return nil, false, err
+	}
+	return raw, found, nil
 }
 
 // GetGlobalSetting retrieves a global setting.
@@ -151,9 +173,14 @@ func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (
 
 // GetAllGlobalSettings retrieves all global settings with environment fallback.
 func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
-	result := make(map[string]*Setting)
+	rawSettings, err := s.db.GetAllSettings(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*Setting, len(DefaultGlobalSettings))
 	for key, defaultValue := range DefaultGlobalSettings {
-		setting, err := s.GetGlobalSetting(key, defaultValue)
+		setting, err := s.resolveSetting(nil, key, defaultValue, rawSettings)
 		if err != nil {
 			return nil, err
 		}
@@ -167,17 +194,25 @@ func (s *Service) GetAllGlobalSettings() (map[string]*Setting, error) {
 // For VCS/CI provider fields, if the app setting is nil/empty, it will use the global default
 // and mark the source as SourceGlobalDefault.
 func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error) {
-	result := make(map[string]*Setting)
+	rawAppSettings, err := s.db.GetAllSettings(&appName)
+	if err != nil {
+		return nil, err
+	}
+
+	globalSettings, err := s.GetAllGlobalSettings()
+	if err != nil {
+		return nil, err
+	}
 
 	// Map of app setting keys to their corresponding global default keys
 	globalDefaultKeys := map[string]string{
 		KeyVCSProvider: KeyDefaultVCSProvider,
 		KeyCIProvider:  KeyDefaultCIProvider,
-		KeyCIOrgSlug:   KeyDefaultCIOrgSlug,
 	}
 
+	result := make(map[string]*Setting, len(DefaultAppSettings))
 	for key, defaultValue := range DefaultAppSettings {
-		setting, err := s.GetAppSetting(appName, key, defaultValue)
+		setting, err := s.resolveSetting(&appName, key, defaultValue, rawAppSettings)
 		if err != nil {
 			return nil, err
 		}
@@ -186,14 +221,10 @@ func (s *Service) GetAllAppSettings(appName string) (map[string]*Setting, error)
 		if globalKey, hasGlobal := globalDefaultKeys[key]; hasGlobal {
 			// If app setting is nil or empty string, use global default
 			if setting.Value == nil || setting.Value == "" {
-				globalSetting, err := s.GetGlobalSetting(globalKey, "")
-				if err != nil {
-					return nil, err
+				if globalSetting, ok := globalSettings[globalKey]; ok {
+					setting.Value = globalSetting.Value
+					setting.Source = SourceGlobalDefault
 				}
-				// Use global value but mark as coming from global default
-				setting.Value = globalSetting.Value
-				setting.Source = SourceGlobalDefault
-				// Keep the app-level env var name for reference
 			}
 		}
 

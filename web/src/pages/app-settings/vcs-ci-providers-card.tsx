@@ -29,7 +29,6 @@ type StringOverrideKey =
   | 'vcs_provider'
   | 'vcs_repo'
   | 'ci_provider'
-  | 'ci_org_slug'
   | 'default_branch'
   | 'verify_git_commit_mode'
 
@@ -45,7 +44,6 @@ const STRING_OVERRIDE_KEYS: readonly StringOverrideKey[] = [
   'vcs_provider',
   'vcs_repo',
   'ci_provider',
-  'ci_org_slug',
   'default_branch',
   'verify_git_commit_mode',
 ]
@@ -84,7 +82,6 @@ type VcsCiDisplayValues = {
   vcsProvider: string
   vcsRepo: string
   ciProvider: string
-  ciOrgSlug: string
   githubVerification: boolean
   allowDeployFromDefaultBranch: boolean
   requirePRForBranch: boolean
@@ -100,7 +97,6 @@ type VcsCiFormState = {
   setVcsProvider: (value: string | null) => void
   setVcsRepo: (value: string | null) => void
   setCiProvider: (value: string | null) => void
-  setCiOrgSlug: (value: string | null) => void
   setGithubVerification: (value: boolean) => void
   setAllowDeployFromDefaultBranch: (value: boolean) => void
   setRequirePRForBranch: (value: boolean) => void
@@ -112,7 +108,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
   const [vcsProvider, setVcsProvider] = useState<string | null>(null)
   const [vcsRepo, setVcsRepo] = useState<string | null>(null)
   const [ciProvider, setCiProvider] = useState<string | null>(null)
-  const [ciOrgSlug, setCiOrgSlug] = useState<string | null>(null)
   const [githubVerification, setGithubVerification] = useState<boolean | null>(null)
   const [allowDeployFromDefaultBranch, setAllowDeployFromDefaultBranch] = useState<boolean | null>(
     null
@@ -126,7 +121,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
       vcs_provider: vcsProvider,
       vcs_repo: vcsRepo,
       ci_provider: ciProvider,
-      ci_org_slug: ciOrgSlug,
       default_branch: defaultBranch,
       verify_git_commit_mode: verifyGitCommitMode,
       github_verification: githubVerification,
@@ -135,7 +129,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     }),
     [
       allowDeployFromDefaultBranch,
-      ciOrgSlug,
       ciProvider,
       defaultBranch,
       githubVerification,
@@ -154,7 +147,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     const rawCiProvider = getSettingValue(settings?.ci_provider, '')
     const currentCiProvider =
       rawCiProvider || (settings?.ci_provider?.source === 'global_default' ? 'circleci' : '')
-    const currentCiOrgSlug = getSettingValue(settings?.ci_org_slug, '')
     const currentGithubVerification = getSettingValue(settings?.github_verification, true)
     const currentAllowDeployFromDefaultBranch = getSettingValue(
       settings?.allow_deploy_from_default_branch,
@@ -168,7 +160,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
       vcsProvider: mergeOverride(overrides.vcs_provider, currentVcsProvider),
       vcsRepo: mergeOverride(overrides.vcs_repo, currentVcsRepo),
       ciProvider: mergeOverride(overrides.ci_provider, currentCiProvider),
-      ciOrgSlug: mergeOverride(overrides.ci_org_slug, currentCiOrgSlug),
       githubVerification: mergeOverride(overrides.github_verification, currentGithubVerification),
       allowDeployFromDefaultBranch: mergeOverride(
         overrides.allow_deploy_from_default_branch,
@@ -192,7 +183,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     setVcsProvider(null)
     setVcsRepo(null)
     setCiProvider(null)
-    setCiOrgSlug(null)
     setGithubVerification(null)
     setAllowDeployFromDefaultBranch(null)
     setRequirePRForBranch(null)
@@ -208,7 +198,6 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     setVcsProvider,
     setVcsRepo,
     setCiProvider,
-    setCiOrgSlug,
     setGithubVerification: (value: boolean) => setGithubVerification(value),
     setAllowDeployFromDefaultBranch: (value: boolean) => setAllowDeployFromDefaultBranch(value),
     setRequirePRForBranch: (value: boolean) => setRequirePRForBranch(value),
@@ -235,7 +224,6 @@ export function VCSCIProvidersCard({
     setVcsProvider,
     setVcsRepo,
     setCiProvider,
-    setCiOrgSlug,
     setGithubVerification,
     setAllowDeployFromDefaultBranch,
     setRequirePRForBranch,
@@ -247,7 +235,6 @@ export function VCSCIProvidersCard({
     vcsProvider: displayVcsProvider,
     vcsRepo: displayVcsRepo,
     ciProvider: displayCiProvider,
-    ciOrgSlug: displayCiOrgSlug,
     githubVerification: displayGithubVerification,
     allowDeployFromDefaultBranch: displayAllowDeployFromDefaultBranch,
     requirePRForBranch: displayRequirePRForBranch,
@@ -305,7 +292,6 @@ export function VCSCIProvidersCard({
     settings?.vcs_provider?.source === 'db' ||
     settings?.vcs_repo?.source === 'db' ||
     settings?.ci_provider?.source === 'db' ||
-    settings?.ci_org_slug?.source === 'db' ||
     settings?.github_verification?.source === 'db' ||
     settings?.allow_deploy_from_default_branch?.source === 'db' ||
     settings?.require_pr_for_branch?.source === 'db' ||
@@ -328,12 +314,10 @@ export function VCSCIProvidersCard({
           <VcsProviderFields
             circleciAvailable={circleciAvailable}
             disabled={disabled}
-            displayCiOrgSlug={displayCiOrgSlug}
             displayCiProvider={displayCiProvider}
             displayVcsProvider={displayVcsProvider}
             displayVcsRepo={displayVcsRepo}
             githubAvailable={githubAvailable}
-            onChangeCiOrgSlug={setCiOrgSlug}
             onChangeCiProvider={(value) => setCiProvider(value || null)}
             onChangeVcsProvider={setVcsProvider}
             onChangeVcsRepo={setVcsRepo}

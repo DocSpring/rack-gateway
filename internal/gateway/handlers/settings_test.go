@@ -308,7 +308,8 @@ func TestGlobalSettingsVCSDefaults_MFA(t *testing.T) {
 		env.markRecentStepUp(t, session, time.Now())
 
 		payload := map[string]interface{}{
-			"default_ci_org_slug": "example",
+			"default_vcs_provider": "github",
+			"default_ci_provider":  "circleci",
 		}
 		w := env.performSettingsRequest(
 			t,

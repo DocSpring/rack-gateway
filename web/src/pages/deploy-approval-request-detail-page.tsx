@@ -85,17 +85,22 @@ function useDeployApprovalRequestData(id: string) {
     }
 
     const metadata = extractCircleCIMetadata(request.ci_metadata)
-    const ciOrgSlug = appSettings?.ci_org_slug?.value as string | undefined
+    const vcsProvider = appSettings?.vcs_provider?.value as string | undefined
+    const vcsRepo = appSettings?.vcs_repo?.value as string | undefined
 
-    if (metadata.pipelineNumber && ciOrgSlug) {
+    if (metadata.pipelineNumber && vcsProvider && vcsRepo) {
       return {
-        circleCIPipelineUrl: buildCircleCIPipelineUrl(ciOrgSlug, metadata.pipelineNumber),
+        circleCIPipelineUrl: buildCircleCIPipelineUrl(
+          vcsProvider,
+          vcsRepo,
+          metadata.pipelineNumber
+        ),
         circleCIMetadata: metadata,
       }
     }
 
     return { circleCIPipelineUrl: null, circleCIMetadata: metadata }
-  }, [appSettings?.ci_org_slug, request?.ci_metadata])
+  }, [appSettings?.vcs_provider, appSettings?.vcs_repo, request?.ci_metadata])
 
   return {
     request,
