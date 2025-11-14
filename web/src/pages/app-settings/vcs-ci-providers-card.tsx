@@ -1,9 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 
-import { getSettingValue } from '@/components/settings/source-indicator'
+import { getSettingValue, SourceIndicator } from '@/components/settings/source-indicator'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { api } from '@/lib/api'
@@ -31,11 +33,13 @@ type StringOverrideKey =
   | 'ci_provider'
   | 'default_branch'
   | 'verify_git_commit_mode'
+  | 'circleci_approval_job_name'
 
 type BooleanOverrideKey =
   | 'github_verification'
   | 'allow_deploy_from_default_branch'
   | 'require_pr_for_branch'
+  | 'circleci_auto_approve_on_approval'
 
 type OverrideState = Record<StringOverrideKey, string | null> &
   Record<BooleanOverrideKey, boolean | null>
@@ -46,12 +50,14 @@ const STRING_OVERRIDE_KEYS: readonly StringOverrideKey[] = [
   'ci_provider',
   'default_branch',
   'verify_git_commit_mode',
+  'circleci_approval_job_name',
 ]
 
 const BOOLEAN_OVERRIDE_KEYS: readonly BooleanOverrideKey[] = [
   'github_verification',
   'allow_deploy_from_default_branch',
   'require_pr_for_branch',
+  'circleci_auto_approve_on_approval',
 ]
 
 function buildUpdatePayload(overrides: OverrideState) {
@@ -87,6 +93,8 @@ type VcsCiDisplayValues = {
   requirePRForBranch: boolean
   defaultBranch: string
   verifyGitCommitMode: string
+  circleCIAutoApproveOnApproval: boolean
+  circleCIApprovalJobName: string
 }
 
 type VcsCiFormState = {
@@ -102,6 +110,8 @@ type VcsCiFormState = {
   setRequirePRForBranch: (value: boolean) => void
   setDefaultBranch: (value: string | null) => void
   setVerifyGitCommitMode: (value: string | null) => void
+  setCircleCIAutoApproveOnApproval: (value: boolean) => void
+  setCircleCIApprovalJobName: (value: string | null) => void
 }
 
 function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState {
@@ -115,6 +125,10 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
   const [requirePRForBranch, setRequirePRForBranch] = useState<boolean | null>(null)
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const [verifyGitCommitMode, setVerifyGitCommitMode] = useState<string | null>(null)
+  const [circleCIAutoApproveOnApproval, setCircleCIAutoApproveOnApproval] = useState<boolean | null>(
+    null
+  )
+  const [circleCIApprovalJobName, setCircleCIApprovalJobName] = useState<string | null>(null)
 
   const overrides = useMemo<OverrideState>(
     () => ({
@@ -123,13 +137,17 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
       ci_provider: ciProvider,
       default_branch: defaultBranch,
       verify_git_commit_mode: verifyGitCommitMode,
+      circleci_approval_job_name: circleCIApprovalJobName,
       github_verification: githubVerification,
       allow_deploy_from_default_branch: allowDeployFromDefaultBranch,
       require_pr_for_branch: requirePRForBranch,
+      circleci_auto_approve_on_approval: circleCIAutoApproveOnApproval,
     }),
     [
       allowDeployFromDefaultBranch,
       ciProvider,
+      circleCIApprovalJobName,
+      circleCIAutoApproveOnApproval,
       defaultBranch,
       githubVerification,
       requirePRForBranch,
@@ -155,6 +173,11 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     const currentRequirePRForBranch = getSettingValue(settings?.require_pr_for_branch, true)
     const currentDefaultBranch = getSettingValue(settings?.default_branch, 'main')
     const currentVerifyGitCommitMode = getSettingValue(settings?.verify_git_commit_mode, 'latest')
+    const currentCircleCIAutoApproveOnApproval = getSettingValue(
+      settings?.circleci_auto_approve_on_approval,
+      false
+    )
+    const currentCircleCIApprovalJobName = getSettingValue(settings?.circleci_approval_job_name, '')
 
     return {
       vcsProvider: mergeOverride(overrides.vcs_provider, currentVcsProvider),
@@ -170,6 +193,14 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
       verifyGitCommitMode: mergeOverride(
         overrides.verify_git_commit_mode,
         currentVerifyGitCommitMode
+      ),
+      circleCIAutoApproveOnApproval: mergeOverride(
+        overrides.circleci_auto_approve_on_approval,
+        currentCircleCIAutoApproveOnApproval
+      ),
+      circleCIApprovalJobName: mergeOverride(
+        overrides.circleci_approval_job_name,
+        currentCircleCIApprovalJobName
       ),
     }
   }, [overrides, settings])
@@ -188,6 +219,8 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     setRequirePRForBranch(null)
     setDefaultBranch(null)
     setVerifyGitCommitMode(null)
+    setCircleCIAutoApproveOnApproval(null)
+    setCircleCIApprovalJobName(null)
   }, [])
 
   return {
@@ -203,6 +236,8 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
     setRequirePRForBranch: (value: boolean) => setRequirePRForBranch(value),
     setDefaultBranch,
     setVerifyGitCommitMode,
+    setCircleCIAutoApproveOnApproval: (value: boolean) => setCircleCIAutoApproveOnApproval(value),
+    setCircleCIApprovalJobName,
   }
 }
 
@@ -229,6 +264,8 @@ export function VCSCIProvidersCard({
     setRequirePRForBranch,
     setDefaultBranch,
     setVerifyGitCommitMode,
+    setCircleCIAutoApproveOnApproval,
+    setCircleCIApprovalJobName,
   } = useVcsCiForm(settings)
 
   const {
@@ -240,6 +277,8 @@ export function VCSCIProvidersCard({
     requirePRForBranch: displayRequirePRForBranch,
     defaultBranch: displayDefaultBranch,
     verifyGitCommitMode: displayVerifyGitCommitMode,
+    circleCIAutoApproveOnApproval: displayCircleCIAutoApproveOnApproval,
+    circleCIApprovalJobName: displayCircleCIApprovalJobName,
   } = display
 
   const updateMutation = useMutation({
@@ -296,7 +335,9 @@ export function VCSCIProvidersCard({
     settings?.allow_deploy_from_default_branch?.source === 'db' ||
     settings?.require_pr_for_branch?.source === 'db' ||
     settings?.default_branch?.source === 'db' ||
-    settings?.verify_git_commit_mode?.source === 'db'
+    settings?.verify_git_commit_mode?.source === 'db' ||
+    settings?.circleci_auto_approve_on_approval?.source === 'db' ||
+    settings?.circleci_approval_job_name?.source === 'db'
 
   return (
     <Card>
@@ -338,6 +379,45 @@ export function VCSCIProvidersCard({
             onToggleRequirePRForBranch={setRequirePRForBranch}
             settings={settings}
           />
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="font-medium text-sm">CircleCI Deploy Approval Settings</h3>
+          <div className={disabled || !circleciAvailable ? 'opacity-50' : ''}>
+            <Label htmlFor="circleci-auto-approve">
+              Auto-approve CircleCI job on approval
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                checked={displayCircleCIAutoApproveOnApproval}
+                disabled={disabled || !circleciAvailable}
+                id="circleci-auto-approve"
+                onChange={(event) => setCircleCIAutoApproveOnApproval(event.target.checked)}
+                type="checkbox"
+              />
+              <SourceIndicator setting={settings?.circleci_auto_approve_on_approval} />
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">
+              Automatically trigger the CircleCI approval job when this deploy approval is approved
+            </p>
+          </div>
+
+          <div className={disabled || !circleciAvailable ? 'opacity-50' : ''}>
+            <Label htmlFor="circleci-approval-job-name">CircleCI Approval Job Name</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                disabled={disabled || !circleciAvailable}
+                id="circleci-approval-job-name"
+                onChange={(event) => setCircleCIApprovalJobName(event.target.value)}
+                placeholder="approve_deploy_staging"
+                value={displayCircleCIApprovalJobName}
+              />
+              <SourceIndicator setting={settings?.circleci_approval_job_name} />
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">
+              The name of the CircleCI approval job to auto-approve (e.g., "approve_deploy_staging")
+            </p>
+          </div>
         </div>
 
         <div className="flex justify-end gap-2">
