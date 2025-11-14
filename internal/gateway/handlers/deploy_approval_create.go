@@ -12,10 +12,8 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
-	"github.com/DocSpring/rack-gateway/internal/gateway/github"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
-	"github.com/DocSpring/rack-gateway/internal/gateway/settings"
 )
 
 // CreateDeployApprovalRequest handles the creation of a new deploy approval request.
@@ -196,31 +194,6 @@ func (h *APIHandler) authorizeCreateRequest(c *gin.Context, userEmail string) bo
 	return true
 }
 
-func (h *APIHandler) validateRequestFields(
-	c *gin.Context,
-	req CreateDeployApprovalRequestRequest,
-) (string, string, string, bool) {
-	message := strings.TrimSpace(req.Message)
-	if message == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
-		return "", "", "", false
-	}
-
-	gitCommitHash := strings.TrimSpace(req.GitCommitHash)
-	if gitCommitHash == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "git_commit_hash is required"})
-		return "", "", "", false
-	}
-
-	app := strings.TrimSpace(req.App)
-	if app == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app is required"})
-		return "", "", "", false
-	}
-
-	return message, gitCommitHash, app, true
-}
-
 func (h *APIHandler) resolveToken(
 	c *gin.Context,
 	dbUser *db.User,
@@ -275,151 +248,6 @@ func (h *APIHandler) marshalCIMetadata(c *gin.Context, req CreateDeployApprovalR
 		}
 	}
 	return ciMetadata, true
-}
-
-func (h *APIHandler) performGitHubVerification(
-	c *gin.Context,
-	app string,
-	req CreateDeployApprovalRequestRequest,
-	gitCommitHash string,
-) (string, bool) {
-	if h.settingsService == nil {
-		return "", true
-	}
-
-	enabled, err := getAppSettingBool(h.settingsService, app, settings.KeyGitHubVerification, true)
-	if err != nil {
-		gtwlog.Warnf("deploy approvals: failed to get github_verification setting app=%s: %v", app, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return "", false
-	}
-
-	if !enabled || h.config == nil || h.config.GitHubToken == "" {
-		return "", true
-	}
-
-	githubRepo, err := getAppSettingString(h.settingsService, app, settings.KeyVCSRepo, "")
-	if err != nil {
-		gtwlog.Warnf("deploy approvals: failed to get vcs_repo setting app=%s: %v", app, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return "", false
-	}
-
-	if githubRepo == "" {
-		return "", true
-	}
-
-	return h.verifyGitHubCommit(c, app, githubRepo, req, gitCommitHash)
-}
-
-func (h *APIHandler) verifyGitHubCommit(
-	c *gin.Context,
-	app string,
-	githubRepo string,
-	req CreateDeployApprovalRequestRequest,
-	gitCommitHash string,
-) (string, bool) {
-	gitBranch := strings.TrimSpace(req.GitBranch)
-	if gitBranch == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "git_branch is required for GitHub verification"})
-		return "", false
-	}
-
-	owner, repo := github.SplitRepo(githubRepo)
-	if owner == "" || repo == "" {
-		gtwlog.Warnf("deploy approvals: invalid vcs_repo format app=%s value=%s", app, githubRepo)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "GitHub integration misconfigured"})
-		return "", false
-	}
-
-	if ok := h.checkDefaultBranchRestriction(c, app, gitBranch); !ok {
-		return "", false
-	}
-
-	requirePR, verifyMode, ok := h.getVerificationSettings(c, app)
-	if !ok {
-		return "", false
-	}
-
-	client := github.NewClient(h.config.GitHubToken)
-	opts := github.VerifyCommitOptions{
-		RequirePR: requirePR,
-		Mode:      verifyMode,
-	}
-
-	prURL, err := client.VerifyCommitAndFindPR(owner, repo, gitBranch, gitCommitHash, opts)
-	if err != nil {
-		gtwlog.Warnf(
-			"deploy approvals: GitHub verification failed app=%s repo=%s/%s branch=%s commit=%s: %v",
-			app,
-			owner,
-			repo,
-			gitBranch,
-			gitCommitHash,
-			err,
-		)
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("GitHub verification failed: %s", err.Error())})
-		return "", false
-	}
-
-	return prURL, true
-}
-
-func (h *APIHandler) checkDefaultBranchRestriction(c *gin.Context, app, gitBranch string) bool {
-	allowDefault, err := getAppSettingBool(
-		h.settingsService,
-		app,
-		settings.KeyAllowDeployFromDefaultBranch,
-		false,
-	)
-	if err != nil {
-		gtwlog.Warnf(
-			"deploy approvals: failed to get allow_deploy_from_default_branch setting app=%s: %v",
-			app,
-			err,
-		)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return false
-	}
-
-	defaultBranch, err := getAppSettingString(h.settingsService, app, settings.KeyDefaultBranch, "main")
-	if err != nil {
-		gtwlog.Warnf("deploy approvals: failed to get default_branch setting app=%s: %v", app, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return false
-	}
-
-	if !allowDefault && gitBranch == defaultBranch {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("deploying from default branch '%s' is not allowed", defaultBranch),
-		})
-		return false
-	}
-
-	return true
-}
-
-func (h *APIHandler) getVerificationSettings(c *gin.Context, app string) (bool, string, bool) {
-	requirePR, err := getAppSettingBool(h.settingsService, app, settings.KeyRequirePRForBranch, true)
-	if err != nil {
-		gtwlog.Warnf("deploy approvals: failed to get require_pr_for_branch setting app=%s: %v", app, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return false, "", false
-	}
-
-	verifyMode, err := getAppSettingString(
-		h.settingsService,
-		app,
-		settings.KeyVerifyGitCommitMode,
-		settings.VerifyGitCommitModeLatest,
-	)
-	if err != nil {
-		gtwlog.Warnf("deploy approvals: failed to get verify_git_commit_mode setting app=%s: %v", app, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load app settings"})
-		return false, "", false
-	}
-
-	return requirePR, verifyMode, true
 }
 
 func (h *APIHandler) createApprovalRecord(

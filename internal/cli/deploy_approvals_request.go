@@ -17,6 +17,7 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "request",
 		Short: "Request manual approval for CI/CD deploy",
+		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cmd *cobra.Command, _ []string) error {
 			cfg, err := parseDeployApprovalRequestOptions(cmd, opts)
 			if err != nil {
