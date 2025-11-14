@@ -49,7 +49,12 @@ if [ "${PIPESTATUS[0]}" -ne 0 ]; then
 fi
 
 # Extract release ID from build output
-RELEASE_ID=$(grep -o 'release [A-Z0-9]*' "$BUILD_LOG" | tail -1 | awk '{print $2}')
+RELEASE_ID=$(
+  sed -n 's/^Release:[[:space:]]*//p' "$BUILD_LOG" | tail -1 | tr -d '[:space:]'
+)
+if [ -z "$RELEASE_ID" ]; then
+  RELEASE_ID=$(grep -oi 'release[[:space:]]\+[A-Z0-9]*' "$BUILD_LOG" | tail -1 | awk '{print $2}')
+fi
 rm -f "$BUILD_LOG"
 
 if [ -z "$RELEASE_ID" ]; then
@@ -102,4 +107,3 @@ echo "✓ Deployment complete!"
 echo "  Rack: $RACK_NAME"
 echo "  App: $APP_NAME"
 echo "  Release: $RELEASE_ID"
-
