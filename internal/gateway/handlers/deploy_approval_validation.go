@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 )
 
@@ -37,7 +38,7 @@ func (h *APIHandler) validateAppExists(c *gin.Context, app string) bool {
 		req.SetBasicAuth(username, rack.APIKey)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := httpclient.NewRackClient(10*time.Second, nil)
 	resp, err := client.Do(req)
 	if err != nil {
 		gtwlog.Errorf("deploy approvals: failed to validate app %s: %v", app, err)
