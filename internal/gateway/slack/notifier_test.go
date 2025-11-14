@@ -363,7 +363,7 @@ func TestFormatDeployApprovalAlert_BasicMessage(t *testing.T) {
 	require.Contains(t, blocksStr, "feature-branch")
 	require.Contains(t, blocksStr, "myapp")
 	require.Contains(t, blocksStr, "abc123d") // First 7 chars of commit
-	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approvals/req_abc123")
+	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approval-requests/req_abc123")
 }
 
 func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
@@ -403,7 +403,7 @@ func TestFormatDeployApprovalAlert_WithPRAndCI(t *testing.T) {
 	// Check all links are present
 	require.Contains(t, blocksStr, "github.com/org/repo/pull/42")
 	require.Contains(t, blocksStr, "circleci.com/gh/org/repo/123")
-	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approvals/req_abc123")
+	require.Contains(t, blocksStr, "gateway.example.com/app/deploy-approval-requests/req_abc123")
 	require.Contains(t, blocksStr, "Test User")
 	require.Contains(t, blocksStr, "user@example.com")
 }

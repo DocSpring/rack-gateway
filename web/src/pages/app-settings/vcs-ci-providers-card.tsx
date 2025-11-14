@@ -125,9 +125,9 @@ function useVcsCiForm(settings: AppSettingsResponse | undefined): VcsCiFormState
   const [requirePRForBranch, setRequirePRForBranch] = useState<boolean | null>(null)
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const [verifyGitCommitMode, setVerifyGitCommitMode] = useState<string | null>(null)
-  const [circleCIAutoApproveOnApproval, setCircleCIAutoApproveOnApproval] = useState<boolean | null>(
-    null
-  )
+  const [circleCIAutoApproveOnApproval, setCircleCIAutoApproveOnApproval] = useState<
+    boolean | null
+  >(null)
   const [circleCIApprovalJobName, setCircleCIApprovalJobName] = useState<string | null>(null)
 
   const overrides = useMemo<OverrideState>(
@@ -384,9 +384,7 @@ export function VCSCIProvidersCard({
         <div className="space-y-4">
           <h3 className="font-medium text-sm">CircleCI Deploy Approval Settings</h3>
           <div className={disabled || !circleciAvailable ? 'opacity-50' : ''}>
-            <Label htmlFor="circleci-auto-approve">
-              Auto-approve CircleCI job on approval
-            </Label>
+            <Label htmlFor="circleci-auto-approve">Auto-approve CircleCI job on approval</Label>
             <div className="flex items-center gap-2">
               <input
                 checked={displayCircleCIAutoApproveOnApproval}

@@ -139,7 +139,7 @@ func deployApprovalLinksBlock(req *db.DeployApprovalRequest, gatewayDomain strin
 		{
 			"type": "mrkdwn",
 			"text": fmt.Sprintf(
-				"🔗 <https://%s/app/deploy-approvals/%s|View Approval Request>",
+				"🔗 <https://%s/app/deploy-approval-requests/%s|View Approval Request>",
 				gatewayDomain,
 				req.PublicID,
 			),
