@@ -127,19 +127,20 @@ func (h *Handler) captureBuildCreation(
 		}
 	}
 
-	if buildID != "" && releaseID != "" {
+	// Track build_id in deploy approval immediately (release may not be set yet)
+	if buildID != "" {
 		tracker := getDeployApprovalTracker(r.Context())
 		gtwlog.Infof(
-			"captureBuildCreation: calling updateBuildApprovalTracking tracker=%v",
+			"captureBuildCreation: calling updateBuildApprovalTracking "+
+				"buildID=%s releaseID=%s tracker=%v",
+			buildID,
+			releaseID,
 			tracker != nil,
 		)
 		h.updateBuildApprovalTracking(r, buildID, releaseID)
 	} else {
 		gtwlog.Warnf(
-			"captureBuildCreation: skipping updateBuildApprovalTracking "+
-				"buildID=%s releaseID=%s",
-			buildID,
-			releaseID,
+			"captureBuildCreation: skipping updateBuildApprovalTracking (empty buildID)",
 		)
 	}
 }
@@ -195,12 +196,26 @@ func (h *Handler) captureBuildDetails(
 		return
 	}
 
-	if id := extractJSONString(obj["id"]); id != "" {
-		h.recordResourceCreator("build", id, email)
+	buildID := extractJSONString(obj["id"])
+	releaseID := extractJSONString(obj["release"])
+
+	if buildID != "" {
+		h.recordResourceCreator("build", buildID, email)
 	}
-	if rel := extractJSONString(obj["release"]); rel != "" {
-		if h.recordResourceCreator("release", rel, email) {
-			r.Header.Add("X-Release-Created", rel)
+	if releaseID != "" {
+		if h.recordResourceCreator("release", releaseID, email) {
+			r.Header.Add("X-Release-Created", releaseID)
+		}
+
+		// Update deploy approval with release_id if it was set after build completion
+		tracker := getDeployApprovalTracker(r.Context())
+		if tracker != nil && buildID != "" {
+			gtwlog.Infof(
+				"captureBuildDetails: updating approval with releaseID=%s for buildID=%s",
+				releaseID,
+				buildID,
+			)
+			h.updateBuildApprovalTracking(r, buildID, releaseID)
 		}
 	}
 }

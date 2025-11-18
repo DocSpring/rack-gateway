@@ -65,8 +65,10 @@ func createBuild(w http.ResponseWriter, r *http.Request) {
 		App:         app,
 		Description: "created by mock",
 		Status:      "running",
-		Release:     "R" + id[1:],
-		Started:     time.Now(),
+		// Release field is empty initially, matching real Convox API behavior.
+		// The release gets created and populated when the build completes.
+		Release: "",
+		Started: time.Now(),
 	}
 	builds := []Build{build}
 	if existing := releasesByApp[app]; existing != nil {

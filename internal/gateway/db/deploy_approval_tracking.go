@@ -1,28 +1,48 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 )
 
-// MarkDeployApprovalRequestBuildStarted records that a build has started for an approved deploy approval request
+// MarkDeployApprovalRequestBuildStarted records that a build has started for an approved deploy approval request.
+// The releaseID may be empty initially since the real Convox API returns builds with an empty release field
+// that gets populated later when the build completes.
 func (d *Database) MarkDeployApprovalRequestBuildStarted(id int64, buildID, releaseID string) error {
 	if strings.TrimSpace(buildID) == "" {
 		return fmt.Errorf("build id required")
 	}
-	if strings.TrimSpace(releaseID) == "" {
-		return fmt.Errorf("release id required")
+
+	var res sql.Result
+	var err error
+
+	// Flow: build creation returns buildID (releaseID empty), then later build completion returns releaseID
+	if releaseID != "" {
+		// Update only release_id (build_id already set from build creation)
+		res, err = d.exec(
+			`UPDATE deploy_approval_requests
+             SET release_id = ?,
+                 updated_at = NOW()
+             WHERE id = ? AND status = ?`,
+			releaseID,
+			id,
+			DeployApprovalRequestStatusApproved,
+		)
+	} else {
+		// Update only build_id (first call from build creation)
+		res, err = d.exec(
+			`UPDATE deploy_approval_requests
+             SET build_id = ?,
+                 updated_at = NOW()
+             WHERE id = ? AND status = ?`,
+			buildID,
+			id,
+			DeployApprovalRequestStatusApproved,
+		)
 	}
-	res, err := d.exec(
-		`UPDATE deploy_approval_requests
-         SET build_id = ?, release_id = ?, updated_at = NOW()
-         WHERE id = ? AND status = ?`,
-		buildID,
-		releaseID,
-		id,
-		DeployApprovalRequestStatusApproved,
-	)
+
 	if err != nil {
 		return fmt.Errorf("failed to update build tracking: %w", err)
 	}

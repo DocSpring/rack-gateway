@@ -201,20 +201,37 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 	ctx := context.WithValue(req.Context(), deployApprovalContextKey, tracker)
 	req = req.WithContext(ctx)
 
-	// Call the function under test
+	// Call the function under test - TWO separate calls to match real flow:
+	// 1. Build creation returns buildID (releaseID empty)
+	// 2. Build completion returns releaseID
 	buildID := "BTEST123"
 	releaseID := "RTEST456"
-	h.updateBuildApprovalTracking(req, buildID, releaseID)
 
-	// Verify build_id and release_id were saved to database
+	// First call: save build_id only (release is empty initially)
+	h.updateBuildApprovalTracking(req, buildID, "")
+
+	// Verify build_id was saved
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
 		GitCommitHash: "abc123",
 		StatusFilter:  "approved",
 	})
 	require.NoError(t, err)
-	require.Equal(t, buildID, updated.BuildID, "build_id should be saved to deploy approval request")
-	require.Equal(t, releaseID, updated.ReleaseID, "release_id should be saved to deploy approval request")
+	require.Equal(t, buildID, updated.BuildID, "build_id should be saved after first call")
+	require.Equal(t, "", updated.ReleaseID, "release_id should still be empty after first call")
+
+	// Second call: save release_id (build completes)
+	h.updateBuildApprovalTracking(req, buildID, releaseID)
+
+	// Verify release_id was saved
+	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:       apiToken.ID,
+		GitCommitHash: "abc123",
+		StatusFilter:  "approved",
+	})
+	require.NoError(t, err)
+	require.Equal(t, buildID, updated.BuildID, "build_id should still be set")
+	require.Equal(t, releaseID, updated.ReleaseID, "release_id should be saved after second call")
 }
 
 // TestUpdateBuildApprovalTracking_WithoutTracker tests that build_id and release_id are NOT saved
@@ -373,19 +390,19 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	ctx := context.WithValue(req.Context(), deployApprovalContextKey, tracker)
 	req = req.WithContext(ctx)
 
-	// Simulate build creation response
+	// Simulate build creation response (release is EMPTY initially - real Convox API behavior)
 	buildID := "BTEST123"
 	releaseID := "RTEST456"
 	responseObj := map[string]interface{}{
 		"id":      buildID,
-		"release": releaseID,
-		"status":  "created",
+		"release": "", // Empty initially!
+		"status":  "running",
 	}
 
-	// Call captureBuildCreation
+	// Call captureBuildCreation - should save build_id only
 	h.captureBuildCreation(req, "/apps/test-app/builds", responseObj, "deployer@example.com")
 
-	// Verify build_id and release_id were saved
+	// Verify build_id was saved but release_id is still empty
 	updated, err := database.FindDeployApprovalRequest(db.DeployApprovalLookup{
 		TokenID:       apiToken.ID,
 		GitCommitHash: "abc123",
@@ -400,8 +417,38 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 	)
 	require.Equal(
 		t,
+		"",
+		updated.ReleaseID,
+		"release_id should still be empty after build creation",
+	)
+
+	// Simulate build completion - GET /builds/{id} returns release_id
+	completedBuildObj := map[string]interface{}{
+		"id":      buildID,
+		"release": releaseID, // Now populated!
+		"status":  "complete",
+	}
+
+	// Call captureBuildDetails - should save release_id
+	h.captureBuildDetails(req, "/apps/test-app/builds/"+buildID, completedBuildObj, "deployer@example.com")
+
+	// Verify release_id was saved
+	updated, err = database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+		TokenID:       apiToken.ID,
+		GitCommitHash: "abc123",
+		StatusFilter:  "approved",
+	})
+	require.NoError(t, err)
+	require.Equal(
+		t,
+		buildID,
+		updated.BuildID,
+		"build_id should still be set",
+	)
+	require.Equal(
+		t,
 		releaseID,
 		updated.ReleaseID,
-		"captureBuildCreation should save release_id via updateBuildApprovalTracking",
+		"captureBuildDetails should save release_id when build completes",
 	)
 }

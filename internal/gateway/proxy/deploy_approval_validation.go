@@ -202,9 +202,12 @@ func (h *Handler) updateObjectURLApprovalTracking(r *http.Request, objectURL str
 // IMPORTANT: This uses the permission-based tracker (deployApprovalContextKey) which is THE MAIN
 // approval tracker set by RBAC when permission is granted. The git-SHA validation is an additional
 // security layer on top - when present, both must pass, but the permission tracker is always authoritative.
+//
+// Note: releaseID may be empty initially when the build is first created. The real Convox API
+// returns Build responses with an empty release field, which gets populated later when the build completes.
 func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseID string) {
-	if buildID == "" || releaseID == "" {
-		gtwlog.Warnf("updateBuildApprovalTracking: skipping update (empty buildID or releaseID)")
+	if buildID == "" {
+		gtwlog.Warnf("updateBuildApprovalTracking: skipping update (empty buildID)")
 		return
 	}
 
@@ -212,21 +215,33 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 	tracker := getDeployApprovalTracker(r.Context())
 	if tracker == nil || tracker.request == nil {
 		gtwlog.Errorf(
-			"updateBuildApprovalTracking: NO TRACKER - BuildID will not be saved! buildID=%s releaseID=%s",
+			"updateBuildApprovalTracking: NO TRACKER - BuildID will not be saved! "+
+				"buildID=%s releaseID=%s",
 			buildID,
 			releaseID,
 		)
 		return
 	}
 
-	gtwlog.Infof("updateBuildApprovalTracking: updating approval_id=%d public_id=%s with buildID=%s releaseID=%s",
-		tracker.request.ID, tracker.request.PublicID, buildID, releaseID)
+	gtwlog.Infof(
+		"updateBuildApprovalTracking: updating approval_id=%d public_id=%s "+
+			"buildID=%s releaseID=%s",
+		tracker.request.ID,
+		tracker.request.PublicID,
+		buildID,
+		releaseID,
+	)
 
 	err := h.database.MarkDeployApprovalRequestBuildStarted(tracker.request.ID, buildID, releaseID)
 	if err != nil {
 		gtwlog.Errorf("updateBuildApprovalTracking: failed to update approval: %v", err)
 	} else {
-		gtwlog.Infof("updateBuildApprovalTracking: successfully updated approval %d with buildID=%s releaseID=%s",
-			tracker.request.ID, buildID, releaseID)
+		gtwlog.Infof(
+			"updateBuildApprovalTracking: successfully updated approval %d "+
+				"buildID=%s releaseID=%s",
+			tracker.request.ID,
+			buildID,
+			releaseID,
+		)
 	}
 }

@@ -47,6 +47,12 @@ tasks:
       - docker exec rack-gateway-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS gateway_dev;"
       - docker exec rack-gateway-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS gateway_test;"
 
+  drop:test:
+    desc: Drop test database (DELETES ALL DATA)
+    cmds:
+      - docker compose --profile test stop gateway-api-test gateway-api-test-2 gateway-api-test-3
+      - docker exec rack-gateway-postgres-1 psql -U postgres -c "DROP DATABASE IF EXISTS gateway_test;"
+
   reset:
     aliases: [reset:all]
     desc: Drop and recreate all databases (DELETES ALL DATA)

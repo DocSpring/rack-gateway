@@ -10,7 +10,8 @@
     "**/coverage/**",
     "**/AGENTS.md",
     "**/CLAUDE.md",
-    "**/*_test.go"
+    "**/*_test.go",
+    "**/*.sql"
   ],
   "gitignore": true,
   "absolute": false

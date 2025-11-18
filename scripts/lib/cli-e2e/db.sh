@@ -52,7 +52,7 @@ assert_deploy_approval_fields() {
     local expected_release_id="${4:-}"
 
     local result
-    result=$(psql_query "SELECT object_url, build_id, release_id FROM deploy_approval_requests WHERE git_commit_hash = '$git_commit_hash' LIMIT 1;")
+    result=$(psql_query "SELECT object_url, build_id, release_id FROM deploy_approval_requests WHERE git_commit_hash = '$git_commit_hash' ORDER BY id DESC LIMIT 1;")
 
     if [[ -z "$result" ]]; then
         echo -e "${RED}ASSERTION FAILED: No deploy approval found for commit $git_commit_hash${NC}" >&2
