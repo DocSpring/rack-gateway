@@ -75,14 +75,15 @@ func (c *Client) ApproveJob(workflowID, pipelineNumber, jobName string) error {
 		return fmt.Errorf("job_name is required")
 	}
 
-	// Get the workflow details to find its name
+	// Get the workflow details to find its name and pipeline ID
 	originalWorkflow, err := c.getWorkflowDetails(workflowID)
 	if err != nil {
 		return fmt.Errorf("failed to get workflow details: %w", err)
 	}
 
 	// Find the latest workflow with the same name in the pipeline
-	latestWorkflowID, err := c.findLatestWorkflowByName(pipelineNumber, originalWorkflow.Name)
+	// Use the pipeline ID (UUID) from the workflow, not the pipeline number
+	latestWorkflowID, err := c.findLatestWorkflowByName(originalWorkflow.PipelineID, originalWorkflow.Name)
 	if err != nil {
 		return fmt.Errorf("failed to find latest workflow: %w", err)
 	}
@@ -203,8 +204,9 @@ type pipelineWorkflow struct {
 }
 
 // findLatestWorkflowByName finds the most recent workflow with the given name in a pipeline.
-func (c *Client) findLatestWorkflowByName(pipelineNumber, workflowName string) (string, error) {
-	url := fmt.Sprintf("%s/pipeline/%s/workflow", c.BaseURL, pipelineNumber)
+// pipelineID must be the UUID pipeline ID, not the pipeline number.
+func (c *Client) findLatestWorkflowByName(pipelineID, workflowName string) (string, error) {
+	url := fmt.Sprintf("%s/pipeline/%s/workflow", c.BaseURL, pipelineID)
 	body, err := c.doRequest(http.MethodGet, url)
 	if err != nil {
 		return "", err
@@ -224,7 +226,7 @@ func (c *Client) findLatestWorkflowByName(pipelineNumber, workflowName string) (
 		}
 	}
 
-	return "", fmt.Errorf("no workflow found with name %q in pipeline %s", workflowName, pipelineNumber)
+	return "", fmt.Errorf("no workflow found with name %q in pipeline %s", workflowName, pipelineID)
 }
 
 func findApprovalJobID(workflow *workflowResponse, jobName string) (string, error) {
