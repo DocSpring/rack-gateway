@@ -104,18 +104,34 @@ task dev
 - Docker & Docker Compose
 - Node.js 20+ and Bun 1.3+
 - mise (for environment variables) - [Install mise](https://mise.jdx.dev/getting-started.html)
+- libfido2 (for WebAuthn CLI support)
 
-Install the task runner (recommended):
+**Install libfido2:**
 
 ```bash
 # macOS (Homebrew)
-brew install go-task/tap/go-task
+brew install libfido2
+
+# Linux (Ubuntu/Debian)
+sudo apt-add-repository ppa:yubico/stable
+sudo apt-get update
+sudo apt-get install libfido2-dev
+```
+
+**Install all development dependencies:**
+
+Run the setup task to install task runner, bun, air, goimports, and libfido2:
+
+```bash
+# Automated setup (recommended)
+task dev-setup
+
+# Or install task runner first, then run dev-setup:
+# macOS (Homebrew)
+brew install go-task/tap/go-task && task dev-setup
 
 # Linux (curl)
-curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
-
-# Or use the convenience script
-sh scripts/dev-setup.sh
+curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin && task dev-setup
 ```
 
 ### Building

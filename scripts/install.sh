@@ -45,43 +45,25 @@ if ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 
-# Check for WebAuthn/FIDO2 system dependencies (Linux only)
-if [[ "$(uname)" == "Linux" ]]; then
-  missing_libs=()
-
-  # Check for libudev (needed for USB device management)
-  if ! pkg-config --exists libudev 2>/dev/null; then
-    missing_libs+=("libudev-dev")
-  fi
-
-  # Check for libusb-1.0 (needed for USB communication)
-  if ! pkg-config --exists libusb-1.0 2>/dev/null; then
-    missing_libs+=("libusb-1.0-0-dev")
-  fi
-
-  if [[ ${#missing_libs[@]} -gt 0 ]]; then
-    echo "WebAuthn/FIDO2 support requires system libraries: ${missing_libs[*]}" >&2
-    echo "" >&2
-    if command -v apt-get >/dev/null 2>&1; then
-      echo "Install with: sudo apt-get install ${missing_libs[*]}" >&2
-    elif command -v yum >/dev/null 2>&1; then
-      echo "Install with: sudo yum install libudev-devel libusb-devel" >&2
-    elif command -v dnf >/dev/null 2>&1; then
-      echo "Install with: sudo dnf install libudev-devel libusb-devel" >&2
-    else
-      echo "Please install the equivalent packages for your distribution." >&2
-    fi
-    echo "" >&2
-    echo "Without these libraries, WebAuthn authentication in the CLI will not work." >&2
-    echo "You can still use TOTP for MFA." >&2
-    echo "" >&2
-    read -p "Continue anyway? [y/N] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      exit 1
-    fi
-  fi
+# Check for libfido2 (required for WebAuthn/FIDO2 support)
+if ! pkg-config --exists libfido2 2>/dev/null; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+  echo "⚠️  libfido2 not found - required for WebAuthn CLI authentication" >&2
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+  echo "" >&2
+  echo "Run the setup task to install all development dependencies:" >&2
+  echo "  task dev-setup" >&2
+  echo "" >&2
+  echo "Without libfido2, the build will fail with:" >&2
+  echo "  fatal error: 'fido.h' file not found" >&2
+  echo "" >&2
+  echo "Alternative: Build without WebAuthn support using:" >&2
+  echo "  task go:build:cli:nofido" >&2
+  echo "" >&2
+  exit 1
 fi
+
+echo "✓ libfido2 detected: $(pkg-config --modversion libfido2)"
 
 echo "Installing rack-gateway CLI to: $INSTALL_DIR"
 

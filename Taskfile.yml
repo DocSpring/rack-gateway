@@ -103,3 +103,8 @@ tasks:
   preview:
     desc: Start preview stack and follow logs
     deps: [docker:preview:start]
+
+  dev-setup:
+    desc: Install development dependencies (task, bun, air, goimports, libfido2)
+    cmds:
+      - scripts/dev-setup.sh
