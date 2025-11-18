@@ -131,22 +131,29 @@ func (h *Handler) isValidAPIToken(authUser *auth.User) bool {
 	return authUser != nil && authUser.TokenID != nil
 }
 
+// approvalGatedActions maps resources to their approval-gated actions
+var approvalGatedActions = map[rbac.Resource][]rbac.Action{
+	rbac.ResourceObject:  {rbac.ActionCreate},
+	rbac.ResourceBuild:   {rbac.ActionCreate, rbac.ActionRead},
+	rbac.ResourceRelease: {rbac.ActionPromote, rbac.ActionRead},
+	rbac.ResourceProcess: {rbac.ActionStart, rbac.ActionExec, rbac.ActionTerminate},
+}
+
 func isApprovalGated(resource rbac.Resource, action rbac.Action, path string) bool {
-	if resource == rbac.ResourceObject && action == rbac.ActionCreate {
-		return true
-	}
-	if resource == rbac.ResourceBuild && (action == rbac.ActionCreate || action == rbac.ActionRead) {
-		return true
-	}
-	if resource == rbac.ResourceRelease && action == rbac.ActionPromote {
-		return true
-	}
-	if resource == rbac.ResourceProcess &&
-		(action == rbac.ActionStart || action == rbac.ActionExec || action == rbac.ActionTerminate) {
-		return true
-	}
+	// Special case: log reads are only gated for build logs
 	if resource == rbac.ResourceLog && action == rbac.ActionRead && isBuildLogPath(path) {
 		return true
+	}
+
+	// Check if action is in the list of gated actions for this resource
+	actions, ok := approvalGatedActions[resource]
+	if !ok {
+		return false
+	}
+	for _, gatedAction := range actions {
+		if action == gatedAction {
+			return true
+		}
 	}
 	return false
 }
@@ -285,6 +292,14 @@ func (h *Handler) approvalResolverFor(resource rbac.Resource, action rbac.Action
 		) (*db.DeployApprovalRequest, error) {
 			return h.findApprovalForProcessAction(r, deny, tokenID, app, rbac.ActionTerminate)
 		},
+		rbac.ResourceRelease.String() + ":" + rbac.ActionRead.String(): func(
+			r *http.Request,
+			deny denyFunc,
+			tokenID int64,
+			app string,
+		) (*db.DeployApprovalRequest, error) {
+			return h.findApprovalForReleaseRead(r, deny, tokenID, app)
+		},
 		rbac.ResourceRelease.String() + ":" + rbac.ActionPromote.String(): func(
 			r *http.Request,
 			deny denyFunc,
@@ -419,24 +434,53 @@ func (h *Handler) findApprovalForProcessAction(
 	return req, err
 }
 
+func (h *Handler) findApprovalForReleaseRead(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+) (*db.DeployApprovalRequest, error) {
+	// Use the same logic as promote - extract release ID and look up approval
+	return h.findApprovalForRelease(r, deny, tokenID, app, false)
+}
+
 func (h *Handler) findApprovalForReleasePromote(
 	r *http.Request,
 	deny denyFunc,
 	tokenID int64,
 	app string,
 ) (*db.DeployApprovalRequest, error) {
+	// Promote needs to check for already-deployed status
+	return h.findApprovalForRelease(r, deny, tokenID, app, true)
+}
+
+func (h *Handler) findApprovalForRelease(
+	r *http.Request,
+	deny denyFunc,
+	tokenID int64,
+	app string,
+	checkDeployed bool,
+) (*db.DeployApprovalRequest, error) {
 	releaseID := extractReleaseIDFromPath(r.URL.Path)
 	if releaseID == "" {
 		_, _, err := deny()
 		return nil, err
 	}
-	req, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
+
+	// For promote, we need to check if already deployed, so we can't filter by status
+	// For read, we can filter by approved status for efficiency
+	lookup := db.DeployApprovalLookup{
 		TokenID:   tokenID,
 		App:       app,
 		ReleaseID: releaseID,
-	})
+	}
+	if !checkDeployed {
+		lookup.StatusFilter = "approved"
+	}
+
+	req, err := h.database.FindDeployApprovalRequest(lookup)
 	if err == nil && req != nil {
-		if req.Status == db.DeployApprovalRequestStatusDeployed {
+		if checkDeployed && req.Status == db.DeployApprovalRequestStatusDeployed {
 			return nil, &deployApprovalError{
 				status:  http.StatusConflict,
 				message: "this deploy approval request has already been deployed",
