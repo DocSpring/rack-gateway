@@ -19,18 +19,14 @@ WORKDIR /app
 
 # Cache go mod download
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
-    go mod download
+RUN go mod download
 
 # Copy only the source needed to build the gateway
 COPY internal ./internal
 COPY cmd/gateway ./cmd/gateway
 
 # Build the gateway binary directly in this stage
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
-    CGO_ENABLED=0 go build -o /out/rack-gateway-api ./cmd/gateway \
+RUN CGO_ENABLED=0 go build -o /out/rack-gateway-api ./cmd/gateway \
     && /out/rack-gateway-api help
 
 FROM alpine:latest

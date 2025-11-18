@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/db"
+	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -107,10 +107,10 @@ func (h *Handler) evaluateAPITokenPermission(
 	req, err := h.findDeployApprovalForResource(r, deny, *authUser.TokenID, app, resource, action)
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-			log.Printf("DEBUG: deploy approval lookup failed: not found")
+			gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval lookup failed: not found")
 			return deny()
 		}
-		log.Printf("DEBUG: deploy approval lookup failed: %v", err)
+		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval lookup failed: %v", err)
 		return false, nil, err
 	}
 	if ok := commonApprovalChecks(req, deny); !ok {
@@ -123,7 +123,7 @@ func (h *Handler) evaluateAPITokenPermission(
 		app:       app,
 		releaseID: req.ReleaseID,
 	}
-	log.Printf("DEBUG: deploy approval permission granted")
+	gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval permission granted")
 	return true, tracker, nil
 }
 
@@ -161,7 +161,7 @@ func approvalsGloballyDisabled(h *Handler) bool {
 	}
 	enabled, err := h.settingsService.GetDeployApprovalsEnabled()
 	if err != nil {
-		log.Printf("Failed to get deploy_approvals_enabled setting: %v", err)
+		gtwlog.Warnf("Failed to get deploy_approvals_enabled setting: %v", err)
 		return false
 	}
 	return !enabled
@@ -178,18 +178,26 @@ func (h *Handler) resolveAppOrDeny(path string, deny denyFunc) (string, bool) {
 
 func commonApprovalChecks(req *db.DeployApprovalRequest, deny denyFunc) bool {
 	if req == nil {
-		log.Printf("DEBUG: deploy approval lookup returned nil request")
+		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval lookup returned nil request")
 		_, _, _ = deny()
 		return false
 	}
-	log.Printf("DEBUG: deploy approval found: id=%s status=%s process_ids=%v", req.PublicID, req.Status, req.ProcessIDs)
+	gtwlog.DebugTopicf(
+		gtwlog.TopicDeployApproval,
+		"deploy approval found: id=%s status=%s process_ids=%v",
+		req.PublicID, req.Status, req.ProcessIDs,
+	)
 	if req.ApprovalExpiresAt != nil && time.Now().After(*req.ApprovalExpiresAt) {
-		log.Printf("DEBUG: deploy approval expired")
+		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "deploy approval expired")
 		_, _, _ = deny()
 		return false
 	}
 	if req.Status != db.DeployApprovalRequestStatusApproved {
-		log.Printf("DEBUG: deploy approval status check failed: expected=approved actual=%s", req.Status)
+		gtwlog.DebugTopicf(
+			gtwlog.TopicDeployApproval,
+			"deploy approval status check failed: expected=approved actual=%s",
+			req.Status,
+		)
 		_, _, _ = deny()
 		return false
 	}
@@ -387,15 +395,15 @@ func (h *Handler) findApprovalForProcessAction(
 	action rbac.Action,
 ) (*db.DeployApprovalRequest, error) {
 	processID := extractProcessIDFromPath(r.URL.Path)
-	log.Printf(
-		"DEBUG: process %s - checking permission for tokenID=%d app=%s processID=%s",
+	gtwlog.DebugTopicf(gtwlog.TopicDeployApproval,
+		"process %s - checking permission for tokenID=%d app=%s processID=%s",
 		action,
 		tokenID,
 		app,
 		processID,
 	)
 	if processID == "" {
-		log.Printf("DEBUG: process %s - denied: empty processID", action)
+		gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "process %s - denied: empty processID", action)
 		_, _, err := deny()
 		return nil, err
 	}
@@ -405,9 +413,9 @@ func (h *Handler) findApprovalForProcessAction(
 		ProcessID:    processID,
 		StatusFilter: "approved",
 	}
-	log.Printf("DEBUG: process %s - looking up deploy approval: %+v", action, lookup)
+	gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "process %s - looking up deploy approval: %+v", action, lookup)
 	req, err := h.database.FindDeployApprovalRequest(lookup)
-	log.Printf("DEBUG: process %s - lookup result: req=%v err=%v", action, req != nil, err)
+	gtwlog.DebugTopicf(gtwlog.TopicDeployApproval, "process %s - lookup result: req=%v err=%v", action, req != nil, err)
 	return req, err
 }
 

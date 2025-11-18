@@ -40,6 +40,8 @@ const (
 	TopicEmailSummary = "email.summary"
 	// TopicEmailBody enables email body logging.
 	TopicEmailBody = "email.body"
+	// TopicDeployApproval enables deploy approval flow logging.
+	TopicDeployApproval = "deploy.approval"
 )
 
 // Reload reloads the logger configuration from environment variables.
