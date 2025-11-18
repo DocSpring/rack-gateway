@@ -29,17 +29,32 @@ func (h *Handler) recordResourceCreator(resourceType, resourceID, email string) 
 // and records the resource ID for audit logging.
 func (h *Handler) captureResourceCreator(r *http.Request, path string, body []byte, email string) {
 	if h.database == nil || h.rbacManager == nil {
+		gtwlog.Warnf(
+			"captureResourceCreator: skipping (database=%v rbacManager=%v)",
+			h.database != nil,
+			h.rbacManager != nil,
+		)
 		return
 	}
 	if len(body) == 0 {
+		gtwlog.Warnf("captureResourceCreator: skipping (empty body) path=%s", path)
 		return
 	}
 
 	obj, ok := h.parseResponseBody(body)
 	if !ok {
+		gtwlog.Warnf(
+			"captureResourceCreator: failed to parse response body path=%s",
+			path,
+		)
 		return
 	}
 
+	gtwlog.Infof(
+		"captureResourceCreator: processing path=%s email=%s",
+		path,
+		email,
+	)
 	h.captureAppCreation(r, path, obj, email)
 	h.captureBuildCreation(r, path, obj, email)
 	h.captureObjectUpload(r, path, obj, email)
@@ -97,6 +112,12 @@ func (h *Handler) captureBuildCreation(
 	buildID := extractJSONString(obj["id"])
 	releaseID := extractJSONString(obj["release"])
 
+	gtwlog.Infof(
+		"captureBuildCreation: extracted buildID=%s releaseID=%s from response",
+		buildID,
+		releaseID,
+	)
+
 	if buildID != "" {
 		h.setResourceWithAudit(r, "build", buildID, email, true)
 	}
@@ -107,7 +128,19 @@ func (h *Handler) captureBuildCreation(
 	}
 
 	if buildID != "" && releaseID != "" {
+		tracker := getDeployApprovalTracker(r.Context())
+		gtwlog.Infof(
+			"captureBuildCreation: calling updateBuildApprovalTracking tracker=%v",
+			tracker != nil,
+		)
 		h.updateBuildApprovalTracking(r, buildID, releaseID)
+	} else {
+		gtwlog.Warnf(
+			"captureBuildCreation: skipping updateBuildApprovalTracking "+
+				"buildID=%s releaseID=%s",
+			buildID,
+			releaseID,
+		)
 	}
 }
 

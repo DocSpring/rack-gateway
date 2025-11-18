@@ -113,6 +113,17 @@ func (h *Handler) shouldCaptureResponse(r *http.Request, path string, isJSON boo
 		}
 	}
 
+	// Only log when we decide to capture (to reduce noise)
+	if shouldCapture {
+		gtwlog.Infof(
+			"shouldCaptureResponse: method=%s path=%s capture=%v process=%v",
+			r.Method,
+			path,
+			shouldCapture,
+			captureProcess,
+		)
+	}
+
 	return shouldCapture, captureProcess
 }
 
