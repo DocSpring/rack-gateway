@@ -174,7 +174,7 @@ func (h *Handler) captureObjectUpload(
 		h.setResourceWithAudit(r, "object", key, email, false)
 	}
 
-	objectURL := extractJSONString(obj["url"])
+	objectURL := extractJSONString(obj["Url"])
 	gtwlog.Infof(
 		"[OBJECT_UPLOAD] captureObjectUpload: extracted objectURL=%s from response",
 		objectURL,

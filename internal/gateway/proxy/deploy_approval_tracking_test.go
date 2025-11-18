@@ -305,10 +305,10 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 	ctx := context.WithValue(req.Context(), deployApprovalContextKey, tracker)
 	req = req.WithContext(ctx)
 
-	// Simulate object upload response
+	// Simulate object upload response (Convox API returns "Url" with capital U)
 	objectURL := "object://test-app/tmp/abc123.tgz"
 	responseObj := map[string]interface{}{
-		"url": objectURL,
+		"Url": objectURL,
 		"key": "tmp/source.tgz",
 	}
 

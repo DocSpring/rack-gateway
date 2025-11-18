@@ -59,7 +59,7 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	writeJSON(w, map[string]string{"url": objectURL})
+	writeJSON(w, map[string]string{"Url": objectURL})
 }
 
 func downloadObject(w http.ResponseWriter, r *http.Request) {
