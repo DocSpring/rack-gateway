@@ -208,7 +208,7 @@ tasks:
     desc: Check for Go code duplication
     dir: internal
     cmds:
-      - jscpd .
+      - jscpd --silent .
 
   coverage:
     desc: Generate coverage report

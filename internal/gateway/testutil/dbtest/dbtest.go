@@ -3,6 +3,7 @@ package dbtest
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"os"
 	"strings"
@@ -96,7 +97,7 @@ func setupAdminConnection(t *testing.T, baseDSN string) (*sql.DB, func()) {
 }
 
 func generateTestDBName() string {
-	return fmt.Sprintf("rgw_test_%d", time.Now().UnixNano())
+	return fmt.Sprintf("rgw_test_%d_%d", time.Now().UnixNano(), rand.Int63())
 }
 
 func createDatabase(t *testing.T, admin *sql.DB, name string) {
