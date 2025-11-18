@@ -79,11 +79,18 @@ func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []b
 	if gitSHA == "" {
 		// No git-sha in request, skip git-sha validation
 		// RBAC permission check will still run separately
-		gtwlog.Infof("validateBuildRequestForAPIToken: no git-sha in request, skipping git-sha validation (tokenID=%d)", tokenID)
+		gtwlog.Infof(
+			"validateBuildRequestForAPIToken: no git-sha, skipping git-sha validation (tokenID=%d)",
+			tokenID,
+		)
 		return nil
 	}
 
-	gtwlog.Infof("validateBuildRequestForAPIToken: looking up approval for tokenID=%d git-sha=%s", tokenID, gitSHA)
+	gtwlog.Infof(
+		"validateBuildRequestForAPIToken: looking up approval for tokenID=%d git-sha=%s",
+		tokenID,
+		gitSHA,
+	)
 
 	// Check if there's an active approved deployment for this token and git commit
 	approval, err := h.database.FindDeployApprovalRequest(db.DeployApprovalLookup{
@@ -93,7 +100,11 @@ func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []b
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrDeployApprovalRequestNotFound) {
-			gtwlog.Warnf("validateBuildRequestForAPIToken: no approved deployment found for tokenID=%d git-sha=%s", tokenID, gitSHA)
+			gtwlog.Warnf(
+				"validateBuildRequestForAPIToken: no approved deployment (tokenID=%d git-sha=%s)",
+				tokenID,
+				gitSHA,
+			)
 			return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
 		}
 		gtwlog.Errorf("validateBuildRequestForAPIToken: database error looking up approval: %v", err)
@@ -101,19 +112,33 @@ func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []b
 	}
 
 	if approval == nil {
-		gtwlog.Warnf("validateBuildRequestForAPIToken: approval lookup returned nil for tokenID=%d git-sha=%s", tokenID, gitSHA)
+		gtwlog.Warnf(
+			"validateBuildRequestForAPIToken: approval lookup returned nil (tokenID=%d git-sha=%s)",
+			tokenID,
+			gitSHA,
+		)
 		return fmt.Errorf("deployment approval required for git commit %s", gitSHA)
 	}
 
-	gtwlog.Infof("validateBuildRequestForAPIToken: found approval id=%d public_id=%s for git-sha=%s", approval.ID, approval.PublicID, gitSHA)
+	gtwlog.Infof(
+		"validateBuildRequestForAPIToken: found approval id=%d public_id=%s for git-sha=%s",
+		approval.ID,
+		approval.PublicID,
+		gitSHA,
+	)
 
 	// Check for duplicate: only fail if object_url is set AND build already exists.
 	// The normal flow is: object upload (sets object_url) → build creation (uses same approval).
 	// If object_url is set but build hasn't been created yet, that's OK - it's the normal flow.
 	// This must happen BEFORE manifest validation to catch true duplicates even if manifest is invalid.
 	if approval.ObjectURL != "" && (approval.BuildID != "" || approval.ReleaseID != "") {
-		gtwlog.Warnf("validateBuildRequestForAPIToken: duplicate build attempt for approval id=%d (object_url=%s build_id=%s release_id=%s)",
-			approval.ID, approval.ObjectURL, approval.BuildID, approval.ReleaseID)
+		gtwlog.Warnf(
+			"validateBuildRequestForAPIToken: duplicate build (approval id=%d object_url=%s build_id=%s release_id=%s)",
+			approval.ID,
+			approval.ObjectURL,
+			approval.BuildID,
+			approval.ReleaseID,
+		)
 		return fmt.Errorf("an archive has already been uploaded for this deploy approval request")
 	}
 
@@ -128,7 +153,11 @@ func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []b
 	})
 	*r = *r.WithContext(ctx)
 
-	gtwlog.Infof("validateBuildRequestForAPIToken: stored buildApprovalContext with approval_id=%d git-sha=%s", approval.ID, gitSHA)
+	gtwlog.Infof(
+		"validateBuildRequestForAPIToken: stored buildApprovalContext (approval_id=%d git-sha=%s)",
+		approval.ID,
+		gitSHA,
+	)
 
 	return nil
 }
@@ -136,20 +165,34 @@ func (h *Handler) validateBuildRequestForAPIToken(r *http.Request, bodyBytes []b
 // updateObjectURLApprovalTracking updates the deploy approval request with object_url
 // after a successful object upload
 func (h *Handler) updateObjectURLApprovalTracking(r *http.Request, objectURL string) error {
+	if objectURL == "" {
+		gtwlog.Warnf("updateObjectURLApprovalTracking: skipping (empty objectURL)")
+		return nil
+	}
+
 	val := r.Context().Value(deployApprovalContextKey)
 	tracker, ok := val.(*deployApprovalTracker)
 	if !ok || tracker == nil || tracker.request == nil {
+		gtwlog.Errorf(
+			"updateObjectURLApprovalTracking: NO TRACKER - object_url will not be saved! objectURL=%s",
+			objectURL,
+		)
 		return nil
 	}
 
-	if objectURL == "" {
-		return nil
-	}
+	gtwlog.Infof(
+		"updateObjectURLApprovalTracking: updating approval_id=%d with objectURL=%s",
+		tracker.request.ID,
+		objectURL,
+	)
 
 	err := h.database.UpdateDeployApprovalRequestObjectURL(tracker.request.ID, objectURL)
 	if err != nil {
+		gtwlog.Errorf("updateObjectURLApprovalTracking: failed to update database: %v", err)
 		return fmt.Errorf("failed to track object URL for deployment approval: %w", err)
 	}
+
+	gtwlog.Infof("updateObjectURLApprovalTracking: successfully saved object_url to approval %d", tracker.request.ID)
 	return nil
 }
 
@@ -168,8 +211,11 @@ func (h *Handler) updateBuildApprovalTracking(r *http.Request, buildID, releaseI
 	// Use the permission-based tracker which is set by RBAC when permission is granted
 	tracker := getDeployApprovalTracker(r.Context())
 	if tracker == nil || tracker.request == nil {
-		gtwlog.Errorf("updateBuildApprovalTracking: NO PERMISSION TRACKER FOUND - BuildID will not be saved! buildID=%s releaseID=%s",
-			buildID, releaseID)
+		gtwlog.Errorf(
+			"updateBuildApprovalTracking: NO TRACKER - BuildID will not be saved! buildID=%s releaseID=%s",
+			buildID,
+			releaseID,
+		)
 		return
 	}
 

@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 
-psql_exec() {
+psql_query() {
     local sql="$1"
     local output
     set +e
@@ -11,6 +11,11 @@ psql_exec() {
         echo "$output" >&2
         exit $status
     fi
+    echo "$output"
+}
+
+psql_exec() {
+    psql_query "$1" > /dev/null
 }
 
 setup_user_mfa() {
@@ -38,6 +43,71 @@ UPDATE users SET mfa_enrolled = FALSE, mfa_enforced_at = NULL WHERE email = '${e
 SQL
     )
     psql_exec "$sql"
+}
+
+assert_deploy_approval_fields() {
+    local git_commit_hash="$1"
+    local expected_object_url="${2:-}"
+    local expected_build_id="${3:-}"
+    local expected_release_id="${4:-}"
+
+    local result
+    result=$(psql_query "SELECT object_url, build_id, release_id FROM deploy_approval_requests WHERE git_commit_hash = '$git_commit_hash' LIMIT 1;")
+
+    if [[ -z "$result" ]]; then
+        echo -e "${RED}ASSERTION FAILED: No deploy approval found for commit $git_commit_hash${NC}" >&2
+        return 1
+    fi
+
+    local actual_object_url actual_build_id actual_release_id
+    IFS=$'\t' read -r actual_object_url actual_build_id actual_release_id <<< "$result"
+
+    local failed=0
+
+    # Check object_url: "NOT_EMPTY" means any non-empty value
+    if [[ "$expected_object_url" == "NOT_EMPTY" ]]; then
+        if [[ -z "$actual_object_url" ]]; then
+            echo -e "${RED}ASSERTION FAILED: object_url should be set but is empty${NC}" >&2
+            failed=1
+        fi
+    elif [[ "$actual_object_url" != "$expected_object_url" ]]; then
+        echo -e "${RED}ASSERTION FAILED: object_url mismatch${NC}" >&2
+        echo -e "  Expected: '$expected_object_url'" >&2
+        echo -e "  Actual:   '$actual_object_url'" >&2
+        failed=1
+    fi
+
+    # Check build_id: "NOT_EMPTY" means any non-empty value
+    if [[ "$expected_build_id" == "NOT_EMPTY" ]]; then
+        if [[ -z "$actual_build_id" ]]; then
+            echo -e "${RED}ASSERTION FAILED: build_id should be set but is empty${NC}" >&2
+            failed=1
+        fi
+    elif [[ "$actual_build_id" != "$expected_build_id" ]]; then
+        echo -e "${RED}ASSERTION FAILED: build_id mismatch${NC}" >&2
+        echo -e "  Expected: '$expected_build_id'" >&2
+        echo -e "  Actual:   '$actual_build_id'" >&2
+        failed=1
+    fi
+
+    # Check release_id: "NOT_EMPTY" means any non-empty value
+    if [[ "$expected_release_id" == "NOT_EMPTY" ]]; then
+        if [[ -z "$actual_release_id" ]]; then
+            echo -e "${RED}ASSERTION FAILED: release_id should be set but is empty${NC}" >&2
+            failed=1
+        fi
+    elif [[ "$actual_release_id" != "$expected_release_id" ]]; then
+        echo -e "${RED}ASSERTION FAILED: release_id mismatch${NC}" >&2
+        echo -e "  Expected: '$expected_release_id'" >&2
+        echo -e "  Actual:   '$actual_release_id'" >&2
+        failed=1
+    fi
+
+    if [[ $failed -eq 1 ]]; then
+        return 1
+    fi
+
+    echo -e "${GREEN}✓ Deploy approval fields match: object_url='$actual_object_url' build_id='$actual_build_id' release_id='$actual_release_id'${NC}"
 }
 
 reset_all_test_state() {

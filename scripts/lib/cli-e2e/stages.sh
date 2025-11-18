@@ -68,6 +68,11 @@ run_api_token_tests() {
         return
     fi
 
+    # If admin tests were skipped, we need to log in now
+    if [[ -n "$SKIP_ADMIN_TESTS" ]]; then
+        login_cli_as "admin@example.com" "e2e"
+    fi
+
     echo -e "${YELLOW}Creating CI/CD API token for pipeline simulation...${NC}"
 
     clear_mfa_replay_protection
@@ -197,6 +202,9 @@ run_api_token_tests() {
     fi
     echo -e "${GREEN}✓ Duplicate object upload correctly rejected${NC}"
 
+    echo -e "${BLUE}Asserting object_url was saved (required for duplicate detection)...${NC}"
+    assert_deploy_approval_fields "$git_commit_hash" "NOT_EMPTY" "" ""
+
     echo -e "${YELLOW}Clearing object_url for next test...${NC}"
     psql_exec "UPDATE deploy_approval_requests SET object_url = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
@@ -240,6 +248,9 @@ EOF
     fi
     echo -e "${GREEN}✓ First valid manifest build succeeded${NC}"
 
+    echo -e "${BLUE}Asserting object_url, build_id, and release_id were saved...${NC}"
+    assert_deploy_approval_fields "$git_commit_hash" "NOT_EMPTY" "NOT_EMPTY" "NOT_EMPTY"
+
     echo -e "${BLUE}Test 5/6: Duplicate build creation (should fail)...${NC}"
     echo -e "${YELLOW}Clearing object_url to allow re-upload, keeping build_id...${NC}"
     psql_exec "UPDATE deploy_approval_requests SET object_url = NULL WHERE git_commit_hash = '$git_commit_hash';"
@@ -259,6 +270,9 @@ EOF
         exit 1
     fi
     echo -e "${GREEN}✓ Duplicate build creation correctly rejected${NC}"
+
+    echo -e "${BLUE}Asserting all fields are set (object uploaded before build failed)...${NC}"
+    assert_deploy_approval_fields "$git_commit_hash" "NOT_EMPTY" "NOT_EMPTY" "NOT_EMPTY"
 
     echo -e "${BLUE}Test 6/6: Default convox.yml with build (should fail)...${NC}"
     echo -e "${YELLOW}Clearing all fields for root manifest test...${NC}"
