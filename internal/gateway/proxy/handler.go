@@ -257,8 +257,24 @@ func (h *Handler) prepareProxyRequest(
 	}
 
 	if approvalTracker != nil {
+		log.Printf(
+			"[CONTEXT] Setting approvalTracker in context: approval_id=%d tokenID=%d app=%s resource=%s action=%s path=%s",
+			approvalTracker.request.ID,
+			approvalTracker.tokenID,
+			approvalTracker.app,
+			resource,
+			action,
+			r.URL.Path,
+		)
 		ctx := context.WithValue(r.Context(), deployApprovalContextKey, approvalTracker)
 		r = r.WithContext(ctx)
+	} else {
+		log.Printf(
+			"[CONTEXT] NO approvalTracker to set in context: resource=%s action=%s path=%s",
+			resource,
+			action,
+			r.URL.Path,
+		)
 	}
 
 	if !authUser.IsAPIToken {

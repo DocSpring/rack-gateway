@@ -650,23 +650,60 @@ See `docs/DATABASE_MAINTENANCE.md` for complete database maintenance procedures 
 
 ### Running SQL Queries
 
-**Development database:**
+**Development database (local Docker):**
 
 ```bash
 docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "YOUR_SQL_QUERY"
 ```
 
-**Test database:**
+**Test database (local Docker):**
 
 ```bash
 docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_test -c "YOUR_SQL_QUERY"
 ```
 
+**Staging database (via Tailscale):**
+
+```bash
+# Password location: reference/convox_racks_terraform/secrets.json -> staging.rack_gateway_rds_admin_password
+# Tailscale hostname: rds-rack-gateway-staging (find it with: tailscale status | grep rds)
+PGPASSWORD="$(jq -r .staging.rack_gateway_rds_admin_password reference/convox_racks_terraform/secrets.json)" psql -h rds-rack-gateway-staging -U rack_gateway_admin -d rack_gateway -c "YOUR_SQL_QUERY"
+```
+
+**Production US database (via Tailscale):**
+
+```bash
+# Password location: reference/convox_racks_terraform/secrets.json -> us.rack_gateway_rds_admin_password
+# Tailscale hostname: rds-rack-gateway-us (find it with: tailscale status | grep rds)
+PGPASSWORD="$(jq -r .us.rack_gateway_rds_admin_password reference/convox_racks_terraform/secrets.json)" psql -h rds-rack-gateway-us -U rack_gateway_admin -d rack_gateway -c "YOUR_SQL_QUERY"
+```
+
+**Production EU database (via Tailscale):**
+
+```bash
+# Password location: reference/convox_racks_terraform/secrets.json -> eu.rack_gateway_rds_admin_password
+# Tailscale hostname: rds-rack-gateway-eu (find it with: tailscale status | grep rds)
+PGPASSWORD="$(jq -r .eu.rack_gateway_rds_admin_password reference/convox_racks_terraform/secrets.json)" psql -h rds-rack-gateway-eu -U rack_gateway_admin -d rack_gateway -c "YOUR_SQL_QUERY"
+```
+
+**CRITICAL: Database credentials and Tailscale hostnames:**
+
+- **Secrets file**: `reference/convox_racks_terraform/secrets.json` (in repo root)
+- **Tailscale hostnames**: Find with `tailscale status | grep rds`
+  - Staging: `rds-rack-gateway-staging`
+  - US Production: `rds-rack-gateway-us`
+  - EU Production: `rds-rack-gateway-eu`
+- **Database name**: `rack_gateway` (production/staging), `gateway_dev` (local dev), `gateway_test` (local test)
+- **Admin user**: `postgres` (local), `rack_gateway_admin` (production/staging)
+
 **Examples:**
 
 ```bash
-# Check deploy approval requests
+# Check deploy approval requests (local dev)
 docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT id, message, status, created_at FROM deploy_approval_requests ORDER BY created_at DESC LIMIT 5;"
+
+# Check deploy approval requests (staging)
+PGPASSWORD="$(jq -r .staging.rack_gateway_rds_admin_password reference/convox_racks_terraform/secrets.json)" psql -h rds-rack-gateway-staging -U rack_gateway_admin -d rack_gateway -c "SELECT id, public_id, status, object_url, build_id, release_id, created_at FROM deploy_approval_requests ORDER BY created_at DESC LIMIT 5;"
 
 # Check users
 docker exec -i rack-gateway-postgres-1 psql -U postgres -d gateway_dev -c "SELECT id, email, role FROM users;"

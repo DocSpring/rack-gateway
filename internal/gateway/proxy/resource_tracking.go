@@ -155,6 +155,12 @@ func (h *Handler) captureObjectUpload(
 		return
 	}
 
+	gtwlog.Infof(
+		"[OBJECT_UPLOAD] captureObjectUpload: START path=%s email=%s",
+		path,
+		email,
+	)
+
 	segments := strings.Split(strings.TrimSpace(path), "/")
 	if len(segments) > 0 {
 		filename := segments[len(segments)-1]
@@ -168,10 +174,36 @@ func (h *Handler) captureObjectUpload(
 		h.setResourceWithAudit(r, "object", key, email, false)
 	}
 
-	if objectURL := extractJSONString(obj["url"]); objectURL != "" {
+	objectURL := extractJSONString(obj["url"])
+	gtwlog.Infof(
+		"[OBJECT_UPLOAD] captureObjectUpload: extracted objectURL=%s from response",
+		objectURL,
+	)
+
+	if objectURL != "" {
+		// Check if tracker exists in context BEFORE calling updateObjectURLApprovalTracking
+		val := r.Context().Value(deployApprovalContextKey)
+		tracker, ok := val.(*deployApprovalTracker)
+		gtwlog.Infof(
+			"[OBJECT_UPLOAD] captureObjectUpload: context check - has_value=%v is_tracker=%v tracker_nil=%v",
+			val != nil,
+			ok,
+			tracker == nil,
+		)
+		if tracker != nil {
+			gtwlog.Infof(
+				"[OBJECT_UPLOAD] captureObjectUpload: tracker found - approval_id=%d tokenID=%d app=%s",
+				tracker.request.ID,
+				tracker.tokenID,
+				tracker.app,
+			)
+		}
+
 		if err := h.updateObjectURLApprovalTracking(r, objectURL); err != nil {
 			gtwlog.Errorf("proxy: failed to update object URL tracking after validation passed: %v", err)
 		}
+	} else {
+		gtwlog.Warnf("[OBJECT_UPLOAD] captureObjectUpload: no objectURL in response body")
 	}
 }
 
