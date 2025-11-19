@@ -36,7 +36,7 @@ rack-gateway deploy-approval request \
 
 ### Admin Approval (Web UI)
 
-Admins review pending requests at `/app/deploy_approval_requests`:
+Admins review pending requests at `/app/deploy-approval-requests`:
 
 - View git commit hash, branch, PR link (if GitHub verification enabled)
 - Click through to see code changes
@@ -340,7 +340,7 @@ jobs:
 
 ### 2. Admin Approval
 
-Admin logs into gateway UI at `https://gateway.example.com/app/deploy_approval_requests`, reviews pending request, clicks "Approve" with MFA.
+Admin logs into gateway UI at `https://gateway.example.com/app/deploy-approval-requests`, reviews pending request, clicks "Approve" with MFA.
 
 ### 3. Automatic Job Approval
 
@@ -425,7 +425,7 @@ Even with a compromised CI/CD token, an attacker cannot:
    ```
 
 5. **Approve in UI:**
-   Visit `http://localhost:9447/app/deploy_approval_requests`
+   Visit `http://localhost:9447/app/deploy-approval-requests`
 
 6. **Test build validation:**
    Create test `convox.yml` with matching git commit in image tags and run build.

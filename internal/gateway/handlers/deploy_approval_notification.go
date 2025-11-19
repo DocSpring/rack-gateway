@@ -91,7 +91,7 @@ func (h *APIHandler) buildApprovalURL(publicID string) string {
 	} else {
 		gatewayURL = fmt.Sprintf("https://%s", gatewayURL)
 	}
-	return fmt.Sprintf("%s/app/deploy_approval_requests/%s", gatewayURL, publicID)
+	return fmt.Sprintf("%s/app/deploy-approval-requests/%s", gatewayURL, publicID)
 }
 
 func (h *APIHandler) enqueueGitHubComment(c *gin.Context, owner, repo string, prNumber int, comment string) {
