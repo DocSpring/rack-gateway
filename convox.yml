@@ -28,9 +28,9 @@ environment:
 
 services:
   gateway:
-    build:
-      path: .
-      manifest: Dockerfile
+    # To deploy: Build locally and push to Docker Hub using scripts/build-and-push.sh
+    # Then update the image tag below to the new version
+    image: docker.io/docspringcom/rack-gateway:latest
     command: ./scripts/start-gateway.sh
     environment:
       - PORT=8080
@@ -49,9 +49,8 @@ services:
       - eks.amazonaws.com/role-arn: "${IAM_ROLE_ARN}"
 
   admin:
-    build:
-      path: .
-      manifest: Dockerfile
+    # Uses same image as gateway service
+    image: docker.io/docspringcom/rack-gateway:latest
     command: echo "Use this service to run migrations, database admin tasks, etc."
     environment:
       - PORT=8080
