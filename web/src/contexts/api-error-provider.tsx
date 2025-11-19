@@ -10,6 +10,10 @@ import { useHttpClient } from './http-client-context'
 
 type InterceptorError = AxiosError & { suppressToast?: boolean }
 
+// Pre-compiled regex for performance (used in handleUnauthorized)
+const TRAILING_SLASH_REGEX = /\/$/
+const MULTIPLE_SLASHES_REGEX = /\/+/g
+
 const shouldSuppressError = (error: InterceptorError): boolean => {
   const suppressGlobal = (error?.config as { __suppressGlobalError?: boolean } | undefined)
     ?.__suppressGlobalError
@@ -48,6 +52,25 @@ const handleUnauthorized = (error: InterceptorError): boolean => {
     }
   }
   toast.error(SESSION_EXPIRED_MESSAGE)
+
+  // Redirect to login with returnTo parameter containing current path
+  // This allows redirecting back after successful authentication
+  if (typeof window !== 'undefined') {
+    const currentPath = window.location.pathname
+    const base = import.meta.env.BASE_URL || '/'
+    const loginPath = `${base}login`.replace(MULTIPLE_SLASHES_REGEX, '/')
+    const normalizedBase = base === '/' ? '' : base.replace(TRAILING_SLASH_REGEX, '')
+
+    // Only include returnTo if we're on an actual app page (not already on login/auth pages)
+    const isAuthPage = currentPath === loginPath || currentPath.includes('/auth/')
+    if (!isAuthPage && currentPath !== normalizedBase && currentPath !== `${normalizedBase}/`) {
+      const returnTo = currentPath
+      const loginURL = `${loginPath}?returnTo=${encodeURIComponent(returnTo)}`
+      window.location.href = loginURL
+      return true
+    }
+  }
+
   authService.logout()
   return true
 }

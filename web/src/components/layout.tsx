@@ -57,21 +57,209 @@ function isNavigationItemActive(item: NavigationItem, pathname: string): boolean
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }
 
+function buildNavigationItems(
+  userRoles: string[] | undefined,
+  setShowCliDialog: (show: boolean) => void
+): NavigationItem[] {
+  const nav: NavigationItem[] = [
+    { name: 'Rack', href: '/rack', icon: Server },
+    { name: 'Apps', href: '/apps', icon: Boxes },
+    { name: 'Processes', href: '/processes', icon: Cpu },
+    { name: 'Instances', href: '/instances', icon: HardDrive },
+    { name: 'Builds', href: '/builds', icon: Hammer },
+    { name: 'Releases', href: '/releases', icon: Blocks },
+    { name: 'Users', href: '/users', icon: Users },
+    { name: 'API Tokens', href: '/api-tokens', icon: Key },
+  ]
+
+  if (userRoles?.includes('admin')) {
+    nav.push({
+      name: 'Deploy Approvals',
+      href: '/deploy-approval-requests',
+      icon: ListChecks,
+    })
+  }
+
+  nav.push({ name: 'Audit Logs', href: '/audit-logs', icon: Logs })
+  nav.push({
+    name: 'Account Security',
+    href: '/account/security',
+    icon: Lock,
+  })
+
+  if (userRoles?.includes('admin')) {
+    nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
+    nav.push({ name: 'Settings', href: '/settings', icon: Settings })
+    nav.push({ name: 'Background Jobs', href: '/jobs', icon: ServerCog })
+  }
+
+  nav.push({
+    name: 'Configure CLI',
+    icon: TerminalSquare,
+    onSelect: () => setShowCliDialog(true),
+  })
+
+  return nav
+}
+
+function applyMfaEnrollmentRestrictions(nav: NavigationItem[]): NavigationItem[] {
+  return nav
+    .map((item) => {
+      if (item.href === '/account/security') {
+        return item
+      }
+      return { ...item, disabled: true }
+    })
+    .sort((a, b) => {
+      const aIsAccount = a.href === '/account/security'
+      const bIsAccount = b.href === '/account/security'
+      if (aIsAccount && !bIsAccount) {
+        return -1
+      }
+      if (!aIsAccount && bIsAccount) {
+        return 1
+      }
+      return 0
+    })
+}
+
+function normalizePathname(locationPathname: string): string {
+  const p = locationPathname || ''
+  const base = '/web'
+  if (p === base) {
+    return '/'
+  }
+  if (p.startsWith(`${base}/`)) {
+    const trimmed = p.slice(base.length)
+    return trimmed === '' ? '/' : trimmed
+  }
+  return p || '/'
+}
+
+function handleAuthRedirect(pathname: string): void {
+  const redirectTarget = pathname !== '/' ? `/app${pathname}` : undefined
+  const loginUrl = redirectTarget
+    ? `/app/login?returnTo=${encodeURIComponent(redirectTarget)}`
+    : '/app/login'
+  if (typeof window !== 'undefined') {
+    window.location.href = loginUrl
+  }
+}
+
+function buildMfaEnrollmentUrl(pathname: string): string {
+  const redirectTarget = pathname !== '/' ? pathname : undefined
+  return redirectTarget
+    ? `/account/security?redirect=${encodeURIComponent(redirectTarget)}`
+    : '/account/security'
+}
+
+function getRedirectTarget(
+  isLoading: boolean,
+  user: ReturnType<typeof useAuth>['user'],
+  pathname: string,
+  needsMfaEnrollment: boolean
+): string | null | undefined {
+  // Redirect to login with returnTo if user is not authenticated
+  if (!(isLoading || user) && pathname !== '/login' && !pathname.startsWith('/auth/')) {
+    handleAuthRedirect(pathname)
+    return null
+  }
+
+  // Redirect to MFA enrollment if needed
+  if (needsMfaEnrollment && pathname !== '/account/security') {
+    return buildMfaEnrollmentUrl(pathname)
+  }
+
+  // Redirect root to appropriate landing page
+  if (pathname === '/') {
+    return needsMfaEnrollment ? '/account/security' : '/rack'
+  }
+}
+
+function UserSection({
+  currentUserHref,
+  user,
+}: {
+  currentUserHref: string | null
+  user: ReturnType<typeof useAuth>['user']
+}) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      {currentUserHref ? (
+        <Link
+          className="group block min-w-0 flex-1 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          to={currentUserHref}
+        >
+          <p className="truncate font-medium text-sm group-hover:underline">
+            {user?.name || 'User'}
+          </p>
+          <p className="truncate text-muted-foreground text-xs group-hover:underline">
+            {user?.email}
+          </p>
+        </Link>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-sm">{user?.name || 'User'}</p>
+          <p className="truncate text-muted-foreground text-xs">{user?.email}</p>
+        </div>
+      )}
+      <ThemeToggle />
+    </div>
+  )
+}
+
+function NavigationItemComponent({ item, pathname }: { item: NavigationItem; pathname: string }) {
+  const Icon = item.icon
+  const isActive = isNavigationItemActive(item, pathname)
+  const itemClassName = cn(
+    'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
+    isActive
+      ? 'bg-accent text-foreground'
+      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+    item.disabled && 'pointer-events-none cursor-not-allowed opacity-50'
+  )
+
+  if (item.href) {
+    if (item.disabled) {
+      return (
+        <span aria-disabled="true" className={itemClassName} key={item.name}>
+          <Icon className="mr-4 h-6 w-6" />
+          {item.name}
+        </span>
+      )
+    }
+    return (
+      <Link
+        aria-disabled={item.disabled ? true : undefined}
+        className={itemClassName}
+        key={item.name}
+        tabIndex={item.disabled ? -1 : undefined}
+        to={item.href}
+      >
+        <Icon className="mr-4 h-6 w-6" />
+        {item.name}
+      </Link>
+    )
+  }
+
+  return (
+    <button
+      className={cn(itemClassName, 'w-full', !item.disabled && 'cursor-pointer')}
+      disabled={item.disabled}
+      key={item.name}
+      onClick={item.onSelect}
+      type="button"
+    >
+      <Icon className="mr-4 h-6 w-6" />
+      {item.name}
+    </button>
+  )
+}
+
 export function Layout() {
-  const { user, logout } = useAuth()
+  const { user, logout, isLoading } = useAuth()
   const location = useLocation()
-  const pathname = useMemo(() => {
-    const p = location.pathname || ''
-    const base = '/web'
-    if (p === base) {
-      return '/'
-    }
-    if (p.startsWith(`${base}/`)) {
-      const trimmed = p.slice(base.length)
-      return trimmed === '' ? '/' : trimmed
-    }
-    return p || '/'
-  }, [location.pathname])
+  const pathname = useMemo(() => normalizePathname(location.pathname), [location.pathname])
   const [showCliDialog, setShowCliDialog] = useState(false)
 
   const needsMfaEnrollment = Boolean(user?.mfa_required && !user?.mfa_enrolled)
@@ -86,66 +274,8 @@ export function Layout() {
   }, [])
 
   const navigation = useMemo<NavigationItem[]>(() => {
-    const nav: NavigationItem[] = [
-      { name: 'Rack', href: '/rack', icon: Server },
-      { name: 'Apps', href: '/apps', icon: Boxes },
-      { name: 'Processes', href: '/processes', icon: Cpu },
-      { name: 'Instances', href: '/instances', icon: HardDrive },
-      { name: 'Builds', href: '/builds', icon: Hammer },
-      { name: 'Releases', href: '/releases', icon: Blocks },
-      { name: 'Users', href: '/users', icon: Users },
-      { name: 'API Tokens', href: '/api-tokens', icon: Key },
-    ]
-
-    if (user?.roles?.includes('admin')) {
-      nav.push({
-        name: 'Deploy Approvals',
-        href: '/deploy-approval-requests',
-        icon: ListChecks,
-      })
-    }
-
-    nav.push({ name: 'Audit Logs', href: '/audit-logs', icon: Logs })
-    nav.push({
-      name: 'Account Security',
-      href: '/account/security',
-      icon: Lock,
-    })
-
-    if (user?.roles?.includes('admin')) {
-      nav.push({ name: 'Integrations', href: '/integrations', icon: Puzzle })
-      nav.push({ name: 'Settings', href: '/settings', icon: Settings })
-      nav.push({ name: 'Background Jobs', href: '/jobs', icon: ServerCog })
-    }
-
-    nav.push({
-      name: 'Configure CLI',
-      icon: TerminalSquare,
-      onSelect: () => setShowCliDialog(true),
-    })
-
-    if (needsMfaEnrollment) {
-      return nav
-        .map((item) => {
-          if (item.href === '/account/security') {
-            return item
-          }
-          return { ...item, disabled: true }
-        })
-        .sort((a, b) => {
-          const aIsAccount = a.href === '/account/security'
-          const bIsAccount = b.href === '/account/security'
-          if (aIsAccount && !bIsAccount) {
-            return -1
-          }
-          if (!aIsAccount && bIsAccount) {
-            return 1
-          }
-          return 0
-        })
-    }
-
-    return nav
+    const nav = buildNavigationItems(user?.roles, setShowCliDialog)
+    return needsMfaEnrollment ? applyMfaEnrollmentRestrictions(nav) : nav
   }, [needsMfaEnrollment, user?.roles])
 
   const currentUserHref = useMemo(() => {
@@ -155,13 +285,12 @@ export function Layout() {
     return `/users/${encodeURIComponent(user.email)}`
   }, [user?.email])
 
-  // Declarative redirect: when at layout root, go to Rack
-  if (needsMfaEnrollment && pathname !== '/account/security') {
-    return <Navigate replace to="/account/security" />
+  const redirectTarget = getRedirectTarget(isLoading, user, pathname, needsMfaEnrollment)
+  if (redirectTarget === null) {
+    return null
   }
-
-  if (pathname === '/') {
-    return <Navigate replace to={needsMfaEnrollment ? '/account/security' : '/rack'} />
+  if (redirectTarget) {
+    return <Navigate replace to={redirectTarget} />
   }
 
   return (
@@ -185,53 +314,9 @@ export function Layout() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {navigation.map((item) => {
-            const Icon = item.icon
-            const isActive = isNavigationItemActive(item, pathname)
-            const itemClassName = cn(
-              'flex items-center rounded-md px-3 py-2 font-medium text-sm transition-colors',
-              isActive
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              item.disabled && 'pointer-events-none cursor-not-allowed opacity-50'
-            )
-
-            if (item.href) {
-              if (item.disabled) {
-                return (
-                  <span aria-disabled="true" className={itemClassName} key={item.name}>
-                    <Icon className="mr-4 h-6 w-6" />
-                    {item.name}
-                  </span>
-                )
-              }
-              return (
-                <Link
-                  aria-disabled={item.disabled ? true : undefined}
-                  className={itemClassName}
-                  key={item.name}
-                  tabIndex={item.disabled ? -1 : undefined}
-                  to={item.href}
-                >
-                  <Icon className="mr-4 h-6 w-6" />
-                  {item.name}
-                </Link>
-              )
-            }
-
-            return (
-              <button
-                className={cn(itemClassName, 'w-full', !item.disabled && 'cursor-pointer')}
-                disabled={item.disabled}
-                key={item.name}
-                onClick={item.onSelect}
-                type="button"
-              >
-                <Icon className="mr-4 h-6 w-6" />
-                {item.name}
-              </button>
-            )
-          })}
+          {navigation.map((item) => (
+            <NavigationItemComponent item={item} key={item.name} pathname={pathname} />
+          ))}
         </nav>
 
         <Separator className="shrink-0" />
@@ -239,27 +324,7 @@ export function Layout() {
         {/* User section */}
         <div className="relative shrink-0 bg-card px-4 pt-3 pb-4">
           <div className="-top-[43px] pointer-events-none absolute left-0 h-[42px] w-full bg-gradient-to-t from-card via-card/5 to-transparent" />
-          <div className="mb-3 flex items-center justify-between gap-2">
-            {currentUserHref ? (
-              <Link
-                className="group block min-w-0 flex-1 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                to={currentUserHref}
-              >
-                <p className="truncate font-medium text-sm group-hover:underline">
-                  {user?.name || 'User'}
-                </p>
-                <p className="truncate text-muted-foreground text-xs group-hover:underline">
-                  {user?.email}
-                </p>
-              </Link>
-            ) : (
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-sm">{user?.name || 'User'}</p>
-                <p className="truncate text-muted-foreground text-xs">{user?.email}</p>
-              </div>
-            )}
-            <ThemeToggle />
-          </div>
+          <UserSection currentUserHref={currentUserHref} user={user} />
           {user?.rack && (
             <div className="mb-3 text-muted-foreground text-xs">
               <div className="group relative inline-flex items-center">

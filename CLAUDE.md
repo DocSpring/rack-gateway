@@ -378,6 +378,28 @@ This runs ALL linters, typechecks, unit tests, builds, and E2E tests. **Must pas
 - When an end-to-end scenario needs verification, run the focused command (for example `task web:e2e -- --grep "manage MFA"`).
 - Leverage `task ci` for the full pre-merge sweep once individual pieces are green.
 
+**Debugging E2E Test Failures:**
+
+When E2E tests fail and you're stuck, use these strategies:
+
+1. **Focus on ONE test** - Use `--grep` to run a single test in isolation: `task web:e2e -- --grep "test name"`
+2. **Add extensive debug logging** - Temporarily add console.log statements in the test code to trace execution flow
+3. **Fast feedback loops when changing ONLY test files**:
+   - If you've ONLY changed E2E test files (files in `web/e2e/*.spec.ts`), you can run Playwright directly without rebuilding Docker images
+   - Run: `cd web && bunx playwright test e2e/your-test.spec.ts` (much faster than `task web:e2e`)
+   - ⚠️ **CRITICAL**: This ONLY works for changes to test files themselves. If you modified ANY application code (TypeScript/TSX/Go), you MUST rebuild with `task web:e2e`
+   - Examples of when you MUST rebuild:
+     - Changed any React component (`.tsx`)
+     - Changed any TypeScript module (`.ts`) in `web/src/`
+     - Changed any Go code (`.go`)
+     - Changed routing, API handlers, or any backend logic
+   - When in doubt, rebuild with `task web:e2e`
+4. **Use Playwright's debugging tools**:
+   - Run with `--headed` to see the browser: `bunx playwright test --headed e2e/test.spec.ts`
+   - Run with `--debug` to use Playwright Inspector (interactive debugging)
+   - Check screenshots/videos in `test-results/` after failures
+5. **Check browser console errors** - React errors and network failures are logged in the Playwright error output
+
 **Two development modes:**
 
 1. **Overmind dev mode (Procfile.dev)** - Used by `task dev`, runs locally with hot reload via air:

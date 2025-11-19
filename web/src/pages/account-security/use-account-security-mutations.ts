@@ -20,6 +20,7 @@ import {
   updatePreferredMFAMethod,
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
+import { resolveWebRedirect } from '@/lib/routes'
 import {
   createCredential,
   prepareCreationOptions,
@@ -42,6 +43,7 @@ type AccountSecurityMutationsDeps = {
   ) => void
   setEditLabel: (value: string) => void
   setOpenDropdownId: (value: number | null) => void
+  redirectTarget: string | null
 }
 
 export function useAccountSecurityMutations({
@@ -58,6 +60,7 @@ export function useAccountSecurityMutations({
   setEditingMethod,
   setEditLabel,
   setOpenDropdownId,
+  redirectTarget,
 }: AccountSecurityMutationsDeps) {
   const startTOTPMutation = useMutation({
     mutationFn: startTOTPEnrollment,
@@ -112,6 +115,12 @@ export function useAccountSecurityMutations({
         refreshUser().catch(() => {
           /* noop */
         })
+
+        // Redirect to original destination after enrollment if redirect parameter exists
+        if (redirectTarget && typeof window !== 'undefined') {
+          const destination = resolveWebRedirect(redirectTarget)
+          window.location.assign(destination)
+        }
       } catch (error) {
         const msg = getErrorMessage(error)
         toast.error(`WebAuthn enrollment failed: ${msg}`)
@@ -148,6 +157,12 @@ export function useAccountSecurityMutations({
       refreshUser().catch(() => {
         /* noop */
       })
+
+      // Redirect to original destination after enrollment if redirect parameter exists
+      if (redirectTarget && typeof window !== 'undefined') {
+        const destination = resolveWebRedirect(redirectTarget)
+        window.location.assign(destination)
+      }
     },
     onError: () => {
       setPendingEditMethod(null)

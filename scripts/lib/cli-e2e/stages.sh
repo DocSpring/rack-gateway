@@ -321,6 +321,14 @@ EOF
     fi
     echo -e "${GREEN}Build created release: $release_id${NC}"
 
+    # Verify deployer can read release info for the approved release
+    verify_rgw_command \
+        "releases info $release_id --app rack-gateway" \
+        "Id" \
+        "$release_id" \
+        "Build" "Created" "Description"
+
+
     verify_rgw_command_failure \
         "run web --app rack-gateway 'delete everything'" \
         "Error: You don't have permission to run processes"

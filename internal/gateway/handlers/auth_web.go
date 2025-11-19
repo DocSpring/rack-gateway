@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,14 +17,66 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
+func (h *AuthHandler) handleMFARedirect(
+	c *gin.Context,
+	userRecord *db.User,
+	session *db.UserSession,
+	redirectURL string,
+) bool {
+	enforceMFA := shouldEnforceMFA(h.mfaSettings, userRecord)
+	if !enforceMFA {
+		return false
+	}
+
+	// If user is not enrolled yet, redirect to enrollment page
+	if !userRecord.MFAEnrolled {
+		params := url.Values{}
+		params.Set("redirect", redirectURL)
+		enrollmentURL := fmt.Sprintf("%s?%s", WebRoute("account/security"), params.Encode())
+		c.Redirect(http.StatusFound, enrollmentURL)
+		return true
+	}
+
+	// If user is enrolled but not verified in this session, redirect to challenge page
+	if session.MFAVerifiedAt == nil {
+		params := url.Values{}
+		params.Set("channel", "web")
+		params.Set("redirect", redirectURL)
+		challengeURL := fmt.Sprintf("%s?%s", WebRoute("auth/mfa/challenge"), params.Encode())
+		c.Redirect(http.StatusFound, challengeURL)
+		return true
+	}
+
+	return false
+}
+
+func (h *AuthHandler) getValidatedRedirectURL(c *gin.Context) string {
+	returnTo := h.getReturnToCookie(c)
+	h.clearReturnToCookie(c)
+
+	redirectURL := DefaultWebRoute
+	if returnTo != "" && validateReturnTo(returnTo) {
+		redirectURL = returnTo
+	}
+	return redirectURL
+}
+
 // WebLoginStart godoc
 // @Summary Start web OAuth login
 // @Description Redirects the browser to the identity provider for login.
 // @Tags Auth
+// @Param returnTo query string false "URL to redirect to after successful login (must start with /app/)"
 // @Success 302 {string} string "Redirect to identity provider"
 // @Router /auth/web/login [get]
 func (h *AuthHandler) WebLoginStart(c *gin.Context) {
 	h.auditLogin(c, "web", "success")
+
+	// Capture and validate returnTo parameter
+	returnTo := strings.TrimSpace(c.Query("returnTo"))
+	if returnTo != "" && validateReturnTo(returnTo) {
+		h.setReturnToCookie(c, returnTo)
+	}
+
 	authURL, state := h.oauth.StartWebLogin()
 	h.setWebOAuthStateCookie(c, state)
 	c.Redirect(http.StatusFound, authURL)
@@ -92,16 +145,13 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		return
 	}
 
-	// Check if MFA verification is required
-	requireMFA := h.isMFARequired(userRecord)
-	if requireMFA && session.MFAVerifiedAt == nil {
-		params := url.Values{}
-		params.Set("channel", "web")
-		params.Set("redirect", DefaultWebRoute)
-		challengeURL := fmt.Sprintf("%s?%s", WebRoute("auth/mfa/challenge"), params.Encode())
-		c.Redirect(http.StatusFound, challengeURL)
+	redirectURL := h.getValidatedRedirectURL(c)
+
+	// Check if MFA redirect is needed
+	if h.handleMFARedirect(c, userRecord, session, redirectURL) {
 		return
 	}
+
 	// Notify about successful login (includes audit logging)
 	if h.securityNotifier != nil {
 		h.securityNotifier.LoginAttempt(
@@ -115,8 +165,8 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 		)
 	}
 
-	// Redirect to web UI
-	c.Redirect(http.StatusFound, DefaultWebRoute)
+	// Redirect to returnTo URL or default web route
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 // WebLogout godoc

@@ -27,7 +27,10 @@ export function LoginPage() {
   const handleLogin = async () => {
     setIsLoading(true)
     try {
-      await login()
+      // Check for returnTo parameter in the URL
+      const params = new URLSearchParams(window.location.search)
+      const returnTo = params.get('returnTo') ?? undefined
+      await login(undefined, returnTo)
     } catch (_error) {
       setIsLoading(false)
     }

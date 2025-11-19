@@ -114,8 +114,8 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	// Get approval window from settings (default: 15 minutes)
-	windowMinutes := 15
+	// Get approval window from settings (default: 1 hour)
+	windowMinutes := 60
 	if h.settingsService != nil {
 		minutes, err := h.settingsService.GetDeployApprovalWindowMinutes()
 		if err != nil {

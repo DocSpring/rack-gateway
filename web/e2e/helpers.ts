@@ -162,7 +162,12 @@ export async function ensureMfaEnrollment(
     return existing
   }
 
-  await page.goto(WebRoute('account/security'))
+  // Only navigate if we're not already on the account security page
+  // (to preserve query parameters like ?redirect= that may have been set)
+  const currentUrl = page.url()
+  if (!currentUrl.includes('/account/security')) {
+    await page.goto(WebRoute('account/security'))
+  }
   await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
   const secret = await startTotpEnrollmentViaUi(page, email)

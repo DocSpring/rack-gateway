@@ -7,7 +7,7 @@ type AuthContextType = {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (rack?: string) => Promise<void>
+  login: (rack?: string, returnTo?: string) => Promise<void>
   logout: () => void
   refresh: () => Promise<User | null>
 }
@@ -63,8 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
   }, [fetchUser])
 
-  const login = async (rack?: string) => {
-    await authService.startLogin(rack)
+  const login = async (rack?: string, returnTo?: string) => {
+    await authService.startLogin(rack, returnTo)
   }
 
   const logout = () => {

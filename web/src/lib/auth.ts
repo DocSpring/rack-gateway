@@ -32,11 +32,16 @@ class AuthService {
   // (PKCE helpers removed; web flow uses server-side OAuth)
 
   // Start OAuth flow for web (no PKCE needed)
-  startLogin(rack = 'default'): void {
+  startLogin(rack = 'default', returnTo?: string): void {
     // Store rack for callback
     sessionStorage.setItem('oauth_rack', rack)
+    // Build login URL with optional returnTo parameter
+    const loginURL = new URL(APIRoute('auth/web/login'), window.location.origin)
+    if (returnTo) {
+      loginURL.searchParams.set('returnTo', returnTo)
+    }
     // Redirect directly to web login endpoint
-    window.location.href = APIRoute('auth/web/login')
+    window.location.href = loginURL.toString()
   }
 
   // Handle OAuth callback

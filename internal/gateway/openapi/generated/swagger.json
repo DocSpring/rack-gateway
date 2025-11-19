@@ -2280,6 +2280,14 @@
                     "Auth"
                 ],
                 "summary": "Start web OAuth login",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "URL to redirect to after successful login (must start with /app/)",
+                        "name": "returnTo",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "302": {
                         "description": "Redirect to identity provider",

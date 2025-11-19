@@ -147,6 +147,7 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     setEditingMethod: methodEdit.setEditingMethod,
     setEditLabel: methodEdit.setEditLabel,
     setOpenDropdownId,
+    redirectTarget,
   })
 
   const runWithStepUp = (action: () => Promise<void>) => {
