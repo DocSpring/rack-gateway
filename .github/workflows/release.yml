@@ -111,7 +111,8 @@ jobs:
           fetch-tags: true
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: rack-gateway-linux-amd64
+          path: artifacts/rack-gateway-linux-amd64
       - run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${GITHUB_REF#refs/tags/}"
