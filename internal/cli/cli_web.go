@@ -14,14 +14,15 @@ func WebCommand() *cobra.Command {
 		Use:   "web",
 		Short: "Open the gateway web UI in your browser",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// Resolve which rack to use (respects --rack flag)
+			currentRack, err := SelectedRack()
+			if err != nil {
+				return err
+			}
+
 			cfg, _, err := LoadConfig()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			currentRack := cfg.Current
-			if currentRack == "" {
-				return fmt.Errorf("no rack selected, please run: rack-gateway login <rack-name> <gateway-url>")
 			}
 
 			gatewayCfg, ok := cfg.Gateways[currentRack]
