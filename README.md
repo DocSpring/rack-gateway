@@ -450,6 +450,38 @@ DocSpring, Inc. may be able to provide basic paid support for Rack Gateway. Cont
 
 If your support needs are more complex, please consider using the official Convox Console. Convox provides both a hosted console and an enterprise license for on-premise deployments. See the [Convox](https://convox.com) website for more information.
 
+## Releasing
+
+**Version Management**: The project version is stored in `web/package.json`.
+
+To create a new release:
+
+```bash
+# 1. Bump the version
+./scripts/bump-version.sh patch  # or minor, major
+
+# 2. Commit the version bump
+git commit -am "chore: bump version to v1.0.1"
+
+# 3. Create and push the release tag
+./scripts/create-release-tags.sh
+git push origin v1.0.1  # or: git push --tags
+```
+
+The GitHub Actions release workflow automatically:
+- Builds the Docker image for linux/amd64
+- Pushes to `docker.io/docspringcom/rack-gateway` with commit SHA and `latest` tags
+- Creates a GitHub release with binaries and checksums
+
+After the release completes, update your deployment:
+
+```bash
+# Update convox.yml to use the new image tag
+# image: docker.io/docspringcom/rack-gateway:${COMMIT_SHA}
+
+convox deploy
+```
+
 ## Deployment
 
 See [DEPLOY.md](./docs/DEPLOY.md) for a production-ready deployment guide, environment configuration, persistence, and a minimal `convox.yml` example.

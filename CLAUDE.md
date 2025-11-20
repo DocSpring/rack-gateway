@@ -513,6 +513,45 @@ See component-specific CLAUDE.md files for detailed implementation information:
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete environment variable reference.
 
+## Version Management
+
+**Single Source of Truth**: The project version is stored in `web/package.json`.
+
+**Releasing a new version:**
+
+1. Bump the version in `web/package.json`:
+   ```bash
+   ./scripts/bump-version.sh patch  # or minor, major
+   ```
+
+2. Commit the version bump:
+   ```bash
+   git commit -am "chore: bump version to v1.0.1"
+   ```
+
+3. Create a git tag:
+   ```bash
+   ./scripts/create-release-tags.sh
+   ```
+
+4. Push the tag to trigger GitHub Actions release:
+   ```bash
+   git push origin v1.0.0
+   # or push all tags:
+   git push --tags
+   ```
+
+The GitHub Actions release workflow (`.github/workflows/release.yml`) automatically:
+- Builds the Docker image for linux/amd64
+- Pushes to `docker.io/docspringcom/rack-gateway` with both commit SHA and `latest` tags
+- Creates a GitHub release with binaries and checksums
+
+**Deployment:**
+
+After the release workflow completes:
+1. Update `convox.yml` to use the new image tag: `image: docker.io/docspringcom/rack-gateway:${COMMIT_SHA}`
+2. Run `convox deploy` to deploy to the rack
+
 ## Code Structure
 
 ```

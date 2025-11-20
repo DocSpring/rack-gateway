@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.3.1-alpine AS webbuild
+FROM oven/bun:1.3.2-alpine AS webbuild
 
 WORKDIR /app/web
 

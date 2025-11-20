@@ -12,11 +12,10 @@ echo "Image: ${IMAGE_NAME}"
 echo "Commit: ${COMMIT_SHA}"
 
 # Build for amd64 (linux/amd64)
-docker buildx build \
-  --platform linux/amd64 \
+# Use DOCKER_DEFAULT_PLATFORM to ensure amd64 build
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker build \
   --tag "${IMAGE_NAME}:${COMMIT_SHA}" \
   --tag "${IMAGE_NAME}:latest" \
-  --load \
   .
 
 echo ""
