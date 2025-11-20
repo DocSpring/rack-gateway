@@ -87,6 +87,11 @@ All development and test ports are defined in `mise.toml`.
 - `RACK_USERNAME` (default: `convox`)
   - Basic Auth username for the rack.
 - `RACK_HOST` is set automatically but can be overridden.
+- `RACK_ALIAS` (optional)
+  - Short rack identifier for CLI use (e.g., `staging`, `us`, `eu`).
+- `RACK_DISPLAY_NAME` (optional, defaults to `RACK_ALIAS`)
+  - Human-readable rack name for user-facing notifications (e.g., `Staging`, `US`, `EU`).
+  - Used in email notifications, Slack messages, and GitHub PR comments.
 
 ## Cookies and Session
 

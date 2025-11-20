@@ -42,7 +42,9 @@ run_admin_tests() {
         "Restarting web... OK" \
         "Restarting worker... OK"
 
-    verify_rgw_command_failure "deploy" \
+    local testdata_dir="scripts/cli-e2e-testdata"
+
+    verify_rgw_command_failure "deploy --manifest $testdata_dir/convox.with-build.yml" \
         "Error: manifest validation failed: service gateway must use a pre-built image"
 
     verify_rgw_command "deploy --app other-app" \
@@ -275,24 +277,24 @@ EOF
     assert_deploy_approval_fields "$git_commit_hash" "NOT_EMPTY" "NOT_EMPTY" "NOT_EMPTY"
 
     echo -e "${BLUE}Test 6/6: Default convox.yml with build (should fail)...${NC}"
-    echo -e "${YELLOW}Clearing all fields for root manifest test...${NC}"
+    echo -e "${YELLOW}Clearing all fields for manifest validation test...${NC}"
     psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, build_id = NULL, release_id = NULL WHERE git_commit_hash = '$git_commit_hash';"
 
     set +e
     local root_deploy_output
-    root_deploy_output=$(./bin/rack-gateway deploy 2>&1)
+    root_deploy_output=$(./bin/rack-gateway deploy --manifest "$testdata_dir/convox.with-build.yml" 2>&1)
     local root_deploy_status=$?
     set -e
     echo "Output: $root_deploy_output" >&2
     if [[ $root_deploy_status -eq 0 ]]; then
-        echo -e "${RED}Expected root convox.yml deploy to fail, but it succeeded${NC}" >&2
+        echo -e "${RED}Expected deploy with build to fail, but it succeeded${NC}" >&2
         exit 1
     fi
     if ! echo "$root_deploy_output" | grep -q "must use a pre-built image"; then
         echo -e "${RED}Expected 'must use a pre-built image' error message${NC}" >&2
         exit 1
     fi
-    echo -e "${GREEN}✓ Root convox.yml correctly rejected${NC}"
+    echo -e "${GREEN}✓ Build-based manifest correctly rejected${NC}"
 
     echo -e "${YELLOW}Clearing all fields for final successful test...${NC}"
     psql_exec "UPDATE deploy_approval_requests SET object_url = NULL, build_id = NULL, release_id = NULL WHERE git_commit_hash = '$git_commit_hash';"

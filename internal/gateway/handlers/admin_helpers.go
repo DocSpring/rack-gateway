@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
-	"github.com/DocSpring/rack-gateway/internal/gateway/config"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
@@ -20,36 +19,7 @@ import (
 // RoleDescriptor is defined in dto.go
 
 func (h *AdminHandler) rackDisplay() string {
-	if h == nil || h.config == nil {
-		return "Convox Rack"
-	}
-	preferred := []string{"default", "local"}
-	for _, key := range preferred {
-		if rc, ok := h.config.Racks[key]; ok && rc.Enabled {
-			if display := rackDisplayName(rc); display != "" {
-				return display
-			}
-		}
-	}
-	for _, rc := range h.config.Racks {
-		if !rc.Enabled {
-			continue
-		}
-		if display := rackDisplayName(rc); display != "" {
-			return display
-		}
-	}
-	return "Convox Rack"
-}
-
-func rackDisplayName(rc config.RackConfig) string {
-	if alias := strings.TrimSpace(rc.Alias); alias != "" {
-		return alias
-	}
-	if name := strings.TrimSpace(rc.Name); name != "" {
-		return name
-	}
-	return ""
+	return rackDisplay(h.config)
 }
 
 func (h *AdminHandler) publicBaseURL(c *gin.Context) string {

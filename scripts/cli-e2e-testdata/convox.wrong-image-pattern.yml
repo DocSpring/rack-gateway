@@ -1,0 +1,4 @@
+services:
+  gateway:
+    image: docker.io/docspringcom/rack-gateway:latest
+    port: 8080

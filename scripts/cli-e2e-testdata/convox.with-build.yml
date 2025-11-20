@@ -1,0 +1,15 @@
+services:
+  gateway:
+    build:
+      path: .
+      manifest: Dockerfile
+    port: 8080
+  web:
+    build:
+      path: .
+      manifest: Dockerfile
+    port: 8080
+  worker:
+    build:
+      path: .
+      manifest: Dockerfile

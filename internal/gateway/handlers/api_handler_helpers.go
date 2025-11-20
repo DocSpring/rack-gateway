@@ -76,3 +76,43 @@ func (h *APIHandler) acquireRackContext(c *gin.Context) (config.RackConfig, *tls
 
 	return config.RackConfig{}, nil, false
 }
+
+func rackDisplayName(rc config.RackConfig) string {
+	if display := strings.TrimSpace(rc.DisplayName); display != "" {
+		return display
+	}
+	if alias := strings.TrimSpace(rc.Alias); alias != "" {
+		return alias
+	}
+	if name := strings.TrimSpace(rc.Name); name != "" {
+		return name
+	}
+	return ""
+}
+
+func rackDisplay(cfg *config.Config) string {
+	if cfg == nil {
+		return "Convox Rack"
+	}
+	preferred := []string{"default", "local"}
+	for _, key := range preferred {
+		if rc, ok := cfg.Racks[key]; ok && rc.Enabled {
+			if display := rackDisplayName(rc); display != "" {
+				return display
+			}
+		}
+	}
+	for _, rc := range cfg.Racks {
+		if !rc.Enabled {
+			continue
+		}
+		if display := rackDisplayName(rc); display != "" {
+			return display
+		}
+	}
+	return "Convox Rack"
+}
+
+func (h *APIHandler) rackDisplay() string {
+	return rackDisplay(h.config)
+}

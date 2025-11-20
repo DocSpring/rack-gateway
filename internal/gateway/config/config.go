@@ -46,13 +46,14 @@ type Config struct {
 
 // RackConfig holds configuration for a single Convox rack connection.
 type RackConfig struct {
-	Name     string
-	Alias    string
-	URL      string
-	Username string // Username for Basic Auth (default: "convox")
-	APIKey   string // Password for Basic Auth
-	Region   string
-	Enabled  bool
+	Name        string
+	Alias       string
+	DisplayName string // Human-readable name for notifications (e.g., "Staging", "US Production")
+	URL         string
+	Username    string // Username for Basic Auth (default: "convox")
+	APIKey      string // Password for Basic Auth
+	Region      string
+	Enabled     bool
 }
 
 var randRead = rand.Read
@@ -232,14 +233,19 @@ func (c *Config) configureRack(rackHost, rackToken, rackUsername string) {
 	if rackAlias == "" {
 		rackAlias = rackName
 	}
+	rackDisplayName := strings.TrimSpace(os.Getenv("RACK_DISPLAY_NAME"))
+	if rackDisplayName == "" {
+		rackDisplayName = rackAlias
+	}
 
 	c.Racks["default"] = RackConfig{
-		Name:     rackName,
-		Alias:    rackAlias,
-		URL:      rackHost,
-		Username: rackUsername,
-		APIKey:   rackToken,
-		Enabled:  true,
+		Name:        rackName,
+		Alias:       rackAlias,
+		DisplayName: rackDisplayName,
+		URL:         rackHost,
+		Username:    rackUsername,
+		APIKey:      rackToken,
+		Enabled:     true,
 	}
 }
 

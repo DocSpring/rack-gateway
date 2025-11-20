@@ -63,6 +63,7 @@ func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID str
 	}
 
 	approvalURL := h.buildApprovalURL(publicID)
+	rackName := h.rackDisplay()
 
 	prNumber, err := github.ExtractPRNumber(prURL)
 	if err != nil {
@@ -77,7 +78,9 @@ func (h *APIHandler) postPRCommentAsync(c *gin.Context, app, prURL, publicID str
 	}
 
 	comment := fmt.Sprintf(
-		"## Deploy Approval Request\n\nA deploy approval request has been created for this PR.\n\n**View request:** %s",
+		"#### Deploy Approval Request for %s\n\n"+
+			"A deploy approval request has been created for this PR.\n\n**View request:** %s",
+		rackName,
 		approvalURL,
 	)
 
