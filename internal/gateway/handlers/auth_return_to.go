@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,7 +24,12 @@ func (h *AuthHandler) getReturnToCookie(c *gin.Context) string {
 	if err != nil || cookie == nil {
 		return ""
 	}
-	return strings.TrimSpace(cookie.Value)
+	// URL-decode the cookie value since gin may encode it
+	decoded, err := url.QueryUnescape(cookie.Value)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(decoded)
 }
 
 // clearReturnToCookie removes the returnTo cookie after it's been used

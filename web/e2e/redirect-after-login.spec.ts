@@ -72,8 +72,8 @@ test.describe('Redirect after login', () => {
     // After enrollment, should redirect back to the original target page
     await expect(page).toHaveURL(targetPath, { timeout: 10_000 })
 
-    // Verify we're actually on the deploy approval requests page
-    await expect(page.getByRole('heading', { name: /Deploy Approval Requests/i })).toBeVisible()
+    // Verify we're actually on the deploy approvals page
+    await expect(page.getByRole('heading', { name: /Deploy Approvals/i })).toBeVisible()
   })
 
   test('invalid returnTo (external URL) is ignored and redirects to default page', async ({
@@ -230,7 +230,20 @@ test.describe('Redirect after login', () => {
       })
       .toBeTruthy()
 
-    // Should redirect directly to the target page (MFA already enrolled)
+    // Should be redirected to MFA challenge page (user is enrolled but new session needs verification)
+    await expect(page).toHaveURL(/\/app\/auth\/mfa\/challenge/, { timeout: 10_000 })
+
+    // Complete MFA challenge on the challenge page (not a modal)
+    const { getUserMfaSecret } = await import('./db')
+    const { typeOtpCode } = await import('./helpers')
+    const secret = await getUserMfaSecret('admin@example.com')
+    if (!secret) throw new Error('No MFA secret found for admin@example.com')
+
+    const { authenticator } = await import('otplib')
+    const code = authenticator.generate(secret)
+    await typeOtpCode(page, page, code)
+
+    // Auto-submits when all 6 digits are entered, wait for redirect to target page
     await expect(page).toHaveURL(targetPath, { timeout: 10_000 })
     await expect(page.getByRole('heading', { name: /API Tokens/i })).toBeVisible()
   })

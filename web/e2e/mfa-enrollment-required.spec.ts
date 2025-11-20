@@ -82,8 +82,8 @@ test.describe('MFA enrollment enforcement', () => {
     // Try to navigate directly to /rack
     await page.goto(WebRoute('rack'))
 
-    // Should be redirected back to account/security
-    await expect(page).toHaveURL(WebRoute('account/security'), { timeout: 10_000 })
+    // Should be redirected back to account/security (with redirect parameter to preserve original destination)
+    await expect(page).toHaveURL(/\/app\/account\/security/, { timeout: 10_000 })
   })
 
   test('attempting to navigate to /users redirects back to account/security', async ({ page }) => {
@@ -98,8 +98,8 @@ test.describe('MFA enrollment enforcement', () => {
     // Try to navigate directly to /users
     await page.goto(WebRoute('users'))
 
-    // Should be redirected back to account/security
-    await expect(page).toHaveURL(WebRoute('account/security'), { timeout: 10_000 })
+    // Should be redirected back to account/security (with redirect parameter to preserve original destination)
+    await expect(page).toHaveURL(/\/app\/account\/security/, { timeout: 10_000 })
   })
 
   test('after completing MFA enrollment, user can navigate freely', async ({ page }) => {

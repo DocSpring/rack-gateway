@@ -52,7 +52,6 @@ func (h *AuthHandler) handleMFARedirect(
 
 func (h *AuthHandler) getValidatedRedirectURL(c *gin.Context) string {
 	returnTo := h.getReturnToCookie(c)
-	h.clearReturnToCookie(c)
 
 	redirectURL := DefaultWebRoute
 	if returnTo != "" && validateReturnTo(returnTo) {
@@ -164,6 +163,9 @@ func (h *AuthHandler) WebLoginCallback(c *gin.Context) {
 			true,
 		)
 	}
+
+	// Clear the returnTo cookie now that we're done with it
+	h.clearReturnToCookie(c)
 
 	// Redirect to returnTo URL or default web route
 	c.Redirect(http.StatusFound, redirectURL)

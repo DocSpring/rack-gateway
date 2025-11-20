@@ -165,6 +165,7 @@ export async function ensureMfaEnrollment(
   // Only navigate if we're not already on the account security page
   // (to preserve query parameters like ?redirect= that may have been set)
   const currentUrl = page.url()
+  const hasRedirectParam = currentUrl.includes('redirect=')
   if (!currentUrl.includes('/account/security')) {
     await page.goto(WebRoute('account/security'))
   }
@@ -172,9 +173,16 @@ export async function ensureMfaEnrollment(
 
   const secret = await startTotpEnrollmentViaUi(page, email)
 
-  await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
-  const statusBadge = page.locator('[data-slot="card"]').first().getByText('Enabled')
-  await expect(statusBadge).toBeVisible()
+  // If there was a redirect parameter, the page will navigate away after enrollment
+  if (hasRedirectParam) {
+    // Wait for navigation to complete (triggered by window.location.assign in the frontend)
+    await page.waitForURL((url) => !url.pathname.includes('/account/security'), { timeout: 10_000 })
+  } else {
+    // No redirect - verify we stayed on the account security page with MFA enabled
+    await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+    const statusBadge = page.locator('[data-slot="card"]').first().getByText('Enabled')
+    await expect(statusBadge).toBeVisible()
+  }
 
   return secret
 }

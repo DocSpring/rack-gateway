@@ -323,7 +323,7 @@ test.describe('Account security', () => {
     await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/app\/login$/)
+    await page.waitForURL(/app\/login/)
     await performLoginWithMfa(page, secret, true)
 
     await page.goto(WebRoute('account/security'))
@@ -363,7 +363,7 @@ test.describe('Account security', () => {
     await enforceMfaFor(ADMIN_EMAIL)
 
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/app\/login$/)
+    await page.waitForURL(/app\/login/)
 
     const btn = page
       .getByTestId('login-cta')
@@ -528,7 +528,7 @@ test.describe('Account security', () => {
     // Enforce MFA and logout
     await enforceMfaFor(ADMIN_EMAIL)
     await page.getByRole('button', { name: /^Logout$/ }).click()
-    await page.waitForURL(/app\/login$/)
+    await page.waitForURL(/app\/login/)
 
     // Login and verify WebAuthn method is shown (not TOTP input)
     await clickLoginButton(page)
@@ -539,7 +539,8 @@ test.describe('Account security', () => {
 
     // WebAuthn starts automatically and succeeds (mocked in E2E)
     // Wait for navigation to complete, indicating successful WebAuthn verification
-    await page.waitForURL(/\/app\/rack/, { timeout: 10_000 })
+    // After logout from account/security, returnTo preserves the page, so we land back on account/security
+    await page.waitForURL(/\/app\/account\/security/, { timeout: 10_000 })
   })
 
   test('invalid MFA code shows inline error and keeps dialog open for retry', async ({ page }) => {
