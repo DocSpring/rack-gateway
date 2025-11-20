@@ -279,7 +279,7 @@ test.describe('Account security', () => {
     if (!dialogAutoVisible) {
       const dropdownButton = methodsTable.locator('tbody tr').first().getByRole('button')
       await dropdownButton.click()
-      const editMenuItem = page.getByText('Edit Label')
+      const editMenuItem = page.getByText('Edit')
       await editMenuItem.click()
       editDialog = page.getByRole('dialog', { name: /Edit MFA Method Label/i })
     }

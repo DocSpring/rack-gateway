@@ -93,7 +93,7 @@ export function MfaMethodsTable({
                           >
                             <DropdownMenuItem onClick={() => onEditMethod(method)}>
                               <Pencil className="h-4 w-4" />
-                              Edit Label
+                              Edit
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
