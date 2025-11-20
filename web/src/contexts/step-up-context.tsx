@@ -103,7 +103,7 @@ export function StepUpProvider({ children }: { children: ReactNode }): React.Rea
   )
 
   const runAction = useCallback(async (action: StepUpAction) => {
-    debugLog('runAction invoked', !!action)
+    debugLog('runAction invoked', Boolean(action))
     if (!action) {
       return
     }

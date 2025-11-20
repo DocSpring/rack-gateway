@@ -478,7 +478,7 @@ export function AuditPage({ userId, userEmail }: { userId?: string; userEmail?: 
         }
         firstRowIndex={firstRowIndex}
         lastRowIndex={lastRowIndex}
-        loading={!!(isLoading && logs.length === 0)}
+        loading={Boolean(isLoading && logs.length === 0)}
         logs={logs}
         onNextPage={() => setPage((p) => Math.min(totalPages, p + 1))}
         onPreviousPage={() => setPage((p) => Math.max(1, p - 1))}

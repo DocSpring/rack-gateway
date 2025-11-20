@@ -40,7 +40,9 @@ test('full OAuth login flow succeeds and /info returns user', async ({ page }) =
     let data: InfoResult['data'] = null
     try {
       data = await response.json()
-    } catch {}
+    } catch {
+      // Ignore JSON parse errors - not all responses are JSON
+    }
     return { ok: response.ok, status: response.status, data }
   }, infoEndpoint)
   expect(info.ok).toBeTruthy()

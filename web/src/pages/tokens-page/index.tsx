@@ -115,7 +115,7 @@ function TokensPageInner() {
             </Button>
           ) : undefined
         }
-        loading={!!isLoading}
+        loading={Boolean(isLoading)}
       >
         <Table>
           <TableHeader>

@@ -11,7 +11,7 @@ import { VcsCiCard } from '@/pages/settings/vcs-ci-card'
 
 export function SettingsPage() {
   const { user } = useAuth()
-  const isAdmin = !!user?.roles?.includes('admin')
+  const isAdmin = Boolean(user?.roles?.includes('admin'))
 
   const {
     data: globalSettings,

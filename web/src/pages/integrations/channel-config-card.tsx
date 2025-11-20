@@ -91,8 +91,8 @@ export function ChannelConfigCard({
             </NativeSelect>
             {config.id && (
               <Button
-                disabled={isTesting}
-                onClick={() => onTestNotification(config.id!)}
+                disabled={isTesting || !config.id}
+                onClick={() => config.id && onTestNotification(config.id)}
                 size="sm"
                 variant="outline"
               >

@@ -10,7 +10,9 @@ test('gateway health via web proxy is OK', async ({ page }) => {
     let data: Record<string, unknown> | null = null
     try {
       data = await r.json()
-    } catch {}
+    } catch {
+      // Ignore JSON parse errors - not all responses are JSON
+    }
     return { ok: r.ok, status: r.status, data }
   })
 

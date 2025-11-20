@@ -374,7 +374,9 @@ export async function startTotpEnrollmentViaUi(
     await editLabelDialog
       .getByRole('button', { name: /^Save$/ })
       .click()
-      .catch(() => {})
+      .catch(() => {
+        // Ignore click errors - button might be disabled or dialog closed
+      })
   }
 
   return secret

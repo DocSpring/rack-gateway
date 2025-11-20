@@ -1,6 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useMutation } from '@/hooks/use-mutation'
@@ -18,6 +27,7 @@ import { getErrorMessage, hasStatus } from '@/pages/integrations/utils'
 
 export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
+  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false)
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
@@ -43,7 +53,7 @@ export function IntegrationsPage() {
       )
       return response.channels || []
     },
-    enabled: !!integration,
+    enabled: Boolean(integration),
   })
 
   const connectMutation = useMutation({
@@ -131,9 +141,12 @@ export function IntegrationsPage() {
   }
 
   const handleDisconnect = () => {
-    if (window.confirm('Are you sure you want to disconnect from Slack?')) {
-      disconnectMutation.mutate()
-    }
+    setShowDisconnectDialog(true)
+  }
+
+  const confirmDisconnect = () => {
+    disconnectMutation.mutate()
+    setShowDisconnectDialog(false)
   }
 
   const handleUpdateChannel = (key: string, channelId: string, channelName: string) => {
@@ -268,6 +281,26 @@ export function IntegrationsPage() {
           updatePending={updateChannelsMutation.isPending}
         />
       </div>
+
+      <Dialog onOpenChange={setShowDisconnectDialog} open={showDisconnectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect from Slack</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to disconnect from Slack? This will remove all channel
+              configurations and notifications.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowDisconnectDialog(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button onClick={confirmDisconnect} variant="destructive">
+              Disconnect
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

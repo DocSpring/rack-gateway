@@ -30,7 +30,7 @@ export function UsersPage() {
   const [userToLock, setUserToLock] = useState<User | null>(null)
 
   // Check if current user is admin
-  const isAdmin = !!currentUser?.roles?.includes('admin')
+  const isAdmin = Boolean(currentUser?.roles?.includes('admin'))
 
   // Fetch users
   const {
@@ -298,7 +298,7 @@ export function UsersPage() {
             </Button>
           ) : undefined
         }
-        loading={!!isLoading}
+        loading={Boolean(isLoading)}
       >
         <Table>
           <TableHeader>

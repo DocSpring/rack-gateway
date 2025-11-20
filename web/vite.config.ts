@@ -105,19 +105,25 @@ export default defineConfig(() => {
                 const target = (options as { target?: string } | undefined)?.target ?? '(unknown)'
                 // biome-ignore lint/suspicious/noConsole: helpful during local proxy debugging
                 console.log(`[vite-proxy] >> ${req.method} ${req.url} -> ${target}`)
-              } catch {}
+              } catch {
+                // Ignore logging errors
+              }
             })
             proxy.on('proxyRes', (proxyRes, req) => {
               try {
                 // biome-ignore lint/suspicious/noConsole: helpful during local proxy debugging
                 console.log(`[vite-proxy] << ${req.method} ${req.url} ${proxyRes.statusCode}`)
-              } catch {}
+              } catch {
+                // Ignore logging errors
+              }
             })
             proxy.on('error', (err, req) => {
               try {
                 // biome-ignore lint/suspicious/noConsole: helpful during local proxy debugging
                 console.error(`[vite-proxy] !! ${req.method} ${req.url} error: ${err.message}`)
-              } catch {}
+              } catch {
+                // Ignore logging errors
+              }
             })
           },
         },

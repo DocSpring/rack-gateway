@@ -69,7 +69,8 @@ describe('UserEditModal', () => {
     fireEvent.change(emailInput, { target: { value: 'invalid-email' } })
 
     // Submit form by clicking button
-    const form = emailInput.closest('form')!
+    const form = emailInput.closest('form')
+    if (!form) throw new Error('Form not found')
     fireEvent.submit(form)
 
     // Check for validation error

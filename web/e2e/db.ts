@@ -89,7 +89,10 @@ async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise
     await client.connect()
     return await handler(client)
   } finally {
-    await client.end().catch(() => {})
+    // Ignore errors when closing the connection - we're already cleaning up
+    await client.end().catch(() => {
+      // Intentionally empty
+    })
   }
 }
 

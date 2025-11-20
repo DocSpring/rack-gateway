@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
-        isAuthenticated: !!user,
+        isAuthenticated: Boolean(user),
         login,
         logout,
         refresh,

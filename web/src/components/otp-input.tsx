@@ -140,7 +140,6 @@ export const OTPInput = forwardRef<HTMLFieldSetElement, OTPInputProps>(
             autoCapitalize="none"
             autoComplete={index === 0 ? 'one-time-code' : 'off'}
             autoCorrect="off"
-            autoFocus={autoFocus && index === 0}
             className={cn(
               'h-14 w-12 rounded-lg border-2 border-input bg-background text-center font-mono text-2xl transition-all',
               'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20',
