@@ -167,8 +167,33 @@ func (s *Service) GetGlobalSetting(key string, defaultValue interface{}) (*Setti
 }
 
 // GetAppSetting retrieves an app-specific setting.
+// For VCS/CI provider fields, if the app setting is nil/empty, it will use the global default.
 func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (*Setting, error) {
-	return s.getSetting(&appName, key, defaultValue)
+	setting, err := s.getSetting(&appName, key, defaultValue)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map of app setting keys to their corresponding global default keys
+	globalDefaultKeys := map[string]string{
+		KeyVCSProvider: KeyDefaultVCSProvider,
+		KeyCIProvider:  KeyDefaultCIProvider,
+	}
+
+	// Check if this setting should fall back to a global default
+	if globalKey, hasGlobal := globalDefaultKeys[key]; hasGlobal {
+		// If app setting is nil or empty string, use global default
+		if setting.Value == nil || setting.Value == "" {
+			globalSetting, err := s.GetGlobalSetting(globalKey, "")
+			if err != nil {
+				return nil, err
+			}
+			setting.Value = globalSetting.Value
+			setting.Source = SourceGlobalDefault
+		}
+	}
+
+	return setting, nil
 }
 
 // GetAllGlobalSettings retrieves all global settings with environment fallback.
