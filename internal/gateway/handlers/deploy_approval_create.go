@@ -222,7 +222,7 @@ func (h *APIHandler) resolveToken(
 	return token, true
 }
 
-func (h *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*int64, *int64) {
+func (_ *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*int64, *int64) {
 	var targetUserID *int64
 	if token != nil && token.UserID > 0 {
 		id := token.UserID
@@ -237,7 +237,7 @@ func (h *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*i
 	return targetUserID, createdByAPITokenID
 }
 
-func (h *APIHandler) marshalCIMetadata(c *gin.Context, req CreateDeployApprovalRequestRequest) ([]byte, bool) {
+func (_ *APIHandler) marshalCIMetadata(c *gin.Context, req CreateDeployApprovalRequestRequest) ([]byte, bool) {
 	var ciMetadata []byte
 	if len(req.CIMetadata) > 0 {
 		var err error
@@ -278,7 +278,7 @@ func (h *APIHandler) createApprovalRecord(
 	return record, true
 }
 
-func (h *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64, gitCommitHash string) {
+func (_ *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64, gitCommitHash string) {
 	switch {
 	case errors.Is(err, db.ErrDeployApprovalRequestActive):
 		var conflict *db.DeployApprovalRequestConflictError

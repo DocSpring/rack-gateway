@@ -26,7 +26,7 @@ func newDenyAllRBAC() *denyAllRBAC {
 	return &denyAllRBAC{}
 }
 
-func (d *denyAllRBAC) Enforce(
+func (_ *denyAllRBAC) Enforce(
 	_ string,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -35,7 +35,7 @@ func (d *denyAllRBAC) Enforce(
 	return false, nil
 }
 
-func (d *denyAllRBAC) EnforceUser(
+func (_ *denyAllRBAC) EnforceUser(
 	_ *db.User,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -44,7 +44,7 @@ func (d *denyAllRBAC) EnforceUser(
 	return false, nil
 }
 
-func (d *denyAllRBAC) EnforceForAPIToken(
+func (_ *denyAllRBAC) EnforceForAPIToken(
 	_ int64,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -53,39 +53,39 @@ func (d *denyAllRBAC) EnforceForAPIToken(
 	return false, nil
 }
 
-func (d *denyAllRBAC) GetAllowedDomain() string {
+func (_ *denyAllRBAC) GetAllowedDomain() string {
 	return "example.com"
 }
 
-func (d *denyAllRBAC) GetUserByEmail(_ string) (*db.User, error) {
+func (_ *denyAllRBAC) GetUserByEmail(_ string) (*db.User, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) DeleteUser(_ string) error {
+func (_ *denyAllRBAC) DeleteUser(_ string) error {
 	return nil
 }
 
-func (d *denyAllRBAC) GetUser(_ string) (*rbac.UserConfig, error) {
+func (_ *denyAllRBAC) GetUser(_ string) (*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetUserWithID(_ string) (*rbac.UserWithID, error) {
+func (_ *denyAllRBAC) GetUserWithID(_ string) (*rbac.UserWithID, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
+func (_ *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
+func (_ *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
 	return nil
 }
 
-func (d *denyAllRBAC) GetUserRoles(_ string) ([]string, error) {
+func (_ *denyAllRBAC) GetUserRoles(_ string) ([]string, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetRolePermissions(_ string) ([]string, error) {
+func (_ *denyAllRBAC) GetRolePermissions(_ string) ([]string, error) {
 	return nil, nil
 }
 

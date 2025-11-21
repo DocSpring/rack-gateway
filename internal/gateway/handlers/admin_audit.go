@@ -195,7 +195,7 @@ func (h *AdminHandler) handleExportFilterError(c *gin.Context, err error, start 
 	}
 }
 
-func (h *AdminHandler) setCSVResponseHeaders(c *gin.Context) {
+func (_ *AdminHandler) setCSVResponseHeaders(c *gin.Context) {
 	c.Header("Content-Type", "text/csv")
 	filename := fmt.Sprintf(
 		"attachment; filename=\"audit-logs-%s.csv\"",

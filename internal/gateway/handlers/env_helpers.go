@@ -97,7 +97,7 @@ func normalizeEnvKey(value string) (string, string, bool) {
 	return trim, upper, true
 }
 
-func (h *APIHandler) fetchEnvMap(
+func (_ *APIHandler) fetchEnvMap(
 	c *gin.Context,
 	scope, app string,
 	rackConfig config.RackConfig,

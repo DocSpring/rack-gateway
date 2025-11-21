@@ -206,7 +206,7 @@ func (c *Config) loadRacksFromEnv() {
 	}
 }
 
-func (c *Config) resolveRackHost(rackHost string) string {
+func (_ *Config) resolveRackHost(rackHost string) string {
 	if rackHost != "" {
 		return rackHost
 	}

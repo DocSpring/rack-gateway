@@ -256,7 +256,7 @@ func createProxyErrorHandler() func(http.ResponseWriter, *http.Request, error) {
 	}
 }
 
-func (h *StaticHandler) injectScriptBlock(content []byte, r *http.Request) []byte {
+func (_ *StaticHandler) injectScriptBlock(content []byte, r *http.Request) []byte {
 	nonce := middleware.StyleNonceFromContext(r.Context())
 	e2eScript := getE2EScript()
 	scriptBlock := buildScriptBlock(nonce, e2eScript)

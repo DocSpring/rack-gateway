@@ -38,7 +38,7 @@ func (e *FingerprintMismatchError) Error() string {
 }
 
 // Unwrap allows errors.Is/As to match ErrFingerprintMismatch.
-func (e *FingerprintMismatchError) Unwrap() error {
+func (_ *FingerprintMismatchError) Unwrap() error {
 	return ErrFingerprintMismatch
 }
 

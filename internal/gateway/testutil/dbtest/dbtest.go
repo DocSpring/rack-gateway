@@ -103,7 +103,8 @@ func generateTestDBName() string {
 		panic(fmt.Sprintf("failed to generate random bytes: %v", err))
 	}
 	// Mask to ensure we stay within int64 positive range (0 to MaxInt64)
-	randomNum := int64(binary.LittleEndian.Uint64(b[:]) & 0x7FFFFFFFFFFFFFFF) //nolint:gosec // G115: Masked to prevent overflow
+	// G115: Masked to prevent overflow
+	randomNum := int64(binary.LittleEndian.Uint64(b[:]) & 0x7FFFFFFFFFFFFFFF) //nolint:gosec
 	return fmt.Sprintf("rgw_test_%d_%d", time.Now().UnixNano(), randomNum)
 }
 

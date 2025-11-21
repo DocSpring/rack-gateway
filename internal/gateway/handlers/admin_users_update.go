@@ -54,7 +54,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	updatedName := h.updateUserName(userConfig.Name, req.Name)
+	updatedName := h.setUserName(userConfig.Name, req.Name)
 
 	updatedRoles, rolesProvided, err := h.updateUserRoles(
 		c,
@@ -302,7 +302,7 @@ func (h *AdminHandler) updateUserEmail(
 }
 
 // updateUserName updates the user name if provided.
-func (h *AdminHandler) updateUserName(currentName string, newName *string) string {
+func (_ *AdminHandler) setUserName(currentName string, newName *string) string {
 	if newName == nil {
 		return currentName
 	}

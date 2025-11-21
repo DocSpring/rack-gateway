@@ -216,7 +216,7 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/app/login")
 }
 
-func (h *AuthHandler) getOAuthErrorMessage(c *gin.Context) string {
+func (_ *AuthHandler) getOAuthErrorMessage(c *gin.Context) string {
 	errorDesc := c.Query("error_description")
 	if errorDesc == "" {
 		return "Authentication was canceled or failed"
@@ -224,7 +224,7 @@ func (h *AuthHandler) getOAuthErrorMessage(c *gin.Context) string {
 	return errorDesc
 }
 
-func (h *AuthHandler) redirectToWebLoginError(c *gin.Context, message string) {
+func (_ *AuthHandler) redirectToWebLoginError(c *gin.Context, message string) {
 	errorURL := fmt.Sprintf("%s?message=%s", WebLoginErrorRoute, url.QueryEscape(message))
 	c.Redirect(http.StatusFound, errorURL)
 }

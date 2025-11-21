@@ -124,7 +124,7 @@ func (h *Handler) markDeployApprovalDeployed(r *http.Request) {
 	}
 }
 
-func (h *Handler) writeBufferedResponse(
+func (_ *Handler) writeBufferedResponse(
 	w http.ResponseWriter,
 	respReader io.Reader,
 	body []byte,
@@ -143,7 +143,7 @@ func (h *Handler) writeBufferedResponse(
 	return bytesWritten, logSnippet, nil
 }
 
-func (h *Handler) writeStreamedResponse(
+func (_ *Handler) writeStreamedResponse(
 	w http.ResponseWriter,
 	respReader io.Reader,
 	shouldCaptureBody bool,
@@ -166,7 +166,7 @@ func (h *Handler) writeStreamedResponse(
 	return bytesWritten, acc.Bytes(), nil
 }
 
-func (h *Handler) logProxyResponse(
+func (_ *Handler) logProxyResponse(
 	r *http.Request,
 	resp *http.Response,
 	path string,

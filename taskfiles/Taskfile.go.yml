@@ -208,7 +208,17 @@ tasks:
     desc: Check for Go code duplication
     dir: internal
     cmds:
-      - jscpd --silent .
+      - |
+        set -o pipefail
+        output=$(jscpd . 2>&1)
+        exit_code=$?
+        if [ $exit_code -ne 0 ]; then
+          echo "Go code duplication detected:"
+          echo "$output"
+          exit 1
+        else
+          echo "No duplicate Go code detected."
+        fi
 
   coverage:
     desc: Generate coverage report

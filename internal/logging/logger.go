@@ -105,13 +105,13 @@ func NewLogger(opts ...Option) *Logger {
 		topicsEnv:     options.TopicsEnv,
 		defaultTopics: normalizeTopics(options.DefaultTopics),
 	}
-	l.reload()
+	l.reloadConfig()
 	return l
 }
 
 // Reload refreshes level and topic configuration from the environment.
 func (l *Logger) Reload() {
-	l.reload()
+	l.reloadConfig()
 }
 
 // Level returns the current logging level.
@@ -238,7 +238,7 @@ func (l *Logger) logf(level, topic, format string, args ...interface{}) {
 	log.Printf(prefix+" "+format, args...)
 }
 
-func (l *Logger) reload() {
+func (l *Logger) reloadConfig() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

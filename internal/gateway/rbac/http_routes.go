@@ -196,6 +196,11 @@ var httpRouteSpecs = []RouteSpec{
 		"/api/v1/deploy-approval-requests/:id/reject",
 		Gateway(ResourceDeployApprovalRequest, ActionApprove),
 	),
+	newHTTPRoute(
+		"POST",
+		"/api/v1/deploy-approval-requests/:id/extend",
+		Gateway(ResourceDeployApprovalRequest, ActionApprove),
+	),
 	newHTTPRoute("GET", "/api/v1/apps/:app/env", Convox(ResourceEnv, ActionRead)),
 	newHTTPRoute("PUT", "/api/v1/apps/:app/env", Convox(ResourceEnv, ActionSet)),
 

@@ -105,6 +105,7 @@ func registerDeployApprovalRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	deployApprove.POST("", h.api.CreateDeployApprovalRequest)
 	deployApprove.POST("/:id/approve", h.admin.ApproveDeployApprovalRequest)
 	deployApprove.POST("/:id/reject", h.admin.RejectDeployApprovalRequest)
+	deployApprove.POST("/:id/extend", h.admin.ExtendDeployApprovalRequest)
 }
 
 func registerGlobalSettingsRoutes(authenticated *gin.RouterGroup, cfg *Config, h *handlerSet) {

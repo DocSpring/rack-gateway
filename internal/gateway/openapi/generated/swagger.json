@@ -2547,6 +2547,55 @@
                 }
             }
         },
+        "/deploy-approval-requests/{id}/extend": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Extends the expiry time for an approved deploy approval request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deploy Approvals"
+                ],
+                "summary": "Extend a deploy approval request expiry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deploy approval request public ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeployApprovalRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/deploy-approval-requests/{id}/reject": {
             "post": {
                 "security": [

@@ -23,11 +23,11 @@ type globalSettingsOps struct {
 	service *settings.Service
 }
 
-func (o *globalSettingsOps) isValid(key string) bool {
+func (_ *globalSettingsOps) isValid(key string) bool {
 	return settings.IsValidGlobalSetting(key)
 }
 
-func (o *globalSettingsOps) getDefault(key string) (interface{}, error) {
+func (_ *globalSettingsOps) getDefault(key string) (interface{}, error) {
 	return settings.GetGlobalSettingDefault(key)
 }
 
@@ -48,11 +48,11 @@ type appSettingsOps struct {
 	service *settings.Service
 }
 
-func (o *appSettingsOps) isValid(key string) bool {
+func (_ *appSettingsOps) isValid(key string) bool {
 	return settings.IsValidAppSetting(key)
 }
 
-func (o *appSettingsOps) getDefault(key string) (interface{}, error) {
+func (_ *appSettingsOps) getDefault(key string) (interface{}, error) {
 	return settings.GetAppSettingDefault(key)
 }
 
@@ -164,7 +164,7 @@ func (h *SettingsHandler) updateSettings(c *gin.Context, ops settingsOperations,
 }
 
 // deleteSettings handles deleting multiple settings (global or app).
-func (h *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations, appName string, allowedKeys []string) {
+func (_ *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations, appName string, allowedKeys []string) {
 	keys := c.QueryArray("key")
 	if len(keys) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one key is required"})
@@ -198,7 +198,7 @@ func (h *SettingsHandler) deleteSettings(c *gin.Context, ops settingsOperations,
 }
 
 // getSingleSettingResponse gets a single setting and returns it as a map response.
-func (h *SettingsHandler) getSingleSettingResponse(c *gin.Context, ops settingsOperations, appName, key string) {
+func (_ *SettingsHandler) getSingleSettingResponse(c *gin.Context, ops settingsOperations, appName, key string) {
 	result, errMsg := buildSettingsResponse(ops, appName, []string{key})
 	if errMsg != "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})

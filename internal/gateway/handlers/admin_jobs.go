@@ -190,7 +190,7 @@ func (h *AdminHandler) fetchJobsWithFilters(
 	return result.Jobs, nil
 }
 
-func (h *AdminHandler) respondJobList(c *gin.Context, jobs []*rivertype.JobRow, limit int, hasBefore bool) {
+func (_ *AdminHandler) respondJobList(c *gin.Context, jobs []*rivertype.JobRow, limit int, hasBefore bool) {
 	// Detect if there are more pages and trim to limit
 	hasMore := len(jobs) > limit
 	if hasMore {

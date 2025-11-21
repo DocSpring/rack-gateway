@@ -227,7 +227,7 @@ func (h *AdminHandler) sendTokenCreatedAdminEmails(
 	_ = h.emailSender.SendMany(recipients, subject, text, html)
 }
 
-func (h *AdminHandler) filterAdminsExcludingOwner(admins []string, ownerEmail string) []string {
+func (_ *AdminHandler) filterAdminsExcludingOwner(admins []string, ownerEmail string) []string {
 	filtered := make([]string, 0, len(admins))
 	for _, addr := range admins {
 		if !strings.EqualFold(addr, ownerEmail) {

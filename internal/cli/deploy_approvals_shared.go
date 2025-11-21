@@ -34,7 +34,7 @@ type deployApprovalRequestConflictError struct {
 	request *deployApprovalRequest
 }
 
-func (e *deployApprovalRequestConflictError) Error() string {
+func (_ *deployApprovalRequestConflictError) Error() string {
 	return "deploy approval request already exists"
 }
 

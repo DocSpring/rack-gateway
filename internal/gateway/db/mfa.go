@@ -196,15 +196,15 @@ func (d *Database) DeleteMFAMethod(methodID int64) error {
 
 // ListMFAMethods returns all confirmed MFA methods for a user.
 func (d *Database) ListMFAMethods(userID int64) ([]*MFAMethod, error) {
-	return d.listMFAMethods(userID, false)
+	return d.queryMFAMethods(userID, false)
 }
 
 // ListAllMFAMethods returns all MFA methods for a user, including unconfirmed ones.
 func (d *Database) ListAllMFAMethods(userID int64) ([]*MFAMethod, error) {
-	return d.listMFAMethods(userID, true)
+	return d.queryMFAMethods(userID, true)
 }
 
-func (d *Database) listMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFAMethod, error) {
+func (d *Database) queryMFAMethods(userID int64, includeUnconfirmed bool) ([]*MFAMethod, error) {
 	query := `
         SELECT id, user_id, type, label, secret, credential_id, public_key, transports, metadata,
                cli_capable, created_at, confirmed_at, last_used_at

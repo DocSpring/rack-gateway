@@ -93,12 +93,12 @@ func (h *Handler) isDevModeOriginAllowed(originURL *url.URL) bool {
 }
 
 // isLocalhostOrigin checks if host is localhost
-func (h *Handler) isLocalhostOrigin(host string) bool {
+func (_ *Handler) isLocalhostOrigin(host string) bool {
 	return host == "localhost" || strings.HasPrefix(host, "localhost:")
 }
 
 // isWebDevServerOrigin checks if host matches WEB_DEV_SERVER_URL
-func (h *Handler) isWebDevServerOrigin(host string) bool {
+func (_ *Handler) isWebDevServerOrigin(host string) bool {
 	webDevURL := os.Getenv("WEB_DEV_SERVER_URL")
 	if webDevURL == "" {
 		return false
@@ -151,13 +151,13 @@ func (h *Handler) normalizeOriginHost(originURL *url.URL) string {
 }
 
 // hasDefaultPort checks if host has default port for scheme
-func (h *Handler) hasDefaultPort(scheme, host string) bool {
+func (_ *Handler) hasDefaultPort(scheme, host string) bool {
 	return (scheme == "https" && strings.HasSuffix(host, ":443")) ||
 		(scheme == "http" && strings.HasSuffix(host, ":80"))
 }
 
 // prepareWebSocketURL converts HTTP(S) target to WS(S) URL
-func (h *Handler) prepareWebSocketURL(target string) (*url.URL, error) {
+func (_ *Handler) prepareWebSocketURL(target string) (*url.URL, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("invalid target URL: %w", err)
@@ -198,7 +198,7 @@ func (h *Handler) buildWebSocketHeaders(
 }
 
 // copyClientHeaders copies allowed headers from client request
-func (h *Handler) copyClientHeaders(src, dst http.Header) {
+func (_ *Handler) copyClientHeaders(src, dst http.Header) {
 	excludedHeaders := map[string]bool{
 		"authorization":            true,
 		"host":                     true,
@@ -280,7 +280,7 @@ func (h *Handler) dialWithRedirects(
 }
 
 // isRedirectResponse checks if response is a redirect
-func (h *Handler) isRedirectResponse(resp *http.Response) bool {
+func (_ *Handler) isRedirectResponse(resp *http.Response) bool {
 	if resp == nil {
 		return false
 	}
@@ -292,7 +292,7 @@ func (h *Handler) isRedirectResponse(resp *http.Response) bool {
 }
 
 // parseRedirectLocation extracts and resolves redirect URL
-func (h *Handler) parseRedirectLocation(resp *http.Response, base *url.URL) (*url.URL, error) {
+func (_ *Handler) parseRedirectLocation(resp *http.Response, base *url.URL) (*url.URL, error) {
 	loc := resp.Header.Get("Location")
 	if loc == "" {
 		return nil, fmt.Errorf("empty redirect location")
@@ -310,7 +310,7 @@ func (h *Handler) parseRedirectLocation(resp *http.Response, base *url.URL) (*ur
 }
 
 // handleDialError processes errors from upstream dial attempts
-func (h *Handler) handleDialError(
+func (_ *Handler) handleDialError(
 	w http.ResponseWriter,
 	resp *http.Response,
 	err error,
@@ -361,7 +361,7 @@ func (h *Handler) proxyWebSocketMessages(clientConn, upstreamConn *websocket.Con
 }
 
 // forwardMessages forwards messages from source to destination
-func (h *Handler) forwardMessages(src, dst *websocket.Conn, errc chan error) {
+func (_ *Handler) forwardMessages(src, dst *websocket.Conn, errc chan error) {
 	for {
 		msgType, message, err := src.ReadMessage()
 		if err != nil {

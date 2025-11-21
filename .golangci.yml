@@ -41,6 +41,8 @@ linters:
           - funlen
           - goconst
   settings:
+    staticcheck:
+      checks: ["all", "-ST1006", "-ST1000"]
     revive:
       rules:
         - name: unused-parameter
@@ -59,7 +61,6 @@ linters:
         - name: indent-error-flow
         - name: if-return
         - name: import-shadowing
-        - name: receiver-naming
         - name: time-naming
         - name: deep-exit
         - name: redefines-builtin-id

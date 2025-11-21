@@ -33,7 +33,7 @@ func NewPostPRCommentWorker() *PostPRCommentWorker {
 }
 
 // Work posts the PR comment
-func (w *PostPRCommentWorker) Work(_ context.Context, job *river.Job[PostPRCommentArgs]) error {
+func (_ *PostPRCommentWorker) Work(_ context.Context, job *river.Job[PostPRCommentArgs]) error {
 	args := job.Args
 
 	// Create client with token from job args

@@ -234,7 +234,7 @@ func (d *Database) rebind(q string) string {
 	return b.String()
 }
 
-func (d *Database) logQuery(prefix, query string, args ...interface{}) {
+func (_ *Database) logQuery(prefix, query string, args ...interface{}) {
 	logAggregate := gtwlog.TopicEnabled(gtwlog.TopicSQL)
 	if !logAggregate {
 		return

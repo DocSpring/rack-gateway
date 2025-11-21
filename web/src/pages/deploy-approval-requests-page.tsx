@@ -5,6 +5,7 @@ import type { KeyboardEvent } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DeployApprovalRejectDialog } from '@/components/deploy-approval-reject-dialog'
 import { DeployApprovalStatusBadge } from '@/components/deploy-approval-status-badge'
+import { ExpiryTime } from '@/components/expiry-time'
 import { PageLayout } from '@/components/page-layout'
 import { TablePane } from '@/components/table-pane'
 import { TimeAgo } from '@/components/time-ago'
@@ -417,7 +418,7 @@ function DeployApprovalRequestRow({
           {showExpiresAt ? (
             <>
               <Timer className="h-4 w-4 text-muted-foreground" />
-              <TimeAgo date={request.approval_expires_at} />
+              <ExpiryTime date={request.approval_expires_at} />
             </>
           ) : (
             '—'

@@ -156,7 +156,7 @@ func (h *AdminHandler) getUserResourceID(email string) string {
 }
 
 // buildUserDetails builds the details map for audit logging.
-func (h *AdminHandler) buildUserDetails(email, name string, roles []string) map[string]interface{} {
+func (_ *AdminHandler) buildUserDetails(email, name string, roles []string) map[string]interface{} {
 	details := map[string]interface{}{
 		"email": email,
 		"roles": roles,

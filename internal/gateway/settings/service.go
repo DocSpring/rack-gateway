@@ -175,22 +175,16 @@ func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (
 	}
 
 	// Map of app setting keys to their corresponding global default keys
-	globalDefaultKeys := map[string]string{
-		KeyVCSProvider: KeyDefaultVCSProvider,
-		KeyCIProvider:  KeyDefaultCIProvider,
-	}
+	globalDefaultKeys := map[string]string{KeyVCSProvider: KeyDefaultVCSProvider, KeyCIProvider: KeyDefaultCIProvider}
 
 	// Check if this setting should fall back to a global default
-	if globalKey, hasGlobal := globalDefaultKeys[key]; hasGlobal {
-		// If app setting is nil or empty string, use global default
-		if setting.Value == nil || setting.Value == "" {
-			globalSetting, err := s.GetGlobalSetting(globalKey, "")
-			if err != nil {
-				return nil, err
-			}
-			setting.Value = globalSetting.Value
-			setting.Source = SourceGlobalDefault
+	if globalKey, hasGlobal := globalDefaultKeys[key]; hasGlobal && (setting.Value == nil || setting.Value == "") {
+		globalSetting, err := s.GetGlobalSetting(globalKey, "")
+		if err != nil {
+			return nil, err
 		}
+		setting.Value = globalSetting.Value
+		setting.Source = SourceGlobalDefault
 	}
 
 	return setting, nil

@@ -350,6 +350,12 @@ export const HTTP_ROUTE_MFA_REQUIREMENTS: HttpRouteMfaRequirement[] = [
   },
   {
     method: "POST",
+    pattern: "/api/v1/deploy-approval-requests/:id/extend",
+    permissions: ["gateway:deploy_approval_request:approve"],
+    mfaLevel: "always",
+  },
+  {
+    method: "POST",
     pattern: "/api/v1/deploy-approval-requests/:id/reject",
     permissions: ["gateway:deploy_approval_request:approve"],
     mfaLevel: "always",

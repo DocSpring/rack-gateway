@@ -93,7 +93,7 @@ func newProxyWithRackServer(t *testing.T, rackHandler http.HandlerFunc) (*Handle
 }
 
 // pathToResourceAction converts a path and HTTP method to resource and action for RBAC
-func (h *Handler) pathToResourceAction(path, method string) (string, string) {
+func (_ *Handler) pathToResourceAction(path, method string) (string, string) {
 	res, act, ok := rbac.MatchRackRoute(method, path)
 	if !ok {
 		return "", ""

@@ -84,6 +84,7 @@ func resourcesInfoCommand() *cobra.Command {
 	return cmd
 }
 
+//nolint:staticcheck // URL is the correct term here
 func resourcesUrlCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "url <name>",

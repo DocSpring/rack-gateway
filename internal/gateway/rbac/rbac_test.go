@@ -160,18 +160,18 @@ func (m *mockDatabase) ListUsers() ([]*db.User, error) {
 	return m.users, nil
 }
 
-func (m *mockDatabase) CreateUser(_ string, _ string, _ []string) (*db.User, error) {
+func (_ *mockDatabase) CreateUser(_ string, _ string, _ []string) (*db.User, error) {
 	return nil, nil
 }
 
-func (m *mockDatabase) UpdateUserRoles(_ string, _ []string) error {
+func (_ *mockDatabase) UpdateUserRoles(_ string, _ []string) error {
 	return nil
 }
 
-func (m *mockDatabase) UpdateUserName(_ string, _ string) error {
+func (_ *mockDatabase) UpdateUserName(_ string, _ string) error {
 	return nil
 }
 
-func (m *mockDatabase) DeleteUser(_ string) error {
+func (_ *mockDatabase) DeleteUser(_ string) error {
 	return nil
 }

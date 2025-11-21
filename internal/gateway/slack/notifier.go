@@ -69,7 +69,7 @@ func (n *Notifier) NotifyAuditEvent(auditLog *db.AuditLog) error {
 }
 
 // matchActionToChannels returns channel IDs that match the given action
-func (n *Notifier) matchActionToChannels(action string, channelActions map[string]interface{}) []string {
+func (_ *Notifier) matchActionToChannels(action string, channelActions map[string]interface{}) []string {
 	var matchedChannels []string
 
 	for _, channelData := range channelActions {
@@ -127,7 +127,7 @@ func matchGlob(pattern, text string) bool {
 }
 
 // formatAuditLogMessage formats an audit log into a Slack message
-func (n *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[string]interface{}) {
+func (_ *Notifier) formatAuditLogMessage(auditLog *db.AuditLog) (string, []map[string]interface{}) {
 	emoji := determineEmojiForAction(auditLog)
 	user := formatUserIdentifier(auditLog)
 	text := fmt.Sprintf("%s *%s* - %s", emoji, auditLog.Action, user)

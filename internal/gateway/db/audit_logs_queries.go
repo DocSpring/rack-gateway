@@ -213,7 +213,7 @@ func (d *Database) VerifyChainIntegrity(startIndex, endIndex int64) error {
 // CleanupOldAuditLogs is DISABLED for append-only audit logs
 // Audit logs are immutable and should NEVER be deleted from the database
 // For compliance, export old logs to S3 Glacier and keep database entries intact
-func (d *Database) CleanupOldAuditLogs(_ int) error {
+func (_ *Database) CleanupOldAuditLogs(_ int) error {
 	return fmt.Errorf("CleanupOldAuditLogs is disabled: audit logs are immutable and must not be deleted")
 }
 

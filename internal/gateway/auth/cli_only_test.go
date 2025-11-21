@@ -36,7 +36,7 @@ func (m *MockTokenService) ValidateAPIToken(tokenValue string) (*db.APIToken, er
 	return nil, fmt.Errorf("invalid token")
 }
 
-func (m *MockTokenService) CreateAPIToken(
+func (_ *MockTokenService) CreateAPIToken(
 	_ uint,
 	_ string,
 	_ []string,
@@ -45,19 +45,19 @@ func (m *MockTokenService) CreateAPIToken(
 	return nil, "", fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) GetAPITokensByUser(_ uint) ([]*db.APIToken, error) {
+func (_ *MockTokenService) GetAPITokensByUser(_ uint) ([]*db.APIToken, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) DeleteAPIToken(_ string) error {
+func (_ *MockTokenService) DeleteAPIToken(_ string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) GetAPIToken(_ string) (*db.APIToken, error) {
+func (_ *MockTokenService) GetAPIToken(_ string) (*db.APIToken, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) UpdateAPIToken(_ string, _ string, _ []string) error {
+func (_ *MockTokenService) UpdateAPIToken(_ string, _ string, _ []string) error {
 	return fmt.Errorf("not implemented")
 }
 

@@ -156,7 +156,7 @@ func (h *AuthHandler) cliStampMFAVerification(sessionID int64, verifiedAt time.T
 	return verifiedAt, true
 }
 
-func (h *AuthHandler) bindCLILoginComplete(c *gin.Context) (CLILoginCompleteRequest, bool) {
+func (_ *AuthHandler) bindCLILoginComplete(c *gin.Context) (CLILoginCompleteRequest, bool) {
 	var req CLILoginCompleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -178,7 +178,7 @@ func (h *AuthHandler) loadCLILoginState(c *gin.Context, state string) (*db.CLILo
 	return record, true
 }
 
-func (h *AuthHandler) handleCLIRecordErrors(c *gin.Context, record *db.CLILoginState) bool {
+func (_ *AuthHandler) handleCLIRecordErrors(c *gin.Context, record *db.CLILoginState) bool {
 	if record.LoginError.Valid {
 		reason := strings.TrimSpace(record.LoginError.String)
 		if reason == "" {
@@ -190,7 +190,7 @@ func (h *AuthHandler) handleCLIRecordErrors(c *gin.Context, record *db.CLILoginS
 	return false
 }
 
-func (h *AuthHandler) respondIfPending(c *gin.Context, record *db.CLILoginState) bool {
+func (_ *AuthHandler) respondIfPending(c *gin.Context, record *db.CLILoginState) bool {
 	if !record.LoginEmail.Valid || !record.MFAVerifiedAt.Valid {
 		c.JSON(http.StatusAccepted, gin.H{"status": "pending"})
 		return true

@@ -94,7 +94,7 @@ func (d *Database) loadAppliedMigrations() (map[string]bool, error) {
 	return applied, rows.Err()
 }
 
-func (d *Database) loadMigrationFiles() ([]string, error) {
+func (_ *Database) loadMigrationFiles() ([]string, error) {
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (d *Database) applyMigration(name, version string) error {
 	return tx.Commit()
 }
 
-func (d *Database) recordMigration(tx *sql.Tx, version string) error {
+func (_ *Database) recordMigration(tx *sql.Tx, version string) error {
 	_, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES ($1)`, version)
 	return err
 }

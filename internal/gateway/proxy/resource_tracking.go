@@ -63,7 +63,7 @@ func (h *Handler) captureResourceCreator(r *http.Request, path string, body []by
 	h.captureProcessResource(r, path, obj, email)
 }
 
-func (h *Handler) parseResponseBody(body []byte) (map[string]interface{}, bool) {
+func (_ *Handler) parseResponseBody(body []byte) (map[string]interface{}, bool) {
 	var payload interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, false
@@ -177,7 +177,7 @@ func (h *Handler) captureObjectUpload(
 	}
 }
 
-func (h *Handler) extractObjectKey(obj map[string]interface{}, segments []string) string {
+func (_ *Handler) extractObjectKey(obj map[string]interface{}, segments []string) string {
 	key := extractJSONString(obj["key"])
 	if key == "" {
 		key = extractJSONString(obj["id"])

@@ -139,7 +139,7 @@ func (h *APIHandler) enrichUserInfoWithSession(email string, authUser *auth.User
 	}
 }
 
-func (h *APIHandler) buildRackSummary(rc config.RackConfig) RackSummary {
+func (_ *APIHandler) buildRackSummary(rc config.RackConfig) RackSummary {
 	alias := strings.TrimSpace(rc.Alias)
 	if alias == "" {
 		alias = strings.TrimSpace(rc.Name)

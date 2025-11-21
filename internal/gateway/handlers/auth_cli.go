@@ -227,7 +227,7 @@ func (h *AuthHandler) CLILoginMFASubmit(c *gin.Context) {
 }
 
 // parseMFASubmitRequest parses and validates the MFA submit request payload.
-func (h *AuthHandler) parseMFASubmitRequest(c *gin.Context) (cliMFASubmit, bool) {
+func (_ *AuthHandler) parseMFASubmitRequest(c *gin.Context) (cliMFASubmit, bool) {
 	var req struct {
 		State             string `json:"state"`
 		Method            string `json:"method"`
@@ -276,7 +276,7 @@ func (h *AuthHandler) loadMFALoginState(c *gin.Context, state string) (*db.CLILo
 }
 
 // shortCircuitIfAlreadyVerified responds immediately if MFA is already verified.
-func (h *AuthHandler) shortCircuitIfAlreadyVerified(c *gin.Context, record *db.CLILoginState) bool {
+func (_ *AuthHandler) shortCircuitIfAlreadyVerified(c *gin.Context, record *db.CLILoginState) bool {
 	if record.MFAVerifiedAt.Valid {
 		c.JSON(http.StatusOK, gin.H{"redirect": WebRoute("cli/auth/success")})
 		return true

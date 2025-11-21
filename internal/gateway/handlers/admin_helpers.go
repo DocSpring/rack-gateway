@@ -105,7 +105,7 @@ func (h *AdminHandler) TriggerSentryTest(c *gin.Context) {
 	}
 }
 
-func (h *AdminHandler) currentAuthUser(c *gin.Context) *auth.User {
+func (_ *AdminHandler) currentAuthUser(c *gin.Context) *auth.User {
 	if c == nil || c.Request == nil {
 		return nil
 	}

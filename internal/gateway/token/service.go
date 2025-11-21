@@ -173,7 +173,7 @@ func (s *Service) UpdateTokenPermissions(tokenID int64, permissions []string) er
 }
 
 // HasPermission checks if an API token has a specific permission
-func (s *Service) HasPermission(apiToken *db.APIToken, resource, action string) bool {
+func (_ *Service) HasPermission(apiToken *db.APIToken, resource, action string) bool {
 	permission := fmt.Sprintf("convox:%s:%s", resource, action)
 
 	for _, perm := range apiToken.Permissions {

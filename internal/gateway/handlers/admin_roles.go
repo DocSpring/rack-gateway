@@ -16,7 +16,7 @@ import (
 // @Success 200 {object} map[string]RoleDescriptor
 // @Security SessionCookie
 // @Router /roles [get]
-func (h *AdminHandler) ListRoles(c *gin.Context) {
+func (_ *AdminHandler) ListRoles(c *gin.Context) {
 	rolePerms := rbac.DefaultRolePermissions()
 	metaMap := rbac.RoleMetadataMap()
 

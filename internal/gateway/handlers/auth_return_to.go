@@ -19,7 +19,7 @@ func (h *AuthHandler) setReturnToCookie(c *gin.Context, value string) {
 }
 
 // getReturnToCookie retrieves the returnTo path from the secure cookie
-func (h *AuthHandler) getReturnToCookie(c *gin.Context) string {
+func (_ *AuthHandler) getReturnToCookie(c *gin.Context) string {
 	cookie, err := c.Request.Cookie(webOAuthReturnToCookie)
 	if err != nil || cookie == nil {
 		return ""

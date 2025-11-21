@@ -185,7 +185,7 @@ func (h *APIHandler) logSecretAccessDenied(
 	})
 }
 
-func (h *APIHandler) maskSecretsIfNeeded(envMap map[string]string, secretKeys []string, allowed bool) {
+func (_ *APIHandler) maskSecretsIfNeeded(envMap map[string]string, secretKeys []string, allowed bool) {
 	if allowed {
 		return
 	}
@@ -354,7 +354,7 @@ func (h *APIHandler) prepareEnvUpdateContext(c *gin.Context) (*envUpdateContext,
 	return ctx, true
 }
 
-func (h *APIHandler) mergeEnvChanges(ctx *envUpdateContext) (map[string]string, []envutil.EnvDiff, error) {
+func (_ *APIHandler) mergeEnvChanges(ctx *envUpdateContext) (map[string]string, []envutil.EnvDiff, error) {
 	return envutil.MergeEnv(
 		ctx.baseEnv,
 		ctx.request.Set,
@@ -372,7 +372,7 @@ func (h *APIHandler) mergeEnvChanges(ctx *envUpdateContext) (map[string]string, 
 	)
 }
 
-func (h *APIHandler) respondMergeError(c *gin.Context, mergeErr error) {
+func (_ *APIHandler) respondMergeError(c *gin.Context, mergeErr error) {
 	switch {
 	case errors.Is(mergeErr, envutil.ErrSecretPermission):
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify secrets."})

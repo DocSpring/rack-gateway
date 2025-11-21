@@ -192,7 +192,7 @@ func (s *Service) ensureUserUnlocked(userID int64) error {
 	return nil
 }
 
-func (s *Service) enforceAttemptLimit(
+func (_ *Service) enforceAttemptLimit(
 	counter func(int64, int) (int, error),
 	userID int64,
 	window int,
