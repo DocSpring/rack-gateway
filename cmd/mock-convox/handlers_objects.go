@@ -17,7 +17,7 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 	name := vars["name"]
 
 	appDir := fmt.Sprintf("%s/%s", objectStorageDir, app)
-	if err := os.MkdirAll(appDir, 0o755); err != nil {
+	if err := os.MkdirAll(appDir, 0o750); err != nil {
 		mclog.Errorf("failed to create app directory: %v", err)
 		http.Error(w, "failed to create storage directory", http.StatusInternalServerError)
 		return
@@ -25,7 +25,7 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 
 	objectPath := fmt.Sprintf("%s/tmp/%s", appDir, name)
 	objectDir := fmt.Sprintf("%s/tmp", appDir)
-	if err := os.MkdirAll(objectDir, 0o755); err != nil {
+	if err := os.MkdirAll(objectDir, 0o750); err != nil {
 		mclog.Errorf("failed to create tmp directory: %v", err)
 		http.Error(w, "failed to create tmp directory", http.StatusInternalServerError)
 		return

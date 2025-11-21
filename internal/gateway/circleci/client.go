@@ -27,7 +27,7 @@ func NewClient(apiToken string) *Client {
 
 // doRequest performs an HTTP request to the CircleCI API with standard error handling.
 func (c *Client) doRequest(method, url string) ([]byte, error) {
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, url, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

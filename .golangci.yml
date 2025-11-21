@@ -27,6 +27,8 @@ linters:
     - nakedret
     - nestif
     - copyloopvar
+    - gosec
+    - unconvert
   exclusions:
     paths:
       - reference
@@ -42,6 +44,10 @@ linters:
     revive:
       rules:
         - name: unused-parameter
+          severity: error
+        - name: unused-receiver
+          severity: error
+        - name: confusing-naming
           severity: error
         - name: exported
         - name: blank-imports

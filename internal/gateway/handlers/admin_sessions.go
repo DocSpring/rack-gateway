@@ -245,7 +245,7 @@ func (h *AdminHandler) convertSessionsToResponse(sessions []*db.UserSession) []U
 			if err := json.Unmarshal(sess.Metadata, &meta); err == nil {
 				entry.Metadata = meta
 			} else {
-				entry.Metadata = json.RawMessage(sess.Metadata)
+				entry.Metadata = sess.Metadata
 			}
 		}
 		result = append(result, entry)

@@ -190,8 +190,12 @@ func runGatewayServer() error {
 	defer application.Cleanup()
 
 	srv := &http.Server{
-		Addr:    ":" + application.Config.Port,
-		Handler: application.Router(),
+		Addr:              ":" + application.Config.Port,
+		Handler:           application.Router(),
+		ReadHeaderTimeout: 30 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	errCh := make(chan error, 1)

@@ -236,7 +236,7 @@ func collectMFAAuth(
 
 func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", baseURL)
-	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+	req, err := http.NewRequest(http.MethodPost, endpoint, http.NoBody)
 	if err != nil {
 		return "", err
 	}

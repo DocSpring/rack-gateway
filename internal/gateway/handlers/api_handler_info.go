@@ -265,7 +265,7 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 	base := strings.TrimRight(rackConfig.URL, "/")
 	url := base + "/system"
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
 		return

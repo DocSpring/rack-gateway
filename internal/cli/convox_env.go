@@ -213,7 +213,7 @@ func fetchAppEnv(_ *cobra.Command, app string, query url.Values) (map[string]str
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

@@ -62,7 +62,7 @@ func buildRoutes() []mfaRoute {
 }
 
 func writeTypeScript(path string, routes []mfaRoute) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
@@ -102,7 +102,7 @@ func writeTypeScript(path string, routes []mfaRoute) error {
 	builder.WriteString("];\n")
 
 	tmpFile := path + ".tmp"
-	if err := os.WriteFile(tmpFile, []byte(builder.String()), 0o644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(builder.String()), 0o600); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 

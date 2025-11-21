@@ -26,7 +26,7 @@ type paramChange struct {
 func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig) (map[string]string, error) {
 	base := strings.TrimRight(rack.URL, "/")
 	targetURL := base + "/system"
-	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	req, err := http.NewRequest(http.MethodGet, targetURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

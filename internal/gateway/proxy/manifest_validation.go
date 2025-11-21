@@ -254,7 +254,7 @@ func handleTarEntry(
 // handleTarHeader was inlined into extractTarballSafely to avoid unnecessary complexity.
 
 func extractTarDirectory(targetPath string) error {
-	if err := os.MkdirAll(targetPath, 0o755); err != nil {
+	if err := os.MkdirAll(targetPath, 0o750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 	return nil
@@ -277,7 +277,7 @@ func extractTarFile(tr *tar.Reader, targetPath string, header *tar.Header, curre
 	}
 
 	// Create parent directory
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o750); err != nil {
 		return 0, fmt.Errorf("failed to create parent directory: %w", err)
 	}
 

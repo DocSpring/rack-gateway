@@ -233,7 +233,7 @@ func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	expiresAt := time.Now().Add(24 * time.Hour)
 	tokenReq := &token.APITokenRequest{
 		Name:        "Test Token",
-		UserID:      int64(testUser.ID),
+		UserID:      testUser.ID,
 		Permissions: []string{"*"},
 		ExpiresAt:   &expiresAt,
 	}

@@ -72,7 +72,7 @@ func TestResolveApp_DotConvoxFile_ParentDir(t *testing.T) {
 		t.Fatalf("write app file: %v", err)
 	}
 	child := filepath.Join(parent, "child", "deeper")
-	if err := os.MkdirAll(child, 0o755); err != nil {
+	if err := os.MkdirAll(child, 0o750); err != nil {
 		t.Fatalf("mkdir child: %v", err)
 	}
 	back := chdir(t, child)
@@ -94,7 +94,7 @@ func TestResolveApp_FallbackBasename(t *testing.T) {
 	base := "cg-app-base"
 	parent := t.TempDir()
 	dir := filepath.Join(parent, base)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	back := chdir(t, dir)

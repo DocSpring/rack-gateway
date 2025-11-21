@@ -54,6 +54,9 @@ func (g GlobalSettingKey) IsValid() bool { return g <= GlobalSettingTrustedDevic
 func ParseGlobalSettingKey(key string) (GlobalSettingKey, error) {
 	for i, s := range globalSettingKeyToString {
 		if s == key {
+			if i > 255 {
+				return 0, fmt.Errorf("setting key index %d exceeds uint8 range", i)
+			}
 			return GlobalSettingKey(i), nil
 		}
 	}
@@ -133,6 +136,9 @@ func (a AppSettingKey) IsValid() bool { return a <= AppSettingVerifyGitCommitMod
 func ParseAppSettingKey(key string) (AppSettingKey, error) {
 	for i, s := range appSettingKeyToString {
 		if s == key {
+			if i > 255 {
+				return 0, fmt.Errorf("setting key index %d exceeds uint8 range", i)
+			}
 			return AppSettingKey(i), nil
 		}
 	}

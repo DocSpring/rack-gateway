@@ -1,9 +1,10 @@
 package dbtest
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"net/url"
 	"os"
 	"strings"
@@ -97,7 +98,13 @@ func setupAdminConnection(t *testing.T, baseDSN string) (*sql.DB, func()) {
 }
 
 func generateTestDBName() string {
-	return fmt.Sprintf("rgw_test_%d_%d", time.Now().UnixNano(), rand.Int63())
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(fmt.Sprintf("failed to generate random bytes: %v", err))
+	}
+	// Mask to ensure we stay within int64 positive range (0 to MaxInt64)
+	randomNum := int64(binary.LittleEndian.Uint64(b[:]) & 0x7FFFFFFFFFFFFFFF)
+	return fmt.Sprintf("rgw_test_%d_%d", time.Now().UnixNano(), randomNum)
 }
 
 func createDatabase(t *testing.T, admin *sql.DB, name string) {
