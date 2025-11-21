@@ -31,7 +31,7 @@ func uploadObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := os.Create(objectPath)
+	f, err := os.Create(objectPath) //nolint:gosec // G304: Mock server, path constructed from app-controlled objectStorageDir
 	if err != nil {
 		mclog.Errorf("failed to create object file: %v", err)
 		http.Error(w, "failed to save upload", http.StatusInternalServerError)

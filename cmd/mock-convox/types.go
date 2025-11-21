@@ -7,7 +7,7 @@ import (
 
 const (
 	mockUsername = "convox"
-	mockPassword = "mock-rack-token-12345"
+	mockPassword = "mock-rack-token-12345" //nolint:gosec // G101: Mock credential for testing only
 )
 
 type App struct {

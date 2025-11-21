@@ -81,13 +81,13 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, source)
 	if err != nil {
-		db.Close() //nolint:errcheck // cleanup on init failure
+		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
 	}
 
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		db.Close() //nolint:errcheck // cleanup on init failure
+		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, fmt.Errorf("failed to ping pgxpool: %w", err)
 	}
 
@@ -98,7 +98,7 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 	if autoMigrate {
 		if err := d.migrateAll(); err != nil {
 			pool.Close()
-			db.Close() //nolint:errcheck // cleanup on init failure
+			db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 			return nil, fmt.Errorf("failed to initialize schema: %w", err)
 		}
 	}

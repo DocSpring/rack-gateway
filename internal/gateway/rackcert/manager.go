@@ -228,6 +228,7 @@ func fetchRackCertificate(ctx context.Context, rck config.RackConfig) (*db.RackT
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	//nolint:gosec // G402: Initial cert fetch for fingerprint pinning
 	dialer := &tls.Dialer{
 		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
 		Config:    &tls.Config{InsecureSkipVerify: true, ServerName: host},
@@ -269,6 +270,7 @@ func buildTLSConfig(cert *db.RackTLSCert, host string) (*tls.Config, error) {
 	expected := make([]byte, len(decoded))
 	copy(expected, decoded)
 
+	//nolint:gosec // G402: Required for custom cert pinning via VerifyPeerCertificate
 	return &tls.Config{
 		MinVersion:         tls.VersionTLS12,
 		ServerName:         host,

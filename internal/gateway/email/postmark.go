@@ -92,7 +92,7 @@ func (p *PostmarkSender) sendEmail(to, bcc, subject, textBody, htmlBody string) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close() //nolint:errcheck // ignore close error
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup // ignore close error
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}

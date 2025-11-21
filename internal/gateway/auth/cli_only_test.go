@@ -138,7 +138,7 @@ func runCLITestCase(t *testing.T, handler http.Handler, tc cliTestCase) {
 
 func TestCLIOnlyMiddleware(t *testing.T) {
 	database, authService, sessionToken := setupCLITestEnvironment(t)
-	defer database.Close() //nolint:errcheck // test cleanup
+	defer database.Close() //nolint:errcheck,gosec // G104: test cleanup
 
 	// Create a test handler that just returns 200 OK
 	tt := t
@@ -220,7 +220,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	// Setup
 	database := setupTestDatabase(t)
-	defer database.Close() //nolint:errcheck // test cleanup
+	defer database.Close() //nolint:errcheck,gosec // G104: test cleanup
 
 	// Create a test user
 	testUser, err := database.CreateUser("test@example.com", "Test User", []string{"admin"})
@@ -366,7 +366,7 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 	// cannot be performed from a browser context (CSRF protection)
 
 	database, authService, sessionToken := setupCLITestEnvironment(t)
-	defer database.Close() //nolint:errcheck // test cleanup
+	defer database.Close() //nolint:errcheck,gosec // G104: test cleanup
 
 	// Create a handler that simulates a dangerous operation
 	ttDanger := t

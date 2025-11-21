@@ -273,7 +273,7 @@ func (h *Handler) forwardRequest(
 		}
 		return 0, fmt.Errorf("failed to forward request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
 }

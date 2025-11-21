@@ -19,6 +19,7 @@ func configFile() string {
 func LoadConfig() (*Config, bool, error) {
 	cfg := &Config{}
 	path := configFile()
+	//nolint:gosec // G304: Path from configFile() is application-controlled
 	data, err := os.ReadFile(path)
 	exists := true
 	if err != nil {

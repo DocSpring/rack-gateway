@@ -104,6 +104,7 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	indexPath := filepath.Join(h.distRoot, "index.html")
+	//nolint:gosec // G304: Path is app-controlled distRoot + hardcoded filename
 	file, err := os.Open(indexPath)
 	if err != nil {
 		http.NotFound(w, r)

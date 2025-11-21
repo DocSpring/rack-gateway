@@ -302,7 +302,7 @@ func (h *APIHandler) GetRackInfo(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch rack info"})
 		return
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	var rackInfo map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&rackInfo); err != nil {

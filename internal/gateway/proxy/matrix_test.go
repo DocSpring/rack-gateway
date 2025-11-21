@@ -15,7 +15,7 @@ func TestPermissionMatrix_DeployerVsAdmin(t *testing.T) {
 	database, err := db.NewFromEnv()
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		database.Close() //nolint:errcheck // test cleanup
+		database.Close() //nolint:errcheck,gosec // G104: test cleanup
 	})
 	dbtest.Reset(t, database)
 

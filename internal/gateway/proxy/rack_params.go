@@ -49,7 +49,8 @@ func (h *Handler) fetchSystemParams(ctx context.Context, rack config.RackConfig)
 		}
 		return nil, err
 	}
-	defer resp.Body.Close() //nolint:errcheck // response cleanup
+	//nolint:errcheck,gosec // G104: response cleanup
+	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("upstream status %d", resp.StatusCode)
 	}
