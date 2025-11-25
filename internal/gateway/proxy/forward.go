@@ -239,7 +239,7 @@ func (h *Handler) forwardRequest(
 
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email, path)
+		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
 	}
 
 	bodyBytes, err := readRequestBody(r)

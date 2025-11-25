@@ -75,7 +75,17 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
             )}
             <div>
               <span className="text-muted-foreground">Response Time:</span>{' '}
-              {typeof entry.response_time_ms === 'number' ? `${entry.response_time_ms} ms` : '-'}
+              {(() => {
+                if (typeof entry.response_time_ms === 'number') {
+                  return `${entry.response_time_ms} ms`
+                }
+                const avg = (entry as any).avg_response_time_ms
+                if (typeof avg === 'number') {
+                  const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
+                  return `${avg} ms${suffix}`
+                }
+                return '-'
+              })()}
             </div>
             <div>
               <span className="text-muted-foreground">IP:</span> {entry.ip_address || '-'}

@@ -173,7 +173,7 @@ describe('AuditPage', () => {
           action: 'aggregated.event',
           status: 'success',
           event_count: 10,
-          response_time_ms: 50,
+          avg_response_time_ms: 50,
         },
       ]
       vi.mocked(api.get).mockResolvedValueOnce(makeResponse(aggregatedLogs as any))
@@ -201,6 +201,9 @@ describe('AuditPage', () => {
 
       // Check that the detail dialog shows the timestamp from last_seen
       expect(screen.getByText('2024-02-20T12:00:00.000Z')).toBeInTheDocument()
+      
+      // Check that response time is displayed (using avg)
+      expect(screen.getByText('50 ms (avg)')).toBeInTheDocument()
     })
 
     it('shows event count in detail dialog', async () => {

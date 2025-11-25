@@ -15,7 +15,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
+	"github.com/DocSpring/rack-gateway/internal/gateway/audit"
+	"github.com/DocSpring/rack-gateway/internal/gateway/auth"
 	"github.com/DocSpring/rack-gateway/internal/gateway/config"
+	"github.com/DocSpring/rack-gateway/internal/gateway/db"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	"github.com/DocSpring/rack-gateway/internal/gateway/httputil"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
@@ -27,19 +30,22 @@ func (h *Handler) proxyWebSocket(
 	r *http.Request,
 	rack config.RackConfig,
 	target string,
-	userEmail string,
+	authUser *auth.User,
 	originalPath string,
 ) (int, error) {
 	if status := h.validateExecCommand(w, r, originalPath); status != 0 {
 		return status, nil
 	}
 
+	// Log process.exec.start for immediate visibility
+	h.logExecStart(r, authUser, originalPath)
+
 	wsURL, err := h.prepareWebSocketURL(target)
 	if err != nil {
 		return 0, err
 	}
 
-	header := h.buildWebSocketHeaders(r, rack, userEmail, wsURL)
+	header := h.buildWebSocketHeaders(r, rack, authUser.Email, wsURL)
 
 	upstreamConn, resp, err := h.dialUpstreamWebSocket(r.Context(), wsURL, header, rack.URL)
 	if err != nil {
@@ -406,4 +412,36 @@ func (h *Handler) validateExecCommand(w http.ResponseWriter, r *http.Request, or
 	}
 
 	return 0
+}
+
+func (h *Handler) logExecStart(r *http.Request, authUser *auth.User, path string) {
+	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
+	if action != "process.exec" {
+		return
+	}
+
+	resourceType := h.auditLogger.InferResourceType(path, action)
+
+	auditLog := &db.AuditLog{
+		UserEmail:      authUser.Email,
+		UserName:       r.Header.Get("X-User-Name"),
+		APITokenID:     authUser.TokenID,
+		APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
+		ActionType:     "convox",
+		Action:         "process.exec.start",
+		Resource:       resource,
+		ResourceType:   resourceType,
+		Details:        h.auditLogger.BuildDetailsJSON(r),
+		IPAddress:      h.auditLogger.GetClientIP(r),
+		UserAgent:      r.UserAgent(),
+		Status:         "success",
+		RBACDecision:   "allow",
+		HTTPStatus:     101, // Switching Protocols
+		ResponseTimeMs: 0,
+		EventCount:     1,
+	}
+
+	if dbErr := h.logAudit(r, auditLog); dbErr != nil {
+		log.Printf("Failed to store process.exec.start audit log: %v", dbErr)
+	}
 }
