@@ -18,9 +18,8 @@ To run convox commands through the gateway:
   rack-gateway apps
   rack-gateway deploy
 
-Recommended aliases for your shell:
-  alias cx="rack-gateway"   # cx apps, cx ps, cx deploy
-  alias cg="rack-gateway"   # cg login, cg switch, cg rack
+Recommended alias for your shell:
+  alias cg="rack-gateway"   # cg apps, cg ps, cg deploy
 
 Rack management:
   rack-gateway rack                # Show current rack
