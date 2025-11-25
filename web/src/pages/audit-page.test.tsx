@@ -161,6 +161,48 @@ describe('AuditPage', () => {
       expect(screen.getByText(/Owner: cibot@example.com/)).toBeInTheDocument()
     })
 
+    it('displays aggregated logs with last_seen instead of timestamp', async () => {
+      const aggregatedLogs = [
+        {
+          id: 101,
+          // No timestamp field
+          last_seen: '2024-02-20T12:00:00Z',
+          first_seen: '2024-02-20T11:00:00Z',
+          user_email: 'agg@example.com',
+          action_type: 'test',
+          action: 'aggregated.event',
+          status: 'success',
+          event_count: 10,
+          response_time_ms: 50,
+        },
+      ]
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(aggregatedLogs as any))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('agg@example.com')).toBeInTheDocument()
+      })
+
+      // Verify time is displayed (TimeAgo usually renders "x time ago" or date)
+      // Since we mocked the date to Feb 20, 2024, it should render a date or relative time.
+      // We just check if the row rendered without error and contains the action
+      expect(screen.getByText('aggregated.event')).toBeInTheDocument()
+
+      // Click to open detail dialog and check timestamp
+      const row = screen.getByText('aggregated.event').closest('tr')
+      expect(row).not.toBeNull()
+      if (row) fireEvent.click(row)
+
+      await waitFor(() => {
+        expect(screen.getByText('Audit Log')).toBeInTheDocument()
+      })
+
+      // Check that the detail dialog shows the timestamp from last_seen
+      expect(screen.getByText('2024-02-20T12:00:00.000Z')).toBeInTheDocument()
+    })
+
     it('shows event count in detail dialog', async () => {
       vi.mocked(api.get).mockResolvedValueOnce(makeResponse(mockLogs))
 

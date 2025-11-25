@@ -106,7 +106,10 @@ export function AuditLogsPane({
               const appearance = getActionTypeBadgeAppearance(actionType)
               const resourceAppearance = getResourceTypeBadgeAppearance(resourceType)
               const statusAppearance = getStatusBadgeAppearance(log.status)
-              const rowKey = log.id ?? `${log.timestamp ?? 'audit'}-${index}`
+              
+              // Handle both standard (timestamp) and aggregated (last_seen/first_seen) logs
+              const timestamp = 'timestamp' in log ? log.timestamp : (log as any).last_seen ?? (log as any).first_seen
+              const rowKey = log.id ?? `${timestamp ?? 'audit'}-${index}`
 
               const statusLabel = formatStatusLabel(log)
 
@@ -168,7 +171,7 @@ export function AuditLogsPane({
                   </TableCell>
                   <TableCell className="font-mono text-sm">{log.ip_address || '-'}</TableCell>
                   <TableCell className="font-mono text-sm">
-                    <TimeAgo date={log.timestamp ?? null} />
+                    <TimeAgo date={timestamp ?? null} />
                   </TableCell>
                   <TableCell
                     className="text-right"

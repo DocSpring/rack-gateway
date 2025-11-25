@@ -31,7 +31,13 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
           <div className="space-y-3 text-sm">
             <div>
               <span className="text-muted-foreground">Timestamp:</span>{' '}
-              {entry.timestamp ? new Date(entry.timestamp).toISOString() : '-'}
+              {(() => {
+                const ts =
+                  'timestamp' in entry
+                    ? entry.timestamp
+                    : (entry as any).last_seen ?? (entry as any).first_seen
+                return ts ? new Date(ts).toISOString() : '-'
+              })()}
             </div>
             {renderActorDetails(entry)}
             <div>
