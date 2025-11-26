@@ -90,6 +90,11 @@ func setupAdminConnection(t *testing.T, baseDSN string) (*sql.DB, func()) {
 	if err != nil {
 		t.Fatalf("open admin: %v", err)
 	}
+	// Limit admin connection pool to avoid exhaustion during parallel tests
+	admin.SetMaxOpenConns(2)
+	admin.SetMaxIdleConns(1)
+	admin.SetConnMaxLifetime(5 * time.Minute)
+
 	return admin, func() {
 		if err := admin.Close(); err != nil {
 			t.Fatalf("close admin connection: %v", err)

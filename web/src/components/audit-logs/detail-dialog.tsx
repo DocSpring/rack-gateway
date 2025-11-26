@@ -30,12 +30,11 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
         {entry ? (
           <div className="space-y-3 text-sm">
             <div>
-              <span className="text-muted-foreground">Timestamp:</span>{' '}
-              {(() => {
+              <span className="text-muted-foreground">Timestamp:</span> {(() => {
                 const ts =
-                  'timestamp' in entry
-                    ? entry.timestamp
-                    : (entry as any).last_seen ?? (entry as any).first_seen
+                  ('timestamp' in entry ? entry.timestamp : undefined) ??
+                  ('last_seen' in entry ? entry.last_seen : undefined) ??
+                  ('first_seen' in entry ? entry.first_seen : undefined)
                 return ts ? new Date(ts).toISOString() : '-'
               })()}
             </div>
@@ -74,15 +73,10 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
               </div>
             )}
             <div>
-              <span className="text-muted-foreground">Response Time:</span>{' '}
-              {(() => {
+              <span className="text-muted-foreground">Response Time:</span> {(() => {
                 if (typeof entry.response_time_ms === 'number') {
-                  return `${entry.response_time_ms} ms`
-                }
-                const avg = (entry as any).avg_response_time_ms
-                if (typeof avg === 'number') {
                   const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
-                  return `${avg} ms${suffix}`
+                  return `${entry.response_time_ms} ms${suffix}`
                 }
                 return '-'
               })()}

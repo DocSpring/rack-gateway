@@ -64,7 +64,7 @@ func TestAuditAggregationMergeProcessExec(t *testing.T) {
 		UserEmail: "dev@example.com",
 	})
 	require.NoError(t, err)
-	
+
 	// Should still be 1 total aggregated entry
 	require.Equal(t, 1, total, "process.exec should have merged into process.exec.start")
 	require.Len(t, aggs, 1)
@@ -73,7 +73,7 @@ func TestAuditAggregationMergeProcessExec(t *testing.T) {
 	assert.Equal(t, "process.exec", agg.Action, "Action should be updated to process.exec")
 	assert.Equal(t, 5000, agg.AvgResponseTimeMs, "Response time should be updated")
 	assert.Equal(t, 1, agg.EventCount, "Event count should be reset to 1")
-	
+
 	// Timestamps check
 	// FirstSeen should come from startLog (older)
 	// LastSeen should come from execLog (newer)

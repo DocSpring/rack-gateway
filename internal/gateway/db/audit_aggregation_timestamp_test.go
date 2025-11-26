@@ -49,7 +49,7 @@ func TestAuditAggregationTimestamps(t *testing.T) {
 
 	agg := aggs[0]
 	assert.Equal(t, 2, agg.EventCount)
-	
+
 	// Verify timestamps
 	assert.False(t, agg.FirstSeen.IsZero(), "FirstSeen should not be zero")
 	assert.False(t, agg.LastSeen.IsZero(), "LastSeen should not be zero")

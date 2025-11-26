@@ -2800,6 +2800,16 @@
                     "Auth"
                 ],
                 "summary": "Start web OAuth login",
+                "parameters": [
+                    {
+                        "description": "URL to redirect to after successful login (must start with /app/)",
+                        "name": "returnTo",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "responses": {
                     "302": {
                         "description": "Redirect to identity provider",
@@ -3093,6 +3103,63 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/handlers.RawAuditLogsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/deploy-approval-requests/{id}/extend": {
+            "post": {
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Extends the expiry time for an approved deploy approval request",
+                "tags": [
+                    "Deploy Approvals"
+                ],
+                "summary": "Extend a deploy approval request expiry",
+                "parameters": [
+                    {
+                        "description": "Deploy approval request public ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.DeployApprovalRequestResponse"
                                 }
                             }
                         }
@@ -4940,6 +5007,10 @@
                     },
                     "resource_type": {
                         "type": "string"
+                    },
+                    "response_time_ms": {
+                        "description": "Mapped to AvgResponseTimeMs for frontend consistency",
+                        "type": "integer"
                     },
                     "status": {
                         "type": "string"

@@ -30,6 +30,8 @@ export interface DbAuditLogAggregated {
   rbac_decision?: string;
   resource?: string;
   resource_type?: string;
+  /** Mapped to AvgResponseTimeMs for frontend consistency */
+  response_time_ms?: number;
   status?: string;
   user_agent?: string;
   user_email?: string;

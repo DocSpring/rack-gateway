@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { WebRoute } from '@/lib/routes'
 import { expect, test } from './fixtures'
-import { login, resetMfaFor } from './helpers'
+import { enforceMfaFor, login, resetMfaFor } from './helpers'
 
 const ADMIN_EMAIL = 'admin@example.com'
 
@@ -26,6 +26,8 @@ test.describe('MFA enrollment enforcement', () => {
   test('admin user without MFA is redirected to account/security on login', async ({ page }) => {
     // Reset MFA for admin user to simulate first-time login
     await resetMfaFor(ADMIN_EMAIL)
+    // Explicitly enforce MFA to ensure the requirement is active regardless of global settings
+    await enforceMfaFor(ADMIN_EMAIL)
 
     // Login without auto-enrolling MFA
     await login(page, { autoEnrollMfa: false })
@@ -43,6 +45,7 @@ test.describe('MFA enrollment enforcement', () => {
   test('sidebar navigation links are disabled when MFA enrollment required', async ({ page }) => {
     // Reset MFA for admin user
     await resetMfaFor(ADMIN_EMAIL)
+    await enforceMfaFor(ADMIN_EMAIL)
 
     // Login without auto-enrolling MFA
     await login(page, { autoEnrollMfa: false })
@@ -73,6 +76,7 @@ test.describe('MFA enrollment enforcement', () => {
   test('attempting to navigate to /rack redirects back to account/security', async ({ page }) => {
     // Reset MFA for admin user
     await resetMfaFor(ADMIN_EMAIL)
+    await enforceMfaFor(ADMIN_EMAIL)
 
     // Login without auto-enrolling MFA
     await login(page, { autoEnrollMfa: false })
@@ -89,6 +93,7 @@ test.describe('MFA enrollment enforcement', () => {
   test('attempting to navigate to /users redirects back to account/security', async ({ page }) => {
     // Reset MFA for admin user
     await resetMfaFor(ADMIN_EMAIL)
+    await enforceMfaFor(ADMIN_EMAIL)
 
     // Login without auto-enrolling MFA
     await login(page, { autoEnrollMfa: false })
@@ -105,6 +110,7 @@ test.describe('MFA enrollment enforcement', () => {
   test('after completing MFA enrollment, user can navigate freely', async ({ page }) => {
     // Reset MFA for admin user
     await resetMfaFor(ADMIN_EMAIL)
+    await enforceMfaFor(ADMIN_EMAIL)
 
     // Login without auto-enrolling MFA
     await login(page, { autoEnrollMfa: false })

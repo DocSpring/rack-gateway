@@ -71,6 +71,9 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 	}
 
 	// Apply connection pool configuration
+	if poolConfig == nil {
+		poolConfig = poolConfigFromEnv()
+	}
 	applyPoolConfig(db, poolConfig)
 
 	if err := db.Ping(); err != nil {
@@ -79,7 +82,19 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 
 	// Create pgxpool connection (for River and pgx-native operations)
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, source)
+	pgxConfig, err := pgxpool.ParseConfig(source)
+	if err != nil {
+		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
+		return nil, fmt.Errorf("failed to parse pgxpool config: %w", err)
+	}
+
+	// Apply compatible pool settings to pgxpool
+	pgxConfig.MaxConns = int32(poolConfig.MaxOpenConns) //nolint:gosec // trusted config
+	pgxConfig.MinConns = int32(poolConfig.MaxIdleConns) //nolint:gosec // trusted config
+	pgxConfig.MaxConnLifetime = poolConfig.ConnMaxLifetime
+	pgxConfig.MaxConnIdleTime = poolConfig.ConnMaxIdleTime
+
+	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
 	if err != nil {
 		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
@@ -122,8 +137,8 @@ func applyPoolConfig(db *sql.DB, poolConfig *PoolConfig) {
 // Configuration values should be passed in via PoolConfig parameter instead of reading from env.
 func poolConfigFromEnv() *PoolConfig {
 	return &PoolConfig{
-		MaxOpenConns:    25,
-		MaxIdleConns:    5,
+		MaxOpenConns:    2,
+		MaxIdleConns:    1,
 		ConnMaxLifetime: 30 * time.Minute,
 		ConnMaxIdleTime: 10 * time.Minute,
 	}

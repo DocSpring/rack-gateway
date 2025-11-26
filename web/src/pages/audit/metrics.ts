@@ -89,7 +89,7 @@ function calculateAuditStats(logs: readonly AuditLogRecord[]): AuditStats {
       deniedEvents += occurrences
     }
 
-    if (typeof log.response_time_ms === 'number') {
+    if (typeof log.response_time_ms === 'number' && log.response_time_ms > 0) {
       totalResponseTime += log.response_time_ms * occurrences
     }
   }

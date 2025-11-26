@@ -4107,6 +4107,10 @@
                 "resource_type": {
                     "type": "string"
                 },
+                "response_time_ms": {
+                    "description": "Mapped to AvgResponseTimeMs for frontend consistency",
+                    "type": "integer"
+                },
                 "status": {
                     "type": "string"
                 },
