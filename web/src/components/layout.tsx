@@ -153,7 +153,8 @@ function buildMfaEnrollmentUrl(pathname: string, search?: string): string {
   if (pathname.endsWith('/login') && search) {
     const params = new URLSearchParams(search)
     const returnTo = params.get('returnTo')
-    if (returnTo) {
+    // Validate that returnTo is a safe relative path and not an external URL or protocol-relative URL
+    if (returnTo?.startsWith('/') && !returnTo.startsWith('//') && !returnTo.includes('://')) {
       redirectTarget = returnTo
     }
   }

@@ -11,7 +11,9 @@ export function useDeployApprovalAuditLogs(id: string, enabled: boolean) {
   const { data, isLoading, error } = useQuery<AuditLogsResponse, Error>({
     queryKey: ['deployApprovalRequestAuditLogs', id, pageIndex, DEFAULT_PER_PAGE],
     queryFn: () =>
-      api.get(`/api/v1/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}`),
+      api.get(
+        `/api/v1/deploy-approval-requests/${id}/audit-logs?limit=${DEFAULT_PER_PAGE}&page=${pageIndex}`
+      ),
     enabled,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: true,

@@ -15,7 +15,6 @@ func (d *Database) CreateDeployApprovalRequest(
 	createdByUserID int64,
 	createdByAPITokenID *int64,
 	targetAPITokenID int64,
-	_ *int64,
 ) (*DeployApprovalRequest, error) {
 	if err := validateDeployApprovalRequestInput(message, app, gitCommitHash, targetAPITokenID); err != nil {
 		return nil, err

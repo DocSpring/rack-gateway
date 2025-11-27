@@ -54,7 +54,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	targetUserID, createdByAPITokenID := h.deriveTokenIDs(token, authUser)
+	_, createdByAPITokenID := h.deriveTokenIDs(token, authUser)
 
 	ciMetadata, ok := h.marshalCIMetadata(c, req)
 	if !ok {
@@ -77,7 +77,6 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		dbUser.ID,
 		createdByAPITokenID,
 		token.ID,
-		targetUserID,
 	)
 	if !ok {
 		return
@@ -257,7 +256,6 @@ func (h *APIHandler) createApprovalRecord(
 	userID int64,
 	createdByAPITokenID *int64,
 	tokenID int64,
-	targetUserID *int64,
 ) (*db.DeployApprovalRequest, bool) {
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
@@ -269,7 +267,6 @@ func (h *APIHandler) createApprovalRecord(
 		userID,
 		createdByAPITokenID,
 		tokenID,
-		targetUserID,
 	)
 	if err != nil {
 		h.handleCreateError(c, err, tokenID, gitCommitHash)

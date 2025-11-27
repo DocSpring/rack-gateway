@@ -188,7 +188,7 @@ export const rejectDeployApprovalRequest = (
   unwrap(gateway.postDeployApprovalRequestsIdReject(id, payload ?? {}))
 
 export const extendDeployApprovalRequest = (id: string): Promise<DeployApprovalRequest> =>
-  api.post(`/api/v1/deploy-approval-requests/${id}/extend`)
+  unwrap(gateway.postDeployApprovalRequestsIdExtend(id, {}))
 
 export type AuditLogQuery = Partial<{
   search: string
