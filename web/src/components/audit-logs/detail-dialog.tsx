@@ -21,8 +21,8 @@ function renderTimestamp(entry: AuditLogRecord): string {
     ('last_seen' in entry ? entry.last_seen : undefined) ??
     ('first_seen' in entry ? entry.first_seen : undefined)
   if (!ts) return '-'
-  const d = new Date(ts)
-  return Number.isNaN(d.getTime()) ? '-' : d.toISOString()
+  const dateObject = new Date(ts)
+  return Number.isNaN(dateObject.getTime()) ? '-' : dateObject.toISOString()
 }
 
 function renderResponseTime(entry: AuditLogRecord): string {

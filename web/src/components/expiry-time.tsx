@@ -9,14 +9,14 @@ export function ExpiryTime({ date }: ExpiryTimeProps) {
   if (!date) {
     return <span>—</span>
   }
-  const d = typeof date === 'string' ? new Date(date) : date
-  if (Number.isNaN(d.getTime())) {
+  const dateObject = typeof date === 'string' ? new Date(date) : date
+  if (Number.isNaN(dateObject.getTime())) {
     return <span>—</span>
   }
 
-  const exact = format(d, 'yyyy-MM-dd HH:mm:ss XXX')
-  const isExpired = isPast(d)
-  const rel = formatDistanceToNow(d, { addSuffix: true })
+  const exact = format(dateObject, 'yyyy-MM-dd HH:mm:ss XXX')
+  const isExpired = isPast(dateObject)
+  const rel = formatDistanceToNow(dateObject, { addSuffix: true })
 
   return (
     <TooltipProvider>

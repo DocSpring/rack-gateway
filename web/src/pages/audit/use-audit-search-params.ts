@@ -66,9 +66,9 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
       }
     }
     try {
-      const v = localStorage.getItem('audit_per_page')
-      if (v) {
-        const parsed = Number.parseInt(v, 10)
+      const storedValue = localStorage.getItem('audit_per_page')
+      if (storedValue) {
+        const parsed = Number.parseInt(storedValue, 10)
         if (Number.isFinite(parsed) && parsed > 0) {
           return parsed
         }
