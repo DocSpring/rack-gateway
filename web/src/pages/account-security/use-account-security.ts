@@ -150,20 +150,23 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     redirectTarget,
   })
 
-  const runWithStepUp = (action: () => Promise<void>) => {
-    const wrappedAction = async () => {
-      await action()
-    }
-    const actionWithStatusRefresh = async () => {
-      await invalidateStatus()
-      await wrappedAction()
-    }
-    wrappedAction().catch((error) => {
-      handleStepUpError(error, actionWithStatusRefresh)
-    })
-  }
+  const runWithStepUp = useCallback(
+    (action: () => Promise<void>) => {
+      const wrappedAction = async () => {
+        await action()
+      }
+      const actionWithStatusRefresh = async () => {
+        await invalidateStatus()
+        await wrappedAction()
+      }
+      wrappedAction().catch((error) => {
+        handleStepUpError(error, actionWithStatusRefresh)
+      })
+    },
+    [handleStepUpError, invalidateStatus]
+  )
 
-  const handleConfirmEnrollment = () => {
+  const handleConfirmEnrollment = useCallback(() => {
     if (!enrollment.enrollment?.method_id) {
       toast.error('Enrollment session expired. Start again.')
       return
@@ -177,9 +180,15 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
       trust_device: enrollment.trustEnrollmentDevice,
       label: normalizedLabel,
     })
-  }
+  }, [
+    confirmEnrollmentMutation,
+    enrollment.enrollment?.method_id,
+    enrollment.setPendingEditMethod,
+    enrollment.trustEnrollmentDevice,
+    enrollment.verificationCode,
+  ])
 
-  const handleDownloadCodes = (codes: string[]) => {
+  const handleDownloadCodes = useCallback((codes: string[]) => {
     const blob = new Blob([formatCodeForDownload(codes)], {
       type: 'text/plain;charset=utf-8',
     })
@@ -189,70 +198,88 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     link.download = 'rack-gateway-backup-codes.txt'
     link.click()
     URL.revokeObjectURL(url)
-  }
+  }, []) // No external dependencies
 
-  const handleCopy = async (value: string) => {
+  const handleCopy = useCallback(async (value: string) => {
     try {
       await navigator.clipboard.writeText(value)
       toast.success('Copied to clipboard')
     } catch {
       toast.error('Failed to copy to clipboard')
     }
-  }
+  }, []) // toast is a stable reference
 
-  const handleCopyCodes = async (codes: string[]) => {
+  const handleCopyCodes = useCallback(async (codes: string[]) => {
     try {
       await navigator.clipboard.writeText(codes.join('\n'))
       toast.success('Backup codes copied')
     } catch {
       toast.error('Unable to copy backup codes')
     }
-  }
+  }, []) // toast is a stable reference
 
-  const handleRegenerateCodes = () =>
-    runWithStepUp(async () => {
-      await regenerateCodesMutation.mutateAsync()
-    })
+  const handleRegenerateCodes = useCallback(
+    () =>
+      runWithStepUp(async () => {
+        await regenerateCodesMutation.mutateAsync()
+      }),
+    [regenerateCodesMutation, runWithStepUp]
+  )
 
-  const handleMethodRemove = (method: MFAMethodRecord) => {
-    if (!method.id) {
-      toast.error('Unable to determine method identifier')
-      return
-    }
-    runWithStepUp(async () => {
-      await deleteMethodMutation.mutateAsync(method.id as number)
-    })
-  }
-  const handleRevokeDevice = (device: TrustedDeviceRecord) => {
-    if (!device.id) {
-      toast.error('Unable to determine device identifier')
-      return
-    }
-    runWithStepUp(async () => {
-      await revokeDeviceMutation.mutateAsync(device.id as number)
-    })
-  }
-  const handleTrustDevice = () =>
-    runWithStepUp(async () => {
-      await trustDeviceMutation.mutateAsync()
-    })
+  const handleMethodRemove = useCallback(
+    (method: MFAMethodRecord) => {
+      if (!method.id) {
+        toast.error('Unable to determine method identifier')
+        return
+      }
+      runWithStepUp(async () => {
+        await deleteMethodMutation.mutateAsync(method.id as number)
+      })
+    },
+    [deleteMethodMutation, runWithStepUp]
+  )
+  const handleRevokeDevice = useCallback(
+    (device: TrustedDeviceRecord) => {
+      if (!device.id) {
+        toast.error('Unable to determine device identifier')
+        return
+      }
+      runWithStepUp(async () => {
+        await revokeDeviceMutation.mutateAsync(device.id as number)
+      })
+    },
+    [revokeDeviceMutation, runWithStepUp]
+  )
+  const handleTrustDevice = useCallback(
+    () =>
+      runWithStepUp(async () => {
+        await trustDeviceMutation.mutateAsync()
+      }),
+    [runWithStepUp, trustDeviceMutation]
+  )
 
-  const handleStartEnrollment = (type: MFAMethodType) => {
-    if (type === 'webauthn') {
-      startWebAuthnMutation.mutate()
-      return
-    }
-    startTOTPMutation.mutate()
-  }
+  const handleStartEnrollment = useCallback(
+    (type: MFAMethodType) => {
+      if (type === 'webauthn') {
+        startWebAuthnMutation.mutate()
+        return
+      }
+      startTOTPMutation.mutate()
+    },
+    [startTOTPMutation, startWebAuthnMutation]
+  )
 
-  const handlePreferredMethodChange = (value: string) => {
-    const method: string | undefined = value === 'none' ? undefined : value
-    updatePreferredMethodMutation.mutate({
-      preferred_method: method,
-    })
-  }
+  const handlePreferredMethodChange = useCallback(
+    (value: string) => {
+      const method: string | undefined = value === 'none' ? undefined : value
+      updatePreferredMethodMutation.mutate({
+        preferred_method: method,
+      })
+    },
+    [updatePreferredMethodMutation]
+  )
 
-  const handleDisableAllMfa = () => {
+  const handleDisableAllMfa = useCallback(() => {
     const methods = status?.methods ?? []
     if (methods.length === 0) {
       setDisableDialogOpen(false)
@@ -275,7 +302,7 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     }
     setDisableDialogOpen(false)
     runWithStepUp(performDisable)
-  }
+  }, [deleteMethodMutation, runWithStepUp, status?.methods])
 
   useEffect(() => {
     if (
@@ -332,7 +359,7 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     startWebAuthnMutation.isPending ||
     confirmEnrollmentMutation.isPending
 
-  const handleEditDialogSubmit = () => {
+  const handleEditDialogSubmit = useCallback(() => {
     const { editingMethod } = methodEdit
     if (!editingMethod) {
       return
@@ -346,7 +373,7 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
         }),
       })
     })
-  }
+  }, [methodEdit, runWithStepUp, updateMethodMutation])
 
   return {
     status,

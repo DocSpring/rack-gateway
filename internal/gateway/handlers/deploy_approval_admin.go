@@ -146,25 +146,14 @@ func (h *AdminHandler) ApproveDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	details := auditDetails(map[string]string{
-		"expires_at": expiresAt.UTC().Format(time.RFC3339),
-		"notes":      strings.TrimSpace(input.notes),
-		"message":    strings.TrimSpace(record.Message),
-	})
-
-	logDeployApprovalAudit(
-		h.auditLogger,
-		input.userEmail,
-		input.approver.Name,
-		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), rbac.ActionApprove.String()),
-		fmt.Sprintf("%d", record.ID),
-		details,
-		"success",
-		http.StatusOK,
-	)
-
 	h.triggerCircleCIApprovalIfEnabled(c, record)
-	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
+	h.finishApprovalAction(
+		c,
+		record,
+		input,
+		rbac.ActionApprove.String(),
+		map[string]string{"expires_at": expiresAt.UTC().Format(time.RFC3339)},
+	)
 }
 
 // RejectDeployApprovalRequest godoc
@@ -196,23 +185,13 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	details := auditDetails(map[string]string{
-		"notes":   strings.TrimSpace(input.notes),
-		"message": strings.TrimSpace(record.Message),
-	})
-
-	logDeployApprovalAudit(
-		h.auditLogger,
-		input.userEmail,
-		input.approver.Name,
-		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), audit.ActionVerbReject),
-		fmt.Sprintf("%d", record.ID),
-		details,
-		"success",
-		http.StatusOK,
+	h.finishApprovalAction(
+		c,
+		record,
+		input,
+		audit.ActionVerbReject,
+		nil,
 	)
-
-	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
 // ExtendDeployApprovalRequest godoc
@@ -222,7 +201,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Deploy approval request public ID"
-// @Param body body handlers.UpdateDeployApprovalRequestStatusRequest false "Extension notes"
+// @Param body body UpdateDeployApprovalRequestStatusRequest false "Extension notes"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -245,23 +224,13 @@ func (h *AdminHandler) ExtendDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	details := auditDetails(map[string]string{
-		"expires_at": expiresAt.UTC().Format(time.RFC3339),
-		"message":    strings.TrimSpace(record.Message),
-	})
-
-	logDeployApprovalAudit(
-		h.auditLogger,
-		input.userEmail,
-		input.approver.Name,
-		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), "extend"),
-		fmt.Sprintf("%d", record.ID),
-		details,
-		"success",
-		http.StatusOK,
+	h.finishApprovalAction(
+		c,
+		record,
+		input,
+		"extend",
+		map[string]string{"expires_at": expiresAt.UTC().Format(time.RFC3339)},
 	)
-
-	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
 
 func (h *AdminHandler) triggerCircleCIApprovalIfEnabled(c *gin.Context, record *db.DeployApprovalRequest) {
@@ -398,4 +367,33 @@ func (h *AdminHandler) GetDeployApprovalRequestAuditLogs(c *gin.Context) {
 		Page:  1,
 		Limit: limit,
 	})
+}
+
+func (h *AdminHandler) finishApprovalAction(
+	c *gin.Context,
+	record *db.DeployApprovalRequest,
+	input *deployApprovalStatusInput,
+	action string,
+	extraDetails map[string]string,
+) {
+	auditData := map[string]string{
+		"notes":   strings.TrimSpace(input.notes),
+		"message": strings.TrimSpace(record.Message),
+	}
+	for k, v := range extraDetails {
+		auditData[k] = v
+	}
+
+	logDeployApprovalAudit(
+		h.auditLogger,
+		input.userEmail,
+		input.approver.Name,
+		audit.BuildAction(rbac.ResourceDeployApprovalRequest.String(), action),
+		fmt.Sprintf("%d", record.ID),
+		auditDetails(auditData),
+		"success",
+		http.StatusOK,
+	)
+
+	c.JSON(http.StatusOK, toDeployApprovalRequestResponse(record))
 }
