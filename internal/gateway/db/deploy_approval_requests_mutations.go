@@ -16,46 +16,49 @@ func (d *Database) CreateDeployApprovalRequest(
 	createdByAPITokenID *int64,
 	targetAPITokenID int64,
 ) (*DeployApprovalRequest, error) {
-	if err := validateDeployApprovalRequestInput(message, app, gitCommitHash, targetAPITokenID); err != nil {
+	normalizedMessage, normalizedApp, normalizedGitCommitHash, err := validateAndNormalizeDeployApprovalInput(
+		message, app, gitCommitHash, targetAPITokenID,
+	)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := d.checkDeployApprovalConflict(targetAPITokenID, gitCommitHash); err != nil {
+	if err := d.checkDeployApprovalConflict(targetAPITokenID, normalizedGitCommitHash); err != nil {
 		return nil, err
 	}
 
 	nullValues := buildDeployApprovalNullValues(createdByAPITokenID, gitBranch, prURL)
 
 	id, err := d.insertDeployApprovalRequest(
-		message, app, gitCommitHash, ciMetadata,
+		normalizedMessage, normalizedApp, normalizedGitCommitHash, ciMetadata,
 		createdByUserID, nullValues, targetAPITokenID,
 	)
 	if err != nil {
-		return d.handleDeployApprovalInsertError(err, targetAPITokenID, gitCommitHash)
+		return d.handleDeployApprovalInsertError(err, targetAPITokenID, normalizedGitCommitHash)
 	}
 	return d.GetDeployApprovalRequest(id)
 }
 
-func validateDeployApprovalRequestInput(
+func validateAndNormalizeDeployApprovalInput(
 	message, app, gitCommitHash string,
 	targetAPITokenID int64,
-) error {
+) (string, string, string, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
-		return fmt.Errorf("message is required")
+		return "", "", "", fmt.Errorf("message is required")
 	}
 	app = strings.TrimSpace(app)
 	if app == "" {
-		return fmt.Errorf("app is required")
+		return "", "", "", fmt.Errorf("app is required")
 	}
 	gitCommitHash = strings.TrimSpace(gitCommitHash)
 	if gitCommitHash == "" {
-		return fmt.Errorf("git_commit_hash is required")
+		return "", "", "", fmt.Errorf("git_commit_hash is required")
 	}
 	if targetAPITokenID <= 0 {
-		return fmt.Errorf("target api token required")
+		return "", "", "", fmt.Errorf("target api token required")
 	}
-	return nil
+	return message, app, gitCommitHash, nil
 }
 
 func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash string) error {
@@ -142,7 +145,7 @@ func (d *Database) insertDeployApprovalRequest(
 func (d *Database) handleDeployApprovalInsertError(
 	err error,
 	tokenID int64,
-	gitCommitHash string,
+	normalizedGitCommitHash string,
 ) (*DeployApprovalRequest, error) {
 	if !isUniqueConstraintViolation(err) {
 		return nil, fmt.Errorf("failed to create deploy approval request: %w", err)
@@ -150,7 +153,7 @@ func (d *Database) handleDeployApprovalInsertError(
 
 	existing, fetchErr := d.FindDeployApprovalRequest(DeployApprovalLookup{
 		TokenID:       tokenID,
-		GitCommitHash: gitCommitHash,
+		GitCommitHash: normalizedGitCommitHash,
 		StatusFilter:  "any",
 	})
 	if fetchErr == nil && existing != nil {
