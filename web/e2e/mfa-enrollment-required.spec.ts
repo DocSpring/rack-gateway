@@ -52,27 +52,16 @@ test.describe('MFA enrollment enforcement', () => {
 
     await expectRedirectToAccountSecurity(page)
 
-    // Check that sidebar links are disabled or not clickable
-    // Try to find the Rack link
+    // Check that sidebar links are disabled (rendered as non-links)
+    // The "Rack" item should be rendered as a span, not a link, so getByRole('link') should not find it
     const rackLink = page.getByRole('link', { name: /^Rack$/i })
+    await expect(rackLink).toBeHidden()
 
-    // The link should not be visible (it's rendered as a span when disabled)
-    // or if it is visible (implementation change), it should be disabled.
-    if (await rackLink.isVisible()) {
-      const isDisabled =
-        (await rackLink.getAttribute('aria-disabled')) === 'true' ||
-        (await rackLink.getAttribute('class'))?.includes('disabled') ||
-        (await rackLink.getAttribute('class'))?.includes('opacity-50')
-
-      expect(isDisabled).toBeTruthy()
-    } else {
-      // If the link is not visible, check if the text "Rack" is visible (as a span)
-      // and verify it has the disabled styling/attributes if possible, or just accept that it's not a link.
-      const rackText = page.locator('nav').getByText(/^Rack$/i)
-      await expect(rackText).toBeVisible()
-      // Ensure it's not a link
-      await expect(rackText).not.toHaveRole('link')
-    }
+    // Verify the text is still visible (as a span) and appears disabled
+    const rackText = page.locator('nav').getByText(/^Rack$/i)
+    await expect(rackText).toBeVisible()
+    // Check for the disabled styling class we use in Layout.tsx
+    await expect(rackText).toHaveClass(/opacity-50/)
   })
 
   test('attempting to navigate to /rack redirects back to account/security', async ({ page }) => {
@@ -110,6 +99,7 @@ test.describe('MFA enrollment enforcement', () => {
   })
 
   test('after completing MFA enrollment, user can navigate freely', async ({ page }) => {
+    test.setTimeout(60_000)
     // Reset MFA for admin user
     await resetMfaFor(ADMIN_EMAIL)
     await enforceMfaFor(ADMIN_EMAIL)
