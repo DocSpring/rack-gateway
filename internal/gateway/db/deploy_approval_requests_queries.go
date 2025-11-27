@@ -128,5 +128,8 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 		}
 		out = append(out, req)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during deploy approval requests iteration: %w", err)
+	}
 	return out, nil
 }
