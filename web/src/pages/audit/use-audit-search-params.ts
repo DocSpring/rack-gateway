@@ -134,14 +134,14 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
 
   const customStartISO = useMemo(() => {
     if (dateRange !== 'custom') {
-      return undefined
+      return
     }
     return toISOStringParam(customStart)
   }, [customStart, dateRange])
 
   const customEndISO = useMemo(() => {
     if (dateRange !== 'custom') {
-      return undefined
+      return
     }
     return toISOStringParam(customEnd)
   }, [customEnd, dateRange])
@@ -247,14 +247,13 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
 
   // Debounce search to prevent refetch on every keystroke
   useEffect(() => {
-    if (!searchInitializedRef.current) {
-      searchInitializedRef.current = true
-      setDebouncedSearch(searchTerm)
-    } else {
+    if (searchInitializedRef.current) {
       setPage(1)
       const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
       return () => clearTimeout(timer)
     }
+    searchInitializedRef.current = true
+    setDebouncedSearch(searchTerm)
   }, [searchTerm])
 
   const routingQuery = useMemo(

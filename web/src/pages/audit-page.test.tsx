@@ -10,6 +10,25 @@ const FAILED_LOAD_REGEX = /Failed to load audit logs/i
 const PAGE_FIVE_REGEX = /page=5/
 const PAGE_TWO_REGEX = /page=2/
 
+// Mock @tanstack/react-router
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    to,
+    children,
+    ...props
+  }: { to?: unknown; children?: React.ReactNode; [key: string]: unknown }) => (
+    <a href={typeof to === 'string' ? to : '#'} {...props}>
+      {children}
+    </a>
+  ),
+  useNavigate: () => vi.fn(),
+  useLocation: () => ({
+    pathname: '/',
+    search: typeof window !== 'undefined' ? window.location.search : '',
+    hash: '',
+  }),
+}))
+
 // Mock the API
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
