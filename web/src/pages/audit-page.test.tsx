@@ -21,7 +21,7 @@ vi.mock('@tanstack/react-router', () => ({
     children?: React.ReactNode
     [key: string]: unknown
   }) => (
-    <a href={typeof to === 'string' ? to : '#'} {...props}>
+    <a href={typeof to === 'string' ? to : '/mock-link'} {...props}>
       {children}
     </a>
   ),

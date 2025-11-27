@@ -302,8 +302,17 @@ type DisconnectDialogProps = {
 }
 
 function DisconnectDialog({ open, onCancel, onConfirm }: DisconnectDialogProps) {
+  const handleOpenChange = useCallback(
+    (isOpen: boolean) => {
+      if (!isOpen) {
+        onCancel()
+      }
+    },
+    [onCancel]
+  )
+
   return (
-    <Dialog onOpenChange={(isOpen) => !isOpen && onCancel()} open={open}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Disconnect from Slack</DialogTitle>
