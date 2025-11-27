@@ -26,7 +26,7 @@ cd "$TARGET_DIR"
 
 set -o pipefail
 # Run jscpd on the current directory (target dir) so it picks up local config (.jscpd.json)
-if output=$(jscpd . 2>&1); then
+if output=$(jscpd . --exitCode 1 2>&1); then
   echo "No duplicate $LABEL code detected."
   exit 0
 else
