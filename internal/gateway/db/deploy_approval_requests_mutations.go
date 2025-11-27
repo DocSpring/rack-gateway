@@ -324,7 +324,7 @@ func (d *Database) UpdateDeployApprovalRequestObjectURL(id int64, objectURL stri
 		return fmt.Errorf("failed to update object url tracking: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("deployment approval not found or not approved")
+		return ErrDeployApprovalRequestNotFound
 	}
 	return nil
 }

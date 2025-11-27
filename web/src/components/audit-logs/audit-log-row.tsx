@@ -50,7 +50,7 @@ export function AuditLogRow({ log, index, onClick }: AuditLogRowProps) {
       </TableCell>
       <TableCell>
         <Badge className={appearance.className} variant={appearance.variant}>
-          {actionType.replace('_', ' ')}
+          {actionType.replaceAll('_', ' ')}
         </Badge>
       </TableCell>
       <TableCell className="text-sm">{renderActionCell(log)}</TableCell>
