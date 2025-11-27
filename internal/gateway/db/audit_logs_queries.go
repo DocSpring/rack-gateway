@@ -213,7 +213,7 @@ func (d *Database) VerifyChainIntegrity(startIndex, endIndex int64) error {
 // CleanupOldAuditLogs is DISABLED for append-only audit logs
 // Audit logs are immutable and should NEVER be deleted from the database
 // For compliance, export old logs to S3 Glacier and keep database entries intact
-func (d *Database) CleanupOldAuditLogs(_ int) error {
+func (_ *Database) CleanupOldAuditLogs(_ int) error {
 	return fmt.Errorf("CleanupOldAuditLogs is disabled: audit logs are immutable and must not be deleted")
 }
 
@@ -227,6 +227,7 @@ type AuditLogAggregated struct {
 	FirstHash               []byte    `json:"first_hash"`
 	LastHash                []byte    `json:"last_hash"`
 	EventCount              int       `json:"event_count"`
+	ResponseTimeMs          int       `json:"response_time_ms"` // Mapped to AvgResponseTimeMs for frontend consistency
 	MinResponseTimeMs       int       `json:"min_response_time_ms"`
 	MaxResponseTimeMs       int       `json:"max_response_time_ms"`
 	AvgResponseTimeMs       int       `json:"avg_response_time_ms"`
@@ -333,6 +334,8 @@ func scanAuditLogAggregated(scanner interface{ Scan(...interface{}) error }) (*A
 	if err := scanAuditRow(scanner, args, tokenState, log, &deployApprovalRequestID); err != nil {
 		return nil, err
 	}
+
+	log.ResponseTimeMs = log.AvgResponseTimeMs
 
 	return log, nil
 }

@@ -26,6 +26,7 @@ import type {
   GetAuthCliCallbackParams,
   GetAuthCliMfaParams,
   GetAuthWebCallbackParams,
+  GetAuthWebLoginParams,
   GetCreatedBy200,
   GetCreatedByParams,
   GetDeployApprovalRequestsIdAuditLogsParams,
@@ -826,10 +827,11 @@ Secrets remain masked unless the user has secrets permissions.
    * @summary Start web OAuth login
    */
   const getAuthWebLogin = (
+    params?: GetAuthWebLoginParams,
     options?: SecondParameter<typeof createGatewayClient<unknown>>,
   ) => {
     return createGatewayClient<unknown>(
-      { url: `/auth/web/login`, method: 'GET' },
+      { url: `/auth/web/login`, method: 'GET', params },
       options,
     );
   };
@@ -915,6 +917,28 @@ Secrets remain masked unless the user has secrets permissions.
         url: `/deploy-approval-requests/${id}/audit-logs`,
         method: 'GET',
         params,
+      },
+      options,
+    );
+  };
+
+  /**
+   * Extends the expiry time for an approved deploy approval request
+   * @summary Extend a deploy approval request expiry
+   */
+  const postDeployApprovalRequestsIdExtend = (
+    id: string,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
+    options?: SecondParameter<
+      typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
+    >,
+  ) => {
+    return createGatewayClient<HandlersDeployApprovalRequestResponse>(
+      {
+        url: `/deploy-approval-requests/${id}/extend`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
       },
       options,
     );
@@ -1374,6 +1398,7 @@ Secrets remain masked unless the user has secrets permissions.
     getDeployApprovalRequests,
     postDeployApprovalRequestsIdApprove,
     getDeployApprovalRequestsIdAuditLogs,
+    postDeployApprovalRequestsIdExtend,
     postDeployApprovalRequestsIdReject,
     getHealth,
     getInfo,
@@ -1674,6 +1699,13 @@ export type GetDeployApprovalRequestsIdAuditLogsResult = NonNullable<
       ReturnType<
         typeof getRackGatewayAPI
       >['getDeployApprovalRequestsIdAuditLogs']
+    >
+  >
+>;
+export type PostDeployApprovalRequestsIdExtendResult = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof getRackGatewayAPI>['postDeployApprovalRequestsIdExtend']
     >
   >
 >;

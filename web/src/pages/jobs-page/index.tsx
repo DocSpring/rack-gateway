@@ -197,7 +197,7 @@ function JobsPageInner() {
         empty={jobs.length === 0}
         emptyMessage="No background jobs found"
         error={error ? 'Failed to load background jobs' : null}
-        loading={!!isLoading}
+        loading={Boolean(isLoading)}
       >
         <Table>
           <TableHeader>

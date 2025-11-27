@@ -38,6 +38,7 @@ export * from './getAuditLogsParams';
 export * from './getAuthCliCallbackParams';
 export * from './getAuthCliMfaParams';
 export * from './getAuthWebCallbackParams';
+export * from './getAuthWebLoginParams';
 export * from './getCreatedBy200';
 export * from './getCreatedByParams';
 export * from './getCreatedByType';

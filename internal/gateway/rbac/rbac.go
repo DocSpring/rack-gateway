@@ -369,18 +369,18 @@ func (a *memoryAdapter) LoadPolicy(mdl model.Model) error {
 	return nil
 }
 
-func (a *memoryAdapter) SavePolicy(model.Model) error {
+func (_ *memoryAdapter) SavePolicy(model.Model) error {
 	return nil // We don't save policies, they're embedded
 }
 
-func (a *memoryAdapter) AddPolicy(string, string, []string) error {
+func (_ *memoryAdapter) AddPolicy(string, string, []string) error {
 	return nil
 }
 
-func (a *memoryAdapter) RemovePolicy(string, string, []string) error {
+func (_ *memoryAdapter) RemovePolicy(string, string, []string) error {
 	return nil
 }
 
-func (a *memoryAdapter) RemoveFilteredPolicy(string, string, int, ...string) error {
+func (_ *memoryAdapter) RemoveFilteredPolicy(string, string, int, ...string) error {
 	return nil
 }

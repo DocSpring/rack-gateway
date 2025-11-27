@@ -13,7 +13,7 @@ type SendSingleArgs struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Text    string `json:"text"`
-	Html    string `json:"html"`
+	Html    string `json:"html"` //nolint:staticcheck // JSON field name matches email API
 }
 
 // Kind returns the job kind identifier for single email sending
@@ -44,7 +44,7 @@ type SendManyArgs struct {
 	To      []string `json:"to"`
 	Subject string   `json:"subject"`
 	Text    string   `json:"text"`
-	Html    string   `json:"html"`
+	Html    string   `json:"html"` //nolint:staticcheck // JSON field name matches email API
 }
 
 // Kind returns the job kind identifier for multi-recipient email sending

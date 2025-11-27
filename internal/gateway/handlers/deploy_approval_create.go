@@ -54,7 +54,7 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		return
 	}
 
-	targetUserID, createdByAPITokenID := h.deriveTokenIDs(token, authUser)
+	_, createdByAPITokenID := h.deriveTokenIDs(token, authUser)
 
 	ciMetadata, ok := h.marshalCIMetadata(c, req)
 	if !ok {
@@ -77,7 +77,6 @@ func (h *APIHandler) CreateDeployApprovalRequest(c *gin.Context) {
 		dbUser.ID,
 		createdByAPITokenID,
 		token.ID,
-		targetUserID,
 	)
 	if !ok {
 		return
@@ -222,7 +221,7 @@ func (h *APIHandler) resolveToken(
 	return token, true
 }
 
-func (h *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*int64, *int64) {
+func (_ *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*int64, *int64) {
 	var targetUserID *int64
 	if token != nil && token.UserID > 0 {
 		id := token.UserID
@@ -237,7 +236,7 @@ func (h *APIHandler) deriveTokenIDs(token *db.APIToken, authUser *auth.User) (*i
 	return targetUserID, createdByAPITokenID
 }
 
-func (h *APIHandler) marshalCIMetadata(c *gin.Context, req CreateDeployApprovalRequestRequest) ([]byte, bool) {
+func (_ *APIHandler) marshalCIMetadata(c *gin.Context, req CreateDeployApprovalRequestRequest) ([]byte, bool) {
 	var ciMetadata []byte
 	if len(req.CIMetadata) > 0 {
 		var err error
@@ -257,7 +256,6 @@ func (h *APIHandler) createApprovalRecord(
 	userID int64,
 	createdByAPITokenID *int64,
 	tokenID int64,
-	targetUserID *int64,
 ) (*db.DeployApprovalRequest, bool) {
 	record, err := h.database.CreateDeployApprovalRequest(
 		message,
@@ -269,7 +267,6 @@ func (h *APIHandler) createApprovalRecord(
 		userID,
 		createdByAPITokenID,
 		tokenID,
-		targetUserID,
 	)
 	if err != nil {
 		h.handleCreateError(c, err, tokenID, gitCommitHash)
@@ -278,7 +275,7 @@ func (h *APIHandler) createApprovalRecord(
 	return record, true
 }
 
-func (h *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64, gitCommitHash string) {
+func (_ *APIHandler) handleCreateError(c *gin.Context, err error, tokenID int64, gitCommitHash string) {
 	switch {
 	case errors.Is(err, db.ErrDeployApprovalRequestActive):
 		var conflict *db.DeployApprovalRequestConflictError

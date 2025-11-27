@@ -115,9 +115,8 @@ tasks:
 
   duplication:
     desc: Check for web code duplication
-    dir: web
     cmds:
-      - jscpd --silent .
+      - scripts/check_duplication.sh web
 
   format:
     dir: web

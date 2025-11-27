@@ -21,7 +21,7 @@ func NewHealthHandler() *HealthHandler {
 // @Produce json
 // @Success 200 {object} HealthResponse
 // @Router /health [get]
-func (h *HealthHandler) Health(c *gin.Context) {
+func (_ *HealthHandler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{
 		Status:  "ok",
 		Service: "rack-gateway",

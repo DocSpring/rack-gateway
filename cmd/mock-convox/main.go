@@ -44,6 +44,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -89,7 +90,16 @@ func runServer() error {
 	auth := base64.StdEncoding.EncodeToString([]byte(mockUsername + ":" + mockPassword))
 	mclog.DebugTopicf(mclog.TopicAuth, "expected auth: Basic %s", auth)
 
-	if err := http.ListenAndServe(":"+port, router); err != nil {
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 30 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
 		return fmt.Errorf("server listen failed: %w", err)
 	}
 	return nil

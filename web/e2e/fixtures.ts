@@ -173,6 +173,7 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
           urlString.includes('/auth/mfa/enroll/totp/start')
 
         if ((this as any).__e2e_capture_totp === true) {
+          // TOTP capture logic handled elsewhere
         }
 
         return originalOpen.apply(this, args)
@@ -219,7 +220,9 @@ export const test = base.extend<{ expectedErrors: ExpectedError[] }>({
         let body = ''
         try {
           body = await resp.text()
-        } catch {}
+        } catch {
+          // Ignore parse errors - body might not be text
+        }
         const snippet = body ? body.slice(0, 200).replace(/\s+/g, ' ').trim() : ''
 
         if (status === 403 && snippet.includes('mfa_enrollment_required')) {

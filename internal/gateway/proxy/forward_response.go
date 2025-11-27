@@ -92,7 +92,7 @@ func (h *Handler) processProxyResponse(
 }
 
 // shouldCaptureResponse determines if the response should be captured.
-func (h *Handler) shouldCaptureResponse(r *http.Request, path string, isJSON bool) (bool, bool) {
+func (_ *Handler) shouldCaptureResponse(r *http.Request, path string, isJSON bool) (bool, bool) {
 	if !isJSON {
 		return false, false
 	}
@@ -142,7 +142,7 @@ func (h *Handler) writeResponse(
 }
 
 // logResponseHeaders logs all response headers.
-func (h *Handler) logResponseHeaders(resp *http.Response) {
+func (_ *Handler) logResponseHeaders(resp *http.Response) {
 	for key, values := range resp.Header {
 		for _, value := range values {
 			gtwlog.DebugTopicf(gtwlog.TopicHTTPResponseHeaders, "%s: %s", key, value)

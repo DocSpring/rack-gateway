@@ -387,7 +387,7 @@ func (h *AuthHandler) handleMFADisablement(userID int64) {
 	h.revokeAllUserTrustedDevices(userID)
 }
 
-func (h *AuthHandler) hasConfirmedMFAMethod(methods []*db.MFAMethod) bool {
+func (_ *AuthHandler) hasConfirmedMFAMethod(methods []*db.MFAMethod) bool {
 	for _, method := range methods {
 		if method != nil && method.ConfirmedAt != nil {
 			return true

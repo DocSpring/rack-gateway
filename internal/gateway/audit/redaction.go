@@ -61,7 +61,7 @@ func (l *Logger) shouldRedact(value string) bool {
 }
 
 // RedactEnvVars redacts all environment variables for security in audit logs
-func (l *Logger) RedactEnvVars(envVars map[string]string) map[string]string {
+func (_ *Logger) RedactEnvVars(envVars map[string]string) map[string]string {
 	redacted := make(map[string]string)
 	for key := range envVars {
 		redacted[key] = "[REDACTED]"

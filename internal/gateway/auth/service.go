@@ -78,7 +78,7 @@ func (a *Service) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func (a *Service) withUserContext(r *http.Request, user *User) *http.Request {
+func (_ *Service) withUserContext(r *http.Request, user *User) *http.Request {
 	ctx := context.WithValue(r.Context(), UserContextKey, user)
 	if user != nil && user.DBUser != nil {
 		ctx = context.WithValue(ctx, userRecordKey, user.DBUser)
@@ -86,7 +86,7 @@ func (a *Service) withUserContext(r *http.Request, user *User) *http.Request {
 	return r.WithContext(ctx)
 }
 
-func (a *Service) setAuthHeaders(r *http.Request, user *User, source string) {
+func (_ *Service) setAuthHeaders(r *http.Request, user *User, source string) {
 	r.Header.Set("X-User-Name", user.Name)
 	r.Header.Set("X-User-Email", user.Email)
 	r.Header.Set("X-Auth-Source", source)
@@ -112,7 +112,7 @@ func (a *Service) setAuthHeaders(r *http.Request, user *User, source string) {
 }
 
 // writeUnauthorized centralizes 401 responses and optional debug logging.
-func (a *Service) writeUnauthorized(w http.ResponseWriter, r *http.Request, reason string) {
+func (_ *Service) writeUnauthorized(w http.ResponseWriter, r *http.Request, reason string) {
 	// Non-intrusive hint header + body for diagnostics
 	w.Header().Set("X-Error-Reason", reason)
 	// Structured debug at log level
@@ -215,7 +215,7 @@ func (a *Service) authenticateFromCookie(r *http.Request) (*User, string, error)
 	return user, "cookie", nil
 }
 
-func (a *Service) applyHeaderMFA(r *http.Request, user *User) {
+func (_ *Service) applyHeaderMFA(r *http.Request, user *User) {
 	if totpCode := strings.TrimSpace(r.Header.Get("X-Mfa-Totp")); totpCode != "" {
 		user.MFAType = "totp"
 		user.MFAValue = totpCode

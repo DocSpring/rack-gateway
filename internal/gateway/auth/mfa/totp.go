@@ -41,7 +41,7 @@ func (s *Service) StartTOTPEnrollment(user *db.User) (*StartTOTPEnrollmentResult
 	}
 	// TOTP always generates backup codes on first enrollment
 	if backupCodes == nil {
-		codes, hashes, err := s.generateBackupCodes()
+		codes, hashes, err := s.genBackupCodes()
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +223,7 @@ func (s *Service) verifyBackupCodes(
 
 // validateTOTPCodeWithTimeStep validates a TOTP code and returns the time-step it was valid for.
 // Returns (timeStep, nil) on success, or (0, error) on failure.
-func (s *Service) validateTOTPCodeWithTimeStep(secret, code string) (int64, error) {
+func (_ *Service) validateTOTPCodeWithTimeStep(secret, code string) (int64, error) {
 	now := time.Now()
 	currentStep := now.Unix() / totpPeriodSeconds
 

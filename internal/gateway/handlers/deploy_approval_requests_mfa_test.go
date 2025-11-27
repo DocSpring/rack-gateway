@@ -109,7 +109,6 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 		fixture.admin.ID,    // createdByUserID
 		nil,                 // createdByAPITokenID
 		fixture.apiToken.ID, // targetAPITokenID
-		&fixture.admin.ID,   // targetUserID
 	)
 	require.NoError(t, err)
 	require.Equal(t, "pending", req.Status)
@@ -178,7 +177,6 @@ func TestApproveDeployApprovalRequest_RequiresMFACode(t *testing.T) {
 			fixture.admin.ID,    // createdByUserID
 			nil,                 // createdByAPITokenID
 			fixture.apiToken.ID, // targetAPITokenID
-			&fixture.admin.ID,   // targetUserID
 		)
 		require.NoError(t, err)
 

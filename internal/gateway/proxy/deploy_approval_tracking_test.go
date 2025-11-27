@@ -84,7 +84,6 @@ func TestUpdateObjectURLApprovalTracking_WithTracker(t *testing.T) {
 		user.ID,           // createdByUserID
 		nil,               // createdByAPITokenID
 		apiToken.ID,       // targetAPITokenID
-		&user.ID,          // targetUserID
 	)
 	require.NoError(t, err)
 
@@ -172,7 +171,6 @@ func TestUpdateBuildApprovalTracking_WithTracker(t *testing.T) {
 		user.ID,           // createdByUserID
 		nil,               // createdByAPITokenID
 		apiToken.ID,       // targetAPITokenID
-		&user.ID,          // targetUserID
 	)
 	require.NoError(t, err)
 
@@ -280,7 +278,6 @@ func TestCaptureObjectUpload_CallsUpdateObjectURLApprovalTracking(t *testing.T) 
 		user.ID,           // createdByUserID
 		nil,               // createdByAPITokenID
 		apiToken.ID,       // targetAPITokenID
-		&user.ID,          // targetUserID
 	)
 	require.NoError(t, err)
 
@@ -361,7 +358,6 @@ func TestCaptureBuildCreation_CallsUpdateBuildApprovalTracking(t *testing.T) {
 		user.ID,           // createdByUserID
 		nil,               // createdByAPITokenID
 		apiToken.ID,       // targetAPITokenID
-		&user.ID,          // targetUserID
 	)
 	require.NoError(t, err)
 

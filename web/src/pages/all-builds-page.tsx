@@ -107,7 +107,7 @@ export function AllBuildsPage() {
                 <TableCell>
                   <Link
                     className="underline hover:no-underline"
-                    params={{ app: b.app! as string }}
+                    params={{ app: (b.app || '') as string }}
                     to="/apps/$app/builds"
                   >
                     {b.app}

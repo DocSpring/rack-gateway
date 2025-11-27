@@ -279,7 +279,7 @@ func RequestAlreadyLogged(r *http.Request) bool {
 }
 
 // GetClientIP extracts the client IP address from the request
-func (l *Logger) GetClientIP(r *http.Request) string {
+func (_ *Logger) GetClientIP(r *http.Request) string {
 	return getClientIP(r)
 }
 
@@ -297,7 +297,7 @@ func getClientIP(r *http.Request) string {
 // ParseConvoxAction extracts meaningful action and resource from the request.
 // Returns "unknown" for both if route cannot be matched - caller must handle this.
 // If resourceIDOverride is provided, it will be used instead of parsing from the path.
-func (l *Logger) ParseConvoxAction(path, method, resourceIDOverride string) (action, resource string) {
+func (_ *Logger) ParseConvoxAction(path, method, resourceIDOverride string) (action, resource string) {
 	// For audit purposes, treat WebSocket GET upgrades as SOCKET method for matching
 	res, act, ok := rbac.MatchRackRoute(method, path)
 	if !ok && method == http.MethodGet && strings.Contains(path, "/logs") {
@@ -362,7 +362,7 @@ func extractAppName(parts []string) string {
 }
 
 // BuildDetailsJSON creates a JSON string with request details
-func (l *Logger) BuildDetailsJSON(r *http.Request) string {
+func (_ *Logger) BuildDetailsJSON(r *http.Request) string {
 	details := map[string]interface{}{
 		"method": r.Method,
 		"path":   r.URL.Path,
@@ -402,7 +402,9 @@ func (l *Logger) BuildDetailsJSON(r *http.Request) string {
 }
 
 // MapHttpStatusToStatus converts HTTP status code to audit status string
-func (l *Logger) MapHttpStatusToStatus(httpStatus int) string {
+//
+//nolint:staticcheck // Http is part of the function name convention
+func (_ *Logger) MapHttpStatusToStatus(httpStatus int) string {
 	switch {
 	case httpStatus == 101: // WebSocket Switching Protocols treated as success
 		return "success"
@@ -419,7 +421,7 @@ func (l *Logger) MapHttpStatusToStatus(httpStatus int) string {
 }
 
 // InferResourceType attempts to derive a normalized resource type label for UI display.
-func (l *Logger) InferResourceType(path, action string) string {
+func (_ *Logger) InferResourceType(path, action string) string {
 	// First, try to infer from action (most reliable)
 	if i := strings.Index(action, "."); i > 0 {
 		return action[:i]

@@ -15,7 +15,7 @@ func (s *Service) ensureBackupCodes(userID int64) ([]string, error) {
 		return nil, nil
 	}
 
-	codes, hashes, err := s.generateBackupCodes()
+	codes, hashes, err := s.genBackupCodes()
 	if err != nil {
 		return nil, err
 	}

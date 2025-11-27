@@ -313,7 +313,7 @@ func (h *Handler) isAllowedConvoxRoute(r *http.Request, rackPath string) bool {
 	return ok
 }
 
-func (h *Handler) determineMethod(r *http.Request) string {
+func (_ *Handler) determineMethod(r *http.Request) string {
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
 		return "SOCKET"

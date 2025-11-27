@@ -37,7 +37,7 @@ func New() (*App, error) {
 		return nil, err
 	}
 	if err := database.EnsureEnvironment(cfg.DevMode); err != nil {
-		database.Close() //nolint:errcheck // cleanup on init failure
+		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, err
 	}
 
@@ -52,7 +52,7 @@ func New() (*App, error) {
 
 	// Initialize services
 	if err := app.initializeServices(); err != nil {
-		database.Close() //nolint:errcheck // cleanup on init failure
+		database.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, err
 	}
 
@@ -72,9 +72,9 @@ func (a *App) Cleanup() {
 	if a.JobsClient != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		a.JobsClient.Stop(ctx) //nolint:errcheck // application shutdown
+		a.JobsClient.Stop(ctx) //nolint:errcheck,gosec // G104: application shutdown
 	}
 	if a.Database != nil {
-		a.Database.Close() //nolint:errcheck // application shutdown
+		a.Database.Close() //nolint:errcheck,gosec // G104: application shutdown
 	}
 }

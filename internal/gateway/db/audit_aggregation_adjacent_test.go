@@ -16,7 +16,7 @@ import (
 // for adjacent/consecutive events, not all matching events across the log.
 func TestAuditAggregationOnlyAdjacentEvents(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck // test cleanup
+	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
 	dbtest.Reset(t, db)
 
 	// Create a login.start event
@@ -92,7 +92,7 @@ func TestAuditAggregationOnlyAdjacentEvents(t *testing.T) {
 // actions create separate aggregated rows even if they're the same action type.
 func TestAuditAggregationDifferentActionsBreakSequence(t *testing.T) {
 	db := dbtest.NewDatabase(t)
-	defer db.Close() //nolint:errcheck // test cleanup
+	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
 	dbtest.Reset(t, db)
 
 	// Create: rack.read, rack.read, build.create, rack.read

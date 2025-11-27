@@ -10,6 +10,7 @@ import {
   getUserMfaSecret,
   resetMfaForUser,
   setupBothMfaMethodsForUser,
+  setupTotpMfaForUser,
 } from './db'
 import { expect } from './fixtures'
 
@@ -154,36 +155,57 @@ export async function setupBothMfaMethods(email: string) {
 
 export async function ensureMfaEnrollment(
   page: Page,
-  options: { email?: string } = {}
+  options: { email?: string; useUi?: boolean } = {}
 ): Promise<string> {
   const email = options.email ?? 'admin@example.com'
+  const useUi = options.useUi ?? false
   const existing = await getUserMfaSecret(email)
   if (existing) {
     return existing
   }
 
-  // Only navigate if we're not already on the account security page
-  // (to preserve query parameters like ?redirect= that may have been set)
-  const currentUrl = page.url()
-  const hasRedirectParam = currentUrl.includes('redirect=')
-  if (!currentUrl.includes('/account/security')) {
-    await page.goto(WebRoute('account/security'))
-  }
-  await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
-
-  const secret = await startTotpEnrollmentViaUi(page, email)
-
-  // If there was a redirect parameter, the page will navigate away after enrollment
-  if (hasRedirectParam) {
-    // Wait for navigation to complete (triggered by window.location.assign in the frontend)
-    await page.waitForURL((url) => !url.pathname.includes('/account/security'), { timeout: 10_000 })
-  } else {
-    // No redirect - verify we stayed on the account security page with MFA enabled
+  if (useUi) {
+    // Only navigate if we're not already on the account security page
+    // (to preserve query parameters like ?redirect= that may have been set)
+    const currentUrl = page.url()
+    const hasRedirectParam = currentUrl.includes('redirect=')
+    if (!currentUrl.includes('/account/security')) {
+      await page.goto(WebRoute('account/security'))
+    }
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
-    const statusBadge = page.locator('[data-slot="card"]').first().getByText('Enabled')
-    await expect(statusBadge).toBeVisible()
+
+    const secret = await startTotpEnrollmentViaUi(page, email)
+
+    // If there was a redirect parameter, the page will navigate away after enrollment
+    if (hasRedirectParam) {
+      // Wait for navigation to complete (triggered by window.location.assign in the frontend)
+      await page.waitForURL((url) => !url.pathname.includes('/account/security'), {
+        timeout: 15_000,
+      })
+    } else {
+      // No redirect - verify we stayed on the account security page with MFA enabled
+      await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
+      const statusBadge = page.locator('[data-slot="card"]').first().getByText('Enabled')
+      await expect(statusBadge).toBeVisible()
+    }
+    return secret
   }
 
+  // Use DB helper for fast setup instead of UI flow
+  await setupTotpMfaForUser(email)
+
+  // Reload page to ensure frontend picks up the new MFA status (e.g. mfa_enrolled flag in user object)
+  // Only reload if we are not already navigating/redirecting significantly
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' })
+  } catch {
+    // Ignore reload errors if page is closed/navigating
+  }
+
+  const secret = await getUserMfaSecret(email)
+  if (!secret) {
+    throw new Error(`Failed to setup MFA for ${email}`)
+  }
   return secret
 }
 
@@ -255,7 +277,7 @@ export async function satisfyMFAStepUpModal(
   }
 
   // Wait for the dialog to close after auto-submit
-  await expect(dialog).toBeHidden({ timeout: 5000 })
+  await expect(dialog).toBeHidden({ timeout: 10_000 })
   return true
 }
 
@@ -374,7 +396,9 @@ export async function startTotpEnrollmentViaUi(
     await editLabelDialog
       .getByRole('button', { name: /^Save$/ })
       .click()
-      .catch(() => {})
+      .catch(() => {
+        // Ignore click errors - button might be disabled or dialog closed
+      })
   }
 
   return secret

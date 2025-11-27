@@ -111,30 +111,33 @@ func (h *SettingsHandler) GetGlobalSetting(c *gin.Context) {
 // @Security CSRFToken
 // @Router /settings [put]
 func (h *SettingsHandler) UpdateGlobalSettings(c *gin.Context) {
-	h.updateGlobalSettings(c, nil)
+	h.updateGlobalSettingsWithKeys(c, nil)
 }
 
 // UpdateGlobalMFAConfiguration updates MFA configuration settings.
 func (h *SettingsHandler) UpdateGlobalMFAConfiguration(c *gin.Context) {
-	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration))
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration)
+	h.updateGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 // UpdateGlobalAllowDestructiveActions updates allow destructive actions settings.
 func (h *SettingsHandler) UpdateGlobalAllowDestructiveActions(c *gin.Context) {
-	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive))
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive)
+	h.updateGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 // UpdateGlobalVCSAndCIDefaults updates VCS and CI default settings.
 func (h *SettingsHandler) UpdateGlobalVCSAndCIDefaults(c *gin.Context) {
-	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults))
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults)
+	h.updateGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 // UpdateGlobalDeployApprovals updates deploy approval settings.
 func (h *SettingsHandler) UpdateGlobalDeployApprovals(c *gin.Context) {
-	h.updateGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
+	h.updateGlobalSettingsWithKeys(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
 }
 
-func (h *SettingsHandler) updateGlobalSettings(c *gin.Context, allowedKeys []string) {
+func (h *SettingsHandler) updateGlobalSettingsWithKeys(c *gin.Context, allowedKeys []string) {
 	h.updateSettings(c, &globalSettingsOps{service: h.settingsService}, "", allowedKeys)
 }
 
@@ -152,30 +155,33 @@ func (h *SettingsHandler) updateGlobalSettings(c *gin.Context, allowedKeys []str
 // @Security CSRFToken
 // @Router /settings [delete]
 func (h *SettingsHandler) DeleteGlobalSettings(c *gin.Context) {
-	h.deleteGlobalSettings(c, nil)
+	h.deleteGlobalSettingsWithKeys(c, nil)
 }
 
 // DeleteGlobalMFAConfiguration deletes MFA configuration settings.
 func (h *SettingsHandler) DeleteGlobalMFAConfiguration(c *gin.Context) {
-	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration))
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupMFAConfiguration)
+	h.deleteGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 // DeleteGlobalAllowDestructiveActions deletes allow destructive actions settings.
 func (h *SettingsHandler) DeleteGlobalAllowDestructiveActions(c *gin.Context) {
-	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive))
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupAllowDestructive)
+	h.deleteGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 // DeleteGlobalVCSAndCIDefaults deletes VCS and CI default settings.
 func (h *SettingsHandler) DeleteGlobalVCSAndCIDefaults(c *gin.Context) {
-	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults))
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupVCSAndCIDefaults)
+	h.deleteGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 // DeleteGlobalDeployApprovals deletes deploy approval settings.
 func (h *SettingsHandler) DeleteGlobalDeployApprovals(c *gin.Context) {
-	h.deleteGlobalSettings(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
+	h.deleteGlobalSettingsWithKeys(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
 }
 
-func (h *SettingsHandler) deleteGlobalSettings(c *gin.Context, allowedKeys []string) {
+func (h *SettingsHandler) deleteGlobalSettingsWithKeys(c *gin.Context, allowedKeys []string) {
 	h.deleteSettings(c, &globalSettingsOps{service: h.settingsService}, "", allowedKeys)
 }
 
@@ -221,15 +227,15 @@ func (h *SettingsHandler) GetAllAppSettings(c *gin.Context) {
 // @Security CSRFToken
 // @Router /apps/{app}/settings [put]
 func (h *SettingsHandler) UpdateAppSettings(c *gin.Context) {
-	h.updateAppSettings(c, nil)
+	h.updateAppSettingsWithKeys(c, nil)
 }
 
 // UpdateAppVCSCIDeploySettings updates VCS/CI deployment settings for an app.
 func (h *SettingsHandler) UpdateAppVCSCIDeploySettings(c *gin.Context) {
-	h.updateAppSettings(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
+	h.updateAppSettingsWithKeys(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
 }
 
-func (h *SettingsHandler) updateAppSettings(c *gin.Context, allowedKeys []string) {
+func (h *SettingsHandler) updateAppSettingsWithKeys(c *gin.Context, allowedKeys []string) {
 	appName := c.Param("app")
 	if appName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "app name is required"})
@@ -253,15 +259,15 @@ func (h *SettingsHandler) updateAppSettings(c *gin.Context, allowedKeys []string
 // @Security CSRFToken
 // @Router /apps/{app}/settings [delete]
 func (h *SettingsHandler) DeleteAppSettings(c *gin.Context) {
-	h.deleteAppSettings(c, nil)
+	h.deleteAppSettingsWithKeys(c, nil)
 }
 
 // DeleteAppVCSCIDeploySettings deletes VCS/CI deployment settings for an app.
 func (h *SettingsHandler) DeleteAppVCSCIDeploySettings(c *gin.Context) {
-	h.deleteAppSettings(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
+	h.deleteAppSettingsWithKeys(c, settings.AppSettingGroupKeyStrings(settings.AppSettingGroupVCSCIDeploy))
 }
 
-func (h *SettingsHandler) deleteAppSettings(c *gin.Context, allowedKeys []string) {
+func (h *SettingsHandler) deleteAppSettingsWithKeys(c *gin.Context, allowedKeys []string) {
 	appName := c.Param("app")
 	if appName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "app name is required"})

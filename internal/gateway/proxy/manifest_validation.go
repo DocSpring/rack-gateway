@@ -110,7 +110,8 @@ func (h *Handler) fetchObject(ctx context.Context, app, key string) ([]byte, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch object: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck // cleanup
+	//nolint:errcheck,gosec // G104: cleanup
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
@@ -151,6 +152,7 @@ func extractAndParseManifestFromPath(tarballData []byte, manifestPath string) (*
 	}
 
 	// Read and parse manifest
+	//nolint:gosec // G304: Path validated by extraction process
 	manifestData, err := os.ReadFile(extractedManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read manifest: %w", err)
@@ -198,6 +200,7 @@ func extractTarballSafely(r io.Reader, destDir string, manifestPath string) (str
 			return "", err
 		}
 
+		//nolint:gosec // G305: Path validated by validateTarPath()
 		targetPath := filepath.Join(destDir, header.Name)
 		foundManifestPath = updateFoundManifestPath(header.Name, manifestPath, foundManifestPath, targetPath)
 
@@ -254,7 +257,7 @@ func handleTarEntry(
 // handleTarHeader was inlined into extractTarballSafely to avoid unnecessary complexity.
 
 func extractTarDirectory(targetPath string) error {
-	if err := os.MkdirAll(targetPath, 0o755); err != nil {
+	if err := os.MkdirAll(targetPath, 0o750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 	return nil
@@ -277,21 +280,24 @@ func extractTarFile(tr *tar.Reader, targetPath string, header *tar.Header, curre
 	}
 
 	// Create parent directory
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o750); err != nil {
 		return 0, fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
 	// Extract file
+	//nolint:gosec // G304: targetPath validated by validateTarPath()
 	outFile, err := os.Create(targetPath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create file: %w", err)
 	}
 
 	if _, err := io.CopyN(outFile, tr, header.Size); err != nil {
-		outFile.Close() //nolint:errcheck // cleanup on error
+		outFile.Close() //nolint:errcheck,gosec // G104: cleanup on error
 		return 0, fmt.Errorf("failed to write file: %w", err)
 	}
-	outFile.Close() //nolint:errcheck // cleanup
+	if err := outFile.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close file: %w", err)
+	}
 
 	return newSize, nil
 }

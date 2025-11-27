@@ -11,6 +11,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
   })
 
   test('browser with valid cookie cannot access Convox proxy routes', async ({ page }) => {
+    test.setTimeout(60_000)
     // First, login to get a valid session cookie
     await login(page)
 
@@ -178,8 +179,8 @@ test.describe('CSRF Protection for Proxy Routes', () => {
           status: response.status,
           text: await response.text(),
         }
-      } catch (error: any) {
-        return { error: error.message }
+      } catch (error: unknown) {
+        return { error: error instanceof Error ? error.message : String(error) }
       }
     }, baseURL)
 

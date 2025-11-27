@@ -99,7 +99,7 @@ func (d *Database) UpdateUserRoles(email string, roles []string) error {
 // deleteUserAuditLogs is a no-op that preserves audit logs for compliance.
 // Audit logs are immutable and should never be deleted.
 // The audit.audit_event table has triggers that block DELETE operations.
-func (d *Database) deleteUserAuditLogs(_ string) error {
+func (_ *Database) deleteUserAuditLogs(_ string) error {
 	return nil
 }
 

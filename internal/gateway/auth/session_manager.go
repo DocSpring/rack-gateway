@@ -164,7 +164,7 @@ func (m *SessionManager) loadSessionAndUser(sessionToken string) (*db.UserSessio
 	return session, user, nil
 }
 
-func (m *SessionManager) logSessionDebugInfo(session *db.UserSession, user *db.User) {
+func (_ *SessionManager) logSessionDebugInfo(session *db.UserSession, user *db.User) {
 	var stepUpAtStr string
 	if session.RecentStepUpAt != nil {
 		stepUpAtStr = session.RecentStepUpAt.Format(time.RFC3339)
@@ -366,7 +366,7 @@ func (m *SessionManager) extractTTLFromMetadata(metadata []byte) time.Duration {
 	return m.parseTTLSeconds(raw)
 }
 
-func (m *SessionManager) parseTTLSeconds(raw interface{}) time.Duration {
+func (_ *SessionManager) parseTTLSeconds(raw interface{}) time.Duration {
 	switch v := raw.(type) {
 	case float64:
 		if v > 0 {

@@ -36,7 +36,7 @@ func (m *MockTokenService) ValidateAPIToken(tokenValue string) (*db.APIToken, er
 	return nil, fmt.Errorf("invalid token")
 }
 
-func (m *MockTokenService) CreateAPIToken(
+func (_ *MockTokenService) CreateAPIToken(
 	_ uint,
 	_ string,
 	_ []string,
@@ -45,19 +45,19 @@ func (m *MockTokenService) CreateAPIToken(
 	return nil, "", fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) GetAPITokensByUser(_ uint) ([]*db.APIToken, error) {
+func (_ *MockTokenService) GetAPITokensByUser(_ uint) ([]*db.APIToken, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) DeleteAPIToken(_ string) error {
+func (_ *MockTokenService) DeleteAPIToken(_ string) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) GetAPIToken(_ string) (*db.APIToken, error) {
+func (_ *MockTokenService) GetAPIToken(_ string) (*db.APIToken, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *MockTokenService) UpdateAPIToken(_ string, _ string, _ []string) error {
+func (_ *MockTokenService) UpdateAPIToken(_ string, _ string, _ []string) error {
 	return fmt.Errorf("not implemented")
 }
 
@@ -138,7 +138,7 @@ func runCLITestCase(t *testing.T, handler http.Handler, tc cliTestCase) {
 
 func TestCLIOnlyMiddleware(t *testing.T) {
 	database, authService, sessionToken := setupCLITestEnvironment(t)
-	defer database.Close() //nolint:errcheck // test cleanup
+	defer database.Close() //nolint:errcheck,gosec // G104: test cleanup
 
 	// Create a test handler that just returns 200 OK
 	tt := t
@@ -220,7 +220,7 @@ func TestCLIOnlyMiddleware(t *testing.T) {
 func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	// Setup
 	database := setupTestDatabase(t)
-	defer database.Close() //nolint:errcheck // test cleanup
+	defer database.Close() //nolint:errcheck,gosec // G104: test cleanup
 
 	// Create a test user
 	testUser, err := database.CreateUser("test@example.com", "Test User", []string{"admin"})
@@ -233,7 +233,7 @@ func TestCLIOnlyMiddlewareWithAPIToken(t *testing.T) {
 	expiresAt := time.Now().Add(24 * time.Hour)
 	tokenReq := &token.APITokenRequest{
 		Name:        "Test Token",
-		UserID:      int64(testUser.ID),
+		UserID:      testUser.ID,
 		Permissions: []string{"*"},
 		ExpiresAt:   &expiresAt,
 	}
@@ -366,7 +366,7 @@ func TestCLIOnlyMiddlewarePreventsBrowserCSRF(t *testing.T) {
 	// cannot be performed from a browser context (CSRF protection)
 
 	database, authService, sessionToken := setupCLITestEnvironment(t)
-	defer database.Close() //nolint:errcheck // test cleanup
+	defer database.Close() //nolint:errcheck,gosec // G104: test cleanup
 
 	// Create a handler that simulates a dangerous operation
 	ttDanger := t

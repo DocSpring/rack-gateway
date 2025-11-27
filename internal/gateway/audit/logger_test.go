@@ -66,7 +66,7 @@ func TestLogRequest(t *testing.T) {
 	logger := NewLogger(database)
 
 	// LogRequest only logs to stdout now, not database
-	req, err := http.NewRequest("GET", "/apps/myapp/releases?limit=1", nil)
+	req, err := http.NewRequest("GET", "/apps/myapp/releases?limit=1", http.NoBody)
 	require.NoError(t, err)
 
 	req.Header.Set("X-User-Name", "Test User")

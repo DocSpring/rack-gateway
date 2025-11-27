@@ -26,6 +26,10 @@ func computeEventHash(secret []byte, chainIndex int64, previousHash []byte, log 
 	h := hmac.New(sha256.New, secret)
 
 	// Write chain index (8 bytes, little-endian)
+	// Chain index is always non-negative from database sequence
+	if chainIndex < 0 {
+		panic(fmt.Sprintf("invalid chain index: %d", chainIndex))
+	}
 	indexBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(indexBytes, uint64(chainIndex))
 	h.Write(indexBytes)
@@ -40,6 +44,9 @@ func computeEventHash(secret []byte, chainIndex int64, previousHash []byte, log 
 	h.Write([]byte(log.UserEmail))
 	h.Write([]byte(log.UserName))
 	if log.APITokenID != nil {
+		if *log.APITokenID < 0 {
+			panic(fmt.Sprintf("invalid API token ID: %d", *log.APITokenID))
+		}
 		tokenIDBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(tokenIDBytes, uint64(*log.APITokenID))
 		h.Write(tokenIDBytes)
@@ -56,15 +63,24 @@ func computeEventHash(secret []byte, chainIndex int64, previousHash []byte, log 
 	h.Write([]byte(log.Status))
 	h.Write([]byte(log.RBACDecision))
 
+	if log.HTTPStatus < 0 || log.HTTPStatus > 999 {
+		panic(fmt.Sprintf("invalid HTTP status: %d", log.HTTPStatus))
+	}
 	httpStatusBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(httpStatusBytes, uint32(log.HTTPStatus))
 	h.Write(httpStatusBytes)
 
+	if log.ResponseTimeMs < 0 || log.ResponseTimeMs > 4294967295 {
+		panic(fmt.Sprintf("invalid response time: %d", log.ResponseTimeMs))
+	}
 	responseTimeBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(responseTimeBytes, uint32(log.ResponseTimeMs))
 	h.Write(responseTimeBytes)
 
 	if log.DeployApprovalRequestID != nil {
+		if *log.DeployApprovalRequestID < 0 {
+			panic(fmt.Sprintf("invalid deploy approval request ID: %d", *log.DeployApprovalRequestID))
+		}
 		darIDBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(darIDBytes, uint64(*log.DeployApprovalRequestID))
 		h.Write(darIDBytes)

@@ -313,7 +313,7 @@ func testMockConvoxAuth(t *testing.T, s *TestServers) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// Test with correct auth
-	req, err := http.NewRequest("GET", "http://localhost:"+mockConvoxPort+"/apps", nil)
+	req, err := http.NewRequest("GET", "http://localhost:"+mockConvoxPort+"/apps", http.NoBody)
 	require.NoError(t, err)
 
 	auth := base64.StdEncoding.EncodeToString([]byte("convox:" + mockRackToken))
@@ -342,7 +342,7 @@ func testProxyWithValidToken(t *testing.T, s *TestServers) {
 }
 
 func testProxyWithInvalidToken(t *testing.T, s *TestServers) {
-	req, err := http.NewRequest("GET", "http://localhost:"+gatewayPort+"/v1/proxy/staging/apps", nil)
+	req, err := http.NewRequest("GET", "http://localhost:"+gatewayPort+"/v1/proxy/staging/apps", http.NoBody)
 	require.NoError(t, err)
 
 	req.Header.Set("Authorization", "Bearer invalid-token")
@@ -853,7 +853,7 @@ func testCLIWebAuthnMFA(t *testing.T, s *TestServers) {
 	sessionID := session.ID
 
 	// Step 1: Start WebAuthn assertion via HTTP endpoint
-	startReq, err := http.NewRequest("POST", "http://localhost:"+gatewayPort+"/api/v1/auth/mfa/webauthn/assertion/start", nil)
+	startReq, err := http.NewRequest("POST", "http://localhost:"+gatewayPort+"/api/v1/auth/mfa/webauthn/assertion/start", http.NoBody)
 	require.NoError(t, err)
 	startReq.Header.Set("Authorization", "Bearer "+sessionToken)
 	startReq.Header.Set("Cookie", "session_token="+sessionToken)

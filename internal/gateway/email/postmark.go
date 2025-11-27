@@ -92,7 +92,7 @@ func (p *PostmarkSender) sendEmail(to, bcc, subject, textBody, htmlBody string) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close() //nolint:errcheck // ignore close error
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup // ignore close error
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("postmark send failed: %s", resp.Status)
 	}
@@ -129,7 +129,7 @@ func (p *PostmarkSender) SendMany(to []string, subject, textBody, htmlBody strin
 type LoggerSender struct{ From string }
 
 // Send logs an email to stdout instead of sending it.
-func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
+func (_ *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 	if htmlBody != "" {
 		gtwlog.DebugTopicf(gtwlog.TopicEmailSummary, "to=%s subject=%q", to, subject)
 		gtwlog.DebugTopicf(gtwlog.TopicEmailBody, "text=%s\n\nhtml=%s", textBody, htmlBody)
@@ -142,7 +142,7 @@ func (l *LoggerSender) Send(to, subject, textBody, htmlBody string) error {
 }
 
 // SendMany logs an email to multiple recipients to stdout instead of sending it.
-func (l *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string) error {
+func (_ *LoggerSender) SendMany(to []string, subject, textBody, htmlBody string) error {
 	primary := ""
 	if len(to) > 0 {
 		primary = to[0]
@@ -175,7 +175,7 @@ type DevEmail struct {
 	To      []string  `json:"to"`
 	Subject string    `json:"subject"`
 	Text    string    `json:"text"`
-	Html    string    `json:"html"`
+	Html    string    `json:"html"` //nolint:staticcheck // JSON field name from external API
 	TS      time.Time `json:"ts"`
 }
 

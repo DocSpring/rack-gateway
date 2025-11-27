@@ -67,7 +67,7 @@ func (h *Handler) checkEnvSetPermissions(r *http.Request, email string) bool {
 	return true
 }
 
-func (h *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
+func (_ *Handler) extractEnvKeysFromHeaders(hdr http.Header) []string {
 	keys := make([]string, 0)
 	for name, vals := range hdr {
 		if !isEnvHeader(name) {

@@ -224,7 +224,7 @@ func (h *AdminHandler) RevokeAllUserSessions(c *gin.Context) {
 	h.respondAuditSuccess(c, http.StatusOK, result, "user.sessions.revoke_all", email, start, details)
 }
 
-func (h *AdminHandler) convertSessionsToResponse(sessions []*db.UserSession) []UserSessionResponse {
+func (_ *AdminHandler) convertSessionsToResponse(sessions []*db.UserSession) []UserSessionResponse {
 	result := make([]UserSessionResponse, 0, len(sessions))
 	for _, sess := range sessions {
 		entry := UserSessionResponse{
@@ -245,7 +245,7 @@ func (h *AdminHandler) convertSessionsToResponse(sessions []*db.UserSession) []U
 			if err := json.Unmarshal(sess.Metadata, &meta); err == nil {
 				entry.Metadata = meta
 			} else {
-				entry.Metadata = json.RawMessage(sess.Metadata)
+				entry.Metadata = sess.Metadata
 			}
 		}
 		result = append(result, entry)

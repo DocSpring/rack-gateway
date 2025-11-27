@@ -21,7 +21,7 @@ func TestClientIPFromRequest(t *testing.T) {
 		{
 			name: "extracts from X-Forwarded-For header",
 			setupReq: func() *http.Request {
-				req, _ := http.NewRequest("GET", "/", nil)
+				req, _ := http.NewRequest("GET", "/", http.NoBody)
 				req.Header.Set("X-Forwarded-For", "192.0.2.1, 203.0.113.1")
 				req.RemoteAddr = "198.51.100.1:12345"
 				return req
@@ -31,7 +31,7 @@ func TestClientIPFromRequest(t *testing.T) {
 		{
 			name: "extracts from X-Real-IP when X-Forwarded-For is empty",
 			setupReq: func() *http.Request {
-				req, _ := http.NewRequest("GET", "/", nil)
+				req, _ := http.NewRequest("GET", "/", http.NoBody)
 				req.Header.Set("X-Real-IP", "192.0.2.2")
 				req.RemoteAddr = "198.51.100.1:12345"
 				return req
@@ -41,7 +41,7 @@ func TestClientIPFromRequest(t *testing.T) {
 		{
 			name: "extracts from RemoteAddr when no headers present",
 			setupReq: func() *http.Request {
-				req, _ := http.NewRequest("GET", "/", nil)
+				req, _ := http.NewRequest("GET", "/", http.NoBody)
 				req.RemoteAddr = "192.0.2.3:12345"
 				return req
 			},
@@ -50,7 +50,7 @@ func TestClientIPFromRequest(t *testing.T) {
 		{
 			name: "handles RemoteAddr without port",
 			setupReq: func() *http.Request {
-				req, _ := http.NewRequest("GET", "/", nil)
+				req, _ := http.NewRequest("GET", "/", http.NoBody)
 				req.RemoteAddr = "192.0.2.4"
 				return req
 			},
@@ -59,7 +59,7 @@ func TestClientIPFromRequest(t *testing.T) {
 		{
 			name: "prefers X-Forwarded-For over X-Real-IP",
 			setupReq: func() *http.Request {
-				req, _ := http.NewRequest("GET", "/", nil)
+				req, _ := http.NewRequest("GET", "/", http.NoBody)
 				req.Header.Set("X-Forwarded-For", "192.0.2.5")
 				req.Header.Set("X-Real-IP", "192.0.2.6")
 				req.RemoteAddr = "198.51.100.1:12345"
@@ -70,7 +70,7 @@ func TestClientIPFromRequest(t *testing.T) {
 		{
 			name: "handles empty X-Forwarded-For and falls back to X-Real-IP",
 			setupReq: func() *http.Request {
-				req, _ := http.NewRequest("GET", "/", nil)
+				req, _ := http.NewRequest("GET", "/", http.NoBody)
 				req.Header.Set("X-Forwarded-For", "   ")
 				req.Header.Set("X-Real-IP", "192.0.2.7")
 				req.RemoteAddr = "198.51.100.1:12345"

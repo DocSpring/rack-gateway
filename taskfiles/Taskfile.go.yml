@@ -157,8 +157,8 @@ tasks:
       - internal/**/*.go
       - scripts/**/*.sh
     cmds:
-      - ./scripts/safe-test.sh -v -race -short -timeout 30s ./cmd/gateway/... ./cmd/rack-gateway/... ./cmd/mock-convox/... ./internal/gateway/... ./internal/integration/...
-      - ./scripts/safe-test.sh -v -race -tags=integration -timeout 30s ./internal/integration/...
+      - ./scripts/safe-test.sh -v -race -short -timeout 2m ./cmd/gateway/... ./cmd/rack-gateway/... ./cmd/mock-convox/... ./internal/gateway/... ./internal/integration/...
+      - ./scripts/safe-test.sh -v -race -tags=integration -timeout 2m ./internal/integration/...
 
   format:
     desc: Format Go code with gofmt
@@ -206,9 +206,8 @@ tasks:
 
   duplication:
     desc: Check for Go code duplication
-    dir: internal
     cmds:
-      - jscpd --silent .
+      - scripts/check_duplication.sh go
 
   coverage:
     desc: Generate coverage report

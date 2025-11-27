@@ -29,7 +29,7 @@ type fakeOAuth struct {
 	startState  string
 }
 
-func (f *fakeOAuth) StartLogin() (*auth.LoginStartResponse, error) {
+func (_ *fakeOAuth) StartLogin() (*auth.LoginStartResponse, error) {
 	return &auth.LoginStartResponse{AuthURL: "http://example.com", State: "state", CodeVerifier: "verifier"}, nil
 }
 

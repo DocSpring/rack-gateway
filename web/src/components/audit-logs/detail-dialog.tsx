@@ -15,6 +15,28 @@ type AuditLogDetailDialogProps = {
   onClose: () => void
 }
 
+function renderTimestamp(entry: AuditLogRecord): string {
+  const ts =
+    ('timestamp' in entry ? entry.timestamp : undefined) ??
+    ('last_seen' in entry ? entry.last_seen : undefined) ??
+    ('first_seen' in entry ? entry.first_seen : undefined)
+  if (!ts) return '-'
+  const dateObject = new Date(ts)
+  return Number.isNaN(dateObject.getTime()) ? '-' : dateObject.toISOString()
+}
+
+function renderResponseTime(entry: AuditLogRecord): string {
+  if (typeof entry.response_time_ms === 'number') {
+    const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
+    return `${entry.response_time_ms} ms${suffix}`
+  }
+  if ('avg_response_time_ms' in entry && typeof entry.avg_response_time_ms === 'number') {
+    const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
+    return `${entry.avg_response_time_ms} ms${suffix}`
+  }
+  return '-'
+}
+
 export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogProps) {
   const statusLabel = useMemo(() => (entry ? formatStatusLabel(entry) : '-'), [entry])
 
@@ -30,8 +52,7 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
         {entry ? (
           <div className="space-y-3 text-sm">
             <div>
-              <span className="text-muted-foreground">Timestamp:</span>{' '}
-              {entry.timestamp ? new Date(entry.timestamp).toISOString() : '-'}
+              <span className="text-muted-foreground">Timestamp:</span> {renderTimestamp(entry)}
             </div>
             {renderActorDetails(entry)}
             <div>
@@ -69,7 +90,7 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
             )}
             <div>
               <span className="text-muted-foreground">Response Time:</span>{' '}
-              {typeof entry.response_time_ms === 'number' ? `${entry.response_time_ms} ms` : '-'}
+              {renderResponseTime(entry)}
             </div>
             <div>
               <span className="text-muted-foreground">IP:</span> {entry.ip_address || '-'}

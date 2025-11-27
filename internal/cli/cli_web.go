@@ -40,7 +40,7 @@ func WebCommand() *cobra.Command {
 
 			fmt.Printf("Opening %s in your browser...\n", webURL)
 
-			if err := openBrowser(webURL); err != nil {
+			if err := launchBrowser(webURL); err != nil {
 				fmt.Printf("Failed to open browser automatically: %v\n", err)
 				fmt.Printf("Please open this URL manually: %s\n", webURL)
 				return nil
@@ -51,7 +51,7 @@ func WebCommand() *cobra.Command {
 	}
 }
 
-func openBrowser(url string) error {
+func launchBrowser(url string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {

@@ -11,7 +11,7 @@ import (
 
 // GenerateBackupCodes replaces the user's backup codes and returns the plaintext set.
 func (s *Service) GenerateBackupCodes(userID int64) ([]string, error) {
-	codes, hashes, err := s.generateBackupCodes()
+	codes, hashes, err := s.genBackupCodes()
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +21,7 @@ func (s *Service) GenerateBackupCodes(userID int64) ([]string, error) {
 	return codes, nil
 }
 
-func (s *Service) generateBackupCodes() ([]string, []string, error) {
+func (s *Service) genBackupCodes() ([]string, []string, error) {
 	codes := make([]string, 0, backupCodeCount)
 	hashes := make([]string, 0, backupCodeCount)
 	for i := 0; i < backupCodeCount; i++ {

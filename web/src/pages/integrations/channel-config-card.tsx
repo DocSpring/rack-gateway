@@ -1,4 +1,5 @@
 import { Loader2, X } from 'lucide-react'
+import { type ChangeEvent, useCallback } from 'react'
 
 import { StringArrayInput } from '@/components/settings/string-array-input'
 import { Button } from '@/components/ui/button'
@@ -33,22 +34,46 @@ export function ChannelConfigCard({
   isUpdating,
   isTesting,
 }: ChannelConfigCardProps) {
-  const handleActionsChange = (newActions: string[]) => {
-    if (newActions.length > config.actions.length) {
-      const newAction = newActions.find((action) => !config.actions.includes(action))
-      if (newAction) {
-        onAddAction(configKey, newAction)
+  const handleActionsChange = useCallback(
+    (newActions: string[]) => {
+      if (newActions.length > config.actions.length) {
+        const newAction = newActions.find((action) => !config.actions.includes(action))
+        if (newAction) {
+          onAddAction(configKey, newAction)
+        }
+        return
       }
-      return
-    }
 
-    if (newActions.length < config.actions.length) {
-      const removedIndex = config.actions.findIndex((action) => !newActions.includes(action))
-      if (removedIndex !== -1) {
-        onRemoveAction(configKey, removedIndex)
+      if (newActions.length < config.actions.length) {
+        const removedIndex = config.actions.findIndex((action) => !newActions.includes(action))
+        if (removedIndex !== -1) {
+          onRemoveAction(configKey, removedIndex)
+        }
       }
+    },
+    [config.actions, configKey, onAddAction, onRemoveAction]
+  )
+
+  const handleRemoveChannelClick = useCallback(() => {
+    onRemoveChannel(configKey)
+  }, [configKey, onRemoveChannel])
+
+  const handleChannelChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const value = event.target.value
+      const channel = channels.find((c) => c.id === value)
+      if (channel) {
+        onUpdateChannel(configKey, channel.id, channel.name)
+      }
+    },
+    [channels, configKey, onUpdateChannel]
+  )
+
+  const handleTestClick = useCallback(() => {
+    if (config.id) {
+      onTestNotification(config.id)
     }
-  }
+  }, [config.id, onTestNotification])
 
   return (
     <Card>
@@ -57,7 +82,7 @@ export function ChannelConfigCard({
           <CardTitle className="text-base">{config.name}</CardTitle>
           <Button
             disabled={isUpdating}
-            onClick={() => onRemoveChannel(configKey)}
+            onClick={handleRemoveChannelClick}
             size="sm"
             variant="ghost"
           >
@@ -73,13 +98,7 @@ export function ChannelConfigCard({
               className="flex-1"
               disabled={isUpdating}
               id={`channel-${configKey}`}
-              onChange={(event) => {
-                const value = event.target.value
-                const channel = channels.find((c) => c.id === value)
-                if (channel) {
-                  onUpdateChannel(configKey, channel.id, channel.name)
-                }
-              }}
+              onChange={handleChannelChange}
               value={config.id || ''}
             >
               <option value="">Select a channel...</option>
@@ -91,8 +110,8 @@ export function ChannelConfigCard({
             </NativeSelect>
             {config.id && (
               <Button
-                disabled={isTesting}
-                onClick={() => onTestNotification(config.id!)}
+                disabled={isTesting || !config.id}
+                onClick={handleTestClick}
                 size="sm"
                 variant="outline"
               >

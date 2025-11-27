@@ -18,9 +18,8 @@ To run convox commands through the gateway:
   rack-gateway apps
   rack-gateway deploy
 
-Recommended aliases for your shell:
-  alias cx="rack-gateway"   # cx apps, cx ps, cx deploy
-  alias cg="rack-gateway"   # cg login, cg switch, cg rack
+Recommended alias for your shell:
+  alias cg="rack-gateway"   # cg apps, cg ps, cg deploy
 
 Rack management:
   rack-gateway rack                # Show current rack
@@ -35,7 +34,7 @@ Rack management:
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&ConfigPath, "config", ConfigPath, "Config directory")
-	rootCmd.PersistentFlags().StringVar(&RackFlag, "rack", "", "Rack to use (overrides current rack)")
+	rootCmd.PersistentFlags().StringVarP(&RackFlag, "rack", "r", "", "Rack to use (overrides current rack)")
 	rootCmd.PersistentFlags().
 		StringVar(&APITokenFlag, "api-token", "", "API token for CLI requests (overrides RACK_GATEWAY_API_TOKEN)")
 	rootCmd.PersistentFlags().StringVar(&MFAMethodFlag, "mfa-method", "", "MFA method to use (totp or webauthn)")

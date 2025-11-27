@@ -61,6 +61,7 @@ func OpenBrowser(url string) error {
 		return fmt.Errorf("unsupported platform")
 	}
 
+	//nolint:gosec // G204: Platform-specific browser commands, url from app not user
 	return exec.Command(cmd, args...).Start()
 }
 
@@ -101,6 +102,7 @@ func searchConvoxApp(start string) string {
 	dir := start
 	for {
 		candidate := filepath.Join(dir, ".convox", "app")
+		//nolint:gosec // G304: Reading known config file .convox/app
 		if data, err := os.ReadFile(candidate); err == nil {
 			if name := strings.TrimSpace(string(data)); name != "" {
 				return name

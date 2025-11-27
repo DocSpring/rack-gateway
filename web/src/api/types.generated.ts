@@ -2599,7 +2599,10 @@ export interface paths {
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description URL to redirect to after successful login (must start with /app/) */
+                    returnTo?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -2916,6 +2919,71 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deploy-approval-requests/{id}/extend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend a deploy approval request expiry
+         * @description Extends the expiry time for an approved deploy approval request
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Deploy approval request public ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description Extension notes */
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.DeployApprovalRequestResponse"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["handlers.ErrorResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4529,6 +4597,8 @@ export interface components {
             rbac_decision?: string;
             resource?: string;
             resource_type?: string;
+            /** @description Mapped to AvgResponseTimeMs for frontend consistency */
+            response_time_ms?: number;
             status?: string;
             user_agent?: string;
             user_email?: string;

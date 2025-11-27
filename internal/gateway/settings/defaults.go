@@ -25,8 +25,9 @@ const (
 	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
 	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
 	KeyMFARequireAllUsers          = "mfa_require_all_users"
-	KeyStepUpWindowMinutes         = "mfa_step_up_window_minutes"
-	KeyTrustedDeviceTTLDays        = "mfa_trusted_device_ttl_days"
+	//nolint:gosec // G101: Setting key name, not a credential
+	KeyStepUpWindowMinutes  = "mfa_step_up_window_minutes"
+	KeyTrustedDeviceTTLDays = "mfa_trusted_device_ttl_days"
 )
 
 var globalSettingKeyToString = [...]string{
@@ -54,6 +55,9 @@ func (g GlobalSettingKey) IsValid() bool { return g <= GlobalSettingTrustedDevic
 func ParseGlobalSettingKey(key string) (GlobalSettingKey, error) {
 	for i, s := range globalSettingKeyToString {
 		if s == key {
+			if i > 255 {
+				return 0, fmt.Errorf("setting key index %d exceeds uint8 range", i)
+			}
 			return GlobalSettingKey(i), nil
 		}
 	}
@@ -94,11 +98,12 @@ const (
 	KeyGitHubVerification            = "github_verification"
 	KeyProtectedEnvVars              = "protected_env_vars"
 	KeyRequirePRForBranch            = "require_pr_for_branch"
-	KeySecretEnvVars                 = "secret_env_vars"
-	KeyServiceImagePatterns          = "service_image_patterns"
-	KeyVCSProvider                   = "vcs_provider"
-	KeyVCSRepo                       = "vcs_repo"
-	KeyVerifyGitCommitMode           = "verify_git_commit_mode"
+	//nolint:gosec // G101: Setting key name, not a credential
+	KeySecretEnvVars        = "secret_env_vars"
+	KeyServiceImagePatterns = "service_image_patterns"
+	KeyVCSProvider          = "vcs_provider"
+	KeyVCSRepo              = "vcs_repo"
+	KeyVerifyGitCommitMode  = "verify_git_commit_mode"
 )
 
 var appSettingKeyToString = [...]string{
@@ -133,6 +138,9 @@ func (a AppSettingKey) IsValid() bool { return a <= AppSettingVerifyGitCommitMod
 func ParseAppSettingKey(key string) (AppSettingKey, error) {
 	for i, s := range appSettingKeyToString {
 		if s == key {
+			if i > 255 {
+				return 0, fmt.Errorf("setting key index %d exceeds uint8 range", i)
+			}
 			return AppSettingKey(i), nil
 		}
 	}

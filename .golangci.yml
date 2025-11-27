@@ -27,6 +27,8 @@ linters:
     - nakedret
     - nestif
     - copyloopvar
+    - gosec
+    - unconvert
   exclusions:
     paths:
       - reference
@@ -39,9 +41,15 @@ linters:
           - funlen
           - goconst
   settings:
+    staticcheck:
+      checks: ["all", "-ST1006", "-ST1000"]
     revive:
       rules:
         - name: unused-parameter
+          severity: error
+        - name: unused-receiver
+          severity: error
+        - name: confusing-naming
           severity: error
         - name: exported
         - name: blank-imports
@@ -53,7 +61,6 @@ linters:
         - name: indent-error-flow
         - name: if-return
         - name: import-shadowing
-        - name: receiver-naming
         - name: time-naming
         - name: deep-exit
         - name: redefines-builtin-id

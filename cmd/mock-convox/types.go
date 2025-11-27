@@ -7,7 +7,7 @@ import (
 
 const (
 	mockUsername = "convox"
-	mockPassword = "mock-rack-token-12345"
+	mockPassword = "mock-rack-token-12345" //nolint:gosec // G101: Mock credential for testing only
 )
 
 type App struct {
@@ -20,10 +20,10 @@ type App struct {
 }
 
 type Process struct {
-	Id       string    `json:"id"`
+	Id       string    `json:"id"` //nolint:staticcheck // Convox API contract
 	App      string    `json:"app"`
 	Command  string    `json:"command"`
-	Cpu      float64   `json:"cpu"`
+	Cpu      float64   `json:"cpu"` //nolint:staticcheck // Convox API contract
 	Host     string    `json:"host"`
 	Image    string    `json:"image"`
 	Instance string    `json:"instance"`

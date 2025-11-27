@@ -101,7 +101,7 @@ export function AllReleasesPage() {
                 <TableCell>
                   <Link
                     className="underline hover:no-underline"
-                    params={{ app: r.app! as string }}
+                    params={{ app: (r.app || '') as string }}
                     to="/apps/$app/releases"
                   >
                     {r.app}

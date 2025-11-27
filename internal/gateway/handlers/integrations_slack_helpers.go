@@ -55,7 +55,7 @@ func (h *AdminHandler) loadSlackIntegration(c *gin.Context) *db.SlackIntegration
 
 // createSlackClient decrypts the bot token and creates a Slack client.
 // Returns the client if successful, nil otherwise (and writes the error response to the context).
-func (h *AdminHandler) createSlackClient(c *gin.Context, integration *db.SlackIntegration) *slack.Client {
+func (_ *AdminHandler) createSlackClient(c *gin.Context, integration *db.SlackIntegration) *slack.Client {
 	botToken, err := base64.StdEncoding.DecodeString(integration.BotTokenEncrypted)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decrypt token"})

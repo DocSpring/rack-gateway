@@ -35,4 +35,8 @@ const rootContent = sentryActive ? (
   <AppRoot />
 )
 
-createRoot(document.getElementById('root')!).render(rootContent)
+const rootElement = document.getElementById('root')
+if (!rootElement) {
+  throw new Error('Root element not found')
+}
+createRoot(rootElement).render(rootContent)

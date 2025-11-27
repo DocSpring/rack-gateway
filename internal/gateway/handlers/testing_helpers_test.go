@@ -21,7 +21,7 @@ func newAllowAllRBAC(users ...*db.User) *allowAllRBAC {
 	return &allowAllRBAC{users: m}
 }
 
-func (a *allowAllRBAC) Enforce(
+func (_ *allowAllRBAC) Enforce(
 	_ string,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -30,7 +30,7 @@ func (a *allowAllRBAC) Enforce(
 	return true, nil
 }
 
-func (a *allowAllRBAC) EnforceUser(
+func (_ *allowAllRBAC) EnforceUser(
 	_ *db.User,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -39,7 +39,7 @@ func (a *allowAllRBAC) EnforceUser(
 	return true, nil
 }
 
-func (a *allowAllRBAC) EnforceForAPIToken(
+func (_ *allowAllRBAC) EnforceForAPIToken(
 	_ int64,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -48,7 +48,7 @@ func (a *allowAllRBAC) EnforceForAPIToken(
 	return true, nil
 }
 
-func (a *allowAllRBAC) GetAllowedDomain() string {
+func (_ *allowAllRBAC) GetAllowedDomain() string {
 	return "example.com"
 }
 
@@ -103,6 +103,6 @@ func (a *allowAllRBAC) GetUserRoles(email string) ([]string, error) {
 	return append([]string(nil), user.Roles...), nil
 }
 
-func (a *allowAllRBAC) GetRolePermissions(_ string) ([]string, error) {
+func (_ *allowAllRBAC) GetRolePermissions(_ string) ([]string, error) {
 	return []string{}, nil
 }

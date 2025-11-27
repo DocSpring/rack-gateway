@@ -13,6 +13,7 @@ import (
 // traffic on the internal network, and skipping verification is an intentional, documented
 // trade-off for that deployment model.
 func NewRackTLSConfig() *tls.Config {
+	//nolint:gosec // G402: Intentional for internal rack traffic (see function docs)
 	return &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"http/1.1"},

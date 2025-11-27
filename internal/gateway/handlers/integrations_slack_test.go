@@ -26,7 +26,7 @@ func newDenyAllRBAC() *denyAllRBAC {
 	return &denyAllRBAC{}
 }
 
-func (d *denyAllRBAC) Enforce(
+func (_ *denyAllRBAC) Enforce(
 	_ string,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -35,7 +35,7 @@ func (d *denyAllRBAC) Enforce(
 	return false, nil
 }
 
-func (d *denyAllRBAC) EnforceUser(
+func (_ *denyAllRBAC) EnforceUser(
 	_ *db.User,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -44,7 +44,7 @@ func (d *denyAllRBAC) EnforceUser(
 	return false, nil
 }
 
-func (d *denyAllRBAC) EnforceForAPIToken(
+func (_ *denyAllRBAC) EnforceForAPIToken(
 	_ int64,
 	_ rbac.Scope,
 	_ rbac.Resource,
@@ -53,39 +53,39 @@ func (d *denyAllRBAC) EnforceForAPIToken(
 	return false, nil
 }
 
-func (d *denyAllRBAC) GetAllowedDomain() string {
+func (_ *denyAllRBAC) GetAllowedDomain() string {
 	return "example.com"
 }
 
-func (d *denyAllRBAC) GetUserByEmail(_ string) (*db.User, error) {
+func (_ *denyAllRBAC) GetUserByEmail(_ string) (*db.User, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) DeleteUser(_ string) error {
+func (_ *denyAllRBAC) DeleteUser(_ string) error {
 	return nil
 }
 
-func (d *denyAllRBAC) GetUser(_ string) (*rbac.UserConfig, error) {
+func (_ *denyAllRBAC) GetUser(_ string) (*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetUserWithID(_ string) (*rbac.UserWithID, error) {
+func (_ *denyAllRBAC) GetUserWithID(_ string) (*rbac.UserWithID, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
+func (_ *denyAllRBAC) GetUsers() (map[string]*rbac.UserConfig, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
+func (_ *denyAllRBAC) SaveUser(_ string, _ *rbac.UserConfig) error {
 	return nil
 }
 
-func (d *denyAllRBAC) GetUserRoles(_ string) ([]string, error) {
+func (_ *denyAllRBAC) GetUserRoles(_ string) ([]string, error) {
 	return nil, nil
 }
 
-func (d *denyAllRBAC) GetRolePermissions(_ string) ([]string, error) {
+func (_ *denyAllRBAC) GetRolePermissions(_ string) ([]string, error) {
 	return nil, nil
 }
 
@@ -122,7 +122,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 	handler.SlackOAuthAuthorizeHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -137,7 +137,7 @@ func TestSlackOAuthAuthorizeHandler(t *testing.T) {
 func TestGetSlackIntegration_NotFound(t *testing.T) {
 	env := setupSlackTestEnv(t)
 	resp := env.callGetSlackIntegration()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
@@ -188,7 +188,7 @@ func TestGetSlackIntegration_Found(t *testing.T) {
 	handler.GetSlackIntegrationHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -271,7 +271,7 @@ func TestUpdateSlackChannels(t *testing.T) {
 	handler.UpdateSlackChannelsHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -336,7 +336,7 @@ func TestDeleteSlackIntegration(t *testing.T) {
 	handler.DeleteSlackIntegrationHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -385,7 +385,7 @@ func TestUpdateSlackChannels_NoIntegration(t *testing.T) {
 	handler.UpdateSlackChannelsHandler(c)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -408,7 +408,7 @@ func TestEnforceIntegrationPermission_Unauthorized(t *testing.T) {
 	require.False(t, allowed)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
@@ -446,7 +446,7 @@ func TestEnforceIntegrationPermission_Forbidden(t *testing.T) {
 	require.False(t, allowed)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
@@ -474,7 +474,7 @@ func TestLoadSlackIntegration_NotFound(t *testing.T) {
 	require.Nil(t, integration)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
@@ -517,7 +517,7 @@ func TestCreateSlackClient_InvalidToken(t *testing.T) {
 	require.Nil(t, client)
 
 	resp := w.Result()
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 

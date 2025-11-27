@@ -10,6 +10,29 @@ const FAILED_LOAD_REGEX = /Failed to load audit logs/i
 const PAGE_FIVE_REGEX = /page=5/
 const PAGE_TWO_REGEX = /page=2/
 
+// Mock @tanstack/react-router
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    to,
+    children,
+    ...props
+  }: {
+    to?: unknown
+    children?: React.ReactNode
+    [key: string]: unknown
+  }) => (
+    <a href={typeof to === 'string' ? to : '/mock-link'} {...props}>
+      {children}
+    </a>
+  ),
+  useNavigate: () => vi.fn(),
+  useLocation: () => ({
+    pathname: '/',
+    search: typeof window !== 'undefined' ? window.location.search : '',
+    hash: '',
+  }),
+}))
+
 // Mock the API
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -159,6 +182,54 @@ describe('AuditPage', () => {
       expect(screen.queryByText('×1')).not.toBeInTheDocument()
       expect(screen.getAllByText('API Token')).not.toHaveLength(0)
       expect(screen.getByText(/Owner: cibot@example.com/)).toBeInTheDocument()
+    })
+
+    it('displays aggregated logs with last_seen instead of timestamp', async () => {
+      const aggregatedLogs = [
+        {
+          id: 101,
+          // No timestamp field
+          last_seen: '2024-02-20T12:00:00Z',
+          first_seen: '2024-02-20T11:00:00Z',
+          user_email: 'agg@example.com',
+          action_type: 'test',
+          action: 'aggregated.event',
+          status: 'success',
+          event_count: 10,
+          avg_response_time_ms: 50,
+          response_time_ms: 50,
+        },
+      ]
+      // @ts-expect-error - aggregated logs mock is partial
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(aggregatedLogs))
+
+      const Wrapper = createWrapper()
+      render(<AuditPage />, { wrapper: Wrapper })
+
+      await waitFor(() => {
+        expect(screen.getByText('agg@example.com')).toBeInTheDocument()
+      })
+
+      // Verify time is displayed (TimeAgo usually renders "x time ago" or date)
+      // Since we mocked the date to Feb 20, 2024, it should render a date or relative time.
+      // We just check if the row rendered without error and contains the action
+      expect(screen.getByText('aggregated.event')).toBeInTheDocument()
+
+      // Click to open detail dialog and check timestamp
+      const row = screen.getByText('aggregated.event').closest('tr')
+      expect(row).not.toBeNull()
+      if (row) fireEvent.click(row)
+
+      await waitFor(() => {
+        expect(screen.getByText('Audit Log')).toBeInTheDocument()
+      })
+
+      // Check that the detail dialog shows the timestamp from last_seen
+      expect(screen.getByText(/2024-02-20T12:00:00.000Z/)).toBeInTheDocument()
+
+      // Check that response time is displayed (using avg)
+      const responseTimeLabel = screen.getByText('Response Time:')
+      expect(responseTimeLabel.parentElement).toHaveTextContent('50 ms (avg)')
     })
 
     it('shows event count in detail dialog', async () => {

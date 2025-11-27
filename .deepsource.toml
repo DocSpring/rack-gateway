@@ -1,5 +1,11 @@
 version = 1
 
+test_patterns = [
+  "web/src/**/*.test.tsx",
+  "web/src/**/*.test.ts",
+  "**/*_test.go"
+]
+
 [[analyzers]]
 name = "javascript"
 

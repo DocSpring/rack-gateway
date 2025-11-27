@@ -104,6 +104,7 @@ func (h *StaticHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	indexPath := filepath.Join(h.distRoot, "index.html")
+	//nolint:gosec // G304: Path is app-controlled distRoot + hardcoded filename
 	file, err := os.Open(indexPath)
 	if err != nil {
 		http.NotFound(w, r)
@@ -255,7 +256,7 @@ func createProxyErrorHandler() func(http.ResponseWriter, *http.Request, error) {
 	}
 }
 
-func (h *StaticHandler) injectScriptBlock(content []byte, r *http.Request) []byte {
+func (_ *StaticHandler) injectScriptBlock(content []byte, r *http.Request) []byte {
 	nonce := middleware.StyleNonceFromContext(r.Context())
 	e2eScript := getE2EScript()
 	scriptBlock := buildScriptBlock(nonce, e2eScript)

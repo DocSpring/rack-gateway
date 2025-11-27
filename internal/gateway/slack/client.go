@@ -103,16 +103,16 @@ func (c *Client) ListChannels() ([]Channel, error) {
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close() //nolint:errcheck
+			resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 			return nil, fmt.Errorf("slack API returned %d: %s", resp.StatusCode, string(body))
 		}
 
 		var result ListChannelsResponse
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			resp.Body.Close() //nolint:errcheck
+			resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 			return nil, err
 		}
-		resp.Body.Close() //nolint:errcheck
+		resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 		if !result.OK {
 			return nil, fmt.Errorf("slack API error: %s", result.Error)
@@ -158,7 +158,7 @@ func (c *Client) PostMessage(channelID, text string, blocks []map[string]interfa
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	// Read body for better error logging
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -207,7 +207,7 @@ func ExchangeOAuthCode(clientID, clientSecret, code, redirectURI string) (*OAuth
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

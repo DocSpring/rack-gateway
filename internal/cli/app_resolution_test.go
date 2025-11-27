@@ -42,10 +42,10 @@ func TestResolveApp_EnvVar(t *testing.T) {
 
 func TestResolveApp_DotConvoxFile_CurrentDir(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".convox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".convox"), 0o750); err != nil {
 		t.Fatalf("mkdir .convox: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".convox", "app"), []byte("from-file\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".convox", "app"), []byte("from-file\n"), 0o600); err != nil {
 		t.Fatalf("write app file: %v", err)
 	}
 	back := chdir(t, dir)
@@ -65,14 +65,14 @@ func TestResolveApp_DotConvoxFile_CurrentDir(t *testing.T) {
 
 func TestResolveApp_DotConvoxFile_ParentDir(t *testing.T) {
 	parent := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(parent, ".convox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(parent, ".convox"), 0o750); err != nil {
 		t.Fatalf("mkdir .convox: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(parent, ".convox", "app"), []byte("from-parent\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(parent, ".convox", "app"), []byte("from-parent\n"), 0o600); err != nil {
 		t.Fatalf("write app file: %v", err)
 	}
 	child := filepath.Join(parent, "child", "deeper")
-	if err := os.MkdirAll(child, 0o755); err != nil {
+	if err := os.MkdirAll(child, 0o750); err != nil {
 		t.Fatalf("mkdir child: %v", err)
 	}
 	back := chdir(t, child)
@@ -94,7 +94,7 @@ func TestResolveApp_FallbackBasename(t *testing.T) {
 	base := "cg-app-base"
 	parent := t.TempDir()
 	dir := filepath.Join(parent, base)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	back := chdir(t, dir)

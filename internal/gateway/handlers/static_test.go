@@ -74,13 +74,13 @@ func TestStaticHandlerServesDist(t *testing.T) {
 	tmp := t.TempDir()
 	indexPath := filepath.Join(tmp, "index.html")
 	assetPath := filepath.Join(tmp, "assets", "app.js")
-	if err := os.WriteFile(indexPath, []byte("<html>index</html>"), 0o644); err != nil {
+	if err := os.WriteFile(indexPath, []byte("<html>index</html>"), 0o600); err != nil {
 		t.Fatalf("failed to write index: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(assetPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(assetPath), 0o750); err != nil {
 		t.Fatalf("failed to create assets dir: %v", err)
 	}
-	if err := os.WriteFile(assetPath, []byte("console.log('ok')"), 0o644); err != nil {
+	if err := os.WriteFile(assetPath, []byte("console.log('ok')"), 0o600); err != nil {
 		t.Fatalf("failed to write asset: %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestStaticHandlerInjectsSentryPlaceholders(t *testing.T) {
 		`<meta name="rgw-sentry-environment" content="RGW_SENTRY_ENVIRONMENT">` +
 		`<meta name="rgw-sentry-release" content="RGW_SENTRY_RELEASE">` +
 		`<meta name="rgw-sentry-traces-sample-rate" content="RGW_SENTRY_TRACES_SAMPLE_RATE">`
-	if err := os.WriteFile(indexPath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(indexPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write index: %v", err)
 	}
 

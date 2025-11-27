@@ -89,7 +89,10 @@ async function withDbClient<T>(handler: (client: Client) => Promise<T>): Promise
     await client.connect()
     return await handler(client)
   } finally {
-    await client.end().catch(() => {})
+    // Ignore errors when closing the connection - we're already cleaning up
+    await client.end().catch(() => {
+      // Intentionally empty
+    })
   }
 }
 
@@ -399,21 +402,20 @@ export async function getUserMfaEnrolled(email: string): Promise<boolean> {
   })
 }
 
-export async function setupBothMfaMethodsForUser(email: string) {
-  await withDbClient(async (client) => {
-    // First reset any existing MFA state
-    await client.query(
-      'DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = $1);',
-      [email]
-    )
-    await client.query(
-      'DELETE FROM mfa_backup_codes WHERE user_id = (SELECT id FROM users WHERE email = $1);',
-      [email]
-    )
+async function resetMfaAndSetupTotp(client: Client, email: string) {
+  // First reset any existing MFA state
+  await client.query(
+    'DELETE FROM mfa_methods WHERE user_id = (SELECT id FROM users WHERE email = $1);',
+    [email]
+  )
+  await client.query(
+    'DELETE FROM mfa_backup_codes WHERE user_id = (SELECT id FROM users WHERE email = $1);',
+    [email]
+  )
 
-    // Insert TOTP method (using real secret from dev database)
-    await client.query(
-      `INSERT INTO mfa_methods (user_id, type, secret, label, created_at, confirmed_at, last_used_at)
+  // Insert TOTP method (using real secret from dev database)
+  await client.query(
+    `INSERT INTO mfa_methods (user_id, type, secret, label, created_at, confirmed_at, last_used_at)
        VALUES (
          (SELECT id FROM users WHERE email = $1),
          'totp',
@@ -423,8 +425,51 @@ export async function setupBothMfaMethodsForUser(email: string) {
          NOW(),
          NULL
        );`,
-      [email]
+    [email]
+  )
+
+  // Generate backup codes
+  const backupCodes = [
+    'BACKUP01',
+    'BACKUP02',
+    'BACKUP03',
+    'BACKUP04',
+    'BACKUP05',
+    'BACKUP06',
+    'BACKUP07',
+    'BACKUP08',
+    'BACKUP09',
+    'BACKUP10',
+  ]
+  for (const code of backupCodes) {
+    await client.query(
+      `INSERT INTO mfa_backup_codes (user_id, code_hash, used_at, created_at)
+         VALUES (
+           (SELECT id FROM users WHERE email = $1),
+           $2,
+           NULL,
+           NOW()
+         );`,
+      [email, code]
     )
+  }
+
+  // Mark user as MFA enrolled and set default preferred method to TOTP
+  await client.query(
+    'UPDATE users SET mfa_enrolled = TRUE, preferred_mfa_method = $2 WHERE email = $1;',
+    [email, 'totp']
+  )
+}
+
+export async function setupTotpMfaForUser(email: string) {
+  await withDbClient(async (client) => {
+    await resetMfaAndSetupTotp(client, email)
+  })
+}
+
+export async function setupBothMfaMethodsForUser(email: string) {
+  await withDbClient(async (client) => {
+    await resetMfaAndSetupTotp(client, email)
 
     // Insert WebAuthn method (using real Yubikey credential from dev database)
     await client.query(
@@ -440,38 +485,6 @@ export async function setupBothMfaMethodsForUser(email: string) {
          NULL
        );`,
       [email]
-    )
-
-    // Generate backup codes
-    const backupCodes = [
-      'BACKUP01',
-      'BACKUP02',
-      'BACKUP03',
-      'BACKUP04',
-      'BACKUP05',
-      'BACKUP06',
-      'BACKUP07',
-      'BACKUP08',
-      'BACKUP09',
-      'BACKUP10',
-    ]
-    for (const code of backupCodes) {
-      await client.query(
-        `INSERT INTO mfa_backup_codes (user_id, code_hash, used_at, created_at)
-         VALUES (
-           (SELECT id FROM users WHERE email = $1),
-           $2,
-           NULL,
-           NOW()
-         );`,
-        [email, code]
-      )
-    }
-
-    // Mark user as MFA enrolled and set default preferred method to TOTP
-    await client.query(
-      'UPDATE users SET mfa_enrolled = TRUE, preferred_mfa_method = $2 WHERE email = $1;',
-      [email, 'totp']
     )
   })
 }

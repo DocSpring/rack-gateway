@@ -127,7 +127,7 @@ func (h *Handler) evaluateAPITokenPermission(
 	return true, tracker, nil
 }
 
-func (h *Handler) isValidAPIToken(authUser *auth.User) bool {
+func (_ *Handler) isValidAPIToken(authUser *auth.User) bool {
 	return authUser != nil && authUser.TokenID != nil
 }
 
@@ -174,7 +174,7 @@ func approvalsGloballyDisabled(h *Handler) bool {
 	return !enabled
 }
 
-func (h *Handler) resolveAppOrDeny(path string, deny denyFunc) (string, bool) {
+func (_ *Handler) resolveAppOrDeny(path string, deny denyFunc) (string, bool) {
 	app := extractAppFromPath(path)
 	if app == "" {
 		_, _, _ = deny()

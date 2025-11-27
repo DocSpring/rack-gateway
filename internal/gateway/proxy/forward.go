@@ -124,7 +124,7 @@ func (h *Handler) markDeployApprovalDeployed(r *http.Request) {
 	}
 }
 
-func (h *Handler) writeBufferedResponse(
+func (_ *Handler) writeBufferedResponse(
 	w http.ResponseWriter,
 	respReader io.Reader,
 	body []byte,
@@ -143,7 +143,7 @@ func (h *Handler) writeBufferedResponse(
 	return bytesWritten, logSnippet, nil
 }
 
-func (h *Handler) writeStreamedResponse(
+func (_ *Handler) writeStreamedResponse(
 	w http.ResponseWriter,
 	respReader io.Reader,
 	shouldCaptureBody bool,
@@ -166,7 +166,7 @@ func (h *Handler) writeStreamedResponse(
 	return bytesWritten, acc.Bytes(), nil
 }
 
-func (h *Handler) logProxyResponse(
+func (_ *Handler) logProxyResponse(
 	r *http.Request,
 	resp *http.Response,
 	path string,
@@ -239,7 +239,7 @@ func (h *Handler) forwardRequest(
 
 	if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") &&
 		strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-		return h.proxyWebSocket(w, r, rack, targetURL, authUser.Email, path)
+		return h.proxyWebSocket(w, r, rack, targetURL, authUser, path)
 	}
 
 	bodyBytes, err := readRequestBody(r)
@@ -273,7 +273,7 @@ func (h *Handler) forwardRequest(
 		}
 		return 0, fmt.Errorf("failed to forward request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer resp.Body.Close() //nolint:errcheck,gosec // G104: cleanup
 
 	return h.processProxyResponse(w, r, resp, path, authUser.Email)
 }

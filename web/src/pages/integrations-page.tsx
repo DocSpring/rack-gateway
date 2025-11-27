@@ -1,6 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
 import { useMutation } from '@/hooks/use-mutation'
@@ -18,6 +27,7 @@ import { getErrorMessage, hasStatus } from '@/pages/integrations/utils'
 
 export function IntegrationsPage() {
   const [isConnecting, setIsConnecting] = useState(false)
+  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false)
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
@@ -43,7 +53,7 @@ export function IntegrationsPage() {
       )
       return response.channels || []
     },
-    enabled: !!integration,
+    enabled: Boolean(integration),
   })
 
   const connectMutation = useMutation({
@@ -125,16 +135,23 @@ export function IntegrationsPage() {
     },
   })
 
-  const handleConnect = () => {
+  const handleConnect = useCallback(() => {
     setIsConnecting(true)
     connectMutation.mutate()
-  }
+  }, [connectMutation])
 
-  const handleDisconnect = () => {
-    if (window.confirm('Are you sure you want to disconnect from Slack?')) {
-      disconnectMutation.mutate()
-    }
-  }
+  const handleDisconnect = useCallback(() => {
+    setShowDisconnectDialog(true)
+  }, [])
+
+  const confirmDisconnect = useCallback(() => {
+    disconnectMutation.mutate()
+    setShowDisconnectDialog(false)
+  }, [disconnectMutation])
+
+  const handleCancelDisconnect = useCallback(() => {
+    setShowDisconnectDialog(false)
+  }, [])
 
   const handleUpdateChannel = (key: string, channelId: string, channelName: string) => {
     if (!integration?.channel_actions) {
@@ -268,6 +285,51 @@ export function IntegrationsPage() {
           updatePending={updateChannelsMutation.isPending}
         />
       </div>
+
+      <DisconnectDialog
+        onCancel={handleCancelDisconnect}
+        onConfirm={confirmDisconnect}
+        open={showDisconnectDialog}
+      />
     </div>
+  )
+}
+
+type DisconnectDialogProps = {
+  open: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+function DisconnectDialog({ open, onCancel, onConfirm }: DisconnectDialogProps) {
+  const handleOpenChange = useCallback(
+    (isOpen: boolean) => {
+      if (!isOpen) {
+        onCancel()
+      }
+    },
+    [onCancel]
+  )
+
+  return (
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Disconnect from Slack</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to disconnect from Slack? This will remove all channel
+            configurations and notifications.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={onCancel} variant="outline">
+            Cancel
+          </Button>
+          <Button onClick={onConfirm} variant="destructive">
+            Disconnect
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

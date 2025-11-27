@@ -55,7 +55,7 @@ func (n *Notifier) NotifyDeployApprovalCreated(req *db.DeployApprovalRequest, ga
 }
 
 // formatDeployApprovalAlert formats a deploy approval request into a rich Slack message
-func (n *Notifier) formatDeployApprovalAlert(
+func (_ *Notifier) formatDeployApprovalAlert(
 	req *db.DeployApprovalRequest,
 	gatewayDomain string,
 ) (string, []map[string]interface{}) {

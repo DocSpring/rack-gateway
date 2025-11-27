@@ -1,5 +1,3 @@
-import { format } from 'date-fns'
-
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 
 export const RESOURCE_TYPES = {
@@ -256,7 +254,3 @@ export const ensureFilterValue = (
   value: string | null | undefined,
   options: Record<string, string>
 ) => (value && value in options ? value : 'all')
-
-export function formatAuditExportFileName() {
-  return `audit-logs-${format(new Date(), 'yyyy-MM-dd')}.csv`
-}

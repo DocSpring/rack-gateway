@@ -33,6 +33,7 @@ jobs:
         with:
           name: gateway-image
           path: ${{ runner.temp }}/gateway-api.tar
+          retention-days: 1
 
   web-e2e:
     runs-on: ubuntu-latest

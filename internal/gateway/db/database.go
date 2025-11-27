@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +72,9 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 	}
 
 	// Apply connection pool configuration
+	if poolConfig == nil {
+		poolConfig = poolConfigFromEnv()
+	}
 	applyPoolConfig(db, poolConfig)
 
 	if err := db.Ping(); err != nil {
@@ -79,15 +83,27 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 
 	// Create pgxpool connection (for River and pgx-native operations)
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, source)
+	pgxConfig, err := pgxpool.ParseConfig(source)
 	if err != nil {
-		db.Close() //nolint:errcheck // cleanup on init failure
+		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
+		return nil, fmt.Errorf("failed to parse pgxpool config: %w", err)
+	}
+
+	// Apply compatible pool settings to pgxpool
+	pgxConfig.MaxConns = int32(poolConfig.MaxOpenConns) //nolint:gosec // trusted config
+	pgxConfig.MinConns = int32(poolConfig.MaxIdleConns) //nolint:gosec // trusted config
+	pgxConfig.MaxConnLifetime = poolConfig.ConnMaxLifetime
+	pgxConfig.MaxConnIdleTime = poolConfig.ConnMaxIdleTime
+
+	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
+	if err != nil {
+		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
 	}
 
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		db.Close() //nolint:errcheck // cleanup on init failure
+		db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 		return nil, fmt.Errorf("failed to ping pgxpool: %w", err)
 	}
 
@@ -98,7 +114,7 @@ func NewWithPoolConfigAndMigration(dsn string, poolConfig *PoolConfig, autoMigra
 	if autoMigrate {
 		if err := d.migrateAll(); err != nil {
 			pool.Close()
-			db.Close() //nolint:errcheck // cleanup on init failure
+			db.Close() //nolint:errcheck,gosec // G104: cleanup on init failure
 			return nil, fmt.Errorf("failed to initialize schema: %w", err)
 		}
 	}
@@ -118,15 +134,33 @@ func applyPoolConfig(db *sql.DB, poolConfig *PoolConfig) {
 	db.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
 }
 
-// poolConfigFromEnv returns default pool configuration values.
-// Configuration values should be passed in via PoolConfig parameter instead of reading from env.
+// poolConfigFromEnv returns pool configuration values from environment variables.
+// Defaults to conservative values safe for parallel unit tests if env vars are not set.
 func poolConfigFromEnv() *PoolConfig {
 	return &PoolConfig{
-		MaxOpenConns:    25,
-		MaxIdleConns:    5,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
+		MaxOpenConns:    envInt("DB_MAX_OPEN_CONNS", 2),
+		MaxIdleConns:    envInt("DB_MAX_IDLE_CONNS", 1),
+		ConnMaxLifetime: envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		ConnMaxIdleTime: envDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute),
 	}
+}
+
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
+}
+
+func envDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
 }
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.
@@ -234,7 +268,7 @@ func (d *Database) rebind(q string) string {
 	return b.String()
 }
 
-func (d *Database) logQuery(prefix, query string, args ...interface{}) {
+func (_ *Database) logQuery(prefix, query string, args ...interface{}) {
 	logAggregate := gtwlog.TopicEnabled(gtwlog.TopicSQL)
 	if !logAggregate {
 		return

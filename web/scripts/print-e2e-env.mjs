@@ -27,7 +27,7 @@ const VITE_DEBUG_PROXY = env.VITE_DEBUG_PROXY || 'false'
 const databaseUrlsList = parseList(env.E2E_DATABASE_URLS || env.E2E_DATABASE_URL)
 
 console.log('--- E2E Boot Config ---')
-console.log(pad('CI'), String(!!env.CI))
+console.log(pad('CI'), String(Boolean(env.CI)))
 console.log(pad('WEB_E2E_SHARDS'), shards)
 console.log(pad('Gateway ports'), gatewayPortsList.join(', ') || gatewayPort)
 console.log(pad('WEB_PORT'), webPort)
