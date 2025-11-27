@@ -59,16 +59,30 @@ func validateDeployApprovalRequestInput(
 }
 
 func (d *Database) checkDeployApprovalConflict(tokenID int64, gitCommitHash string) error {
+	// Check for unexpired approved requests
 	existing, err := d.FindDeployApprovalRequest(DeployApprovalLookup{
 		TokenID:       tokenID,
 		GitCommitHash: gitCommitHash,
-		StatusFilter:  "any",
+		StatusFilter:  DeployApprovalRequestStatusApproved, // FindDeployApprovalRequest enforces expiry for "approved"
 	})
-	if err == nil && existing != nil {
-		return &DeployApprovalRequestConflictError{Request: existing}
-	}
 	if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
-		return fmt.Errorf("failed to check existing deploy approval requests: %w", err)
+		return fmt.Errorf("failed to check existing approved requests: %w", err)
+	}
+
+	if existing == nil {
+		// Check for pending requests
+		existing, err = d.FindDeployApprovalRequest(DeployApprovalLookup{
+			TokenID:       tokenID,
+			GitCommitHash: gitCommitHash,
+			StatusFilter:  DeployApprovalRequestStatusPending,
+		})
+		if err != nil && !errors.Is(err, ErrDeployApprovalRequestNotFound) {
+			return fmt.Errorf("failed to check existing pending requests: %w", err)
+		}
+	}
+
+	if existing != nil {
+		return &DeployApprovalRequestConflictError{Request: existing}
 	}
 	return nil
 }
@@ -337,10 +351,11 @@ func (d *Database) ExtendDeployApprovalRequestExpiry(
 	res, err := d.exec(
 		`UPDATE deploy_approval_requests
          SET approval_expires_at = ?, updated_at = NOW()
-         WHERE public_id = ? AND status = ?`,
+         WHERE public_id = ? AND status = ? AND (approval_expires_at IS NULL OR approval_expires_at < ?)`,
 		newExpiresAt,
 		publicID,
 		DeployApprovalRequestStatusApproved,
+		newExpiresAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extend deploy approval expiry: %w", err)

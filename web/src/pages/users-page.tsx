@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog'
 import { TablePane } from '@/components/table-pane'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { UserEditDialog } from '@/components/user-edit-dialog'
 import { UserLockDialog, useUnlockUser } from '@/components/user-lock-dialog'
 import { useAuth } from '@/contexts/auth-context'
 import { useMutation } from '@/hooks/use-mutation'
-import { api, type RoleName, type UpdateUserRequest } from '@/lib/api'
+import { api, type UpdateUserRequest } from '@/lib/api'
 import { DEFAULT_PER_PAGE } from '@/lib/constants'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { pickPrimaryRole } from '@/lib/user-roles'
@@ -263,18 +263,24 @@ export function UsersPage() {
     }
   }
 
+  const goToPreviousPage = useCallback(() => {
+    setPage((p) => Math.max(1, p - 1))
+  }, [])
+
+  const goToNextPage = useCallback(() => {
+    setPage((p) => Math.min(totalPages, p + 1))
+  }, [totalPages])
+
+  // Dialog-related derived state
   const isEditingExistingUser = dialogMode === 'edit' && editingUser !== null
   const dialogInitialEmail = isEditingExistingUser && editingUser ? editingUser.email : ''
   const dialogInitialName = isEditingExistingUser && editingUser ? editingUser.name : ''
-  const dialogInitialRole: RoleName =
+  const dialogInitialRole =
     isEditingExistingUser && editingUser ? pickPrimaryRole(editingUser.roles) : 'viewer'
-
   const dialogBusy =
     dialogMode === 'create'
       ? createUserMutation.isPending
       : updateUserMutation.isPending || updateUserNameMutation.isPending
-
-  // All authenticated users can view this page; actions are gated by role.
 
   return (
     <div className="p-8">
@@ -333,18 +339,10 @@ export function UsersPage() {
               Showing {start + 1}–{end} of {total} users
             </div>
             <div className="flex gap-2">
-              <Button
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                variant="outline"
-              >
+              <Button disabled={page === 1} onClick={goToPreviousPage} variant="outline">
                 Previous
               </Button>
-              <Button
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                variant="outline"
-              >
+              <Button disabled={page === totalPages} onClick={goToNextPage} variant="outline">
                 Next
               </Button>
             </div>

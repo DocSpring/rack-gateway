@@ -1,7 +1,6 @@
 package db
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -91,13 +90,15 @@ type DeployApprovalRequestListOptions struct {
 // ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
 func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOptions) ([]*DeployApprovalRequest, error) {
 	clauses := []string{"TRUE"}
-	args := []interface{}{}
-	if opts.Status != "" {
+	var args []interface{}
+	if opts.OnlyOpen {
+		clauses = append(clauses,
+			"(dr.status = 'pending' OR "+
+				"(dr.status = 'approved' AND (dr.approval_expires_at IS NULL OR dr.approval_expires_at > NOW())))",
+		)
+	} else if opts.Status != "" {
 		clauses = append(clauses, "dr.status = ?")
 		args = append(args, opts.Status)
-	}
-	if opts.OnlyOpen {
-		clauses = append(clauses, "dr.status IN ('pending','approved')")
 	}
 	if opts.TokenID > 0 {
 		clauses = append(clauses, "dr.target_api_token_id = ?")
@@ -123,9 +124,6 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	for rows.Next() {
 		req, err := scanDeployApprovalRequest(rows)
 		if err != nil {
-			if errors.Is(err, ErrDeployApprovalRequestNotFound) {
-				continue
-			}
 			return nil, err
 		}
 		out = append(out, req)

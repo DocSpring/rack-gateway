@@ -222,6 +222,7 @@ func (h *AdminHandler) RejectDeployApprovalRequest(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Deploy approval request public ID"
+// @Param body body handlers.UpdateDeployApprovalRequestStatusRequest false "Extension notes"
 // @Success 200 {object} DeployApprovalRequestResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse

@@ -55,7 +55,7 @@ test.describe('MFA enrollment enforcement', () => {
     // Check that sidebar links are disabled (rendered as non-links)
     // The "Rack" item should be rendered as a span, not a link, so getByRole('link') should not find it
     const rackLink = page.getByRole('link', { name: /^Rack$/i })
-    await expect(rackLink).toBeHidden()
+    await expect(rackLink).toHaveCount(0)
 
     // Verify the text is still visible (as a span) and appears disabled
     const rackText = page.locator('nav').getByText(/^Rack$/i)

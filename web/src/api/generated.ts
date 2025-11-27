@@ -928,12 +928,18 @@ Secrets remain masked unless the user has secrets permissions.
    */
   const postDeployApprovalRequestsIdExtend = (
     id: string,
+    handlersUpdateDeployApprovalRequestStatusRequest: HandlersUpdateDeployApprovalRequestStatusRequest,
     options?: SecondParameter<
       typeof createGatewayClient<HandlersDeployApprovalRequestResponse>
     >,
   ) => {
     return createGatewayClient<HandlersDeployApprovalRequestResponse>(
-      { url: `/deploy-approval-requests/${id}/extend`, method: 'POST' },
+      {
+        url: `/deploy-approval-requests/${id}/extend`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        data: handlersUpdateDeployApprovalRequestStatusRequest,
+      },
       options,
     );
   };

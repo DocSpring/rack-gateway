@@ -15,6 +15,28 @@ type AuditLogDetailDialogProps = {
   onClose: () => void
 }
 
+function renderTimestamp(entry: AuditLogRecord): string {
+  const ts =
+    ('timestamp' in entry ? entry.timestamp : undefined) ??
+    ('last_seen' in entry ? entry.last_seen : undefined) ??
+    ('first_seen' in entry ? entry.first_seen : undefined)
+  if (!ts) return '-'
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime()) ? '-' : d.toISOString()
+}
+
+function renderResponseTime(entry: AuditLogRecord): string {
+  if (typeof entry.response_time_ms === 'number') {
+    const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
+    return `${entry.response_time_ms} ms${suffix}`
+  }
+  if ('avg_response_time_ms' in entry && typeof entry.avg_response_time_ms === 'number') {
+    const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
+    return `${entry.avg_response_time_ms} ms${suffix}`
+  }
+  return '-'
+}
+
 export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogProps) {
   const statusLabel = useMemo(() => (entry ? formatStatusLabel(entry) : '-'), [entry])
 
@@ -30,13 +52,7 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
         {entry ? (
           <div className="space-y-3 text-sm">
             <div>
-              <span className="text-muted-foreground">Timestamp:</span> {(() => {
-                const ts =
-                  ('timestamp' in entry ? entry.timestamp : undefined) ??
-                  ('last_seen' in entry ? entry.last_seen : undefined) ??
-                  ('first_seen' in entry ? entry.first_seen : undefined)
-                return ts ? new Date(ts).toISOString() : '-'
-              })()}
+              <span className="text-muted-foreground">Timestamp:</span> {renderTimestamp(entry)}
             </div>
             {renderActorDetails(entry)}
             <div>
@@ -73,13 +89,8 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
               </div>
             )}
             <div>
-              <span className="text-muted-foreground">Response Time:</span> {(() => {
-                if (typeof entry.response_time_ms === 'number') {
-                  const suffix = (entry.event_count ?? 1) > 1 ? ' (avg)' : ''
-                  return `${entry.response_time_ms} ms${suffix}`
-                }
-                return '-'
-              })()}
+              <span className="text-muted-foreground">Response Time:</span>{' '}
+              {renderResponseTime(entry)}
             </div>
             <div>
               <span className="text-muted-foreground">IP:</span> {entry.ip_address || '-'}

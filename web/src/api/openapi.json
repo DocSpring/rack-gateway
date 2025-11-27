@@ -3153,6 +3153,16 @@
                         }
                     }
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/handlers.UpdateDeployApprovalRequestStatusRequest"
+                            }
+                        }
+                    },
+                    "description": "Extension notes"
+                },
                 "responses": {
                     "200": {
                         "description": "OK",

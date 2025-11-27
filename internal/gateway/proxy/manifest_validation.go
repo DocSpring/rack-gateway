@@ -295,7 +295,9 @@ func extractTarFile(tr *tar.Reader, targetPath string, header *tar.Header, curre
 		outFile.Close() //nolint:errcheck,gosec // G104: cleanup on error
 		return 0, fmt.Errorf("failed to write file: %w", err)
 	}
-	outFile.Close() //nolint:errcheck,gosec // G104: cleanup
+	if err := outFile.Close(); err != nil {
+		return 0, fmt.Errorf("failed to close file: %w", err)
+	}
 
 	return newSize, nil
 }

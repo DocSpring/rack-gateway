@@ -179,7 +179,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
           status: response.status,
           text: await response.text(),
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         return { error: error.message }
       }
     }, baseURL)

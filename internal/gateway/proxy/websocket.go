@@ -414,17 +414,28 @@ func (h *Handler) validateExecCommand(w http.ResponseWriter, r *http.Request, or
 }
 
 func (h *Handler) logExecStart(r *http.Request, authUser *auth.User, path string) {
+	if h.auditLogger == nil {
+		return
+	}
+
 	action, resource := h.auditLogger.ParseConvoxAction(path, r.Method, r.Header.Get("X-Audit-Resource"))
 	if action != "process.exec" {
 		return
 	}
 
+	var userEmail string
+	var tokenID *int64
+	if authUser != nil {
+		userEmail = authUser.Email
+		tokenID = authUser.TokenID
+	}
+
 	resourceType := h.auditLogger.InferResourceType(path, action)
 
 	auditLog := &db.AuditLog{
-		UserEmail:      authUser.Email,
+		UserEmail:      userEmail,
 		UserName:       r.Header.Get("X-User-Name"),
-		APITokenID:     authUser.TokenID,
+		APITokenID:     tokenID,
 		APITokenName:   strings.TrimSpace(r.Header.Get("X-API-Token-Name")),
 		ActionType:     "convox",
 		Action:         "process.exec.start",

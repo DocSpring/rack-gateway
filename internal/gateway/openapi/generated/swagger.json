@@ -2572,6 +2572,14 @@
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Extension notes",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateDeployApprovalRequestStatusRequest"
+                        }
                     }
                 ],
                 "responses": {

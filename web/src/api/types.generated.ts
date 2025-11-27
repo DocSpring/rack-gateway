@@ -2948,7 +2948,12 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            /** @description Extension notes */
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["handlers.UpdateDeployApprovalRequestStatusRequest"];
+                };
+            };
             responses: {
                 /** @description OK */
                 200: {

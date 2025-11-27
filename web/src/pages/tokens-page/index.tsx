@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { TablePane } from '../../components/table-pane'
 import { Button } from '../../components/ui/button'
@@ -71,27 +71,49 @@ function TokensPageInner() {
     [permissionMetadata]
   )
   const roleShortcuts = permissionMetadata?.roles ?? []
-  const userPermissions = useMemo(
-    () => normalizePermissions(permissionMetadata?.user_permissions ?? []),
+
+  const userPermissionsSet = useMemo(
+    () => new Set(normalizePermissions(permissionMetadata?.user_permissions ?? [])),
     [permissionMetadata]
   )
-  const userPermissionsSet = useMemo(() => new Set(userPermissions), [userPermissions])
   const hasWildcardPermission = userPermissionsSet.has('convox:*:*')
 
-  const canAssignPermission = (permission: string): boolean => {
-    if (hasWildcardPermission) {
-      return true
-    }
-    if (userPermissionsSet.has(permission)) {
-      return true
-    }
-    for (const perm of userPermissionsSet) {
-      if (perm.endsWith(':*') && permission.startsWith(perm.slice(0, -1))) {
+  const canAssignPermission = useCallback(
+    (permission: string): boolean => {
+      if (hasWildcardPermission) {
         return true
       }
-    }
-    return false
-  }
+      if (userPermissionsSet.has(permission)) {
+        return true
+      }
+      for (const perm of userPermissionsSet) {
+        if (perm.endsWith(':*') && permission.startsWith(perm.slice(0, -1))) {
+          return true
+        }
+      }
+      return false
+    },
+    [hasWildcardPermission, userPermissionsSet]
+  )
+  const handleCreateToken = useCallback(() => {
+    setModal({ type: 'create' })
+  }, [])
+
+  const handleDeleteToken = useCallback((tokenId: string) => {
+    setModal({ type: 'delete', tokenId })
+  }, [])
+
+  const handleEditToken = useCallback((tokenId: string) => {
+    setModal({ type: 'edit', tokenId })
+  }, [])
+
+  const goToPreviousPage = useCallback(() => {
+    setPage((p) => Math.max(1, p - 1))
+  }, [])
+
+  const goToNextPage = useCallback(() => {
+    setPage((p) => Math.min(totalPages, p + 1))
+  }, [totalPages])
 
   return (
     <div className="p-8">
@@ -109,7 +131,7 @@ function TokensPageInner() {
         error={error ? 'Failed to load API tokens' : null}
         headerRight={
           canCreate ? (
-            <Button onClick={() => setModal({ type: 'create' })}>
+            <Button onClick={handleCreateToken}>
               <Plus className="mr-2 h-4 w-4" />
               Create Token
             </Button>
@@ -145,13 +167,13 @@ function TokensPageInner() {
                     if (!canEdit) {
                       return
                     }
-                    setModal({ type: 'delete', tokenId: token.public_id })
+                    handleDeleteToken(token.public_id)
                   }}
                   onEdit={() => {
                     if (!canEdit) {
                       return
                     }
-                    setModal({ type: 'edit', tokenId: token.public_id })
+                    handleEditToken(token.public_id)
                   }}
                   token={token}
                 />
@@ -166,18 +188,10 @@ function TokensPageInner() {
               Showing {start + 1}–{end} of {total} tokens
             </div>
             <div className="flex gap-2">
-              <Button
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                variant="outline"
-              >
+              <Button disabled={page === 1} onClick={goToPreviousPage} variant="outline">
                 Previous
               </Button>
-              <Button
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                variant="outline"
-              >
+              <Button disabled={page === totalPages} onClick={goToNextPage} variant="outline">
                 Next
               </Button>
             </div>
