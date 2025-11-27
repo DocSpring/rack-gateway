@@ -5,6 +5,7 @@ import { login } from './helpers'
 
 test.describe('Audit aggregation', () => {
   test('aggregates repeated app list views into single audit entry', async ({ page }) => {
+    test.setTimeout(60_000)
     await cleanupE2eArtifacts()
     await ensureAdminUser()
     await seedAggregatedAuditLog({

@@ -67,7 +67,7 @@ test.describe('Redirect after login', () => {
 
     // Complete MFA enrollment
     const { ensureMfaEnrollment } = await import('./helpers')
-    await ensureMfaEnrollment(page)
+    await ensureMfaEnrollment(page, { useUi: true })
 
     // After enrollment, should redirect back to the original target page
     await expect(page).toHaveURL(targetPath, { timeout: 10_000 })
@@ -186,7 +186,7 @@ test.describe('Redirect after login', () => {
 
     // Complete MFA enrollment
     const { ensureMfaEnrollment } = await import('./helpers')
-    await ensureMfaEnrollment(page)
+    await ensureMfaEnrollment(page, { useUi: true })
 
     // Should redirect to the original target path, not the default
     await expect(page).toHaveURL(targetPath, { timeout: 10_000 })
