@@ -1,5 +1,5 @@
 import { Loader2, X } from 'lucide-react'
-import { useCallback } from 'react'
+import { type ChangeEvent, useCallback } from 'react'
 
 import { StringArrayInput } from '@/components/settings/string-array-input'
 import { Button } from '@/components/ui/button'
@@ -59,7 +59,7 @@ export function ChannelConfigCard({
   }, [configKey, onRemoveChannel])
 
   const handleChannelChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
+    (event: ChangeEvent<HTMLSelectElement>) => {
       const value = event.target.value
       const channel = channels.find((c) => c.id === value)
       if (channel) {
