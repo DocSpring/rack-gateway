@@ -180,7 +180,7 @@ test.describe('CSRF Protection for Proxy Routes', () => {
           text: await response.text(),
         }
       } catch (error: unknown) {
-        return { error: error.message }
+        return { error: error instanceof Error ? error.message : String(error) }
       }
     }, baseURL)
 
