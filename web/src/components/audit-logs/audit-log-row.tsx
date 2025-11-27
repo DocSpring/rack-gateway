@@ -1,4 +1,5 @@
 import { Eye } from 'lucide-react'
+import { useCallback } from 'react'
 import { renderActionCell } from '@/components/audit-logs/action-cell'
 import {
   getActionTypeBadgeAppearance,
@@ -39,12 +40,18 @@ export function AuditLogRow({ log, index, onClick }: AuditLogRowProps) {
 
   const statusLabel = formatStatusLabel(log)
 
+  const handleRowClick = useCallback(() => onClick(log), [log, onClick])
+
+  const handleViewClick = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation()
+      onClick(log)
+    },
+    [log, onClick]
+  )
+
   return (
-    <TableRow
-      className="cursor-pointer hover:bg-accent/50"
-      key={rowKey}
-      onClick={() => onClick(log)}
-    >
+    <TableRow className="cursor-pointer hover:bg-accent/50" key={rowKey} onClick={handleRowClick}>
       <TableCell>
         <ActorCell log={log} />
       </TableCell>
@@ -71,13 +78,7 @@ export function AuditLogRow({ log, index, onClick }: AuditLogRowProps) {
       <TableCell className="font-mono text-sm">
         <TimeAgo date={timestamp ?? null} />
       </TableCell>
-      <TableCell
-        className="text-right"
-        onClick={(event) => {
-          event.stopPropagation()
-          onClick(log)
-        }}
-      >
+      <TableCell className="text-right" onClick={handleViewClick}>
         <Button size="sm" variant="ghost">
           <Eye className="h-4 w-4" />
         </Button>

@@ -134,14 +134,14 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
 
   const customStartISO = useMemo(() => {
     if (dateRange !== 'custom') {
-      return
+      return undefined
     }
     return toISOStringParam(customStart)
   }, [customStart, dateRange])
 
   const customEndISO = useMemo(() => {
     if (dateRange !== 'custom') {
-      return
+      return undefined
     }
     return toISOStringParam(customEnd)
   }, [customEnd, dateRange])
@@ -250,12 +250,11 @@ export function useAuditSearchParams(userId?: string, userEmail?: string) {
     if (!searchInitializedRef.current) {
       searchInitializedRef.current = true
       setDebouncedSearch(searchTerm)
-      return
+    } else {
+      setPage(1)
+      const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
+      return () => clearTimeout(timer)
     }
-
-    setPage(1)
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
-    return () => clearTimeout(timer)
   }, [searchTerm])
 
   const routingQuery = useMemo(

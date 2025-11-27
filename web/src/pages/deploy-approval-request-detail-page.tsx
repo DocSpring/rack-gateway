@@ -73,6 +73,10 @@ export function DeployApprovalRequestDetailPage() {
     [id, submitRejection]
   )
 
+  const handleRejectClick = useCallback(() => {
+    setRejectDialogOpen(true)
+  }, [])
+
   if (requestError) return <ErrorState error={requestError} />
   if (requestLoading || !request) return <LoadingState />
 
@@ -89,7 +93,7 @@ export function DeployApprovalRequestDetailPage() {
           extendMutationPending={extendMutationPending}
           onApprove={handleApprove}
           onExtend={handleExtend}
-          onReject={() => setRejectDialogOpen(true)}
+          onReject={handleRejectClick}
           rejectMutationPending={rejectMutationPending}
           requestStatus={request.status}
         />

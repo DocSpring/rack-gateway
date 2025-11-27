@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { AuditLogRow } from '@/components/audit-logs/audit-log-row'
 import { AuditLogDetailDialog } from '@/components/audit-logs/detail-dialog'
 import type { AuditLogRecord } from '@/components/audit-logs/types'
@@ -50,9 +50,13 @@ export function AuditLogsPane({
     return `Showing ${firstRowIndex === 0 ? 0 : firstRowIndex}–${lastRowIndex} of ${totalCount} logs`
   }, [firstRowIndex, lastRowIndex, logs.length, totalCount])
 
-  const handleRowClick = (log: AuditLogRecord) => {
+  const handleRowClick = useCallback((log: AuditLogRecord) => {
     setSelected(log)
-  }
+  }, [])
+
+  const handleCloseDialog = useCallback(() => {
+    setSelected(null)
+  }, [])
 
   return (
     <>
@@ -107,7 +111,7 @@ export function AuditLogsPane({
         )}
       </TablePane>
 
-      <AuditLogDetailDialog entry={selected} onClose={() => setSelected(null)} />
+      <AuditLogDetailDialog entry={selected} onClose={handleCloseDialog} />
     </>
   )
 }

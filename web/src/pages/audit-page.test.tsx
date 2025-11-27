@@ -177,7 +177,8 @@ describe('AuditPage', () => {
           response_time_ms: 50,
         },
       ]
-      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(aggregatedLogs as any))
+      // @ts-expect-error - aggregated logs mock is partial
+      vi.mocked(api.get).mockResolvedValueOnce(makeResponse(aggregatedLogs))
 
       const Wrapper = createWrapper()
       render(<AuditPage />, { wrapper: Wrapper })
