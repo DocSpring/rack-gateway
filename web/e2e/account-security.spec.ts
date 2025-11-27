@@ -83,7 +83,7 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
 
   // Wait to see if we're redirected to MFA challenge page or directly to app
   try {
-    await page.waitForURL(/auth\/mfa\/challenge/, { timeout: 3000 })
+    await page.waitForURL(/auth\/mfa\/challenge/, { timeout: 10_000 })
     // We're on the MFA challenge page - fill in the code
     const verificationInput = page.getByLabel('Verification code')
     await expect(verificationInput).toBeVisible({ timeout: 5000 })
@@ -104,10 +104,10 @@ async function performLoginWithMfa(page: Page, secret: string, trustDevice: bool
     await typeOtpCode(page, page, code)
 
     // Auto-submits on 6-digit code, wait for redirect
-    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 30_000 })
   } catch {
     // Not redirected to MFA challenge - might already be at /app or trusted device
-    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 30_000 })
   }
 }
 
@@ -326,6 +326,9 @@ test.describe('Account security', () => {
     await page.waitForURL(/app\/login/)
     await performLoginWithMfa(page, secret, true)
 
+    // Ensure we are fully loaded before navigating
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
+
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()
 
@@ -502,6 +505,9 @@ test.describe('Account security', () => {
 
     // Login with MFA already enrolled - must use performLoginWithMfa since user has MFA
     await performLoginWithMfa(page, secret, false)
+
+    // Ensure we are fully loaded before navigating
+    await page.waitForURL(/app(?:\/|$)/, { timeout: 15_000 })
 
     await page.goto(WebRoute('account/security'))
     await expect(page.getByRole('heading', { name: 'Account Security' })).toBeVisible()

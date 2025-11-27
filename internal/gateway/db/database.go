@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,15 +134,33 @@ func applyPoolConfig(db *sql.DB, poolConfig *PoolConfig) {
 	db.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
 }
 
-// poolConfigFromEnv returns default pool configuration values.
-// Configuration values should be passed in via PoolConfig parameter instead of reading from env.
+// poolConfigFromEnv returns pool configuration values from environment variables.
+// Defaults to conservative values safe for parallel unit tests if env vars are not set.
 func poolConfigFromEnv() *PoolConfig {
 	return &PoolConfig{
-		MaxOpenConns:    2,
-		MaxIdleConns:    1,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
+		MaxOpenConns:    envInt("DB_MAX_OPEN_CONNS", 2),
+		MaxIdleConns:    envInt("DB_MAX_IDLE_CONNS", 1),
+		ConnMaxLifetime: envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		ConnMaxIdleTime: envDuration("DB_CONN_MAX_IDLE_TIME", 10*time.Minute),
 	}
+}
+
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
+}
+
+func envDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
 }
 
 // NewFromEnv builds a Postgres DSN from env if DATABASE_URL is unset.

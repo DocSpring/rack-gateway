@@ -56,20 +56,22 @@ test.describe('MFA enrollment enforcement', () => {
     // Try to find the Rack link
     const rackLink = page.getByRole('link', { name: /^Rack$/i })
 
-    // The link should either:
-    // 1. Not be visible
-    // 2. Be disabled (aria-disabled)
-    // 3. Have a disabled class
-    const isVisible = await rackLink.isVisible().catch(() => false)
-
-    if (isVisible) {
-      // If visible, check if it's disabled
+    // The link should not be visible (it's rendered as a span when disabled)
+    // or if it is visible (implementation change), it should be disabled.
+    if (await rackLink.isVisible()) {
       const isDisabled =
         (await rackLink.getAttribute('aria-disabled')) === 'true' ||
         (await rackLink.getAttribute('class'))?.includes('disabled') ||
         (await rackLink.getAttribute('class'))?.includes('opacity-50')
 
       expect(isDisabled).toBeTruthy()
+    } else {
+      // If the link is not visible, check if the text "Rack" is visible (as a span)
+      // and verify it has the disabled styling/attributes if possible, or just accept that it's not a link.
+      const rackText = page.locator('nav').getByText(/^Rack$/i)
+      await expect(rackText).toBeVisible()
+      // Ensure it's not a link
+      await expect(rackText).not.toHaveRole('link')
     }
   })
 

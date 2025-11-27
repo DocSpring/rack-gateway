@@ -36,6 +36,9 @@ x-gateway-test-env: &gateway_test_env
   RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-200}
   LOG_LEVEL: debug
   DEBUG_TOPICS: "mfa,sql,http.request.info"
+  # Increase DB connections for E2E tests to avoid starvation under load
+  DB_MAX_OPEN_CONNS: "25"
+  DB_MAX_IDLE_CONNS: "5"
   # Test settings via environment variables
   RGW_SETTING_MFA_TRUSTED_DEVICE_TTL_DAYS: "45"
   RGW_APP_API_SETTING_DEFAULT_BRANCH: "develop"
@@ -223,6 +226,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    command: postgres -c max_connections=500
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

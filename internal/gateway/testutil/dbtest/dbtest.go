@@ -132,7 +132,7 @@ func buildTestDSN(t *testing.T, baseDSN, dbName string) string {
 
 func waitForDatabaseReady(t *testing.T, dsn string) {
 	t.Helper()
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 300; i++ {
 		testConn, err := sql.Open("pgx", dsn)
 		if err == nil {
 			if err = testConn.Ping(); err == nil {

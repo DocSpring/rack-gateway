@@ -146,19 +146,36 @@ function handleAuthRedirect(pathname: string): void {
   }
 }
 
-function buildMfaEnrollmentUrl(pathname: string): string {
-  const redirectTarget = pathname !== '/' ? pathname : undefined
+function buildMfaEnrollmentUrl(pathname: string, search?: string): string {
+  let redirectTarget = pathname !== '/' ? pathname : undefined
+
+  // If we are on the login page, prefer the returnTo param as the redirect target
+  if (pathname.endsWith('/login') && search) {
+    const params = new URLSearchParams(search)
+    const returnTo = params.get('returnTo')
+    if (returnTo) {
+      redirectTarget = returnTo
+    }
+  }
+
   return redirectTarget
     ? `/account/security?redirect=${encodeURIComponent(redirectTarget)}`
     : '/account/security'
 }
 
-function getRedirectTarget(
-  isLoading: boolean,
-  user: ReturnType<typeof useAuth>['user'],
-  pathname: string,
+function getRedirectTarget({
+  isLoading,
+  user,
+  pathname,
+  search,
+  needsMfaEnrollment,
+}: {
+  isLoading: boolean
+  user: ReturnType<typeof useAuth>['user']
+  pathname: string
+  search: string
   needsMfaEnrollment: boolean
-): string | null | undefined {
+}): string | null | undefined {
   // Redirect to login with returnTo if user is not authenticated
   if (!(isLoading || user) && pathname !== '/login' && !pathname.startsWith('/auth/')) {
     handleAuthRedirect(pathname)
@@ -167,7 +184,7 @@ function getRedirectTarget(
 
   // Redirect to MFA enrollment if needed
   if (needsMfaEnrollment && pathname !== '/account/security') {
-    return buildMfaEnrollmentUrl(pathname)
+    return buildMfaEnrollmentUrl(pathname, search)
   }
 
   // Redirect root to appropriate landing page
@@ -285,7 +302,13 @@ export function Layout() {
     return `/users/${encodeURIComponent(user.email)}`
   }, [user?.email])
 
-  const redirectTarget = getRedirectTarget(isLoading, user, pathname, needsMfaEnrollment)
+  const redirectTarget = getRedirectTarget({
+    isLoading,
+    user,
+    pathname,
+    search: location.search,
+    needsMfaEnrollment,
+  })
   if (redirectTarget === null) {
     return null
   }
