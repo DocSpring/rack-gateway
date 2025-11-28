@@ -80,11 +80,13 @@ func (d *Database) GetDeployApprovalRequestForUser(id, userID int64) (*DeployApp
 
 // DeployApprovalRequestListOptions contains options for listing deploy approval requests
 type DeployApprovalRequestListOptions struct {
-	Status   string
-	Limit    int
-	Offset   int
-	OnlyOpen bool
-	TokenID  int64
+	Status        string
+	Limit         int
+	Offset        int
+	OnlyOpen      bool
+	TokenID       int64
+	GitBranch     string
+	GitCommitHash string
 }
 
 // ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
@@ -103,6 +105,14 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	if opts.TokenID > 0 {
 		clauses = append(clauses, "dr.target_api_token_id = ?")
 		args = append(args, opts.TokenID)
+	}
+	if opts.GitBranch != "" {
+		clauses = append(clauses, "dr.git_branch = ?")
+		args = append(args, opts.GitBranch)
+	}
+	if opts.GitCommitHash != "" {
+		clauses = append(clauses, "dr.git_commit_hash = ?")
+		args = append(args, opts.GitCommitHash)
 	}
 	limit := opts.Limit
 	if limit <= 0 || limit > 200 {

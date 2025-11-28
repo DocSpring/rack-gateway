@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -68,4 +69,56 @@ func parseDurationFlag(raw, flag string, allowZero bool, defaultValue time.Durat
 	}
 
 	return dur, nil
+}
+
+// resolveRacks parses a comma-separated list of rack names, or returns the selected rack if empty.
+func resolveRacks(racksFlag string) ([]string, error) {
+	trimmed := strings.TrimSpace(racksFlag)
+	if trimmed == "" {
+		rack, err := SelectedRack()
+		if err != nil {
+			return nil, err
+		}
+		return []string{rack}, nil
+	}
+
+	parts := strings.Split(trimmed, ",")
+	racks := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			racks = append(racks, value)
+		}
+	}
+	if len(racks) == 0 {
+		return nil, fmt.Errorf("no valid rack names provided")
+	}
+	return racks, nil
+}
+
+// getCurrentGitBranch returns the current git branch name, or an error if not in a git repo.
+func getCurrentGitBranch() (string, error) {
+	//nolint:gosec // G204: Command is hardcoded
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current git branch: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// resolveBranchOrCommit resolves the branch and commit values from the provided options.
+// If neither is specified, it falls back to the current git branch.
+func resolveBranchOrCommit(branchOpt, commitOpt string) (branch, commit string, err error) {
+	branch = strings.TrimSpace(branchOpt)
+	commit = strings.TrimSpace(commitOpt)
+
+	if branch == "" && commit == "" {
+		currentBranch, gitErr := getCurrentGitBranch()
+		if gitErr != nil {
+			return "", "", fmt.Errorf("no ID, --branch, or --commit provided, and %w", gitErr)
+		}
+		branch = currentBranch
+	}
+	return branch, commit, nil
 }

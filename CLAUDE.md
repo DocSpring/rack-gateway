@@ -89,6 +89,16 @@ IMPORTANT: Read [docs/CONVOX_REFERENCE.md](docs/CONVOX_REFERENCE.md) and [README
 - `shellcheck` - Validate all shell scripts
 - `npm audit` - Check for npm package vulnerabilities
 
+### 7. DeepSource Static Analysis
+
+DeepSource runs additional static analysis in CI. Key points:
+
+- **DeepSource uses ESLint configuration** for JavaScript/TypeScript analysis
+- We use **Biome for local linting**, but maintain `web/.eslintrc.json` for DeepSource
+- **To disable a DeepSource JS rule**, add it to `web/.eslintrc.json` rules (not `.deepsource.toml`)
+- Example: `"react/jsx-no-bind": "off"` disables the arrow-functions-in-JSX-props rule
+- The `react/jsx-no-bind` rule is intentionally disabled - it's outdated advice for modern React
+
 ## 🚨 PROJECT PHILOSOPHY - READ THIS FIRST
 
 **This is a greenfield project with ZERO active deployments.**

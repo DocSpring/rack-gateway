@@ -29,7 +29,6 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 
 	cmd.Flags().
 		StringVarP(&opts.appFlag, "app", "a", "", "App name (auto-detected from .convox/app or current directory)")
-	cmd.Flags().StringVar(&opts.rackFlag, "rack", "", "Rack name")
 	cmd.Flags().BoolVar(&opts.wait, "wait", false, "Block until approval is decided")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "5s", "Polling interval when --wait is set")
 	cmd.Flags().StringVar(
@@ -55,7 +54,6 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 }
 
 type deployApprovalRequestOptions struct {
-	rackFlag      string
 	appFlag       string
 	wait          bool
 	pollInterval  string
@@ -97,7 +95,7 @@ func parseDeployApprovalRequestOptions(
 		return deployApprovalRequestConfig{}, err
 	}
 
-	rack, err := resolveRackFlag(opts.rackFlag)
+	rack, err := SelectedRack()
 	if err != nil {
 		return deployApprovalRequestConfig{}, err
 	}
@@ -128,18 +126,6 @@ func parseDeployApprovalRequestOptions(
 		ciMetadata:    metadata,
 		message:       message,
 	}, nil
-}
-
-func resolveRackFlag(flagValue string) (string, error) {
-	rack, err := SelectedRack()
-	if err != nil {
-		return "", err
-	}
-	trimmed := strings.TrimSpace(flagValue)
-	if trimmed != "" {
-		return trimmed, nil
-	}
-	return rack, nil
 }
 
 func parseCIMetadata(raw string) (map[string]interface{}, error) {

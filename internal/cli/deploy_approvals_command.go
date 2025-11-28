@@ -14,7 +14,7 @@ func DeployApprovalCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		newDeployApprovalListCommand(),
-		newDeployApprovalGetCommand(),
+		newDeployApprovalShowCommand(),
 		newDeployApprovalRequestCommand(),
 		newDeployApprovalApproveCommand(),
 		newDeployApprovalWaitCommand(),

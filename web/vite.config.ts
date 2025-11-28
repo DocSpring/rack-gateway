@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 import type { PluginOption } from 'vite'
 import { defineConfig } from 'vite'
 import viteCompression from 'vite-plugin-compression'
-import packageJson from './package.json'
+import packageJson from './package.json' with { type: 'json' }
 
 function getGitCommitHash(): string {
   try {

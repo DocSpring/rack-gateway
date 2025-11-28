@@ -23,37 +23,42 @@ import (
 )
 
 func parseDeployApprovalListOptions(c *gin.Context) (db.DeployApprovalRequestListOptions, bool) {
-	opts := db.DeployApprovalRequestListOptions{}
-
-	if status := strings.TrimSpace(c.Query("status")); status != "" {
-		opts.Status = status
+	opts := db.DeployApprovalRequestListOptions{
+		Status:        strings.TrimSpace(c.Query("status")),
+		OnlyOpen:      strings.TrimSpace(c.Query("only_open")) == "true",
+		GitBranch:     strings.TrimSpace(c.Query("git_branch")),
+		GitCommitHash: strings.TrimSpace(c.Query("git_commit")),
 	}
 
-	if onlyOpen := strings.TrimSpace(c.Query("only_open")); onlyOpen != "" {
-		opts.OnlyOpen = onlyOpen == "true"
+	limit, ok := parseNonNegativeInt(c, "limit")
+	if !ok {
+		return opts, false
 	}
+	opts.Limit = limit
 
-	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil {
-			if limit < 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be non-negative"})
-				return opts, false
-			}
-			opts.Limit = limit
-		}
+	offset, ok := parseNonNegativeInt(c, "offset")
+	if !ok {
+		return opts, false
 	}
-
-	if offsetStr := strings.TrimSpace(c.Query("offset")); offsetStr != "" {
-		if offset, err := strconv.Atoi(offsetStr); err == nil {
-			if offset < 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be non-negative"})
-				return opts, false
-			}
-			opts.Offset = offset
-		}
-	}
+	opts.Offset = offset
 
 	return opts, true
+}
+
+func parseNonNegativeInt(c *gin.Context, param string) (int, bool) {
+	str := strings.TrimSpace(c.Query(param))
+	if str == "" {
+		return 0, true
+	}
+	value, err := strconv.Atoi(str)
+	if err != nil {
+		return 0, true // Invalid number, just ignore
+	}
+	if value < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": param + " must be non-negative"})
+		return 0, false
+	}
+	return value, true
 }
 
 // ListDeployApprovalRequests godoc
