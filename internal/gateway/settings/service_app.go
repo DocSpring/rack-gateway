@@ -13,7 +13,8 @@ func (s *Service) GetAppSetting(appName, key string, defaultValue interface{}) (
 
 	// Check if this setting should fall back to a global default
 	if globalKey, hasGlobal := globalDefaultKeys[key]; hasGlobal && (setting.Value == nil || setting.Value == "") {
-		globalSetting, err := s.GetGlobalSetting(globalKey, "")
+		globalDefault := DefaultGlobalSettings[globalKey]
+		globalSetting, err := s.GetGlobalSetting(globalKey, globalDefault)
 		if err != nil {
 			return nil, err
 		}
