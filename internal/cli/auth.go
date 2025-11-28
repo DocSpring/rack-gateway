@@ -126,3 +126,32 @@ func sendGatewayRequest(method, url string, body io.Reader) (*http.Response, err
 
 	return HTTPClient.Do(req)
 }
+
+// GetGatewayInfo fetches gateway info from /api/v1/info (requires auth)
+func GetGatewayInfo(gatewayURL, token string) (*GatewayInfoResponse, error) {
+	url := buildGatewayAPIURL(gatewayURL, "/api/v1/info")
+
+	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get gateway info: %s", string(body))
+	}
+
+	var result GatewayInfoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}

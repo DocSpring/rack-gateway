@@ -14,7 +14,8 @@
     "src/**/*.test.tsx",
     "src/**/*.test.js",
     "src/**/*.test.jsx",
-    "src/**/*.test.d.ts"
+    "src/**/*.test.d.ts",
+    "src/vite-env.d.ts"
   ],
   "exclude": []
 }

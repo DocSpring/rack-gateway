@@ -97,6 +97,7 @@ export function DeployApprovalRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [rejectRequestId, setRejectRequestId] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { handleStepUpError } = useStepUp()
@@ -133,8 +134,12 @@ export function DeployApprovalRequestsPage() {
       rejectDeployApprovalRequest(id, toNotesPayload(notes)),
     onSuccess: (_data, { id }) => {
       toast.success(`Request ${id} was rejected`)
+      setRejectingId(null)
       setRejectDialogOpen(false)
       queryClient.invalidateQueries({ queryKey })
+    },
+    onError: () => {
+      setRejectingId(null)
     },
   })
 
@@ -175,12 +180,14 @@ export function DeployApprovalRequestsPage() {
 
   const submitRejection = useCallback(
     async (id: string, notes: string) => {
+      setRejectingId(id)
       try {
         await rejectMutation.mutateAsync({ id, notes })
       } catch (err) {
         if (handleStepUpError(err, () => rejectMutation.mutateAsync({ id, notes }))) {
           return
         }
+        setRejectingId(null)
         withAPIErrorMessage(err, 'Failed to reject request', (message) =>
           toast.error('Rejection failed', { description: message })
         )
@@ -274,7 +281,7 @@ export function DeployApprovalRequestsPage() {
                     })
                   }
                   rejectDisabled={rejectDisabled}
-                  rejectingId={rejectRequestId}
+                  rejectingId={rejectingId}
                   request={request}
                 />
               ))}

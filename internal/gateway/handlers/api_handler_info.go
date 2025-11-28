@@ -17,6 +17,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/httpclient"
 	gtwlog "github.com/DocSpring/rack-gateway/internal/gateway/logging"
 	"github.com/DocSpring/rack-gateway/internal/gateway/rackcert"
+	"github.com/DocSpring/rack-gateway/internal/gateway/version"
 )
 
 // GetInfo godoc
@@ -50,11 +51,16 @@ func (h *APIHandler) GetInfo(c *gin.Context) {
 
 	rackInfo := h.buildRackSummary(rc)
 	integrationsInfo := h.buildIntegrationsInfo()
+	versionInfo := VersionInfo{
+		Version:    version.Version,
+		CommitHash: version.CommitHash,
+	}
 
 	response := InfoResponse{
 		User:         userInfo,
 		Rack:         rackInfo,
 		Integrations: integrationsInfo,
+		Version:      versionInfo,
 	}
 
 	c.JSON(http.StatusOK, response)

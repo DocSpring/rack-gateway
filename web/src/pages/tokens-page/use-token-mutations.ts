@@ -33,10 +33,11 @@ export function useTokenMutations() {
       name: string
       permissions: string[]
     }) => {
-      await api.put(`/api/v1/api-tokens/${publicId}`, {
+      const response = await api.put(`/api/v1/api-tokens/${publicId}`, {
         name,
         permissions,
       })
+      return response
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOKENS })

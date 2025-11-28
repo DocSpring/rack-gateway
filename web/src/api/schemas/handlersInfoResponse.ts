@@ -8,9 +8,11 @@
 import type { HandlersIntegrationsInfo } from './handlersIntegrationsInfo';
 import type { HandlersRackSummary } from './handlersRackSummary';
 import type { HandlersUserInfo } from './handlersUserInfo';
+import type { HandlersVersionInfo } from './handlersVersionInfo';
 
 export interface HandlersInfoResponse {
   integrations: HandlersIntegrationsInfo;
   rack: HandlersRackSummary;
   user: HandlersUserInfo;
+  version: HandlersVersionInfo;
 }

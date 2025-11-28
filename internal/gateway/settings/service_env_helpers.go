@@ -65,21 +65,11 @@ func (s *Service) GetApprovedDeployCommands(appName string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	// Handle both []interface{} and []string from JSON unmarshaling
-	switch val := setting.Value.(type) {
-	case []string:
-		return val, nil
-	case []interface{}:
-		strs := make([]string, 0, len(val))
-		for _, v := range val {
-			if s, ok := v.(string); ok {
-				strs = append(strs, s)
-			}
-		}
-		return strs, nil
-	default:
+	result := extractStringSlice(setting.Value)
+	if result == nil {
 		return []string{}, nil
 	}
+	return result, nil
 }
 
 // GetServiceImagePatterns returns service image patterns for an app.

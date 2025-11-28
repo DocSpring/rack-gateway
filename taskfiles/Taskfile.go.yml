@@ -91,10 +91,16 @@ tasks:
       - cmd/gateway/**/*.go
       - internal/**/*.go
       - internal/gateway/db/migrations/**/*.sql
+      - web/package.json
     generates:
       - bin/rack-gateway-api
+    vars:
+      VERSION:
+        sh: node -p "require('./web/package.json').version"
+      COMMIT_HASH:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
     cmds:
-      - go build -buildvcs=false -o bin/rack-gateway-api ./cmd/gateway/
+      - go build -buildvcs=false -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version={{.VERSION}} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash={{.COMMIT_HASH}}" -o bin/rack-gateway-api ./cmd/gateway/
 
   build:cli:
     desc: Build gateway CLI -> bin/rack-gateway

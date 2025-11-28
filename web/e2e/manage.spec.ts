@@ -273,6 +273,8 @@ test('tokens: create, rename, delete', async ({ page }) => {
     require: true,
   })
   await renameResponse
+  // Wait for Edit dialog to close
+  await expect(page.getByRole('dialog', { name: /Edit API Token/i })).toBeHidden()
   await expect(page.locator('tr', { hasText: name2 })).toBeVisible()
 
   // Delete token - click dropdown and select "Delete Token"

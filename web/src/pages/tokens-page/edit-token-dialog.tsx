@@ -95,18 +95,15 @@ export function EditTokenDialog({
       }
 
       setNameError(null)
-      // Use runWithMFAGuard to handle MFA step-up verification properly.
-      // This ensures onClose is called when MFA verification succeeds.
-      const updated = await runWithMFAGuard(() =>
+      // Use runWithMFAGuard to handle MFA step-up verification.
+      // MFA cancellation throws (promise rejects), so we only reach onClose() on success.
+      await runWithMFAGuard(() =>
         updateToken.mutateAsync({
           publicId: token.public_id,
           name: result.data.name,
           permissions: result.data.permissions,
         })
       )
-      if (updated === undefined) {
-        return // MFA was cancelled
-      }
       onClose()
     },
   })

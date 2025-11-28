@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
@@ -5,9 +6,20 @@ import react from '@vitejs/plugin-react'
 import type { PluginOption } from 'vite'
 import { defineConfig } from 'vite'
 import viteCompression from 'vite-plugin-compression'
+import packageJson from './package.json'
+
+function getGitCommitHash(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(() => {
+  const appVersion = packageJson.version
+  const commitHash = getGitCommitHash()
   const fastBuild = process.env.VITE_FAST_BUILD === 'true'
   const rollupInputs = {
     main: path.resolve(process.cwd(), 'index.html'),
@@ -60,6 +72,10 @@ export default defineConfig(() => {
   return {
     // Serve UI consistently under /app/ in all envs
     base: '/app/',
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+      __COMMIT_HASH__: JSON.stringify(commitHash),
+    },
     plugins: [
       reactPlugin,
       tailwindPlugin,

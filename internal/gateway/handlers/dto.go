@@ -178,11 +178,18 @@ type IntegrationsInfo struct {
 	CircleCI bool `json:"circleci" validate:"required"`
 }
 
+// VersionInfo describes the application version
+type VersionInfo struct {
+	Version    string `json:"version"     validate:"required"`
+	CommitHash string `json:"commit_hash" validate:"required"`
+}
+
 // InfoResponse provides bootstrap information for the frontend
 type InfoResponse struct {
 	User         UserInfo         `json:"user"         validate:"required"`
 	Rack         RackSummary      `json:"rack"         validate:"required"`
 	Integrations IntegrationsInfo `json:"integrations" validate:"required"`
+	Version      VersionInfo      `json:"version"      validate:"required"`
 }
 
 // EnvValuesResponse wraps environment variable key/value pairs.

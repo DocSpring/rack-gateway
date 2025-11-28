@@ -49,6 +49,7 @@ Rack management:
 		SwitchCommand(),
 		RacksCommand(),
 		VersionCommand(),
+		GatewayCommand(),
 		WebCommand(),
 		CompletionCommand(),
 
