@@ -131,6 +131,91 @@ func (d *Database) UpsertSetting(appName *string, key string, value interface{},
 	return nil
 }
 
+// SettingUpdate represents a single setting to update in a batch operation.
+type SettingUpdate struct {
+	Key   string
+	Value interface{}
+}
+
+// UpsertSettingsInTx atomically updates multiple settings within a single transaction.
+// All settings succeed or all fail together.
+func (d *Database) UpsertSettingsInTx(appName *string, updates []SettingUpdate, updatedByUserID *int64) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin settings transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, update := range updates {
+		valueJSON, err := json.Marshal(update.Value)
+		if err != nil {
+			return fmt.Errorf("failed to marshal setting %s: %w", update.Key, err)
+		}
+
+		if err := d.upsertSettingInTx(tx, appName, update.Key, string(valueJSON), updatedByUserID); err != nil {
+			scope := "global"
+			if appName != nil {
+				scope = fmt.Sprintf("app %s", *appName)
+			}
+			return fmt.Errorf("failed to upsert %s setting %s: %w", scope, update.Key, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit settings transaction: %w", err)
+	}
+	return nil
+}
+
+func (d *Database) upsertSettingInTx(tx *sql.Tx, appName *string, key, valueJSON string, userID *int64) error {
+	if userID != nil {
+		return d.upsertSettingWithUserInTx(tx, appName, key, valueJSON, *userID)
+	}
+	return d.upsertSettingWithoutUserInTx(tx, appName, key, valueJSON)
+}
+
+func (d *Database) upsertSettingWithUserInTx(tx *sql.Tx, appName *string, key, valueJSON string, userID int64) error {
+	if appName == nil {
+		_, err := d.execTx(tx, `
+			INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
+			VALUES (NULL, ?, ?::jsonb, NOW(), ?)
+			ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+			SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
+			key, valueJSON, userID)
+		return err
+	}
+	_, err := d.execTx(tx, `
+		INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
+		VALUES (?, ?, ?::jsonb, NOW(), ?)
+		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+		SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
+		*appName, key, valueJSON, userID)
+	return err
+}
+
+func (d *Database) upsertSettingWithoutUserInTx(tx *sql.Tx, appName *string, key, valueJSON string) error {
+	if appName == nil {
+		_, err := d.execTx(tx, `
+			INSERT INTO settings (app_name, key, value, updated_at)
+			VALUES (NULL, ?, ?::jsonb, NOW())
+			ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+			SET value = EXCLUDED.value, updated_at = NOW()`,
+			key, valueJSON)
+		return err
+	}
+	_, err := d.execTx(tx, `
+		INSERT INTO settings (app_name, key, value, updated_at)
+		VALUES (?, ?, ?::jsonb, NOW())
+		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+		SET value = EXCLUDED.value, updated_at = NOW()`,
+		*appName, key, valueJSON)
+	return err
+}
+
 // DeleteSetting removes a setting from the database (revert to env/default).
 func (d *Database) DeleteSetting(appName *string, key string) error {
 	var err error

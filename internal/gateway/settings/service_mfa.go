@@ -54,7 +54,8 @@ func (s *Service) GetMFASettings() (*db.MFASettings, error) {
 	}, nil
 }
 
-// SetMFASettings stores MFA configuration in the database.
+// SetMFASettings stores MFA configuration in the database atomically.
+// All settings are updated within a single transaction to prevent partial updates.
 func (s *Service) SetMFASettings(settings *db.MFASettings, updatedByUserID *int64) error {
 	if settings == nil {
 		return fmt.Errorf("mfa settings cannot be nil")
@@ -66,11 +67,11 @@ func (s *Service) SetMFASettings(settings *db.MFASettings, updatedByUserID *int6
 		settings.StepUpWindowMinutes = 10
 	}
 
-	if err := s.SetGlobalSetting(KeyMFARequireAllUsers, settings.RequireAllUsers, updatedByUserID); err != nil {
-		return err
+	updates := []db.SettingUpdate{
+		{Key: KeyMFARequireAllUsers, Value: settings.RequireAllUsers},
+		{Key: KeyTrustedDeviceTTLDays, Value: settings.TrustedDeviceTTLDays},
+		{Key: KeyStepUpWindowMinutes, Value: settings.StepUpWindowMinutes},
 	}
-	if err := s.SetGlobalSetting(KeyTrustedDeviceTTLDays, settings.TrustedDeviceTTLDays, updatedByUserID); err != nil {
-		return err
-	}
-	return s.SetGlobalSetting(KeyStepUpWindowMinutes, settings.StepUpWindowMinutes, updatedByUserID)
+
+	return s.SetGlobalSettingsInTx(updates, updatedByUserID)
 }
