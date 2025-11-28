@@ -97,6 +97,7 @@ export function DeployApprovalRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [rejectRequestId, setRejectRequestId] = useState<string | null>(null)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { handleStepUpError } = useStepUp()
   const navigate = useNavigate()
@@ -119,7 +120,11 @@ export function DeployApprovalRequestsPage() {
     mutationFn: (id: string) => approveDeployApprovalRequest(id, {}),
     onSuccess: (_data, id) => {
       toast.success(`Request ${id} was approved`)
+      setApprovingId(null)
       queryClient.invalidateQueries({ queryKey })
+    },
+    onError: () => {
+      setApprovingId(null)
     },
   })
 
@@ -152,12 +157,14 @@ export function DeployApprovalRequestsPage() {
 
   const approveRequest = useCallback(
     async (id: string) => {
+      setApprovingId(id)
       try {
         await approveMutation.mutateAsync(id)
       } catch (err) {
         if (handleStepUpError(err, () => approveMutation.mutateAsync(id))) {
           return
         }
+        setApprovingId(null)
         withAPIErrorMessage(err, 'Failed to approve request', (message) =>
           toast.error('Approval failed', { description: message })
         )
@@ -256,7 +263,7 @@ export function DeployApprovalRequestsPage() {
               {visibleRequests.map((request) => (
                 <DeployApprovalRequestRow
                   approveDisabled={approveDisabled}
-                  approvePending={approveMutation.isPending}
+                  approvingId={approvingId}
                   key={request.public_id}
                   onApprove={handleApprove}
                   onReject={handleRejectClick}
@@ -267,7 +274,7 @@ export function DeployApprovalRequestsPage() {
                     })
                   }
                   rejectDisabled={rejectDisabled}
-                  rejectPending={rejectMutation.isPending}
+                  rejectingId={rejectRequestId}
                   request={request}
                 />
               ))}
@@ -313,9 +320,9 @@ export function DeployApprovalRequestsPage() {
 type DeployApprovalRequestRowProps = {
   request: DeployApprovalRequest
   approveDisabled: boolean
-  approvePending: boolean
+  approvingId: string | null
   rejectDisabled: boolean
-  rejectPending: boolean
+  rejectingId: string | null
   onApprove: (id: string) => void
   onReject: (request: DeployApprovalRequest) => void
   onSelect: (request: DeployApprovalRequest) => void
@@ -324,9 +331,9 @@ type DeployApprovalRequestRowProps = {
 function DeployApprovalRequestRow({
   request,
   approveDisabled,
-  approvePending,
+  approvingId,
   rejectDisabled,
-  rejectPending,
+  rejectingId,
   onApprove,
   onReject,
   onSelect,
@@ -438,7 +445,7 @@ function DeployApprovalRequestRow({
               size="sm"
               variant="ghost"
             >
-              {approvePending ? (
+              {approvingId === publicId ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Check className="h-4 w-4 text-green-600" />
@@ -456,7 +463,7 @@ function DeployApprovalRequestRow({
               size="sm"
               variant="ghost"
             >
-              {rejectPending ? (
+              {rejectingId === publicId ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <X className="h-4 w-4 text-red-600" />
