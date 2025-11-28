@@ -12,8 +12,20 @@ module.exports = async function waitForChecks({
   const owner = context.repo.owner;
   const repo = context.repo.repo;
   const ref = context.sha;
+  // All required checks from CI and E2E workflows
+  const defaultChecks = [
+    // CI workflow jobs
+    "go-tests",
+    "lint",
+    "web-tests",
+    "mock-oauth-tests",
+    // E2E workflow jobs
+    "build-image",
+    "web-e2e",
+    "cli-e2e",
+  ];
   const desiredChecks =
-    Array.isArray(checks) && checks.length > 0 ? checks : ["go-tests", "lint"];
+    Array.isArray(checks) && checks.length > 0 ? checks : defaultChecks;
   const checkSet = new Set(desiredChecks);
 
   const maxAttempts = Number.parseInt(

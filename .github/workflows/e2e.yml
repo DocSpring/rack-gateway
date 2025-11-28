@@ -23,6 +23,8 @@ jobs:
           context: .
           file: Dockerfile
           tags: ${{ env.GATEWAY_IMAGE }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           load: false
