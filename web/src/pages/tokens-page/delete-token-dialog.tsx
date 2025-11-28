@@ -30,12 +30,8 @@ export function DeleteTokenDialog({
     if (!token) {
       return
     }
-    // Use runWithMFAGuard to handle MFA step-up verification properly.
-    // This ensures onClose is called when MFA verification succeeds.
-    const deleted = await runWithMFAGuard(() => deleteToken.mutateAsync(token.public_id))
-    if (deleted === undefined) {
-      return // MFA was cancelled
-    }
+    // runWithMFAGuard throws on MFA cancel, so if we reach onClose() the deletion succeeded
+    await runWithMFAGuard(() => deleteToken.mutateAsync(token.public_id))
     onClose()
   }
 

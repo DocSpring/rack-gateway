@@ -205,7 +205,7 @@ function UserSection({
     <div className="mb-3 flex items-center justify-between gap-2">
       {currentUserHref ? (
         <Link
-          className="group block min-w-0 flex-1 rounded-md px-1 py-0.5 transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="group block min-w-0 flex-1 rounded-md py-0.5 transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           to={currentUserHref}
         >
           <p className="truncate font-medium text-sm group-hover:underline">
@@ -346,11 +346,11 @@ export function Layout() {
         <Separator className="shrink-0" />
 
         {/* User section */}
-        <div className="relative shrink-0 bg-card px-4 pt-3 pb-4">
+        <div className="relative shrink-0 bg-card px-5 pt-3 pb-4">
           <div className="-top-[43px] pointer-events-none absolute left-0 h-[42px] w-full bg-gradient-to-t from-card via-card/5 to-transparent" />
           <UserSection currentUserHref={currentUserHref} user={user} />
           {user?.rack && (
-            <div className="mb-3 text-muted-foreground text-xs">
+            <div className="mb-1 text-muted-foreground text-xs">
               <div className="group relative inline-flex items-center">
                 <span>Rack: {user.rack.alias || user.rack.name || 'Unknown'}</span>
                 <div
@@ -362,13 +362,15 @@ export function Layout() {
               </div>
             </div>
           )}
+          <div className="mb-5 text-muted-foreground text-xs">
+            <div className="inline-flex items-center">
+              <span>Version: v{__APP_VERSION__} ({__COMMIT_HASH__})</span>
+            </div>
+          </div>
           <Button className="w-full" onClick={logout} size="sm" variant="outline">
             <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
-          <div className="mt-3 text-center text-muted-foreground text-xs">
-            v{__APP_VERSION__} ({__COMMIT_HASH__})
-          </div>
         </div>
       </div>
 

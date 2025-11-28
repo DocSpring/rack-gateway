@@ -10,9 +10,15 @@ import packageJson from './package.json' with { type: 'json' }
 
 function getGitCommitHash(): string {
   try {
-    return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
-  } catch {
-    return 'unknown'
+    const hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
+    if (!hash) {
+      throw new Error('Git commit hash is empty')
+    }
+    return hash
+  } catch (error) {
+    throw new Error(
+      `Failed to get git commit hash. Build cannot proceed without a valid commit hash. Error: ${error}`
+    )
   }
 }
 
