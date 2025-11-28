@@ -53,6 +53,8 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
           tags: |
             docker.io/docspringcom/rack-gateway:${{ env.COMMIT_SHA }}
             docker.io/docspringcom/rack-gateway:latest

@@ -364,7 +364,9 @@ export function Layout() {
           )}
           <div className="mb-5 text-muted-foreground text-xs">
             <div className="inline-flex items-center">
-              <span>Version: v{__APP_VERSION__} ({__COMMIT_HASH__})</span>
+              <span>
+                Version: v{__APP_VERSION__} ({__COMMIT_HASH__})
+              </span>
             </div>
           </div>
           <Button className="w-full" onClick={logout} size="sm" variant="outline">

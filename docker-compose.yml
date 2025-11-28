@@ -48,6 +48,8 @@ x-gateway-test-service: &gateway_test_service
   build:
     context: .
     dockerfile: Dockerfile
+    args:
+      COMMIT_SHA: ${COMMIT_SHA:-dev}
   image: ${GATEWAY_TEST_IMAGE:-rack-gateway-api:test}
   volumes: []
   depends_on:
@@ -135,6 +137,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-dev}
     image: ${GATEWAY_IMAGE:-rack-gateway-api:local}
     environment:
       <<: *gateway_common_env

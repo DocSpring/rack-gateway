@@ -9,17 +9,14 @@ import viteCompression from 'vite-plugin-compression'
 import packageJson from './package.json' with { type: 'json' }
 
 function getGitCommitHash(): string {
-  try {
-    const hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
-    if (!hash) {
-      throw new Error('Git commit hash is empty')
-    }
-    return hash
-  } catch (error) {
-    throw new Error(
-      `Failed to get git commit hash. Build cannot proceed without a valid commit hash. Error: ${error}`
-    )
+  // First check for COMMIT_SHA env var (used in Docker builds)
+  const envHash = process.env.COMMIT_SHA?.trim()
+  if (envHash) {
+    return envHash.substring(0, 7)
   }
+
+  // Fall back to git command (local development)
+  return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
 }
 
 // https://vite.dev/config/

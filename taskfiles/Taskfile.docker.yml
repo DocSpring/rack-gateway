@@ -68,7 +68,7 @@ tasks:
     desc: Build Docker image for the gateway API
     run: once
     cmds:
-      - docker build -t rack-gateway-api:latest .
+      - docker build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t rack-gateway-api:latest .
 
   build:mocks:
     desc: Build mock services (OAuth and Convox)
