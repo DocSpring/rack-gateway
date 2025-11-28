@@ -28,6 +28,7 @@ func parseDeployApprovalListOptions(c *gin.Context) (db.DeployApprovalRequestLis
 		OnlyOpen:      strings.TrimSpace(c.Query("only_open")) == "true",
 		GitBranch:     strings.TrimSpace(c.Query("git_branch")),
 		GitCommitHash: strings.TrimSpace(c.Query("git_commit")),
+		App:           strings.TrimSpace(c.Query("app")),
 	}
 
 	limit, ok := parseNonNegativeInt(c, "limit")

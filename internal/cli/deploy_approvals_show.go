@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 
 type deployApprovalShowOptions struct {
 	racks  string
+	app    string
 	branch string
 	commit string
 	output string
@@ -26,15 +26,18 @@ func newDeployApprovalShowCommand() *cobra.Command {
 		Short: "Show a deploy approval request",
 		Long: `Show details for a deploy approval request.
 
-If no ID is provided, searches for the latest approval request matching the current git branch.
+If no ID is provided, searches for the latest approval request matching the current app and git branch.
 Use --branch or --commit to search by specific criteria instead.
 
 Examples:
   # Show by ID
   cx deploy-approval show abc123-def456-...
 
-  # Show latest for current git branch
+  # Show latest for current app and git branch
   cx deploy-approval show
+
+  # Show latest for a specific app
+  cx deploy-approval show --app myapp
 
   # Show latest for a specific branch
   cx deploy-approval show --branch main
@@ -51,6 +54,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of racks to search")
+	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Search by git branch (uses current branch if no ID given)")
 	cmd.Flags().StringVar(&opts.commit, "commit", "", "Search by git commit hash")
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "", "Output format (json)")
@@ -60,6 +64,12 @@ Examples:
 
 func executeDeployApprovalShow(cmd *cobra.Command, args []string, opts deployApprovalShowOptions) error {
 	racks, err := resolveRacks(opts.racks)
+	if err != nil {
+		return err
+	}
+
+	// Resolve app name (auto-detect from .convox/app or directory)
+	app, err := ResolveApp(opts.app)
 	if err != nil {
 		return err
 	}
@@ -81,7 +91,7 @@ func executeDeployApprovalShow(cmd *cobra.Command, args []string, opts deployApp
 	if err != nil {
 		return err
 	}
-	return showBySearch(cmd, racks, branch, commit, opts.output)
+	return showBySearch(cmd, racks, app, branch, commit, opts.output)
 }
 
 func showByID(cmd *cobra.Command, racks []string, publicID, output string) error {
@@ -107,48 +117,64 @@ func showByID(cmd *cobra.Command, racks []string, publicID, output string) error
 	return fmt.Errorf("deploy approval request %s not found", publicID)
 }
 
-func showBySearch(cmd *cobra.Command, racks []string, branch, commit, output string) error {
-	// Try pending first, then approved
-	for _, status := range []string{"pending", "approved"} {
-		req, rack, found := searchForRequest(cmd, racks, branch, commit, status)
-		if found {
-			if output == "json" {
-				return printJSON(cmd, *req)
-			}
-			return printDeployApprovalDetails(req, rack, len(racks) > 1)
-		}
-	}
-
-	if branch != "" {
-		return fmt.Errorf("no deploy approval request found for branch %q", branch)
-	}
-	return fmt.Errorf("no deploy approval request found for commit %q", commit)
+type rackResult struct {
+	rack string
+	req  *deployApprovalRequest
 }
 
-func searchForRequest(
-	cmd *cobra.Command, racks []string, branch, commit, status string,
-) (*deployApprovalRequest, string, bool) {
-	params := url.Values{}
-	params.Set("status", status)
-	params.Set("limit", "1")
-	if branch != "" {
-		params.Set("git_branch", branch)
-	}
-	if commit != "" {
-		params.Set("git_commit", commit)
-	}
-	endpoint := "/deploy-approval-requests?" + params.Encode()
+func showBySearch(cmd *cobra.Command, racks []string, app, branch, commit, output string) error {
+	results := collectResultsFromRacks(cmd, racks, app, branch, commit)
 
-	for _, rack := range racks {
-		var result deployApprovalRequestList
-		if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
-			continue
+	if len(results) == 0 {
+		if branch != "" {
+			return fmt.Errorf("no deploy approval request found for app %q branch %q", app, branch)
 		}
-		if len(result.DeployApprovalRequests) > 0 {
-			return &result.DeployApprovalRequests[0], rack, true
+		return fmt.Errorf("no deploy approval request found for app %q commit %q", app, commit)
+	}
+
+	if output == "json" {
+		return outputResultsAsJSON(cmd, results)
+	}
+	return outputResultsAsText(results, len(racks) > 1)
+}
+
+func collectResultsFromRacks(
+	cmd *cobra.Command, racks []string, app, branch, commit string,
+) []rackResult {
+	var results []rackResult
+	for _, rack := range racks {
+		for _, status := range []string{"pending", "approved"} {
+			req, found := searchForRequestInRack(cmd, rack, app, branch, commit, status)
+			if found {
+				results = append(results, rackResult{rack: rack, req: req})
+				break
+			}
 		}
 	}
-	return nil, "", false
+	return results
+}
+
+func outputResultsAsJSON(cmd *cobra.Command, results []rackResult) error {
+	if len(results) == 1 {
+		return printJSON(cmd, *results[0].req)
+	}
+	reqs := make([]deployApprovalRequest, len(results))
+	for i, r := range results {
+		reqs[i] = *r.req
+	}
+	return printJSON(cmd, reqs)
+}
+
+func outputResultsAsText(results []rackResult, showRack bool) error {
+	for i, r := range results {
+		if i > 0 {
+			fmt.Println()
+		}
+		if err := printDeployApprovalDetails(r.req, r.rack, showRack); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRack bool) error {
@@ -158,6 +184,9 @@ func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRac
 	fmt.Printf("ID:       %s\n", req.PublicID)
 	fmt.Printf("Status:   %s\n", req.Status)
 	fmt.Printf("Message:  %s\n", req.Message)
+	if req.App != "" {
+		fmt.Printf("App:      %s\n", req.App)
+	}
 	fmt.Printf("Created:  %s\n", req.CreatedAt.Format(time.RFC3339))
 	fmt.Printf("Updated:  %s\n", req.UpdatedAt.Format(time.RFC3339))
 

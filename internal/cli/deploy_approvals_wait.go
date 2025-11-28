@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -30,6 +31,9 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 
 	cmd.Flags().
 		StringVar(&opts.racks, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
+	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
+	cmd.Flags().StringVar(&opts.branch, "branch", "", "Filter by git branch (uses current branch by default)")
+	cmd.Flags().StringVar(&opts.commit, "commit", "", "Filter by git commit hash")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "1s", "Polling interval")
 	cmd.Flags().BoolVar(&opts.autoApprove, "approve", false, "Automatically approve the first pending request found")
 	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval (only used with --approve)")
@@ -41,6 +45,9 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 
 type deployApprovalWaitOptions struct {
 	racks        string
+	app          string
+	branch       string
+	commit       string
 	pollInterval string
 	autoApprove  bool
 	notes        string
@@ -49,6 +56,9 @@ type deployApprovalWaitOptions struct {
 
 type deployApprovalWaitConfig struct {
 	racks        []string
+	app          string
+	branch       string
+	commit       string
 	pollInterval time.Duration
 	autoApprove  bool
 	notes        string
@@ -64,6 +74,16 @@ func parseDeployApprovalWaitOptions(
 		return deployApprovalWaitConfig{}, err
 	}
 
+	app, err := ResolveApp(opts.app)
+	if err != nil {
+		return deployApprovalWaitConfig{}, err
+	}
+
+	branch, commit, err := resolveBranchOrCommit(opts.branch, opts.commit)
+	if err != nil {
+		return deployApprovalWaitConfig{}, err
+	}
+
 	pollInterval, err := parseDurationFlag(opts.pollInterval, "poll-interval", false, time.Second)
 	if err != nil {
 		return deployApprovalWaitConfig{}, err
@@ -71,6 +91,9 @@ func parseDeployApprovalWaitOptions(
 
 	return deployApprovalWaitConfig{
 		racks:        racks,
+		app:          app,
+		branch:       branch,
+		commit:       commit,
 		pollInterval: pollInterval,
 		autoApprove:  opts.autoApprove,
 		notes:        strings.TrimSpace(opts.notes),
@@ -82,6 +105,9 @@ func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) err
 	waiter := &deployApprovalWaiter{
 		cmd:          cmd,
 		racks:        cfg.racks,
+		app:          cfg.app,
+		branch:       cfg.branch,
+		commit:       cfg.commit,
 		pollInterval: cfg.pollInterval,
 		autoApprove:  cfg.autoApprove,
 		notes:        cfg.notes,
@@ -94,7 +120,7 @@ func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) err
 
 	for {
 		rack := waiter.nextRack()
-		requests, err := fetchPendingDeployRequests(cmd, rack)
+		requests, err := fetchPendingDeployRequests(cmd, rack, cfg.app, cfg.branch, cfg.commit)
 		if err != nil {
 			return err
 		}
@@ -120,6 +146,9 @@ func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) err
 type deployApprovalWaiter struct {
 	cmd          *cobra.Command
 	racks        []string
+	app          string
+	branch       string
+	commit       string
 	pollInterval time.Duration
 	autoApprove  bool
 	notes        string
@@ -137,26 +166,49 @@ func (w *deployApprovalWaiter) nextRack() string {
 }
 
 func (w *deployApprovalWaiter) printWaitingMessage() error {
-	switch len(w.racks) {
-	case 0:
+	if len(w.racks) == 0 {
 		return nil
-	case 1:
-		return writef(w.cmd.OutOrStdout(), "Waiting for pending deploy approval requests on rack: %s\n", w.racks[0])
-	default:
+	}
+
+	// Build filter description
+	filter := fmt.Sprintf("app=%s", w.app)
+	if w.branch != "" {
+		filter += fmt.Sprintf(" branch=%s", w.branch)
+	}
+	if w.commit != "" {
+		filter += fmt.Sprintf(" commit=%s", w.commit)
+	}
+
+	if len(w.racks) == 1 {
 		return writef(
 			w.cmd.OutOrStdout(),
-			"Waiting for pending deploy approval requests on %d racks: %s\n",
-			len(w.racks),
-			strings.Join(w.racks, ", "),
+			"Waiting for pending deploy approval requests on rack %s (%s)\n",
+			w.racks[0], filter,
 		)
 	}
+	return writef(
+		w.cmd.OutOrStdout(),
+		"Waiting for pending deploy approval requests on %d racks: %s (%s)\n",
+		len(w.racks), strings.Join(w.racks, ", "), filter,
+	)
 }
 
-func fetchPendingDeployRequests(cmd *cobra.Command, rack string) ([]deployApprovalRequest, error) {
+func fetchPendingDeployRequests(
+	cmd *cobra.Command, rack, app, branch, commit string,
+) ([]deployApprovalRequest, error) {
 	var response struct {
 		Requests []deployApprovalRequest `json:"deploy_approval_requests"`
 	}
-	endpoint := "/deploy-approval-requests?status=pending"
+	params := url.Values{}
+	params.Set("status", "pending")
+	params.Set("app", app)
+	if branch != "" {
+		params.Set("git_branch", branch)
+	}
+	if commit != "" {
+		params.Set("git_commit", commit)
+	}
+	endpoint := "/deploy-approval-requests?" + params.Encode()
 	if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &response); err != nil {
 		return nil, err
 	}

@@ -3,8 +3,6 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +13,7 @@ import (
 
 type deployApprovalApproveOptions struct {
 	racks  string
+	app    string
 	branch string
 	commit string
 	notes  string
@@ -53,6 +52,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of racks to search")
+	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
 	cmd.Flags().StringVar(&opts.branch, "branch", "", "Search by git branch (uses current branch if no ID given)")
 	cmd.Flags().StringVar(&opts.commit, "commit", "", "Search by git commit hash")
 	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval")
@@ -62,6 +62,12 @@ Examples:
 
 func executeDeployApprovalApprove(cmd *cobra.Command, args []string, opts deployApprovalApproveOptions) error {
 	racks, err := resolveRacks(opts.racks)
+	if err != nil {
+		return err
+	}
+
+	// Resolve app name (auto-detect from .convox/app or directory)
+	app, err := ResolveApp(opts.app)
 	if err != nil {
 		return err
 	}
@@ -83,7 +89,7 @@ func executeDeployApprovalApprove(cmd *cobra.Command, args []string, opts deploy
 	if err != nil {
 		return err
 	}
-	return approveBySearch(cmd, racks, branch, commit, opts.notes)
+	return approveBySearch(cmd, racks, app, branch, commit, opts.notes)
 }
 
 func approveByID(cmd *cobra.Command, racks []string, publicID, notes string) error {
@@ -105,11 +111,11 @@ func approveByID(cmd *cobra.Command, racks []string, publicID, notes string) err
 	return fmt.Errorf("deploy approval request %s not found", publicID)
 }
 
-func approveBySearch(cmd *cobra.Command, racks []string, branch, commit, notes string) error {
+func approveBySearch(cmd *cobra.Command, racks []string, app, branch, commit, notes string) error {
 	// Search each rack for a pending request
 	for _, rack := range racks {
-		req, err := findPendingRequest(cmd, rack, branch, commit)
-		if err != nil || req == nil {
+		req := findPendingRequest(cmd, rack, app, branch, commit)
+		if req == nil {
 			continue
 		}
 
@@ -135,32 +141,17 @@ func approveBySearch(cmd *cobra.Command, racks []string, branch, commit, notes s
 	}
 
 	if branch != "" {
-		return fmt.Errorf("no pending deploy approval request found for branch %q", branch)
+		return fmt.Errorf("no pending deploy approval request found for app %q branch %q", app, branch)
 	}
-	return fmt.Errorf("no pending deploy approval request found for commit %q", commit)
+	return fmt.Errorf("no pending deploy approval request found for app %q commit %q", app, commit)
 }
 
-func findPendingRequest(cmd *cobra.Command, rack, branch, commit string) (*deployApprovalRequest, error) {
-	params := url.Values{}
-	params.Set("status", "pending")
-	params.Set("limit", "1")
-	if branch != "" {
-		params.Set("git_branch", branch)
+func findPendingRequest(cmd *cobra.Command, rack, app, branch, commit string) *deployApprovalRequest {
+	req, found := searchForRequestInRack(cmd, rack, app, branch, commit, "pending")
+	if !found {
+		return nil
 	}
-	if commit != "" {
-		params.Set("git_commit", commit)
-	}
-
-	endpoint := "/deploy-approval-requests?" + params.Encode()
-	var result deployApprovalRequestList
-	if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
-		return nil, err
-	}
-
-	if len(result.DeployApprovalRequests) == 0 {
-		return nil, nil
-	}
-	return &result.DeployApprovalRequests[0], nil
+	return req
 }
 
 func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*deployApprovalRequest, error) {

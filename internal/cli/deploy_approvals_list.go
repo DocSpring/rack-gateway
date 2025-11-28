@@ -10,10 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type deployApprovalRequestList struct {
-	DeployApprovalRequests []deployApprovalRequest `json:"deploy_approval_requests"`
-}
-
 type deployApprovalListOptions struct {
 	racks    string
 	status   string

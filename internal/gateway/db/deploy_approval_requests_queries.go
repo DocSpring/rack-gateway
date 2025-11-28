@@ -87,6 +87,7 @@ type DeployApprovalRequestListOptions struct {
 	TokenID       int64
 	GitBranch     string
 	GitCommitHash string
+	App           string
 }
 
 // ListDeployApprovalRequests returns a paginated list of deploy approval requests matching the given options
@@ -113,6 +114,10 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 	if opts.GitCommitHash != "" {
 		clauses = append(clauses, "dr.git_commit_hash = ?")
 		args = append(args, opts.GitCommitHash)
+	}
+	if opts.App != "" {
+		clauses = append(clauses, "dr.app = ?")
+		args = append(args, opts.App)
 	}
 	limit := opts.Limit
 	if limit <= 0 || limit > 200 {

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ type deployApprovalRequest struct {
 	PublicID           string                 `json:"public_id"`
 	Message            string                 `json:"message"`
 	Status             string                 `json:"status"`
+	App                string                 `json:"app,omitempty"`
 	CreatedAt          time.Time              `json:"created_at"`
 	UpdatedAt          time.Time              `json:"updated_at"`
 	TargetAPITokenID   string                 `json:"target_api_token_id"`
@@ -121,4 +123,34 @@ func resolveBranchOrCommit(branchOpt, commitOpt string) (branch, commit string, 
 		branch = currentBranch
 	}
 	return branch, commit, nil
+}
+
+type deployApprovalRequestList struct {
+	DeployApprovalRequests []deployApprovalRequest `json:"deploy_approval_requests"`
+}
+
+// searchForRequestInRack searches for a deploy approval request in a specific rack.
+func searchForRequestInRack(
+	cmd *cobra.Command, rack, app, branch, commit, status string,
+) (*deployApprovalRequest, bool) {
+	params := url.Values{}
+	params.Set("status", status)
+	params.Set("limit", "1")
+	params.Set("app", app)
+	if branch != "" {
+		params.Set("git_branch", branch)
+	}
+	if commit != "" {
+		params.Set("git_commit", commit)
+	}
+	endpoint := "/deploy-approval-requests?" + params.Encode()
+
+	var result deployApprovalRequestList
+	if err := gatewayRequest(cmd, rack, http.MethodGet, endpoint, nil, &result); err != nil {
+		return nil, false
+	}
+	if len(result.DeployApprovalRequests) > 0 {
+		return &result.DeployApprovalRequests[0], true
+	}
+	return nil, false
 }
