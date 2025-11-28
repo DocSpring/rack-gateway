@@ -25,6 +25,7 @@ import {
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
 import { TooltipProvider } from '../../components/ui/tooltip'
+import { useStepUp } from '../../contexts/step-up-context'
 import { tokenFormSchema } from '../../lib/validation'
 import { TokenPermissionsEditor } from './permission-components'
 import { findMatchingRole, normalizePermissions } from './permission-utils'
@@ -48,7 +49,8 @@ export function CreateTokenDialog({
   isPermissionLoading: boolean
   permissionMetadata: TokenPermissionMetadata | undefined
 }) {
-  const { createToken, handleStepUpError } = useTokenMutations()
+  const { createToken } = useTokenMutations()
+  const { runWithMFAGuard } = useStepUp()
   const [createdToken, setCreatedToken] = useState<string | null>(null)
   const [createdTokenUuid, setCreatedTokenUuid] = useState<string | null>(null)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -83,13 +85,14 @@ export function CreateTokenDialog({
 
       setNameError(null)
 
-      try {
-        const response = await createToken.mutateAsync(result.data)
-        setCreatedToken(response.token || '')
-        setCreatedTokenUuid(response.api_token?.public_id || null)
-      } catch (err) {
-        handleStepUpError(err, () => createToken.mutateAsync(result.data))
+      // Use runWithMFAGuard to handle MFA step-up verification properly.
+      // This ensures the response is captured when MFA verification succeeds.
+      const response = await runWithMFAGuard(() => createToken.mutateAsync(result.data))
+      if (!response) {
+        return // MFA was cancelled
       }
+      setCreatedToken(response.token || '')
+      setCreatedTokenUuid(response.api_token?.public_id || null)
     },
   })
 

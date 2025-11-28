@@ -25,6 +25,7 @@ import {
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
 import { TooltipProvider } from '../../components/ui/tooltip'
+import { useStepUp } from '../../contexts/step-up-context'
 import { tokenFormSchema } from '../../lib/validation'
 import { TokenPermissionsEditor } from './permission-components'
 import { findMatchingRole, normalizePermissions } from './permission-utils'
@@ -48,7 +49,8 @@ export function EditTokenDialog({
   canAssignPermission: (permission: string) => boolean
   isPermissionLoading: boolean
 }) {
-  const { updateToken, handleStepUpError } = useTokenMutations()
+  const { updateToken } = useTokenMutations()
+  const { runWithMFAGuard } = useStepUp()
   const [nameError, setNameError] = useState<string | null>(null)
 
   const { data: tokensData } = useQuery<APIToken[]>({
@@ -92,23 +94,20 @@ export function EditTokenDialog({
         return
       }
 
-      try {
-        setNameError(null)
-        await updateToken.mutateAsync({
+      setNameError(null)
+      // Use runWithMFAGuard to handle MFA step-up verification properly.
+      // This ensures onClose is called when MFA verification succeeds.
+      const updated = await runWithMFAGuard(() =>
+        updateToken.mutateAsync({
           publicId: token.public_id,
           name: result.data.name,
           permissions: result.data.permissions,
         })
-        onClose()
-      } catch (err) {
-        handleStepUpError(err, () =>
-          updateToken.mutateAsync({
-            publicId: token.public_id,
-            name: result.data.name,
-            permissions: result.data.permissions,
-          })
-        )
+      )
+      if (updated === undefined) {
+        return // MFA was cancelled
       }
+      onClose()
     },
   })
 
