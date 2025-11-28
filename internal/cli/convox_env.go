@@ -22,7 +22,7 @@ func EnvCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	// Add subcommands
 	cmd.AddCommand(envEditCommand())
@@ -39,6 +39,9 @@ func envEditCommand() *cobra.Command {
 		Short: "edit environment interactively",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "env edit")
 			if err != nil {
 				return err
@@ -52,7 +55,7 @@ func envEditCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().Bool("promote", false, "promote release after setting")
 	cmd.Flags().StringSlice("replace", []string{}, "replace environment variables")
 
@@ -68,7 +71,7 @@ func envGetCommand() *cobra.Command {
 		RunE: SilenceOnError(envGetGateway),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().Bool("unmask", false, "show unmasked secret values (requires secret:read permission)")
 
 	return cmd
@@ -80,6 +83,9 @@ func envSetCommand() *cobra.Command {
 		Short: "set environment variables",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "env set")
 			if err != nil {
 				return err
@@ -93,7 +99,7 @@ func envSetCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("id", "", "release id")
 	cmd.Flags().Bool("promote", false, "promote release after setting")
 	cmd.Flags().StringSlice("replace", []string{}, "replace environment variables")
@@ -107,6 +113,9 @@ func envUnsetCommand() *cobra.Command {
 		Short: "unset environment variables",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "env unset")
 			if err != nil {
 				return err
@@ -120,7 +129,7 @@ func envUnsetCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("id", "", "release id")
 	cmd.Flags().Bool("promote", false, "promote release after unsetting")
 

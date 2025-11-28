@@ -12,6 +12,9 @@ func DeployCommand() *cobra.Command {
 		Short: "deploy an app",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "deploy")
 			if err != nil {
 				return err
@@ -20,7 +23,7 @@ func DeployCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("description", "", "build description")
 	cmd.Flags().StringP("file", "f", "", "path to Dockerfile")
 	cmd.Flags().StringP("manifest", "m", "", "path to manifest file")
@@ -38,6 +41,9 @@ func ReleasesCommand() *cobra.Command {
 		Short: "list releases",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "releases")
 			if err != nil {
 				return err
@@ -46,7 +52,7 @@ func ReleasesCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().IntP("limit", "l", 0, "limit number of releases")
 
 	// Add subcommands
@@ -63,6 +69,9 @@ func releasesInfoCommand() *cobra.Command {
 		Short: "get information about a release",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "releases info")
 			if err != nil {
 				return err
@@ -76,7 +85,7 @@ func releasesInfoCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
@@ -87,6 +96,9 @@ func releasesPromoteCommand() *cobra.Command {
 		Short: "promote a release",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "releases promote")
 			if err != nil {
 				return err
@@ -100,7 +112,7 @@ func releasesPromoteCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().Bool("wait", false, "wait for promotion to complete")
 	cmd.Flags().Bool("force", false, "force promotion")
 
@@ -113,6 +125,9 @@ func releasesRollbackCommand() *cobra.Command {
 		Short: "roll back to a previous release",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "releases rollback")
 			if err != nil {
 				return err
@@ -126,7 +141,7 @@ func releasesRollbackCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().Bool("wait", false, "wait for rollback to complete")
 
 	return cmd

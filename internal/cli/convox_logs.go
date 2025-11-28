@@ -12,6 +12,9 @@ func LogsCommand() *cobra.Command {
 		Short: "get logs for an app",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "logs")
 			if err != nil {
 				return err
@@ -25,7 +28,7 @@ func LogsCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("filter", "", "filter logs")
 	cmd.Flags().BoolP("follow", "f", false, "follow logs")
 	cmd.Flags().String("since", "", "show logs since timestamp")

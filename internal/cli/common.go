@@ -234,3 +234,28 @@ func normalizeConvoxExit(err error) error {
 	}
 	return err
 }
+
+// appFlagHelp is the standard help text for the -a/--app flag.
+const appFlagHelp = "app name (auto-detected from .convox/app or current directory)"
+
+// resolveAppFlag resolves the app name using ResolveApp if the -a/--app flag was not explicitly set.
+// This ensures consistent app resolution across all CLI commands.
+func resolveAppFlag(cmd *cobra.Command) error {
+	appFlag := cmd.Flags().Lookup("app")
+	if appFlag == nil {
+		return nil // No app flag defined
+	}
+
+	if appFlag.Changed {
+		return nil // User explicitly set the flag
+	}
+
+	// Resolve app name from .convox/app or directory name
+	app, err := ResolveApp("")
+	if err != nil {
+		return err
+	}
+
+	// Set the resolved value and mark as changed so it gets forwarded to Convox SDK
+	return cmd.Flags().Set("app", app)
+}
