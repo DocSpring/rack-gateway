@@ -13,6 +13,7 @@ const (
 	GlobalSettingDeployApprovalsEnabled
 	GlobalSettingDeployApprovalWindowMinutes
 	GlobalSettingMFARequireAllUsers
+	GlobalSettingSessionTimeoutMinutes
 	GlobalSettingStepUpWindowMinutes
 	GlobalSettingTrustedDeviceTTLDays
 )
@@ -25,6 +26,7 @@ const (
 	KeyDeployApprovalsEnabled      = "deploy_approvals_enabled"
 	KeyDeployApprovalWindowMinutes = "deploy_approval_window_minutes"
 	KeyMFARequireAllUsers          = "mfa_require_all_users"
+	KeySessionTimeoutMinutes       = "session_timeout_minutes"
 	//nolint:gosec // G101: Setting key name, not a credential
 	KeyStepUpWindowMinutes  = "mfa_step_up_window_minutes"
 	KeyTrustedDeviceTTLDays = "mfa_trusted_device_ttl_days"
@@ -37,6 +39,7 @@ var globalSettingKeyToString = [...]string{
 	KeyDeployApprovalsEnabled,
 	KeyDeployApprovalWindowMinutes,
 	KeyMFARequireAllUsers,
+	KeySessionTimeoutMinutes,
 	KeyStepUpWindowMinutes,
 	KeyTrustedDeviceTTLDays,
 }
@@ -161,6 +164,7 @@ var DefaultGlobalSettings = map[string]interface{}{
 	KeyDeployApprovalsEnabled:      true,
 	KeyDeployApprovalWindowMinutes: 15,
 	KeyMFARequireAllUsers:          true,
+	KeySessionTimeoutMinutes:       5,
 	KeyStepUpWindowMinutes:         10,
 	KeyTrustedDeviceTTLDays:        30,
 }

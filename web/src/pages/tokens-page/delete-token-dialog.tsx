@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { ConfirmDeleteDialog } from '../../components/confirm-delete-dialog'
+import { useStepUp } from '../../contexts/step-up-context'
 import type { APIToken } from './types'
 import { useTokenMutations } from './use-token-mutations'
 
@@ -13,7 +14,8 @@ export function DeleteTokenDialog({
   isOpen: boolean
   onClose: () => void
 }) {
-  const { deleteToken, handleStepUpError } = useTokenMutations()
+  const { deleteToken } = useTokenMutations()
+  const { runWithMFAGuard } = useStepUp()
 
   const { data: tokensData } = useQuery<APIToken[]>({
     queryKey: QUERY_KEYS.TOKENS,
@@ -28,12 +30,13 @@ export function DeleteTokenDialog({
     if (!token) {
       return
     }
-    try {
-      await deleteToken.mutateAsync(token.public_id)
-      onClose()
-    } catch (err) {
-      handleStepUpError(err, () => deleteToken.mutateAsync(token.public_id))
+    // Use runWithMFAGuard to handle MFA step-up verification properly.
+    // This ensures onClose is called when MFA verification succeeds.
+    const deleted = await runWithMFAGuard(() => deleteToken.mutateAsync(token.public_id))
+    if (deleted === undefined) {
+      return // MFA was cancelled
     }
+    onClose()
   }
 
   return (

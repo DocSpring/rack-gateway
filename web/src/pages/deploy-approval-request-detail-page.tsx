@@ -82,24 +82,23 @@ export function DeployApprovalRequestDetailPage() {
 
   return (
     <div className="space-y-8 p-8">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <RequestHeader
-          circleCIMetadata={circleCIMetadata}
-          circleCIPipelineUrl={circleCIPipelineUrl}
-          request={request}
-        />
-        <ActionButtons
-          approveMutationPending={approveMutationPending}
-          extendMutationPending={extendMutationPending}
-          onApprove={handleApprove}
-          onExtend={handleExtend}
-          onReject={handleRejectClick}
-          rejectMutationPending={rejectMutationPending}
-          requestStatus={request.status}
-        />
-      </div>
+      <RequestHeader
+        circleCIMetadata={circleCIMetadata}
+        circleCIPipelineUrl={circleCIPipelineUrl}
+        request={request}
+      />
 
       <RequestDetailsCard request={request} />
+
+      <ActionButtons
+        approveMutationPending={approveMutationPending}
+        extendMutationPending={extendMutationPending}
+        onApprove={handleApprove}
+        onExtend={handleExtend}
+        onReject={handleRejectClick}
+        rejectMutationPending={rejectMutationPending}
+        requestStatus={request.status}
+      />
 
       <div data-testid="deploy-approval-audit-logs">
         <AuditLogsPane

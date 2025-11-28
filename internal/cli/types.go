@@ -98,3 +98,38 @@ type MFAMethodResponse struct {
 
 // ErrLoginPending is returned when login is still pending browser completion
 var ErrLoginPending = errors.New("login pending")
+
+// GatewayInfoResponse is the response from /api/v1/info
+type GatewayInfoResponse struct {
+	User         GatewayUserInfo         `json:"user"`
+	Rack         GatewayRackSummary      `json:"rack"`
+	Integrations GatewayIntegrationsInfo `json:"integrations"`
+	Version      GatewayVersionInfo      `json:"version"`
+}
+
+// GatewayUserInfo contains user information from the gateway
+type GatewayUserInfo struct {
+	Email string   `json:"email"`
+	Name  string   `json:"name"`
+	Roles []string `json:"roles"`
+}
+
+// GatewayRackSummary contains rack summary from the gateway
+type GatewayRackSummary struct {
+	Name  string `json:"name"`
+	Alias string `json:"alias"`
+	Host  string `json:"host"`
+}
+
+// GatewayIntegrationsInfo contains integration status
+type GatewayIntegrationsInfo struct {
+	Slack    bool `json:"slack"`
+	GitHub   bool `json:"github"`
+	CircleCI bool `json:"circleci"`
+}
+
+// GatewayVersionInfo contains gateway version information
+type GatewayVersionInfo struct {
+	Version    string `json:"version"`
+	CommitHash string `json:"commit_hash"`
+}

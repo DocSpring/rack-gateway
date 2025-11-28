@@ -21,11 +21,27 @@ const (
 	cliDefaultAbsoluteTTL     = 90 * 24 * time.Hour
 )
 
+// SessionTTLProvider provides the session TTL dynamically from settings.
+type SessionTTLProvider interface {
+	GetSessionTimeoutDuration() (time.Duration, error)
+}
+
+// StaticTTLProvider is a simple TTL provider that returns a fixed duration.
+// Useful for testing.
+type StaticTTLProvider struct {
+	TTL time.Duration
+}
+
+// GetSessionTimeoutDuration returns the configured static TTL.
+func (p *StaticTTLProvider) GetSessionTimeoutDuration() (time.Duration, error) {
+	return p.TTL, nil
+}
+
 // SessionManager manages user sessions including creation, validation, and revocation.
 type SessionManager struct {
-	db     *db.Database
-	secret []byte
-	ttl    time.Duration
+	db          *db.Database
+	secret      []byte
+	ttlProvider SessionTTLProvider
 }
 
 // SessionMetadata contains metadata for creating a new session.
@@ -47,15 +63,12 @@ type SessionValidationResult struct {
 }
 
 // NewSessionManager creates a new session manager with the given configuration.
-func NewSessionManager(database *db.Database, secret string, ttl time.Duration) *SessionManager {
-	timeout := ttl
-	if timeout <= 0 {
-		timeout = defaultSessionIdleTimeout
-	}
+// The ttlProvider is used to dynamically fetch the session timeout from settings.
+func NewSessionManager(database *db.Database, secret string, ttlProvider SessionTTLProvider) *SessionManager {
 	return &SessionManager{
-		db:     database,
-		secret: []byte(secret),
-		ttl:    timeout,
+		db:          database,
+		secret:      []byte(secret),
+		ttlProvider: ttlProvider,
 	}
 }
 
@@ -64,7 +77,23 @@ func (m *SessionManager) TTL() time.Duration {
 	if m == nil {
 		return 0
 	}
-	return m.ttl
+	return m.getConfiguredTTL()
+}
+
+// getConfiguredTTL fetches the TTL from the provider, falling back to the default.
+func (m *SessionManager) getConfiguredTTL() time.Duration {
+	if m.ttlProvider != nil {
+		ttl, err := m.ttlProvider.GetSessionTimeoutDuration()
+		switch {
+		case err != nil:
+			gtwlog.Errorf("Failed to get session timeout from provider, using default: %v", err)
+		case ttl <= 0:
+			gtwlog.Warnf("Provider returned invalid TTL (%v), using default", ttl)
+		default:
+			return ttl
+		}
+	}
+	return defaultSessionIdleTimeout
 }
 
 // CreateSession creates a new session for the given user with metadata.
@@ -84,7 +113,7 @@ func (m *SessionManager) CreateSession(user *db.User, meta SessionMetadata) (str
 	tokenHash := hashSessionToken(sessionToken)
 
 	now := time.Now()
-	ttl := m.ttl
+	ttl := m.getConfiguredTTL()
 	if meta.TTLOverride > 0 {
 		ttl = meta.TTLOverride
 	}
@@ -332,7 +361,7 @@ func hashSessionToken(token string) string {
 }
 
 func (m *SessionManager) sessionTTLFor(session *db.UserSession) time.Duration {
-	ttl := m.ttl
+	ttl := m.getConfiguredTTL()
 	if session == nil {
 		return ttl
 	}

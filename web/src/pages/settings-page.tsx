@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { DeployApprovalsCard } from '@/pages/settings/deploy-approvals-card'
 import { DestructiveActionsCard } from '@/pages/settings/destructive-actions-card'
 import { MfaConfigCard } from '@/pages/settings/mfa-config-card'
+import { SessionTimeoutCard } from '@/pages/settings/session-timeout-card'
 import type { GlobalSettingsResponse } from '@/pages/settings/types'
 import { VcsCiCard } from '@/pages/settings/vcs-ci-card'
 
@@ -58,6 +59,9 @@ export function SettingsPage() {
         <div className="grid gap-6 md:grid-cols-2">
           <MfaConfigCard disabled={!isAdmin} settings={globalSettings} />
           <DestructiveActionsCard disabled={!isAdmin} settings={globalSettings} />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <SessionTimeoutCard disabled={!isAdmin} settings={globalSettings} />
         </div>
         <VcsCiCard disabled={!isAdmin} settings={globalSettings} />
         <DeployApprovalsCard disabled={!isAdmin} settings={globalSettings} />

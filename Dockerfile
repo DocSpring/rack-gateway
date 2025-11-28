@@ -13,7 +13,7 @@ RUN bun run build
 
 FROM golang:1.25-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates make gcc musl-dev
+RUN apk add --no-cache git ca-certificates make gcc musl-dev nodejs npm
 
 WORKDIR /app
 
@@ -21,12 +21,19 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy version source (package.json for version number)
+COPY web/package.json ./web/package.json
+
 # Copy only the source needed to build the gateway
 COPY internal ./internal
 COPY cmd/gateway ./cmd/gateway
 
-# Build the gateway binary directly in this stage
-RUN CGO_ENABLED=0 go build -o /out/rack-gateway-api ./cmd/gateway \
+# Build the gateway binary with version info
+ARG COMMIT_HASH=unknown
+RUN VERSION=$(node -p "require('./web/package.json').version") && \
+    CGO_ENABLED=0 go build \
+    -ldflags "-X github.com/DocSpring/rack-gateway/internal/gateway/version.Version=${VERSION} -X github.com/DocSpring/rack-gateway/internal/gateway/version.CommitHash=${COMMIT_HASH}" \
+    -o /out/rack-gateway-api ./cmd/gateway \
     && /out/rack-gateway-api help
 
 FROM alpine:latest

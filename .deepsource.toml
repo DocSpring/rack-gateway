@@ -1,5 +1,9 @@
 version = 1
 
+# DeepSource uses ESLint configuration for JavaScript/TypeScript analysis.
+# We use Biome for local linting, but maintain web/.eslintrc.json for DeepSource.
+# To disable a DeepSource JS rule, add it to web/.eslintrc.json rules.
+
 test_patterns = [
   "web/src/**/*.test.tsx",
   "web/src/**/*.test.ts",

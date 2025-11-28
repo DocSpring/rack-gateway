@@ -14,7 +14,7 @@ func BuildCommand() *cobra.Command {
 	}
 	cmd.RunE = SilenceOnError(runBuildCommand)
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("description", "", "build description")
 	cmd.Flags().StringP("file", "f", "", "path to Dockerfile")
 	cmd.Flags().StringP("manifest", "m", "", "path to manifest file")
@@ -30,6 +30,9 @@ func BuildsCommand() *cobra.Command {
 		Short: "list builds",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "builds")
 			if err != nil {
 				return err
@@ -38,7 +41,7 @@ func BuildsCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().IntP("limit", "l", 0, "limit number of builds")
 
 	// Add subcommands
@@ -56,6 +59,9 @@ func buildsInfoCommand() *cobra.Command {
 		Short: "get information about a build",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "builds info")
 			if err != nil {
 				return err
@@ -69,7 +75,7 @@ func buildsInfoCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
@@ -80,6 +86,9 @@ func buildsExportCommand() *cobra.Command {
 		Short: "export a build",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "builds export")
 			if err != nil {
 				return err
@@ -93,7 +102,7 @@ func buildsExportCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().StringP("file", "f", "", "output file")
 
 	return cmd
@@ -105,6 +114,9 @@ func buildsImportCommand() *cobra.Command {
 		Short: "import a build",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "builds import")
 			if err != nil {
 				return err
@@ -118,12 +130,15 @@ func buildsImportCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
 
 func runBuildCommand(cobraCmd *cobra.Command, args []string) error {
+	if err := resolveAppFlag(cobraCmd); err != nil {
+		return err
+	}
 	client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "build")
 	if err != nil {
 		return err
@@ -137,6 +152,9 @@ func buildsLogsCommand() *cobra.Command {
 		Short: "get logs for a build",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "builds logs")
 			if err != nil {
 				return err
@@ -150,7 +168,7 @@ func buildsLogsCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }

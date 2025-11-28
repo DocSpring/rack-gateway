@@ -91,6 +91,9 @@ func appsInfoCommand() *cobra.Command {
 		Short: "get information about an app",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "apps info")
 			if err != nil {
 				return err
@@ -104,7 +107,7 @@ func appsInfoCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }

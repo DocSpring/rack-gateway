@@ -137,6 +137,12 @@ func (h *SettingsHandler) UpdateGlobalDeployApprovals(c *gin.Context) {
 	h.updateGlobalSettingsWithKeys(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
 }
 
+// UpdateGlobalSessionConfiguration updates session configuration settings.
+func (h *SettingsHandler) UpdateGlobalSessionConfiguration(c *gin.Context) {
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupSessionConfiguration)
+	h.updateGlobalSettingsWithKeys(c, allowedKeys)
+}
+
 func (h *SettingsHandler) updateGlobalSettingsWithKeys(c *gin.Context, allowedKeys []string) {
 	h.updateSettings(c, &globalSettingsOps{service: h.settingsService}, "", allowedKeys)
 }
@@ -179,6 +185,12 @@ func (h *SettingsHandler) DeleteGlobalVCSAndCIDefaults(c *gin.Context) {
 // DeleteGlobalDeployApprovals deletes deploy approval settings.
 func (h *SettingsHandler) DeleteGlobalDeployApprovals(c *gin.Context) {
 	h.deleteGlobalSettingsWithKeys(c, settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupDeployApprovals))
+}
+
+// DeleteGlobalSessionConfiguration deletes session configuration settings.
+func (h *SettingsHandler) DeleteGlobalSessionConfiguration(c *gin.Context) {
+	allowedKeys := settings.GlobalSettingGroupKeyStrings(settings.GlobalSettingGroupSessionConfiguration)
+	h.deleteGlobalSettingsWithKeys(c, allowedKeys)
 }
 
 func (h *SettingsHandler) deleteGlobalSettingsWithKeys(c *gin.Context, allowedKeys []string) {

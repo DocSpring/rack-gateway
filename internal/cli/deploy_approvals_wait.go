@@ -59,12 +59,9 @@ func parseDeployApprovalWaitOptions(
 	_ *cobra.Command,
 	opts deployApprovalWaitOptions,
 ) (deployApprovalWaitConfig, error) {
-	racks, err := resolveWaitRacks(opts.racks)
+	racks, err := resolveRacks(opts.racks)
 	if err != nil {
 		return deployApprovalWaitConfig{}, err
-	}
-	if len(racks) == 0 {
-		return deployApprovalWaitConfig{}, fmt.Errorf("no racks specified")
 	}
 
 	pollInterval, err := parseDurationFlag(opts.pollInterval, "poll-interval", false, time.Second)
@@ -79,27 +76,6 @@ func parseDeployApprovalWaitOptions(
 		notes:        strings.TrimSpace(opts.notes),
 		loop:         opts.loop,
 	}, nil
-}
-
-func resolveWaitRacks(flagValue string) ([]string, error) {
-	trimmed := strings.TrimSpace(flagValue)
-	if trimmed == "" {
-		rack, err := SelectedRack()
-		if err != nil {
-			return nil, err
-		}
-		return []string{rack}, nil
-	}
-
-	parts := strings.Split(trimmed, ",")
-	racks := make([]string, 0, len(parts))
-	for _, part := range parts {
-		value := strings.TrimSpace(part)
-		if value != "" {
-			racks = append(racks, value)
-		}
-	}
-	return racks, nil
 }
 
 func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) error {

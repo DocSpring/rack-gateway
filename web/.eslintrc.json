@@ -2,8 +2,9 @@
   "$schema": "https://json.schemastore.org/eslintrc",
   "root": true,
   "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
+  "plugins": ["@typescript-eslint", "react"],
   "rules": {
-    "consistent-return": "off"
+    "consistent-return": "off",
+    "react/jsx-no-bind": "off"
   }
 }

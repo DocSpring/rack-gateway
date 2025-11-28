@@ -59,7 +59,8 @@
     "formatter": {
       "quoteStyle": "single",
       "semicolons": "asNeeded"
-    }
+    },
+    "globals": ["__APP_VERSION__", "__COMMIT_HASH__"]
   },
   "overrides": [
     {

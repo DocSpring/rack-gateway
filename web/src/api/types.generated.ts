@@ -4767,6 +4767,7 @@ export interface components {
             integrations: components["schemas"]["handlers.IntegrationsInfo"];
             rack: components["schemas"]["handlers.RackSummary"];
             user: components["schemas"]["handlers.UserInfo"];
+            version: components["schemas"]["handlers.VersionInfo"];
         };
         "handlers.IntegrationsInfo": {
             circleci: boolean;
@@ -4963,6 +4964,10 @@ export interface components {
             assertion_response: string;
             session_data: string;
             trust_device?: boolean;
+        };
+        "handlers.VersionInfo": {
+            commit_hash: string;
+            version: string;
         };
         "handlers.WebAuthnAssertionStartResponse": {
             /** @description protocol.CredentialAssertion */

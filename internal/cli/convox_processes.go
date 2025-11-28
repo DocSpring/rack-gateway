@@ -12,6 +12,9 @@ func PsCommand() *cobra.Command {
 		Short: "list app processes",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "ps")
 			if err != nil {
 				return err
@@ -25,7 +28,7 @@ func PsCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("release", "", "filter by release")
 	cmd.Flags().StringP("service", "s", "", "filter by service")
 	cmd.Flags().Bool("all", false, "show all processes")
@@ -43,6 +46,9 @@ func psInfoCommand() *cobra.Command {
 		Short: "get information about a process",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "ps info")
 			if err != nil {
 				return err
@@ -56,7 +62,7 @@ func psInfoCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
@@ -67,6 +73,9 @@ func psStopCommand() *cobra.Command {
 		Short: "stop a process",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "ps stop")
 			if err != nil {
 				return err
@@ -80,7 +89,7 @@ func psStopCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
@@ -92,6 +101,9 @@ func ExecCommand() *cobra.Command {
 		Short: "execute a command in a running process",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "exec")
 			if err != nil {
 				return err
@@ -100,7 +112,7 @@ func ExecCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
 
 	return cmd
@@ -113,6 +125,9 @@ func RunCommand() *cobra.Command {
 		Short: "run a one-off process",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			client, ctx, err := setupConvoxWithMFAAction(cobraCmd, args, "run")
 			if err != nil {
 				return err
@@ -121,7 +136,7 @@ func RunCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().BoolP("detach", "d", false, "run in detached mode")
 	cmd.Flags().String("entrypoint", "", "override entrypoint")
 	cmd.Flags().String("release", "", "release to run")
@@ -137,6 +152,9 @@ func RestartCommand() *cobra.Command {
 		Short: "restart an app",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "restart")
 			if err != nil {
 				return err
@@ -150,7 +168,7 @@ func RestartCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
@@ -162,6 +180,9 @@ func ScaleCommand() *cobra.Command {
 		Short: "scale app processes",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "scale")
 			if err != nil {
 				return err
@@ -175,7 +196,7 @@ func ScaleCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().Int("count", 0, "number of processes")
 	cmd.Flags().Int("cpu", 0, "cpu allocation")
 	cmd.Flags().Int("memory", 0, "memory allocation")

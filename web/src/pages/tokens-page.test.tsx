@@ -100,6 +100,8 @@ vi.mock('../contexts/step-up-context', () => ({
   StepUpProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useStepUp: () => ({
     handleStepUpError: vi.fn().mockReturnValue(false),
+    // runWithMFAGuard just executes the function directly in tests (no MFA required)
+    runWithMFAGuard: <T,>(fn: () => Promise<T>) => fn(),
   }),
 }))
 

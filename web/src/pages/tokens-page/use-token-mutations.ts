@@ -2,13 +2,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/ui/use-toast'
 import { useMutation } from '@/hooks/use-mutation'
 import { QUERY_KEYS } from '@/lib/query-keys'
-import { useStepUp } from '../../contexts/step-up-context'
 import { api } from '../../lib/api'
 import type { APITokenResponse } from '../../lib/generated/gateway-types'
 
 export function useTokenMutations() {
   const queryClient = useQueryClient()
-  const { handleStepUpError } = useStepUp()
 
   const createToken = useMutation({
     mutationFn: async (payload: { name: string; permissions: string[] }) => {
@@ -35,10 +33,11 @@ export function useTokenMutations() {
       name: string
       permissions: string[]
     }) => {
-      await api.put(`/api/v1/api-tokens/${publicId}`, {
+      const response = await api.put(`/api/v1/api-tokens/${publicId}`, {
         name,
         permissions,
       })
+      return response
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOKENS })
@@ -60,6 +59,5 @@ export function useTokenMutations() {
     createToken,
     updateToken,
     deleteToken,
-    handleStepUpError,
   }
 }

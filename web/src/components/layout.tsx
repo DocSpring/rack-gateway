@@ -366,6 +366,9 @@ export function Layout() {
             <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
+          <div className="mt-3 text-center text-muted-foreground text-xs">
+            v{__APP_VERSION__} ({__COMMIT_HASH__})
+          </div>
         </div>
       </div>
 

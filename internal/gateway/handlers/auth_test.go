@@ -88,7 +88,7 @@ func TestHandlePostLoginMFAClearsStaleTrustedDevice(t *testing.T) {
 		t.Fatalf("failed to reload user: %v", err)
 	}
 
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	sessionToken, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -149,7 +149,7 @@ func TestWebLoginCallbackSetsCookieInDev(t *testing.T) {
 	if _, err := database.CreateUser("dev@example.com", "Dev", []string{"viewer"}); err != nil {
 		t.Fatalf("failed to create test user: %v", err)
 	}
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
 		oauth,
@@ -195,7 +195,7 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 	if _, err := database.CreateUser("prod@example.com", "Prod", []string{"viewer"}); err != nil {
 		t.Fatalf("failed to create test user: %v", err)
 	}
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
 		oauth,
@@ -228,7 +228,7 @@ func TestWebLoginCallbackSetsCookieSecureInProd(t *testing.T) {
 func TestWebLogoutClearsCookie(t *testing.T) {
 	oauth := &fakeOAuth{}
 	database := dbtest.NewDatabase(t)
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
 		oauth,
@@ -263,7 +263,7 @@ func TestWebLogoutClearsCookie(t *testing.T) {
 func TestWebLoginStartSetsStateCookie(t *testing.T) {
 	oauth := &fakeOAuth{startURL: "http://idp.example.com/login", startState: "abc123"}
 	database := dbtest.NewDatabase(t)
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
 		oauth,
@@ -301,7 +301,7 @@ func TestWebLoginStartSetsStateCookie(t *testing.T) {
 func TestWebLoginCallbackRejectsInvalidState(t *testing.T) {
 	oauth := &fakeOAuth{}
 	database := dbtest.NewDatabase(t)
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	auditLogger := audit.NewLogger(database)
 	handler := NewAuthHandler(
 		oauth,
@@ -390,7 +390,7 @@ func setupTrustedDevicesForTest(t *testing.T, database *db.Database, userID int6
 }
 
 func createTestSession(t *testing.T, database *db.Database, user *db.User) string {
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	sessionToken, _, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -407,7 +407,7 @@ func createTestAuthHandler(database *db.Database, oauth *fakeOAuth) *AuthHandler
 	settings := &db.MFASettings{RequireAllUsers: true}
 	cfg := &config.Config{DevMode: true}
 	auditLogger := audit.NewLogger(database)
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	return NewAuthHandler(oauth, database, cfg, sessionManager, mfaService, settings, nil, auditLogger)
 }
 

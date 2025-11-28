@@ -65,45 +65,54 @@ func (d *Database) GetAllSettings(appName *string) (map[string][]byte, error) {
 	return settings, rows.Err()
 }
 
-func (d *Database) upsertSettingWithUser(
-	appName *string,
-	key, valueJSON string,
-	userID int64,
-) error {
-	if appName == nil {
-		_, err := d.exec(`
-			INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
-			VALUES (NULL, ?, ?::jsonb, NOW(), ?)
-			ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-			SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
-			key, valueJSON, userID)
-		return err
-	}
-	_, err := d.exec(`
+// SQL constants for settings upsert operations
+const (
+	upsertSettingWithUserGlobalSQL = `
+		INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
+		VALUES (NULL, ?, ?::jsonb, NOW(), ?)
+		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+		SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`
+	upsertSettingWithUserAppSQL = `
 		INSERT INTO settings (app_name, key, value, updated_at, updated_by_user_id)
 		VALUES (?, ?, ?::jsonb, NOW(), ?)
 		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-		SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`,
-		*appName, key, valueJSON, userID)
-	return err
-}
-
-func (d *Database) upsertSettingWithoutUser(appName *string, key, valueJSON string) error {
-	if appName == nil {
-		_, err := d.exec(`
-			INSERT INTO settings (app_name, key, value, updated_at)
-			VALUES (NULL, ?, ?::jsonb, NOW())
-			ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-			SET value = EXCLUDED.value, updated_at = NOW()`,
-			key, valueJSON)
-		return err
-	}
-	_, err := d.exec(`
+		SET value = EXCLUDED.value, updated_at = NOW(), updated_by_user_id = EXCLUDED.updated_by_user_id`
+	upsertSettingNoUserGlobalSQL = `
+		INSERT INTO settings (app_name, key, value, updated_at)
+		VALUES (NULL, ?, ?::jsonb, NOW())
+		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
+		SET value = EXCLUDED.value, updated_at = NOW()`
+	upsertSettingNoUserAppSQL = `
 		INSERT INTO settings (app_name, key, value, updated_at)
 		VALUES (?, ?, ?::jsonb, NOW())
 		ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE
-		SET value = EXCLUDED.value, updated_at = NOW()`,
-		*appName, key, valueJSON)
+		SET value = EXCLUDED.value, updated_at = NOW()`
+)
+
+// upsertSettingCore is the centralized helper for all setting upsert operations.
+// If tx is nil, it uses the database connection directly; otherwise it uses the transaction.
+func (d *Database) upsertSettingCore(tx *sql.Tx, appName *string, key, valueJSON string, userID *int64) error {
+	execFn := func(query string, args ...interface{}) (sql.Result, error) {
+		if tx != nil {
+			return d.execTx(tx, query, args...)
+		}
+		return d.exec(query, args...)
+	}
+
+	if userID != nil {
+		if appName == nil {
+			_, err := execFn(upsertSettingWithUserGlobalSQL, key, valueJSON, *userID)
+			return err
+		}
+		_, err := execFn(upsertSettingWithUserAppSQL, *appName, key, valueJSON, *userID)
+		return err
+	}
+
+	if appName == nil {
+		_, err := execFn(upsertSettingNoUserGlobalSQL, key, valueJSON)
+		return err
+	}
+	_, err := execFn(upsertSettingNoUserAppSQL, *appName, key, valueJSON)
 	return err
 }
 
@@ -114,19 +123,52 @@ func (d *Database) UpsertSetting(appName *string, key string, value interface{},
 		return fmt.Errorf("failed to marshal setting %s: %w", key, err)
 	}
 
-	valueJSON := string(b)
-	if updatedByUserID != nil {
-		err = d.upsertSettingWithUser(appName, key, valueJSON, *updatedByUserID)
-	} else {
-		err = d.upsertSettingWithoutUser(appName, key, valueJSON)
-	}
-
-	if err != nil {
+	if err := d.upsertSettingCore(nil, appName, key, string(b), updatedByUserID); err != nil {
 		scope := "global"
 		if appName != nil {
 			scope = fmt.Sprintf("app %s", *appName)
 		}
 		return fmt.Errorf("failed to upsert %s setting %s: %w", scope, key, err)
+	}
+	return nil
+}
+
+// SettingUpdate represents a single setting to update in a batch operation.
+type SettingUpdate struct {
+	Key   string
+	Value interface{}
+}
+
+// UpsertSettingsInTx atomically updates multiple settings within a single transaction.
+// All settings succeed or all fail together.
+func (d *Database) UpsertSettingsInTx(appName *string, updates []SettingUpdate, updatedByUserID *int64) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin settings transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, update := range updates {
+		valueJSON, err := json.Marshal(update.Value)
+		if err != nil {
+			return fmt.Errorf("failed to marshal setting %s: %w", update.Key, err)
+		}
+
+		if err := d.upsertSettingCore(tx, appName, update.Key, string(valueJSON), updatedByUserID); err != nil {
+			scope := "global"
+			if appName != nil {
+				scope = fmt.Sprintf("app %s", *appName)
+			}
+			return fmt.Errorf("failed to upsert %s setting %s: %w", scope, update.Key, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit settings transaction: %w", err)
 	}
 	return nil
 }

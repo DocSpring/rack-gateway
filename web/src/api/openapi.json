@@ -5559,7 +5559,8 @@
                 "required": [
                     "integrations",
                     "rack",
-                    "user"
+                    "user",
+                    "version"
                 ],
                 "properties": {
                     "integrations": {
@@ -5570,6 +5571,9 @@
                     },
                     "user": {
                         "$ref": "#/components/schemas/handlers.UserInfo"
+                    },
+                    "version": {
+                        "$ref": "#/components/schemas/handlers.VersionInfo"
                     }
                 }
             },
@@ -6293,6 +6297,21 @@
                     },
                     "trust_device": {
                         "type": "boolean"
+                    }
+                }
+            },
+            "handlers.VersionInfo": {
+                "type": "object",
+                "required": [
+                    "commit_hash",
+                    "version"
+                ],
+                "properties": {
+                    "commit_hash": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
                     }
                 }
             },

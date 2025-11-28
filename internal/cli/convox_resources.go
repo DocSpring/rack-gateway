@@ -12,6 +12,9 @@ func ResourcesCommand() *cobra.Command {
 		Short: "list resources",
 		Args:  cobra.NoArgs,
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "resources")
 			if err != nil {
 				return err
@@ -25,7 +28,7 @@ func ResourcesCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	// Add subcommands
 	cmd.AddCommand(resourcesInfoCommand())
@@ -41,6 +44,9 @@ func resourcesExportCommand() *cobra.Command {
 		Short: "export a resource",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "resources export")
 			if err != nil {
 				return err
@@ -54,7 +60,7 @@ func resourcesExportCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 	cmd.Flags().StringP("file", "f", "", "output file")
 
 	return cmd
@@ -66,6 +72,9 @@ func resourcesInfoCommand() *cobra.Command {
 		Short: "get information about a resource",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "resources info")
 			if err != nil {
 				return err
@@ -79,7 +88,7 @@ func resourcesInfoCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }
@@ -91,6 +100,9 @@ func resourcesUrlCommand() *cobra.Command {
 		Short: "get resource URL",
 		Args:  cobra.ExactArgs(1),
 		RunE: SilenceOnError(func(cobraCmd *cobra.Command, args []string) error {
+			if err := resolveAppFlag(cobraCmd); err != nil {
+				return err
+			}
 			mfaAuth, err := checkMFAAndGetAuth(cobraCmd, "resources url")
 			if err != nil {
 				return err
@@ -104,7 +116,7 @@ func resourcesUrlCommand() *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringP("app", "a", "", "app name")
+	cmd.Flags().StringP("app", "a", "", appFlagHelp)
 
 	return cmd
 }

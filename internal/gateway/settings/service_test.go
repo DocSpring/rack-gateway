@@ -117,3 +117,38 @@ func TestGetAllAppSettings_GlobalDefaultFallback(t *testing.T) {
 		require.Equal(t, SourceGlobalDefault, vcsProvider.Source)
 	})
 }
+
+func TestGetAppSetting_HardcodedGlobalDefaultFallback(t *testing.T) {
+	database := dbtest.NewDatabase(t)
+	t.Cleanup(func() { _ = database.Close() })
+
+	svc := NewService(database)
+
+	// This test verifies the bug fix: when there's no global default in the DB,
+	// GetAppSetting should fall back to the hardcoded default from DefaultGlobalSettings.
+	// Previously it would pass "" as the default, returning empty string instead of "circleci".
+
+	t.Run("ci_provider falls back to hardcoded default when no DB entries exist", func(t *testing.T) {
+		// DO NOT set any global default in the database
+		// DO NOT set any app-specific ci_provider
+
+		// GetAppSetting should return the hardcoded default from DefaultGlobalSettings
+		setting, err := svc.GetAppSetting("newapp", KeyCIProvider, "")
+		require.NoError(t, err)
+		require.NotNil(t, setting)
+		require.Equal(t, "circleci", setting.Value, "should fall back to hardcoded default_ci_provider")
+		require.Equal(t, SourceGlobalDefault, setting.Source)
+	})
+
+	t.Run("vcs_provider falls back to hardcoded default when no DB entries exist", func(t *testing.T) {
+		// DO NOT set any global default in the database
+		// DO NOT set any app-specific vcs_provider
+
+		// GetAppSetting should return the hardcoded default from DefaultGlobalSettings
+		setting, err := svc.GetAppSetting("newapp", KeyVCSProvider, "")
+		require.NoError(t, err)
+		require.NotNil(t, setting)
+		require.Equal(t, "github", setting.Value, "should fall back to hardcoded default_vcs_provider")
+		require.Equal(t, SourceGlobalDefault, setting.Source)
+	})
+}

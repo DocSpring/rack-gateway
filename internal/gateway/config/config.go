@@ -21,7 +21,6 @@ type Config struct {
 	SentryJSTracesRate    string
 	SentryTestsEnabled    bool
 	SessionSecret         string
-	SessionIdleTimeout    time.Duration
 	GoogleClientID        string
 	GoogleClientSecret    string
 	GoogleAllowedDomain   string
@@ -83,7 +82,6 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	cfg.loadSessionTimeout()
 	cfg.loadUserRoles()
 	cfg.loadTrustedProxies()
 	cfg.loadRacksFromEnv()
@@ -141,15 +139,6 @@ func (c *Config) loadSessionSecret() error {
 	}
 	c.SessionSecret = sessionSecret
 	return nil
-}
-
-func (c *Config) loadSessionTimeout() {
-	c.SessionIdleTimeout = 5 * time.Minute
-	if raw := strings.TrimSpace(getEnv("SESSION_IDLE_TIMEOUT", "")); raw != "" {
-		if dur, err := time.ParseDuration(raw); err == nil && dur > 0 {
-			c.SessionIdleTimeout = dur
-		}
-	}
 }
 
 func (c *Config) loadUserRoles() {

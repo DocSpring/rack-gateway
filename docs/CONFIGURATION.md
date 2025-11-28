@@ -25,8 +25,8 @@ If you’re deploying to production, read this alongside [DEPLOY.md](DEPLOY.md).
   - TCP port the API listens on.
 - `APP_SECRET_KEY` (required in production)
   - Secret used for session tokens and CSRF protection. Auto-generated in dev if missing.
-- `SESSION_IDLE_TIMEOUT` (default: `5m`)
-  - Sliding inactivity window for browser sessions. Accepts Go duration strings (e.g., `5m`, `15m`).
+- `RGW_SETTING_SESSION_TIMEOUT_MINUTES` (default: `5`)
+  - Sliding inactivity window for browser sessions in minutes. Can also be configured via the Settings page in the admin UI (database value takes precedence).
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (required)
   - OAuth client credentials for Google Workspace (or your OIDC provider).
 - `GOOGLE_ALLOWED_DOMAIN` (required)
