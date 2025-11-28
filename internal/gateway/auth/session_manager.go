@@ -83,7 +83,13 @@ func (m *SessionManager) TTL() time.Duration {
 // getConfiguredTTL fetches the TTL from the provider, falling back to the default.
 func (m *SessionManager) getConfiguredTTL() time.Duration {
 	if m.ttlProvider != nil {
-		if ttl, err := m.ttlProvider.GetSessionTimeoutDuration(); err == nil && ttl > 0 {
+		ttl, err := m.ttlProvider.GetSessionTimeoutDuration()
+		switch {
+		case err != nil:
+			gtwlog.Errorf("Failed to get session timeout from provider, using default: %v", err)
+		case ttl <= 0:
+			gtwlog.Warnf("Provider returned invalid TTL (%v), using default", ttl)
+		default:
 			return ttl
 		}
 	}
