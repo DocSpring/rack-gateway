@@ -13,6 +13,8 @@ func DeployApprovalCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
+		newDeployApprovalListCommand(),
+		newDeployApprovalGetCommand(),
 		newDeployApprovalRequestCommand(),
 		newDeployApprovalApproveCommand(),
 		newDeployApprovalWaitCommand(),
