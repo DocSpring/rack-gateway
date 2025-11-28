@@ -32,7 +32,7 @@ func TestVerifyMFAUsesSharedHelper(t *testing.T) {
 		t.Fatalf("failed to mark user enrolled: %v", err)
 	}
 
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	_, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
@@ -136,7 +136,7 @@ func TestVerifyMFAHandlesFailure(t *testing.T) {
 		t.Fatalf("failed to mark user enrolled: %v", err)
 	}
 
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	_, session, err := sessionManager.CreateSession(user, auth.SessionMetadata{Channel: "web"})
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)

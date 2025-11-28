@@ -7,10 +7,11 @@ type GlobalSettingGroup string
 // Global setting groups mapped to their constituent keys.
 // App setting groups mapped to their constituent keys.
 const (
-	GlobalSettingGroupMFAConfiguration GlobalSettingGroup = "mfa_configuration"
-	GlobalSettingGroupAllowDestructive GlobalSettingGroup = "allow_destructive_actions"
-	GlobalSettingGroupVCSAndCIDefaults GlobalSettingGroup = "vcs_and_ci_defaults"
-	GlobalSettingGroupDeployApprovals  GlobalSettingGroup = "deploy_approvals"
+	GlobalSettingGroupMFAConfiguration     GlobalSettingGroup = "mfa_configuration"
+	GlobalSettingGroupAllowDestructive     GlobalSettingGroup = "allow_destructive_actions"
+	GlobalSettingGroupVCSAndCIDefaults     GlobalSettingGroup = "vcs_and_ci_defaults"
+	GlobalSettingGroupDeployApprovals      GlobalSettingGroup = "deploy_approvals"
+	GlobalSettingGroupSessionConfiguration GlobalSettingGroup = "session_configuration"
 )
 
 var globalSettingGroupKeys = map[GlobalSettingGroup][]GlobalSettingKey{
@@ -29,6 +30,9 @@ var globalSettingGroupKeys = map[GlobalSettingGroup][]GlobalSettingKey{
 	GlobalSettingGroupDeployApprovals: {
 		GlobalSettingDeployApprovalsEnabled,
 		GlobalSettingDeployApprovalWindowMinutes,
+	},
+	GlobalSettingGroupSessionConfiguration: {
+		GlobalSettingSessionTimeoutMinutes,
 	},
 }
 

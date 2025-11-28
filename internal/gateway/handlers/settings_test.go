@@ -164,7 +164,7 @@ func setupSettingsServices(
 	database := dbtest.NewDatabase(t)
 
 	settingsService := settings.NewService(database)
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	pepper := []byte("test-pepper")
 	mfaService, err := mfa.NewService(database, "Test", 24*time.Hour, 10*time.Minute, pepper, "", "", "", "", nil)
 	require.NoError(t, err)

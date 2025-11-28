@@ -122,6 +122,8 @@ func registerGlobalSettingsRoutes(authenticated *gin.RouterGroup, cfg *Config, h
 	settingsMutations.DELETE("/vcs-and-ci-defaults", h.settings.DeleteGlobalVCSAndCIDefaults)
 	settingsMutations.PUT("/deploy-approvals", h.settings.UpdateGlobalDeployApprovals)
 	settingsMutations.DELETE("/deploy-approvals", h.settings.DeleteGlobalDeployApprovals)
+	settingsMutations.PUT("/session-configuration", h.settings.UpdateGlobalSessionConfiguration)
+	settingsMutations.DELETE("/session-configuration", h.settings.DeleteGlobalSessionConfiguration)
 	settingsMutations.POST("/rack-tls-cert/refresh", h.admin.RefreshRackTLSCert)
 
 	diagnostics := authenticated.Group("/diagnostics")

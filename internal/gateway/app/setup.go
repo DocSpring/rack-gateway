@@ -46,9 +46,10 @@ func (a *App) initializeServices() error {
 		return err
 	}
 
+	a.initSettingsService()
 	a.initSessionManager()
 
-	mfaCfg, err := a.initSettingsAndMFAConfig()
+	mfaCfg, err := a.initMFAConfig()
 	if err != nil {
 		return err
 	}
@@ -108,13 +109,15 @@ func (a *App) seedInitialUsers() error {
 	})
 }
 
-func (a *App) initSessionManager() {
-	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.SessionSecret, a.Config.SessionIdleTimeout)
+func (a *App) initSettingsService() {
+	a.SettingsService = settings.NewService(a.Database)
 }
 
-func (a *App) initSettingsAndMFAConfig() (*mfaRuntimeConfig, error) {
-	a.SettingsService = settings.NewService(a.Database)
+func (a *App) initSessionManager() {
+	a.SessionManager = auth.NewSessionManager(a.Database, a.Config.SessionSecret, a.SettingsService)
+}
 
+func (a *App) initMFAConfig() (*mfaRuntimeConfig, error) {
 	mfaSettings, err := a.SettingsService.GetMFASettings()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load MFA settings: %w", err)

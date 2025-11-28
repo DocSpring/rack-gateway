@@ -87,7 +87,7 @@ func setupCLITestEnvironment(t *testing.T) (*db.Database, *Service, string) {
 
 	// Create auth service
 	tokenService := token.NewService(database)
-	sessionManager := NewSessionManager(database, "test-secret", 24*time.Hour)
+	sessionManager := NewSessionManager(database, "test-secret", &StaticTTLProvider{TTL: 24 * time.Hour})
 	authService := NewAuthService(tokenService, database, sessionManager)
 
 	// Get user record and create session token

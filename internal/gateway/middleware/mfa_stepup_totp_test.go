@@ -138,7 +138,7 @@ func setupMFAHelpers(t *testing.T, database *db.Database) (*mfa.Service, *db.MFA
 	mfaSettings, err := settingsService.GetMFASettings()
 	require.NoError(t, err)
 
-	sessionManager := auth.NewSessionManager(database, "test-session-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-session-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	return mfaService, mfaSettings, sessionManager
 }
 

@@ -27,7 +27,7 @@ func TestAuthenticatedSetsRequestContext(t *testing.T) {
 		t.Fatalf("new rbac manager: %v", err)
 	}
 
-	sessionManager := auth.NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := auth.NewSessionManager(database, "test-secret", &auth.StaticTTLProvider{TTL: time.Hour})
 	service := auth.NewAuthService(nil, database, sessionManager)
 
 	// Get user and create session

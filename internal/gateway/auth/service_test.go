@@ -17,7 +17,7 @@ func TestAuthServiceAllowsCookieSession(t *testing.T) {
 		t.Fatalf("initialize admin: %v", err)
 	}
 
-	sessionManager := NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := NewSessionManager(database, "test-secret", &StaticTTLProvider{TTL: time.Hour})
 
 	user, err := database.GetUser("user@example.com")
 	if err != nil {
@@ -68,7 +68,7 @@ func TestValidateSessionRejectsLockedUser(t *testing.T) {
 		t.Fatalf("initialize admin: %v", err)
 	}
 
-	sessionManager := NewSessionManager(database, "test-secret", time.Hour)
+	sessionManager := NewSessionManager(database, "test-secret", &StaticTTLProvider{TTL: time.Hour})
 
 	user, err := database.GetUser("user@example.com")
 	if err != nil {
