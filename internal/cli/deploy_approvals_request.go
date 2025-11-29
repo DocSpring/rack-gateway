@@ -46,6 +46,8 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 		"CI metadata as JSON (e.g., '{\"workflow_id\":\"abc123\",\"pipeline_number\":\"456\"}')",
 	)
 	cmd.Flags().StringVar(&opts.message, "message", "", "Deploy approval message (required)")
+	cmd.Flags().StringVar(&opts.targetAPITokenID,
+		"target-api-token-id", "", "Target API token ID (required when using session auth)")
 
 	_ = cmd.MarkFlagRequired("git-commit")
 	_ = cmd.MarkFlagRequired("message")
@@ -54,26 +56,28 @@ func newDeployApprovalRequestCommand() *cobra.Command {
 }
 
 type deployApprovalRequestOptions struct {
-	appFlag       string
-	wait          bool
-	pollInterval  string
-	timeout       string
-	gitCommitHash string
-	gitBranch     string
-	ciMetadata    string
-	message       string
+	appFlag          string
+	wait             bool
+	pollInterval     string
+	timeout          string
+	gitCommitHash    string
+	gitBranch        string
+	ciMetadata       string
+	message          string
+	targetAPITokenID string
 }
 
 type deployApprovalRequestConfig struct {
-	rack          string
-	app           string
-	wait          bool
-	pollInterval  time.Duration
-	timeout       time.Duration
-	gitCommitHash string
-	gitBranch     string
-	ciMetadata    map[string]interface{}
-	message       string
+	rack             string
+	app              string
+	wait             bool
+	pollInterval     time.Duration
+	timeout          time.Duration
+	gitCommitHash    string
+	gitBranch        string
+	ciMetadata       map[string]interface{}
+	message          string
+	targetAPITokenID string
 }
 
 func parseDeployApprovalRequestOptions(
@@ -116,15 +120,16 @@ func parseDeployApprovalRequestOptions(
 	}
 
 	return deployApprovalRequestConfig{
-		rack:          rack,
-		app:           app,
-		wait:          opts.wait,
-		pollInterval:  pollInterval,
-		timeout:       timeout,
-		gitCommitHash: commit,
-		gitBranch:     strings.TrimSpace(opts.gitBranch),
-		ciMetadata:    metadata,
-		message:       message,
+		rack:             rack,
+		app:              app,
+		wait:             opts.wait,
+		pollInterval:     pollInterval,
+		timeout:          timeout,
+		gitCommitHash:    commit,
+		gitBranch:        strings.TrimSpace(opts.gitBranch),
+		ciMetadata:       metadata,
+		message:          message,
+		targetAPITokenID: strings.TrimSpace(opts.targetAPITokenID),
 	}, nil
 }
 
@@ -149,7 +154,7 @@ func executeDeployApprovalRequest(cmd *cobra.Command, cfg deployApprovalRequestC
 		cfg.gitBranch,
 		cfg.ciMetadata,
 		cfg.message,
-		"",
+		cfg.targetAPITokenID,
 	)
 	if err != nil {
 		return handleDeployApprovalCreationError(cmd, err)

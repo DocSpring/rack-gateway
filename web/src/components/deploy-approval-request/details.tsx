@@ -36,6 +36,15 @@ function formatUser(name?: string | null, email?: string | null): string {
   return name ?? email ?? PLACEHOLDER_VALUE
 }
 
+function formatCreatedBy(request: DeployApprovalRequest): string {
+  // If created by an API token, show the token name
+  if (request.created_by_api_token_name) {
+    return `${request.created_by_api_token_name} (API Token)`
+  }
+  // Otherwise show the user
+  return formatUser(request.created_by_name, request.created_by_email)
+}
+
 type RequestHeaderProps = {
   request: DeployApprovalRequest
   circleCIPipelineUrl: string | null
@@ -61,10 +70,7 @@ export function RequestHeader({
         valueClassName="text-muted-foreground"
       />
       <DetailRow label="Status" value={<DeployApprovalStatusBadge status={request.status} />} />
-      <DetailRow
-        label="Created by"
-        value={formatUser(request.created_by_name, request.created_by_email)}
-      />
+      <DetailRow label="Created by" value={formatCreatedBy(request)} />
       {request.approval_expires_at && (
         <DetailRow
           label="Expires"
