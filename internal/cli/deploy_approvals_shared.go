@@ -98,29 +98,29 @@ func resolveRacks(racksFlag string) ([]string, error) {
 	return racks, nil
 }
 
-// getCurrentGitBranch returns the current git branch name, or an error if not in a git repo.
-func getCurrentGitBranch() (string, error) {
+// getCurrentGitCommit returns the current git commit hash (short form), or an error if not in a git repo.
+func getCurrentGitCommit() (string, error) {
 	//nolint:gosec // G204: Command is hardcoded
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
 	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to get current git branch: %w", err)
+		return "", fmt.Errorf("failed to get current git commit: %w", err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }
 
 // resolveBranchOrCommit resolves the branch and commit values from the provided options.
-// If neither is specified, it falls back to the current git branch.
+// If neither is specified, it falls back to the current git commit.
 func resolveBranchOrCommit(branchOpt, commitOpt string) (branch, commit string, err error) {
 	branch = strings.TrimSpace(branchOpt)
 	commit = strings.TrimSpace(commitOpt)
 
 	if branch == "" && commit == "" {
-		currentBranch, gitErr := getCurrentGitBranch()
+		currentCommit, gitErr := getCurrentGitCommit()
 		if gitErr != nil {
 			return "", "", fmt.Errorf("no ID, --branch, or --commit provided, and %w", gitErr)
 		}
-		branch = currentBranch
+		commit = currentCommit
 	}
 	return branch, commit, nil
 }

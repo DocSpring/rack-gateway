@@ -32,8 +32,8 @@ func newDeployApprovalWaitCommand() *cobra.Command {
 	cmd.Flags().
 		StringVar(&opts.racks, "racks", "", "Comma-separated list of rack names to monitor (e.g., dev,staging,prod)")
 	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
-	cmd.Flags().StringVar(&opts.branch, "branch", "", "Filter by git branch (uses current branch by default)")
-	cmd.Flags().StringVar(&opts.commit, "commit", "", "Filter by git commit hash")
+	cmd.Flags().StringVar(&opts.branch, "branch", "", "Filter by git branch")
+	cmd.Flags().StringVar(&opts.commit, "commit", "", "Filter by git commit hash (uses current commit by default)")
 	cmd.Flags().StringVar(&opts.pollInterval, "poll-interval", "1s", "Polling interval")
 	cmd.Flags().BoolVar(&opts.autoApprove, "approve", false, "Automatically approve the first pending request found")
 	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval (only used with --approve)")
