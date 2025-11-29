@@ -88,8 +88,6 @@ export function DeployApprovalRequestDetailPage() {
         request={request}
       />
 
-      <RequestDetailsCard request={request} />
-
       <ActionButtons
         approveMutationPending={approveMutationPending}
         extendMutationPending={extendMutationPending}
@@ -99,6 +97,8 @@ export function DeployApprovalRequestDetailPage() {
         rejectMutationPending={rejectMutationPending}
         requestStatus={request.status}
       />
+
+      <RequestDetailsCard request={request} />
 
       <div data-testid="deploy-approval-audit-logs">
         <AuditLogsPane
