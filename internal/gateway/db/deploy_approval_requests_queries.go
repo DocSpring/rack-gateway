@@ -34,8 +34,9 @@ func (d *Database) FindDeployApprovalRequest(lookup DeployApprovalLookup) (*Depl
 	args := []interface{}{lookup.TokenID}
 
 	if lookup.GitCommitHash != "" {
-		clauses = append(clauses, "dr.git_commit_hash = ?")
-		args = append(args, lookup.GitCommitHash)
+		// Support both short and full commit hashes via prefix match
+		clauses = append(clauses, "dr.git_commit_hash LIKE ?")
+		args = append(args, lookup.GitCommitHash+"%")
 	}
 	if lookup.App != "" {
 		clauses = append(clauses, "dr.app = ?")
@@ -112,8 +113,9 @@ func (d *Database) ListDeployApprovalRequests(opts DeployApprovalRequestListOpti
 		args = append(args, opts.GitBranch)
 	}
 	if opts.GitCommitHash != "" {
-		clauses = append(clauses, "dr.git_commit_hash = ?")
-		args = append(args, opts.GitCommitHash)
+		// Support both short and full commit hashes via prefix match
+		clauses = append(clauses, "dr.git_commit_hash LIKE ?")
+		args = append(args, opts.GitCommitHash+"%")
 	}
 	if opts.App != "" {
 		clauses = append(clauses, "dr.app = ?")

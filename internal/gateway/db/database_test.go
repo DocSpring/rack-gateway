@@ -538,3 +538,69 @@ func TestDatabaseInitialization(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(users), 2)
 }
+
+func TestDeployApprovalShortCommitHashMatching(t *testing.T) {
+	db := dbtest.NewDatabase(t)
+	defer db.Close() //nolint:errcheck,gosec // G104: test cleanup
+	dbtest.Reset(t, db)
+
+	// Create a user and API token for the deploy approval request
+	user, err := db.CreateUser("deployer@example.com", "Deployer", []string{"deployer"})
+	require.NoError(t, err)
+
+	tokenHash := "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
+	token, err := db.CreateAPIToken(tokenHash, "ci-token", user.ID, []string{"convox:build:create"}, nil, nil)
+	require.NoError(t, err)
+
+	// Create a deploy approval request with a full 40-char commit hash
+	fullCommitHash := "abc123def456789012345678901234567890abcd"
+	_, err = db.CreateDeployApprovalRequest(
+		"Test deploy",  // message
+		"myapp",        // app
+		fullCommitHash, // gitCommitHash
+		"main",         // gitBranch
+		"",             // prURL
+		nil,            // ciMetadata
+		user.ID,        // createdByUserID
+		nil,            // createdByAPITokenID
+		token.ID,       // targetAPITokenID
+	)
+	require.NoError(t, err)
+
+	// Test 1: ListDeployApprovalRequests with short commit hash (7 chars)
+	shortHash := "abc123d"
+	results, err := db.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
+		GitCommitHash: shortHash,
+		App:           "myapp",
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 1, "should find request with short commit hash prefix")
+	assert.Equal(t, fullCommitHash, results[0].GitCommitHash)
+
+	// Test 2: ListDeployApprovalRequests with full commit hash still works
+	results, err = db.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
+		GitCommitHash: fullCommitHash,
+		App:           "myapp",
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 1, "should find request with full commit hash")
+
+	// Test 3: FindDeployApprovalRequest with short commit hash
+	found, err := db.FindDeployApprovalRequest(gwdb.DeployApprovalLookup{
+		TokenID:       token.ID,
+		GitCommitHash: shortHash,
+		App:           "myapp",
+		StatusFilter:  "pending",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, found, "should find request with short commit hash via FindDeployApprovalRequest")
+	assert.Equal(t, fullCommitHash, found.GitCommitHash)
+
+	// Test 4: Non-matching short hash returns no results
+	results, err = db.ListDeployApprovalRequests(gwdb.DeployApprovalRequestListOptions{
+		GitCommitHash: "zzz999",
+		App:           "myapp",
+	})
+	require.NoError(t, err)
+	assert.Len(t, results, 0, "should not find request with non-matching prefix")
+}
