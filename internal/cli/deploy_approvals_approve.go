@@ -116,55 +116,80 @@ type rackApproval struct {
 }
 
 func approveBySearch(cmd *cobra.Command, racks []string, app, branch, commit, notes string) error {
-	// Collect all requests from all racks (pending or approved, like show command)
 	allRequests := collectAllRequests(cmd, racks, app, branch, commit)
 
 	if len(allRequests) == 0 {
-		if branch != "" {
-			return fmt.Errorf("no deploy approval request found for app %q branch %q", app, branch)
-		}
-		return fmt.Errorf("no deploy approval request found for app %q commit %q", app, commit)
+		return noRequestFoundError(app, branch, commit)
 	}
 
-	// Display all requests
-	fmt.Println()
-	for i, r := range allRequests {
-		if i > 0 {
-			fmt.Println()
-		}
-		if err := printDeployApprovalDetails(r.req, r.rack, len(racks) > 1); err != nil {
-			return err
-		}
+	if err := displayAllRequests(allRequests, len(racks) > 1); err != nil {
+		return err
 	}
 
-	// Filter to only pending requests
-	var pending []rackApproval
-	for _, r := range allRequests {
-		if r.req.Status == "pending" {
-			pending = append(pending, r)
-		}
-	}
-
-	// If no pending requests, nothing to approve
+	pending := filterPendingRequests(allRequests)
 	if len(pending) == 0 {
 		fmt.Println("\nAll requests are already approved.")
 		return nil
 	}
 
-	// Prompt for confirmation
-	promptText := "\nPress Enter to approve"
-	if len(pending) > 1 {
-		promptText = fmt.Sprintf("\nPress Enter to approve %d pending request(s)", len(pending))
+	if err := promptForApproval(pending); err != nil {
+		return err
 	}
+
+	return approveAllRequests(cmd, pending, notes, len(racks) > 1)
+}
+
+func noRequestFoundError(app, branch, commit string) error {
+	if branch != "" {
+		return fmt.Errorf("no deploy approval request found for app %q branch %q", app, branch)
+	}
+	return fmt.Errorf("no deploy approval request found for app %q commit %q", app, commit)
+}
+
+func displayAllRequests(requests []rackApproval, showRack bool) error {
+	fmt.Println()
+	for i, r := range requests {
+		if i > 0 {
+			fmt.Println()
+		}
+		if err := printDeployApprovalDetails(r.req, r.rack, showRack); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func filterPendingRequests(requests []rackApproval) []rackApproval {
+	var pending []rackApproval
+	for _, r := range requests {
+		if r.req.Status == "pending" {
+			pending = append(pending, r)
+		}
+	}
+	return pending
+}
+
+func promptForApproval(pending []rackApproval) error {
+	promptText := buildApprovalPrompt(pending)
 	fmt.Print(promptText + " (or Ctrl+C to abort): ")
 
 	reader := bufio.NewReader(os.Stdin)
 	if _, err := reader.ReadString('\n'); err != nil {
 		return fmt.Errorf("aborted")
 	}
+	return nil
+}
 
-	// Approve each pending request, caching PIN after first one
-	return approveAllRequests(cmd, pending, notes, len(racks) > 1)
+func buildApprovalPrompt(pending []rackApproval) string {
+	if len(pending) == 1 {
+		return fmt.Sprintf("\nPress Enter to approve on rack %s", pending[0].rack)
+	}
+	rackNames := make([]string, len(pending))
+	for i, p := range pending {
+		rackNames[i] = p.rack
+	}
+	return fmt.Sprintf("\nPress Enter to approve %d requests on racks: %s",
+		len(pending), strings.Join(rackNames, ", "))
 }
 
 func collectAllRequests(
@@ -224,17 +249,17 @@ func printApprovalContext(cmd *cobra.Command, p rackApproval, current, total int
 		_, _ = fmt.Fprintln(out, "Approving request:")
 	}
 
-	_, _ = fmt.Fprintf(out, "  Rack:    %s\n", p.rack)
-	_, _ = fmt.Fprintf(out, "  ID:      %s\n", p.req.PublicID)
-	_, _ = fmt.Fprintf(out, "  Message: %s\n", p.req.Message)
+	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Rack:   "), p.rack)
+	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("ID:     "), p.req.PublicID)
+	_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Message:"), p.req.Message)
 	if p.req.App != "" {
-		_, _ = fmt.Fprintf(out, "  App:     %s\n", p.req.App)
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("App:    "), p.req.App)
 	}
 	if p.req.GitCommitHash != "" {
-		_, _ = fmt.Fprintf(out, "  Commit:  %s\n", p.req.GitCommitHash)
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Commit: "), p.req.GitCommitHash)
 	}
 	if p.req.GitBranch != "" {
-		_, _ = fmt.Fprintf(out, "  Branch:  %s\n", p.req.GitBranch)
+		_, _ = fmt.Fprintf(out, "  %s %s\n", dim("Branch: "), p.req.GitBranch)
 	}
 }
 

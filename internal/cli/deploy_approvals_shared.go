@@ -5,15 +5,63 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 //go:embed assets/notification.mp3
 var notificationSound []byte
+
+// ANSI color codes
+const (
+	colorReset     = "\033[0m"
+	colorBold      = "\033[1m"
+	colorDim       = "\033[2m"
+	colorCyan      = "\033[96m" // bright cyan
+	colorGreen     = "\033[92m" // light green
+	colorRed       = "\033[91m" // light red/pink
+	colorYellow    = "\033[93m"
+	colorGray      = "\033[38;5;245m" // medium gray (256-color)
+	colorBoldGreen = "\033[1;92m"
+	colorBoldRed   = "\033[1;91m"
+)
+
+// colorsEnabled returns true if stdout is a terminal and colors should be used
+func colorsEnabled() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// dim returns dimmed/gray text
+func dim(s string) string {
+	if !colorsEnabled() {
+		return s
+	}
+	return colorGray + s + colorReset
+}
+
+// statusColor returns the status with appropriate color
+func statusColor(status string) string {
+	if !colorsEnabled() {
+		return status
+	}
+	switch strings.ToLower(status) {
+	case "pending":
+		return colorCyan + status + colorReset
+	case "approved":
+		return colorBoldGreen + status + colorReset
+	case "rejected":
+		return colorBoldRed + status + colorReset
+	case "expired":
+		return colorYellow + status + colorReset
+	default:
+		return status
+	}
+}
 
 type deployApprovalRequest struct {
 	PublicID           string                 `json:"public_id"`

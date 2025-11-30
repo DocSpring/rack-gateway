@@ -179,41 +179,41 @@ func outputResultsAsText(results []rackResult, showRack bool) error {
 
 func printDeployApprovalDetails(req *deployApprovalRequest, rack string, showRack bool) error {
 	if showRack {
-		fmt.Printf("Rack:     %s\n", rack)
+		fmt.Printf("%s %s\n", dim("Rack:    "), rack)
 	}
-	fmt.Printf("ID:       %s\n", req.PublicID)
-	fmt.Printf("Status:   %s\n", req.Status)
-	fmt.Printf("Message:  %s\n", req.Message)
+	fmt.Printf("%s %s\n", dim("ID:      "), req.PublicID)
+	fmt.Printf("%s %s\n", dim("Status:  "), statusColor(req.Status))
+	fmt.Printf("%s %s\n", dim("Message: "), req.Message)
 	if req.App != "" {
-		fmt.Printf("App:      %s\n", req.App)
+		fmt.Printf("%s %s\n", dim("App:     "), req.App)
 	}
-	fmt.Printf("Created:  %s\n", req.CreatedAt.Format(time.RFC3339))
-	fmt.Printf("Updated:  %s\n", req.UpdatedAt.Format(time.RFC3339))
+	fmt.Printf("%s %s\n", dim("Created: "), req.CreatedAt.Format(time.RFC3339))
+	fmt.Printf("%s %s\n", dim("Updated: "), req.UpdatedAt.Format(time.RFC3339))
 
 	if req.TargetAPITokenName != "" {
-		fmt.Printf("Token:    %s (%s)\n", req.TargetAPITokenName, req.TargetAPITokenID)
+		fmt.Printf("%s %s %s\n", dim("Token:   "), req.TargetAPITokenName, dim("("+req.TargetAPITokenID+")"))
 	} else {
-		fmt.Printf("Token ID: %s\n", req.TargetAPITokenID)
+		fmt.Printf("%s %s\n", dim("Token ID:"), req.TargetAPITokenID)
 	}
 
 	if req.GitCommitHash != "" {
-		fmt.Printf("Commit:   %s\n", req.GitCommitHash)
+		fmt.Printf("%s %s\n", dim("Commit:  "), req.GitCommitHash)
 	}
 	if req.GitBranch != "" {
-		fmt.Printf("Branch:   %s\n", req.GitBranch)
+		fmt.Printf("%s %s\n", dim("Branch:  "), req.GitBranch)
 	}
 
 	if req.ApprovedAt != nil {
-		fmt.Printf("Approved: %s\n", req.ApprovedAt.Format(time.RFC3339))
+		fmt.Printf("%s %s\n", dim("Approved:"), req.ApprovedAt.Format(time.RFC3339))
 	}
 	if req.ApprovalExpiresAt != nil {
-		fmt.Printf("Expires:  %s\n", req.ApprovalExpiresAt.Format(time.RFC3339))
+		fmt.Printf("%s %s\n", dim("Expires: "), req.ApprovalExpiresAt.Format(time.RFC3339))
 	}
 	if req.RejectedAt != nil {
-		fmt.Printf("Rejected: %s\n", req.RejectedAt.Format(time.RFC3339))
+		fmt.Printf("%s %s\n", dim("Rejected:"), req.RejectedAt.Format(time.RFC3339))
 	}
 	if req.ApprovalNotes != "" {
-		fmt.Printf("Notes:    %s\n", req.ApprovalNotes)
+		fmt.Printf("%s %s\n", dim("Notes:   "), req.ApprovalNotes)
 	}
 
 	return nil
