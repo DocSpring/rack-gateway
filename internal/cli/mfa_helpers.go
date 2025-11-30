@@ -106,21 +106,30 @@ func isStepUpFresh(expiresAt *time.Time, now time.Time) bool {
 }
 
 func promptMFAForCommand(cmd *cobra.Command, baseURL, bearer, rack string) (string, error) {
+	result, _, err := GetMFAAuthWithPIN(cmd, baseURL, bearer, rack, "")
+	return result, err
+}
+
+// GetMFAAuthWithPIN gets MFA authentication, checking the --mfa-code flag first.
+// Optionally uses a cached PIN for WebAuthn.
+// Returns the auth string, the PIN used (for caching), and any error.
+func GetMFAAuthWithPIN(cmd *cobra.Command, baseURL, bearer, rack, cachedPIN string) (string, string, error) {
+	// Check for --mfa-code flag first (for TOTP)
 	if code, ok := inlineTotpFromFlag(); ok {
-		return code, nil
+		return code, "", nil
 	}
 
 	status, err := loadMFAStatus(baseURL, bearer)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	method, err := selectMFAMethod(status, rack)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return collectMFAAuth(cmd, baseURL, bearer, rack, method, status.Methods)
+	return CollectMFAAuthWithPIN(cmd, baseURL, bearer, method, cachedPIN)
 }
 
 func inlineTotpFromFlag() (string, bool) {
@@ -202,41 +211,48 @@ func collectMFAAuth(
 	method MFAMethodResponse,
 	_ []MFAMethodResponse,
 ) (string, error) {
+	result, _, err := CollectMFAAuthWithPIN(cmd, baseURL, bearer, method, "")
+	return result, err
+}
+
+// CollectMFAAuthWithPIN collects MFA authentication, optionally using a cached PIN for WebAuthn.
+// Returns the auth string, the PIN used (for caching), and any error.
+func CollectMFAAuthWithPIN(
+	cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, cachedPIN string,
+) (string, string, error) {
 	out := cmd.ErrOrStderr()
 
 	switch method.Type {
 	case "webauthn":
-		if err := writeLine(out, "Multi-factor authentication required (WebAuthn)."); err != nil {
-			return "", err
+		// Only print the message if this is the first call (no cached PIN)
+		if cachedPIN == "" {
+			if err := writeLine(out, "Multi-factor authentication required (WebAuthn)."); err != nil {
+				return "", "", err
+			}
 		}
 
-		assertionData, err := collectWebAuthnAssertion(baseURL, bearer)
+		assertionData, pinUsed, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN)
 		if err != nil {
-			return "", fmt.Errorf("WebAuthn verification failed: %w", err)
+			return "", "", fmt.Errorf("WebAuthn verification failed: %w", err)
 		}
 
-		return "webauthn." + assertionData, nil
+		return "webauthn." + assertionData, pinUsed, nil
 
 	case "totp":
 		if err := writeLine(out, "Multi-factor authentication required (TOTP)."); err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		code, err := promptMFACode()
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
-		return "totp." + code, nil
+		return "totp." + code, "", nil
 
 	default:
-		return "", fmt.Errorf("unsupported MFA method for inline verification: %s", method.Type)
+		return "", "", fmt.Errorf("unsupported MFA method for inline verification: %s", method.Type)
 	}
-}
-
-func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
-	result, _, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, "")
-	return result, err
 }
 
 // collectWebAuthnAssertionWithPIN collects a WebAuthn assertion, optionally using a cached PIN.

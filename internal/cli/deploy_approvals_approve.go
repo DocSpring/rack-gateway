@@ -279,7 +279,7 @@ func approveDeployRequestWithPIN(
 	endpoint := fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID)
 
 	// Get MFA auth with PIN caching
-	mfaAuth, pinUsed, err := getMFAAuthWithPIN(cmd, rack, cachedPIN)
+	mfaAuth, pinUsed, err := getDeployApprovalMFAAuth(cmd, rack, cachedPIN)
 	if err != nil {
 		return nil, "", err
 	}
@@ -292,7 +292,7 @@ func approveDeployRequestWithPIN(
 	return result, pinUsed, nil
 }
 
-func getMFAAuthWithPIN(cmd *cobra.Command, rack, cachedPIN string) (string, string, error) {
+func getDeployApprovalMFAAuth(cmd *cobra.Command, rack, cachedPIN string) (string, string, error) {
 	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
 		return "", "", nil
 	}
@@ -302,55 +302,7 @@ func getMFAAuthWithPIN(cmd *cobra.Command, rack, cachedPIN string) (string, stri
 		return "", "", err
 	}
 
-	status, err := loadMFAStatus(gatewayURL, bearer)
-	if err != nil {
-		return "", "", err
-	}
-
-	method, err := selectMFAMethod(status, rack)
-	if err != nil {
-		return "", "", err
-	}
-
-	return collectMFAAuthWithPIN(cmd, gatewayURL, bearer, method, cachedPIN)
-}
-
-func collectMFAAuthWithPIN(
-	cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, cachedPIN string,
-) (string, string, error) {
-	out := cmd.ErrOrStderr()
-
-	switch method.Type {
-	case "webauthn":
-		// Only print the message if this is the first call (no cached PIN)
-		if cachedPIN == "" {
-			if err := writeLine(out, "Multi-factor authentication required (WebAuthn)."); err != nil {
-				return "", "", err
-			}
-		}
-
-		assertionData, pinUsed, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN)
-		if err != nil {
-			return "", "", fmt.Errorf("WebAuthn verification failed: %w", err)
-		}
-
-		return "webauthn." + assertionData, pinUsed, nil
-
-	case "totp":
-		if err := writeLine(out, "Multi-factor authentication required (TOTP)."); err != nil {
-			return "", "", err
-		}
-
-		code, err := promptMFACode()
-		if err != nil {
-			return "", "", err
-		}
-
-		return "totp." + code, "", nil
-
-	default:
-		return "", "", fmt.Errorf("unsupported MFA method for inline verification: %s", method.Type)
-	}
+	return GetMFAAuthWithPIN(cmd, gatewayURL, bearer, rack, cachedPIN)
 }
 
 func postDeployApprovalRequestWithMFA(
