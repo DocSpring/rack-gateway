@@ -235,21 +235,28 @@ func collectMFAAuth(
 }
 
 func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
+	result, _, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, "")
+	return result, err
+}
+
+// collectWebAuthnAssertionWithPIN collects a WebAuthn assertion, optionally using a cached PIN.
+// Returns the assertion data, the PIN used (for caching), and any error.
+func collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN string) (string, string, error) {
 	endpoint := fmt.Sprintf("%s/api/v1/auth/mfa/webauthn/assertion/start", baseURL)
 	req, err := http.NewRequest(http.MethodPost, endpoint, http.NoBody)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+bearer)
 
 	resp, err := HTTPClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to start WebAuthn assertion")
+		return "", "", fmt.Errorf("failed to start WebAuthn assertion")
 	}
 
 	var startResp struct {
@@ -268,7 +275,7 @@ func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&startResp); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	allowedCreds := make([]string, 0, len(startResp.Options.PublicKey.AllowCredentials))
@@ -276,21 +283,21 @@ func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 		allowedCreds = append(allowedCreds, cred.ID)
 	}
 
-	assertion, err := webauthn.GetAssertion(webauthn.AssertionOptions{
+	assertion, pinUsed, err := webauthn.GetAssertionWithCachedPIN(webauthn.AssertionOptions{
 		Challenge:        startResp.Options.PublicKey.Challenge,
 		RPID:             startResp.Options.PublicKey.RPID,
 		AllowCredentials: allowedCreds,
 		Timeout:          startResp.Options.PublicKey.Timeout,
 		UserVerification: startResp.Options.PublicKey.UserVerification,
 		Origin:           baseURL,
-	})
+	}, cachedPIN)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	assertionJSON, err := marshalWebAuthnResponse(assertion)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	inlineData := map[string]any{
@@ -300,10 +307,10 @@ func collectWebAuthnAssertion(baseURL, bearer string) (string, error) {
 
 	jsonData, err := json.Marshal(inlineData)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return base64.StdEncoding.EncodeToString(jsonData), nil
+	return base64.StdEncoding.EncodeToString(jsonData), pinUsed, nil
 }
 
 func marshalWebAuthnResponse(assertion *webauthn.AssertionResponse) (string, error) {

@@ -27,14 +27,14 @@ func newDeployApprovalApproveCommand() *cobra.Command {
 		Short: "Approve a deploy approval request",
 		Long: `Approve a deploy approval request.
 
-If no ID is provided, searches for the latest pending approval request matching the current git branch.
-Shows the request details and prompts for MFA code before approving.
+If no ID is provided, searches for pending approval requests matching the current git commit.
+Shows all matching requests and prompts once before approving all of them.
 
 Examples:
   # Approve by ID
   cx deploy-approval approve abc123-def456-...
 
-  # Approve latest for current git branch (prompts for MFA)
+  # Approve latest for current git commit (prompts for MFA)
   cx deploy-approval approve
 
   # Approve latest for a specific branch
@@ -43,7 +43,7 @@ Examples:
   # Approve for a specific commit
   cx deploy-approval approve --commit abc123def
 
-  # Approve across multiple racks
+  # Approve across multiple racks (one PIN entry, one touch per rack)
   cx deploy-approval approve --racks staging,us,eu`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: SilenceOnError(func(cmd *cobra.Command, args []string) error {
@@ -53,8 +53,8 @@ Examples:
 
 	cmd.Flags().StringVar(&opts.racks, "racks", "", "Comma-separated list of racks to search")
 	cmd.Flags().StringVarP(&opts.app, "app", "a", "", appFlagHelp)
-	cmd.Flags().StringVar(&opts.branch, "branch", "", "Search by git branch (uses current branch if no ID given)")
-	cmd.Flags().StringVar(&opts.commit, "commit", "", "Search by git commit hash")
+	cmd.Flags().StringVar(&opts.branch, "branch", "", "Search by git branch")
+	cmd.Flags().StringVar(&opts.commit, "commit", "", "Search by git commit hash (uses current commit by default)")
 	cmd.Flags().StringVar(&opts.notes, "notes", "", "Optional notes for approval")
 
 	return cmd
@@ -66,7 +66,6 @@ func executeDeployApprovalApprove(cmd *cobra.Command, args []string, opts deploy
 		return err
 	}
 
-	// Resolve app name (auto-detect from .convox/app or directory)
 	app, err := ResolveApp(opts.app)
 	if err != nil {
 		return err
@@ -111,57 +110,232 @@ func approveByID(cmd *cobra.Command, racks []string, publicID, notes string) err
 	return fmt.Errorf("deploy approval request %s not found", publicID)
 }
 
-func approveBySearch(cmd *cobra.Command, racks []string, app, branch, commit, notes string) error {
-	// Search each rack for a pending request
-	for _, rack := range racks {
-		req := findPendingRequest(cmd, rack, app, branch, commit)
-		if req == nil {
-			continue
-		}
-
-		// Found a request - show details and prompt for confirmation
-		showRack := len(racks) > 1
-		fmt.Println("\n📋 Deploy Approval Request Found:")
-		if err := printDeployApprovalDetails(req, rack, showRack); err != nil {
-			return err
-		}
-
-		fmt.Print("\nPress Enter to approve (or Ctrl+C to abort): ")
-		reader := bufio.NewReader(os.Stdin)
-		if _, err := reader.ReadString('\n'); err != nil {
-			return fmt.Errorf("aborted")
-		}
-
-		approved, err := approveDeployRequest(cmd, rack, req.PublicID, notes)
-		if err != nil {
-			return err
-		}
-
-		return printApprovalSuccess(cmd, approved, rack, showRack)
-	}
-
-	if branch != "" {
-		return fmt.Errorf("no pending deploy approval request found for app %q branch %q", app, branch)
-	}
-	return fmt.Errorf("no pending deploy approval request found for app %q commit %q", app, commit)
+type rackApproval struct {
+	rack string
+	req  *deployApprovalRequest
 }
 
-func findPendingRequest(cmd *cobra.Command, rack, app, branch, commit string) *deployApprovalRequest {
-	req, found := searchForRequestInRack(cmd, rack, app, branch, commit, "pending")
-	if !found {
+func approveBySearch(cmd *cobra.Command, racks []string, app, branch, commit, notes string) error {
+	// Collect all requests from all racks (pending or approved, like show command)
+	allRequests := collectAllRequests(cmd, racks, app, branch, commit)
+
+	if len(allRequests) == 0 {
+		if branch != "" {
+			return fmt.Errorf("no deploy approval request found for app %q branch %q", app, branch)
+		}
+		return fmt.Errorf("no deploy approval request found for app %q commit %q", app, commit)
+	}
+
+	// Display all requests
+	fmt.Println()
+	for i, r := range allRequests {
+		if i > 0 {
+			fmt.Println()
+		}
+		if err := printDeployApprovalDetails(r.req, r.rack, len(racks) > 1); err != nil {
+			return err
+		}
+	}
+
+	// Filter to only pending requests
+	var pending []rackApproval
+	for _, r := range allRequests {
+		if r.req.Status == "pending" {
+			pending = append(pending, r)
+		}
+	}
+
+	// If no pending requests, nothing to approve
+	if len(pending) == 0 {
+		fmt.Println("\nAll requests are already approved.")
 		return nil
 	}
-	return req
+
+	// Prompt for confirmation
+	promptText := "\nPress Enter to approve"
+	if len(pending) > 1 {
+		promptText = fmt.Sprintf("\nPress Enter to approve %d pending request(s)", len(pending))
+	}
+	fmt.Print(promptText + " (or Ctrl+C to abort): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	if _, err := reader.ReadString('\n'); err != nil {
+		return fmt.Errorf("aborted")
+	}
+
+	// Approve each pending request, caching PIN after first one
+	return approveAllRequests(cmd, pending, notes, len(racks) > 1)
+}
+
+func collectAllRequests(
+	cmd *cobra.Command, racks []string, app, branch, commit string,
+) []rackApproval {
+	var results []rackApproval
+	for _, rack := range racks {
+		// Try pending first, then approved (like show command)
+		for _, status := range []string{"pending", "approved"} {
+			req, found := searchForRequestInRack(cmd, rack, app, branch, commit, status)
+			if found {
+				results = append(results, rackApproval{rack: rack, req: req})
+				break
+			}
+		}
+	}
+	return results
+}
+
+func approveAllRequests(cmd *cobra.Command, pending []rackApproval, notes string, showRack bool) error {
+	var cachedPIN string
+	var successCount int
+
+	for i, p := range pending {
+		printApprovalContext(cmd, p, i+1, len(pending))
+
+		approved, pin, err := approveDeployRequestWithPIN(cmd, p.rack, p.req.PublicID, notes, cachedPIN)
+		if err != nil {
+			return fmt.Errorf("failed to approve request on rack %s: %w", p.rack, err)
+		}
+
+		// Cache the PIN for subsequent approvals
+		if cachedPIN == "" && pin != "" {
+			cachedPIN = pin
+		}
+
+		if err := printApprovalSuccess(cmd, approved, p.rack, showRack); err != nil {
+			return err
+		}
+		successCount++
+	}
+
+	if successCount > 1 {
+		fmt.Printf("\n✅ Successfully approved %d requests\n", successCount)
+	}
+
+	return nil
+}
+
+func printApprovalContext(cmd *cobra.Command, p rackApproval, current, total int) {
+	out := cmd.ErrOrStderr()
+	_, _ = fmt.Fprintln(out)
+
+	if total > 1 {
+		_, _ = fmt.Fprintf(out, "Approving request %d of %d:\n", current, total)
+	} else {
+		_, _ = fmt.Fprintln(out, "Approving request:")
+	}
+
+	_, _ = fmt.Fprintf(out, "  Rack:    %s\n", p.rack)
+	_, _ = fmt.Fprintf(out, "  ID:      %s\n", p.req.PublicID)
+	_, _ = fmt.Fprintf(out, "  Message: %s\n", p.req.Message)
+	if p.req.App != "" {
+		_, _ = fmt.Fprintf(out, "  App:     %s\n", p.req.App)
+	}
+	if p.req.GitCommitHash != "" {
+		_, _ = fmt.Fprintf(out, "  Commit:  %s\n", p.req.GitCommitHash)
+	}
+	if p.req.GitBranch != "" {
+		_, _ = fmt.Fprintf(out, "  Branch:  %s\n", p.req.GitBranch)
+	}
 }
 
 func approveDeployRequest(cmd *cobra.Command, rack, requestID, notes string) (*deployApprovalRequest, error) {
+	result, _, err := approveDeployRequestWithPIN(cmd, rack, requestID, notes, "")
+	return result, err
+}
+
+func approveDeployRequestWithPIN(
+	cmd *cobra.Command, rack, requestID, notes, cachedPIN string,
+) (*deployApprovalRequest, string, error) {
 	payload := map[string]interface{}{}
 	if notes != "" {
 		payload["notes"] = notes
 	}
 
 	endpoint := fmt.Sprintf("/deploy-approval-requests/%s/approve", requestID)
-	return postDeployApprovalRequest(cmd, rack, endpoint, payload)
+
+	// Get MFA auth with PIN caching
+	mfaAuth, pinUsed, err := getMFAAuthWithPIN(cmd, rack, cachedPIN)
+	if err != nil {
+		return nil, "", err
+	}
+
+	result, err := postDeployApprovalRequestWithMFA(cmd, rack, endpoint, payload, mfaAuth)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return result, pinUsed, nil
+}
+
+func getMFAAuthWithPIN(cmd *cobra.Command, rack, cachedPIN string) (string, string, error) {
+	if os.Getenv("RACK_GATEWAY_API_TOKEN") != "" {
+		return "", "", nil
+	}
+
+	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	if err != nil {
+		return "", "", err
+	}
+
+	status, err := loadMFAStatus(gatewayURL, bearer)
+	if err != nil {
+		return "", "", err
+	}
+
+	method, err := selectMFAMethod(status, rack)
+	if err != nil {
+		return "", "", err
+	}
+
+	return collectMFAAuthWithPIN(cmd, gatewayURL, bearer, method, cachedPIN)
+}
+
+func collectMFAAuthWithPIN(
+	cmd *cobra.Command, baseURL, bearer string, method MFAMethodResponse, cachedPIN string,
+) (string, string, error) {
+	out := cmd.ErrOrStderr()
+
+	switch method.Type {
+	case "webauthn":
+		// Only print the message if this is the first call (no cached PIN)
+		if cachedPIN == "" {
+			if err := writeLine(out, "Multi-factor authentication required (WebAuthn)."); err != nil {
+				return "", "", err
+			}
+		}
+
+		assertionData, pinUsed, err := collectWebAuthnAssertionWithPIN(baseURL, bearer, cachedPIN)
+		if err != nil {
+			return "", "", fmt.Errorf("WebAuthn verification failed: %w", err)
+		}
+
+		return "webauthn." + assertionData, pinUsed, nil
+
+	case "totp":
+		if err := writeLine(out, "Multi-factor authentication required (TOTP)."); err != nil {
+			return "", "", err
+		}
+
+		code, err := promptMFACode()
+		if err != nil {
+			return "", "", err
+		}
+
+		return "totp." + code, "", nil
+
+	default:
+		return "", "", fmt.Errorf("unsupported MFA method for inline verification: %s", method.Type)
+	}
+}
+
+func postDeployApprovalRequestWithMFA(
+	cmd *cobra.Command, rack, endpoint string, payload map[string]interface{}, mfaAuth string,
+) (*deployApprovalRequest, error) {
+	var result deployApprovalRequest
+	if err := gatewayRequestWithMFA(cmd, rack, "POST", endpoint, payload, &result, mfaAuth); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func printApprovalSuccess(cmd *cobra.Command, approved *deployApprovalRequest, rack string, showRack bool) error {

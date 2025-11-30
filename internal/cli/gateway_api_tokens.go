@@ -233,6 +233,40 @@ func applyInlineMFA(bearer string, ctx *gatewayMFAContext) string {
 	return bearer + "." + ctx.mfaAuth
 }
 
+// gatewayRequestWithMFA performs a gateway request with pre-collected MFA auth.
+// This is used when MFA has already been collected (e.g., for batch approvals with PIN caching).
+func gatewayRequestWithMFA(
+	_ *cobra.Command, rack, method, path string, body, out interface{}, mfaAuth string,
+) error {
+	gatewayURL, bearer, err := gatewayAuthInfo(rack)
+	if err != nil {
+		return err
+	}
+
+	// Apply MFA auth if provided
+	requestBearer := bearer
+	if mfaAuth != "" {
+		requestBearer = bearer + "." + mfaAuth
+	}
+
+	statusCode, responseBody, err := doGatewayRequest(gatewayURL, requestBearer, method, path, body)
+	if err != nil {
+		return err
+	}
+
+	if statusCode >= 400 {
+		return fmt.Errorf("gateway request failed (%d): %s", statusCode, strings.TrimSpace(string(responseBody)))
+	}
+
+	if out != nil {
+		if err := json.Unmarshal(responseBody, out); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func maybeRetryWithMFA(
 	cmd *cobra.Command,
 	statusCode int,

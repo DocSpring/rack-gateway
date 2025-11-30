@@ -35,35 +35,54 @@ type AssertionResponse struct {
 
 // GetAssertion prompts the user to authenticate with their FIDO2 device
 func GetAssertion(options AssertionOptions) (*AssertionResponse, error) {
+	resp, _, err := GetAssertionWithCachedPIN(options, "")
+	return resp, err
+}
+
+// GetAssertionWithCachedPIN authenticates with FIDO2 device, optionally using a cached PIN.
+// Returns the assertion response and the PIN used (for caching in subsequent calls).
+// If cachedPIN is empty, prompts the user for PIN. Otherwise uses the cached PIN.
+func GetAssertionWithCachedPIN(options AssertionOptions, cachedPIN string) (*AssertionResponse, string, error) {
 	device, err := openFirstFIDODevice()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	allowList, err := decodeCredentialIDs(options.AllowCredentials)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	allowList, pin, err := filterCredentialsForDevice(device, options.RPID, allowList)
-	if err != nil {
-		return nil, err
+	var pin string
+	if cachedPIN != "" {
+		pin = cachedPIN
+		// Still need to filter credentials for device
+		allowList, err = filterCredentialsOnly(device, options.RPID, allowList, pin)
+		if err != nil {
+			return nil, "", err
+		}
+	} else {
+		allowList, pin, err = filterCredentialsForDevice(device, options.RPID, allowList)
+		if err != nil {
+			return nil, "", err
+		}
 	}
 
 	clientDataJSON, clientDataHash, err := buildClientData(options)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	assertionOpts := buildAssertionOptions(options)
 
-	fmt.Fprintln(os.Stderr, "Touch your security key to authenticate...")
+	fmt.Fprintln(os.Stderr, "Touch your security key to authenticate... (press Ctrl+C to abort)")
 	assertion, err := device.Assertion(options.RPID, clientDataHash, allowList, pin, assertionOpts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get assertion: %w", err)
+		return nil, "", fmt.Errorf("failed to get assertion: %w", err)
 	}
 
-	return buildAssertionResponse(assertion, clientDataJSON)
+	resp, err := buildAssertionResponse(assertion, clientDataJSON)
+	return resp, pin, err
 }
 
 func openFirstFIDODevice() (*libfido2.Device, error) {
@@ -104,21 +123,30 @@ func filterCredentialsForDevice(device *libfido2.Device, rpID string, allowList 
 		return nil, "", err
 	}
 
+	filtered, err := filterCredentialsOnly(device, rpID, allowList, pin)
+	if err != nil {
+		return nil, "", err
+	}
+	return filtered, pin, nil
+}
+
+// filterCredentialsOnly filters credentials for device using an already-known PIN.
+func filterCredentialsOnly(device *libfido2.Device, rpID string, allowList [][]byte, pin string) ([][]byte, error) {
 	deviceCreds, err := device.Credentials(rpID, pin)
 	if err != nil {
-		return allowList, pin, nil
+		return allowList, nil
 	}
 
 	if len(deviceCreds) == 0 {
-		return nil, "", fmt.Errorf("this security key has no credentials registered for this service")
+		return nil, fmt.Errorf("this security key has no credentials registered for this service")
 	}
 
 	filtered, err := intersectCredentialLists(allowList, deviceCreds)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "Found %d matching credential(s) on this device\n", len(filtered))
-	return filtered, pin, nil
+	return filtered, nil
 }
 
 func maybePromptForPIN(info *libfido2.DeviceInfo) (string, error) {
