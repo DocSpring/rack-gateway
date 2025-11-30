@@ -252,6 +252,16 @@ var httpRouteSpecs = []RouteSpec{
 		globalSettingsGroupPath(settings.GlobalSettingGroupDeployApprovals),
 		GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals),
 	),
+	newHTTPRoute(
+		"PUT",
+		globalSettingsGroupPath(settings.GlobalSettingGroupSessionConfiguration),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupSessionConfiguration),
+	),
+	newHTTPRoute(
+		"DELETE",
+		globalSettingsGroupPath(settings.GlobalSettingGroupSessionConfiguration),
+		GatewayGlobalSettingGroup(settings.GlobalSettingGroupSessionConfiguration),
+	),
 	newHTTPRoute("POST", settingsActionPath("rack_tls_cert/refresh"), Security(ResourceSecret, ActionUpdate)),
 	newHTTPRoute("POST", "/api/v1/diagnostics/sentry", Gateway(ResourceIntegration, ActionUpdate)),
 

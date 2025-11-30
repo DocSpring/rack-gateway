@@ -116,10 +116,11 @@ var MFARequirements = map[string]MFALevel{
 	// ========================================================================
 
 	// Global Settings - Security-critical configurations
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive): MFAAlways, // Destructive ops
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals):  MFAAlways, // Approval workflow
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration): MFAAlways, // MFA config
-	GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults): MFAStepUp, // Repo/CI defaults
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupAllowDestructive):     MFAAlways, // Destructive ops
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupDeployApprovals):      MFAAlways, // Approval workflow
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupMFAConfiguration):     MFAAlways, // MFA config
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupSessionConfiguration): MFAStepUp, // Session timeouts
+	GatewayGlobalSettingGroup(settings.GlobalSettingGroupVCSAndCIDefaults):     MFAStepUp, // Repo/CI defaults
 
 	// App Settings - Security controls
 	GatewayAppSettingGroup(settings.AppSettingGroupVCSCIDeploy):         MFAAlways, // GitHub verify/PR reqs
