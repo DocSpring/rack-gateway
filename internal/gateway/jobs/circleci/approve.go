@@ -3,6 +3,7 @@ package circleci
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/riverqueue/river"
 
@@ -39,8 +40,24 @@ func (_ *ApproveJobWorker) Work(_ context.Context, job *river.Job[ApproveJobArgs
 	client := circleci.NewClient(args.CircleCIToken)
 
 	if err := client.ApproveJob(args.WorkflowID, args.PipelineNumber, args.ApprovalJobName); err != nil {
+		// Don't retry if the job is in an invalid state (canceled, already approved, etc.)
+		if isNonRetryableError(err) {
+			return river.JobCancel(fmt.Errorf("CircleCI job approval failed (non-retryable): %w", err))
+		}
 		return fmt.Errorf("failed to approve CircleCI job: %w", err)
 	}
 
 	return nil
+}
+
+// isNonRetryableError checks if the error indicates a permanent failure that shouldn't be retried
+func isNonRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// "Invalid approval job state" - job was canceled or already processed
+	// "approval job not found" - job doesn't exist anymore
+	return strings.Contains(errStr, "Invalid approval job state") ||
+		strings.Contains(errStr, "approval job") && strings.Contains(errStr, "not found")
 }
