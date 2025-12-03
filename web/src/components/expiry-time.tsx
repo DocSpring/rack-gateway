@@ -22,10 +22,10 @@ export function ExpiryTime({ date }: ExpiryTimeProps) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={`cursor-help ${isExpired ? 'text-destructive' : ''}`}>{exact}</span>
+          <span className={`cursor-help ${isExpired ? 'text-destructive' : ''}`}>{rel}</span>
         </TooltipTrigger>
         <TooltipContent>
-          <span className="font-mono">{rel}</span>
+          <span className="font-mono">{exact}</span>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
