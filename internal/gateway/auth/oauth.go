@@ -141,13 +141,20 @@ func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
 	codeChallenge := generatePKCEChallenge(codeVerifier)
 	state := generateSecureRandomString(32)
 
-	// Generate auth URL with PKCE
-	authURL := h.oauth2ConfigCLI.AuthCodeURL(state,
+	// Build auth URL options
+	opts := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 		oauth2.SetAuthURLParam("prompt", "select_account"),
-	)
+	}
+
+	// Add hd (hosted domain) parameter to filter Google accounts shown during sign-in
+	if h.allowedDomain != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("hd", h.allowedDomain))
+	}
+
+	authURL := h.oauth2ConfigCLI.AuthCodeURL(state, opts...)
 
 	return &LoginStartResponse{
 		AuthURL:      authURL,
@@ -162,11 +169,18 @@ func (h *OAuthHandler) StartLogin() (*LoginStartResponse, error) {
 func (h *OAuthHandler) StartWebLogin() (authURL string, state string) {
 	state = generateSecureRandomString(32)
 
-	// Generate auth URL without PKCE for web flow
-	authURL = h.oauth2ConfigWeb.AuthCodeURL(state,
+	// Build auth URL options
+	opts := []oauth2.AuthCodeOption{
 		oauth2.AccessTypeOnline,
 		oauth2.SetAuthURLParam("prompt", "select_account"),
-	)
+	}
+
+	// Add hd (hosted domain) parameter to filter Google accounts shown during sign-in
+	if h.allowedDomain != "" {
+		opts = append(opts, oauth2.SetAuthURLParam("hd", h.allowedDomain))
+	}
+
+	authURL = h.oauth2ConfigWeb.AuthCodeURL(state, opts...)
 
 	return authURL, state
 }
