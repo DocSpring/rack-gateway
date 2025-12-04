@@ -102,58 +102,100 @@ func parseDeployApprovalWaitOptions(
 }
 
 func runDeployApprovalWait(cmd *cobra.Command, cfg deployApprovalWaitConfig) error {
-	waiter := &deployApprovalWaiter{
-		cmd:          cmd,
-		racks:        cfg.racks,
-		app:          cfg.app,
-		branch:       cfg.branch,
-		commit:       cfg.commit,
-		pollInterval: cfg.pollInterval,
-		autoApprove:  cfg.autoApprove,
-		notes:        cfg.notes,
-		loop:         cfg.loop,
-	}
+	waiter := newDeployApprovalWaiter(cmd, cfg)
 
 	if err := waiter.printWaitingMessage(); err != nil {
 		return err
 	}
 
 	for {
-		rack := waiter.nextRack()
-		requests, err := fetchPendingDeployRequests(cmd, rack, cfg.app, cfg.branch, cfg.commit)
+		done, err := waiter.pollNextRack()
 		if err != nil {
 			return err
 		}
-
-		if len(requests) > 0 {
-			if err := waiter.handleRequest(rack, requests[0]); err != nil {
-				return err
-			}
-			if !cfg.loop {
-				return nil
-			}
-			if err := waiter.printWaitingMessage(); err != nil {
-				return err
-			}
-			waiter.sleep()
-			continue
+		if done {
+			return nil
 		}
-
 		waiter.sleep()
 	}
 }
 
+func newDeployApprovalWaiter(cmd *cobra.Command, cfg deployApprovalWaitConfig) *deployApprovalWaiter {
+	return &deployApprovalWaiter{
+		cmd:           cmd,
+		racks:         cfg.racks,
+		app:           cfg.app,
+		branch:        cfg.branch,
+		commit:        cfg.commit,
+		pollInterval:  cfg.pollInterval,
+		autoApprove:   cfg.autoApprove,
+		notes:         cfg.notes,
+		loop:          cfg.loop,
+		approvedRacks: make(map[string]bool),
+	}
+}
+
+// pollNextRack checks the next rack in rotation for pending/approved requests.
+// Returns (true, nil) when all racks are done and we should exit.
+func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
+	rack := w.nextRack()
+
+	// Skip racks we've already processed
+	if w.approvedRacks[rack] {
+		return w.shouldExit(), nil
+	}
+
+	// Check for pending requests first
+	if done, err := w.checkPendingRequests(rack); err != nil || done {
+		return done, err
+	}
+
+	// Check for already-approved requests
+	return w.checkApprovedRequests(rack)
+}
+
+func (w *deployApprovalWaiter) checkPendingRequests(rack string) (bool, error) {
+	requests, err := fetchPendingDeployRequests(w.cmd, rack, w.app, w.branch, w.commit)
+	if err != nil {
+		return false, err
+	}
+
+	if len(requests) == 0 {
+		return false, nil
+	}
+
+	if err := w.handleRequest(rack, requests[0]); err != nil {
+		return false, err
+	}
+	return w.shouldExit(), nil
+}
+
+func (w *deployApprovalWaiter) checkApprovedRequests(rack string) (bool, error) {
+	approved, err := fetchApprovedDeployRequests(w.cmd, rack, w.app, w.branch, w.commit)
+	if err != nil {
+		return false, err
+	}
+
+	if len(approved) > 0 {
+		w.approvedRacks[rack] = true
+		_ = writef(w.cmd.OutOrStdout(), "✓ Already approved on rack %s: %s\n", rack, approved[0].PublicID)
+	}
+	return w.shouldExit(), nil
+}
+
 type deployApprovalWaiter struct {
-	cmd          *cobra.Command
-	racks        []string
-	app          string
-	branch       string
-	commit       string
-	pollInterval time.Duration
-	autoApprove  bool
-	notes        string
-	loop         bool
-	rackIndex    int
+	cmd           *cobra.Command
+	racks         []string
+	app           string
+	branch        string
+	commit        string
+	pollInterval  time.Duration
+	autoApprove   bool
+	notes         string
+	loop          bool
+	rackIndex     int
+	cachedPIN     string
+	approvedRacks map[string]bool
 }
 
 func (w *deployApprovalWaiter) nextRack() string {
@@ -163,6 +205,20 @@ func (w *deployApprovalWaiter) nextRack() string {
 	rack := w.racks[w.rackIndex]
 	w.rackIndex = (w.rackIndex + 1) % len(w.racks)
 	return rack
+}
+
+func (w *deployApprovalWaiter) shouldExit() bool {
+	// In loop mode, never exit based on approval count
+	if w.loop {
+		return false
+	}
+
+	// Exit when all racks have approved requests
+	if len(w.approvedRacks) >= len(w.racks) {
+		return true
+	}
+
+	return false
 }
 
 func (w *deployApprovalWaiter) printWaitingMessage() error {
@@ -193,14 +249,14 @@ func (w *deployApprovalWaiter) printWaitingMessage() error {
 	)
 }
 
-func fetchPendingDeployRequests(
-	cmd *cobra.Command, rack, app, branch, commit string,
+func fetchDeployRequestsByStatus(
+	cmd *cobra.Command, rack, app, branch, commit, status string,
 ) ([]deployApprovalRequest, error) {
 	var response struct {
 		Requests []deployApprovalRequest `json:"deploy_approval_requests"`
 	}
 	params := url.Values{}
-	params.Set("status", "pending")
+	params.Set("status", status)
 	params.Set("app", app)
 	if branch != "" {
 		params.Set("git_branch", branch)
@@ -218,7 +274,22 @@ func fetchPendingDeployRequests(
 	return response.Requests, nil
 }
 
+func fetchPendingDeployRequests(
+	cmd *cobra.Command, rack, app, branch, commit string,
+) ([]deployApprovalRequest, error) {
+	return fetchDeployRequestsByStatus(cmd, rack, app, branch, commit, "pending")
+}
+
+func fetchApprovedDeployRequests(
+	cmd *cobra.Command, rack, app, branch, commit string,
+) ([]deployApprovalRequest, error) {
+	return fetchDeployRequestsByStatus(cmd, rack, app, branch, commit, "approved")
+}
+
 func (w *deployApprovalWaiter) handleRequest(rack string, request deployApprovalRequest) error {
+	// Mark this rack as having an approved request (pending counts too, we'll approve it)
+	w.approvedRacks[rack] = true
+
 	cfg, _, _ := LoadConfig()
 	soundDone := w.startNotificationSound(cfg, rack)
 
@@ -227,16 +298,36 @@ func (w *deployApprovalWaiter) handleRequest(rack string, request deployApproval
 		return err
 	}
 
-	var err error
-	if w.autoApprove {
-		err = w.autoApproveRequest(rack, request)
-	} else {
+	<-soundDone
+
+	if !w.autoApprove {
 		msg := "\nUse 'rack-gateway deploy-approval approve <id>' to approve this request."
-		err = writeLine(w.cmd.OutOrStdout(), msg)
+		return writeLine(w.cmd.OutOrStdout(), msg)
 	}
 
-	<-soundDone
-	return err
+	// Approve with PIN caching
+	approved, pin, err := approveDeployRequestWithPIN(w.cmd, rack, request.PublicID, w.notes, w.cachedPIN)
+	if err != nil {
+		return err
+	}
+
+	// Cache the PIN for subsequent approvals
+	if w.cachedPIN == "" && pin != "" {
+		w.cachedPIN = pin
+	}
+
+	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
+	if len(w.racks) > 1 {
+		statusLine = fmt.Sprintf("\n✅ Deploy approval request %s approved on rack %s", approved.PublicID, rack)
+	}
+	if approved.ApprovalExpiresAt != nil {
+		statusLine = fmt.Sprintf(
+			"%s (expires at %s)",
+			statusLine,
+			approved.ApprovalExpiresAt.UTC().Format(time.RFC3339),
+		)
+	}
+	return writeLine(w.cmd.OutOrStdout(), statusLine)
 }
 
 func (w *deployApprovalWaiter) startNotificationSound(cfg *Config, rack string) <-chan struct{} {
@@ -275,23 +366,6 @@ func (w *deployApprovalWaiter) writeRequestSummary(rack string, request deployAp
 		return err
 	}
 	return writef(out, "  Created: %s\n", request.CreatedAt.Format(time.RFC3339))
-}
-
-func (w *deployApprovalWaiter) autoApproveRequest(rack string, request deployApprovalRequest) error {
-	approved, err := approveDeployRequest(w.cmd, rack, request.PublicID, w.notes)
-	if err != nil {
-		return err
-	}
-
-	statusLine := fmt.Sprintf("\n✅ Deploy approval request %s approved", approved.PublicID)
-	if approved.ApprovalExpiresAt != nil {
-		statusLine = fmt.Sprintf(
-			"%s (expires at %s)",
-			statusLine,
-			approved.ApprovalExpiresAt.UTC().Format(time.RFC3339),
-		)
-	}
-	return writeLine(w.cmd.OutOrStdout(), statusLine)
 }
 
 func (w *deployApprovalWaiter) sleep() {
