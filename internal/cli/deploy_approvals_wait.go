@@ -150,7 +150,12 @@ func (w *deployApprovalWaiter) pollNextRack() (bool, error) {
 		return done, err
 	}
 
-	// Check for already-approved requests
+	// If we just handled a request (marked rack as approved), we're done with this rack
+	if w.approvedRacks[rack] {
+		return w.shouldExit(), nil
+	}
+
+	// Check for already-approved requests (from previous sessions or other users)
 	return w.checkApprovedRequests(rack)
 }
 
