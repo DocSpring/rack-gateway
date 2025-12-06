@@ -241,8 +241,11 @@ func (h *Handler) validateProtectedKeys(
 	email, app string,
 	posted map[string]string,
 ) error {
-	for k := range posted {
+	for k, v := range posted {
 		if !h.isProtectedKeyForApp(k, app) {
+			continue
+		}
+		if v == maskedSecret {
 			continue
 		}
 		userName := r.Header.Get("X-User-Name")

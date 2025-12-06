@@ -175,6 +175,60 @@ func TestProxyBlocksReleaseCreateWithSecretSetForDeployer(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, rr.Code)
 }
 
+// TestValidateProtectedKeysAllowsMaskedValues reproduces a bug where running
+// `env set LOGSTRUCT_ENABLED=false` would fail with "protected key change denied"
+// for unrelated protected keys like ADMIN_PASSWORD.
+//
+// The bug: When the CLI posts the full env, protected keys appear in the posted
+// map with their masked value (e.g., ADMIN_PASSWORD=********************).
+// validateProtectedKeys was rejecting ANY protected key in the posted map,
+// even when the value was just the masked placeholder (not an actual change).
+func TestValidateProtectedKeysAllowsMaskedValues(t *testing.T) {
+	h, database, _ := newProxyForEnvTest(t)
+
+	// Set ADMIN_PASSWORD as protected for the app
+	appName := "docspring"
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"ADMIN_PASSWORD"}, nil))
+
+	// Simulate what the CLI posts: full env with protected key masked
+	// User is trying to change LOGSTRUCT_ENABLED, but the posted map
+	// includes ALL keys (with secrets/protected keys masked)
+	posted := map[string]string{
+		"ADMIN_PASSWORD":    envutil.MaskedSecret, // masked - not a real change
+		"LOGSTRUCT_ENABLED": "false",              // actual change
+		"OTHER_VAR":         "value",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/apps/docspring/releases", nil)
+	req.Header.Set("X-User-Name", "Admin")
+
+	// This should succeed - ADMIN_PASSWORD is masked, so it's not being changed
+	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
+	require.NoError(t, err, "validateProtectedKeys should allow masked protected keys")
+}
+
+// TestValidateProtectedKeysBlocksActualChanges ensures that trying to actually
+// change a protected key's value is still blocked.
+func TestValidateProtectedKeysBlocksActualChanges(t *testing.T) {
+	h, database, _ := newProxyForEnvTest(t)
+
+	appName := "docspring"
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"ADMIN_PASSWORD"}, nil))
+
+	// User tries to actually change the protected key
+	posted := map[string]string{
+		"ADMIN_PASSWORD":    "new_password", // actual change - should be blocked
+		"LOGSTRUCT_ENABLED": "false",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/apps/docspring/releases", nil)
+	req.Header.Set("X-User-Name", "Admin")
+
+	err := h.validateProtectedKeys(req, "admin@test.com", appName, posted)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "protected key change denied")
+}
+
 func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 	// Set protected env var for the app (app-scoped setting)
