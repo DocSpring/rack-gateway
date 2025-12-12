@@ -229,6 +229,62 @@ func TestValidateProtectedKeysBlocksActualChanges(t *testing.T) {
 	require.Contains(t, err.Error(), "protected key change denied")
 }
 
+// TestMergeEnvPreservesProtectedKeysNotInPosted reproduces a bug where running
+// `env unset LOGSTRUCT_DEBUG` would fail with "protected key change denied"
+// for unrelated protected keys like DATABASE_URL_DIRECT that aren't in the posted env.
+//
+// The bug: When the CLI posts the env, it may not include protected keys at all
+// (or they may be filtered). The code was treating missing keys as deletions and
+// validateProtectedDiffs was rejecting any "deletion" of a protected key.
+func TestMergeEnvPreservesProtectedKeysNotInPosted(t *testing.T) {
+	h, database, _ := newProxyForEnvTest(t)
+
+	appName := "docspring"
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"DATABASE_URL_DIRECT"}, nil))
+
+	// Posted env does NOT include DATABASE_URL_DIRECT at all
+	// User is just unsetting LOGSTRUCT_DEBUG
+	posted := map[string]string{
+		"LOGSTRUCT_DEBUG": "", // Being unset
+		"OTHER_VAR":       "value",
+	}
+	order := []string{"LOGSTRUCT_DEBUG", "OTHER_VAR"}
+
+	// Base env has DATABASE_URL_DIRECT
+	baseEnv := map[string]string{
+		"DATABASE_URL_DIRECT": "postgres://localhost/db",
+		"LOGSTRUCT_DEBUG":     "true",
+		"OTHER_VAR":           "value",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/apps/docspring/releases", nil)
+	req.Header.Set("X-User-Name", "Admin")
+
+	// This should succeed - DATABASE_URL_DIRECT is not being changed
+	merged, diffs, err := h.mergeEnvAndComputeDiffs(
+		req, "admin@test.com", appName, posted, order, baseEnv, true,
+	)
+	require.NoError(t, err, "mergeEnvAndComputeDiffs should allow unchanged protected keys")
+
+	// DATABASE_URL_DIRECT should be preserved in merged
+	require.Equal(t, "postgres://localhost/db", merged["DATABASE_URL_DIRECT"])
+
+	// Only LOGSTRUCT_DEBUG should have a diff (being unset)
+	// DATABASE_URL_DIRECT should NOT appear in diffs since it's protected and unchanged
+	var logstructDiff *envutil.EnvDiff
+	for i := range diffs {
+		if diffs[i].Key == "LOGSTRUCT_DEBUG" {
+			logstructDiff = &diffs[i]
+		}
+		if diffs[i].Key == "DATABASE_URL_DIRECT" {
+			t.Errorf("DATABASE_URL_DIRECT should not appear in diffs - it's protected and not being changed")
+		}
+	}
+	require.NotNil(t, logstructDiff, "LOGSTRUCT_DEBUG should have a diff")
+	require.Equal(t, "true", logstructDiff.OldVal)
+	require.Equal(t, "", logstructDiff.NewVal)
+}
+
 func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 	h, database, mgr := newProxyForEnvTest(t)
 	// Set protected env var for the app (app-scoped setting)

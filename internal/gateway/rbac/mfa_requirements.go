@@ -50,7 +50,8 @@ var MFARequirements = map[string]MFALevel{
 	Convox(ResourceProcess, ActionStop):      MFAStepUp,
 
 	// Environment variables (secrets)
-	Convox(ResourceEnv, ActionSet): MFAStepUp,
+	Convox(ResourceEnv, ActionSet):   MFAStepUp,
+	Convox(ResourceEnv, ActionUnset): MFAStepUp,
 
 	// Rack operations
 	Convox(ResourceRack, ActionUpdate): MFAStepUp,

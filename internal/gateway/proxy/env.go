@@ -334,6 +334,12 @@ func (h *Handler) mergeEnvAndComputeDiffs(
 		if _, ok := posted[key]; ok {
 			continue
 		}
+		// Protected keys not in posted should be preserved, not treated as deletions.
+		// This handles the case where the CLI doesn't include protected keys in the post.
+		if h.isProtectedKeyForApp(key, app) {
+			merged[key] = base
+			continue
+		}
 		diffs = append(diffs, envutil.EnvDiff{Key: key, OldVal: base, NewVal: "", Secret: h.isSecretKey(key)})
 	}
 

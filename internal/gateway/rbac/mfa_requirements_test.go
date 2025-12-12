@@ -60,6 +60,7 @@ func TestMFARequirements_ConvoxPermissions(t *testing.T) {
 		{Convox(ResourceProcess, ActionStop), MFAStepUp},
 		{Convox(ResourceProcess, ActionTerminate), MFAStepUp},
 		{Convox(ResourceEnv, ActionSet), MFAStepUp},
+		{Convox(ResourceEnv, ActionUnset), MFAStepUp},
 		{Convox(ResourceRack, ActionUpdate), MFAStepUp},
 
 		// Low-risk write operations - None
