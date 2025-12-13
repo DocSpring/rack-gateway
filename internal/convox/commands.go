@@ -216,6 +216,7 @@ var Commands = []Command{
 		Permissions: []string{
 			rbac.Convox(rbac.ResourceEnv, rbac.ActionSet),
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), // Required when --promote flag is used
 		},
 		AllowedFlags: []string{"promote", "replace"},
 		Description:  "Set env var(s)",
@@ -225,6 +226,7 @@ var Commands = []Command{
 		Permissions: []string{
 			rbac.Convox(rbac.ResourceEnv, rbac.ActionUnset),
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), // Required when --promote flag is used
 		},
 		AllowedFlags: []string{"promote"},
 		Description:  "Unset env var(s)",
@@ -234,6 +236,7 @@ var Commands = []Command{
 		Permissions: []string{
 			rbac.Convox(rbac.ResourceEnv, rbac.ActionSet),
 			rbac.Convox(rbac.ResourceRelease, rbac.ActionCreate),
+			rbac.Convox(rbac.ResourceRelease, rbac.ActionPromote), // Required when --promote flag is used
 		},
 		AllowedFlags: []string{"promote"},
 		Description:  "Edit env interactively",

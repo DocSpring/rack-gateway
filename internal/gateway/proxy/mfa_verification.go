@@ -14,7 +14,11 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-// verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided
+// verifyMFAIfRequired checks if MFA is required for the route and verifies inline MFA if provided.
+// IMPORTANT: Step-up window is checked FIRST to support multi-step CLI operations.
+// When CLI runs commands like "env set --promote", it embeds the same MFA code in ALL requests.
+// TOTP replay protection would reject the same code on subsequent requests.
+// By checking step-up window first, subsequent requests reuse the step-up from the first verification.
 func (h *Handler) verifyMFAIfRequired(
 	r *http.Request,
 	w http.ResponseWriter,
@@ -33,6 +37,14 @@ func (h *Handler) verifyMFAIfRequired(
 		return nil
 	}
 
+	// Check step-up window FIRST - if already valid, skip inline MFA verification.
+	// This prevents TOTP replay errors when CLI sends the same MFA code for multiple
+	// API calls in a single operation (e.g., env set + release promote).
+	if authUser.Session != nil && h.isStepUpValid(authUser) {
+		return nil
+	}
+
+	// Only verify inline MFA if step-up window is expired or not set
 	if authUser.MFAType != "" && authUser.MFAValue != "" {
 		return h.verifyInlineMFA(r, w, authUser, rackConfig, start)
 	}
