@@ -66,6 +66,7 @@ Rack management:
 		BuildCommand(),
 		BuildsCommand(),
 		DeployCommand(),
+		MultiDeployCommand(),
 		ReleasesCommand(),
 
 		// Processes
