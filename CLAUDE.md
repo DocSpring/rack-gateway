@@ -523,7 +523,14 @@ See component-specific CLAUDE.md files for detailed implementation information:
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete environment variable reference.
 
-## Version Management
+## Version Management and Deployment
+
+**IMPORTANT: Deploying to production requires a new Docker image, which is only built when you push a git tag.**
+
+There is no way to deploy code changes without:
+1. Creating a version tag (e.g., `v0.0.19`)
+2. Pushing the tag to trigger the GitHub Actions release workflow
+3. Waiting for the Docker image to build and push
 
 **Single Source of Truth**: The project version is stored in `web/package.json`.
 
@@ -536,31 +543,42 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete environment vari
 
 2. Commit the version bump:
    ```bash
-   git commit -am "chore: bump version to v1.0.1"
+   git commit -am "chore: bump version to vX.Y.Z"
    ```
 
-3. Create a git tag:
+3. Push the commit to main:
+   ```bash
+   git push origin main
+   ```
+
+4. Create and push a git tag to trigger the release:
    ```bash
    ./scripts/create-release-tags.sh
-   ```
-
-4. Push the tag to trigger GitHub Actions release:
-   ```bash
-   git push origin v1.0.0
-   # or push all tags:
    git push --tags
    ```
 
-The GitHub Actions release workflow (`.github/workflows/release.yml`) automatically:
+The GitHub Actions release workflow (`.github/workflows/release.yml`) is triggered by `v*` tags and:
 - Builds the Docker image for linux/amd64
-- Pushes to `docker.io/docspringcom/rack-gateway` with both commit SHA and `latest` tags
+- Pushes to `docker.io/docspringcom/rack-gateway` with both version tag and `latest` tags
 - Creates a GitHub release with binaries and checksums
 
-**Deployment:**
+**Deployment to Convox:**
 
-After the release workflow completes:
-1. Update `convox.yml` to use the new image tag: `image: docker.io/docspringcom/rack-gateway:${COMMIT_SHA}`
-2. Run `convox deploy` to deploy to the rack
+After the release workflow completes successfully:
+1. The `convox.yml` uses `image: docker.io/docspringcom/rack-gateway:latest` (or a specific version tag)
+2. Run `convox deploy` to deploy the new image to the rack
+
+**Quick Release Workflow:**
+```bash
+# After your changes are merged to main:
+./scripts/bump-version.sh patch
+git commit -am "chore: bump version to v0.0.19"
+git push origin main
+./scripts/create-release-tags.sh
+git push --tags
+# Wait for GitHub Actions to complete, then deploy
+convox deploy
+```
 
 ## Code Structure
 
