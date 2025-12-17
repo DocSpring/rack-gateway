@@ -185,3 +185,36 @@ func (h *Handler) isCommandApproved(app, command string) bool {
 
 	return false
 }
+
+// filterEnvironmentMapResponse masks secret keys in GET /apps/{app}/environment response.
+// The environment endpoint returns a flat JSON map: {"KEY1": "value1", "KEY2": "value2"}
+// This is different from the release format which has an "env" field with newline-separated values.
+func (h *Handler) filterEnvironmentMapResponse(email string, body []byte, app string) []byte {
+	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
+
+	var envMap map[string]string
+	if err := json.Unmarshal(body, &envMap); err != nil {
+		return body
+	}
+
+	// Build set of keys that need masking
+	for key := range envMap {
+		shouldMask := false
+		if !canEnvView {
+			// No env:read permission - mask all values
+			shouldMask = true
+		} else if h.isSecretKey(key) || h.isProtectedKeyForApp(key, app) {
+			// Has env:read - mask secrets and protected keys
+			shouldMask = true
+		}
+		if shouldMask {
+			envMap[key] = maskedSecret
+		}
+	}
+
+	result, err := json.Marshal(envMap)
+	if err != nil {
+		return body
+	}
+	return result
+}

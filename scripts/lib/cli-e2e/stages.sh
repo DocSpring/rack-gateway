@@ -38,6 +38,23 @@ run_admin_tests() {
     verify_rgw_command "env set FOO=bar" \
         "Setting FOO..." "Release:"
 
+    verify_rgw_command "env unset FOO --promote" \
+        "Unsetting FOO..." "Release:"
+
+    # Test env unset with protected keys present (regression test for ADMIN_PASSWORD bug)
+    # The mock convox returns DATABASE_URL which we'll mark as protected
+    echo -e "${YELLOW}Setting DATABASE_URL as a protected env var for rack-gateway...${NC}"
+    psql_exec "INSERT INTO settings (app_name, key, value, updated_at) VALUES ('rack-gateway', 'protected_env_vars', '[\"DATABASE_URL\"]'::jsonb, NOW()) ON CONFLICT (COALESCE(app_name, ''), key) DO UPDATE SET value = '[\"DATABASE_URL\"]'::jsonb, updated_at = NOW();"
+
+    verify_rgw_command "env set TEST_PROTECTED=1" \
+        "Setting TEST_PROTECTED..." "Release:"
+
+    verify_rgw_command "env unset TEST_PROTECTED --promote" \
+        "Unsetting TEST_PROTECTED..." "Release:"
+
+    # Clean up the protected_env_vars setting
+    psql_exec "DELETE FROM settings WHERE app_name = 'rack-gateway' AND key = 'protected_env_vars';"
+
     verify_rgw_command "restart" \
         "Restarting web... OK" \
         "Restarting worker... OK"

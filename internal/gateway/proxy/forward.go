@@ -76,6 +76,7 @@ func (h *Handler) processBufferedResponse(
 	pth string,
 	authUserEmail string,
 	filterRelease bool,
+	filterEnvironment bool,
 	shouldCapture bool,
 	captureProcess bool,
 ) ([]byte, error) {
@@ -86,6 +87,11 @@ func (h *Handler) processBufferedResponse(
 
 	if filterRelease {
 		body = h.filterReleaseEnvForUser(authUserEmail, body, false)
+	}
+
+	if filterEnvironment {
+		app := extractAppFromPath(pth)
+		body = h.filterEnvironmentMapResponse(authUserEmail, body, app)
 	}
 
 	if shouldCapture {

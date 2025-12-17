@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -315,4 +316,135 @@ func TestProxyBlocksProtectedEnvChangesAndAudits(t *testing.T) {
 		}
 	}
 	require.True(t, found, "expected denied env.set audit for protected key change")
+}
+
+// TestEnvUnsetWithProtectedKeysFullFlow tests the complete flow of `cx env unset`:
+// 1. CLI does GET /apps/{app}/environment - gateway should mask protected keys
+// 2. CLI modifies env (removes target key)
+// 3. CLI does POST /apps/{app}/environment - gateway should accept masked protected keys
+//
+// This test verifies the fix for the bug where env unset fails with "protected key change denied"
+// because the GET response wasn't masking protected keys.
+func TestEnvUnsetWithProtectedKeysFullFlow(t *testing.T) {
+	h, database, mgr := newProxyForEnvTest(t)
+
+	// Set up a protected key for the app
+	appName := "docspring"
+	protectedVars := []string{"ADMIN_DATABASE_URL_DIRECT"}
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", protectedVars, nil))
+
+	// Admin user should be able to env unset without triggering protected key errors
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	// Step 1: Test that GET /apps/{app}/environment response masks protected keys
+	// using filterEnvironmentMapResponse (the fix)
+	envGetResponse := map[string]interface{}{
+		"ADMIN_DATABASE_URL_DIRECT": "postgres://admin:secret@localhost/db",
+		"LOGSTRUCT_DEBUG":           "true",
+		"OTHER_VAR":                 "value",
+	}
+	envGetBody, err := json.Marshal(envGetResponse)
+	require.NoError(t, err)
+
+	// Use the new filterEnvironmentMapResponse which handles the /environment format
+	filteredBody := h.filterEnvironmentMapResponse("admin@test.com", envGetBody, appName)
+
+	// Parse the filtered response
+	var filteredEnv map[string]string
+	require.NoError(t, json.Unmarshal(filteredBody, &filteredEnv))
+
+	// Verify protected key is masked
+	require.Equal(t, envutil.MaskedSecret, filteredEnv["ADMIN_DATABASE_URL_DIRECT"],
+		"Protected key should be masked in GET /environment response")
+
+	// Verify non-protected keys are NOT masked
+	require.Equal(t, "true", filteredEnv["LOGSTRUCT_DEBUG"],
+		"Non-protected key should NOT be masked")
+	require.Equal(t, "value", filteredEnv["OTHER_VAR"],
+		"Non-protected key should NOT be masked")
+
+	// Step 2: Test validateProtectedKeys with masked value (what happens after the fix)
+	postedWithMasked := map[string]string{
+		"ADMIN_DATABASE_URL_DIRECT": envutil.MaskedSecret, // Properly masked
+		"OTHER_VAR":                 "value",
+		// LOGSTRUCT_DEBUG removed (being unset)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/apps/docspring/environment", nil)
+	req.Header.Set("X-User-Name", "Admin")
+
+	err = h.validateProtectedKeys(req, "admin@test.com", appName, postedWithMasked)
+	require.NoError(t, err, "validateProtectedKeys should allow masked protected keys")
+
+	// Step 3: Test validateProtectedKeys with real value (should still be blocked for direct attempts)
+	postedWithReal := map[string]string{
+		"ADMIN_DATABASE_URL_DIRECT": "postgres://admin:secret@localhost/db", // Real value - should be blocked!
+		"OTHER_VAR":                 "value",
+	}
+
+	err = h.validateProtectedKeys(req, "admin@test.com", appName, postedWithReal)
+	require.Error(t, err, "validateProtectedKeys should block real protected key values")
+	require.Contains(t, err.Error(), "protected key change denied")
+}
+
+// TestFilterEnvironmentEndpointResponse tests that the /apps/{app}/environment
+// endpoint response has protected keys masked via filterEnvironmentMapResponse.
+func TestFilterEnvironmentEndpointResponse(t *testing.T) {
+	h, database, mgr := newProxyForEnvTest(t)
+
+	// Set up admin user with env:read permission
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	appName := "docspring"
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"ADMIN_PASSWORD"}, nil))
+
+	// /environment returns a simple JSON map
+	envResponse := `{"ADMIN_PASSWORD":"real_secret_password","PORT":"3000","NODE_ENV":"production"}`
+
+	// Use filterEnvironmentMapResponse (the fix for the /environment endpoint)
+	filtered := h.filterEnvironmentMapResponse("admin@test.com", []byte(envResponse), appName)
+
+	var result map[string]string
+	require.NoError(t, json.Unmarshal(filtered, &result))
+
+	// Verify protected key is masked
+	require.Equal(t, envutil.MaskedSecret, result["ADMIN_PASSWORD"],
+		"Protected key ADMIN_PASSWORD should be masked")
+
+	// Verify non-protected keys are NOT masked
+	require.Equal(t, "3000", result["PORT"],
+		"Non-protected key PORT should NOT be masked")
+	require.Equal(t, "production", result["NODE_ENV"],
+		"Non-protected key NODE_ENV should NOT be masked")
+}
+
+// TestFilterEnvironmentMasksSecretKeys tests that secret keys (DATABASE_URL, etc.)
+// are also masked even if not explicitly protected.
+func TestFilterEnvironmentMasksSecretKeys(t *testing.T) {
+	h, database, mgr := newProxyForEnvTest(t)
+
+	// Set up admin user with env:read permission
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	appName := "myapp"
+	// No protected env vars configured for this app
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{}, nil))
+
+	// These keys should be masked by default (secretNames configured in handler)
+	envResponse := `{"DATABASE_URL":"postgres://secret@localhost","REDIS_URL":"redis://secret@localhost","PORT":"3000"}`
+
+	filtered := h.filterEnvironmentMapResponse("admin@test.com", []byte(envResponse), appName)
+
+	var result map[string]string
+	require.NoError(t, json.Unmarshal(filtered, &result))
+
+	// DATABASE_URL and REDIS_URL are in h.secretNames (configured in newProxyForEnvTest)
+	require.Equal(t, envutil.MaskedSecret, result["DATABASE_URL"],
+		"Secret key DATABASE_URL should be masked")
+	require.Equal(t, envutil.MaskedSecret, result["REDIS_URL"],
+		"Secret key REDIS_URL should be masked")
+
+	// Non-secret keys should NOT be masked
+	require.Equal(t, "3000", result["PORT"],
+		"Non-secret key PORT should NOT be masked")
 }

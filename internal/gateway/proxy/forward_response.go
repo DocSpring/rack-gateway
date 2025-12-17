@@ -25,8 +25,11 @@ func (h *Handler) processProxyResponse(
 	filterRelease := isJSON &&
 		(rbac.KeyMatch3(path, "/apps/{app}/releases") || rbac.KeyMatch3(path, "/apps/{app}/releases/{id}"))
 
+	// GET /apps/{app}/environment returns a flat JSON map that needs secret masking
+	filterEnvironment := isJSON && r.Method == http.MethodGet && rbac.KeyMatch3(path, "/apps/{app}/environment")
+
 	shouldCapture, captureProcess := h.shouldCaptureResponse(r, path, isJSON)
-	needsBuffer := filterRelease || shouldCapture || captureProcess
+	needsBuffer := filterRelease || filterEnvironment || shouldCapture || captureProcess
 
 	logProxy := gtwlog.TopicEnabled(gtwlog.TopicProxy)
 	logResponse := gtwlog.TopicEnabled(gtwlog.TopicHTTPResponse)
@@ -44,6 +47,7 @@ func (h *Handler) processProxyResponse(
 			path,
 			authUserEmail,
 			filterRelease,
+			filterEnvironment,
 			shouldCapture,
 			captureProcess,
 		)
