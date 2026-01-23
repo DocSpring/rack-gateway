@@ -684,7 +684,8 @@ func testProxyE2EUnauthorized(t *testing.T, s *TestServers) {
 		require.Error(t, err, "ops should be blocked from setting env vars")
 		assert.True(
 			t,
-			strings.Contains(string(output), "You don't have permission to promote releases.") ||
+			strings.Contains(string(output), "You don't have permission to create releases.") ||
+				strings.Contains(string(output), "You don't have permission to promote releases.") ||
 				strings.Contains(string(output), "MFA"),
 			"should be blocked: %s",
 			output,

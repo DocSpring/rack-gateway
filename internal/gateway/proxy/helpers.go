@@ -171,7 +171,9 @@ func forbiddenMessage(resource rbac.Resource, action rbac.Action) string {
 		}
 	case rbac.ResourceRelease:
 		switch action {
-		case rbac.ActionCreate, rbac.ActionPromote:
+		case rbac.ActionCreate:
+			return "You don't have permission to create releases."
+		case rbac.ActionPromote:
 			return "You don't have permission to promote releases."
 		}
 	}
