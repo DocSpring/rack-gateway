@@ -149,6 +149,20 @@ tasks:
     cmds:
       - go build -buildvcs=false -o bin/mock-convox ./cmd/mock-convox/
 
+  build:totp-gen:
+    desc: Build TOTP generator -> bin/totp-gen
+    deps: [deps]
+    env:
+      CGO_ENABLED: "0"
+    sources:
+      - go.*
+      - Taskfile.go.yml
+      - cmd/totp-gen/**/*.go
+    generates:
+      - bin/totp-gen
+    cmds:
+      - go build -buildvcs=false -o bin/totp-gen ./cmd/totp-gen/
+
   test:
     desc: Run Go unit and integration tests safely
     env:
