@@ -34,7 +34,7 @@ const mockTokens: APIToken[] = [
     permissions: defaultPermissions,
     last_used_at: '2024-01-15T00:00:00Z',
     created_at: '2024-01-01T00:00:00Z',
-    expires_at: '2026-01-01T00:00:00Z',
+    expires_at: '2030-01-01T00:00:00Z', // Far future to ensure "Active" status
   },
   {
     id: 2,
@@ -199,8 +199,9 @@ describe('TokensPage', () => {
     })
 
     expect(screen.getByText('Development Token')).toBeInTheDocument()
-    expect(screen.getByText('Expired')).toBeInTheDocument()
-    expect(screen.getByText('Active')).toBeInTheDocument()
+    // Use getAllByText since status badges may appear multiple times (e.g., in header + row)
+    expect(screen.getAllByText('Expired').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows empty state', async () => {

@@ -211,7 +211,18 @@ test.describe('CSRF Protection for Proxy Routes', () => {
 
       // These should work (200) or possibly 403 if user lacks permission
       // but NOT 401 (authentication required)
-      expect([200, 403]).toContain(response.status())
+      const status = response.status()
+      if (status === 500) {
+        const body = await response.text()
+        test.info().attach('gateway-500', {
+          body: `Endpoint: ${endpoint}\n${body}`,
+          contentType: 'text/plain',
+        })
+      }
+      expect(
+        [200, 403].includes(status),
+        `Expected ${endpoint} to return 200 or 403, got ${status}`
+      ).toBeTruthy()
 
       if (response.status() === 403) {
         // Permission denied is OK, but not "CLI authentication required"

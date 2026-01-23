@@ -169,6 +169,7 @@ export async function ensureMfaEnrollment(
     // (to preserve query parameters like ?redirect= that may have been set)
     const currentUrl = page.url()
     const hasRedirectParam = currentUrl.includes('redirect=')
+    const isCliMode = currentUrl.includes('channel=cli')
     if (!currentUrl.includes('/account/security')) {
       await page.goto(WebRoute('account/security'))
     }
@@ -176,8 +177,8 @@ export async function ensureMfaEnrollment(
 
     const secret = await startTotpEnrollmentViaUi(page, email)
 
-    // If there was a redirect parameter, the page will navigate away after enrollment
-    if (hasRedirectParam) {
+    // If there was a redirect parameter or CLI mode, the page will navigate away after enrollment
+    if (hasRedirectParam || isCliMode) {
       // Wait for navigation to complete (triggered by window.location.assign in the frontend)
       await page.waitForURL((url) => !url.pathname.includes('/account/security'), {
         timeout: 15_000,

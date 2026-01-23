@@ -20,12 +20,33 @@ import {
   updatePreferredMFAMethod,
 } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
-import { resolveWebRedirect } from '@/lib/routes'
+import { resolveWebRedirect, WebRoute } from '@/lib/routes'
 import {
   createCredential,
   prepareCreationOptions,
   serializeRegistrationCredential,
 } from '@/lib/webauthn-utils'
+
+/**
+ * Handles post-enrollment redirect based on the enrollment channel.
+ * CLI mode redirects to the CLI success page, web mode redirects to the original destination.
+ */
+function handleEnrollmentRedirect(
+  enrollmentChannel: string | undefined,
+  cliState: string | undefined,
+  redirectTarget: string | null
+): void {
+  if (typeof window === 'undefined') return
+
+  if (enrollmentChannel === 'cli' && cliState) {
+    window.location.assign(`${WebRoute('cli/auth/success')}?state=${encodeURIComponent(cliState)}`)
+    return
+  }
+
+  if (redirectTarget) {
+    window.location.assign(resolveWebRedirect(redirectTarget))
+  }
+}
 
 type AccountSecurityMutationsDeps = {
   closeEnrollmentModal: () => void
@@ -44,6 +65,8 @@ type AccountSecurityMutationsDeps = {
   setEditLabel: (value: string) => void
   setOpenDropdownId: (value: number | null) => void
   redirectTarget: string | null
+  enrollmentChannel?: string
+  cliState?: string
 }
 
 export function useAccountSecurityMutations({
@@ -61,6 +84,8 @@ export function useAccountSecurityMutations({
   setEditLabel,
   setOpenDropdownId,
   redirectTarget,
+  enrollmentChannel,
+  cliState,
 }: AccountSecurityMutationsDeps) {
   const startTOTPMutation = useMutation({
     mutationFn: startTOTPEnrollment,
@@ -116,11 +141,7 @@ export function useAccountSecurityMutations({
           /* noop */
         })
 
-        // Redirect to original destination after enrollment if redirect parameter exists
-        if (redirectTarget && typeof window !== 'undefined') {
-          const destination = resolveWebRedirect(redirectTarget)
-          window.location.assign(destination)
-        }
+        handleEnrollmentRedirect(enrollmentChannel, cliState, redirectTarget)
       } catch (error) {
         const msg = getErrorMessage(error)
         toast.error(`WebAuthn enrollment failed: ${msg}`)
@@ -158,11 +179,7 @@ export function useAccountSecurityMutations({
         /* noop */
       })
 
-      // Redirect to original destination after enrollment if redirect parameter exists
-      if (redirectTarget && typeof window !== 'undefined') {
-        const destination = resolveWebRedirect(redirectTarget)
-        window.location.assign(destination)
-      }
+      handleEnrollmentRedirect(enrollmentChannel, cliState, redirectTarget)
     },
     onError: () => {
       setPendingEditMethod(null)

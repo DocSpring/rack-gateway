@@ -488,3 +488,66 @@ export async function setupBothMfaMethodsForUser(email: string) {
     )
   })
 }
+
+export async function createPendingDeployApprovalRequest(): Promise<string> {
+  return await withDbClient(async (client) => {
+    // Get admin user ID for the token
+    const adminResult = await client.query(
+      `SELECT id FROM users WHERE email = 'admin@example.com' LIMIT 1;`
+    )
+    if (adminResult.rows.length === 0) {
+      throw new Error('Admin user not found')
+    }
+    const adminUserId = adminResult.rows[0].id
+
+    // First ensure we have an API token to use as the target
+    const tokenResult = await client.query(
+      `INSERT INTO api_tokens (name, user_id, token_hash, permissions)
+       VALUES ('E2E Test Token', $1, 'e2e_test_token_hash_' || gen_random_uuid(), '["deploy:*"]')
+       ON CONFLICT (name) DO UPDATE SET permissions = EXCLUDED.permissions
+       RETURNING id;`,
+      [adminUserId]
+    )
+
+    let tokenId: number
+    if (tokenResult.rows.length > 0) {
+      tokenId = tokenResult.rows[0].id
+    } else {
+      // Token already exists, fetch it
+      const existing = await client.query(
+        `SELECT id FROM api_tokens WHERE name = 'E2E Test Token' LIMIT 1;`
+      )
+      tokenId = existing.rows[0].id
+    }
+
+    // Create a pending deploy approval request
+    const result = await client.query(
+      `INSERT INTO deploy_approval_requests (
+         git_commit_hash,
+         git_branch,
+         message,
+         app,
+         target_api_token_id,
+         status
+       )
+       VALUES (
+         'abc123def456',
+         'main',
+         'E2E Test Deploy Request',
+         'docspring',
+         $1,
+         'pending'
+       )
+       RETURNING public_id;`,
+      [tokenId]
+    )
+
+    return result.rows[0].public_id
+  })
+}
+
+export async function deleteDeployApprovalRequest(publicId: string): Promise<void> {
+  await withDbClient(async (client) => {
+    await client.query('DELETE FROM deploy_approval_requests WHERE public_id = $1;', [publicId])
+  })
+}

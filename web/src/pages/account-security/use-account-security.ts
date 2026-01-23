@@ -98,6 +98,7 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
   const redirectTarget = useMemo(() => normalizeRedirectPath(redirectParam), [redirectParam])
   const enrollmentRequiredFlag = searchParams.get('enrollment') === 'required'
   const enrollmentChannel = searchParams.get('channel') ?? undefined
+  const cliState = searchParams.get('state') ?? undefined
 
   const {
     data: status,
@@ -148,6 +149,8 @@ export function useAccountSecurityPage(): UseAccountSecurityPageResult {
     setEditLabel: methodEdit.setEditLabel,
     setOpenDropdownId,
     redirectTarget,
+    enrollmentChannel,
+    cliState,
   })
 
   const runWithStepUp = useCallback(
