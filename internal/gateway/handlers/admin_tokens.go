@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -146,6 +147,7 @@ func (h *AdminHandler) ListAPITokens(c *gin.Context) {
 	// List all API tokens
 	tokens, err := h.database.ListAllAPITokens()
 	if err != nil {
+		slog.Error("failed to list API tokens", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tokens"})
 		return
 	}
