@@ -86,7 +86,8 @@ func (h *Handler) processBufferedResponse(
 	}
 
 	if filterRelease {
-		body = h.filterReleaseEnvForUser(authUserEmail, body, false)
+		app := extractAppFromPath(pth)
+		body = h.filterReleaseEnvForUser(authUserEmail, body, app)
 	}
 
 	if filterEnvironment {

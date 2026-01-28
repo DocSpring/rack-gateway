@@ -10,7 +10,7 @@ import (
 	"github.com/DocSpring/rack-gateway/internal/gateway/rbac"
 )
 
-func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []byte {
+func (h *Handler) filterReleaseEnvForUser(email string, body []byte, app string) []byte {
 	canEnvView, _ := h.rbacManager.Enforce(email, rbac.ScopeConvox, rbac.ResourceEnv, rbac.ActionRead)
 
 	var payload interface{}
@@ -22,7 +22,10 @@ func (h *Handler) filterReleaseEnvForUser(email string, body []byte, _ bool) []b
 	if !canEnvView {
 		transform = maskAllEnvVars
 	} else {
-		transform = h.maskSecretEnvVars
+		// Create a transform that masks secrets AND app-specific protected keys
+		transform = func(s string) string {
+			return h.maskSecretAndProtectedEnvVars(s, app)
+		}
 	}
 
 	if updated, ok := transformEnvPayload(payload, transform); ok {
@@ -46,8 +49,8 @@ func maskAllEnvVars(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// maskSecretEnvVars masks only secret environment variable values.
-func (h *Handler) maskSecretEnvVars(s string) string {
+// maskSecretAndProtectedEnvVars masks secret env vars and app-specific protected keys.
+func (h *Handler) maskSecretAndProtectedEnvVars(s string, app string) string {
 	lines := strings.Split(s, "\n")
 	for i, ln := range lines {
 		if ln == "" {
@@ -55,7 +58,8 @@ func (h *Handler) maskSecretEnvVars(s string) string {
 		}
 		parts := strings.SplitN(ln, "=", 2)
 		key := parts[0]
-		if h.isSecretKey(key) && len(parts) > 1 {
+		shouldMask := h.isSecretKey(key) || (app != "" && h.isProtectedKeyForApp(key, app))
+		if shouldMask && len(parts) > 1 {
 			lines[i] = parts[0] + "=" + maskedSecret
 		}
 	}

@@ -64,14 +64,14 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 	// Body with env field
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
-	// Admin should still see masked secrets (native releases always masked)
-	out := h.filterReleaseEnvForUser("admin@test.com", []byte(body), true)
+	// Admin should still see masked secrets
+	out := h.filterReleaseEnvForUser("admin@test.com", []byte(body), "testapp")
 	s := string(out)
 	require.Contains(t, s, "SECRET_KEY=********************")
 	require.Contains(t, s, "DATABASE_URL=********************")
 
 	// Ops sees masked sensitive values
-	out = h.filterReleaseEnvForUser("ops@test.com", []byte(body), false)
+	out = h.filterReleaseEnvForUser("ops@test.com", []byte(body), "testapp")
 	s = string(out)
 	require.Contains(t, s, "SECRET_KEY=********************")
 	require.Contains(t, s, "DATABASE_URL=********************")
@@ -79,7 +79,7 @@ func TestFilterReleaseEnvForUser(t *testing.T) {
 	require.Contains(t, s, "PORT=3000")
 
 	// Deployer same as ops
-	out = h.filterReleaseEnvForUser("deployer@test.com", []byte(body), false)
+	out = h.filterReleaseEnvForUser("deployer@test.com", []byte(body), "testapp")
 	s = string(out)
 	require.Contains(t, s, "SECRET_KEY=*********")
 }
@@ -90,7 +90,7 @@ func TestFilterReleaseEnv_NoEnvViewMasksAll(t *testing.T) {
 
 	body := `{"id":"R1","env":"DATABASE_URL=postgres://...\nSECRET_KEY=abc\nREDIS_URL=redis://...\nPORT=3000\n"}`
 
-	out := h.filterReleaseEnvForUser("viewer@test.com", []byte(body), false)
+	out := h.filterReleaseEnvForUser("viewer@test.com", []byte(body), "testapp")
 	s := string(out)
 	// Should contain env, but all values masked
 	require.Contains(t, s, "DATABASE_URL=********************")
@@ -416,6 +416,45 @@ func TestFilterEnvironmentEndpointResponse(t *testing.T) {
 		"Non-protected key PORT should NOT be masked")
 	require.Equal(t, "production", result["NODE_ENV"],
 		"Non-protected key NODE_ENV should NOT be masked")
+}
+
+// TestFilterReleaseEnvMasksAppSpecificProtectedKeys tests that filterReleaseEnvForUser
+// masks app-specific protected keys stored in the database.
+func TestFilterReleaseEnvMasksAppSpecificProtectedKeys(t *testing.T) {
+	h, database, mgr := newProxyForEnvTest(t)
+
+	// Set up admin user with env:read permission
+	require.NoError(t, mgr.SaveUser("admin@test.com", &rbac.UserConfig{Name: "Admin", Roles: []string{"admin"}}))
+
+	// Set ADMIN_PASSWORD as a protected key for the "docspring" app in the DATABASE
+	// This is the key difference from secretNames which are global config
+	appName := "docspring"
+	require.NoError(t, database.UpsertSetting(&appName, "protected_env_vars", []string{"ADMIN_PASSWORD"}, nil))
+
+	// Release response with env field (this is what GET /apps/{app}/releases/{id} returns)
+	// ADMIN_PASSWORD is an app-specific protected key that should be masked
+	releaseBody := `{"id":"R1","env":"ADMIN_PASSWORD=super_secret_password\nLOGSTRUCT_DEBUG=true\nPORT=3000"}`
+
+	// Filter the release response for the admin user
+	// We need to pass the app name so it can look up app-specific protected keys
+	filtered := h.filterReleaseEnvForUser("admin@test.com", []byte(releaseBody), "docspring")
+
+	// Parse the filtered response
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal(filtered, &result))
+
+	envStr, ok := result["env"].(string)
+	require.True(t, ok, "env field should be a string")
+
+	// ADMIN_PASSWORD should be masked because it's a protected key for this app
+	require.Contains(t, envStr, "ADMIN_PASSWORD="+envutil.MaskedSecret,
+		"App-specific protected key ADMIN_PASSWORD should be masked in release response")
+
+	// Non-protected keys should NOT be masked
+	require.Contains(t, envStr, "LOGSTRUCT_DEBUG=true",
+		"Non-protected key LOGSTRUCT_DEBUG should NOT be masked")
+	require.Contains(t, envStr, "PORT=3000",
+		"Non-protected key PORT should NOT be masked")
 }
 
 // TestFilterEnvironmentMasksSecretKeys tests that secret keys (DATABASE_URL, etc.)
