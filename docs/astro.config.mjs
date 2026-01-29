@@ -198,6 +198,10 @@ export default defineConfig({
             { label: 'Docker', slug: 'deployment/docker' },
             { label: 'Convox', slug: 'deployment/convox' },
             {
+              label: 'Private Network',
+              slug: 'deployment/private-network',
+            },
+            {
               label: 'Terraform',
               collapsed: true,
               items: [

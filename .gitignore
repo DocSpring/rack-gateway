@@ -42,6 +42,9 @@ tmp/
 web/dist/
 web/node_modules/
 web/.vite/
+docs/node_modules/
+docs/dist/
+docs/.astro/
 /mock-convox
 
 # Test artifacts

@@ -10,7 +10,9 @@ set -e
 
 # Exclusion patterns (paths or glob patterns to skip)
 EXCLUSIONS=(
+  "docs/*"
   "*.md"
+  "*.mdx"
   "*.json"
   "*.yml"
   "*.yaml"

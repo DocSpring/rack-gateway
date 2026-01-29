@@ -230,35 +230,21 @@ Staging Environment
 We strongly recommend using Tailscale or another VPN so that neither the Convox API nor Rack Gateway is exposed to the public internet.
 </Aside>
 
-With Tailscale:
+With a private network:
 - Gateway accessible only to team members
 - No public attack surface
 - Zero-trust network model
+- Defense-in-depth even if tokens are compromised
 
 #### Making the Convox API Fully Private
 
-By default, Convox exposes its API publicly via nginx ingress. There's an [open PR to add a `private_api` parameter](https://github.com/convox/convox/pull/935) that disables public access entirely, restricting the API to VPC/private network access only.
+By default, Convox exposes its API publicly via nginx ingress. DocSpring maintains a [fork of Convox](https://github.com/DocSpring/convox/tree/docspring) that includes a `private_api` option to disable public access entirely.
 
-DocSpring maintains a [public fork of Convox](https://github.com/DocSpring/convox/tree/docspring) that includes this feature (along with CloudFlare DNS-01 resolver support and other improvements). You can use it in your Terraform configuration:
-
-```hcl
-module "system" {
-  source  = "github.com/DocSpring/convox//terraform/system/aws?ref=docspring"
-  image   = "docspringcom/convox"
-  release = "docspring-004"
-
-  # ... other config ...
-
-  # Private Convox API access
-  private_api = true
-}
-```
-
-When `private_api = true`, the public nginx ingress is not created. You then provide access through Tailscale, VPC peering, or another private network solution.
-
-<Aside type="note" title="Why a Fork?">
-The `private_api` feature is unlikely to be merged upstream since it would prevent Convox's hosted Console from connecting to racks. If you're using Rack Gateway instead of Console, this isn't a concern.
-</Aside>
+See [Private Network Deployment](/deployment/private-network/) for complete setup instructions including:
+- Terraform configuration for DocSpring's Convox fork
+- Tailscale operator setup and ingress configuration
+- ACL examples and verification steps
+- Alternative private network options (PrivateLink, VPN, bastion)
 
 ## Scalability
 
